@@ -23,14 +23,14 @@ Attributes:
 
 """
 
-import re
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from functools import reduce
 from logging import Logger
 from typing import Any
 
 import pygogo as gogo
 
+from riko._strutils import reduce_find
 from riko.bado.itertools import coop_reduce
 from riko.cast import BasicCastType
 from riko.types.configs import RefindObjconf
@@ -48,41 +48,9 @@ OPTS: Opts = {
 DEFAULTS: Defaults = {}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
-PARAMS: dict[str, Callable[[str, FindConfRule], list[str]]] = {
-    "first": lambda word, rule: re.split(rule.find, word, maxsplit=1),
-    "last": lambda word, rule: re.split(rule.find, word),
-}
-
-AT_PARAMS: dict[
-    str, Callable[[str, FindConfRule], list[str] | re.Match[str] | None]
-] = {
-    "first": lambda word, rule: re.search(rule.find, word),
-    "last": lambda word, rule: re.findall(rule.find, word),
-}
-
-OPS: dict[str, Callable[[list[str], FindConfRule], str]] = {
-    "before": lambda splits, rule: rule.find.join(splits[: len(splits) - 1]),
-    "after": lambda splits, _: splits[-1],
-}
-
 
 def reducer(word: str, rule: FindConfRule) -> str:
-    param = rule.param or "first"
-    is_first = param == "first"
-
-    if rule.location == "at":
-        result = ""
-        splits = AT_PARAMS.get(param, AT_PARAMS["first"])(word, rule)
-
-        if splits and is_first:
-            result = splits[0]
-        elif splits:
-            result = splits[-1]
-    else:
-        splits = PARAMS.get(param, PARAMS["first"])(word, rule)
-        result = OPS.get(rule.location, OPS["before"])(splits, rule)
-
-    return result.strip()
+    return reduce_find(word, rule)
 
 
 async def async_parser(

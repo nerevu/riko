@@ -26,6 +26,7 @@ from typing import Any
 
 import pygogo as gogo
 
+from riko._iterutils import listize
 from riko.bado.itertools import coop_reduce
 from riko.cast import BasicCastType
 from riko.types.configs import StrTransformObjconf
@@ -59,23 +60,27 @@ ATTRS = {
 }
 
 
-def reducer(word: str, rule: StrTransformConfRule) -> str:
-    if rule.transform in ATTRS:
-        args = rule.args.split(",") if rule.args else []
-        result = getattr(word, rule.transform)(*args)
-    else:
+def reducer(word: str | int, rule: StrTransformConfRule) -> str | int:
+    if rule.transform not in ATTRS:
         logger.warning(f"Invalid transformation: {rule.transform}")
         result = word
+    else:
+        if isinstance(rule.args, str):
+            args: Sequence[object] = rule.args.split(",") if rule.args else []
+        else:
+            args = listize(rule.args)
+
+        result = getattr(word, rule.transform)(*args)
 
     return result
 
 
 async def async_parser(
-    word: str,
+    word: str | int,
     rules: Sequence[StrTransformConfRule],
     objconf: StrTransformObjconf,
     **kwargs: object,
-) -> str:
+) -> str | int:
     """
     Asynchronously parses the pipe content
 
@@ -110,11 +115,11 @@ async def async_parser(
 
 
 def parser(
-    word: str,
+    word: str | int,
     rules: Sequence[StrTransformConfRule],
     objconf: StrTransformObjconf,
     **kwargs: object,
-) -> str:
+) -> str | int:
     """
     Parses the pipe content
 
@@ -146,7 +151,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: object) -> str:
+async def async_pipe(*args: Any, **kwargs: object) -> str | int:
     """
     A processor module that asynchronously performs string transformations
     on the field of an item.
@@ -194,7 +199,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> str:
+def pipe(*args: Any, **kwargs: object) -> str | int:
     """
     A processor that performs string transformations on the field of an item.
 
