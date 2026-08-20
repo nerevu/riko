@@ -455,6 +455,10 @@ With `filter(stop=True)` the first rejected item:
 ## 16. Batch model
 
 > **Status: Planned.** no `Batch`/`BatchPipe`/`BatchPolicy`.
+>
+> **Consumer:** the runtime `batch_feed`/`batch_stream` primitives and their use in streaming
+> `write`/`split`/reducers are planned in [feed-native-streaming.md](feed-native-streaming.md), which
+> delegates to this `BatchPolicy` rather than exposing a separate per-pipe chunk concept.
 
 ```python
 @dataclass(frozen=True)
@@ -519,6 +523,12 @@ error
 ---
 
 > **Extracted from ROADMAP Appendix A.** Async/sync primitive reference for the runtime-semantics contract. `§N` references point back to [ROADMAP.md](../ROADMAP.md).
+>
+> **Alignment audit (separate concern).** Which of these `bado` helpers to remove/replace/keep as
+> AnyIO adds equivalents (4.14 task handles, `functools.reduce`, async `itertools`) — plus the async
+> benchmarking/profiling methodology — lives in
+> [bado-anyio-alignment.md](bado-anyio-alignment.md). This appendix owns their *semantics*; that
+> gameplan owns the *cleanup*.
 
 ## A. Async primitive reference
 

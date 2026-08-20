@@ -18,7 +18,9 @@ Related authoritative plans:
 * `mcp.md` — generic capability metadata, effects, catalog, and execution policy;
 * `execution-semantics.md` — retry, timeout, cancellation, and error policy;
 * `provider-integrations.md` — `OperationHandle` and shared operation waiting;
-* `orchestration.md` — deployment schedules and durable run boundaries.
+* `orchestration.md` — deployment schedules and durable run boundaries;
+* `autopilot-provisioning.md` — a concrete downstream *scenario* (Windows Autopilot new-device
+  provisioning) that specializes this plan's preflight/ChangePlan/verify contract.
 
 ## 2. Inspiration integrated by this plan
 

@@ -523,6 +523,10 @@ Deliver before major runtime work:
   stdlib/dependency-free cache. Optional modernization (not legacy cleanup); the Flask concern is
   moot (current ``mezmorize`` depends on ``cachelib``, not Flask). Also drops the ``manage``
   console-script collision with ``mezmorize`` (see root ``CLAUDE.md``).
+  **Pair this with ``async_memoize``** — the async fetch path has no memoization at all, so
+  whatever replaces ``mezmorize`` should be async-aware from the start rather than growing a
+  second, divergent cache. See
+  `bado-anyio-alignment.md <bado-anyio-alignment.md>`_ § 2b.
 * add entry-point plugin discovery if needed
 * upstream temporary Meza adapters
 * remove compatibility materialization pipes where possible

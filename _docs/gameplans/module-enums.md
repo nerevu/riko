@@ -12,10 +12,11 @@
 > [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) § P9A and [IMPLEMENTED.md](../IMPLEMENTED.md).
 > (Grounding notes below predate this.)
 
-Actionable plan derived from `_docs/current_implementation.md` (the "generated module enums"
-design), scoped to **core riko only**. The `riko-microsoft` / Autopilot half of that doc is a
-downstream *consumer* of this work and is planned separately (P14 — gated behind P8/P11/P12); it
-appears here only as the fake in-repo example extension that proves the seam.
+Actionable plan for the "generated module enums" design, scoped to **core riko only** (the source
+scratch analysis has been folded into the gameplans). The `riko-microsoft` / Autopilot half is a
+downstream *consumer* of this work, owned by
+[autopilot-provisioning.md](autopilot-provisioning.md) and planned separately (P14 — gated behind
+P8/P11/P12); it appears here only as the fake in-repo example extension that proves the seam.
 
 ## Scope & resolved decisions
 

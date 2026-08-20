@@ -260,6 +260,12 @@ and one external workflow consumer validate the contracts, and no open P0 correc
 remains in execution, routing, lifecycle, or serialization (see §27 non-goals and §26
 Milestone 10).
 
+> **Boundary:** E7 owns the **ecosystem** side of 1.0 (conformance badges, published stable/
+> extension/contract/schema policies, deprecation/migration windows). The **internal DX/API-shape
+> polish and the release/package-fidelity gate** (config strictness, Pipeline/Execution split,
+> `Collection`→`from_sources`, `executor=`, pub/sub 1.0 contract, wheel/PyPI CI, the Must-land/
+> Preferred/Can-wait triage) live in [release-readiness.md](release-readiness.md).
+
 ## E8. Prior-art research conclusions
 
 Issue #10 named six projects. Their implementations are dated, but several design ideas

@@ -10,7 +10,10 @@
 > `parser_mode: feed | legacy_stream` classification, review #8) are not built:
 > today's module parsers consume synchronous `Items`, so a non-parallel async
 > pipe buffers its upstream at the explicit `AsyncPipe._materialize_legacy_source`
-> boundary. Only the bounded/parallel path streams end-to-end (see §3.2, §8).
+> boundary. Only the bounded/parallel path streams end-to-end (see §3.2, §8). This
+> file owns the `parser_mode` **mechanism**; the per-pipe **rollout plan** that
+> consumes it (which pipes go Feed-native, in what order, plus the streaming-memory
+> model and streaming `write`) is [feed-native-streaming.md](feed-native-streaming.md).
 
 ### Pipe execution options
 
