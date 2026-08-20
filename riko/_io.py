@@ -43,6 +43,38 @@ logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 
 
+def ext_from_content_type(content_type: str | None) -> str | None:
+    """
+    Returns the file extension implied by a content type.
+
+    Args:
+        content_type: The response content type, if the source reported one.
+
+    Returns:
+        ``"xml"``/``"json"`` for the feed types, otherwise the content subtype,
+        or ``None`` when no content type is available.
+
+    Examples:
+        >>> ext_from_content_type("application/json; charset=utf-8")
+        'json'
+        >>> ext_from_content_type("text/html")
+        'html'
+        >>> ext_from_content_type(None) is None
+        True
+
+    """
+    if not content_type:
+        ext = None
+    elif "xml" in content_type:
+        ext = "xml"
+    elif "json" in content_type:
+        ext = "json"
+    else:
+        ext = content_type.split("/")[1].split(";")[0]
+
+    return ext
+
+
 def make_blocking(f: RawIOBase | TextIOBase) -> None:
     if fcntl is not None:
         fd = f.fileno()
@@ -407,13 +439,4 @@ class Fetch[B: (Literal[True], Literal[False])]:
 
     @property
     def ext(self) -> str | None:
-        if not self.content_type:
-            ext = None
-        elif "xml" in self.content_type:
-            ext = "xml"
-        elif "json" in self.content_type:
-            ext = "json"
-        else:
-            ext = self.content_type.split("/")[1].split(";")[0]
-
-        return ext
+        return ext_from_content_type(self.content_type)
