@@ -149,6 +149,45 @@ shape. Use the literal forms above.
         - ``<hash>`` when ``emit`` is True
 ```
 
+#### Assigning splits three ways, not two
+
+`gen_assignments` branches on whether there is an item to merge into, and the
+two branches have different *semantics* — not just different laziness:
+
+```python
+elif item and value_is_iterator:
+    yield item | {assign: list(value)}       # ONE output, all values collected
+elif value_is_iterator:
+    yield from ({assign: v} for v in value)  # one output PER value, lazy
+```
+
+So a **multi-value** pipe needs three bullets, and the merge one must show the
+list:
+
+```python
+    Yields:
+        - ``<row>`` when ``emit`` is True (default)
+        - ``{<assign>: <row>}`` per row when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<row>, ...]}`` when ``emit`` is False and
+          item is given
+```
+
+A **single-value** pipe keeps the scalar form, because `one=True` makes `value`
+a scalar rather than an iterator, so the list branch never runs:
+
+```python
+        - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item is given
+```
+
+Check which one applies by running it with and without an item — `csv` gives 645
+outputs bare and *one* output (holding a 645-item list) when merged, while
+`input` gives a scalar both ways.
+
+The `list(value)` is required, not a missed optimization: collapsing N values
+into one field means knowing them all before emitting. The corollary is that an
+**unbounded** source with `emit=False` and an input item never returns, which is
+worth a `Notes:` on any pipe that can produce an endless stream.
+
 Every stated default and every bullet must be verified by running the pipe, not
 inferred from the signature — `assign` defaults to the *pipe name*, and `emit`'s
 default is derived from the parser's return annotation, so neither is visible at

@@ -1,21 +1,24 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for performing simple mathematical operations, e.g.,
-addition, subtraction, multiplication, division, modulo, averages, etc.
+Performs a simple mathematical operation on an item field.
+
+The field value and ``other`` are both cast to ``Decimal``, so results are
+exact rather than binary floats.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from decimal import Decimal
         >>> from riko.modules.simplemath import pipe
         >>>
-        >>> conf = {'op': 'divide', 'other': '5'}
-        >>> next(pipe({'content': '10'}, conf=conf))['simplemath']
+        >>> conf = {"op": "divide", "other": "5"}
+        >>> next(pipe({"content": "10"}, conf=conf))["simplemath"]
         Decimal('2')
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPS: Supported operations, keyed by ``op`` name.
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -62,14 +65,15 @@ def parser(
     num: Decimal, extraction: Extraction, objconf: SimpleMathObjconf, **kwargs: object
 ) -> NumLike:
     """
-    Parsers the pipe content
+    Applies the configured operation to ``num`` and ``other``.
 
     Args:
-        num (Decimal): The first number to operate on
-        objconf (obj): The pipe configuration (an Objectify instance)
+        num: The first operand, already cast to ``Decimal``.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `op` and `other`.
 
     Returns:
-        dict: The formatted item
+        The result of ``op`` applied to ``num`` and ``other``.
 
     Raises:
         TypeError: If ``conf`` has no ``op`` or ``other`` key, or ``op`` is
@@ -78,7 +82,7 @@ def parser(
     Examples:
         >>> from meza.fntools import Objectify
         >>>
-        >>> conf = {'op': 'divide', 'other': 4}
+        >>> conf = {"op": "divide", "other": 4}
         >>> objconf = Objectify(conf)
         >>> parser(10, None, objconf)
         Decimal('2.5')
@@ -98,28 +102,37 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> NumLike:
     """
-    A processor module that asynchronously performs basic arithmetic, such
-    as addition and subtraction.
+    Asynchronously performs basic arithmetic on an item field.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            op (str): The operation, one of "add", "subtract", "multiply",
+                "divide", "floor", "modulo", "power", "mean". Required.
+            other (number): The second operand, cast to ``Decimal``. Required.
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the keys 'other'
-            and 'op'.
+        field (str): Item attribute holding the first operand, cast to
+            ``Decimal`` (default: "content").
 
-            other (number): The second number to operate on.
-            op (str): The math operation. Must be one of 'addition',
-                'subtraction', 'multiplication', 'division', 'modulo',
-                'floor', 'power', or 'mean'.
+        assign (str): Field the result is assigned to. Ignored when ``emit`` is
+            True (default: "simplemath").
 
-        assign (str): Attribute to assign parsed content (default: simplemath)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        emit (bool): Whether to emit the result in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
-    Returns:
-        Awaitable: item with formatted currency
+    Yields:
+        - merged ``{Item, <assign>: <result>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <result>}`` when ``emit`` is False and no item given
+        - ``<result>`` when ``emit`` is True
 
     Raises:
         TypeError: If ``conf`` has no ``op`` or ``other`` key, or ``op`` is
@@ -129,9 +142,9 @@ def async_pipe(*args: Any, **kwargs: object) -> NumLike:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     conf = {'op': 'divide', 'other': '5'}
-        ...     result = await async_pipe({'content': '10'}, conf=conf)
-        ...     print(next(result)['simplemath'])
+        ...     conf = {"op": "divide", "other": "5"}
+        ...     result = await async_pipe({"content": "10"}, conf=conf)
+        ...     print(next(result)["simplemath"])
         >>>
         >>> run(main)
         2
@@ -143,28 +156,37 @@ def async_pipe(*args: Any, **kwargs: object) -> NumLike:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> NumLike:
     """
-    A processor module that performs basic arithmetic, such as addition and
-    subtraction.
+    Performs basic arithmetic on an item field.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            op (str): The operation, one of "add", "subtract", "multiply",
+                "divide", "floor", "modulo", "power", "mean". Required.
+            other (number): The second operand, cast to ``Decimal``. Required.
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the keys 'other'
-            and 'op'.
+        field (str): Item attribute holding the first operand, cast to
+            ``Decimal`` (default: "content").
 
-            other (number): The second number to operate on.
-            op (str): The math operation. Must be one of 'addition',
-                'subtraction', 'multiplication', 'division', 'modulo',
-                'floor', 'power', or 'mean'.
+        assign (str): Field the result is assigned to. Ignored when ``emit`` is
+            True (default: "simplemath").
 
-        assign (str): Attribute to assign parsed content (default: simplemath)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        emit (bool): Whether to emit the result in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
-    Returns:
-        dict: an item with math result
+    Yields:
+        - merged ``{Item, <assign>: <result>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <result>}`` when ``emit`` is False and no item given
+        - ``<result>`` when ``emit`` is True
 
     Raises:
         TypeError: If ``conf`` has no ``op`` or ``other`` key, or ``op`` is
@@ -173,11 +195,11 @@ def pipe(*args: Any, **kwargs: object) -> NumLike:
     Examples:
         >>> from decimal import Decimal
         >>>
-        >>> conf = {'op': 'divide', 'other': '5'}
-        >>> next(pipe({'content': '10'}, conf=conf))['simplemath']
+        >>> conf = {"op": "divide", "other": "5"}
+        >>> next(pipe({"content": "10"}, conf=conf))["simplemath"]
         Decimal('2')
-        >>> kwargs = {'conf': conf, 'field': 'num', 'assign': 'result'}
-        >>> next(pipe({'num': '10'}, **kwargs))['result']
+        >>> kwargs = {"conf": conf, "field": "num", "assign": "result"}
+        >>> next(pipe({"num": "10"}, **kwargs))["result"]
         Decimal('2')
 
     """
