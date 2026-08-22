@@ -71,7 +71,7 @@ def parser(
     """
     keyfunc = lambda s: s.lower()
     splits = [s.strip() for s in content.split(objconf.delimiter) if s]
-    deduped = set(splits) if objconf.dedupe else splits
+    deduped = dict.fromkeys(splits) if objconf.dedupe else splits
     chunks = sorted(deduped, key=keyfunc) if objconf.sort else deduped
     token_key = objconf.token_key or TOKEN_KEY
     return ({token_key: chunk} for chunk in chunks)
@@ -165,6 +165,10 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
         >>> conf.update({'token_key': 'token'})
         >>> next(pipe(item, conf=conf, **kwargs))
         {'token': 'no more'}
+        >>> conf = {"dedupe": True}
+        >>> item = {"content": "delta,alpha,delta,bravo,alpha"}
+        >>> [t["content"] for t in pipe(item, conf=conf)]
+        ['delta', 'alpha', 'bravo']
 
     """
     return parser(*args, **kwargs)

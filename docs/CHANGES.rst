@@ -82,6 +82,9 @@ Fixed
 - ``currencyformat`` yields ``""`` (instead of ``"$NaN.00"``) when the field is missing
   or not numeric to match the other text-producing pipes.
 
+- ``tokenizer``'s ``dedupe`` keeps the first occurrence of each token, so the input
+  order survives. It is now ``PYTHONHASHSEED`` independent.
+
 - ``tokenizer``'s ``token_key`` now falls back to ``"content"`` instead of raising
   ``TypeError: argument of type 'NoneType' is not iterable``.
 
