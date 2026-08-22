@@ -37,18 +37,21 @@ plan: [gameplans/module-enums.md](gameplans/module-enums.md). Other pending-phas
 
 **Accepted/deferred (documented, not bugs):** sync/async **udf-count divergence under partial
 consumption** (eager-concurrent async vs lazy-sequential sync — see the `AsyncPipe` docstring +
-§ P7); bare `async for … break` without close emits GC noise. Migration shims in
-`MIGRATION_SHIMS.md` (row 18: `threads` → `executor`).
+§ P7); bare `async for … break` without close emits GC noise. The former `parallel`/`threads` →
+`executor` migration is **subsumed by the pre-1.0 clean break** (§ release gate): `parallel`/
+`threads` live only on the removed `SyncPipe`/`SyncCollection`, so `executor=` becomes the sole
+concurrency vocabulary and `Pipeline.with_config` never grows them — no shim doc.
 
 **Done phases** below carry a full summary (what landed / decisions / carryovers). Guiding &
 resolved decisions are at the bottom.
 
 > **Pre-1.0 release gate.** The cross-cutting DX/API-shape polish that *sequences* items across
-> P9/P11/P12/P13 (pub/sub 1.0 contract, config-validation strictness, Pipeline/Execution split,
-> `Collection`→`from_sources`, `executor=` cleanup, wheel/PyPI release fidelity) plus its
-> Must-land/Preferred/Can-wait triage lives in
-> [gameplans/release-readiness.md](gameplans/release-readiness.md). Phase *status* still lives only
-> in this tracker.
+> P9/P11/P12/P13 (pub/sub 1.0 contract, config-validation strictness, **clean-break**
+> Pipeline/Execution split, `Collection`→`Pipeline(source=…)`, `with_config`/`executor=` cleanup,
+> wheel/PyPI release fidelity) plus its Must-land/Preferred/Can-wait triage lives in
+> [gameplans/release-readiness.md](gameplans/release-readiness.md); its file map · sequence · exit
+> tests · DoD live in [MILESTONES.md](MILESTONES.md) § Pipeline/Execution split. Phase *status*
+> still lives only in this tracker.
 
 > **Landing a phase → update (single-source-of-truth checklist):** (1) this tracker row +
 > suite count; (2) add a done-phase summary section below (migrate the design out of

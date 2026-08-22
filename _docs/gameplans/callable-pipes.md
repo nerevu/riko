@@ -322,6 +322,41 @@ Resolved value:
 module.opts["determinism"] == "nondeterministic"
 ```
 
+### Bare decorators and implementation kind
+
+`@processor`, `@operator`, and `@splitter` accept either a sync or an async callable, bare or
+configured:
+
+```python
+@processor
+def pipe(item, **kwargs): ...
+
+@processor
+async def pipe(item, **kwargs): ...      # single-impl async — no rename to async_pipe
+
+@processor(emit=False)
+async def pipe(item, **kwargs): ...
+```
+
+The implementation kind comes from the callable's metadata, not its variable name. The current
+`Module._resolve_isasync()` restriction that **rejects an `async def pipe`** (forcing the name
+`async_pipe`) is lifted — `iscoroutinefunction(pipe)` already detects it.
+
+`isasync=True` and the `async_pipe` name are **retained** — they are not shims:
+
+- `isasync=True` is the explicit override for async implementations Python cannot introspect: a
+  plain `def` that returns a coroutine, or a callable object (`iscoroutinefunction` is `False` for
+  both). It also selects the typed `Literal[True]` overload. See `sort.py` (`def async_pipe`).
+- The `async_pipe` **name is structurally required** in a dual-implementation module: a module
+  cannot define two functions both named `pipe`, so the optimized async form coexists as
+  `async_pipe` alongside the sync `pipe`.
+
+So the only change is **additive**: a single-implementation async module may now write
+`async def pipe`. Dual-implementation modules keep `pipe` + `async_pipe` unchanged. Riko selects the
+native implementation for the execution mode and privately adapts the other side
+([execution-semantics.md § Execution-mode adaptation](execution-semantics.md)); one-sided
+`ModuleDefinition` registration is in [extensibility.md § 24](extensibility.md).
+
 ### Strict mode
 
 Strictness is inherited from the pipe and may be overridden per pipe.

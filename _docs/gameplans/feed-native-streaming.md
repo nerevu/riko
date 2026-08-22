@@ -204,7 +204,7 @@ contract) is:
 |---|---|
 | `None` | source invocation (one call producing a stream) — **not** an empty stream |
 | `Mapping` | one record |
-| primitive / `str` | one item |
+| primitive / `str` / `bytes` | one item (never iterated char/byte-wise) |
 | `Iterable` (`list`/`tuple`/`range`/generator/iterator) | stream of items |
 | `AsyncIterable` | async stream of items |
 | `Awaitable` | `await`, then normalize the result |
@@ -229,6 +229,11 @@ Two hard constraints the adapter must preserve (both are current, load-bearing b
 - **Normalize only the outermost source, never record values.** A `Mapping` is one record;
   `listize(mapping)` already yields a one-item stream. A list-valued *field* inside a record
   (e.g. `tags: [...]`) stays a list — riko interprets only the outermost argument as one-or-many.
+- **Definition replay vs generator one-shot.** A `Pipeline` *definition* over a list/tuple replays
+  across executions; a **generator instance** is intrinsically one-shot and is **never** secretly
+  buffered to fake replay. That definition-vs-execution rule is owned by
+  [release-readiness.md § 4](release-readiness.md); this section owns only the per-source
+  classification above.
 
 ## 8. Implementation sequence
 

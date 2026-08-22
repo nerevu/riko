@@ -166,11 +166,92 @@ When both execution and cleanup fail:
 
 ---
 
+## Execution-mode adaptation (`Pipeline` sync ↔ async)
+
+> **Status: Planned.** Owns the sync↔async adaptation layer behind the public
+> [`Pipeline`](release-readiness.md) (definition) / `SyncExecution` / `AsyncExecution` (one-shot,
+> built fresh per `iter`/`aiter`). API shape → [release-readiness.md § 4](release-readiness.md);
+> decorator DX → [callable-pipes.md](callable-pipes.md); source ingest →
+> [feed-native-streaming.md § 7.1](feed-native-streaming.md). AnyIO/Asyncer are **private** — never
+> surfaced through `riko`/`riko.ext`.
+
+### Native-wins resolution matrix
+
+The resolver returns a module *definition* (its optional `sync_pipe`/`async_pipe` slots), then the
+execution selects an implementation for its mode. A native implementation always wins; adapt only
+when the matching side is absent.
+
+| Module implements | Sync execution | Async execution |
+|---|---|---|
+| sync + async | native sync | native async |
+| sync only | native sync | sync on a worker |
+| async only | async on the execution portal | native async |
+
+### Async-only under sync execution — one persistent portal
+
+A single `SyncExecution` owns **one** lazily-created AnyIO `BlockingPortal`, created only when an
+async component is first encountered and reused by every async step, the async source, and any
+async pub/sub for the life of that execution. **Never one portal per item.**
+
+- Long-lived async resources (HTTP clients, DB pools, task groups, channels, async generators) stay
+  on that portal's loop.
+- If an async step yields an async iterator, `anext()` bridges through the same portal; `aclose()`
+  runs through it during teardown.
+- The portal closes deterministically on normal exhaustion, explicit close, and exceptions;
+  original exceptions propagate.
+- Two independent executions of the same reusable `Pipeline` get **independent** portal lifetimes.
+
+If the `async` extra is absent and a pipeline needs an async-only module, raise a clear riko-level
+error (install `riko[async]`) — never a deep AnyIO/Asyncer `ImportError`.
+
+### Sync-only under async execution — worker policy
+
+Unknown synchronous extension code is potentially blocking and is **safe by default**: it runs on a
+worker thread, not the event-loop thread. riko does **not** inspect imports, bytecode, names,
+timing, or source to guess whether a `def` blocks. The policy is the single `execution` `Opts` field
+(declared on the decorator, overridable per call; the same field used by
+[callable-pipes.md](callable-pipes.md)):
+
+| `execution` | Behavior |
+|---|---|
+| `auto` (default) | native async awaited inline; unknown sync under async → worker |
+| `inline` | explicitly safe to run on the event-loop thread (riko's own pure transforms) |
+| `thread` | worker thread |
+| `process` | existing process machinery; do not expand scope to support it |
+
+Built-in pure transforms are marked `inline` internally because riko owns and tests them.
+Third-party modules declare nothing for correctness — absence of metadata stays safe.
+
+### Do not auto-detect blocking
+
+There is no reliable general test for whether arbitrary Python blocks (it may return immediately,
+call `requests`, read a file, sleep, or run CPU-heavy Python depending on input). Optimize known
+cases via the `execution` policy; never make safety depend on a heuristic.
+
+### Sync islands (Deferred — first performance follow-up)
+
+To avoid one worker hop per tiny pure transform under async execution, the execution plan *may*
+group consecutive `inline`/`thread` sync-only processors into one worker segment
+(`[async fetch] → [filter → strreplace → rename] → [async write]`). Grouping is driven by resolved
+implementation kind + `execution` policy, **never** by inferring whether code blocks. Safe only
+across consecutive sync steps with no native-async step, operator/splitter/whole-stream boundary,
+ordering/concurrency boundary, or resource/side-effect boundary between them. **Not shipped** — the
+planner (`riko/_execution/plan.py`) must allow adding it without API changes; benchmark
+before/after.
+
+### Non-goals
+
+Do not turn the whole runtime into one async engine, force sync execution through AnyIO, spin up an
+async runtime per record, or expose AnyIO/Asyncer types. The cheap native sync path stays cheap.
+
+---
+
 ## 7. Timeout
 
 > **Status: Partial.** **Shipped → [IMPLEMENTED.md §7](../IMPLEMENTED.md#7-timeout-shipped)**
 > (lifetime `total` timeout, sync + async `TimeoutIterator`). **Remaining:** the `idle`/`item`
-> modes and the `on_timeout` policy described below.
+> modes, the `on_timeout` policy described below, and the unbounded async
+> `receive` wait (§7.1).
 
 ```python
 timeout(
@@ -195,6 +276,35 @@ Definitions:
 `on_timeout="stop"` is normal completion.
 
 `on_timeout="error"` enters the configured error policy.
+
+### 7.1 `receive` has no async timeout
+
+The sync and async `receive` pipes wait on entirely different terms, and only
+the sync one can give up:
+
+| | Waits by | Honors `max_wait` |
+|---|---|---|
+| `parser` (sync) | polling the queue, yielding `StreamState.PENDING` | yes — closes and stops |
+| `async_parser` | blocking until the sender finishes | **no** |
+
+`async_parser` reads only `objconf.name`; `wait`, `max_wait` and `max_len` are
+sync-only (`max_len` is applied in `_register_receiver`, which the async path
+never calls). Measured:
+
+```text
+async_pipe(conf={"name": "nosender", "max_wait": 1})   ->  hangs indefinitely
+```
+
+So a mistyped receiver name, or a sender that errors before starting, wedges an
+async pipeline with no diagnostic — while the same mistake on the sync path
+times out and closes cleanly. This is the same hazard as `§7`'s `item` mode: a
+wait with no upper bound.
+
+Fixing it means wrapping the subscribe in `anyio.fail_after`/`move_on_after`
+using `max_wait`, and deciding which of `on_timeout="stop"` (return what
+arrived) or `"error"` applies — so it should land **with** the `on_timeout`
+policy above rather than as a separate patch. Until then the docstrings state
+that the async path has no timeout.
 
 ---
 
