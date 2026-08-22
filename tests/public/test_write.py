@@ -99,3 +99,32 @@ class TestWriteSkips:
     def test_async_missing_url_skips_but_passes_through(self):
         conf = cast(WriteConf, {"target": "json"})
         assert _run_async_pipe(ITEMS, conf=conf) == ITEMS
+
+
+class TestWriteTargetFromExtension:
+    """When ``target`` is omitted, the url extension selects the converter."""
+
+    def _read(self, path):
+        with open(path, mode="rb") as f:
+            return f.read()
+
+    def test_sync_csv_extension(self, tmp_path):
+        path = tmp_path / "out.csv"
+        list(pipe(ITEMS, conf=WriteConf({"url": path})))
+        assert self._read(path).split() == [b"x", b"0", b"1", b"2"]
+
+    @pytest.mark.skipif(not isasync, reason="anyio not installed")
+    def test_async_csv_extension(self, tmp_path):
+        path = tmp_path / "out.csv"
+        _run_async_pipe(ITEMS, conf=WriteConf({"url": str(path)}))
+        assert self._read(path).split() == [b"x", b"0", b"1", b"2"]
+
+    def test_explicit_target_overrides_extension(self, tmp_path):
+        path = tmp_path / "out.csv"
+        list(pipe(ITEMS, conf=WriteConf({"url": path, "target": "json"})))
+        assert self._read(path) == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
+
+    def test_unknown_extension_falls_back_to_json(self, tmp_path):
+        path = tmp_path / "out.dat"
+        list(pipe(ITEMS, conf=WriteConf({"url": path})))
+        assert self._read(path) == b'[{"x": 0}, {"x": 1}, {"x": 2}]'

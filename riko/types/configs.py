@@ -289,7 +289,7 @@ class UrlParseObjconf(DynamicConf):
 
 class WriteObjconf(DynamicConf):
     url: str | Path
-    target: TargetLike
+    target: TargetLike | None
     mode: str
 
 

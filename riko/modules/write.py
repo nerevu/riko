@@ -38,6 +38,7 @@ Attributes:
 
 from io import StringIO
 from logging import Logger
+from pathlib import Path
 from typing import Any, cast
 
 import pygogo as gogo
@@ -46,12 +47,43 @@ from meza import io
 from riko.bado.io import async_write
 from riko.types.configs import WriteObjconf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
+from riko.types.values import TargetLike
 
 from . import operator
 
 OPTS: Opts = Opts()
-DEFAULTS: Defaults = Defaults({"target": "json", "mode": "wb+"})
+DEFAULTS: Defaults = Defaults({"target": None, "mode": "wb+"})
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+
+
+def _resolve_target(
+    url: str | Path | None, target: TargetLike | None, *funcs: TargetLike
+) -> TargetLike:
+    """
+    Resolves the export target from an explicit ``target``, else the url extension.
+
+    An explicit ``target`` wins. Otherwise the url's file extension (lowercased,
+    sans dot) is used when it names a known converter. This allows
+    ``write(conf={"url": "out.csv"})`` to select ``csv`` as the ``target``. A url with
+    no / an unknown extension falls back to ``json``.
+
+    Args:
+        url: The destination file path (a ``str``, ``Path``, or unset).
+        target: The configured export format, or ``None`` to derive one.
+        funcs: The known converters, keyed by target.
+
+    Returns:
+        The resolved export target.
+
+    """
+    resolved = "json"
+
+    if target:
+        resolved = target
+    elif url and (ext := Path(url).suffix.lstrip(".").lower()) in funcs:
+        resolved = ext
+
+    return resolved
 
 
 async def async_parser(
@@ -97,15 +129,16 @@ async def async_parser(
     from riko.collections import CONVERSION_FUNCS  # noqa: PLC0415
 
     items = list(stream)
+    target = _resolve_target(objconf.url, objconf.target, *CONVERSION_FUNCS)
 
     if not objconf.url:
         logger.warning("The url is not set, skipping writing")
-    elif objconf.target in {"list", "tuple"}:
-        logger.warning(f"The target {objconf.target} is not supported for writing")
-    elif (convert := CONVERSION_FUNCS.get(objconf.target)) is None:
-        logger.warning(f"The target {objconf.target} is not a known converter")
+    elif target in {"list", "tuple"}:
+        logger.warning(f"The target {target} is not supported for writing")
+    elif (convert := CONVERSION_FUNCS.get(target)) is None:
+        logger.warning(f"The target {target} is not a known converter")
     elif (content := convert([dict(item) for item in items])) is None:
-        logger.warning(f"The {objconf.target} converter produced no content")
+        logger.warning(f"The {target} converter produced no content")
     else:
         await async_write(objconf.url, cast(StringIO, content), mode=objconf.mode)
 
@@ -150,15 +183,16 @@ def parser(
     from riko.collections import CONVERSION_FUNCS  # noqa: PLC0415
 
     items = list(stream)
+    target = _resolve_target(objconf.url, objconf.target, *CONVERSION_FUNCS)
 
     if not objconf.url:
         logger.warning("The url is not set, skipping writing")
-    elif objconf.target in {"list", "tuple"}:
-        logger.warning(f"The target {objconf.target} is not supported for writing")
-    elif (convert := CONVERSION_FUNCS.get(objconf.target)) is None:
-        logger.warning(f"The target {objconf.target} is not a known converter")
+    elif target in {"list", "tuple"}:
+        logger.warning(f"The target {target} is not supported for writing")
+    elif (convert := CONVERSION_FUNCS.get(target)) is None:
+        logger.warning(f"The target {target} is not a known converter")
     elif (content := convert([dict(item) for item in items])) is None:
-        logger.warning(f"The {objconf.target} converter produced no content")
+        logger.warning(f"The {target} converter produced no content")
     else:
         io.write(objconf.url, content, mode=objconf.mode)
 

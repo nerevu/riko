@@ -167,7 +167,7 @@ class Defaults(TypedDict, total=False):
     stop: bool
     strict: bool
     sum_key: str
-    target: TargetLike
+    target: TargetLike | None
     test: bool
     token_key: str
     type: str

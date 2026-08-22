@@ -849,7 +849,7 @@ class UrlParseConf(TypedDict, total=False):
 
 class WriteConf(TypedDict, total=False):
     url: Required[str | Path]
-    target: "TargetLike" = "json"
+    target: "TargetLike | None" = None
     mode: str = "wb+"
 
 
