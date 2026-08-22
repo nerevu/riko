@@ -21,6 +21,7 @@ import pygogo as gogo
 from meza.fntools import chunk as _chunk
 
 from riko import ENCODING, bado
+from riko._io import ext_from_content_type
 from riko.bado import async_get, async_read, open_file
 from riko.paths import get_abspath
 
@@ -53,6 +54,7 @@ def _coerce_chunk(raw: str | bytes, binary: bool, encoding: str) -> str | bytes:
 
 class NamedTextIOWrapper(TextIOWrapper):
     _name: str = ""
+    content_type: str | None = None
 
     @property
     def name(self) -> str:  # type: ignore[override]
@@ -62,14 +64,19 @@ class NamedTextIOWrapper(TextIOWrapper):
     def name(self, value: str) -> None:
         self._name = value
 
+    @property
+    def ext(self) -> str | None:
+        return ext_from_content_type(self.content_type)
 
-async def _read_bytes(url: str, timeout: float) -> tuple[bytes, str]:
+
+async def _read_bytes(url: str, timeout: float) -> tuple[bytes, str, str | None]:
     if url.startswith("http"):
         response = await async_get(url, timeout=timeout)
-        result = (response.content, url)
+        content_type = response.headers.get("content-type")
+        result = (response.content, url, content_type)
     else:
         response = await async_read(url, binary=True)
-        result = (response, url.replace("file://", ""))
+        result = (response, url.replace("file://", ""), None)
 
     return result
 
@@ -98,13 +105,14 @@ async def async_url_open(  # noqa: E302
     binary: bool = False,
     **kwargs: object,
 ) -> BytesIO | NamedTextIOWrapper:
-    data, name = await _read_bytes(url, timeout)
+    data, name, content_type = await _read_bytes(url, timeout)
 
     if binary:
         f: BytesIO | NamedTextIOWrapper = BytesIO(data)
     else:
         f = NamedTextIOWrapper(BytesIO(data), encoding=encoding)
         f.name = name
+        f.content_type = content_type
 
     return f
 
