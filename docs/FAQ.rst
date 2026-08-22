@@ -353,11 +353,13 @@ Both accept a plain ``str`` or a ``StrEnum`` member.
 .. code-block:: python
 
     >>> write = describe_module(Sinks.WRITE)
-    >>> write.name, write.module
-    ('write', <module 'riko.modules.write' from .../write.py'>)
+    >>> write.name, write.description
+    ('write', 'Writes a stream to a file as a terminal sink.')
     >>> fetch = describe_module(Sources.FETCH)
-    >>> fetch.name, fetch.module
-    ('fetch', <module 'riko.modules.fetch' from .../fetch.py'>)
+    >>> fetch.module
+    <module 'riko.modules.fetch' from '...fetch.py'>
+    >>> fetch.sync_pipe.__name__, fetch.async_pipe.__name__
+    ('pipe', 'async_pipe')
     >>> describe_module('does-not-exist')
 
 Notes:

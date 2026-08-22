@@ -186,16 +186,57 @@ def list_modules(  # noqa: E302
     return modules if show_metadata else [module.name for module in modules]
 
 
+def _gen_doc(module: object) -> Iterator[str]:
+    lines = (getattr(module, "__doc__", "") or "").strip().splitlines()
+    return map(str.strip, lines)
+
+
 def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
-    canonical = normalize_module_name(name)
-    definition = registry.definition(canonical) if canonical else None
+    """
+    Returns a module's definition, or None when the name is unknown.
 
-    if definition is None and canonical:
-        try:
-            module = import_module(f"{_PACKAGE}.{canonical}")
-        except ModuleNotFoundError:
-            module = None
+    A built-in is described from its module rather than the registry, so its
+    ``description`` comes from the docstring summary and its pipe callables are
+    read off the module. A registry definition instead reports whatever its
+    registrant supplied, which may leave the callables unset; ``get_pipe``
+    resolves either.
 
-        definition = ModuleDefinition(name=canonical, module=module) if module else None
+    Args:
+        name: The module name, either a str or a discovery-tree member.
+
+    Returns:
+        The definition, or None when no module answers to ``name``.
+
+    Examples:
+        >>> from riko import Sources
+        >>>
+        >>> fetch = describe_module(Sources.FETCH)
+        >>> fetch.name
+        'fetch'
+        >>> fetch.description
+        'Fetches an RSS feed and yields feed entries.'
+        >>> fetch.sync_pipe.__name__, fetch.async_pipe.__name__
+        ('pipe', 'async_pipe')
+        >>> fetch.get_pipe("pipe") is fetch.sync_pipe
+        True
+        >>> describe_module("does-not-exist")
+
+    """
+    if canonical := normalize_module_name(name):
+        if (definition := registry.definition(canonical)) is None:
+            try:
+                module = import_module(f"{_PACKAGE}.{canonical}")
+            except ModuleNotFoundError:
+                pass
+            else:
+                definition = ModuleDefinition(
+                    name=canonical,
+                    module=module,
+                    sync_pipe=getattr(module, "pipe", None),
+                    async_pipe=getattr(module, "async_pipe", None),
+                    description=next(_gen_doc(module), None),
+                )
+    else:
+        definition = None
 
     return definition

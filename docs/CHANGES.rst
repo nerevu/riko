@@ -18,7 +18,9 @@ New
   ``pipe.filter()``.
 
 - Added ``category`` filtering (``source``, ``transform``, ``sink``) to
-  ``riko.list_modules``, plus ``riko.describe_module(name)``.
+  ``riko.list_modules``.
+
+- Added ``describe_module`` to view built-in's fully populated ``ModuleDefinition``.
 
 - Added the ``gen-names`` script (and ``manage codegen``) to regenerate
   ``riko/modules/_names.py`` from the built-in catalog.
