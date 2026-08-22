@@ -130,3 +130,11 @@ def test_no_leaked_public_functions():
 
 def test_stable_and_extension_are_disjoint():
     assert STABLE.isdisjoint(EXTENSION)
+
+
+@pytest.mark.parametrize(
+    "module", [riko, riko.api, riko.ext, riko.modules], ids=lambda m: m.__name__
+)
+def test_all_has_no_duplicates(module):
+    names = module.__all__
+    assert len(names) == len(set(names))

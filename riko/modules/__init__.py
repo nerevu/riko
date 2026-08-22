@@ -24,7 +24,6 @@ __all__ = [
     "describe_module",
     "get_module_metadata",
     "list_modules",
-    "list_modules",
     "operator",
     "processor",
     "splitter",
