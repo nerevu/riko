@@ -262,9 +262,10 @@ Milestone 10).
 
 > **Boundary:** E7 owns the **ecosystem** side of 1.0 (conformance badges, published stable/
 > extension/contract/schema policies, deprecation/migration windows). The **internal DX/API-shape
-> polish and the release/package-fidelity gate** (config strictness, Pipeline/Execution split,
-> `Collection`→`from_sources`, `executor=`, pub/sub 1.0 contract, wheel/PyPI CI, the Must-land/
-> Preferred/Can-wait triage) live in [release-readiness.md](release-readiness.md).
+> polish and the release/package-fidelity gate** (config strictness, clean-break Pipeline/Execution
+> split, `Collection`→`Pipeline(source=…)`, `with_config`/`executor=`, pub/sub 1.0 contract,
+> wheel/PyPI CI, the Must-land/Preferred/Can-wait triage) live in
+> [release-readiness.md](release-readiness.md).
 
 ## E8. Prior-art research conclusions
 
@@ -350,6 +351,27 @@ Initial registry:
 * entry-point discovery deferred
 
 One distribution and internal plugin architecture are sufficient initially. External connectors should use optional dependencies and plugin boundaries.
+
+**One-sided registration (execution-mode adaptation).** A `ModuleDefinition` needs only the
+implementation the author actually wrote — the runtime adapts the missing side
+([execution-semantics.md § Execution-mode adaptation](execution-semantics.md)):
+
+```python
+@processor
+def pipe(item, **kwargs): ...
+
+register(ModuleDefinition(name="example.normalize", sync_pipe=pipe))
+```
+
+```python
+@processor
+async def pipe(item, **kwargs): ...
+
+register(ModuleDefinition(name="example.lookup", async_pipe=pipe))
+```
+
+Supplying both `sync_pipe` and `async_pipe` stays available as an optimization when the two
+implementations genuinely differ; it is never required merely for sync/async parity.
 
 
 ## Prior-art sources

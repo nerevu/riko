@@ -47,15 +47,17 @@ and the **same rules apply to sync and async**. Concretely (each maps to a topol
   `subscription.close()`/channel closure. (F5)
 
 **Vocabulary (P1 of the doc):** `others`→`targets`, `max_len`→`buffer_size`,
-`max_wait`→`timeout`/`idle_timeout`, drop the sync-only `wait` interval; keep old names as
-deprecated aliases ≥1 minor. Export `ReceiverUnavailableError`/`DuplicateReceiverError`/the new
+`max_wait`→`timeout`/`idle_timeout`, drop the sync-only `wait` interval. **Clean break, no
+deprecated aliases** — riko has no external consumers pre-1.0, so rename outright rather than
+carry a shim to 1.0. Export `ReceiverUnavailableError`/`DuplicateReceiverError`/the new
 backpressure error from `riko`/`riko.api`.
 
 ## 3. Configuration correctness
 
 - **Stop silently accepting invalid `Context`.** Remove the catch-all `**kwargs` (`Context(verbsoe=…)`
   must not look successful; migration's `describe_input=True`→`RUN` silent coercion is release
-  poison). Deprecated kwargs translate with `DeprecationWarning` or raise actionable errors.
+  poison). Unknown/renamed kwargs **raise** an actionable error — no translation shim (clean
+  break, pre-1.0, no external consumers).
 - **Validate module config early** — unknown keys, invalid enums/operators, conflicting options,
   wrong types — at pipe **construction**, not mid-iteration.
 
@@ -64,35 +66,68 @@ backpressure error from `riko`/`riko.api`.
 > **Make streaming, boundedness, ordering, and side-effect semantics properties of the *pipe*, not
 > consequences of whether the user picked `SyncPipe` or `AsyncPipe`.**
 
-- **`Collection` stops being a first-class abstraction.** It is effectively a multi-source
-  constructor for a pipe (`SyncCollection.pipe()`/`AsyncCollection.async_pipe()` literally convert to
-  a pipe). Replace with `SyncPipe.from_sources(sources, …)` / `AsyncPipe.from_sources(…)`; keep
-  `SyncCollection(...)` as a deprecated alias for one cycle. Shrinks the stable surface from four
-  concepts to two. Private source strategies (`_IterableSource`/`_MultiSource`/`_AsyncMultiSource`/
-  `_ModuleSource`) own ingestion; the pipe owns composition/lifecycle. **Do not** merge into a giant
-  `PyFlow` — that compresses inheritance while leaving four user-visible objects.
-- **`PyPipe` becomes private/structural** (`_PipeBase`/`_PipeDefinition`+`_ExecutionConfig`+
-  `_Lifecycle`), never a named third pipe concept.
-- **Definition vs execution.** Highest-value architectural change: separate a reusable immutable
-  `Pipeline`/`PipeSpec` from a one-shot `Execution`. Interim: make post-construction config
-  immutable, remove mutable `PyPipe.__call__` (derivation → `with_config(...)` returns a **new**
-  object), and reject chaining `EXHAUSTED` with `PipelineStateError` (silent empty output is a
-  brutal failure mode). Target model:
+> **Decisions locked (2026-08).** Clean break, **no deprecated aliases** (pre-1.0, no external
+> consumers). Go straight to the full `Pipeline`(definition)/`Execution`(one-shot) split — **no
+> interim immutable-`PyPipe`** stepping stone. `Pipeline(source=…)` is the only stream constructor
+> (**no `from_sources`**); execution options derive via `with_config(...)`. (Folds in the former
+> standalone `_docs/pipeline.md` handoff; its cross-cutting parts route to the owners linked below.)
+
+- **`Pipeline` is the sole public pipeline concept.** A reusable, immutable *definition* lives in
+  `riko/pipeline.py`, exported from `riko` and `riko.api`. `Pipeline("fetch", source=…)` or
+  `Pipeline(source=…)` (an identity stream until a step is chained). Fluent composition —
+  `flow.filter(conf=…)`, `flow.pipe("filter", conf=…)`, value-taking `flow | "filter"` /
+  `flow | ("filter", conf)` — each returns a **new** definition and never mutates `flow`. No `.then()`.
+- **Definition vs execution — the full split, now.** `iter(flow)` builds a fresh `SyncExecution`
+  (an `Iterator`); `aiter(flow)` builds a fresh `AsyncExecution` (an `AsyncIterator`). The same
+  `flow` runs under `for` **or** `async for`; each iteration is an independent execution. The P5
+  one-shot lifecycle belongs to the *execution*, not the definition — chaining onto an `EXHAUSTED`
+  execution raises `PipelineStateError` (silent empty output is a brutal failure mode). Do not
+  memoize an execution on the definition. Target model:
   ```text
   Pipeline  (reusable definition) → SyncExecution (Iterator) / AsyncExecution (AsyncIterator)
   ```
+- **`SyncPipe`/`AsyncPipe`/`SyncCollection`/`AsyncCollection` are removed from the public surface**
+  (no deprecated aliases). Their mature one-shot execution mechanics are refactored **private**
+  into `riko/_execution/` (`SyncExecution`/`AsyncExecution` + adapters), not preserved as parallel
+  compat classes. Compiled `pipe_*` pipelines and `run-pipe` keep working through the private
+  engines. Migration is a documented hard break (§ Migration below). `PyPipe` never becomes a named
+  third pipe concept — it collapses into the private `_execution` engines.
+- **`Collection` disappears entirely.** An outer iterable of records already *is* a stream, so
+  `Pipeline(source=[…])` covers every multi-source case — there is no `from_sources`. Source
+  classification is one boundary (owned by
+  [feed-native-streaming.md § 7.1](feed-native-streaming.md)): a `Mapping` is **one** record; a
+  `list`/`tuple`/iterator/generator is a stream; `str`/`bytes` are one item; async
+  iterables/awaitables resolve through the execution. A `Pipeline` **definition** over a list
+  replays across executions; a **generator instance** stays one-shot and is **never** secretly
+  buffered to fake replay.
+- **Prerequisite — rename the internal type alias.** `riko/types/general.py` has
+  `type Pipeline = SyncPipeParser | AsyncPipeParser`; rename it to `PipeCallable` (+ update
+  `Resolver` typing / internal imports) before the public `Pipeline` class can land. Do not expose
+  adaptation-layer protocol types merely to solve the rename.
 - **Explicit terminals** — `flow.collect()`/`first()`/`take(n)`/`write("out.json")` instead of
   inferring `list(sync_pipe)` = collect vs `await async_pipe` = collect. Reserve `.pipe()` for
-  transforms; reconsider `split()`/`export()` as special methods (`export()`'s list|tuple|StringIO|
-  int|iterable|None return is hard to type — separate collection from writing).
-- **One concurrency vocabulary.** Promote `executor=` (`"thread"`/`"process"`/`"inline"`) + `workers`/
-  `concurrency`/`ordered`/`prefetch`; demote `parallel`/`threads`/`pool`/`pool_scope`/`chunksize` to
-  expert-only. Finish the tracked `threads → executor` shim before freezing 1.0.
+  transforms; keep `split()`/`export()` out of the inferred-terminal muddle (`export()`'s
+  list|tuple|StringIO|int|iterable|None return is hard to type — separate collection from writing).
+- **One concurrency vocabulary — `executor=` only.** `flow.with_config(executor="thread"|"process"|
+  "inline", workers=…, concurrency=…, ordered=…, prefetch=…)` returns a **new** definition. **No
+  `parallel`/`threads`/`pool`/`pool_scope`/`chunksize` shim** — clean break, single vocabulary.
+- **Execution-mode adaptation is owned by
+  [execution-semantics.md § Execution-mode adaptation](execution-semantics.md).** Native
+  implementation always wins; a sync-only module under async execution runs on a worker; an
+  async-only module under sync execution runs on **one** persistent portal per execution. The
+  `execution=`(`auto`/`inline`/`thread`/`process`) policy is a single `Opts` field (declared on the
+  decorator, overridable per call) — not duplicated here. AnyIO/Asyncer stay **private** (never in
+  `riko`/`riko.ext`); a sync-only install that needs an async-only module raises an actionable
+  `riko[async]` error (§ 6), never a deep `ImportError`.
+- **Decorator DX is owned by [callable-pipes.md § Bare decorators](callable-pipes.md).**
+  `@processor async def pipe` newly works for single-impl async; `isasync=`/`async_pipe` are
+  **retained** (load-bearing for non-introspectable/dual-impl cases, not shims). One-sided
+  `ModuleDefinition` registration → [extensibility.md § 24](extensibility.md).
 - **Shrink `Context`** — `verbose`→logging, `test`→remove, `submodule`→internal, `mode`→explicit
   introspection (`flow.describe()`/`required_inputs()`/`dependencies()`; `ExecutionMode` stays
-  private/compiler-facing). Aim for `Context(inputs=…, resources=…)` — `resources` also solves the
-  process-global pub/sub/registry ownership.
-- **Constructor stops being a union of every module's knobs** — move `assign`/`field`/`func`/`others`/
+  private/compiler-facing). Aim for `Context(inputs=…, resources=…)` — `resources` also carries the
+  execution-scoped pub/sub/registry ownership ([fanout-topology.md F5](fanout-topology.md)).
+- **Constructor stops being a union of every module's knobs** — move `assign`/`field`/`func`/`targets`/
   `skip_if` to the step boundary (`flow.pipe("foo", conf=…, assign=…)`); typed `SourceSpec`/
   `("fetch", {...})` tuples instead of `{"type": "fetch", …}` dict-encoded behavior.
 - **Collapse the runtime-utility surface** — de-emphasize `backend`/`isasync`/`issync`/`async_return`/
@@ -100,6 +135,15 @@ backpressure error from `riko`/`riko.api`.
   Python iteration.
 - **Rename `collections.py`** once `Sync/AsyncCollection` go (→ `pipe.py`/`runtime.py`/`execution.py`);
   users import only from `riko`.
+
+**Migration (hard break, pre-1.0 — no aliases).**
+
+```text
+SyncPipe(mod, …)           → Pipeline(mod, source=…)
+AsyncPipe(mod, …)          → Pipeline(mod, source=…)
+SyncCollection(mod, srcs)  → Pipeline(mod, source=srcs)
+AsyncCollection(mod, srcs) → Pipeline(mod, source=srcs)
+```
 
 ## 5. Error UX (owned by P12)
 
@@ -158,13 +202,16 @@ fixes (F1/F4/F5).
 **Can wait:** new modules · branching/routing primitives · connector packages · richer orchestration ·
 most roadmap expansion.
 
-**Biggest open question:** do `SyncPipe`/`AsyncPipe` remain *both* pipeline definition and running
-cursor for 1.0? If yes → tighten one-shot semantics aggressively. If no → separate `Pipeline` from
-`Execution` now (§ 4); doing it after public adoption is far more expensive.
+**Resolved (2026-08):** `SyncPipe`/`AsyncPipe` do **not** survive as a public definition+cursor.
+Separate `Pipeline` (definition) from `Execution` now (§ 4), clean break, no deprecated aliases —
+far cheaper before public adoption than after. File map · sequence · exit tests · DoD:
+[MILESTONES.md § Pipeline/Execution split](../MILESTONES.md).
 
 ## 10. Relationship to the P-track
 
 - **Sequences, not replaces, the P-track** — § 2 = P11 + fanout-topology F1/F4/F5; § 5 = P12; § 8's
-  `riko.modules` shrink = P3/P9 surface work; § 4 config-immutability tightens P5 one-shot lifecycle.
+  `riko.modules` shrink = P3/P9 surface work; § 4 Pipeline/Execution split tightens P5 one-shot
+  lifecycle and sequences across P9/P11/P12/P13 — its file map + exit tests live in
+  [MILESTONES.md § Pipeline/Execution split](../MILESTONES.md).
 - **Live status** (done/next/suite count) lives only in the
   [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) tracker — do not restate it here.

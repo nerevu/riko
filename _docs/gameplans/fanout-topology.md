@@ -304,6 +304,12 @@ Initial recommendation:
 Persistent broker semantics are connector concerns, not in-process `send` / `receive`
 semantics.
 
+The public [`Pipeline`](release-readiness.md) pub/sub UX rides on F5: a producer
+`Pipeline(source=…).send(targets=[…])` and a consumer `Pipeline.subscribe("…")` (or
+`flow.subscribe`) resolve their channel from the execution's resource scope (`Context.resources`),
+not a process global. Producer vocabulary is `targets` (renamed from `others`, clean break —
+[release-readiness.md § 2](release-readiness.md)).
+
 ## 10. Phase F6 — topology-aware workflow representation
 
 Branching must become visible to workflow introspection rather than existing only as
