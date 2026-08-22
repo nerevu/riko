@@ -31,6 +31,7 @@ from riko import ENCODING
 from riko._rssutils import augment_entries
 from riko.bado import io
 from riko.cast import SourceOpts
+from riko.modules._prepare import require_conf
 from riko.parsers import parse_rss
 from riko.types.configs import FetchObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
@@ -71,6 +72,9 @@ async def async_parser(
     Returns:
         Awaitable: Iter[dict]
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path
         >>> from riko import run
@@ -85,13 +89,9 @@ async def async_parser(
         Donations
 
     """
-    if objconf.url:
-        content: str = await io.async_url_read(objconf.url, delay=objconf.delay)
-        result = augment_entries(parse_rss(content=content))
-    else:
-        result = iter([])
-
-    return result
+    url: str = require_conf(objconf, "url", "fetch")
+    content: str = await io.async_url_read(url, delay=objconf.delay)
+    return augment_entries(parse_rss(content=content))
 
 
 def parser(
@@ -113,6 +113,9 @@ def parser(
     Returns:
         Iter[dict]: The stream of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
@@ -123,13 +126,9 @@ def parser(
         'Donations'
 
     """
-    if objconf.url:
-        entries = parse_rss(objconf.url, encoding=objconf.encoding)
-        stream = augment_entries(entries)
-    else:
-        stream = iter([])
-
-    return stream
+    url: str = require_conf(objconf, "url", "fetch")
+    entries = parse_rss(url, encoding=objconf.encoding)
+    return augment_entries(entries)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -153,6 +152,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
     Returns:
         Awaitable: iterator of items
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
@@ -189,6 +191,9 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
     Returns:
         dict: an iterator of items
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path

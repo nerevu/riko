@@ -34,6 +34,7 @@ from riko._io import Fetch
 from riko._iterutils import betwix
 from riko.bado import io
 from riko.cast import SourceOpts
+from riko.modules._prepare import require_conf
 from riko.parsers import get_text
 from riko.types.configs import FetchPageObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
@@ -74,6 +75,9 @@ async def async_parser(
     Returns:
         Iter[dict]: The stream of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path
         >>> from riko import run
@@ -91,7 +95,8 @@ async def async_parser(
         CNN.com International - Breaking
 
     """
-    content = await io.async_url_read(objconf.url)
+    url: str = require_conf(objconf, "url", "fetchpage")
+    content = await io.async_url_read(url)
     parsed = get_string(content, str(objconf.start), str(objconf.end))
     detagged = get_text(parsed) if objconf.detag else parsed
     split = detagged.split(objconf.token) if objconf.token else [detagged]
@@ -112,6 +117,9 @@ def parser(
     Returns:
         Iter[dict]: The stream of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from meza.fntools import Objectify
         >>> from riko import get_path
@@ -125,7 +133,8 @@ def parser(
         'CNN.com International'
 
     """
-    with Fetch(objconf.url, encoding=objconf.encoding) as f:
+    url: str = require_conf(objconf, "url", "fetchpage")
+    with Fetch(url, encoding=objconf.encoding) as f:
         sliced = betwix(f, objconf.start, objconf.end, True)
         content = "\n".join(sliced)
 
@@ -161,6 +170,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
     Returns:
         Awaitable: item
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
@@ -204,6 +216,9 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
     Yields:
         dict: item
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path

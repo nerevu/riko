@@ -32,6 +32,7 @@ from riko._io import Fetch, auto_close
 from riko._iterutils import listize
 from riko.bado import io
 from riko.cast import SourceOpts
+from riko.modules._prepare import require_conf
 from riko.parsers import any2dict
 from riko.types.configs import FetchDataObjconf
 from riko.types.general import Defaults, Extraction, FileTypes, Item, Opts, Stream
@@ -61,6 +62,9 @@ async def async_parser(
     Returns:
         Iter[dict]: The stream of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path
         >>> from riko import run
@@ -76,11 +80,12 @@ async def async_parser(
         Business System Analyst
 
     """
-    ext = splitext(objconf.url)[1].lstrip(".")
+    url: str = require_conf(objconf, "url", "fetchdata")
+    ext = splitext(url)[1].lstrip(".")
     path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
     # TODO: Figure out if html/xml files should be parsed as binary too.
     binary = ext == "json"
-    f = await io.async_url_open(objconf.url, encoding=objconf.encoding, binary=binary)
+    f = await io.async_url_open(url, encoding=objconf.encoding, binary=binary)
     content = any2dict(f, ext, objconf.html5, path=path)
     stream = auto_close(content, f)
     return stream
@@ -104,6 +109,9 @@ def parser(
     Returns:
         Iter[dict]: The stream of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
@@ -115,11 +123,12 @@ def parser(
         'Business System Analyst'
 
     """
-    ext = splitext(objconf.url)[1].lstrip(".")
+    url: str = require_conf(objconf, "url", "fetchdata")
+    ext = splitext(url)[1].lstrip(".")
     paths = cast(list[str], listize(objconf.path))
     path = ".".join(paths)
 
-    with Fetch(objconf.url, encoding=objconf.encoding, binary=(ext == "json")) as f:
+    with Fetch(url, encoding=objconf.encoding, binary=(ext == "json")) as f:
         ext = ext or f.ext
         content = cast(FileTypes, f)
         yield from any2dict(content, ext, objconf.html5, path=path)
@@ -147,6 +156,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Returns:
         Awaitable: stream of items
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
@@ -187,6 +199,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Returns:
         dict: an iterator of items
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
