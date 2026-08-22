@@ -230,6 +230,12 @@ def cast_datetime(  # noqa: E302
         'datetime'
         >>> type(cast_datetime('today')).__name__
         'date'
+        >>> cast_datetime('-1 day') == cast_datetime('yesterday')
+        True
+        >>> cast_datetime('1 week') == cast_datetime('+7 days')
+        True
+        >>> cast_datetime('next month') == cast_datetime('1 month')
+        True
 
     """
     tt = None
@@ -248,7 +254,8 @@ def cast_datetime(  # noqa: E302
         tt, _date = value, tt_to_datetime(value, as_date=as_date)
     else:
         words = value.split(" ")
-        mathish = set(words).intersection(MATH_WORDS)
+        count = words[0].lstrip("+-")
+        unit = f"{words[-1].rstrip('s')}s" if len(words) == 2 else ""
         textish = set(words).intersection(TEXT_WORDS)
         now = dt.now(UTC)
         today = now.date()
@@ -259,9 +266,9 @@ def cast_datetime(  # noqa: E302
             "yesterday": today - timedelta(days=1),
         }
 
-        if value and value[0] in {"+", "-"} and len(mathish) == 1:
+        if unit in MATH_WORDS and count.isdigit():
             op = sub if value.startswith("-") else add
-            _date = get_date("".join(mathish), int(words[0][1:]), op)
+            _date = get_date(unit, int(count), op)
         elif len(textish) == 2:
             op = sub if words[0] == "last" else add
             _date = get_date(f"{words[1]}s", 1, op)

@@ -61,6 +61,16 @@ Fixed
 - ``slugify`` treats a ``None`` ``separator`` as unset and falls back to ``"-"`` instead
   of raising from ``python-slugify``.
 
+- ``datebuilder`` now resolves shorthands at call time rather than at import, accepts
+  every offset unit (``"2 weeks"``, ``"-1 month"``, ``"30 minutes"``) plus the
+  ``"next week"``/``"last month"`` word forms, and raises one clear ``ValueError``
+  for anything it cannot convert. Sub-day offsets such as ``"1 hour"`` were previously
+  read as times of day (``01:00`` today).
+
+- ``cast_datetime`` accepts unsigned counts (``"3 days"``, not just ``"+3 days"``) and
+  singular units (``"1 week"``), and no longer misreads a three-word string such as
+  ``"3 days ago"`` as a future date.
+
 Removed
 ~~~~~~~
 

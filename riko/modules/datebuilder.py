@@ -2,6 +2,11 @@
 """
 Provides functions for converting a text string into a datetime. Loopable.
 
+Delegates to ``riko.cast.cast_datetime``, so it accepts an absolute date in
+most common formats, the shorthands ``"today"``/``"tomorrow"``/``"yesterday"``/
+``"now"``, a counted offset such as ``"3 days"`` or ``"-1 month"``, and the word
+forms ``"next week"`` and ``"last year"``.
+
 Examples:
     basic usage::
 
@@ -16,30 +21,18 @@ Attributes:
 
 """
 
-import datetime
-from datetime import UTC, timedelta
-from datetime import datetime as dt
 from logging import Logger
 from time import struct_time
 from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType
-from riko.dates import NOW, TODAY, parse_date_string
+from riko.cast import BasicCastType, cast_datetime
 from riko.types.configs import DynamicConf
 from riko.types.general import Defaults, Extraction, Opts
+from riko.types.values import DateLikeType
 
 from . import processor
-
-# TODO: Make timezone settable and add more options (e.g. 'next week', 'last month',
-# etc.)
-SWITCH: dict[str, datetime.date | datetime.datetime] = {
-    "today": TODAY,
-    "tomorrow": TODAY + timedelta(days=1),
-    "yesterday": TODAY + timedelta(days=-1),
-    "now": NOW,
-}
 
 OPTS: Opts = {"ptype": BasicCastType.NONE, "field": "content"}
 DEFAULTS: Defaults = {}
@@ -71,25 +64,15 @@ def parser(
         2014
 
     """
-    today = dt.now(UTC).date()
+    try:
+        new_date = cast_datetime(text) if isinstance(text, DateLikeType) else None
+    except ValueError:
+        new_date = None
 
-    if text.endswith((" day", " days")):
-        count = int(text.split(" ")[0])
-        new_date = today + timedelta(days=count)
-    elif text.endswith((" year", " years")):
-        count = int(text.split(" ")[0])
-        new_date = today.replace(year=today.year + count)
-    else:
-        new_date = SWITCH.get(text)
+    if new_date is None:
+        raise ValueError(f"the 'datebuilder' pipe got an unrecognized date {text!r}")
 
-    if not new_date:
-        new_date = parse_date_string(text)
-
-    if not new_date:
-        raise ValueError(f"Unrecognized date string: {text}")
-
-    stream = new_date.timetuple()
-    return stream
+    return new_date.timetuple()
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -139,8 +122,19 @@ def pipe(*args: Any, **kwargs: object) -> struct_time:
         dict: an item with date timetuples
 
     Examples:
-        >>> next(pipe({'content': '12/2/2014'}))['datebuilder'].tm_year
+        >>> next(pipe({"content": "12/2/2014"}))["datebuilder"].tm_year
         2014
+        >>> next(pipe({"content": "5/4/82"}, emit=True))[:3]
+        (1982, 5, 4)
+        >>> next(pipe({"content": "tomorrow"}, emit=True)).tm_hour
+        0
+        >>> yesterday = next(pipe({"content": "-1 day"}, emit=True))
+        >>> yesterday == next(pipe({"content": "yesterday"}, emit=True))
+        True
+        >>> next(pipe({"content": "bogus"}))
+        Traceback (most recent call last):
+            ...
+        ValueError: the 'datebuilder' pipe got an unrecognized date 'bogus'
 
     """
     return parser(*args, **kwargs)
