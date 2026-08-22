@@ -380,9 +380,10 @@ Typed module discovery
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 For editor autocompletion and static checks, ``riko`` ships a generated, typed discovery
-surface. ``Modules`` is a ``StrEnum`` of **every** built-in ``pipe``, while
-``Sources``/``Transforms``/``Sinks``/``Targets`` are a ``StrEnum`` that group by
-data-flow role. Each ``StrEnum`` is interchangeable with a module name.
+surface. ``Modules`` is a flat namespace aliasing **every** built-in ``pipe`` (each
+member *is* the corresponding bucket member, so ``Modules.FILTER is Transforms.FILTER``),
+while ``Sources``/``Transforms``/``Sinks``/``Targets`` are ``StrEnum`` subclasses that
+group by data-flow role. Every bucket member is interchangeable with a module name.
 
 .. code-block:: python
 
