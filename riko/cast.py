@@ -68,6 +68,7 @@ class LocationType(StrEnum):
 
 class BasicCastType(StrEnum):
     DATE = "date"
+    DATETIME = "datetime"
     DECIMAL = "decimal"
     FLOAT = "float"
     INT = "int"

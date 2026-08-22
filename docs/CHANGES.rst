@@ -34,6 +34,9 @@ New
   anyio-native counterpart of ``meza.io.write``; ``get_async_temp_file`` is the async
   analog of ``get_temp_file``, usable as ``async with get_async_temp_file() as fp``.
 
+- Added ``BasicCastType.DATETIME``, so a pipe's ``ftype``/``ptype`` can preserve the
+  time of day rather than truncating to a date.
+
 - Added a typed ``riko.Targets`` ``StrEnum`` for ``export``/``write`` formats (``csv``,
   ``geojson``, ``json``, ``list``, ``tuple``, plus ``ofx``/``qif`` with the
   ``finance`` extra).
@@ -70,6 +73,8 @@ Fixed
 - ``cast_datetime`` accepts unsigned counts (``"3 days"``, not just ``"+3 days"``) and
   singular units (``"1 week"``), and no longer misreads a three-word string such as
   ``"3 days ago"`` as a future date.
+
+- ``dateformat`` no longer discards the time of day.
 
 Removed
 ~~~~~~~

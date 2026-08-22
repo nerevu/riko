@@ -43,7 +43,7 @@ from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
 
-OPTS: Opts = {"field": "date", "ftype": BasicCastType.DATE}
+OPTS: Opts = {"field": "date", "ftype": BasicCastType.DATETIME}
 DEFAULTS: Defaults = {"format": "%m/%d/%Y %H:%M:%S"}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -142,15 +142,19 @@ def pipe(*args: Any, **kwargs: object) -> str:
         dict: an item with formatted date string
 
     Examples:
-        >>> from datetime import date
+        >>> from datetime import date, datetime
         >>>
-        >>> item = {'date': date(2015, 5, 4)}
-        >>> next(pipe(item))['dateformat']
+        >>> item = {"date": date(2015, 5, 4)}
+        >>> next(pipe(item))["dateformat"]
         '05/04/2015 00:00:00'
-        >>> next(pipe(item, conf={'format': '%Y'}))['dateformat']
+        >>> next(pipe(item, conf={"format": "%Y"}))["dateformat"]
         '2015'
-        >>> next(pipe({'date': '05/04/2015'}))['dateformat']
+        >>> next(pipe({"date": "05/04/2015"}))["dateformat"]
         '05/04/2015 00:00:00'
+        >>> conf = {"format": "%A, %b %d, %y at %I:%M %p"}
+        >>> stamp = {"date": datetime(2008, 2, 12, 20, 45)}
+        >>> next(pipe(stamp, conf=conf))["dateformat"]
+        'Tuesday, Feb 12, 08 at 08:45 PM'
 
     """
     return parser(*args, **kwargs)
