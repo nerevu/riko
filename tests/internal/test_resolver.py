@@ -94,7 +94,7 @@ class TestModuleRegistry:
 
             return __import__(name, *args, **kwargs)
 
-        monkeypatch.setattr("riko.ext.registry.import_module", fake_import)
+        monkeypatch.setattr("riko._importutils.import_module", fake_import)
 
         with pytest.raises(ModuleNotFoundError) as e:
             clean_registry.resolve("tokenizer", "pipe")

@@ -17,12 +17,12 @@ core compiler.
 
 from collections.abc import Mapping
 from functools import partial, update_wrapper
-from importlib import import_module
 from json import loads
 from pathlib import Path
 from types import ModuleType
 from typing import Literal, Protocol, cast, overload
 
+from riko._importutils import import_or_else
 from riko.exceptions import UnsupportedPipelineError
 from riko.modules._subpipe import is_subpipe, mark_subpipe
 from riko.types.compile import ParsedPipeDef
@@ -60,20 +60,7 @@ class PackageStore:
         self._package = package
 
     def load(self, name: str) -> ModuleType | None:
-        target = f"{self._package}.{name}"
-
-        try:
-            module = import_module(target)
-        except ModuleNotFoundError as e:
-            if missing_name := e.name:
-                is_target = target == missing_name
-
-                if not (is_target or target.startswith(f"{missing_name}.")):
-                    raise
-
-            module = None
-
-        return module
+        return import_or_else(f"{self._package}.{name}")
 
 
 class MappingStore:

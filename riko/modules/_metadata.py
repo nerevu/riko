@@ -14,6 +14,7 @@ from importlib import import_module
 from pkgutil import iter_modules as iter_package_modules
 from typing import Literal, cast, overload
 
+from riko._importutils import import_or_else
 from riko._iterutils import broadcast
 from riko.ext.names import derive_category, normalize_module_name
 from riko.ext.registry import ModuleDefinition, registry
@@ -223,12 +224,8 @@ def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
 
     """
     if canonical := normalize_module_name(name):
-        if (definition := registry.definition(canonical)) is None:
-            try:
-                module = import_module(f"{_PACKAGE}.{canonical}")
-            except ModuleNotFoundError:
-                pass
-            else:
+        if (definition := registry.definition(canonical)) is None:  # noqa: SIM102
+            if module := import_or_else(f"{_PACKAGE}.{canonical}"):
                 definition = ModuleDefinition(
                     name=canonical,
                     module=module,

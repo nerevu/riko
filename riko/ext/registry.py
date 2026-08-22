@@ -19,10 +19,10 @@ discovered by name lazily (no extension import until a name is resolved).
 
 from dataclasses import dataclass
 from dataclasses import replace as _replace
-from importlib import import_module
 from importlib.metadata import EntryPoint, entry_points
 from typing import Literal, cast, overload
 
+from riko._importutils import import_or_else
 from riko.exceptions import UnsupportedModuleError
 from riko.types.general import (
     AsyncPipeCallable,
@@ -100,21 +100,11 @@ class ModuleRegistry:
         return self._loaded.get(name)
 
     def _resolve_builtin(self, name: str, interface: Interface) -> Pipeline:
-        target = f"riko.modules.{name}"
-
-        try:
-            module = import_module(target)
-        except ModuleNotFoundError as e:
-            if missing_name := e.name:
-                is_target = target == missing_name
-
-                if not (is_target or target.startswith(f"{missing_name}.")):
-                    raise
-
-            raise UnsupportedModuleError(name) from e
-
-        if (resolved := getattr(module, interface, None)) is None:
-            raise UnsupportedModuleError(f"{name!r} has no {interface!r}")
+        if module := import_or_else(f"riko.modules.{name}"):
+            if (resolved := getattr(module, interface, None)) is None:
+                raise UnsupportedModuleError(f"{name!r} has no {interface!r}")
+        else:
+            raise UnsupportedModuleError(name)
 
         return resolved
 

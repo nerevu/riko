@@ -12,7 +12,7 @@ from riko import get_module_metadata
 from riko.cast import CastType
 from riko.collections import CONVERSION_FUNCS, list_targets
 from riko.context import Context
-from riko.modules import list_modules, operator
+from riko.modules import describe_module, list_modules, operator
 from riko.modules.count import pipe as count_pipe
 from riko.modules.input import pipe as input_pipe
 from riko.types.modules import InputConf
@@ -149,3 +149,13 @@ def test_count_default_and_emitted_subtypes():
 
 def test_list_targets():
     assert list_targets() == sorted(CONVERSION_FUNCS)
+
+
+def test_describe_module_reraises_nested_dependency_error(monkeypatch):
+    def boom(target):
+        raise ModuleNotFoundError("No module named 'phantom_dep'", name="phantom_dep")
+
+    monkeypatch.setattr("riko._importutils.import_module", boom)
+
+    with pytest.raises(ModuleNotFoundError, match="phantom_dep"):
+        describe_module("hash")
