@@ -47,6 +47,8 @@ OPTS: Opts = {"listize": True, "extract": "rule", "emit": True}
 DEFAULTS: Defaults = {"convert": True, "multi": False}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
+_MISSING = object()
+
 
 async def async_parser(
     item: Item,
@@ -94,10 +96,10 @@ async def async_parser(
 
     async def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict[RikoValue]:
         field = rules[0]["field"]
-        word = item.get(field, **kwargs)
+        word = item.get(field, _MISSING, **kwargs)
 
-        if word is None:
-            replacement = None
+        if word is _MISSING or word is None:
+            replacement = word
         elif multi:
             grouped = group_by(rules, "flags")
             group_rules = [g[1] for g in grouped]
@@ -105,7 +107,8 @@ async def async_parser(
         else:
             replacement = await coop_reduce(substitute, rules, str(word))
 
-        result = DotDict({**item, field: replacement})
+        rewritten = {} if replacement is _MISSING else {field: replacement}
+        result = DotDict({**item, **rewritten})
         return cast(DotDict[RikoValue], result)
 
     regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
@@ -157,10 +160,10 @@ def parser(
 
     def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict[RikoValue]:
         field = str(rules[0]["field"])
-        word = item.get(field, **kwargs)
+        word = item.get(field, _MISSING, **kwargs)
 
-        if word is None:
-            replacement = None
+        if word is _MISSING or word is None:
+            replacement = word
         elif multi:
             grouped = group_by(rules, "flags")
             group_rules = [g[1] for g in grouped]
@@ -168,7 +171,8 @@ def parser(
         else:
             replacement = reduce(substitute, rules, str(word))
 
-        result = DotDict({**item, field: replacement})
+        rewritten = {} if replacement is _MISSING else {field: replacement}
+        result = DotDict({**item, **rewritten})
         return cast(DotDict[RikoValue], result)
 
     regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]

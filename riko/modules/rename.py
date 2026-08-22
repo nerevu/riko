@@ -49,10 +49,16 @@ DEFAULTS: Defaults = {}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
+_MISSING = object()
+
+
 def reducer(item: Item, rule: RenameConfRule) -> Item:
+    value = DotDict(item).get(rule.field, _MISSING)
     reduced = DotDict(item if rule.copy else remove_keys(item, rule.field))
-    new_dict = {rule.newval: item.get(rule.field)} if rule.newval else {}
-    reduced.update(new_dict)
+
+    if rule.newval and value is not _MISSING:
+        reduced.update({rule.newval: value})
+
     return cast(Item, reduced)
 
 

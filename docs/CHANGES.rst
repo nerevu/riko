@@ -45,6 +45,12 @@ Changes
   so it moves to ``Sources`` in the discovery tree and its ``assign`` default changes
   from ``"rssitembuilder"`` to ``"content"`` (observable only with ``emit=False``).
 
+Fixed
+~~~~~
+
+- ``rename`` and ``regex`` no longer create a field the item lacks; a rule naming an
+  absent field is skipped. A field holding ``None`` is still renamed or rewritten.
+
 Removed
 ~~~~~~~
 
