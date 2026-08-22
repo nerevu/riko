@@ -3,6 +3,7 @@ from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum, StrEnum, auto
+from pathlib import PurePath
 from time import struct_time
 from typing import TYPE_CHECKING, NotRequired, Required, TypedDict
 
@@ -170,7 +171,15 @@ PrimitiveValueType: tuple[type, ...] = (
     date,
     struct_time,
 )
-HashableType: tuple[type, ...] = (str, int, float, Decimal, date, struct_time)
+HashableType: tuple[type, ...] = (
+    str,
+    int,
+    float,
+    Decimal,
+    date,
+    struct_time,
+    PurePath,
+)
 
 NonstreamExpressions: tuple[type, ...] = (
     ast.BinOp,

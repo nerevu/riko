@@ -1,6 +1,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from re import Pattern, RegexFlag
 from typing import (
     TYPE_CHECKING,
@@ -847,7 +848,7 @@ class UrlParseConf(TypedDict, total=False):
 
 
 class WriteConf(TypedDict, total=False):
-    url: Required[str]
+    url: Required[str | Path]
     target: "TargetLike" = "json"
     mode: str = "wb+"
 
@@ -932,5 +933,6 @@ type AnyModuleConf = (
     | UniqConf
     | UrlBuilderConf
     | UrlParseConf
+    | WriteConf
     | XpathFetchPageConf
 )

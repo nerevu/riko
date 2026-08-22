@@ -15,6 +15,7 @@ Examples:
 from collections.abc import Iterator
 from io import BytesIO, StringIO, TextIOWrapper
 from logging import Logger
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast, overload
 
 import pygogo as gogo
@@ -135,7 +136,7 @@ async def async_url_read(
 
 
 async def async_write(
-    filepath: str,
+    filepath: str | Path,
     content: str | bytes | BytesIO | StringIO,
     mode: str = "wb+",
     encoding: str = ENCODING,

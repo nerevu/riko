@@ -175,10 +175,14 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
         items (Items): The source stream.
+
         conf (dict): The pipe configuration. Must contain the key 'url'.
 
-            url (str): the destination file path
-            target (str): the export format (default: 'json')
+            url (str | Path): the destination file path
+
+            target (str): the export format (default: derived from the ``url``
+                extension when recognized, else 'json')
+
             mode (str): the file open mode (default: 'wb+')
 
         context (Context): the execution context
@@ -208,6 +212,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         ...         stream = await async_pipe([{"x": 0}, {"x": 1}], conf=conf)
         ...         print(next(stream))
         ...         print((await fp.read()).split())
+        >>>
         >>> run(main)
         {'x': 0}
         [b'x', b'0', b'1']
@@ -226,10 +231,14 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
         items (Items): The source stream.
+
         conf (dict): The pipe configuration. Must contain the key 'url'.
 
-            url (str): the destination file path
-            target (str): the export format (default: 'json')
+            url (str | Path): the destination file path
+
+            target (str): the export format (default: derived from the ``url``
+                extension when recognized, else 'json')
+
             mode (str): the file open mode (default: 'wb+')
 
         context (Context): the execution context

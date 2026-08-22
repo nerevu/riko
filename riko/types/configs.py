@@ -27,6 +27,7 @@ if TYPE_CHECKING:
         FindConfRule,
         Function,
         ParsedParam,
+        Path,
         RegexConfRule,
         RenameConfRule,
         SortConfRule,
@@ -287,7 +288,7 @@ class UrlParseObjconf(DynamicConf):
 
 
 class WriteObjconf(DynamicConf):
-    url: str
+    url: str | Path
     target: TargetLike
     mode: str
 
