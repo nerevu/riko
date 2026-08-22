@@ -54,6 +54,7 @@ from riko import ENCODING
 from riko._io import Fetch, auto_close
 from riko.bado import io
 from riko.cast import SourceOpts
+from riko.modules._prepare import require_conf
 from riko.parsers import any2dict
 from riko.types.configs import XpathFetchPageObjconf
 from riko.types.general import Defaults, Extraction, FileTypes, Item, Stream
@@ -61,7 +62,7 @@ from riko.types.general import Defaults, Extraction, FileTypes, Item, Stream
 from . import processor
 
 OPTS = SourceOpts
-DEFAULTS = Defaults({"encoding": ENCODING})
+DEFAULTS = Defaults({"encoding": ENCODING, "html5": False})
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -88,6 +89,9 @@ async def async_parser(
 
     Returns:
         Iter[dict]: The stream of items
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from traceback import format_exc
@@ -122,13 +126,14 @@ async def async_parser(
         Help Page -- ScienceDaily
 
     """
-    ext = splitext(objconf.url)[1].lstrip(".")
+    url: str = require_conf(objconf, "url", "xpathfetchpage")
+    ext = splitext(url)[1].lstrip(".")
 
-    if objconf.url.startswith("http") and not ext:
+    if url.startswith("http") and not ext:
         ext = "html"
 
     # TODO: centralize error handling and retry logic
-    f = await io.async_url_open(objconf.url, encoding=objconf.encoding)
+    f = await io.async_url_open(url, encoding=objconf.encoding)
     content = any2dict(f, ext, objconf.html5, path=objconf.xpath)
     stream = auto_close(content, f)
     return stream
@@ -148,6 +153,9 @@ def parser(
     Returns:
         Iter[dict]: The stream of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from meza.fntools import Objectify
         >>> from riko import get_path
@@ -164,12 +172,13 @@ def parser(
         'Help Page -- ScienceDaily'
 
     """
-    ext = splitext(objconf.url)[1].lstrip(".")
+    url: str = require_conf(objconf, "url", "xpathfetchpage")
+    ext = splitext(url)[1].lstrip(".")
 
-    if objconf.url.startswith("http") and not ext:
+    if url.startswith("http") and not ext:
         ext = "html"
 
-    with Fetch(objconf.url, encoding=objconf.encoding) as f:
+    with Fetch(url, encoding=objconf.encoding) as f:
         content = cast(FileTypes, f)
         yield from any2dict(content, ext, objconf.html5, path=objconf.xpath)
 
@@ -198,6 +207,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Returns:
         Awaitable: item
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from traceback import format_exc
@@ -254,6 +266,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Yields:
         dict: item
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path

@@ -31,6 +31,7 @@ from riko import ENCODING
 from riko._io import Fetch, auto_close, seekable
 from riko.bado import io
 from riko.cast import SourceOpts
+from riko.modules._prepare import require_conf
 from riko.types.configs import CsvObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 
@@ -65,6 +66,9 @@ async def async_parser(
     Returns:
         Rows keyed by column name. The source closes when the stream is exhausted.
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
@@ -82,7 +86,8 @@ async def async_parser(
         7213
 
     """
-    r = await io.async_url_open(objconf.url, encoding=objconf.encoding)
+    url: str = require_conf(objconf, "url", "csv")
+    r = await io.async_url_open(url, encoding=objconf.encoding)
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
     source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
@@ -105,6 +110,9 @@ def parser(
     Returns:
         Rows keyed by column name. The source closes when the stream is exhausted.
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
@@ -119,10 +127,11 @@ def parser(
         '7213'
 
     """
+    url: str = require_conf(objconf, "url", "csv")
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
 
-    f = Fetch(objconf.url, encoding=objconf.encoding)
+    f = Fetch(url, encoding=objconf.encoding)
     source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     content = cast(Stream, read_csv(source, **rkwargs))
@@ -175,6 +184,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         - ``{<assign>: <row>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<row>, ...]}`` when ``emit`` is False and item
           is given
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Notes:
         ``has_header=False`` buffers content into memory/disk. Every other option
@@ -240,6 +252,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         - ``{<assign>: <row>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<row>, ...]}`` when ``emit`` is False and item
           is given
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Notes:
         ``has_header=False`` buffers content into memory/disk. Every other option

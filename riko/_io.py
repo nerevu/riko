@@ -232,6 +232,9 @@ def opener(  # noqa: E302
     timeout: float | None = None,
     **_: object,
 ) -> tuple[FileTypes, str | None]:
+    if not url:
+        raise TypeError("a url is required")
+
     params = params or {}
     url = get_abspath(url, offline=offline)
     r = None

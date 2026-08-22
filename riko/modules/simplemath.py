@@ -28,6 +28,7 @@ from typing import Any
 import pygogo as gogo
 
 from riko.cast import BasicCastType, CastType, cast_value
+from riko.modules._prepare import require_conf
 from riko.types.configs import SimpleMathObjconf
 from riko.types.general import Defaults, Extraction, NumLike, Opts
 
@@ -70,6 +71,10 @@ def parser(
     Returns:
         dict: The formatted item
 
+    Raises:
+        TypeError: If ``conf`` has no ``op`` or ``other`` key, or ``op`` is
+            unsupported.
+
     Examples:
         >>> from meza.fntools import Objectify
         >>>
@@ -79,8 +84,14 @@ def parser(
         Decimal('2.5')
 
     """
-    operation = OPS[objconf.op]
-    other = cast_value(objconf.other, type_=CastType.DECIMAL)
+    op: str = require_conf(objconf, "op", "simplemath")
+    raw: object = require_conf(objconf, "other", "simplemath")
+
+    if op not in OPS:
+        raise TypeError(f"the 'simplemath' pipe got an unsupported op {op!r}")
+
+    operation = OPS[op]
+    other = cast_value(raw, type_=CastType.DECIMAL)
     return operation(num, other)
 
 
@@ -109,6 +120,10 @@ def async_pipe(*args: Any, **kwargs: object) -> NumLike:
 
     Returns:
         Awaitable: item with formatted currency
+
+    Raises:
+        TypeError: If ``conf`` has no ``op`` or ``other`` key, or ``op`` is
+            unsupported.
 
     Examples:
         >>> from riko import run
@@ -150,6 +165,10 @@ def pipe(*args: Any, **kwargs: object) -> NumLike:
 
     Returns:
         dict: an item with math result
+
+    Raises:
+        TypeError: If ``conf`` has no ``op`` or ``other`` key, or ``op`` is
+            unsupported.
 
     Examples:
         >>> from decimal import Decimal

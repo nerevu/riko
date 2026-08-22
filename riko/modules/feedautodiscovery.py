@@ -47,13 +47,14 @@ import pygogo as gogo
 
 from riko import autorss
 from riko.cast import SourceOpts
+from riko.modules._prepare import require_conf
 from riko.types.configs import FeedAutoDiscoveryObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 
 from . import processor
 
 OPTS: Opts = SourceOpts
-DEFAULTS: Defaults = {"strict": True}
+DEFAULTS: Defaults = {"strict": True, "sort": False}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -75,6 +76,9 @@ async def async_parser(
     Returns:
         Iter[dict]: Deferred stream
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path
         >>> from riko import run
@@ -89,8 +93,9 @@ async def async_parser(
         file://riko/data/bbci.co.uk.xml
 
     """
+    url: str = require_conf(objconf, "url", "feedautodiscovery")
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = await autorss.async_get_rss(objconf.url, link_type=None, **rkwargs)
+    stream = await autorss.async_get_rss(url, link_type=None, **rkwargs)
     return stream
 
 
@@ -112,6 +117,9 @@ def parser(
     Returns:
         Iter[dict]: The stream of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
@@ -128,8 +136,9 @@ def parser(
         'file://riko/data/bbci.co.uk.xml'
 
     """
+    url: str = require_conf(objconf, "url", "feedautodiscovery")
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = autorss.get_rss(objconf.url, link_type=None, **rkwargs)
+    stream = autorss.get_rss(url, link_type=None, **rkwargs)
     return stream
 
 
@@ -149,6 +158,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Returns:
         Awaitable: an iterator of items
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
@@ -183,6 +195,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Yields:
         dict: item
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path

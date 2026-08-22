@@ -41,6 +41,7 @@ from riko import autorss
 from riko._rssutils import augment_entries
 from riko.bado import io
 from riko.cast import SourceOpts
+from riko.modules._prepare import require_conf
 from riko.parsers import parse_rss
 from riko.types.configs import FetchSiteFeedObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
@@ -71,6 +72,9 @@ async def async_parser(
     Returns:
         Iter[dict]: The stream of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path
         >>> from riko import run
@@ -85,7 +89,8 @@ async def async_parser(
         EU sets out 'phased' Brexit strategy
 
     """
-    rss = await autorss.async_get_rss(objconf.url)
+    url: str = require_conf(objconf, "url", "fetchsitefeed")
+    rss = await autorss.async_get_rss(url)
     link = str(next(rss)["link"])
     content = await io.async_url_read(link)
     entries = parse_rss(content=content)
@@ -110,6 +115,9 @@ def parser(
     Returns:
         Iter[dict]: The stream of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
@@ -120,7 +128,8 @@ def parser(
         "EU sets out 'phased' Brexit strategy"
 
     """
-    rss = autorss.get_rss(objconf.url)
+    url: str = require_conf(objconf, "url", "fetchsitefeed")
+    rss = autorss.get_rss(url)
     link = str(next(rss)["link"])
     entries = parse_rss(link)
     return augment_entries(entries)
@@ -142,6 +151,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
     Returns:
         Awaitable: an iterator of items
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
@@ -174,6 +186,9 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
     Yields:
         dict: item
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path

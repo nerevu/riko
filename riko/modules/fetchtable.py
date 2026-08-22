@@ -31,6 +31,7 @@ from riko import ENCODING
 from riko._io import Fetch, auto_close, seekable
 from riko.bado import io
 from riko.cast import SourceOpts
+from riko.modules._prepare import require_conf
 from riko.types.configs import FetchTableObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 
@@ -87,12 +88,13 @@ async def async_parser(
         7213
 
     """
-    r = await io.async_url_open(objconf.url, encoding=objconf.encoding)
+    url: str = require_conf(objconf, "url", "fetchtable")
+    r = await io.async_url_open(url, encoding=objconf.encoding)
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
     source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
-    ext = splitext(objconf.url)[1]
+    ext = splitext(url)[1]
     return auto_close(read(source, ext, **rkwargs), source)
 
 
@@ -124,12 +126,13 @@ def parser(
         '7213'
 
     """
+    url: str = require_conf(objconf, "url", "fetchtable")
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
-    f = Fetch(objconf.url, encoding=objconf.encoding)
+    f = Fetch(url, encoding=objconf.encoding)
     source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
-    ext = splitext(objconf.url)[1]
+    ext = splitext(url)[1]
     return auto_close(read(source, ext, **rkwargs), source)
 
 
@@ -163,6 +166,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Returns:
         Awaitable: item
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
@@ -209,6 +215,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Yields:
         dict: item
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path

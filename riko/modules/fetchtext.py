@@ -31,6 +31,7 @@ from riko import ENCODING
 from riko._io import Fetch, auto_close
 from riko.bado import io
 from riko.cast import BasicCastType
+from riko.modules._prepare import require_conf
 from riko.types.configs import FetchTextObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
 
@@ -59,6 +60,9 @@ async def async_parser(
     Returns:
         Iter[dict]: The stream of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path
         >>> from riko import run
@@ -74,7 +78,8 @@ async def async_parser(
         What is Lorem Ipsum?
 
     """
-    f = await io.async_url_open(objconf.url, encoding=objconf.encoding)
+    url: str = require_conf(objconf, "url", "fetchtext")
+    f = await io.async_url_open(url, encoding=objconf.encoding)
     stream = auto_close(map(str.strip, f), f)
     return stream
 
@@ -97,6 +102,9 @@ def parser(
     Returns:
         Iter[dict]: The stream of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
     Examples:
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
@@ -108,7 +116,8 @@ def parser(
         'What is Lorem Ipsum?'
 
     """
-    f = Fetch(objconf.url, encoding=objconf.encoding)
+    url: str = require_conf(objconf, "url", "fetchtext")
+    f = Fetch(url, encoding=objconf.encoding)
     stream = auto_close(map(str.strip, f), f)
     return stream
 
@@ -135,6 +144,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
     Returns:
         Awaitable: stream of items
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
@@ -173,6 +185,9 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
     Returns:
         dict: an iterator of items
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path

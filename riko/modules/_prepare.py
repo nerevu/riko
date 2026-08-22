@@ -82,6 +82,42 @@ def require_kwarg[T](  # noqa: E704
     return cast(T, kwargs[name])
 
 
+def require_conf[T](  # noqa: E704
+    objconf: object, key: str, pipe: str
+) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
+    """
+    Returns a required conf value, or reports which one is missing.
+
+    Args:
+        objconf: The parsed pipe configuration.
+        key: The conf key that must be set.
+        pipe: The pipe name, used in the error message.
+
+    Returns:
+        The value bound to ``key``.
+
+    Raises:
+        TypeError: If ``key`` is absent or ``None``.
+
+    Examples:
+        >>> from meza.fntools import Objectify
+        >>>
+        >>> require_conf(Objectify({"url": "x"}), "url", "csv")
+        'x'
+        >>> require_conf(Objectify({}), "url", "csv")
+        Traceback (most recent call last):
+            ...
+        TypeError: the 'csv' pipe requires the 'url' conf key
+
+    """
+    value = getattr(objconf, key, None)
+
+    if value is None:
+        raise TypeError(f"the {pipe!r} pipe requires the {key!r} conf key")
+
+    return cast(T, value)
+
+
 def get_pieces_or_conf(
     parsed_conf: AnyModuleConf | None,
     defaults: Defaults,

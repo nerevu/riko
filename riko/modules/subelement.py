@@ -51,12 +51,14 @@ Attributes:
 
 """
 
+from collections.abc import Sequence
 from logging import Logger
 from typing import Any
 
 import pygogo as gogo
 
 from riko._rssutils import gen_items
+from riko.modules._prepare import require_conf
 from riko.types.configs import SubelementObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 from riko.types.values import RikoValue
@@ -81,6 +83,9 @@ def parser(
     Returns:
         Iter[dict]: The stream of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``path`` key.
+
     Examples:
         >>> from riko.dotdict import DotDict
         >>> from meza.fntools import Objectify
@@ -99,7 +104,8 @@ def parser(
         {'content': 'verse1'}
 
     """
-    path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
+    raw: str | Sequence[str] = require_conf(objconf, "path", "subelement")
+    path = raw if isinstance(raw, str) else ".".join(raw)
     element = item.get(path, **kwargs)
     return gen_items(element, objconf.token_key or "")
 
@@ -125,6 +131,9 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
 
     Returns:
        Awaitable: sub-element item
+
+    Raises:
+        TypeError: If ``conf`` has no ``path`` key.
 
     Examples:
         >>> from riko import run
@@ -163,6 +172,9 @@ def pipe(*args: Any, **kwargs: RikoValue) -> Stream:
 
     Yields:
         dict: a sub-element item
+
+    Raises:
+        TypeError: If ``conf`` has no ``path`` key.
 
     Examples:
         >>> sonnet = {
