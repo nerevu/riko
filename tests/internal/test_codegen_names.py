@@ -41,6 +41,7 @@ _SOURCES = {
     "forever",
     "input",
     "itembuilder",
+    "rssitembuilder",
     "xpathfetchpage",
 }
 

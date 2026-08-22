@@ -25,6 +25,7 @@ from typing import Any, cast
 
 import pygogo as gogo
 
+from riko.cast import BasicCastType
 from riko.dates import NOW
 from riko.dotdict import DotDict
 from riko.types.configs import RssItemBuilderObjconf
@@ -33,7 +34,7 @@ from riko.types.values import RikoValue
 
 from . import processor
 
-OPTS: Opts = {"emit": True}
+OPTS: Opts = {"ftype": BasicCastType.NONE}
 DEFAULTS: Defaults = {"pubDate": NOW.isoformat()}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 

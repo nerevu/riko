@@ -38,6 +38,13 @@ New
   ``geojson``, ``json``, ``list``, ``tuple``, plus ``ofx``/``qif`` with the
   ``finance`` extra).
 
+Changes
+~~~~~~~
+
+- ``rssitembuilder`` is now categorized as a ``source`` rather than a ``transformer``,
+  so it moves to ``Sources`` in the discovery tree and its ``assign`` default changes
+  from ``"rssitembuilder"`` to ``"content"`` (observable only with ``emit=False``).
+
 Removed
 ~~~~~~~
 
