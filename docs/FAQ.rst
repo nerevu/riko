@@ -335,7 +335,7 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
     >>> list_modules(category='source')[0]
     'csv'
     >>> len(list_modules(category='source'))
-    12
+    13
     >>> # Full module metadata
     >>> metadata = list_modules(show_metadata=True)[0]
     >>> metadata.name, metadata.type, metadata.subtype

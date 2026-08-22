@@ -16,6 +16,7 @@ class Sources(ModuleName):
     FOREVER = "forever"
     INPUT = "input"
     ITEMBUILDER = "itembuilder"
+    RSSITEMBUILDER = "rssitembuilder"
     XPATHFETCHPAGE = "xpathfetchpage"
 
 
@@ -36,7 +37,6 @@ class Transforms(ModuleName):
     REGEX = "regex"
     RENAME = "rename"
     REVERSE = "reverse"
-    RSSITEMBUILDER = "rssitembuilder"
     SEND = "send"
     SIMPLEMATH = "simplemath"
     SLUGIFY = "slugify"
@@ -93,7 +93,7 @@ class Modules:
     REGEX = Transforms.REGEX
     RENAME = Transforms.RENAME
     REVERSE = Transforms.REVERSE
-    RSSITEMBUILDER = Transforms.RSSITEMBUILDER
+    RSSITEMBUILDER = Sources.RSSITEMBUILDER
     SEND = Transforms.SEND
     SIMPLEMATH = Transforms.SIMPLEMATH
     SLUGIFY = Transforms.SLUGIFY
