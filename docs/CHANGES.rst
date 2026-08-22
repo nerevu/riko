@@ -76,6 +76,9 @@ Fixed
 
 - ``dateformat`` no longer discards the time of day.
 
+- ``urlbuilder``'s ``param`` is now genuinely optional, and skips ``param`` without a
+  ``key``.
+
 Removed
 ~~~~~~~
 

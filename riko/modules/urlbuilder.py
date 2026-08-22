@@ -68,7 +68,7 @@ from riko.types.modules import ObjconfParam
 from . import processor
 
 OPTS: Opts = {"extract": "param", "listize": True, "emit": True}
-DEFAULTS: Defaults = {}
+DEFAULTS: Defaults = {"param": {}}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -110,7 +110,8 @@ def parser(
     else:
         paths = []
 
-    encoded = urlencode([(p.key, p.value) for p in param if p.key])
+    params = [(p.key, p.value) for p in param if getattr(p, "key")]  # noqa: B009
+    encoded = urlencode(params)
     joined = urljoin(str(objconf.base), "/".join(paths))
     stream = f"{joined}?{encoded}" if encoded else joined
 
@@ -196,6 +197,8 @@ def pipe(*args: Any, **kwargs: object) -> str:
         >>> conf = {'base': base, 'path': path, 'param': param}
         >>> next(pipe(conf=conf))
         'http://finance.yahoo.com/rss/headline?s=gm'
+        >>> next(pipe(conf={"base": base, "path": "rss/headline"}))
+        'http://finance.yahoo.com/rss/headline'
 
     """
     return parser(*args, **kwargs)
