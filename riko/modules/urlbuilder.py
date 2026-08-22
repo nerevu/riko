@@ -61,6 +61,7 @@ from urllib.parse import urlencode, urljoin
 import pygogo as gogo
 
 from riko._strutils import INVALID_FILECHAR_PATTERN
+from riko.modules._prepare import require_conf
 from riko.types.configs import UrlBuilderObjconf
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import ObjconfParam
@@ -112,7 +113,8 @@ def parser(
 
     params = [(p.key, p.value) for p in param if getattr(p, "key")]  # noqa: B009
     encoded = urlencode(params)
-    joined = urljoin(str(objconf.base), "/".join(paths))
+    base: str = require_conf(objconf, "base", "urlbuilder")
+    joined = urljoin(base, "/".join(paths))
     stream = f"{joined}?{encoded}" if encoded else joined
 
     if objconf.ext:

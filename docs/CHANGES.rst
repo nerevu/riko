@@ -88,6 +88,9 @@ Fixed
 - ``tokenizer``'s ``token_key`` now falls back to ``"content"`` instead of raising
   ``TypeError: argument of type 'NoneType' is not iterable``.
 
+- ``urlbuilder`` now raises when ``conf`` has no ``base`` instead of putting ``"None"``
+  in the url.
+
 Removed
 ~~~~~~~
 
