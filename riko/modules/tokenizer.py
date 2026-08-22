@@ -32,12 +32,14 @@ from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
 
+TOKEN_KEY = "content"  # noqa: S105
+
 OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {
     "delimiter": ",",
     "dedupe": False,
     "sort": False,
-    "token_key": "content",
+    "token_key": TOKEN_KEY,
 }
 
 
@@ -71,8 +73,8 @@ def parser(
     splits = [s.strip() for s in content.split(objconf.delimiter) if s]
     deduped = set(splits) if objconf.dedupe else splits
     chunks = sorted(deduped, key=keyfunc) if objconf.sort else deduped
-    stream = ({objconf.token_key: chunk} for chunk in chunks)
-    return stream
+    token_key = objconf.token_key or TOKEN_KEY
+    return ({token_key: chunk} for chunk in chunks)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
