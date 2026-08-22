@@ -26,8 +26,9 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 | execution modes, boundedness, cancellation, ordering | `execution-semantics.md` | domain-specific constraints |
 | generic `RetryPolicy`, timeout, error/disposition policy | `execution-semantics.md` | retryable-error classification and provider delay hints |
 | connector sessions, transport lifecycle, credential references/resolution | `connectors.md` | provider/protocol credential implementations |
-| REST pagination, endpoint dependencies, REST cursor extraction | `rest-incremental.md` | provider-specific REST vocabulary |
+| REST pagination, endpoint dependencies, REST cursor extraction/encoding, source-filter pushdown | `rest-incremental.md` | provider-specific REST vocabulary |
 | source checkpoints, checkpoint stores, dedupe/change/anomaly monitoring state | `feed-monitoring.md` | source-specific cursor encoding |
+| generic `Change`, `ChangeFeedSemantics`, tombstones, replay/history/order guarantees | `feed-monitoring.md` | source-specific mapping into the shared change envelope |
 | recurring source polling/bootstrap semantics | `feed-monitoring.md` | deployment cadence or source specialization |
 | Pandas, Arrow, Polars, frame/batch conversion | `tabular-interop.md` | where a frame boundary is used |
 | file/artifact codecs, report contexts, rendering, artifact lineage | `artifact-conversion.md` | domain-specific artifact consumers |
@@ -54,13 +55,50 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 
 `connectors.md` owns HTTP sessions, credentials, response envelopes, and lifecycle.
 `rest-incremental.md` owns how a REST collection is traversed: record selection, pagination,
-dependent endpoints, and extraction cursors.
+dependent endpoints, extraction cursors, and source-supported filter pushdown.
 
 ### Source state versus REST cursors
 
 `feed-monitoring.md` owns `SourceCheckpoint`, checkpoint stores, commit ordering, observation
-state, dedupe, and change detection. `rest-incremental.md` only defines how REST requests and
-responses encode/decode a cursor.
+state, dedupe, and change-feed semantics. `rest-incremental.md` only defines how REST
+requests and responses encode/decode a source cursor.
+
+For an opaque cursor, generic code must persist and round-trip the source-level JSON value
+without incrementing, parsing, comparing, or inferring order from its representation.
+
+### Change feed versus business change detection
+
+These are intentionally separate:
+
+```text
+Change / ChangeFeedSemantics
+    what the upstream source says happened
+    entity identity, source version/change identity, cursor, deletion, replay/order/history
+
+changed(...)
+    whether selected business fields differ from previously observed state
+```
+
+A source may emit a new version that `changed(...)` suppresses because selected business
+fields are identical. A snapshot source may derive a business change without any
+source-native change event.
+
+`feed-monitoring.md` owns both contracts and the distinction between them.
+
+### Entity identity versus change identity
+
+Change-feed dedupe should normally use a stable change identity such as:
+
+```text
+(entity_id, version)
+source-native event/change ID
+```
+
+rather than entity identity alone. `entity_id` identifies the logical thing over time;
+change identity identifies one source-observed version/event of that thing.
+
+Deletion tombstones retain entity/change identity and remain routable events rather than
+being silently converted into absence.
 
 ### Source polling versus operation waiting
 
@@ -68,14 +106,15 @@ These are intentionally different contracts:
 
 ```text
 feed-monitoring.md
-    periodically observe a finite data source for new/changed records
+    periodically observe a finite data source or resume a data change feed
 
 provider-integrations.md
     wait for one already-started provider operation to reach terminal state
 ```
 
-A source poll may create many independent records across repeated observations. An operation
-wait tracks one operation identity and repeatedly re-reads its authoritative status.
+A source poll/change feed may create many independent records across observations. An
+operation wait tracks one operation identity and repeatedly re-reads its authoritative
+status.
 
 Do not expose both as competing generic `.poll()` APIs.
 
@@ -85,12 +124,21 @@ Do not expose both as competing generic `.poll()` APIs.
 
 `feed-monitoring.md` may define delay/backoff between independent source observations after
 a failed finite poll, but it should use the shared retry contract for retries within one
-attempt.
+attempt or change-feed read.
 
 `orchestration.md` may rerun the entire `PipelineRunRequest`. That is a run-level retry, not
 another `RetryPolicy` implementation.
 
 Only one layer should retry a given failure domain.
+
+### Source-filter pushdown versus pipeline filtering
+
+`rest-incremental.md` owns declarative source-filter pushdown for APIs that support it.
+Source filters execute upstream before transfer and may affect checkpoint validity.
+
+Ordinary Riko `filter` stages execute after acquisition and remain runtime transformation
+semantics. A gameplan must not silently treat an arbitrary pipeline predicate as safe or
+equivalent to an upstream filter.
 
 ### Frames versus artifacts
 
@@ -145,8 +193,13 @@ Before merging a new gameplan or substantial update:
 
 - Does it introduce a contract already owned above?
 - Does it copy a dataclass/protocol/API from another plan?
-- Does it repeat generic lifecycle, retry, credential, checkpoint, capability, or boundedness
-  rules?
+- Does it repeat generic lifecycle, retry, credential, checkpoint, capability, change-feed,
+  or boundedness rules?
+- Does a new source invent another change/event envelope instead of mapping into `Change`?
+- Is an opaque source cursor being parsed, incremented, or compared by generic code?
+- Is entity identity being incorrectly used as change identity for dedupe?
+- Is a deletion being turned into absence even though the source provided a tombstone?
+- Is a source filter being confused with a downstream Riko `filter` stage?
 - Is it using `poll` to mean source recurrence, operation waiting, or both?
 - Could the repeated section become one paragraph linking to the owner?
 - Are tests for the shared contract located only in the owner?
