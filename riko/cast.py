@@ -187,12 +187,11 @@ def lookup_coordinates(
 def cast_location(
     address: BasicValue, loc_type: LocationType = LocationType.STREET_ADDRESS
 ) -> AnyLocation:
-    result = dict(GEOLOCATERS[loc_type](str(address)))
+    result = GEOLOCATERS[loc_type](str(address))
 
     if location := result.get("location"):
-        # TODO: make location a typed dict
-        extra = LOCATIONS.get(str(location), {})
-        result.update(extra)
+        extra = LOCATIONS.get(str(location), cast(dict[str, str], {}))
+        result = cast(AnyLocation, {**result, **extra})
 
     return result
 

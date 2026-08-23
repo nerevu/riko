@@ -102,6 +102,8 @@ class CsvObjconf(DynamicConf):
 
 class CurrencyFormatObjconf(DynamicConf):
     currency: str
+    locale: str
+    clean: bool
 
 
 class DateFormatObjconf(DynamicConf):

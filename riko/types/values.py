@@ -119,13 +119,29 @@ type PrimitiveValue = SortableValue | None
 type ModuleNameLike = str | ModuleName
 type TargetLike = str | TargetName
 
+
 # Geo/currency
+class Region(TypedDict, total=False):
+    code_2: Required[str]
+    code_3: str
+    continent: Required[str]
+    country: str
+    num: str
+
+
+class CurrencyCode(TypedDict, total=False):
+    code: Required[str]
+    location: Required[str]
+    name: str
+    name_plural: str
+    symbol: str
+    symbol_native: str
+    locale: str
+
+
 type IPAddress = dict[str, str]
 type Location = IPAddress | dict[str, float]
-type CurrencyCode = (
-    Location | dict[str, int] | dict[str, str | int] | dict[str, str | int | float]
-)
-type AnyLocation = CurrencyCode | dict[str, float | str]
+type AnyLocation = Region | CurrencyCode | Location | dict[str, float | str]
 
 # Args
 type BasicMapping = Mapping[str, BasicValue]

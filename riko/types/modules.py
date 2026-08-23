@@ -205,6 +205,8 @@ class CsvRawConf(TypedDict):
 
 class CurrencyFormatRawConf(TypedDict, total=False):
     currency: Value
+    locale: Value
+    clean: Value
 
 
 class DateFormatRawConf(TypedDict, total=False):
@@ -658,6 +660,8 @@ class CsvConf(TypedDict, total=False):
 
 class CurrencyFormatConf(TypedDict, total=False):
     currency: str = "USD"
+    locale: str
+    clean: bool
 
 
 class DateFormatConf(TypedDict, total=False):

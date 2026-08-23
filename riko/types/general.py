@@ -129,6 +129,7 @@ class Defaults(TypedDict, total=False):
     combine: Literal["and", "or"]
     count: int
     count_key: str | None
+    clean: bool
     currency: str  # TODO this should be an enum/literal
     dedupe: bool
     default: BasicArg

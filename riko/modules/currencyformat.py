@@ -18,19 +18,21 @@ Attributes:
 
 from decimal import Decimal
 from logging import Logger
-from typing import Any
+from typing import Any, cast
 
 import pygogo as gogo
 from babel.numbers import format_currency
 
 from riko.cast import BasicCastType
+from riko.currencies import CURRENCY_CODES
+from riko.modules._prepare import require_conf
 from riko.types.configs import CurrencyFormatObjconf
 from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}
-DEFAULTS: Defaults = {"currency": "USD"}
+DEFAULTS: Defaults = {"currency": "USD", "clean": False}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -62,10 +64,17 @@ def parser(
     if amount is None or amount.is_nan():
         parsed = ""
     else:
+        currency: str = require_conf(objconf, "currency", "currencyformat")
+        currency_code = CURRENCY_CODES.get(currency, cast(dict[str, str], {}))
+        locale = objconf.locale or currency_code.get("locale", "")
+
         try:
-            parsed = format_currency(amount, objconf.currency, locale="en_US")
+            parsed = format_currency(amount, objconf.currency, locale=locale)
         except ValueError:
             parsed = ""
+        else:
+            # non-breaking space to space
+            parsed = parsed.replace("\xa0", " ") if objconf.clean else parsed
 
     return parsed
 
@@ -133,12 +142,14 @@ def pipe(*args: Any, **kwargs: object) -> str:
         dict: an item with formatted date string
 
     Examples:
-        >>> next(pipe({'content': '10.33'}))['currencyformat']
-        '$10.33'
-        >>> conf = {'currency': 'GBP'}
-        >>> result = next(pipe({'content': '100'}, conf=conf))
-        >>> result['currencyformat']
-        '£100.00'
+        >>> next(pipe({"content": "1000.33"}))["currencyformat"]
+        '$1,000.33'
+        >>> conf = {"currency": "GBP"}
+        >>> next(pipe({"content": "1000.33"}, conf=conf))["currencyformat"]
+        '£1,000.33'
+        >>> conf = {"currency": "EUR", "clean": True}
+        >>> next(pipe({"content": "1000.33"}, conf=conf))["currencyformat"]
+        '1.000,33 €'
         >>> next(pipe({"content": "bogus"}))["currencyformat"]
         ''
         >>> next(pipe({}))["currencyformat"]

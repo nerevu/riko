@@ -1,13 +1,32 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides location lookup dictionaries
+riko.locations
+~~~~~~~~~~~~~~
+
+Provides location lookup dictionaries.
+
+``LOCATIONS`` is keyed by continent *and* by country, so a lookup may return
+either shape. A continent carries only ``code_2`` and ``continent``; a country
+adds ``code_3``, ``country``, and its ISO 3166 ``num``.
+
+Examples:
+    Basic usage::
+
+        >>> from riko.locations import LOCATIONS
+        >>>
+        >>> LOCATIONS["Asia"]
+        {'code_2': 'AS', 'continent': 'Asia'}
+        >>> LOCATIONS["Japan"]["code_3"]
+        'JPN'
 
 Attributes:
-    LOCATIONS (dict): Location name to info mapping
+    LOCATIONS: Continent or country name to region record mapping.
 
 """
 
-LOCATIONS = {
+from riko.types.values import Region
+
+LOCATIONS: dict[str, Region] = {
     "Asia": {"code_2": "AS", "continent": "Asia"},
     "Africa": {"code_2": "AF", "continent": "Africa"},
     "Europe": {"code_2": "EU", "continent": "Europe"},
