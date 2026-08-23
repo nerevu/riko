@@ -55,6 +55,10 @@ Changes
   just iterators. Previously, processors treated ``list``/``tuple``/etc. as a single
   value. See the "How does a processor map over items?" FAQ.
 
+- ``urlbuilder`` is now categorized as a ``source`` rather than a ``transformer``, so it
+  moves to ``Sources`` in the discovery tree and its ``assign`` default changes from
+  ``"urlbuilder"`` to ``"content"`` (observable only with ``emit=False``).
+
 Fixed
 ~~~~~
 

@@ -17,6 +17,7 @@ class Sources(ModuleName):
     INPUT = "input"
     ITEMBUILDER = "itembuilder"
     RSSITEMBUILDER = "rssitembuilder"
+    URLBUILDER = "urlbuilder"
     XPATHFETCHPAGE = "xpathfetchpage"
 
 
@@ -57,7 +58,6 @@ class Transforms(ModuleName):
     UDF = "udf"
     UNION = "union"
     UNIQ = "uniq"
-    URLBUILDER = "urlbuilder"
     URLPARSE = "urlparse"
 
 
@@ -114,7 +114,7 @@ class Modules:
     UDF = Transforms.UDF
     UNION = Transforms.UNION
     UNIQ = Transforms.UNIQ
-    URLBUILDER = Transforms.URLBUILDER
+    URLBUILDER = Sources.URLBUILDER
     URLPARSE = Transforms.URLPARSE
     WRITE = Sinks.WRITE
     XPATHFETCHPAGE = Sources.XPATHFETCHPAGE

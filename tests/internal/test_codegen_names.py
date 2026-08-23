@@ -42,6 +42,7 @@ _SOURCES = {
     "input",
     "itembuilder",
     "rssitembuilder",
+    "urlbuilder",
     "xpathfetchpage",
 }
 

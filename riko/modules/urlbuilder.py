@@ -61,6 +61,7 @@ from urllib.parse import urlencode, urljoin
 import pygogo as gogo
 
 from riko._strutils import INVALID_FILECHAR_PATTERN
+from riko.cast import BasicCastType
 from riko.modules._prepare import require_conf
 from riko.types.configs import UrlBuilderObjconf
 from riko.types.general import Defaults, Item, Opts
@@ -68,7 +69,7 @@ from riko.types.modules import ObjconfParam
 
 from . import processor
 
-OPTS: Opts = {"extract": "param", "listize": True, "emit": True}
+OPTS: Opts = {"ftype": BasicCastType.NONE, "extract": "param", "listize": True}
 DEFAULTS: Defaults = {"param": {}}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 

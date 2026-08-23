@@ -227,7 +227,7 @@ availability, and loopability.
 +----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
 | `uniq`_              | operator  | composer         | filters out non-unique items according to a specified field                                  |
 +----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `urlbuilder`_        | processor | transformer      | builds a URL                                                                                 |
+| `urlbuilder`_        | processor | source           | builds a URL                                                                                 |
 +----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
 | `urlparse`_          | processor | transformer      | parses a URL into its six components                                                         |
 +----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
@@ -335,7 +335,7 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
     >>> list_modules(category='source')[0]
     'csv'
     >>> len(list_modules(category='source'))
-    13
+    14
     >>> # Full module metadata
     >>> metadata = list_modules(show_metadata=True)[0]
     >>> metadata.name, metadata.type, metadata.subtype
