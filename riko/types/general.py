@@ -127,7 +127,6 @@ class PreCaster(TypedDict):
 class Defaults(TypedDict, total=False):
     col_names: list[str] | None
     combine: Literal["and", "or"]
-    convert: bool
     count: int
     count_key: str | None
     currency: str  # TODO this should be an enum/literal

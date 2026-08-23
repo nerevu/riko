@@ -15,7 +15,7 @@ Attributes:
 import itertools as it
 import re
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from dataclasses import is_dataclass
+from dataclasses import fields, is_dataclass
 from operator import itemgetter
 from random import choice
 
@@ -232,7 +232,11 @@ def make_regex_rule(
 def get_regex_rule(
     rule: DynamicConf | RegexConfRule, recompile: bool = False
 ) -> RegexRule:
-    rule = rule if is_dataclass(rule) else RegexConfRule(**rule)
+    if not is_dataclass(rule):
+        keys = {f.name for f in fields(RegexConfRule)}
+        filtered = {k: v for k, v in rule.items() if k in keys}
+        rule = RegexConfRule(**filtered)
+
     flags = 0 if rule.casematch else re.IGNORECASE
 
     if not rule.singlelinematch:

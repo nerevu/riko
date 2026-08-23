@@ -183,7 +183,6 @@ class RefindObjconf(DynamicConf):
 class RegexObjconf(DynamicConf):
     rule: RegexConfRule | list[RegexConfRule]
     multi: bool
-    convert: bool
 
 
 class RenameObjconf(DynamicConf):
@@ -191,7 +190,6 @@ class RenameObjconf(DynamicConf):
 
 
 class SendObjconf(DynamicConf):
-    name: str
     max_wait: int | float
 
 

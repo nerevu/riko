@@ -100,8 +100,15 @@ Fixed
   ``00:00:00`` under the default ``"%m/%d/%Y %H:%M:%S"`` format and the ``%R``/``%I:%M``
   specifiers its own docs advertised could never work.
 
+- ``regex`` ignores unrecognized rule keys instead of raising.
+
 Removed
 ~~~~~~~
+
+- Removed ``send``'s unused ``name`` conf key.
+
+- Removed ``regex``'s ``convert`` and ``singlematch`` conf keys. Neither was read in any
+  release.
 
 - Removed the ``loop`` operator's dedicated confs (``LoopRawConf``/``LoopConf``), the
   generated ``LoopObjconf``, and the legacy nested ``Embed`` descriptor. ``loop`` has no

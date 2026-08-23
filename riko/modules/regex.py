@@ -43,7 +43,7 @@ from riko.types.values import RikoValue
 from . import processor
 
 OPTS: Opts = {"listize": True, "extract": "rule", "emit": True}
-DEFAULTS: Defaults = {"convert": True, "multi": False}
+DEFAULTS: Defaults = {"multi": False}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 _MISSING = object()
@@ -78,7 +78,7 @@ async def async_parser(
         >>>
         >>> async def main():
         ...     rule = {"field": "content", "match": match, "replace": replace}
-        ...     conf = {"rule": rule, "multi": False, "convert": True}
+        ...     conf = {"rule": rule, "multi": False}
         ...     objconf = Objectify(conf)
         ...     rules = [Objectify(rule)]
         ...     kwargs = {"stream": item, "conf": conf}
@@ -140,7 +140,7 @@ def parser(
         >>> item = DotDict({"content": "hello world", "title": "greeting"})
         >>> match = r"(\\w+)\\s(\\w+)"
         >>> rule = {"field": "content", "match": match, "replace": "$2wide"}
-        >>> conf = {"rule": rule, "multi": False, "convert": True}
+        >>> conf = {"rule": rule, "multi": False}
         >>> objconf = Objectify(conf)
         >>> rules = [Objectify(rule)]
         >>> kwargs = {"stream": item, "conf": conf}
@@ -243,7 +243,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
         >>>
         >>> async def main():
         ...     rule = {"field": "content", "match": match, "replace": "$2wide"}
-        ...     conf = {"rule": rule, "multi": False, "convert": True}
+        ...     conf = {"rule": rule, "multi": False}
         ...     result = await async_pipe(item, conf=conf)
         ...     print(next(result)["content"])
         >>>
@@ -317,7 +317,7 @@ def pipe(*args: Any, **kwargs: object) -> Item:
         >>> item = {"content": "hello world", "title": "greeting"}
         >>> match = r"(\\w+)\\s(\\w+)"
         >>> rule = {"field": "content", "match": match, "replace": "$2wide"}
-        >>> conf = {"rule": rule, "multi": False, "convert": True}
+        >>> conf = {"rule": rule, "multi": False}
         >>> next(pipe(item, conf=conf))
         {'content': 'worldwide', 'title': 'greeting'}
         >>> # multiple regex mode

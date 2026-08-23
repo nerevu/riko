@@ -309,7 +309,6 @@ class RegexRawRule(TypedDict, total=False):
     offset: Value
     replace: Value
     series: Value
-    singlematch: Value
     singlelinematch: Value
     casematch: Value
 
@@ -317,7 +316,6 @@ class RegexRawRule(TypedDict, total=False):
 class RegexRawConf(TypedDict):
     rule: RegexRawRule | list[RegexRawRule]
     multi: NotRequired[Value]
-    convert: NotRequired[Value]
 
 
 class RenameRawRule(TypedDict):
@@ -331,7 +329,6 @@ class RenameRawConf(TypedDict):
 
 
 class SendRawConf(TypedDict):
-    name: Value
     max_wait: NotRequired[Value]
 
 
@@ -552,7 +549,6 @@ class RegexConfRule:
     default: str | None = None
     casematch: bool | None = None
     singlelinematch: bool | None = None
-    singlematch: bool | None = None
     offset: int = 0
     seriesmatch: bool = True
     replace: str = ""
@@ -743,7 +739,6 @@ class RefindConf(TypedDict):
 class RegexConf(TypedDict, total=False):
     rule: Required[RegexConfRule | list[RegexConfRule]]
     multi: bool = False
-    convert: bool = True
 
 
 class RenameConf(TypedDict):
@@ -751,7 +746,6 @@ class RenameConf(TypedDict):
 
 
 class SendConf(TypedDict, total=False):
-    name: str
     max_wait: int | float = 5
 
 
