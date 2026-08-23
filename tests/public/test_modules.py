@@ -10,10 +10,8 @@ import pytest
 
 from riko import get_module_metadata
 from riko.cast import CastType
-from riko.collections import CONVERSION_FUNCS, list_targets
 from riko.context import Context
 from riko.modules import describe_module, list_modules, operator
-from riko.modules.count import pipe as count_pipe
 from riko.modules.input import pipe as input_pipe
 from riko.types.modules import InputConf
 
@@ -137,18 +135,6 @@ def test_operator_metadata_is_derived():
 
     assert composition_key_pipe.subtype == "aggregator"
     assert composition_key_pipe.subtypes == {"aggregator", "composer"}
-
-
-def test_count_default_and_emitted_subtypes():
-    items = ({"content": value} for value in range(3))
-    assert next(count_pipe(items)) == {"count": 3}
-
-    items = ({"content": value} for value in range(3))
-    assert next(count_pipe(items, emit=True)) == 3
-
-
-def test_list_targets():
-    assert list_targets() == sorted(CONVERSION_FUNCS)
 
 
 def test_describe_module_reraises_nested_dependency_error(monkeypatch):

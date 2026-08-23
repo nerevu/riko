@@ -154,6 +154,8 @@ def pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
 
     Examples:
         >>> stream = [{"x": x} for x in range(5)]
+        >>> next(pipe(stream, emit=True))
+        5
         >>> next(pipe(stream))["count"]
         5
         >>> # Assign the count to "content":
