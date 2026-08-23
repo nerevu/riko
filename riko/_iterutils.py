@@ -17,7 +17,7 @@ from collections.abc import (
     Mapping,
     Sequence,
 )
-from datetime import date, tzinfo
+from datetime import UTC, date, tzinfo
 from datetime import datetime as dt
 from decimal import Decimal
 from functools import partial
@@ -164,7 +164,7 @@ def def_itemgetter(
     attr: str,
     default: PrimitiveValue | None = None,
     type_: str | None = None,
-    fallback_tzinfo: tzinfo | None = None,
+    fallback_tzinfo: tzinfo = UTC,
 ) -> Callable[[Mapping | PrimitiveValue], SortableValue]:
     """
     Like operator.itemgetter but fills in missing keys with a typed default.

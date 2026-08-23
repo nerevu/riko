@@ -5,7 +5,7 @@ Provides type casting capabilities
 
 from ast import literal_eval
 from collections.abc import Callable
-from datetime import UTC, date, timedelta
+from datetime import date, timedelta
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -22,6 +22,7 @@ import pygogo as gogo
 from riko._date_utils import (
     date_to_tt,
     ensure_tzinfo,
+    get_local_tz,
     parse_date_string,
     tt_to_datetime,
 )
@@ -198,27 +199,38 @@ def cast_location(
 
 # TODO: inherit from meza
 @overload
-def cast_datetime(value: DateLike) -> dt | None: ...  # noqa: E704
-@overload  # noqa: E302
 def cast_datetime(  # noqa: E704
-    value: DateLike, as_date: Literal[True]
-) -> date | None: ...
-@overload  # noqa: E302
-def cast_datetime(  # noqa: E704
-    value: DateLike, as_date: Literal[False] = ...
+    value: DateLike, *, try_local_tz: bool = ...
 ) -> dt | None: ...
 @overload  # noqa: E302
 def cast_datetime(  # noqa: E704
-    value: DateLike, as_date: Literal[True], as_datedict: Literal[True]
+    value: DateLike, as_date: Literal[True], *, try_local_tz: bool = ...
+) -> date | None: ...
+@overload  # noqa: E302
+def cast_datetime(  # noqa: E704
+    value: DateLike, as_date: Literal[False] = ..., *, try_local_tz: bool = ...
+) -> dt | None: ...
+@overload  # noqa: E302
+def cast_datetime(  # noqa: E704
+    value: DateLike,
+    as_date: Literal[True],
+    as_datedict: Literal[True],
+    *,
+    try_local_tz: bool = ...,
 ) -> DateDict | None: ...
 @overload  # noqa: E302
 def cast_datetime(  # noqa: E704
-    value: DateLike, *, as_date: Literal[False] = ..., as_datedict: Literal[True]
+    value: DateLike,
+    *,
+    as_date: Literal[False] = ...,
+    as_datedict: Literal[True],
+    try_local_tz: bool = ...,
 ) -> DateDict | None: ...
 def cast_datetime(  # noqa: E302
     value: DateLike,
     as_date=False,
     as_datedict=False,
+    *,
     try_local_tz=False,
 ) -> date | dt | DateDict | None:
     """
@@ -254,7 +266,7 @@ def cast_datetime(  # noqa: E302
         count = words[0].lstrip("+-")
         unit = f"{words[-1].rstrip('s')}s" if len(words) == 2 else ""
         textish = set(words).intersection(TEXT_WORDS)
-        now = dt.now(UTC)
+        now = dt.now(get_local_tz(try_local_tz=try_local_tz))
         today = now.date()
         named = {
             "today": today,

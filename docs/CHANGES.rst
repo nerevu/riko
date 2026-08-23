@@ -41,6 +41,9 @@ New
   ``geojson``, ``json``, ``list``, ``tuple``, plus ``ofx``/``qif`` with the
   ``finance`` extra).
 
+- ``cast_datetime`` exposes its keyword-only ``try_local_tz``, so a relative date can
+  resolve in the local timezone instead of UTC.
+
 Changes
 ~~~~~~~
 

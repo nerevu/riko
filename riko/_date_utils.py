@@ -81,9 +81,9 @@ def parse_date_string(value: str) -> dt:
     return result
 
 
-def _get_local_tz(
-    try_local_tz: bool | None = True, fallback_tzinfo: tzinfo | None = UTC
-) -> tzinfo | None:
+def get_local_tz(
+    try_local_tz: bool | None = True, fallback_tzinfo: tzinfo = UTC
+) -> tzinfo:
     _tzinfo = dt.now(UTC).astimezone().tzinfo if try_local_tz else None
     return _tzinfo or fallback_tzinfo
 
@@ -159,14 +159,14 @@ def get_tzinfo(
 def date_to_datetime(content: None) -> None: ...  # noqa: E704
 @overload  # noqa: E302
 def date_to_datetime(  # noqa: E704
-    content: date, *, fallback_tzinfo: tzinfo | None = ...
+    content: date, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo = ...
 ) -> AwareDT: ...
 def date_to_datetime(  # noqa: E302
     content: date | None,
     try_local_tz: bool | None = True,
-    fallback_tzinfo: tzinfo | None = UTC,
-) -> AwareDT | NaiveDT | None:
-    _tzinfo = _get_local_tz(try_local_tz, fallback_tzinfo)
+    fallback_tzinfo: tzinfo = UTC,
+) -> AwareDT | None:
+    _tzinfo = get_local_tz(try_local_tz, fallback_tzinfo)
 
     if content:
         _date = dt(content.year, content.month, content.day, tzinfo=_tzinfo)
@@ -235,32 +235,28 @@ def date_to_tt(  # noqa: E302
 
 @overload
 def ensure_tzinfo(  # noqa: E704
-    _date: None, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo | None = ...
+    _date: None, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo = ...
 ) -> None: ...
 @overload  # noqa: E302
 def ensure_tzinfo(  # noqa: E704
-    _date: str, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo | None = ...
-) -> AwareDT: ...
-@overload  # noqa: E302
-def ensure_tzinfo(  # noqa: E704
-    _date: AwareDT | NaiveDT,
+    _date: AwareDT | NaiveDT | str,
     try_local_tz: bool | None = ...,
-    fallback_tzinfo: tzinfo | None = ...,
+    fallback_tzinfo: tzinfo = ...,
 ) -> AwareDT: ...
 @overload  # noqa: E302
 def ensure_tzinfo(  # noqa: E704
     _date: AwareST | NaiveST,
     try_local_tz: bool | None = ...,
-    fallback_tzinfo: tzinfo | None = ...,
+    fallback_tzinfo: tzinfo = ...,
 ) -> AwareST: ...
 @overload  # noqa: E302
 def ensure_tzinfo(  # noqa: E704
-    _date: date, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo | None = ...
+    _date: date, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo = ...
 ) -> date: ...
 def ensure_tzinfo(  # noqa: E302
     _date: AwareDT | NaiveDT | AwareST | NaiveST | date | str | None,
     try_local_tz: bool | None = True,
-    fallback_tzinfo: tzinfo | None = UTC,
+    fallback_tzinfo: tzinfo = UTC,
 ) -> AwareDT | AwareST | date | None:
     """
     Examples:
@@ -286,7 +282,7 @@ def ensure_tzinfo(  # noqa: E302
     if get_tzname(_date):
         new_date = _date
     else:
-        _tzinfo = _get_local_tz(try_local_tz, fallback_tzinfo)
+        _tzinfo = get_local_tz(try_local_tz, fallback_tzinfo)
 
         if isinstance(_date, struct_time):
             new_date = tt_to_datetime(_date, def_tzinfo=_tzinfo)
