@@ -111,8 +111,7 @@ def parser(
     else:
         paths = []
 
-    params = [(p.key, p.value) for p in param if getattr(p, "key")]  # noqa: B009
-    encoded = urlencode(params)
+    encoded = urlencode([(p.key, p.value) for p in param if p.key])
     base: str = require_conf(objconf, "base", "urlbuilder")
     joined = urljoin(base, "/".join(paths))
     stream = f"{joined}?{encoded}" if encoded else joined
@@ -199,6 +198,10 @@ def pipe(*args: Any, **kwargs: object) -> str:
         >>> conf = {'base': base, 'path': path, 'param': param}
         >>> next(pipe(conf=conf))
         'http://finance.yahoo.com/rss/headline?s=gm'
+        >>> next(pipe(conf={"base": base, "path": path, "param": {"key": "s"}}))
+        'http://finance.yahoo.com/rss/headline?s=None'
+        >>> next(pipe(conf={"base": base, "path": path, "param": {"value": "gm"}}))
+        'http://finance.yahoo.com/rss/headline'
         >>> next(pipe(conf={"base": base, "path": "rss/headline"}))
         'http://finance.yahoo.com/rss/headline'
 

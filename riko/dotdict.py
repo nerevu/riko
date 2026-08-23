@@ -239,9 +239,9 @@ def gen_dict[VT](  # noqa: E302
     """
     >>> r = DotDict({'a': {'value': 'bar'}})
     >>> r
-    {'a': 'bar'}
+    {'a': {'value': 'bar'}}
     >>> dict(gen_dict(r))
-    {'a': 'bar'}
+    {'a': {'value': 'bar'}}
     >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
     >>> r
     {'a': 'baz'}
@@ -752,9 +752,9 @@ class DotDict(CaseInsensitiveDict[VT]):
         """
         >>> r = DotDict({'a': {'value': 'bar'}})
         >>> r
-        {'a': 'bar'}
+        {'a': {'value': 'bar'}}
         >>> r.asdict()
-        {'a': 'bar'}
+        {'a': {'value': 'bar'}}
         >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
         >>> r
         {'a': 'baz'}

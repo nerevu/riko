@@ -655,9 +655,15 @@ defaults to ``sw-{n}``, so the terse form is just:
     {
         "modules": [
             {"type": "fetchdata", "conf": {"url": "feed.json", "path": "value.items"}},
-            {"type": "truncate", "conf": {"count": {"value": "3"}}}
+            {"type": "truncate", "conf": {"count": 3}}
         ]
     }
+
+A scalar ``conf`` value may be written plainly, as ``count`` is above, or as a
+``{"type": ..., "value": ...}`` mapping (the Yahoo! Pipes form) to have it cast
+from a string. E.g., ``{"count": {"type": "int", "value": "3"}}``. A **bare**
+``{"value": "3"}`` is neither: it carries no ``type``, so it stays an ordinary
+nested mapping rather than being unwrapped to ``3``.
 
 Compact ``[source, target]`` pairs can't represent the secondary fan-in ports
 for modules such as ``join`` and ``union``. Use the full format for those. Chaining

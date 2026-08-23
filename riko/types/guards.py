@@ -65,6 +65,4 @@ def is_sentinal[VT](val: Mapping[str, VT], **kwargs: object) -> TypeGuard[Sentin
 
 
 def is_type_value(val: Mapping[Any, Any]) -> TypeGuard[ConfArg]:
-    n = len(val)
-    double = n == 2 and "type" in val and "value" in val
-    return double or (n == 1 and "value" in val)
+    return len(val) == 2 and "type" in val and "value" in val
