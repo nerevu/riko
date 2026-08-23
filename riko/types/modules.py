@@ -727,7 +727,7 @@ class JoinConf(TypedDict, total=False):
 
 class ReceiveConf(TypedDict, total=False):
     name: str
-    wait: int | float = 0.1
+    wait: int | float = 1
     max_wait: int | float = 5
     max_len: int
 
