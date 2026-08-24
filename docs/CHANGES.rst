@@ -62,6 +62,10 @@ Changes
 Fixed
 ~~~~~
 
+- Stream Fetch requests whenever the response is read lazily via ``r.raw``; the memoized
+  branches still buffer via ``r.text``/``r.content``. Now text resources without
+  ``memoize`` no longer fail with ``StopIteration``.
+
 - ``rename`` and ``regex`` no longer create a field the item lacks; a rule naming an
   absent field is skipped. A field holding ``None`` is still renamed or rewritten.
 
