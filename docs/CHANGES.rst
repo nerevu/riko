@@ -131,6 +131,11 @@ Removed
   ``conf`` of its own because it uses the embedded submodule's   ``conf``. The submodule
   is now set with the compact top-level ``embed`` kwarg.
 
+Dev
+~~~
+
+- ``manage test`` now correctly parses ``stop`` and ``verbose`` options
+
 v0.75.0 (2026-08-15)
 --------------------
 

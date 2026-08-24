@@ -445,13 +445,18 @@ def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
 def test(paths=(), where=(), stop=None, **kwargs):  # noqa: PT028
     """Run pytest, tox, and script tests"""
     where = [*where, *paths]
-    quiet = kwargs.get("quiet") and not kwargs.get("verbose")
-    verbosity = "-q" if quiet else "-v"
-    opts = f"-x{verbosity}" if stop else verbosity
+
+    if kwargs.get("quiet"):
+        verbosity = "q"
+    elif kwargs.get("verbose"):
+        verbosity = "vv --tb=long -ra"
+    else:
+        verbosity = "v --tb=short -ra"
+
+    opts = f"-x{verbosity}" if stop else f"-{verbosity}"
     opts += " --cov=riko" if kwargs.get("cov") else " --no-cov"
     opts += "" if kwargs.get("capture") else " -s"
     opts += " --last-failed" if kwargs.get("failed") else ""
-    opts += " -vv --tb=long -ra" if kwargs.get("verbose") else " --tb=short -ra"
 
     if kwargs.get("watch") and kwargs.get("capture"):
         opts += " --looponfail"
