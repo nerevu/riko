@@ -167,17 +167,34 @@ list:
 ```python
     Yields:
         - ``<row>`` when ``emit`` is True (default)
-        - ``{<assign>: <row>}`` per row when ``emit`` is False and no item given
+        - ``{<assign>: <row>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<row>, ...]}`` when ``emit`` is False and
           item is given
 ```
 
-A **single-value** pipe keeps the scalar form, because `one=True` makes `value`
-a scalar rather than an iterator, so the list branch never runs:
+A **single-value** pipe still needs all three — only the *merge* bullet
+differs, because `one=True` makes `value` a scalar rather than an iterator, so
+the list branch never runs:
 
 ```python
-        - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item is given
+    Yields:
+        - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <value>}`` when ``emit`` is False and no item given
+        - ``<value>`` when ``emit`` is True
 ```
+
+**`operators` are the exception — they take two bullets, not three.**
+`operator.process` always passes an empty `DotDict()` to `gen_assignments`, so
+the merge branch is unreachable and there is no "item given" case:
+
+```python
+result = gen_assignments(DotDict(), assignment, assign=assign, one=one)
+```
+
+That is also why operators *nest* (``{<assign>: Item}``) rather than merge.
+Processors pass the real `_input`, which may be empty or populated — hence
+their third bullet.
 
 Check which one applies by running it with and without an item — `csv` gives 645
 outputs bare and *one* output (holding a 645-item list) when merged, while

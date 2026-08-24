@@ -1,22 +1,21 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for splitting a string into an array of strings.
+Splits a string into tokens.
 
-A delimiter string (often just a single character) tells the module where to
-split the input string. The delimiter string doesn't appear in the output.
+Each token is whitespace-stripped and emitted on its own.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.tokenizer import pipe
         >>>
-        >>> item = {'content': 'Once,twice,thrice'}
-        >>> next(pipe(item))
+        >>> next(pipe({"content": "Once,twice,thrice"}))
         {'content': 'Once'}
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    TOKEN_KEY: The field each token is assigned to when ``conf`` supplies none.
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -42,7 +41,6 @@ DEFAULTS: Defaults = {
     "token_key": TOKEN_KEY,
 }
 
-
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -50,29 +48,30 @@ def parser(
     content: str, extraction: Extraction, objconf: TokenizerObjconf, **kwargs: object
 ) -> Iterator[dict[str, str]]:
     """
-    Parses the pipe content
+    Splits ``content`` on the configured delimiter.
 
     Args:
-        content (str): The content to tokenize
-        objconf (obj): The pipe configuration (an Objectify instance)
+        content: The string to split.
+
+        extraction: The extracted conf value. Unused.
+
+        objconf: The pipe configuration, containing `delimiter`, `dedupe`, `sort` and
+            `token_key`.
 
     Returns:
-        Iter[dict]: The stream of items
+        The tokens, each wrapped in a dict.
 
     Examples:
         >>> from meza.fntools import Objectify
         >>>
-        >>> objconf = Objectify({'delimiter': '//', 'token_key': 'token'})
-        >>> content = 'Once//twice//thrice//no more'
-        >>> result = parser(content, None, objconf)
-        >>> next(result)
+        >>> objconf = Objectify({"delimiter": "//", "token_key": "token"})
+        >>> next(parser("Once//twice//thrice//no more", None, objconf))
         {'token': 'Once'}
 
     """
-    keyfunc = lambda s: s.lower()
     splits = [s.strip() for s in content.split(objconf.delimiter) if s]
     deduped = dict.fromkeys(splits) if objconf.dedupe else splits
-    chunks = sorted(deduped, key=keyfunc) if objconf.sort else deduped
+    chunks = sorted(deduped, key=str.lower) if objconf.sort else deduped
     token_key = objconf.token_key or TOKEN_KEY
     return ({token_key: chunk} for chunk in chunks)
 
@@ -80,41 +79,52 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     """
-    A processor module that asynchronously splits a string by a delimiter.
+    Asynchronously splits a string into tokens.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            delimiter (str): Where to split the string (default: ",").
+
+            dedupe (bool): Whether to drop repeated tokens (default: False).
+
+            sort (bool): Whether to sort the tokens, ignoring case
+                (default: False).
+
+            token_key (str): Field each token is assigned to
+                (default: "content").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'delimiter',
-            'dedupe', 'sort', or 'token_key'.
+        field (str): Item attribute to split (default: "content").
 
-            delimiter (str): the delimiter string (default: ',')
-            dedupe (bool): Remove duplicates (default: False).
-            sort (bool): Sort tokens (default: False)
+        assign (str): Field the tokens are nested under. Ignored when ``emit``
+            is True (default: "tokenizer").
 
-            token_key (str): Attribute to assign individual tokens (default:
-                content)
+        emit (bool): Whether to emit each token directly rather than nest them.
+            Overrides ``assign`` (default: True).
 
-        assign (str): Attribute to assign parsed content (default:
-            tokenizer)
+    Yields:
+        - ``<token>`` when ``emit`` is True (default)
+        - ``{<assign>: <token>}`` when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<token>, ...]}`` when ``emit`` is False
+          and item is given
 
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: 'content')
-
-        emit (bool): Return the stream as is and don't assign it to an item
-            attribute (default: False)
-
-    Returns:
-        Awaitable: item with tokenized content
+    Notes:
+        Empty tokens are dropped, and ``dedupe`` keeps the first occurrence of
+        each, so the input order survives. A field the item lacks yields nothing.
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     item = {'content': 'Once,twice,thrice,no more'}
-        ...     result = await async_pipe(item)
+        ...     result = await async_pipe({"content": "Once,twice,thrice"})
         ...     print(next(result))
         >>>
         >>> run(main)
@@ -127,42 +137,55 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     """
-    A processor that splits a string by a delimiter.
+    Splits a string into tokens.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            delimiter (str): Where to split the string (default: ",").
+
+            dedupe (bool): Whether to drop repeated tokens (default: False).
+
+            sort (bool): Whether to sort the tokens, ignoring case
+                (default: False).
+
+            token_key (str): Field each token is assigned to
+                (default: "content").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'delimiter',
-            'dedupe', 'sort', or 'token_key'.
+        field (str): Item attribute to split (default: "content").
 
-            delimiter (str): the delimiter string (default: ',')
-            dedupe (bool): Remove duplicates (default: False).
-            sort (bool): Sort tokens (default: False)
-            token_key (str): Attribute to assign individual tokens (default:
-                content)
+        assign (str): Field the tokens are nested under. Ignored when ``emit``
+            is True (default: "tokenizer").
 
-        assign (str): Attribute to assign parsed content (default:
-            tokenizer)
+        emit (bool): Whether to emit each token directly rather than nest them.
+            Overrides ``assign`` (default: True).
 
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
+    Yields:
+        - ``<token>`` when ``emit`` is True (default)
+        - ``{<assign>: <token>}`` when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<token>, ...]}`` when ``emit`` is False
+          and item is given
 
-        emit (bool): Return the stream as is and don't assign it to an item
-            attribute (default: False)
-
-    Returns:
-        dict: an item with tokenized content
+    Notes:
+        Empty tokens are dropped, and ``dedupe`` keeps the first occurrence of
+        each, so the input order survives. A field the item lacks yields nothing.
 
     Examples:
-        >>> item = {'description': 'Once//twice//thrice//no more'}
-        >>> conf = {'delimiter': '//', 'sort': True}
-        >>> kwargs = {'field': 'description', 'emit': False, 'assign': 'tokens'}
-        >>> next(pipe(item, conf=conf, **kwargs))['tokens'][0]
+        >>> item = {"description": "Once//twice//thrice//no more"}
+        >>> conf = {"delimiter": "//", "sort": True}
+        >>> kwargs = {"field": "description", "emit": False, "assign": "tokens"}
+        >>> next(pipe(item, conf=conf, **kwargs))["tokens"][0]
         {'content': 'no more'}
-        >>> kwargs.update({'emit': True})
-        >>> conf.update({'token_key': 'token'})
+        >>> kwargs.update({"emit": True})
+        >>> conf.update({"token_key": "token"})
         >>> next(pipe(item, conf=conf, **kwargs))
         {'token': 'no more'}
         >>> conf = {"dedupe": True}

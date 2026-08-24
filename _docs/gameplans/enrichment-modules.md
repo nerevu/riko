@@ -146,6 +146,24 @@ Removing a `type` value is a breaking change to the public conf surface, so it
 is SemVer-gated. Until then the docstrings carry a `Warning:` naming which
 lookups are real.
 
+## 6c. Relative dates — settable timezone
+
+`riko.cast.cast_datetime` is the single implementation of relative-date parsing
+(shorthands, counted offsets, and the `next`/`last` word forms); `datebuilder`
+delegates to it rather than carrying a second, weaker copy.
+
+What remains is that `cast_datetime` timezone should be settable (per call via `conf`,
+or per pipeline via `Context`) with UTC as the default.
+
+This is additive, so it is not SemVer-gated.
+
+**Resolved:** the epoch-default half of this section. `CAST_SWITCH["date"]` and
+`["datetime"]` now default to `None`, so a miss is detectable, and the two roles
+`default` was serving are separated — `def_itemgetter` converts date sort keys to
+epoch floats and fills a miss with `_iterutils.SORT_FILLER` (`-inf`), which cannot
+collide with a real date the way the epoch did. `dateformat` guards on `None` and
+returns `""`.
+
 ## 7. Composition
 
 Do not add public `applys()` or `transform_csv()` abstractions. Users compose named modules

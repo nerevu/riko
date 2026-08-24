@@ -1347,5 +1347,3 @@ Bugfixes
 - Fixed sleep config. [Reuben Cummings]
 
 - Fixed json bool parsing. [Reuben Cummings]
-
-

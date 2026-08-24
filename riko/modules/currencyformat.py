@@ -1,18 +1,21 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for formatting numbers to currency strings.
+Formats a number as a currency string.
+
+The currency's own conventions decide the symbol and the number of decimal
+places, so ``100`` is ``$100.00`` in USD but ``¥100`` in JPY.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.currencyformat import pipe
         >>>
-        >>> next(pipe({'content': '100'}))['currencyformat']
+        >>> next(pipe({"content": "100"}))["currencyformat"]
         '$100.00'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -43,21 +46,22 @@ def parser(
     **kwargs: object,
 ) -> str:
     """
-    Parsers the pipe content
+    Formats ``amount`` in the configured currency.
 
     Args:
-        amount (Decimal): The amount to format
-        objconf (obj): The pipe configuration (an Objectify instance)
+        amount: The amount to format.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `currency`.
 
     Returns:
-        dict: The formatted item
+        The formatted amount, or ``""`` when there is no amount to format.
 
     Examples:
         >>> from decimal import Decimal
         >>> from meza.fntools import Objectify
         >>>
-        >>> objconf = Objectify({'currency': 'USD'})
-        >>> parser(Decimal('10.33'), None, objconf)
+        >>> objconf = Objectify({"currency": "USD"})
+        >>> parser(Decimal("10.33"), None, objconf)
         '$10.33'
 
     """
@@ -82,34 +86,53 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> str:
     """
-    A processor module that asynchronously formats a number to a given
-    currency string.
+    Asynchronously formats a number as a currency string.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            currency (str): ISO code of the currency to format in (default: "USD").
+
+            locale (str): Currency locale identifier (default: the currency code locale
+                as mapped in CURRENCY_CODES, or (if not locale exists) the system
+                currency locale).
+
+            clean (bool): Replace the non-breaking space with a space (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'currency'.
+        field (str): Item attribute to format (default: "content").
 
-            currency (str): The currency ISO abbreviation (default: USD).
+        assign (str): Field the text is assigned to. Ignored when ``emit`` is
+            True (default: "currencyformat").
 
-        assign (str): Attribute to assign parsed content (default:
-            currencyformat)
+        emit (bool): Whether to emit the text in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
-        field (str): Item attribute from which to obtain the string to be
-            formatted (default: 'content')
+    Yields:
+        - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item is
+          given (default)
+        - ``{<assign>: <text>}`` when ``emit`` is False and no item given
+        - ``<text>`` when ``emit`` is True
 
-    Returns:
-        Awaitable: item with formatted currency
+    Notes:
+        A field that is missing or not numeric yields ``""``.
+
+        Amounts are laid out US style whatever the currency, and an unrecognized
+        ISO code is used verbatim in place of a symbol.
 
     Examples:
-        >>> from datetime import date
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({'content': '10.33'})
-        ...     print(next(result)['currencyformat'])
+        ...     result = await async_pipe({"content": "10.33"})
+        ...     print(next(result)["currencyformat"])
         >>>
         >>> run(main)
         $10.33
@@ -121,25 +144,46 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> str:
     """
-    A processor module that formats a number to a given currency string.
+    Formats a number as a currency string.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            currency (str): ISO code of the currency to format in (default: "USD").
+
+            locale (str): Currency locale identifier (default: the currency code locale
+                as mapped in CURRENCY_CODES, or (if not locale exists) the system
+                currency locale).
+
+            clean (bool): Replace the non-breaking space with a space (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'currency'.
+        field (str): Item attribute to format (default: "content").
 
-            currency (str): The currency ISO abbreviation (default: USD).
+        assign (str): Field the text is assigned to. Ignored when ``emit`` is
+            True (default: "currencyformat").
 
-        assign (str): Attribute to assign parsed content (default:
-            currencyformat)
+        emit (bool): Whether to emit the text in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
-        field (str): Item attribute from which to obtain the string to be
-            formatted (default: 'content')
+    Yields:
+        - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item is
+          given (default)
+        - ``{<assign>: <text>}`` when ``emit`` is False and no item given
+        - ``<text>`` when ``emit`` is True
 
-    Returns:
-        dict: an item with formatted date string
+    Notes:
+        A field that is missing or not numeric yields ``""``.
+
+        Amounts are laid out US style whatever the currency, and an unrecognized
+        ISO code is used verbatim in place of a symbol.
 
     Examples:
         >>> next(pipe({"content": "1000.33"}))["currencyformat"]

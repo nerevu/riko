@@ -79,6 +79,7 @@ Every detailed plan lives under [gameplans/](gameplans/). The per-`§N` map is t
 | [bado-anyio-alignment.md](gameplans/bado-anyio-alignment.md) | **`bado` ↔ AnyIO 4.14 alignment** — remove/replace/keep audit of the async helpers, **missing async helpers** (`async_memoize`, `throttle`) + async benchmarking/profiling methodology (execution-semantics owns the primitive *semantics*). |
 | [callable-pipes.md](gameplans/callable-pipes.md) | **§4 callable pipes** — `map`/`flat_map`, `Opts` fields, decorator model, strict mode, thread/process execution (+ impl plan). |
 | [cli.md](gameplans/cli.md) | CLI architecture, command-plugin system, config precedence. |
+| [correctness-audit.md](gameplans/correctness-audit.md) | **Correctness audit of the non-module repo** — the defect taxonomy the 52-module sweep produced (import-time state, unreachable guards, unread config, silent fabrication, leaked dependency errors, weaker duplicates, doc drift, non-determinism, dataclass-vs-TypedDict removal) plus the phased plan to apply it to `cast`/`types`/parsing/core/async/CLI. |
 | [connectors.md](gameplans/connectors.md) | Source/sink connectors (HTTP, files, mail, brokers, CKAN/Prometheus/tabular, Singer). |
 | [database-transforms.md](gameplans/database-transforms.md) | `riko-sql` / `riko-dbt` (Ibis-backed reads, dbt coordination); owns **§25** (conversion & dataframe). |
 | [dotdict-parsing.md](gameplans/dotdict-parsing.md) | DotDict parsing — business-data key handling. |

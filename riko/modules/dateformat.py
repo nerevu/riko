@@ -1,33 +1,23 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for formatting dates.
+Formats a date field as text.
 
-A wide range of format specifiers can be used to create the output text string.
-The specifiers all begin with a percent sign followed by a single character.
-
-Here are a few specifiers and how they each format the date/time February 12th,
-2008 at 8:45 P.M.
-
-    Specifier                   Formatted Date
-    -------------------------   -------------------------------
-    %m-%d-%Y                    02-12-2008
-    %A, %b %d, %y at %I:%M %p   Tuesday, Feb 12, 08 at 08:45 PM
-    %D 	                        02/12/08
-    %R 	                        20:45
-    %B 	                        February
+``format`` is a ``strftime`` format string, so any specifier Python accepts
+works: ``"%m-%d-%Y"`` gives ``02-12-2008``, ``"%R"`` gives ``20:45``, and
+``"%A, %b %d, %y at %I:%M %p"`` gives ``Tuesday, Feb 12, 08 at 08:45 PM``.
 
 Examples:
-    basic usage::
+    Basic usage::
 
-        >>> from riko.modules.dateformat import pipe
         >>> from datetime import date
+        >>> from riko.modules.dateformat import pipe
         >>>
-        >>> next(pipe({'date': date(2015, 5, 4)}))['dateformat']
+        >>> next(pipe({"date": date(2015, 5, 4)}))["dateformat"]
         '05/04/2015 00:00:00'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -55,20 +45,21 @@ def parser(
     **kwargs: object,
 ) -> str:
     """
-    Obtains the user input
+    Formats ``date`` with the configured format string.
 
     Args:
-        date (date): Must have key 'date' with a date-like object value
-        objconf (obj): The pipe configuration (an Objectify instance)
+        date: The date to format, or None when there is none.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `format`.
 
     Returns:
-        dict: The formatted date
+        The formatted date, or ``""`` when there is no date to format.
 
     Examples:
         >>> from datetime import date
         >>> from meza.fntools import Objectify
         >>>
-        >>> objconf = Objectify({'format': '%m/%d/%Y'})
+        >>> objconf = Objectify({"format": "%m/%d/%Y"})
         >>> parser(date(2015, 5, 4), None, objconf)
         '05/04/2015'
 
@@ -84,35 +75,50 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> str:
     """
-    A processor module that asynchronously formats a date.
+    Asynchronously formats a date field as text.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            format (str): ``strftime`` format string (default:
+                "%m/%d/%Y %H:%M:%S", i.e. "02/12/2008 20:45:00").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'format' or
-            'field'.
+        field (str): Item attribute to format (default: "date").
 
-            format (str): Format string passed to time.strftime (default:
-                '%m/%d/%Y %H:%M:%S', i.e., '02/12/2008 20:45:00')
+        assign (str): Field the text is assigned to. Ignored when ``emit`` is
+            True (default: "dateformat").
 
-            assign (str): Attribute to assign parsed content (default:
-                dateformat)
+        emit (bool): Whether to emit the text in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
-            field (str): Item attribute from which to obtain the string to be
-                formatted (default: 'date')
+    Yields:
+        - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item is
+          given (default)
+        - ``{<assign>: <text>}`` when ``emit`` is False and no item given
+        - ``<text>`` when ``emit`` is True
 
-    Returns:
-        Awaitable: item with formatted date
+    Notes:
+        The field is cast before formatting, so a ``date``, ``datetime``,
+        ``struct_time``, epoch ``int``, or date string all work, and any time of
+        day they carry is kept.
+
+        A field that is missing or names no date yields ``""``.
 
     Examples:
         >>> from datetime import date
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({'date': date(2015, 5, 4)})
-        ...     print(next(result)['dateformat'])
+        ...     result = await async_pipe({"date": date(2015, 5, 4)})
+        ...     print(next(result)["dateformat"])
         >>>
         >>> run(main)
         05/04/2015 00:00:00
@@ -124,27 +130,42 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> str:
     """
-    A processor module that formats a date.
+    Formats a date field as text.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            format (str): ``strftime`` format string (default:
+                "%m/%d/%Y %H:%M:%S", i.e. "02/12/2008 20:45:00").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'format' or
-            'field'.
+        field (str): Item attribute to format (default: "date").
 
-            format (str): Format string passed to time.strftime (default:
-                '%m/%d/%Y %H:%M:%S', i.e., '02/12/2008 20:45:00')
+        assign (str): Field the text is assigned to. Ignored when ``emit`` is
+            True (default: "dateformat").
 
-        assign (str): Attribute to assign parsed content (default:
-            dateformat)
+        emit (bool): Whether to emit the text in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
-        field (str): Item attribute from which to obtain the string to be
-            formatted (default: 'date')
+    Yields:
+        - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item is
+          given (default)
+        - ``{<assign>: <text>}`` when ``emit`` is False and no item given
+        - ``<text>`` when ``emit`` is True
 
-    Returns:
-        dict: an item with formatted date string
+    Notes:
+        The field is cast before formatting, so a ``date``, ``datetime``,
+        ``struct_time``, epoch ``int``, or date string all work, and any time of
+        day they carry is kept.
+
+        A field that is missing or names no date yields ``""``.
 
     Examples:
         >>> from datetime import date, datetime
