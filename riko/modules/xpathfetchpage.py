@@ -135,8 +135,7 @@ async def async_parser(
     # TODO: centralize error handling and retry logic
     f = await io.async_url_open(url, encoding=objconf.encoding)
     content = any2dict(f, ext, objconf.html5, path=objconf.xpath)
-    stream = auto_close(content, f)
-    return stream
+    return auto_close(content, f)
 
 
 def parser(

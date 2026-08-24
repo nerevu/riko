@@ -86,9 +86,9 @@ async def async_parser(
     # TODO: Figure out if html/xml files should be parsed as binary too.
     binary = ext == "json"
     f = await io.async_url_open(url, encoding=objconf.encoding, binary=binary)
+    ext = ext or getattr(f, "ext", None) or ""
     content = any2dict(f, ext, objconf.html5, path=path)
-    stream = auto_close(content, f)
-    return stream
+    return auto_close(content, f)
 
 
 def parser(

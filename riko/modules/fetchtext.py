@@ -80,8 +80,7 @@ async def async_parser(
     """
     url: str = require_conf(objconf, "url", "fetchtext")
     f = await io.async_url_open(url, encoding=objconf.encoding)
-    stream = auto_close(map(str.strip, f), f)
-    return stream
+    return auto_close(map(str.strip, f), f)
 
 
 def parser(
