@@ -51,6 +51,12 @@ Fixed
 - ``rename`` and ``regex`` no longer create a field the item lacks; a rule naming an
   absent field is skipped. A field holding ``None`` is still renamed or rewritten.
 
+- ``rssitembuilder``'s ``pubDate`` default is the time the item is built, not the time
+  ``riko`` was imported.
+
+- ``slugify`` treats a ``None`` ``separator`` as unset and falls back to ``"-"`` instead
+  of raising from ``python-slugify``.
+
 Removed
 ~~~~~~~
 
