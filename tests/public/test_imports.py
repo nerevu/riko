@@ -34,6 +34,7 @@ STABLE = {
     "async_read",
     "async_return",
     "async_sleep",
+    "async_write",
     "list_modules",
     "backend",
     "build_pipeline",

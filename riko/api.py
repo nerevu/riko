@@ -18,7 +18,7 @@ from riko.bado import (
     issync,
     run,
 )
-from riko.bado.io import get_async_temp_file
+from riko.bado.io import async_write, get_async_temp_file
 from riko.collections import (
     AsyncCollection,
     AsyncPipe,
@@ -65,6 +65,7 @@ __all__ = [
     "async_read",
     "async_return",
     "async_sleep",
+    "async_write",
     "backend",
     "build_pipeline",
     "compile_pipe",
