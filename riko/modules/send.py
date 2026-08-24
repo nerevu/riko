@@ -35,9 +35,10 @@ from typing import Any, cast
 import pygogo as gogo
 
 from riko._pubsub import async_hub, send
+from riko.bado.itertools import as_async
 from riko.modules._prepare import require_kwarg
 from riko.types.configs import SendObjconf
-from riko.types.general import Defaults, Opts, PipeTuples, Stream
+from riko.types.general import Defaults, Feed, Opts, PipeTuples, Stream
 
 from . import operator
 
@@ -47,17 +48,18 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    stream: Stream, objconf: SendObjconf, tuples: PipeTuples, **kwargs: str
+    stream: Stream | Feed, objconf: SendObjconf, tuples: PipeTuples, **kwargs: str
 ) -> Stream:
     """
     Asynchronously publishes each item to every target, then returns them.
 
     Receivers may start before or after the sender, so no startup ordering is
-    needed.
+    needed. Targets are completed even when a publish fails, so a healthy receiver isn't
+    left waiting.
 
     Args:
-        stream: The source. Note: this shares the `tuples` iterator, so
-            consuming it will consume `tuples` as well.
+        stream: The source, sync or async. Note: this shares the `tuples`
+            iterator, so consuming it will consume `tuples` as well.
 
         objconf: The pipe configuration, containing `max_wait`.
 
@@ -68,7 +70,9 @@ async def async_parser(
         others (list[str]): Receivers to push to. Required.
 
     Returns:
-        Each source item, unchanged.
+        A sync iterator over each source item, unchanged. Awaiting publishes the
+        whole source, so an unbounded one never returns and a finite one is held
+        in memory.
 
     Raises:
         TypeError: If ``others`` is not given.
@@ -79,11 +83,13 @@ async def async_parser(
     timeout = objconf.max_wait
     sent = []
 
-    for item in stream:
-        await async_hub.publish(others, item, timeout=timeout)
-        sent.append(item)
+    try:
+        async for item in as_async(stream):
+            await async_hub.publish(others, item, timeout=timeout)
+            sent.append(item)
+    finally:
+        await async_hub.complete(others)
 
-    await async_hub.complete(others)
     return iter(sent)
 
 
@@ -148,10 +154,13 @@ async def async_pipe(*args: Any, **kwargs: str) -> Stream:
     """
     Asynchronously pushes items to named receivers.
 
-    Items pass through unchanged, so this can sit mid-pipeline.
+    Items pass through unchanged, so this can sit mid-pipeline. Every target is
+    completed even when a publish fails, so a receiver on a healthy channel is
+    never left waiting on one nobody will close. Unlike the sync `pipe`, the
+    source is published in full before the first item is observable downstream.
 
     Args:
-        items (Items): The source stream.
+        items (Items | Feed): The source stream, sync or async.
 
         conf (dict): The pipe configuration.
 

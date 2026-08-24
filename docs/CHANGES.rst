@@ -62,6 +62,8 @@ Changes
 Fixed
 ~~~~~
 
+- ``send`` now accepts a ``Feed`` source and completes on receiver failures
+
 - ``join`` no longer materializes its primary stream. Only ``other`` is retained and
   replayed now; the source is consumed lazily. Output order is unchanged.
 

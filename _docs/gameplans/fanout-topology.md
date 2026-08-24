@@ -144,6 +144,23 @@ Requirements:
 This is the highest-priority topology change because the named fan-out abstraction is only
 fully useful for unbounded feeds when async receivers remain incremental.
 
+The **sender** side is in the same phase, and its guard test is already written:
+`test_async_send_does_not_buffer_its_source` in `tests/public/test_pipe_implementations.py`
+is a `strict` xfail, so landing F1 flips it and the marker must come off (audit **R4**,
+`send.async_parser` buffers into `sent` and returns `iter(sent)` after `complete`). Two
+adjacent defects there are already repaired — completion now fires from a `finally`, and a
+`Feed` source no longer raises — so what remains for F1 is purely the incremental yield.
+
+Note the seam this needs, since it is not local to the pipes: yielding lazily makes the
+parser an **async generator**, and the operator wrapper's post-parser path is sync-only *and
+fails silently* — an async gen is not awaitable (`_decorators.py:1050`), so
+`isinstance(stream, Iterator)` is `False`, `get_assignment` (`_assignment.py:110`) takes its
+`else` branch, and the generator **object** is emitted as a single item. `OperatorWrapperOutput`
+(`types/general.py:80`) is sync-only and `_assignment.py` has no async path at all. F1 therefore
+consumes step 2 of
+[feed-native-streaming § 8](feed-native-streaming.md#8-implementation-sequence) (the Feed-native
+parser mechanism) rather than reimplementing it.
+
 ## 6. Phase F2 — first-class conditional routing
 
 Add a routing primitive rather than forcing users to encode routing indirectly as

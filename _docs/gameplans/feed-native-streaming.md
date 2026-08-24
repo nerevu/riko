@@ -49,8 +49,8 @@ Priority **A** = clear win, do first; **B** = worthwhile; **C** = inherently eag
 | `tail` | **A** | `async for` into `deque(maxlen=count)` | Still EOF-before-output, but O(count) memory instead of O(source). High value — the legacy seam silently inflates it to O(source). |
 | `count` | **A** | incremental async accumulator | O(1) ungrouped; O(groups) grouped. |
 | `sum` | **A** | incremental async accumulator (`Decimal`) | O(1) ungrouped; O(groups) grouped. |
-| `receive` | **A** | yield directly from the AnyIO receive stream | Removes the current result list; pub/sub is already AnyIO-native, so materialization fights the abstraction. |
-| `send` | **A** | publish → `yield` each item; `complete` in `finally` | Removes the current `sent` list. |
+| `receive` | **A** → **F1** | yield directly from the AnyIO receive stream | Removes the current result list; pub/sub is already AnyIO-native, so materialization fights the abstraction. **Owned by [fanout-topology F1](fanout-topology.md#5-phase-f1--make-async-receive-truly-streaming)** (that phase's title *is* this row). |
+| `send` | **A** → **F1** | publish → `yield` each item; `complete` in `finally` | Removes the current `sent` list. **Owned by F1** — same DoD, and F5 renames/deletes the `others`/`max_wait`/`complete()`/`ids` vocabulary this row assumes. `complete`-in-`finally` is already done (see below). |
 | `timeout` | **A** | AnyIO cancel scopes (`move_on_after`) around iteration | **Real** cancellation of a blocked `anext()` (today's `AsyncTimeoutIterator` only notices *after* the deadline). |
 | `split` | **A/B** | bounded broadcast (prototype with `tee`) | Removes the whole-source copy — see §4. |
 | `forever` | **B** | `anyio.itertools.repeat` | Native async infinite source. |
@@ -72,7 +72,17 @@ Feed port does not reach it first:
   `B/C` for the *async* port.
 * `send` (**R4**) — the `sent` list is not merely wasteful: `await async_pipe(infinite)`
   never returns, and no downstream item appears before the source is exhausted, on the
-  one pipe whose purpose is lazy fan-out.
+  one pipe whose purpose is lazy fan-out. **Reassigned to
+  [fanout-topology F1](fanout-topology.md#5-phase-f1--make-async-receive-truly-streaming),
+  not this port** — F1's DoD #1 is already "`send`/`receive` are incremental in both sync
+  and async execution", and its bounded-capacity/cancellation/sender-failure requirements
+  are the same contract, so porting `send` here would be redone. F1 also renames `others`→
+  `targets` and `max_wait`→`timeout` and deletes `complete()`/the `ids` dict outright
+  (F5), so the *vocabulary* this row assumes is itself scheduled for removal. Two adjacent
+  non-laziness defects (completion skipped on publish failure; sync `for` over a `Feed`)
+  were repaired on the legacy path 2026-08-24 with a `strict` xfail left as F1's guard —
+  see the R4 row in [correctness-audit § 8](correctness-audit.md#8-open-defect-register--features-branch-audit).
+  `truncate` remains this port's proof-of-concept.
 * `timeout` (**R14**) — the cancel-scope port is the *only* thing that makes the pipe
   bound a stalled source. [execution-semantics § 7.2](execution-semantics.md#72-a-blocked-anext-outlives-the-deadline)
   owns the `on_timeout` policy it must land with.
@@ -241,6 +251,11 @@ bespoke source-normalization special-casing currently sitting in `AsyncPipe` and
 `_materialize_legacy_source` seam (§1) down to only genuinely blocking legacy operators — the
 adapter yields a lazy `AsyncIterator` for the Feed/AsyncIterable case rather than pre-draining.
 
+`send.async_parser` now carries a second such arm
+(`stream if isinstance(stream, AsyncIterator) else async_iter(stream)`, added with the R4
+repair — a sync `for` there crashed outright on the `AsyncIterator` that `operator.aparse`
+produces). Fold it in when the adapter lands; it is a call site, not a competing contract.
+
 Two hard constraints the adapter must preserve (both are current, load-bearing behavior):
 - **`None` is a source invocation, not an empty stream.** Source pipes (`fetchdata`, …) are
   called with `item=None` to *produce* a stream; normalizing `None`→empty would never invoke
@@ -263,7 +278,11 @@ Two hard constraints the adapter must preserve (both are current, load-bearing b
 4. Port **`union`** (`chain`).
 5. Port **`filter`, `uniq`, `tail`** with native `async for`.
 6. Port **`count`, `sum`** to incremental accumulators (O(1)/O(groups)).
-7. Port **`send`/`receive`** to yield incrementally (stop materializing).
+7. ~~Port **`send`/`receive`** to yield incrementally (stop materializing).~~ **Reassigned to
+   [fanout-topology F1](fanout-topology.md#5-phase-f1--make-async-receive-truly-streaming)** —
+   it needs the same seam (step 2), but the pub/sub contract, vocabulary rename, and
+   subscription lifecycle around it are F1/F4/F5's, so F1 consumes step 2 rather than this
+   plan owning the pipes.
 8. Add shared `batch_feed`/`batch_stream`; align with the future `BatchPolicy`.
 9. Introduce stateful streaming encoders (JSON/CSV first, JSONL as an easy target).
 10. Convert **`write`** into a chunked passthrough sink over `STREAM_ENCODERS`; leave

@@ -71,7 +71,7 @@ def _cap[T, S](
     return wrapped
 
 
-def _as_async[T](source: AsyncIterable[T] | Iterable[T]) -> AsyncIterable[T]:
+def as_async[T](source: AsyncIterable[T] | Iterable[T]) -> AsyncIterable[T]:
     return source if isinstance(source, AsyncIterable) else async_iter(source)
 
 
@@ -303,7 +303,7 @@ async def _pool_stream[T, S](
 
     async def feed() -> None:
         async with item_send:
-            async for item in _as_async(source):
+            async for item in as_async(source):
                 await item_send.send(item)
 
     async def worker(results, items) -> None:
@@ -407,7 +407,7 @@ async def async_map_ordered_stream[T, S](
     window = max(limit + buffer, 1)
     batch: list[T] = []
 
-    async for item in _as_async(source):
+    async for item in as_async(source):
         batch.append(item)
 
         if len(batch) >= window:
