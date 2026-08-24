@@ -1,22 +1,24 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for obtaining the geo location of an ip address, street
-address, currency code, or lat/lon coordinates.
+Resolves a currency code, street/ip address, or coordinates to a location.
+
+Warning:
+    Only ``type="currency"`` performs a real lookup. ``street_address`` and
+    ``ip_address`` ignore their input and return fixed placeholder data, and
+    ``coordinates`` echoes the supplied lat/lon but reports a placeholder
+    country. See ``riko.cast.lookup_street_address`` and friends.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.geolocate import pipe
         >>>
-        >>> address = '123 Bakersville St., USA'
-        >>> geolocate = next(pipe({'content': address}))
-        >>> geolocate['country']
-        'United States'
-
+        >>> next(pipe({"content": "GBP"}, conf={"type": "currency"}))["country"]
+        'United Kingdom'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -41,25 +43,29 @@ def parser(
     address: str, extraction: Extraction, objconf: GeolocateObjconf, **kwargs: object
 ) -> AnyLocation:
     """
-    Parses the pipe content
+    Resolves ``address`` to a location of the configured type.
 
     Args:
-        address (str): The address to lookup
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
+        address: The value to resolve — a currency code, street address, ip
+            address, or ``"lat,lon"`` pair.
 
-    Kwargs:
-        assign (str): Attribute to assign parsed content (default: geolocate)
-        stream (dict): The original item
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `type`.
+
+    Returns:
+        The resolved location. Only ``type="currency"`` consults real data.
+
+    Raises:
+        KeyError: If ``type`` is not a supported lookup.
 
     Examples:
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
-        >>> item = {'content': 'GBP'}
-        >>> objconf = Objectify({'type': 'currency'})
-        >>> kwargs = {'stream': item, 'assign': 'content'}
-        >>> parser(item['content'], None, objconf, **kwargs)['country']
+        >>> item = {"content": "GBP"}
+        >>> objconf = Objectify({"type": "currency"})
+        >>> kwargs = {"stream": item, "assign": "content"}
+        >>> parser(item["content"], None, objconf, **kwargs)["country"]
         'United Kingdom'
 
     """
@@ -69,34 +75,48 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
     """
-    A processor module that asynchronously obtains the geo location of an ip address, street
-    address, currency code, or lat/lon coordinates.
+    Asynchronously resolves an item field to a location.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            type (str): The lookup to perform, one of "currency", "street_address",
+                "ip_address", "coordinates" (default: "street_address").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'type'.
+        field (str): Item attribute holding the value to resolve
+            (default: "content").
 
-            type (str): The type of geolocation to perform. Must be one of
-                'coordinates', 'street_address', 'ip_address', or 'currency'
-                (default: 'street_address').
+        assign (str): Field the location is assigned to. Ignored when ``emit``
+            is True (default: "geolocate").
 
-        assign (str): Attribute to assign parsed content (default: geolocate)
-        field (str): Item attribute from which to obtain the first address to
-            operate on (default: 'content')
+        emit (bool): Whether to emit the location in place of the item rather
+            than assign it. Overrides ``assign`` (default: False).
 
-    Returns:
-        Awaitable: item with formatted location
+    Yields:
+        - merged ``{Item, <assign>: <location>}`` when ``emit`` is False and
+          item is given (default)
+        - ``{<assign>: <location>}`` when ``emit`` is False and no item given
+        - ``<location>`` when ``emit`` is True
+
+    Raises:
+        KeyError: If ``type`` is not a supported lookup.
+
+    Notes:
+        Only ``"currency"`` resolves real data; the other lookups return placeholder
+        values.
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     conf = {'type': 'currency'}
-        ...     result = await async_pipe({'content': 'GBP'}, conf=conf)
-        ...     print(next(result)['country'])
+        ...     conf = {"type": "currency"}
+        ...     result = await async_pipe({"content": "GBP"}, conf=conf)
+        ...     print(next(result)["country"])
         >>>
         >>> run(main)
         United Kingdom
@@ -108,36 +128,50 @@ def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> AnyLocation:
     """
-    A processor module that obtains the geo location of an ip address, street
-    address, currency code, or lat/lon coordinates.
+    Resolves an item field to a location.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            type (str): The lookup to perform, one of "currency", "street_address",
+                "ip_address", "coordinates" (default: "street_address").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'type'.
+        field (str): Item attribute holding the value to resolve
+            (default: "content").
 
-            type (str): The type of geolocation to perform. Must be one of
-                'coordinates', 'street_address', 'ip_address', or 'currency'
-                (default: 'street_address').
+        assign (str): Field the location is assigned to. Ignored when ``emit``
+            is True (default: "geolocate").
 
-        assign (str): Attribute to assign parsed content (default: geolocate)
-        field (str): Item attribute from which to obtain the first address to
-            operate on (default: 'content')
+        emit (bool): Whether to emit the location in place of the item rather
+            than assign it. Overrides ``assign`` (default: False).
 
-    Returns:
-        dict: an item with formatted location
+    Yields:
+        - merged ``{Item, <assign>: <location>}`` when ``emit`` is False and
+          item is given (default)
+        - ``{<assign>: <location>}`` when ``emit`` is False and no item given
+        - ``<location>`` when ``emit`` is True
+
+    Raises:
+        KeyError: If ``type`` is not a supported lookup.
+
+    Notes:
+        Only ``"currency"`` resolves real data; the other lookups return placeholder
+        values.
 
     Examples:
-        >>> conf = {'type': 'currency'}
-        >>> geolocate = next(pipe({'content': 'INR'}, conf=conf))
-        >>> geolocate['country']
+        >>> conf = {"type": "currency"}
+        >>> geolocate = next(pipe({"content": "INR"}, conf=conf))
+        >>> geolocate["country"]
         'India'
-        >>> address = '123 Bakersville St., USA'
-        >>> kwargs = {'field': 'address', 'emit': False, 'assign': 'result'}
-        >>> geolocate = next(pipe({'address': address}, **kwargs))['result']
-        >>> geolocate['country']
+        >>> address = "123 Bakersville St., USA"
+        >>> kwargs = {"field": "address", "emit": False, "assign": "result"}
+        >>> geolocate = next(pipe({"address": address}, **kwargs))["result"]
+        >>> geolocate["country"]
         'United States'
 
     """
