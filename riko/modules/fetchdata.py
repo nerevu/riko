@@ -1,23 +1,23 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for fetching XML and JSON data sources.
+Fetches an XML or JSON data source and yields records.
 
-Accesses and extracts data from XML and JSON data sources on the web. This data
-can then be converted into an RSS feed or merged with other data in your Pipe.
+Accesses and extracts data from XML and JSON sources on the web, which can then
+be converted into an RSS feed or merged with other data in your pipe.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko import get_path
         >>> from riko.modules.fetchdata import pipe
         >>>
-        >>> conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
-        >>> next(pipe(conf=conf))['title']
+        >>> conf = {"url": get_path("gigs.json"), "path": "value.items"}
+        >>> next(pipe(conf=conf))["title"]
         'Business System Analyst'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -48,33 +48,31 @@ async def async_parser(
     _: Item, extraction: Extraction, objconf: FetchDataObjconf, **kwargs: object
 ) -> Stream:
     """
-    Asynchronously parses the pipe content
+    Asynchronously reads the data source into a stream of records.
+
+    The format is taken from the url's extension, falling back to the fetched
+    file's detected type when the url has none.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url`, `path` and `html5`.
 
     Returns:
-        Iter[dict]: The stream of items
+        Records at ``path``, or the whole document when ``path`` is empty.
 
     Raises:
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
-        ...     url = get_path('gigs.json')
-        ...     objconf = Objectify({'url': url, 'path': 'value.items'})
+        ...     url = get_path("gigs.json")
+        ...     objconf = Objectify({"url": url, "path": "value.items"})
         ...     result = await async_parser(None, None, objconf)
-        ...     print(next(result)['title'])
+        ...     print(next(result)["title"])
         >>>
         >>> run(main)
         Business System Analyst
@@ -95,19 +93,18 @@ def parser(
     _: Item, extraction: Extraction, objconf: FetchDataObjconf, **kwargs: object
 ) -> Stream:
     """
-    Parses the pipe content
+    Reads the data source into a stream of records.
+
+    The format is taken from the url's extension, falling back to the fetched
+    file's detected type when the url has none.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url`, `path` and `html5`.
 
     Returns:
-        Iter[dict]: The stream of items
+        Records at ``path``, or the whole document when ``path`` is empty.
 
     Raises:
         TypeError: If ``conf`` has no ``url`` key.
@@ -116,10 +113,10 @@ def parser(
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
-        >>> url = get_path('gigs.json')
-        >>> objconf = Objectify({'url': url, 'path': 'value.items'})
+        >>> url = get_path("gigs.json")
+        >>> objconf = Objectify({"url": url, "path": "value.items"})
         >>> result = parser(None, None, objconf)
-        >>> next(result)['title']
+        >>> next(result)["title"]
         'Business System Analyst'
 
     """
@@ -137,38 +134,50 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    A source that asynchronously fetches and parses an XML or JSON file to
-    return the entries.
+    Asynchronously fetches an XML or JSON source and yields its records.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The file to fetch, local or remote. Its extension selects
+                the parser. Required.
+
+            path (str | list[str]): Dot separated path to the records, e.g.
+                ``"value.items"``. The whole document is returned when empty
+                (default: None).
+
+            html5 (bool): Whether to use the HTML5 parser (default: False).
+
+            encoding (str): File encoding (default: "utf-8").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'path' or 'html5'.
+        assign (str): Field each record is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The web site to fetch
-            path (str): Dot separated path to extract (default: None, i.e.,
-                return entire page)
+        emit (bool): Whether to emit each record directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-            html5 (bool): Use the HTML5 parser (default: False)
-
-    Returns:
-        Awaitable: stream of items
+    Yields:
+        - ``<record>`` when ``emit`` is True (default)
+        - ``{<assign>: <record>}`` when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<record>, ...]}`` when ``emit`` is False
+          and item is given
 
     Raises:
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     path = 'value.items'
-        ...     conf = {'url': get_path('gigs.json'), 'path': path}
+        ...     path = "value.items"
+        ...     conf = {"url": get_path("gigs.json"), "path": path}
         ...     result = await async_pipe(conf=conf)
-        ...     print(next(result)['title'])
+        ...     print(next(result)["title"])
         >>>
         >>> run(main)
         Business System Analyst
@@ -180,25 +189,38 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    A source that fetches and parses an XML or JSON file to
-    return the entries.
+    Fetches an XML or JSON source and yields its records.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The file to fetch, local or remote. Its extension selects
+                the parser. Required.
+
+            path (str | list[str]): Dot separated path to the records, e.g.
+                ``"value.items"``. The whole document is returned when empty
+                (default: None).
+
+            html5 (bool): Whether to use the HTML5 parser (default: False).
+
+            encoding (str): File encoding (default: "utf-8").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'path' or 'html5'.
+        assign (str): Field each record is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The web site to fetch
-            path (str): Dot separated path to extract (default: None, i.e.,
-                return entire page)
+        emit (bool): Whether to emit each record directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-            html5 (bool): Use the HTML5 parser (default: False)
-
-    Returns:
-        dict: an iterator of items
+    Yields:
+        - ``<record>`` when ``emit`` is True (default)
+        - ``{<assign>: <record>}`` when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<record>, ...]}`` when ``emit`` is False
+          and item is given
 
     Raises:
         TypeError: If ``conf`` has no ``url`` key.
@@ -206,18 +228,18 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Examples:
         >>> from riko import get_path
         >>>
-        >>> conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
-        >>> next(pipe(conf=conf))['title']
+        >>> conf = {"url": get_path("gigs.json"), "path": "value.items"}
+        >>> next(pipe(conf=conf))["title"]
         'Business System Analyst'
-        >>> path = 'appointment'
-        >>> conf = {'url': get_path('places.xml'), 'path': path}
-        >>> next(pipe(conf=conf))['subject']
+        >>> path = "appointment"
+        >>> conf = {"url": get_path("places.xml"), "path": path}
+        >>> next(pipe(conf=conf))["subject"]
         'Bring pizza home'
-        >>> conf = {'url': get_path('places.xml'), 'path': ''}
-        >>> next(pipe(conf=conf))['reminder']
+        >>> conf = {"url": get_path("places.xml"), "path": ""}
+        >>> next(pipe(conf=conf))["reminder"]
         '15'
-        >>> conf = {'url': get_path('schools.xml'), 'path': 'data.row'}
-        >>> next(pipe(conf=conf))['district_name']
+        >>> conf = {"url": get_path("schools.xml"), "path": "data.row"}
+        >>> next(pipe(conf=conf))["district_name"]
         'Turkana'
 
     """

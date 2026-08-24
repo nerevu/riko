@@ -1,46 +1,31 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for fetching the source of a given web site as DOM nodes or a
-string.
+Fetches a web page and yields the nodes matched by an XPath.
 
-##################################################################################
-# WARNING! this module may return an xml namespace in the keys, e.g.,
-# `{http://www.w3.org/1999/xhtml}` without the `lxml` parser (`pip install riko[xml]`)
-# See https://github.com/nerevu/riko/issues/20 for more info
-##################################################################################
+Use ``xpath`` to narrow what you extract; e.g., ``"/a"`` for every link,
+``"/img"`` for every image, ``"/rss/channel/item"`` for feed entries. Without
+one the whole document is returned as a single nested item. The result can be
+converted into an RSS/JSON feed or combined with the regex and string builder
+pipes.
 
-This module fetches the source of a given web site as DOM nodes or a string.
-This data can then be converted into a RSS/JSON feed or merged with other data
-in your Pipe using the Regex module, String Builder modules and others that
-will help achieve what you want.
-
-By default, the module will output the DOM elements as items. You can
-optionally use the "Emit items as string" checkbox if you need the html as a
-string.
-
-You can use the "Extract using XPATH" field to fine tune what you need from the
-HTML Page. For example, if I want all the links in the page I can simply use
-"/a" to grab all links. If I want all the images in the html I can do "/img".
-Read more on XPATH. You can also find XPATH statements using firebug to target
-data that you want in a HTML page.
-
-You have the option to run the parser using support for HTML4 (by default) or
-checking the "Use HTML5 parser" checkbox to use the HTML5 parser.
+The format is taken from the url's extension and defaults to ``html`` for an
+extension-less http url. Set ``html5`` to parse with the HTML5 parser instead
+of HTML4.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko import get_path
         >>> from riko.modules.xpathfetchpage import pipe
         >>>
-        >>> url = get_path('ouseful.xml')
-        >>> conf = {'url': url, 'xpath': '/rss/channel/item'}
-        >>> next(pipe(conf=conf))['title'][:44]
+        >>> url = get_path("ouseful.xml")
+        >>> conf = {"url": url, "xpath": "/rss/channel/item"}
+        >>> next(pipe(conf=conf))["title"][:44]
         'Running “Native” Data Wrangling Applications'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -75,51 +60,43 @@ async def async_parser(
     _: Item, extraction: Extraction, objconf: XpathFetchPageObjconf, **kwargs: object
 ) -> Stream:
     """
-    Asynchronously parses the pipe content
+    Asynchronously reads the page and returns the nodes at ``xpath``.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
-        stream (dict): The original item
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url`, `xpath` and `html5`.
 
     Returns:
-        Iter[dict]: The stream of items
+        One item per matched node, or the whole document when ``xpath`` is unset.
 
     Raises:
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from traceback import format_exc
-        >>>
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
-        ...     xml_url = get_path('ouseful.xml')
-        ...     xml_conf = {'url': xml_url, 'xpath': '/rss/channel/item'}
+        ...     xml_url = get_path("ouseful.xml")
+        ...     xml_conf = {"url": xml_url, "xpath": "/rss/channel/item"}
         ...     xml_objconf = Objectify(xml_conf)
         ...     xml_args = (None, None, xml_objconf)
-        ...     html_url = get_path('sciencedaily.html')
-        ...     html_conf = {'url': html_url, 'xpath': '/html/head/title'}
+        ...     html_url = get_path("sciencedaily.html")
+        ...     html_conf = {"url": html_url, "xpath": "/html/head/title"}
         ...     html_objconf = Objectify(html_conf)
         ...     html_args = (None, None, html_objconf)
-        ...     kwargs = {'stream': {}}
+        ...     kwargs = {"stream": {}}
         ...
         ...     try:
         ...         xml_stream = await async_parser(*xml_args, **kwargs)
         ...         html_stream = await async_parser(*html_args, **kwargs)
-        ...         print(next(xml_stream)['title'][:44])
-        ...         print(next(html_stream)['content'])
+        ...         print(next(xml_stream)["title"][:44])
+        ...         print(next(html_stream)["content"])
         ...     except Exception as e:
         ...         logger.error(e)
         ...         logger.error(format_exc())
-        ...
         >>>
         >>> run(main)
         Running “Native” Data Wrangling Applications
@@ -142,15 +119,15 @@ def parser(
     _: Item, extraction: Extraction, objconf: XpathFetchPageObjconf, **kwargs: object
 ) -> Stream:
     """
-    Parses the pipe content
+    Reads the page and returns the nodes at ``xpath``.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url`, `xpath` and `html5`.
 
     Returns:
-        Iter[dict]: The stream of items
+        One item per matched node, or the whole document when ``xpath`` is unset.
 
     Raises:
         TypeError: If ``conf`` has no ``url`` key.
@@ -159,15 +136,15 @@ def parser(
         >>> from meza.fntools import Objectify
         >>> from riko import get_path
         >>>
-        >>> url = get_path('ouseful.xml')
-        >>> objconf = Objectify({'url': url, 'xpath': '/rss/channel/item'})
+        >>> url = get_path("ouseful.xml")
+        >>> objconf = Objectify({"url": url, "xpath": "/rss/channel/item"})
         >>> result = parser(None, None, objconf)
-        >>> next(result)['title'][:44]
+        >>> next(result)["title"][:44]
         'Running “Native” Data Wrangling Applications'
-        >>> url = get_path('sciencedaily.html')
-        >>> objconf = Objectify({'url': url, 'xpath': '/html/head/title'})
+        >>> url = get_path("sciencedaily.html")
+        >>> objconf = Objectify({"url": url, "xpath": "/html/head/title"})
         >>> result = parser(None, None, objconf)
-        >>> next(result)['content']
+        >>> next(result)["content"]
         'Help Page -- ScienceDaily'
 
     """
@@ -185,52 +162,61 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    A source that asynchronously fetches the content of a given website as
-    DOM nodes or a string.
+    Asynchronously fetches a web page and yields the nodes at an XPath.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The page to fetch, local or remote. Its extension selects
+                the parser, defaulting to ``html`` for an extension-less http
+                url. Required.
+
+            xpath (str): The XPath to extract, e.g. ``"/rss/channel/item"``. The
+                whole document is returned when unset (default: None).
+
+            html5 (bool): Whether to use the HTML5 parser rather than HTML4
+                (default: False).
+
+            encoding (str): Page encoding (default: "utf-8").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'xpath', or 'html5'.
+        assign (str): Field each node is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The web site to fetch
-            xpath (str): The XPATH to extract (default: None, i.e., return
-                entire page)
+        emit (bool): Whether to emit each node directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-            html5 (bool): Use the HTML5 parser (default: False)
-
-        assign (str): Attribute to assign parsed content (default: content)
-
-    Returns:
-        Awaitable: item
+    Yields:
+        - ``<node>`` per match when ``emit`` is True (default)
+        - ``{<assign>: <node>}`` per match when ``emit`` is False, no item given
+        - one merged ``{Item, <assign>: [<node>, ...]}`` when ``emit`` is False and
+          item is given
 
     Raises:
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from traceback import format_exc
-        >>>
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     xml_url = get_path('ouseful.xml')
-        ...     xml_conf = {'url': xml_url, 'xpath': '/rss/channel/item'}
-        ...     html_url = get_path('sciencedaily.html')
-        ...     html_conf = {'url': html_url, 'xpath': '/html/head/title'}
+        ...     xml_url = get_path("ouseful.xml")
+        ...     xml_conf = {"url": xml_url, "xpath": "/rss/channel/item"}
+        ...     html_url = get_path("sciencedaily.html")
+        ...     html_conf = {"url": html_url, "xpath": "/html/head/title"}
         ...
         ...     try:
         ...         xml_stream = await async_pipe(conf=xml_conf)
         ...         html_stream = await async_pipe(conf=html_conf)
-        ...         print(next(xml_stream)['guid']['content'])
-        ...         print(next(html_stream)['content'])
+        ...         print(next(xml_stream)["guid"]["content"])
+        ...         print(next(html_stream)["content"])
         ...     except Exception as e:
         ...         logger.error(e)
         ...         logger.error(format_exc())
-        ...
         >>>
         >>> run(main)
         http://blog.ouseful.info/?p=12065
@@ -244,27 +230,39 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    A source that fetches the content of a given website as DOM nodes or a
-    string.
+    Fetches a web page and yields the nodes at an XPath.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The page to fetch, local or remote. Its extension selects
+                the parser, defaulting to ``html`` for an extension-less http
+                url. Required.
+
+            xpath (str): The XPath to extract, e.g. ``"/rss/channel/item"``. The
+                whole document is returned when unset (default: None).
+
+            html5 (bool): Whether to use the HTML5 parser rather than HTML4
+                (default: False).
+
+            encoding (str): Page encoding (default: "utf-8").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'xpath', or 'html5'.
+        assign (str): Field each node is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The web site to fetch
-            xpath (str): The XPATH to extract (default: None, i.e., return
-                entire page)
-
-            html5 (bool): Use the HTML5 parser (default: False)
-
-        assign (str): Attribute to assign parsed content (default: content)
+        emit (bool): Whether to emit each node directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
     Yields:
-        dict: item
+        - ``<node>`` per match when ``emit`` is True (default)
+        - ``{<assign>: <node>}`` per match when ``emit`` is False, no item given
+        - one merged ``{Item, <assign>: [<node>, ...]}`` when ``emit`` is False and
+          item is given
 
     Raises:
         TypeError: If ``conf`` has no ``url`` key.
@@ -272,15 +270,15 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Examples:
         >>> from riko import get_path
         >>>
-        >>> url = get_path('ouseful.xml')
-        >>> conf = {'url': url, 'xpath': '/rss/channel/item'}
+        >>> url = get_path("ouseful.xml")
+        >>> conf = {"url": url, "xpath": "/rss/channel/item"}
         >>> sorted(next(pipe(conf=conf)))[-3:]
         ['link', 'pubDate', 'title']
         >>> next(pipe(conf=conf)).get("guid")
         {'isPermaLink': 'false', 'content': 'http://blog.ouseful.info/?p=12065'}
-        >>> url = get_path('sciencedaily.html')
-        >>> conf = {'url': url, 'xpath': '/html/head/title'}
-        >>> next(pipe(conf=conf))['content']
+        >>> url = get_path("sciencedaily.html")
+        >>> conf = {"url": url, "xpath": "/html/head/title"}
+        >>> next(pipe(conf=conf))["content"]
         'Help Page -- ScienceDaily'
 
     """
