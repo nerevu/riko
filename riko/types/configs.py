@@ -53,6 +53,7 @@ class InputObjconf(DynamicConf):
 class FetchObjconf(DynamicConf):
     url: str
     delay: float
+    encoding: str
 
 
 class TailObjconf(DynamicConf):
@@ -112,6 +113,7 @@ class ExchangeRateObjconf(DynamicConf):
     param: dict[str, str]
     currency: str
     delay: int
+    encoding: str
     memoize: bool
     precision: int
 
@@ -124,12 +126,14 @@ class FeedAutoDiscoveryObjconf(DynamicConf):
 
 class FetchDataObjconf(DynamicConf):
     url: str
+    encoding: str
     path: str
     html5: bool
 
 
 class FetchPageObjconf(DynamicConf):
     url: str
+    encoding: str
     start: str
     end: str
     token: str
@@ -293,4 +297,5 @@ class WriteObjconf(DynamicConf):
 class XpathFetchPageObjconf(DynamicConf):
     url: str
     xpath: str
+    encoding: str
     html5: bool

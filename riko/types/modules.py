@@ -600,11 +600,11 @@ class StrTransformConfRule:
 
 # Confs
 class SortConf(TypedDict):
-    rule: SortConfRule | list[SortConfRule]
+    rule: NotRequired[SortConfRule | list[SortConfRule]]
 
 
 class InputConf(TypedDict, total=False):
-    type: Required["CastType"]
+    type: "CastType"
     prompt: str
     default: str
     test: bool
@@ -614,6 +614,7 @@ class InputConf(TypedDict, total=False):
 class FetchConf(TypedDict, total=False):
     url: str
     delay: float
+    encoding: str = "utf-8"
 
 
 class TailConf(TypedDict):
@@ -648,9 +649,9 @@ class CountConf(TypedDict, total=False):
     count_key: str | None
 
 
-class CsvConf(TypedDict):
-    url: str
-    encoding: str
+class CsvConf(TypedDict, total=False):
+    url: Required[str]
+    encoding: str = "utf-8"
     col_names: NotRequired[Sequence[str] | None]
     delimiter: str = ","
     quotechar: str = '"'
@@ -660,11 +661,11 @@ class CsvConf(TypedDict):
     sanitize: bool = False
 
 
-class CurrencyFormatConf(TypedDict):
+class CurrencyFormatConf(TypedDict, total=False):
     currency: str = "USD"
 
 
-class DateFormatConf(TypedDict):
+class DateFormatConf(TypedDict, total=False):
     format: str = "%m/%d/%Y %H:%M:%S"
 
 
@@ -673,24 +674,27 @@ class ExchangeRateConf(TypedDict, total=False):
     param: dict[str, str]
     currency: str = "USD"
     delay: int = 0
+    encoding: str = "utf-8"
     memoize: bool = True
     precision: int = 6
 
 
-class FeedAutoDiscoveryConf(TypedDict):
-    url: str
+class FeedAutoDiscoveryConf(TypedDict, total=False):
+    url: Required[str]
     strict: bool = True
     sort: bool = False
 
 
 class FetchDataConf(TypedDict):
     url: str
+    encoding: NotRequired[str]
     path: NotRequired[str]
     html5: NotRequired[bool]
 
 
-class FetchPageConf(TypedDict):
-    url: str
+class FetchPageConf(TypedDict, total=False):
+    url: Required[str]
+    encoding: NotRequired[str]
     start: NotRequired[str]
     end: NotRequired[str]
     token: NotRequired[str]
@@ -701,24 +705,24 @@ class FetchSiteFeedConf(TypedDict):
     url: str
 
 
-class FetchTableConf(CsvConf):
+class FetchTableConf(CsvConf, total=False):
     sanitize: bool = True
 
 
-class FetchTextConf(TypedDict):
-    url: str
-    encoding: str
+class FetchTextConf(TypedDict, total=False):
+    url: Required[str]
+    encoding: str = "utf-8"
 
 
-class FilterConf(TypedDict):
-    rule: FilterConfRule | list[FilterConfRule]
+class FilterConf(TypedDict, total=False):
+    rule: Required[FilterConfRule | list[FilterConfRule]]
     combine: Literal["and", "or"] = "and"
     permit: NotRequired[bool] = True
     stop: NotRequired[bool] = False
 
 
 class GeolocateConf(TypedDict):
-    type: "LocationType"
+    type: NotRequired["LocationType"]
 
 
 class JoinConf(TypedDict, total=False):
@@ -760,11 +764,11 @@ class SimpleMathConf(TypedDict):
     ]
 
 
-class SlugifyConf(TypedDict):
+class SlugifyConf(TypedDict, total=False):
     separator: str = "-"
 
 
-class SplitConf(TypedDict):
+class SplitConf(TypedDict, total=False):
     splits: int = 2
 
 
@@ -784,17 +788,17 @@ class StrTransformConf(TypedDict):
     rule: StrTransformConfRule | list[StrTransformConfRule]
 
 
-class SubelementConf(TypedDict):
-    path: str
+class SubelementConf(TypedDict, total=False):
+    path: Required[str]
     token_key: str | None = "content"  # noqa: S105
 
 
-class SubstrConf(TypedDict):
+class SubstrConf(TypedDict, total=False):
     start: int = 0
     length: int = 0
 
 
-class SumConf(TypedDict):
+class SumConf(TypedDict, total=False):
     sum_key: str = "content"
     group_key: str | None = None
 
@@ -822,7 +826,7 @@ class TruncateConf(TypedDict, total=False):
 
 
 class TypecastConf(TypedDict):
-    type: "CastType"
+    type: NotRequired["CastType"]
 
 
 class UdfConf(TypedDict):
@@ -854,6 +858,7 @@ class WriteConf(TypedDict, total=False):
 class XpathFetchPageConf(TypedDict, total=False):
     url: Required[str]
     xpath: str
+    encoding: str = "utf-8"
     html5: bool = False
 
 

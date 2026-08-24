@@ -42,7 +42,7 @@ from riko.types.general import Defaults, Extraction, Item, Opts
 from . import processor
 
 OPTS: Opts = SourceOpts
-DEFAULTS: Defaults = Defaults({"encoding": ENCODING})
+DEFAULTS: Defaults = Defaults({"encoding": ENCODING, "detag": False})
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 

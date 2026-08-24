@@ -62,7 +62,7 @@ from riko.types.general import Defaults, Extraction, FileTypes, Item, Stream
 from . import processor
 
 OPTS = SourceOpts
-DEFAULTS = Defaults({"encoding": ENCODING})
+DEFAULTS = Defaults({"encoding": ENCODING, "html5": False})
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 

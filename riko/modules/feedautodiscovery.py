@@ -54,7 +54,7 @@ from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 from . import processor
 
 OPTS: Opts = SourceOpts
-DEFAULTS: Defaults = {"strict": True}
+DEFAULTS: Defaults = {"strict": True, "sort": False}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 

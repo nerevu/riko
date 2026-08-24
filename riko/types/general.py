@@ -135,11 +135,13 @@ class Defaults(TypedDict, total=False):
     default: BasicArg
     delay: int
     delimiter: str
+    detag: bool
     encoding: str
     input_key: str
     format: str
     group_key: str | None
     has_header: bool
+    html5: bool
     join_key: str | None
     length: int
     limit: int
