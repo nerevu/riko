@@ -62,6 +62,9 @@ Changes
 Fixed
 ~~~~~
 
+- ``join`` no longer materializes its primary stream. Only ``other`` is retained and
+  replayed now; the source is consumed lazily. Output order is unchanged.
+
 - Stream Fetch requests whenever the response is read lazily via ``r.raw``; the memoized
   branches still buffer via ``r.text``/``r.content``. Now text resources without
   ``memoize`` no longer fail with ``StopIteration``.

@@ -606,7 +606,8 @@ pipe         retains           why
 ``sum``      group only        Streams in O(1) memory without ``group_key``; retains
                                every ``item`` when grouping.
 ``join``     the ``other``     The right-hand side is replayed against each left
-                               ``item``.
+                               ``item``, so it must be finite. The left side streams and
+                               may be unbounded.
 ``tail``     last N            Bounded by ``conf['count']``.
 ``uniq``     last N keys       Bounded by ``conf['limit']``.
 ===========  ================  =======================================================

@@ -2,9 +2,10 @@
 """
 Performs SQL like joins on separate sources.
 
-Not lazy: the ``other`` stream is retained so it can be matched against every
-source item, so it cannot be unbounded. With a join key the comparison is a
-cartesian product, so cost grows as ``len(items) * len(other)``.
+The ``other`` stream is retained so it can be matched against every source item,
+so it cannot be unbounded. The source itself is consumed lazily and may be
+unbounded. With a join key the comparison is a cartesian product, so cost grows
+as ``len(items) * len(other)``.
 
 Examples:
     Basic usage::
@@ -26,12 +27,11 @@ Attributes:
 """
 
 from collections.abc import Mapping
-from itertools import product
 from logging import Logger
 from typing import Any, cast
 
 import pygogo as gogo
-from meza.process import join, merge
+from meza.process import merge
 
 from riko.dotdict import is_mapping
 from riko.modules._prepare import require_kwarg
@@ -121,12 +121,16 @@ def parser(
     if objconf.join_key or objconf.other_join_key:
         x_key = objconf.join_key or objconf.other_join_key
         y_key = objconf.other_join_key or x_key
-        prod = product(stream, other)
+        others = list(other)
         joined = (
-            merge([x, y]) for x, y in prod if compare(x, y, x_key=x_key, y_key=y_key)
+            merge([x, y])
+            for x in stream
+            for y in others
+            if compare(x, y, x_key=x_key, y_key=y_key)
         )
     else:
-        joined = join(stream, filter(is_mapping, other))
+        others = list(filter(is_mapping, other))
+        joined = (merge([x, y]) for x in stream for y in others)
 
     return cast(Stream, joined)
 
@@ -136,7 +140,8 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously joins a source stream against another stream.
 
-    Not lazy: ``other`` is retained and replayed against every source item.
+    ``other`` is retained and replayed against every source item, so it cannot be
+    unbounded. The source stream is consumed lazily.
 
     Args:
         items (Items): The source stream.
@@ -195,7 +200,8 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Joins a source stream against another stream.
 
-    Not lazy: ``other`` is retained and replayed against every source item.
+    ``other`` is retained and replayed against every source item, so it cannot be
+    unbounded. The source stream is consumed lazily.
 
     Args:
         items (Items): The source stream.
