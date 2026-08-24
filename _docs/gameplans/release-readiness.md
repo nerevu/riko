@@ -196,7 +196,8 @@ Same for `ijson`/`lxml` (`perf`) and OFX/QIF (`finance`).
 P12 errors · unified CLI ([cli.md](cli.md)) · wheel/PyPI-dependency smoke tests · the § 2 pub/sub
 fixes (F1/F4/F5).
 
-**Strongly preferred:** explicit terminals · remove mutable post-construction config · shrink
+**Strongly preferred:** explicit terminals · remove mutable post-construction config
+([**R2** below is the concrete bug it removes](#91-merge-gate-features--main)) · shrink
 `riko.modules` · resolve doc drift.
 
 **Can wait:** new modules · branching/routing primitives · connector packages · richer orchestration ·
@@ -206,6 +207,35 @@ most roadmap expansion.
 Separate `Pipeline` (definition) from `Execution` now (§ 4), clean break, no deprecated aliases —
 far cheaper before public adoption than after. File map · sequence · exit tests · DoD:
 [MILESTONES.md § Pipeline/Execution split](../MILESTONES.md).
+
+### 9.1 Merge gate (`features` → `main`)
+
+A gate *before* the release gate. The
+[correctness-audit register](correctness-audit.md#8-open-defect-register--features-branch-audit)
+(17 confirmed defects, verified against `d8d3c02`) is not a release blocker as a whole —
+but its **P0** rows are, because each one is silent: it changes laziness, drains an
+iterator, or drops a value without failing an import or a happy-path test.
+
+**Status (2026-08-24):** R1 fixed; R2 folded into the § 4 split and no longer blocking;
+**R3 fixed** (both the keyed *and* the keyless branch — see the register row).
+**No P0 row now stands between `features` and `main`;** the remaining rows are P1–P3 and
+belong to the release gate, not the merge gate.
+
+| Row | Blocks the merge because |
+|---|---|
+| ~~**R1** `_io.opener`~~ **fixed** | remote non-memoized **text** fetch raised `StopIteration` out of `Fetch` — the most-used source in the library |
+| **R2** `PyPipe.__call__` | **No longer blocks the merge — folded into the split (decided 2026-08-24).** A call that omits `conf` erases the constructor's, and `p.conf` disagrees with what executed; but § 4 deletes the class, so a sentinel patch would be discarded. Consequence, stated plainly: **the defect ships to `main` and stays live until the split lands** ([MILESTONES § Pipeline/Execution split](../MILESTONES.md) owns the two rules that discharge it). Workaround meanwhile: pass every setting at construction and treat calling an existing pipe as a full reconfiguration, not a partial one |
+| ~~**R3** `join`~~ **fixed** | join materialized the primary stream, so an unbounded primary emitted nothing. Both branches were affected — the keyless one via `meza.process.join`, which is itself `map(merge, product(…))` |
+
+Fix order (the audit's, and it is dependency-shaped — each later row is easier once the
+earlier one is settled), with R2 lifted out into the split:
+~~`_io.opener`~~ → ~~`PyPipe.__call__`~~ → ~~`join`~~ → **async `send`** → `repr_cache` →
+compiler identifiers → `gather_results` → `Reencoder` → `fetchtable`/`fetchdata` →
+date/parser edges.
+
+Each fix lands with the matching regression test from
+[testing.md § 2b](testing.md#2b-regression-batch-from-the-branch-audit), *verified failing
+first*, and a `docs/CHANGES.rst` entry — every P0 row is a behaviour change.
 
 ## 10. Relationship to the P-track
 

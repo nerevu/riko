@@ -306,6 +306,33 @@ arrived) or `"error"` applies — so it should land **with** the `on_timeout`
 policy above rather than as a separate patch. Until then the docstrings state
 that the async path has no timeout.
 
+### 7.2 A blocked `anext` outlives the deadline
+
+`AsyncTimeoutIterator.__anext__` bounds the *intervals between* items, not the wait
+itself:
+
+```python
+async def __anext__(self) -> T:
+    self._raise_if_expired()
+    item = await anext(self.aiter)   # unbounded
+    self._raise_if_expired()
+    return item
+```
+
+If the source stalls, the second check is never reached — so the deadline holds only
+while items keep arriving, which is the opposite of what a timeout is for and the same
+unbounded-wait hazard as § 7.1. The claim that `timeout` bounds an infinite `Feed`
+therefore holds only for a *productive* infinite feed.
+
+The fix is an AnyIO cancel scope around the `await` carrying the **remaining** deadline
+(`move_on_after(remaining)`), with expiry mapping onto the same
+`on_timeout="stop" | "error"` policy as § 7 — so it lands with that policy rather than
+before it. `move_on_after` is also what
+[feed-native-streaming § 2](feed-native-streaming.md#2-per-pipe-audit) assumes for the
+Feed-native `timeout` port; doing it twice is wasted work.
+
+Registered as [correctness-audit **R14**](correctness-audit.md#8-open-defect-register--features-branch-audit).
+
 ---
 
 ## 8. Union and merge

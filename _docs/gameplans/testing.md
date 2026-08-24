@@ -58,6 +58,44 @@ These are real test bugs — coverage that looks stronger than it is. Fix them f
    uses the same `marker` callable for both the entry-point definition and the runtime
    registration, so it passes regardless of which wins. Use two distinguishable callables.
 
+## 2b. Regression batch from the branch audit
+
+The [correctness-audit register](correctness-audit.md#8-open-defect-register--features-branch-audit)
+found 17 confirmed defects in the non-module runtime, none of which fails a happy-path
+test today. The register owns the *fixes*; this section owns the *coverage*, because the
+register's shape is a coverage verdict: finite lists, local fixtures and file paths are
+well covered, while **iterator exhaustion, unbounded sources, falsey values, nested
+objects, real HTTP behaviour, binary formats, and sync/async parity** are where every
+row landed.
+
+Each of these is a **regression** test in § 6's sense — write it against the current
+tree, watch it fail, then fix. They belong to the layer that owns the unit under test
+(§ 1), not to one new file:
+
+| Test | Layer | Row |
+|---|---|---|
+| ~~`Fetch(url, memoize=False)` returns the full body and closes the response~~ — **landed** as `tests/internal/test_io.py` (threaded local server; a fixture file cannot reach this branch) | internal | R1 |
+| ~~`p(assign="x")` preserves the constructor `conf`~~ — **moved** to the split's `public/test_pipeline.py` exit tests ([MILESTONES § split](../MILESTONES.md)); writing it against the doomed `PyPipe.__call__` only pins an API being deleted | public | R2 |
+| ~~keyed `join(count(), finite_other)` yields a first result~~ — **landed** as `tests/public/test_pipe_implementations.py` (keyed **and** natural; asserts bounded consumption, since the operator wrapper reads one item ahead) | public | R3 |
+| `async_pipe` (`send`) yields its first item before the source is exhausted | public | R4 |
+| `compile_pipe` handles ids `"class"`, `"foo bar"`, `"foo.bar"`, `"1st"`, `"café"` | internal | R5 |
+| an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged | internal | R6 |
+| `gather_results([none(), one(), none()])` preserves all three positions | internal | R7 |
+| `Reencoder.read(1)` returns one character and the remainder survives the next `read` | internal | R8 |
+| `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
+| `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
+| a tz-aware `struct_time` (`+03:00`) produces the matching epoch | internal | R11 |
+| `get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics | internal | R12 |
+| `listize=True` turns `0`/`False`/`""` into one-element lists | internal | R13 |
+| a stalled async iterator is actually interrupted by `timeout` | internal | R14 |
+| the same bytes decode identically across sync HTTP, async HTTP and async local file | functional | R15 |
+| `has_header=False` closes the original source as well as the spool | internal | R16 |
+
+Two rows want **characterization** tests rather than regressions, because the current
+behaviour may be intended: `filter`'s lexicographic `greater`/`less` (R19) and
+`convert_dag` on an empty module list (R17, not reproduced). Their docstrings must say
+they should be *updated, not deleted*, when the decision is made.
+
 ## 3. File-by-file audit
 
 | Test area | Recommendation | Main changes |

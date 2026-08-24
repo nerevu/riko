@@ -38,7 +38,7 @@ Split into **remove/replace now**, **reconsider**, **keep**. Locations: `_util.p
 | Helper | Where | Recommendation | Priority | Why |
 |---|---|---|---|---|
 | `async_partial` | `_util.py` | **Remove** | very high | Only appears in bado's export machinery (`riko/bado/__init__.py`), no production caller; it's just `partial(maybe_deferred, f, **kwargs)`. |
-| `gather_results` | `_util.py` | **Replace/delete** | very high | AnyIO 4.14 `TaskHandle` captures results; also has a real bug — `[r for r in results if r is not None]` silently drops a legitimate `None` result. No production caller outside a collection test. |
+| `gather_results` | `_util.py` | **Replace/delete** | very high | AnyIO 4.14 `TaskHandle` captures results; also has a real bug — `[r for r in results if r is not None]` silently drops a legitimate `None` result ([correctness-audit **R7**](correctness-audit.md#8-open-defect-register--features-branch-audit); `async_map`'s `_missing` sentinel is the fix if it survives). No production caller outside a collection test. |
 | `async_json` | `_util.py` | **Remove** | very high | `async def async_json(r): return r.json()` decodes synchronously anyway. One caller (`exchangerate.py`) → inline `r.json()`; if payloads ever get large, `await anyio.to_thread.run_sync(r.json)`. |
 | `async_reduce` | `itertools.py` | **Reconsider** | high | AnyIO `functools.reduce` overlaps. Contract diff: Riko accepts `Callable[[T,S], T \| Awaitable[T]]` (sync **or** async reducer); AnyIO expects async. Audit the two callers (`sort`, `regex`) — if neither needs mixed reducers, delegate. |
 | `maybe_deferred` | `_util.py` | **Rename → `maybe_await`/`invoke`** | medium-high | Semantics are useful (one API over sync+async callbacks; used by module/decorator machinery) but `deferred` is dead Twisted vocabulary (Twisted gone since v0.72). Rename the private primitive; keep behavior. |
@@ -97,6 +97,40 @@ Design notes:
 * Interacts with retry/backoff in
   [execution-semantics.md](execution-semantics.md) — a 429 handler and a throttle want the same
   limiter, so design them together rather than bolting a sleep onto the fetch.
+
+## 2c. Encoding-resolution precedence (sync/async parity)
+
+Four paths decode the same bytes four different ways
+([correctness-audit **R15**](correctness-audit.md#8-open-defect-register--features-branch-audit)):
+
+| Path | Uses | Ignores |
+|---|---|---|
+| sync `_io.opener` | `r.encoding or encoding` | — |
+| `async_url_open` (HTTP) | `NamedTextIOWrapper(BytesIO(data), encoding=encoding)` | the HTTP charset |
+| `async_url_read` (HTTP) | `response.text` (httpx's own charset guess) | its explicit `encoding` argument |
+| `fetchpage.async_parser` | `io.async_url_read(url)` | `objconf.encoding` entirely |
+
+So the same feed can come back mojibake under `async_pipe` and clean under `pipe` — the
+`C12` shape in [correctness-audit § 3](correctness-audit.md#c12--syncasync-divergence).
+
+Resolve it once, in `bado/io.py`, with a single documented precedence:
+
+```text
+explicit configured encoding  ->  response charset  ->  ENCODING default (utf-8)
+```
+
+Notes:
+
+* The order deliberately puts the caller **above** the server: a configured `encoding`
+  exists precisely because the server's `Content-Type` was wrong. Sync's
+  `r.encoding or encoding` has it backwards and should move to the same helper.
+* One helper (`resolve_encoding(explicit, charset)`) shared by `async_url_open`,
+  `async_url_read`, and `_io.opener` — the divergence is a missing argument, not a
+  different algorithm, so a second copy would drift again.
+* `fetchpage` (and any other async source that reads `objconf.encoding`) has to forward
+  it; grep for `async_url_read(` / `async_url_open(` call sites when this lands.
+* Do this **with** `async_memoize` (§ 2b): encoding is part of the cache key, so both
+  changes touch the same signature.
 
 ## 3. The replacement decision rule
 

@@ -184,6 +184,26 @@ decorator DX [callable-pipes.md § Bare decorators](gameplans/callable-pipes.md)
 tests · DoD.** Clean break, no deprecated aliases (pre-1.0, no external consumers). Folds in the
 former standalone `_docs/pipeline.md` handoff.
 
+**Discharges correctness-audit R2** (decided 2026-08-24 — fold, do not patch `PyPipe.__call__`
+first). `__call__` writes every *omitted* kwarg into `self.kwargs` as `None` and never syncs
+`self.conf`/`self.context`/`self.inputs`, so `p(assign="x")` erases the constructor's `conf`, and
+`p.conf` can disagree with what actually executed. The split deletes the class, so a standalone
+sentinel patch would be thrown away — but it discharges R2 only if the replacement obeys two rules,
+and neither is automatic:
+
+* **Omitted ≠ `None`.** `with_config(**kwargs)` must distinguish "not mentioned" from "explicitly
+  cleared" using a module-level sentinel (the `_MISSING` pattern in `rename`/`regex`), because
+  `None` is itself a legitimate value for `conf`/`context`/`inputs`. Giving those parameters a
+  `None` default reintroduces R2 in a new object.
+* **One source of truth.** A `Pipeline`'s attributes and the options its `Execution` runs with must
+  be the same state, never two copies that can drift. That is the second half of R2 — `_prime`
+  read the attributes while `__call__` wrote the kwargs — and it is why this is a correctness rule
+  rather than a style preference.
+
+Until the split lands, **R2 stays live on `features`**: reconfiguring an existing pipe by calling
+it silently drops the settings the call omitted. See
+[release-readiness § 9.1](gameplans/release-readiness.md#91-merge-gate-features--main).
+
 **New files (core).**
 
 | File | Purpose |
@@ -228,6 +248,14 @@ shim disappears with the removed classes — `Pipeline.with_config` never grows 
 - `public/test_pipeline.py` — reuse (`list(flow)` twice; `list(flow) == [x async for x in flow]`
   when drained); mapping source = one record (not its keys); generator laziness + no secret
   buffering; same `flow` under `for` and `async for`.
+- `public/test_pipeline.py` (**R2**) — `Pipeline(…, conf=c).with_config(assign="x")` still executes
+  with `c`; `with_config(conf=None)` clears it *explicitly*; the returned object's attributes and
+  the options its `Execution` ran with never disagree; the original `Pipeline` is unmutated. These
+  are **regression** tests in
+  [correctness-audit § 6](gameplans/correctness-audit.md#6-testing-posture)'s sense, not
+  characterization: they assert the desired behaviour, so write the `PyPipe.__call__`
+  equivalents in step 1 and watch them fail — that failure is what proves the split fixed R2 rather
+  than carrying it into the new object.
 - `internal/test_portal.py` — **one** portal per `SyncExecution` over many async-only items (not
   one per item); independent executions → independent portals; long-lived async-resource loop
   affinity.
@@ -248,7 +276,10 @@ shim disappears with the removed classes — `Pipeline.with_config` never grows 
 each iteration is a fresh execution; list sources replay; generators stay lazy/unbuffered; a mapping
 source is one record; sync-only and async-only modules work in both modes with native-wins; unknown
 sync code never blocks the loop; one persistent portal per sync execution (no per-record runtime);
-long-lived async resources are safe under sync execution; `@processor async def pipe` works;
+long-lived async resources are safe under sync execution; **no post-construction mutation survives —
+reconfiguration returns a new `Pipeline`, an omitted kwarg leaves its setting untouched (sentinel,
+not `None`), and no object can disagree with what executed (discharges R2)**;
+`@processor async def pipe` works;
 `isasync`/`async_pipe` still work; authors are never required to write both; Asyncer stays private;
 sync-only installs still work; the legacy classes are removed (no aliases); compiled/named pipelines
 work; P9 typed module names integrate; parity + cleanup tests green; ruff/pyright/pytest/doctest/tox

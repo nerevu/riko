@@ -37,7 +37,7 @@ P8/P11/P12); it appears here only as the fake in-repo example extension that pro
   (a) **extend the existing `.pipe()`** to accept a positional `ModuleNameLike`
   (`pipe.pipe("filter", conf=...)`), and (b) add a native **`__or__`/`__ror__`** so
   `pipe | "filter"` / `pipe | Transforms.FILTER` / `data | pipe` compose. Both are thin sugar
-  over `_chain`, not a new object model. See [§ P9A.4](#p9a4-value-taking-chaining-pipe--__or__).
+  over `_chain`, not a new object model. See [§ P9A.4](#p9a4--value-taking-chaining-pipe--__or__).
   This is the literal **`RunnableSequence (a | b)`** equivalent that
   [ai-Inference.md](ai-Inference.md) (the LangChain-replacement gameplan) maps at line 922 — and it
   stays on the pipe itself, **not** a forbidden `RikoRunnable` wrapper (that doc's key design rule).
@@ -227,6 +227,29 @@ is explicitly not added (second idiom + `then`-vs-callable semantic clash).
   aggregate below — the committed surface is built-ins only, keeping the drift guard env-stable.)
 - [ ] (Later, not P9A) aggregate `riko.generated.Modules` covering the *installed environment* incl.
   extensions; `.pyi` fluent stubs — these are the rest of P9, not P9A.
+
+### P9A.7 — one identifier sanitizer
+
+Two normalizers exist and only one works. `ext/codegen.py`'s `enum_member_name` collapses
+every run of non-alphanumerics and guards a leading digit; `compile.py`'s `pythonise`
+replaces four characters (`-`, `:`, `/`, `""`) and ASCII-`replace`-encodes, so
+`"class"`, `"my module"`, `"foo.bar"`, `"1st"` and `"café"` all reach generated source as
+identifiers — a pipeline that runs fine through `build_pipeline` can emit source that
+does not parse ([correctness-audit **R5**](correctness-audit.md#8-open-defect-register--features-branch-audit),
+the `C6` "weaker duplicate" shape).
+
+- [ ] One sanitizer in `ext/codegen.py` — the module that already owns generated-source
+  formatting (`ruff_format`) — handling non-alphanumerics, leading digits, **`keyword.iskeyword`**,
+  and collisions (suffix, deterministically); `enum_member_name` becomes the upper-case
+  caller, `pythonise` the identifier caller.
+- [ ] `stringify_pipe` emits the sanitized id as the variable while the `PipeDef`/JSON keeps
+  the original string — ids stay canonical (§ Scope), exactly as enum `.value` does.
+- [ ] Round-trip test over the pathological ids above, plus the existing
+  `test_codegen_matches_expected_file` byte guard to prove no `tests/pypipelines/*.py`
+  output changes.
+
+This is additive to P9A (the enum surface has landed) and gates nothing in P8; sequence it
+with whichever of the two generators is next touched.
 
 ---
 

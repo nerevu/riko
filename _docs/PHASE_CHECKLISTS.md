@@ -7,7 +7,12 @@ sequencing). Consolidates the former `P1/P2/P5/P6/P7/P10_CHECKLIST.md` and the f
 
 ## Progress tracker (authoritative)
 
-Suite: **742 passed** (pyright/ruff clean). Branch: `features` (the user commits).
+Suite: **802 passed** (pyright/ruff clean). Branch: `features` (the user commits).
+
+**Merge gate (`features` → `main`): clear.** R3 (`join` materializing its primary stream)
+was the last P0 in the [correctness-audit register](gameplans/correctness-audit.md#8-open-defect-register--features-branch-audit);
+R1 is fixed and R2 is folded into the Pipeline/Execution split. Remaining register rows are
+P1–P3 and belong to the release gate — next up is R4 (async `send` buffers its whole stream).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -413,6 +418,13 @@ Folded in from the retired `REFINEMENT_PLAN.md`. Cross-phase decisions that surv
    `riko.modules` — `riko.modules.Module` already names the decorator base (`_decorators.Module`), a
    collision the gameplan hadn't flagged (resolved by naming the wrapper `Modules`, plural); keeping
    both required the tree to live on the stable surface.
+9. **A defect in an API that is being deleted is fixed by the replacement, not twice** — decided
+   2026-08-24 for correctness-audit **R2** (`PyPipe.__call__` erasing omitted config). The
+   `Pipeline`/`Execution` split removes the class, so the repair is immutable reconfiguration in
+   the new API. The price is explicit: the defect stays live until the split lands, so the deferral
+   is recorded in the register, the merge gate, and the split's DoD — a deferral that is only
+   written in one place turns into a silently shipped bug. Corollary: the replacement must
+   distinguish **omitted from explicit `None`** with a sentinel, or it inherits the same defect.
 
 **Backward-compatibility contract (evergreen).** Every phase ships compat shims (moved-name
 re-exports, `describe_*` properties, re-homed exceptions keep old bases); raw pipeline JSON must

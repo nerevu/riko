@@ -58,6 +58,25 @@ Priority **A** = clear win, do first; **B** = worthwhile; **C** = inherently eag
 | `sort` | **C** | collect Feed then sort | Inherently eager — stays legacy. |
 | `reverse` | **C** | collect Feed then reverse | Inherently eager — stays legacy. |
 
+**Three of those rows are confirmed defects, not missed optimizations** (one now fixed).
+The [branch audit](correctness-audit.md#8-open-defect-register--features-branch-audit)
+verified them against the tree, so each is worth repairing on the legacy path if the
+Feed port does not reach it first:
+
+* ~~`join` (**R3**)~~ — **fixed** on the legacy path. `product(stream, other)` tupled
+  *both* inputs, so the **primary** stream was materialized even though `other` is the
+  documented replayed side; a join over an unbounded primary emitted nothing at all. The
+  keyless branch was equally affected one level down, via `meza.process.join`
+  (`map(merge, product(…))`). Repaired in both branches with `others = list(…)` + a
+  nested lazy loop, independent of the async product/hash-join design — `join` remains
+  `B/C` for the *async* port.
+* `send` (**R4**) — the `sent` list is not merely wasteful: `await async_pipe(infinite)`
+  never returns, and no downstream item appears before the source is exhausted, on the
+  one pipe whose purpose is lazy fan-out.
+* `timeout` (**R14**) — the cancel-scope port is the *only* thing that makes the pipe
+  bound a stalled source. [execution-semantics § 7.2](execution-semantics.md#72-a-blocked-anext-outlives-the-deadline)
+  owns the `on_timeout` policy it must land with.
+
 ## 3. Streaming-memory model: eager output ≠ eager storage
 
 The central distinction:

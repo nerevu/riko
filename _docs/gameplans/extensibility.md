@@ -349,6 +349,14 @@ Initial registry:
 * unqualified names reserved for built-ins
 * namespaces reserved now
 * entry-point discovery deferred
+* **`pipe_` / `pipe:` reserved at registration** — `ext/resolver.py` routes any name with
+  those prefixes to the pipeline resolver *before* consulting `ModuleRegistry`, so a
+  registered leaf extension named `pipe_transform` can never resolve
+  ([correctness-audit **R18**](correctness-audit.md#8-open-defect-register--features-branch-audit)).
+  Registration must reject the prefixes with a riko-owned message rather than accepting a
+  name that silently never resolves; trying the registry first is the alternative, but it
+  makes resolution order depend on install state, which the reservation rule above exists
+  to avoid.
 
 One distribution and internal plugin architecture are sufficient initially. External connectors should use optional dependencies and plugin boundaries.
 

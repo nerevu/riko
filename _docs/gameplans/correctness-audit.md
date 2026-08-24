@@ -181,6 +181,64 @@ any existing config still carrying it.
   "[A-Z][A-Za-z]+\(\*\*[a-z_]+\)" riko/` currently finds `_strutils` only, but the
   same shape will recur wherever raw config meets a dataclass.
 
+### C10 — omitted conflated with an explicit `None`
+
+A call site that never mentioned a parameter is indistinguishable from one that passed
+`None`, so the "default" path overwrites state the caller meant to keep, or invents a
+criterion the caller never supplied.
+
+* **Found:** `PyPipe.__call__` writes `conf=None`/`context=None`/`inputs=None` into
+  `self.kwargs` for every kwarg the caller omitted (§ 8 **R2**); `get_skip` does
+  `if text := str(_skip.get("text")):`, so an absent `text` becomes the truthy literal
+  `"None"` and starts matching real content (**R12**); `listize=True` skips falsey
+  pieces because the guard is `if pieces and opts.get("listize")` (**R13**);
+  `gather_results` filters `r is not None` to mean "not finished" (**R7**).
+* **Detect:** for every `x or default` / `if x:` / `str(x)` over a user-supplied value,
+  ask what `0`, `False`, `""` and a deliberate `None` do. Call each entry point twice —
+  once omitting the argument, once passing `None` — and diff the results.
+* **Fix:** a module-level sentinel, the same pattern as `rename`/`regex`'s `_MISSING`
+  (see `CLAUDE.md` § "Absent field ≠ present-`None`"). Never let `None` carry two
+  meanings; never let truthiness stand in for presence.
+
+### C11 — a lazy stream consumed eagerly
+
+The unit is documented as streaming, and the sync happy path over a list looks right,
+but an iterator input is drained before the first output appears — so an unbounded
+source hangs and a large finite one is retained whole.
+
+* **Found:** keyed `join` builds `product(stream, other)`, and `itertools.product`
+  tuples **both** inputs, so the primary stream is materialized even though the module
+  contract says `other` is the replayed side (§ 8 **R3**); async `send` appends every
+  item to `sent` and returns `iter(sent)` after `complete` (**R4**); the non-memoized
+  text branch of `_io.opener` requests with `stream=False` and then reads `r.raw`
+  (**R1**); `AsyncTimeoutIterator` only checks its deadline *between* `anext` calls, so
+  a stalled source is never bounded (**R14**).
+* **Detect:** feed the unit `itertools.count()` (or any generator that logs each pull)
+  and assert a first output arrives. Assert on *time to first item*, not just on the
+  final list. Grep for `product`, `list(`, `sorted(`, `tuple(` on the primary stream.
+* **Fix:** retain only the side the contract says is retained, and yield inside the
+  loop. Where a deadline is involved, bound the *await* (an AnyIO cancel scope with the
+  remaining deadline), not the interval around it.
+
+### C12 — sync/async divergence
+
+The pair shares a name, a docstring and a config, but the two halves resolve values,
+bound waits, or release resources differently — so a pipeline behaves differently purely
+by execution mode.
+
+* **Found:** sync `send` yields as it publishes while async `send` buffers (**R4**);
+  `async_url_open` decodes with the caller/default encoding and ignores the HTTP charset
+  while `async_url_read` ignores its explicit `encoding` and returns `response.text`,
+  and `fetchpage.async_parser` never forwards `objconf.encoding` at all (**R15**);
+  sync `receive` honors `max_wait` and async does not
+  ([execution-semantics.md § 7.1](execution-semantics.md#71-receive-has-no-async-timeout)).
+* **Detect:** run the same conf through `pipe` and `async_pipe` and diff the outputs,
+  including on the edge inputs of § 2. Diff the two implementations side by side — the
+  divergence is usually one missing argument, not a different algorithm.
+* **Fix:** one resolution order, stated once and shared. For encoding that order is
+  explicit conf → response charset → `ENCODING` default; for waits it is the same
+  `on_timeout` policy on both sides.
+
 ## 4. Scope — the un-swept surface
 
 `riko/modules/` is done. Group the rest by risk, highest first.
@@ -213,6 +271,11 @@ Each phase lands with: fixes for unambiguous defects, a `docs/CHANGES.rst` entry
 behaviour change, a regression test *verified to fail before the fix*, and a
 `CLAUDE.md` invariant for anything a future reader would otherwise "clean up" back.
 
+The § 8 register is the concrete work list for these phases — each row carries the
+phase that owns it. The three **P0** rows do not wait their turn: they gate the
+`features` → `main` merge
+([release-readiness § 9.1](release-readiness.md#91-merge-gate-features--main)).
+
 ## 6. Testing posture
 
 The sweep settled three test kinds; keep them distinct, because they fail for different
@@ -237,3 +300,47 @@ cements what a fix means to change.
 5. Output order does not depend on `PYTHONHASHSEED`.
 6. Documented defaults match executed defaults, repo-wide.
 7. Each fix has a regression test that was verified to fail beforehand.
+8. Every § 8 register row is fixed, or downgraded to an accepted behaviour pinned by a
+   characterization test that says what would change it.
+9. No unit that documents streaming drains its primary input before the first output.
+
+## 8. Open defect register — `features` branch audit
+
+A static correctness pass over the **non-module** runtime (I/O, wrappers, compiler,
+sync/async execution, parsing, extension resolution) on `features` @ `d8d3c02`. It is
+the first evidence that § 4's ranking was right: nearly every row lands in an un-swept
+area, and none of them break a happy-path test. Each row below was **re-verified
+against the tree on 2026-08-23** — the audit's own claims got the § 2 treatment before
+being written down, which is why two of its findings are recorded here as *not
+reproduced*.
+
+`Class` is the § 3 taxonomy; `Phase` is § 5; `Owner` is the gameplan that holds the
+design when the fix is more than a local repair.
+
+| # | Pri | Where | Defect | Class | Phase | Owner |
+|---|:---:|---|---|:---:|:---:|---|
+| R1 | ~~P0~~ **fixed** | `_io.py:271` | Non-memoized **text** fetch requested with `stream=False` (`stream=binary`) then read the already-consumed `r.raw`. Reproduced against a local server: it does not return an empty body, it raises a bare `StopIteration` from meza's `Reencoder.__init__` straight out of `Fetch` (uncaught — neither `RequestException` nor `URLError`). Fixed by `stream=not memoize`; regressions in `tests/internal/test_io.py`, verified failing first. | C11 | A2 | — |
+| R2 | P0 · **deferred** | `collections.py:519` | `PyPipe.__call__` writes every omitted kwarg into `self.kwargs` as `None`, and never syncs `self.conf`/`self.context`/`self.inputs` — so `p(assign="x")` drops the constructor `conf`, and `p(conf=new)` leaves `p.conf` disagreeing with what executed (`_prime` reads the attributes, `__call__` reads the kwargs). **Decided 2026-08-24: not patched here** — the `Pipeline`/`Execution` split deletes the class, so the fix is immutable reconfiguration in the new API, not a sentinel on a doomed one. **Stays live until the split lands.** | C10 | — | [MILESTONES § split](../MILESTONES.md) (rules + exit tests) · [release-readiness § 9.1](release-readiness.md#91-merge-gate-features--main) |
+| R3 | ~~P0~~ **fixed** | `join.py:124,129` | `product(stream, other)` tuples **both** inputs, so the primary stream was materialized despite `other` being the documented replayed side; `join(count(), other)` never emitted. The keyless natural join had the **same** defect one level down — `meza.process.join` is `map(merge, it.product(left, right))` — so both branches were fixed: `others = list(...)` + a nested lazy loop; `meza.process.join`/`itertools.product` no longer imported. Output order unchanged. Regressions in `tests/public/test_pipe_implementations.py`, verified failing first (they hung). They assert **bounded** consumption, not zero: the operator wrapper reads one item ahead of the parser. | C11 | A3 | [feed-native § 2](feed-native-streaming.md#2-per-pipe-audit) |
+| R4 | P1 | `send.py:80` | `async_parser` buffers into `sent` and returns `iter(sent)` after `complete`; sync `parser` yields per item. Unbounded sources never return, finite ones duplicate the stream in memory — on the one pipe whose purpose is lazy fan-out. | C11 · C12 | A4 | [feed-native § 2](feed-native-streaming.md#2-per-pipe-audit) |
+| R5 | P1 | `compile.py:302` | `pythonise` replaces four characters and ASCII-`replace`-encodes, so `"class"`, `"my module"`, `"foo.bar"`, `"1st"`, `"café"` all survive into generated source as identifiers. A pipeline that runs through `build_pipeline` can fail to compile. `ext/codegen.py:59`'s `enum_member_name` already does this properly. | C6 | A5 | [module-enums § P9A.7](module-enums.md#p9a7--one-identifier-sanitizer) |
+| R6 | P1 | `_serialize.py:231` | The unsupported check is shallow (`_UNSUPPORTED in hashable_args`) while `_to_hashable` substitutes **recursively**, so `cached({"x": Opaque()})` calls the wrapped function with `{"x": _UNSUPPORTED}` and every `Opaque()` collapses onto one key. Argument corruption, not a cache miss. Return `(supported, value)` from `_to_hashable`, or scan recursively before `_cached`. | C4 | A3 | — |
+| R7 | P1 | `bado/_util.py:68` | `gather_results` returns `[r for r in results if r is not None]`, so a legitimate `None` result is dropped and the list no longer aligns with its inputs. `async_map`'s `_missing` sentinel is the house fix. | C10 | A4 | [bado-anyio § 2](bado-anyio-alignment.md#2-helper-audit-all-confirmed-present-in-the-current-tree) (already slated for replace/delete) |
+| R8 | P1 | `_reencode.py:66` | `read(n)` is `islice(self.stream, n)` — `n` *iterator elements*, not characters/bytes, so `read(1)` over a line iterator returns a whole line. `read(0)` is fixed; bounded reads are not. Needs a remainder buffer so a partially consumed chunk carries forward. | C7 | A2 | — |
+| R9 | P1 | `fetchtable.py:91,134` | The module advertises xls(x)/mdb/dbf/sqlite, but both halves open the resource as **text** (`Fetch(url, encoding=…)` / `async_url_open(url, encoding=…)`) before handing it to `meza.io.read`. An xlsx is a zip; decoding it first cannot work. Needs format-dependent binary handling. | C7 | A2 | [connectors.md](connectors.md) |
+| R10 | P1 | `fetchdata.py:82,124` · `fetchtable.py:96,137` | `splitext(url)[1]` runs against the whole URL, so `…/export.json?token=abc` mis-detects. Want `splitext(urlparse(url).path)[1]`. Disproportionate for signed/authenticated export URLs — exactly the API-automation direction riko is moving in. | C4 | A2 | [connectors.md](connectors.md) |
+| R11 | P2 | `dates.py:92` · `_date_utils.py:107` | `tt_to_datedict` derives `_tzinfo` from the tuple but computes `"utime": timegm(tt)`, and `timegm` reads the fields as UTC — an aware `+03:00` timestamp gets the 12:00-UTC epoch. Build an aware datetime and call `.timestamp()`. Related: `TZINFOS = dict(gen_tzinfos())` snapshots abbreviations **at import**, and duplicates (`CST`) overwrite each other. | C4 · C1 · C8 | A1 | — |
+| R12 | P2 | `parsers.py:778` | `if text := str(_skip.get("text")):` turns an absent criterion into the literal `"None"`, so `{"content": "none available"}` can be skipped by a rule that specified only `field`. Check the raw value before converting. | C10 | A2 | — |
+| R13 | P2 | `_prepare.py:141` | `if pieces and opts.get("listize")` means `0`/`False`/`""` stay scalars under `listize=True`, which the `listize + objectify` path then tries to iterate. Branch on `opts["listize"]`; special-case `None` only if `None` is meaningfully distinct. | C10 | A3 | — |
+| R14 | P2 | `timeout.py:99` | `AsyncTimeoutIterator.__anext__` checks the clock either side of `await anext(...)`, so a source that stalls forever is never bounded — the deadline holds only while items keep arriving. Needs a cancel scope carrying the **remaining** deadline. | C11 · C12 | A4 | [execution-semantics § 7.2](execution-semantics.md#72-a-blocked-anext-outlives-the-deadline) |
+| R15 | P2 | `bado/io.py:114,131` · `fetchpage.py:96` | `async_url_open` decodes with the caller/default encoding and ignores the HTTP charset; `async_url_read` ignores its explicit `encoding` for HTTP and returns `response.text`; `fetchpage.async_parser` forwards no encoding at all. Four paths decode the same bytes four ways. | C12 | A4 | [bado-anyio § 2c](bado-anyio-alignment.md#2c-encoding-resolution-precedence-syncasync-parity) |
+| R16 | P3 | `csv.py:93,135` · `fetchtable.py:94,135` | `seekable()` documents that its spooled replacement leaves the original open, but both callers `auto_close` the spool only — the HTTP response leaks when `has_header=False`. | C2 | A2 | — |
+| R17 | P3 | `compile.py:854` | *Not reproduced.* `convert_dag` on an empty module list was reported to reach `module_ids[-1]`; the terminal `output` node is appended unconditionally, so it does not. Still worth an explicit empty-DAG rejection rather than relying on that. Pin with a characterization test before changing. | — | A5 | — |
+| R18 | P3 | `ext/resolver.py:39` | `name.startswith(("pipe_", "pipe:"))` routes to the pipeline resolver unconditionally, so a registered **leaf** extension named `pipe_transform` can never resolve through `ModuleRegistry`. Either reserve the prefixes at registration time or try registered modules first. | C7 | A5 | [extensibility § 24](extensibility.md#24-module-registry-and-plugins) |
+| R19 | P3 | `filter.py:76` | `NUMERIC_OPS = {"atmost", "atleast"}`, so `greater`/`less` over string values compare lexicographically (`"10" < "9"`). Whether that is a defect depends on the Yahoo Pipes compatibility contract — **characterize first, decide second**. | open question | A3 | — |
+
+**What the shape of this register says.** The finite/list/file-fixture paths are covered;
+the defects cluster in iterator exhaustion, unbounded streams, falsey values, nested
+objects, real HTTP behaviour, binary formats, and sync/async parity — which is precisely
+the coverage gap [testing.md § 2b](testing.md#2b-regression-batch-from-the-branch-audit)
+now owns.
