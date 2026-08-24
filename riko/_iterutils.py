@@ -17,6 +17,8 @@ from collections.abc import (
     Mapping,
     Sequence,
 )
+from datetime import date, tzinfo
+from datetime import datetime as dt
 from decimal import Decimal
 from functools import partial
 from inspect import signature
@@ -29,11 +31,17 @@ from typing import Any, Literal, TypeGuard, TypeVar, cast, overload
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
+from riko._date_utils import date_to_datetime, ensure_tzinfo
 from riko.cast import CAST_SWITCH, CastType, cast_value
 from riko.types.general import Function
 from riko.types.values import PrimitiveValue, PrimitiveValueType, SortableValue
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+SORT_FILLER = float("-inf")
+DATELIKE_TYPES = frozenset({CastType.DATE, CastType.DATETIME})
+INVALID_DEF_TYPES = frozenset({CastType.LOCATION, CastType.NONE})
+INVALID_TYPES = frozenset({CastType.LOCATION, CastType.PASS, CastType.NONE})
+
 NON_SORTABLE = (Mapping, Sequence)
 
 B = TypeVar("B", Literal[True], Literal[False])
@@ -138,7 +146,12 @@ def _resolve_default(
         logger.warning(f"Invalid cast type={type_}. Setting default to empty string.")
     elif type_ and default is None:
         _default = CAST_SWITCH[type_].get("default")
-        resolved = cast(SortableValue, _default) if _default is not None else ""
+        unorderable = isinstance(_default, (float, Decimal)) and isnan(_default)
+
+        if unorderable or type_ in DATELIKE_TYPES:
+            resolved = SORT_FILLER
+        elif _default is not None:
+            resolved = cast(SortableValue, _default)
     elif isinstance(default, Mapping):
         logger.warning(f"Invalid {default=}. Setting to empty string.")
     elif default is not None:
@@ -148,7 +161,10 @@ def _resolve_default(
 
 
 def def_itemgetter(
-    attr: str, default: PrimitiveValue | None = None, type_: str | None = None
+    attr: str,
+    default: PrimitiveValue | None = None,
+    type_: str | None = None,
+    fallback_tzinfo: tzinfo | None = None,
 ) -> Callable[[Mapping | PrimitiveValue], SortableValue]:
     """
     Like operator.itemgetter but fills in missing keys with a typed default.
@@ -159,18 +175,20 @@ def def_itemgetter(
         5
         >>> keyfunc({})
         0
+        >>> # an invalid number sorts via -inf, not NaN
+        >>> keyfunc = def_itemgetter('n', type_='float')
+        >>> keyfunc({}), keyfunc({'n': 'abc'})
+        (-inf, -inf)
 
     """
-    _invalid_def_type = type_ in {CastType.LOCATION, CastType.NONE}
-    invalid_def_type = bool(_invalid_def_type or (type_ and type_ not in CAST_SWITCH))
+    not_switch = type_ and type_ not in CAST_SWITCH
+    invalid_def_type = bool((type_ in INVALID_DEF_TYPES) or not_switch)
     default = _resolve_default(type_, invalid_def_type, default)
-
-    _invalid_type = type_ in {CastType.LOCATION, CastType.PASS, CastType.NONE}
-    invalid_type = _invalid_type or (type_ and type_ not in CAST_SWITCH)
+    invalid_type = bool((type_ in INVALID_TYPES) or not_switch)
 
     def keyfunc(item: Mapping | PrimitiveValue) -> SortableValue:
         if isinstance(item, (dict, CaseInsensitiveDict, Mapping)):
-            value = item.get(attr, default)
+            value = item.get(attr)
         else:
             value = item
 
@@ -189,6 +207,14 @@ def def_itemgetter(
             casted = value
         else:
             casted = default
+
+        if type_ in DATELIKE_TYPES and isinstance(casted, (date, dt)):
+            if isinstance(casted, dt):
+                aware = ensure_tzinfo(casted, fallback_tzinfo=fallback_tzinfo)
+            else:
+                aware = date_to_datetime(casted, fallback_tzinfo=fallback_tzinfo)
+
+            casted = aware.timestamp()
 
         if casted is None or (isinstance(casted, (float, Decimal)) and isnan(casted)):
             casted = default

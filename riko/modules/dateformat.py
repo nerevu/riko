@@ -49,7 +49,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    date: datetime.date,
+    date: datetime.date | None,
     extraction: Extraction,
     objconf: DateFormatObjconf,
     **kwargs: object,
@@ -73,7 +73,12 @@ def parser(
         '05/04/2015'
 
     """
-    return date.strftime(objconf.format)
+    if date is None:
+        formatted = ""
+    else:
+        formatted = date.strftime(objconf.format)
+
+    return formatted
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -155,6 +160,10 @@ def pipe(*args: Any, **kwargs: object) -> str:
         >>> stamp = {"date": datetime(2008, 2, 12, 20, 45)}
         >>> next(pipe(stamp, conf=conf))["dateformat"]
         'Tuesday, Feb 12, 08 at 08:45 PM'
+        >>> next(pipe({}, conf=conf))["dateformat"]
+        ''
+        >>> next(pipe({"date": "bogus"}, conf=conf))["dateformat"]
+        ''
 
     """
     return parser(*args, **kwargs)

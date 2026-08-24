@@ -1,0 +1,299 @@
+# vim: sw=4:ts=4:expandtab
+"""
+Provides date and time helpers
+"""
+
+from collections.abc import Iterator
+from datetime import UTC, date, timedelta, timezone, tzinfo
+from datetime import datetime as dt
+from functools import cache
+from time import strptime, struct_time
+from typing import Annotated, Literal, cast, overload
+from zoneinfo import ZoneInfo, available_timezones
+
+import pytz
+from dateutil import parser
+
+TIMEOUT = 60 * 60 * 1
+HALF_DAY = 60 * 60 * 12
+NOW = dt.now(UTC)
+TODAY = NOW.date()
+
+TT_KEYS = (
+    "year",
+    "month",
+    "day",
+    "hour",
+    "minute",
+    "second",
+    "day_of_week",
+    "day_of_year",
+    "daylight_savings",
+)
+
+AwareDT = Annotated[dt, "timezone-aware"]
+NaiveDT = Annotated[dt, "timezone-naive"]
+AwareST = Annotated[struct_time, "timezone-aware"]
+NaiveST = Annotated[struct_time, "timezone-naive"]
+
+
+@cache
+def _parse_date_cached(value: str) -> dt | BaseException:
+    # cache doesn't work with exceptions, so we return the exception and raise it in the
+    # caller
+    try:
+        result = cast(dt, parser.parse(value, tzinfos=TZINFOS))
+    except Exception as e:  # noqa: BLE001
+        result = e
+
+    return result
+
+
+def parse_date_string(value: str) -> dt:
+    """
+    Examples:
+        >>> from datetime import datetime
+        >>>
+        >>> _parse_date_cached.cache_clear()
+        >>> isinstance(parse_date_string('2021-01-01'), datetime)
+        True
+        >>> _ = parse_date_string('2021-01-01')
+        >>> _parse_date_cached.cache_info().hits
+        1
+        >>> _parse_date_cached.cache_clear()
+        >>> isinstance(parse_date_string('foo'), datetime)
+        Traceback (most recent call last):
+            ...
+        dateutil.parser._parser.ParserError: Unknown string format: foo
+        >>> _ = parse_date_string('foo')
+        Traceback (most recent call last):
+            ...
+        dateutil.parser._parser.ParserError: Unknown string format: foo
+        >>> _parse_date_cached.cache_info().hits
+        1
+
+    """
+    result = _parse_date_cached(value)
+
+    if isinstance(result, BaseException):
+        raise result
+
+    return result
+
+
+def _get_local_tz(
+    try_local_tz: bool | None = True, fallback_tzinfo: tzinfo | None = UTC
+) -> tzinfo | None:
+    _tzinfo = dt.now(UTC).astimezone().tzinfo if try_local_tz else None
+    return _tzinfo or fallback_tzinfo
+
+
+def gen_tzinfos() -> Iterator[tuple[str, tzinfo]]:
+    # TODO: replace with tzdata
+    for zone in pytz.common_timezones:
+        _tzinfo = ZoneInfo(zone)
+
+        try:
+            tzdate = dt.now(UTC).astimezone(_tzinfo)
+        except pytz.NonExistentTimeError:
+            pass
+        else:
+            tzname = tzdate.tzname()
+
+            if _tzinfo and tzname:
+                yield tzname, _tzinfo
+
+
+TZINFOS = dict(gen_tzinfos())
+
+
+def get_tzname(
+    _date: AwareDT | NaiveDT | AwareST | NaiveST | date | None,
+) -> str | None:
+    if isinstance(_date, struct_time):
+        tzname = _date.tm_zone
+    elif isinstance(_date, dt):
+        tzname = _date.tzname()
+    else:
+        tzname = None
+
+    return tzname
+
+
+def tzinfo_from_tt(
+    tt: AwareST | NaiveST, def_tzinfo: tzinfo | None = None
+) -> ZoneInfo | tzinfo | timezone | None:
+    """
+    Try to get a ZoneInfo from struct_time's tm_zone name,
+    falling back to a fixed-offset timezone from tm_gmtoff.
+    """
+    if not tt:
+        _tzinfo = None
+    elif tt.tm_zone and tt.tm_zone in available_timezones():
+        _tzinfo = ZoneInfo(tt.tm_zone)
+    elif tt.tm_zone and tt.tm_zone in TZINFOS:
+        _tzinfo = TZINFOS[tt.tm_zone]
+    elif tt.tm_gmtoff is not None:
+        _tzinfo = timezone(timedelta(seconds=tt.tm_gmtoff), name=tt.tm_zone or "")
+    else:
+        _tzinfo = def_tzinfo
+
+    return _tzinfo
+
+
+def get_tzinfo(
+    _date: AwareDT | NaiveDT | AwareST | NaiveST | date,
+    def_tzinfo: tzinfo | None = None,
+) -> tzinfo | None:
+    _tzinfo = None
+
+    if isinstance(_date, struct_time):
+        _tzinfo = tzinfo_from_tt(_date, def_tzinfo=def_tzinfo)
+    elif isinstance(_date, dt):
+        _tzinfo = _date.tzinfo or def_tzinfo
+
+    return _tzinfo
+
+
+@overload
+def date_to_datetime(content: None) -> None: ...  # noqa: E704
+@overload  # noqa: E302
+def date_to_datetime(  # noqa: E704
+    content: date, *, fallback_tzinfo: tzinfo | None = ...
+) -> AwareDT: ...
+def date_to_datetime(  # noqa: E302
+    content: date | None,
+    try_local_tz: bool | None = True,
+    fallback_tzinfo: tzinfo | None = UTC,
+) -> AwareDT | NaiveDT | None:
+    _tzinfo = _get_local_tz(try_local_tz, fallback_tzinfo)
+
+    if content:
+        _date = dt(content.year, content.month, content.day, tzinfo=_tzinfo)
+    else:
+        _date = None
+
+    return _date
+
+
+@overload
+def tt_to_datetime(  # noqa: E704
+    tt: None, as_date: bool = ..., def_tzinfo: tzinfo | None = ...
+) -> None: ...
+@overload  # noqa: E302
+def tt_to_datetime(  # noqa: E704
+    tt: AwareST | NaiveST, as_date: Literal[True], def_tzinfo: tzinfo | None = ...
+) -> date: ...
+@overload  # noqa: E302
+def tt_to_datetime(  # noqa: E704
+    tt: AwareST | NaiveST,
+    as_date: Literal[False] = ...,
+    def_tzinfo: tzinfo | None = ...,
+) -> AwareDT | NaiveDT: ...
+def tt_to_datetime(  # noqa: E302
+    tt: struct_time | None,
+    as_date: bool = False,
+    def_tzinfo: tzinfo | None = None,
+) -> date | dt | None:
+    # convert and account for leapseconds
+    if tt:
+        _tzinfo = tzinfo_from_tt(tt, def_tzinfo=def_tzinfo)
+        result = dt(*tt[:5] + (min(tt[5], 59),), tzinfo=_tzinfo)
+        _date = result.date() if as_date else result
+    else:
+        _date = None
+
+    return _date
+
+
+@overload
+def date_to_tt(content: None) -> None: ...  # noqa: E704
+@overload  # noqa: E302
+def date_to_tt(content: AwareDT) -> AwareST: ...  # noqa: E704
+@overload  # noqa: E302
+def date_to_tt(content: NaiveDT | date) -> NaiveST: ...  # noqa: E704
+def date_to_tt(  # noqa: E302
+    content: AwareDT | NaiveDT | date | None,
+) -> AwareST | NaiveST | None:
+    tzname = get_tzname(content)
+
+    if isinstance(content, dt) and tzname:
+        formatted = content.isoformat()
+        sformat = "%Y-%m-%dT%H:%M:%S%z"
+        tt = strptime(formatted[:19] + formatted[-6:], sformat)
+    elif isinstance(content, dt):
+        sformat = "%Y-%m-%dT%H:%M:%S"
+        tt = strptime(content.isoformat()[:19], sformat)
+    elif content:
+        sformat = "%Y-%m-%d"
+        tt = strptime(content.isoformat(), sformat)
+    else:
+        tt = None
+
+    return tt
+
+
+@overload
+def ensure_tzinfo(  # noqa: E704
+    _date: None, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo | None = ...
+) -> None: ...
+@overload  # noqa: E302
+def ensure_tzinfo(  # noqa: E704
+    _date: str, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo | None = ...
+) -> AwareDT: ...
+@overload  # noqa: E302
+def ensure_tzinfo(  # noqa: E704
+    _date: AwareDT | NaiveDT,
+    try_local_tz: bool | None = ...,
+    fallback_tzinfo: tzinfo | None = ...,
+) -> AwareDT: ...
+@overload  # noqa: E302
+def ensure_tzinfo(  # noqa: E704
+    _date: AwareST | NaiveST,
+    try_local_tz: bool | None = ...,
+    fallback_tzinfo: tzinfo | None = ...,
+) -> AwareST: ...
+@overload  # noqa: E302
+def ensure_tzinfo(  # noqa: E704
+    _date: date, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo | None = ...
+) -> date: ...
+def ensure_tzinfo(  # noqa: E302
+    _date: AwareDT | NaiveDT | AwareST | NaiveST | date | str | None,
+    try_local_tz: bool | None = True,
+    fallback_tzinfo: tzinfo | None = UTC,
+) -> AwareDT | AwareST | date | None:
+    """
+    Examples:
+        >>> import time
+        >>> from datetime import datetime
+        >>>
+        >>> st = time.struct_time((2020, 6, 15, 12, 0, 0, 0, 0, -1))
+        >>> ensure_tzinfo(st, try_local_tz=False).tm_gmtoff
+        0
+        >>> local = datetime(2020, 6, 15, 12).astimezone().utcoffset().total_seconds()
+        >>> ensure_tzinfo(st, try_local_tz=True).tm_gmtoff == local
+        True
+
+    """
+    new_date = None
+
+    if isinstance(_date, str):
+        try:
+            _date = dt.fromisoformat(_date)
+        except (ValueError, TypeError):
+            _date = parse_date_string(_date)
+
+    if get_tzname(_date):
+        new_date = _date
+    else:
+        _tzinfo = _get_local_tz(try_local_tz, fallback_tzinfo)
+
+        if isinstance(_date, struct_time):
+            new_date = tt_to_datetime(_date, def_tzinfo=_tzinfo)
+            new_date = date_to_tt(new_date)
+        elif isinstance(_date, dt):
+            new_date = dt.replace(_date, tzinfo=_tzinfo)
+        elif isinstance(_date, date):
+            new_date = _date
+
+    return new_date

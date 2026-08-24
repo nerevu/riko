@@ -91,6 +91,15 @@ Fixed
 - ``urlbuilder`` now raises when ``conf`` has no ``base`` instead of putting ``"None"``
   in the url.
 
+- ``sort`` now orders ``float``/``decimal`` fields when some items are missing it or
+  hold an unparseable value. The invalid values are sorted as ``-inf``, so they appear
+  first when sorting ``asc``.
+
+- ``dateformat`` no longer discards the time of day. Its ``ftype`` was ``date``, which
+  truncated the field before formatting, so a ``datetime`` of ``20:45`` rendered as
+  ``00:00:00`` under the default ``"%m/%d/%Y %H:%M:%S"`` format and the ``%R``/``%I:%M``
+  specifiers its own docs advertised could never work.
+
 Removed
 ~~~~~~~
 

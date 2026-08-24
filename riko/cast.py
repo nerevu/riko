@@ -19,17 +19,14 @@ from urllib.parse import quote, urlparse
 
 import pygogo as gogo
 
-from riko.currencies import CURRENCY_CODES
-from riko.dates import (
-    EPOCH_DATE,
-    EPOCH_DATETIME,
+from riko._date_utils import (
     date_to_tt,
     ensure_tzinfo,
-    get_date,
     parse_date_string,
-    tt_to_datedict,
     tt_to_datetime,
 )
+from riko.currencies import CURRENCY_CODES
+from riko.dates import get_date, tt_to_datedict
 from riko.locations import LOCATIONS
 from riko.types.general import Opts, PreCaster
 from riko.types.values import (
@@ -303,8 +300,8 @@ CAST_SWITCH: dict[str, PreCaster] = {
     "decimal": {"default": Decimal("NaN"), "func": Decimal},
     "int": {"default": 0, "func": lambda i: int(float(i))},
     "text": {"default": "", "func": str},
-    "datetime": {"default": EPOCH_DATETIME, "func": cast_datetime},
-    "date": {"default": EPOCH_DATE, "func": cast_date},
+    "datetime": {"default": None, "func": cast_datetime},
+    "date": {"default": None, "func": cast_date},
     "url": {"default": "", "func": cast_url},
     "location": {"default": {}, "func": cast_location},
     "bool": {"default": False, "func": lambda i: bool(literal_parse(i))},
