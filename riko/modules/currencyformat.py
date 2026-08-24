@@ -31,8 +31,6 @@ from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}
 DEFAULTS: Defaults = {"currency": "USD"}
-NaN: Decimal = Decimal("NaN")
-
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -41,7 +39,7 @@ def parser(
     extraction: Extraction,
     objconf: CurrencyFormatObjconf,
     **kwargs: object,
-) -> str | Decimal:
+) -> str:
     """
     Parsers the pipe content
 
@@ -61,19 +59,19 @@ def parser(
         '$10.33'
 
     """
-    if amount is None:
-        parsed = NaN
+    if amount is None or amount.is_nan():
+        parsed = ""
     else:
         try:
             parsed = format_currency(amount, objconf.currency, locale="en_US")
         except ValueError:
-            parsed = NaN
+            parsed = ""
 
     return parsed
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> str | Decimal:
+def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor module that asynchronously formats a number to a given
     currency string.
@@ -112,7 +110,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str | Decimal:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> str | Decimal:
+def pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor module that formats a number to a given currency string.
 
@@ -141,6 +139,10 @@ def pipe(*args: Any, **kwargs: object) -> str | Decimal:
         >>> result = next(pipe({'content': '100'}, conf=conf))
         >>> result['currencyformat']
         '£100.00'
+        >>> next(pipe({"content": "bogus"}))["currencyformat"]
+        ''
+        >>> next(pipe({}))["currencyformat"]
+        ''
 
     """
     return parser(*args, **kwargs)

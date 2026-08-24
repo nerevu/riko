@@ -79,6 +79,9 @@ Fixed
 - ``urlbuilder``'s ``param`` is now genuinely optional, and skips ``param`` without a
   ``key``.
 
+- ``currencyformat`` yields ``""`` (instead of ``"$NaN.00"``) when the field is missing
+  or not numeric to match the other text-producing pipes.
+
 Removed
 ~~~~~~~
 
