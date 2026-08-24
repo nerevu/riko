@@ -1,20 +1,22 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for receiving items of a stream to a function using generator based
-coroutines.
+Receives items pushed by the send module.
+
+Pairs with ``send`` for in-process fan-out: ``receive`` subscribes to a sender as named
+``others``.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.modules.send import pipe as sender
         >>>
-        >>> conf = {'name': 'receiver1', 'wait': 0.01, 'max_wait': 2}
+        >>> conf = {"name": "receiver1", "wait": 0.01, "max_wait": 2}
         >>> target = receiver(conf=conf)
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
-        >>> stream = ({'x': x} for x in range(5))
-        >>> source = sender(stream, others=['receiver1'])
+        >>> stream = ({"x": x} for x in range(5))
+        >>> source = sender(stream, others=["receiver1"])
         >>> next(source)
         {'x': 0}
         >>> next(target)
@@ -22,10 +24,9 @@ Examples:
         >>> next(target)
         {'x': 0}
 
-
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Operator wrapper options.
+    DEFAULTS: Default operator configuration.
 
 """
 
@@ -53,7 +54,11 @@ DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def _apply(func: Callable, item: Item | StatefulItem, **fkwargs: object) -> Item | None:
+def _apply(
+    func: Callable[[Item | StatefulItem], Item],
+    item: Item | StatefulItem,
+    **fkwargs: object,
+) -> Item | None:
     if not is_stateful_item(item):
         try:
             params = signature(func).parameters
@@ -102,13 +107,21 @@ async def async_parser(
     **kwargs: object,
 ) -> Stream:
     """
-    Asynchronously receives pushed items (materialized).
+    Asynchronously collects items the sender pushes.
 
-    Subscribes to the named AnyIO channel and collects items until the sender
-    completes (channel closure). Registration *is* readiness, so no polling,
-    sleep, or DONE sentinel is involved. Note: this is *materialized* — results
-    are returned only once the channel closes; incremental (yield-as-received)
-    delivery awaits P7.3.
+    There is no timeout, so this waits forever if the sender never runs.
+
+    Args:
+        _: The source stream. Unused; items arrive from the sender.
+        objconf: The pipe configuration, containing `name`.
+        tuples: Iterable of (item, objconf). Unused.
+
+        func: Applied to each received item. Only the kwargs it declares are
+            passed (default: None).
+
+    Returns:
+        Every item received before the sender finished.
+
     """
     name = objconf.name or "".join(gen_name())
     fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
@@ -129,33 +142,35 @@ def parser(
     **kwargs: object,
 ) -> Stream | Iterator[StatefulItem]:
     """
-    Parses the pipe content
+    Yields items as the sender pushes them.
+
     Args:
-        objconf (obj): the item independent configuration (an Objectify
-            instance).
+        _: The source stream. Unused; items arrive from the sender.
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source stream and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the
-            `stream` iterator, so consuming it will consume `stream` as well.
+        objconf: The pipe configuration, containing `name`, `wait`, `max_wait`
+            and `max_len`.
 
-    Kwargs:
-        func
+        tuples: Iterable of (item, objconf). Unused.
 
-    Returns:
-        Iter[dict]: The stream of items
+        func: Applied to each received item. Only the kwargs it declares are
+            passed (default: None).
+
+    Yields:
+        Each received item, or ``StreamState.PENDING`` while waiting. Stops
+        when the sender finishes, or after ``max_wait`` seconds without an
+        item.
 
     Examples:
         >>> from itertools import repeat
         >>> from riko.modules.send import pipe as sender
         >>> from meza.fntools import Objectify
         >>>
-        >>> conf = {'wait': 0.01, 'max_wait': 2, 'name': 'receiver2'}
+        >>> conf = {"wait": 0.01, "max_wait": 2, "name": "receiver2"}
         >>> target = parser(None, Objectify(conf), None)
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
-        >>> stream = ({'x': x} for x in range(5))
-        >>> source = sender(stream, others=['receiver2'])
+        >>> stream = ({"x": x} for x in range(5))
+        >>> source = sender(stream, others=["receiver2"])
         >>> next(source)
         {'x': 0}
         >>> next(target)
@@ -189,35 +204,77 @@ def parser(
 
 @operator(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
-    """An async operator that receives pushed stream items (materialized)."""
+    """
+    Asynchronously receives items pushed by the send module.
+
+    Collects every item the sender pushes and yields them once the sender finishes.
+
+    Args:
+        items (Items): The source stream. Unused.
+
+        conf (dict): The pipe configuration.
+
+            name (str): Receiver identifier the sender targets. A random name
+                is generated when unset (default: "").
+
+        context (Context): the execution context
+
+    Kwargs:
+        func (callable): Applied to each received item before it is yielded.
+            Only the kwargs it declares are passed (default: None).
+
+    Yields:
+        Every item received before the sender finished.
+
+    Notes:
+        ``wait``, ``max_wait`` and ``max_len`` apply to the sync pipe only.
+        This path has no timeout.
+
+    """
     return await async_parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream | Iterator[StatefulItem]:
     """
-    A source that fetches and parses the first feed found on a site.
+    Receives items pushed by the send module.
+
+    Yields each item as the sender pushes it and emits a ``StreamState.PENDING`` marker
+    while waiting. Stops waiting after ``max_wait`` seconds.
 
     Args:
-        item (dict): The entry to process (not used)
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream. Unused.
+
+        conf (dict): The pipe configuration.
+
+            name (str): Receiver identifier the sender targets. A random name
+                is generated when unset (default: "").
+
+            wait (int | float): Seconds to sleep between polls (default: 1).
+
+            max_wait (int | float): Seconds to wait without an item before
+                giving up (default: 5).
+
+            max_len (int): Queue capacity. The oldest item is dropped with a
+                warning when full (default: unbounded).
+
+        context (Context): the execution context
 
     Kwargs:
-        func (callable): The user defined function to apply to each stream item
-        conf (dict): The pipe configuration. Must contain the key 'name'.
-
-            name (str): The receiver identifier
+        func (callable): Applied to each received item before it is yielded.
+            Only the kwargs it declares are passed (default: None).
 
     Yields:
-        dict: item
+        - each received item as the sender pushes it
+        - ``{"state": StreamState.PENDING}`` while waiting
 
     Examples:
         >>> from riko.modules.send import pipe as sender
         >>>
-        >>> target = pipe(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2})
+        >>> target = pipe(conf={"name": "receiver3", "wait": 0.01, "max_wait": 2})
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
-        >>> source = sender([{'x': 0}], others=['receiver3'])
+        >>> source = sender([{"x": 0}], others=["receiver3"])
         >>> next(source)
         {'x': 0}
         >>> next(target)
