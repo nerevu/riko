@@ -160,7 +160,7 @@ class TestBasics:
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 25, 0)
         item = cast(dict, items[0])
-        assert item["link"].startswith("https://edition.cnn.com/webview/politics")
+        assert item["link"] == "http://sz.de/1.2104731"
 
     def test_fetchsitefeed(self):
         """Loads a pipeline containing a fetchsitefeed module"""
