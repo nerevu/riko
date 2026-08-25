@@ -44,6 +44,13 @@ New
 - ``cast_datetime`` exposes its keyword-only ``try_local_tz``, so a relative date can
   resolve in the local timezone instead of UTC.
 
+- ``compile-pipe`` now reads the pipe definition from stdin when the path is ``-`` or
+  omitted. It also composes with ``convert-dag`` in a shell pipeline. An unreadable or
+  malformed definition now logs a warning and exits non-zero.
+
+- Added ``-v``/``--verbose`` to ``compile-pipe`` to report the modules used and bytes
+  written to stderr.
+
 Changes
 ~~~~~~~
 
@@ -117,6 +124,8 @@ Fixed
   specifiers its own docs advertised could never work.
 
 - ``regex`` ignores unrecognized rule keys instead of raising.
+
+- Superseded the long-broken ``bin/compile`` script with ``compile-pipe``.
 
 Removed
 ~~~~~~~

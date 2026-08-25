@@ -879,6 +879,12 @@ Or use the command-line tools:
     convert-dag flow.dag.json -o flow.json
     compile-pipe flow.json -o flow.py
 
+Or chain them, since ``compile-pipe`` reads stdin when given ``-`` (or no path):
+
+.. code-block:: bash
+
+    convert-dag flow.dag.json | compile-pipe - -o flow.py -v
+
 Note that fan-in operators such as ``union``/``join`` cannot be expressed with
 the ``[source, target]`` pair format (their secondary inputs need ``_OTHER{n}``
 targets) and must be authored as a full JSON pipe definition instead. See the

@@ -676,6 +676,13 @@ write to stdout, or to a file via ``-o``):
     convert-dag flow.dag.json -o flow.json
     compile-pipe flow.json -o flow.py
 
+Since ``compile-pipe`` reads stdin when given ``-`` (or no path at all), the two
+compose directly. Add ``-v`` to report the modules used and bytes written to stderr:
+
+.. code-block:: bash
+
+    convert-dag flow.dag.json | compile-pipe - -o flow.py -v
+
 
 See the `DAG format`_ doc and the `Cookbook`_ for the full format/expansion rules and
 examples.
