@@ -82,7 +82,7 @@ live.
 
 * `Stream` is synchronous iteration.
 * `Feed` is asynchronous iteration.
-* Boundedness is represented separately through opts.
+* Boundedness is **not** a declared `Opts` field yet (`Opts.boundedness` / `require_bounded` are planned — [execution-semantics.md §5](gameplans/execution-semantics.md#5-execution-characteristics)); the bound that ships is behavioral, in the §6 async primitives.
 
 The public asynchronous source type is:
 

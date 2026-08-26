@@ -1,8 +1,10 @@
 # Riko Roadmap
 
 This is riko's **map**: the index of gameplans that hold every detailed plan, plus pointers
-to the authoritative specs. The **runtime contract** (§0–25) lives in
-[RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md); what already ships is in
+to the authoritative specs. The **runtime contract** — only the sections that describe
+guaranteed, shipped behavior — lives in [RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md) (the full
+`§0–27` map is the [Index](#index) below; feature/end-state sections live in gameplans); what
+already ships is in
 [IMPLEMENTED.md](IMPLEMENTED.md) (its as-built companion); implementation status and sequence
 are the P-track ([PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md)
 + [MILESTONES.md](MILESTONES.md)). This document just routes you to them.

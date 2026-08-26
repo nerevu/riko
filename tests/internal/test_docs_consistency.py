@@ -134,10 +134,6 @@ def test_no_status_banner_in_gameplans():
     assert not offenders, f"status banners belong only in the tracker: {offenders}"
 
 
-@pytest.mark.xfail(
-    reason="tracker claims completion above the packaged version; use 'targeted for' wording",
-    strict=True,
-)
 def test_no_completion_claim_above_packaged_version():
     offenders = _version_claim_offenders(_packaged_version())
     assert not offenders, f"completion claimed above packaged version: {offenders}"

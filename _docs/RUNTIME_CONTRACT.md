@@ -56,8 +56,11 @@ type AsyncSource = Items | Feed | Awaitable[Items | Feed]
 ```
 
 `Stream` and `Feed` differ by iteration mechanism, not by whether the source is finite or
-live; boundedness is carried separately in opts. Each asynchronous execution resolves the
-source once and normalizes it to `AsyncIterator[Item]`.
+live. Boundedness is **not** a declared `Opts` field today — `Opts.boundedness` /
+`require_bounded` are planned ([execution-semantics.md §5](gameplans/execution-semantics.md#5-execution-characteristics)).
+What ships is the *behavioral* bound in the §6 async primitives (bounded worker concurrency,
+no whole-source materialization). Each asynchronous execution resolves the source once and
+normalizes it to `AsyncIterator[Item]`.
 
 ## 3. Pipe behavior
 
@@ -87,16 +90,20 @@ means "no timeout" (matching sync).
 
 ## 9. Run status and exit codes
 
-The CLI returns process exit codes: `0` completed · `1` failed · `2` CLI usage/config error ·
-`3` partial (the partial code is configurable).
+The CLI (`riko/cli/manage.py`) returns process exit codes: `0` completed · `1` failed ·
+`2` CLI usage/config error. The formal `RunStatus` enum and the four-code
+completed/failed/usage/**partial** scheme (with a configurable partial code) are **planned**,
+not yet implemented — see [IMPLEMENTED.md §9](IMPLEMENTED.md#9-exit-codes-shipped).
 
 ## 10. Delivery guarantee
 
-Riko provides **at-least-once** delivery. A source position advances only after its required
-downstream outputs or terminal dispositions are durable; a failure between sink
-acknowledgement and checkpoint persistence may replay data. Exactly-once processing is not
-claimed — sinks may achieve effective deduplication through stable batch IDs, idempotency
-keys, native transactions, or merge/upsert semantics.
+Today delivery is **best-effort, in-process**: a run streams items from source to sinks within
+a single process, with per-item graceful error capture (§12). There is **no** durable
+checkpoint, source-position, acknowledgement, or replay machinery, so riko makes no cross-run
+durability guarantee yet. The **at-least-once** durability contract — durable outputs gating
+source-position advance, replay on failure between sink acknowledgement and checkpoint
+persistence, exactly-once explicitly *not* claimed — is **planned** and owned by
+[rdp-connect.md](gameplans/rdp-connect.md#17-riko-data-protocol) (§14, §17–§21).
 
 ## 12. Errors and dispositions
 

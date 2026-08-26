@@ -9,10 +9,14 @@ sequencing). Consolidates the former `P1/P2/P5/P6/P7/P10_CHECKLIST.md` and the f
 
 Suite: **802 passed** (pyright/ruff clean). Branch: `features` (the user commits).
 
-**Merge gate (`features` → `main`): clear.** R3 (`join` materializing its primary stream)
-was the last P0 in the [correctness-audit register](gameplans/correctness-audit.md#8-open-defect-register--features-branch-audit);
-R1 is fixed and R2 is folded into the Pipeline/Execution split. Remaining register rows are
-P1–P3 and belong to the release gate — next up is R4 (async `send` buffers its whole stream).
+**Merge gate (`features` → `main`): blocked on R2.** R1 and R3 are fixed; R2
+(`PyPipe.__call__` silently drops omitted kwargs — [correctness-audit register](gameplans/correctness-audit.md#8-open-defect-register--features-branch-audit))
+is the one open P0. By the 2026-08-24 decision it is **deferred, not discharged**: the fix is
+folded into the Pipeline/Execution split (fold, don't patch), so **R2 stays live on `features`
+until that split lands** ([MILESTONES § split](MILESTONES.md) · [release-readiness § 9.1](gameplans/release-readiness.md#91-merge-gate-features--main)).
+Planning the fix is not discharging it — the gate does not clear until the split removes the
+defect. The other register rows are P1–P3 and belong to the release gate — next up is R4 (async
+`send` buffers its whole stream).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -32,7 +36,7 @@ P1–P3 and belong to the release gate — next up is R4 (async `send` buffers i
 | **P14** extensions outside core | ⬜ pending | `riko-microsoft`, `riko-ai` |
 
 **Milestone 1 (P1–P7): complete** (P10 landed early, out of sequence, at the user's request). **P8
-landed** (the M2 seam). **P9A is complete** (v0.76.0): the generated `Modules` tree +
+landed** (the M2 seam). **P9A is complete**, targeted for release v0.76.0: the generated `Modules` tree +
 `derive_category` taxonomy + `riko.ext.codegen`/`gen-names` + `list_modules`/`describe_module`
 (on top of the v0.75.0 prerequisites — value-taking `|`/`.pipe()`, `ModuleName` base, `isasync`
 inference). **Concrete next action: the remaining non-P9A P9 work** — the installed-environment
@@ -304,7 +308,7 @@ overloads make `@operator()` on a coroutine statically async. Also on this branc
 
 ## P9A — enum + taxonomy discoverability
 
-**Delivered** (v0.76.0). A typed *discovery* layer over the canonical string ids — strings stay
+**Landed on `features`; targeted for release v0.76.0.** A typed *discovery* layer over the canonical string ids — strings stay
 canonical everywhere (JSON, entry points, resolver); every enum member's `.value` **is** the id.
 
 - **Taxonomy (`derive_category`, `riko/ext/names.py`).** Pure/total `category` derivation from
