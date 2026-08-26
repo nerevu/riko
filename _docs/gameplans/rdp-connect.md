@@ -4,7 +4,7 @@
 
 ## 14. Lineage and acknowledgements
 
-> **Status: Planned.** no lineage envelope, positions, or acknowledgements.
+> **Current gap:** no lineage envelope, positions, or acknowledgements.
 
 ### 14.1 Position envelope
 
@@ -135,7 +135,7 @@ Defaults depend on join type.
 
 ## 17. Riko Data Protocol
 
-> **Status: Planned.** no RDP protocol/enums/plan types in code.
+> **Current gap:** no RDP protocol/enums/plan types in code.
 
 ### 17.1 Compatibility position
 
@@ -198,7 +198,7 @@ The plan records:
 
 ## 18. State
 
-> **Status: Planned.** no state store / `Checkpoint`.
+> **Current gap:** no state store / `Checkpoint`.
 
 ### 18.1 State types
 
@@ -246,7 +246,7 @@ A crash after output acknowledgement but before CAS causes replay. Stable batch 
 
 ## 19. Schema
 
-> **Status: Planned.** no `RikoSchema` / registry.
+> **Current gap:** no `RikoSchema` / registry.
 
 ### 19.1 Canonical representation
 
@@ -311,7 +311,7 @@ Fixed-schema batch pipelines freeze the initial schema and reject later widening
 
 ## 20. Batch transports
 
-> **Status: Planned.** no batch-transport selection.
+> **Current gap:** no batch-transport selection.
 
 ```python
 batch_transport: Literal[
@@ -356,7 +356,7 @@ The planner selects IPC only when every restriction is satisfied. Otherwise, it 
 
 ## 21. Manifest durability
 
-> **Status: Planned.** no `Manifest` / commit protocol.
+> **Current gap:** no `Manifest` / commit protocol.
 
 The manifest is the commit marker.
 

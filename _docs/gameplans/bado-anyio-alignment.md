@@ -1,6 +1,6 @@
 # Gameplan: `bado` ↔ AnyIO 4.14 Alignment & Async Benchmarking
 
-> **Status (2026-08):** **Planned — unsequenced refinement.** Not yet a P-track phase; touches the
+> **Scope:** An unsequenced refinement — not yet a P-track phase; touches the
 > P7 (true async streaming) and P10 (bounded parallelism/backpressure) as-built primitives without
 > changing their contract. Purely a cleanup + measurement plan: trim `bado` helpers that AnyIO 4.14
 > now subsumes, and stand up an async benchmark/profile harness to justify any primitive change.

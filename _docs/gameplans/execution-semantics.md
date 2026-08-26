@@ -4,7 +4,7 @@
 
 ## 5. Execution characteristics
 
-> **Status: Planned.** `Opts` does not contain `boundedness`/`ordering`/`side_effects`/`determinism`/`require_bounded`/`state_checkpoint`/`lineage_commit`; the bounded/ordered *behaviors* live in the §6 primitives, not as declared metadata.
+> **Current gap:** `Opts` does not contain `boundedness`/`ordering`/`side_effects`/`determinism`/`require_bounded`/`state_checkpoint`/`lineage_commit`; the bounded/ordered *behaviors* live in the §6 primitives, not as declared metadata.
 
 ### 5.1 Boundedness
 
@@ -92,7 +92,7 @@ These opts influence retry safety, replay warnings, caching, and planner behavio
 
 ## 6. Async execution and backpressure
 
-> **Status: Partial.** **Shipped → [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-execution-and-backpressure-shipped)**
+> **Shipped:** see [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-execution-and-backpressure-shipped)
 > (bounded concurrency, order-preserving streaming via `async_map_stream`/`async_map_ordered_stream`).
 > **Remaining:** true indexed reorder buffer, the `ordered=False` doc/behavior fix, and
 > cancellation/cleanup below.
@@ -168,7 +168,7 @@ When both execution and cleanup fail:
 
 ## Execution-mode adaptation (`Pipeline` sync ↔ async)
 
-> **Status: Planned.** Owns the sync↔async adaptation layer behind the public
+> **Scope:** Owns the sync↔async adaptation layer behind the public
 > [`Pipeline`](release-readiness.md) (definition) / `SyncExecution` / `AsyncExecution` (one-shot,
 > built fresh per `iter`/`aiter`). API shape → [release-readiness.md § 4](release-readiness.md);
 > decorator DX → [callable-pipes.md](callable-pipes.md); source ingest →
@@ -248,7 +248,7 @@ async runtime per record, or expose AnyIO/Asyncer types. The cheap native sync p
 
 ## 7. Timeout
 
-> **Status: Partial.** **Shipped → [IMPLEMENTED.md §7](../IMPLEMENTED.md#7-timeout-shipped)**
+> **Shipped:** see [IMPLEMENTED.md §7](../IMPLEMENTED.md#7-timeout-shipped)
 > (lifetime `total` timeout, sync + async `TimeoutIterator`). **Remaining:** the `idle`/`item`
 > modes, the `on_timeout` policy described below, and the unbounded async
 > `receive` wait (§7.1).
@@ -337,7 +337,7 @@ Registered as [correctness-audit **R14**](correctness-audit.md#8-open-defect-reg
 
 ## 8. Union and merge
 
-> **Status: Partial.** **Shipped → [IMPLEMENTED.md §8](../IMPLEMENTED.md#8-union-shipped)**
+> **Shipped:** see [IMPLEMENTED.md §8](../IMPLEMENTED.md#8-union-shipped)
 > (`union` sequential concatenation; the internal `async_merge` primitive). **Remaining:**
 > the user-facing concurrent async `merge` operator below.
 
@@ -412,7 +412,7 @@ A source may discover partitions internally, but new top-level feeds are not dyn
 
 ## 11. Retry policy
 
-> **Status: Planned.** no retry policy in code.
+> **Current gap:** no retry policy in code.
 
 ```python
 @dataclass(frozen=True)
@@ -459,7 +459,7 @@ Retry policies may be configured separately for:
 
 ## 12. Errors and dispositions
 
-> **Status: Planned.** only `on_error`/`error_key` + basic exception classes; no error/disposition sinks or drop policy.
+> **Current gap:** only `on_error`/`error_key` + basic exception classes; no error/disposition sinks or drop policy.
 
 ### 12.1 Error policies
 
@@ -574,7 +574,7 @@ Per-item events are not required for the normal `complete` path.
 
 ## 13. Filter semantics
 
-> **Status: Partial.** **Shipped → [IMPLEMENTED.md §13](../IMPLEMENTED.md#13-filter-semantics-shipped)**
+> **Shipped:** see [IMPLEMENTED.md §13](../IMPLEMENTED.md#13-filter-semantics-shipped)
 > (`permit`/`combine`/`stop`). **Remaining:** the drop-policy / disposition semantics below.
 
 A filtered-out item with `drop_policy="complete"` is immediately considered complete.
@@ -591,7 +591,7 @@ With `filter(stop=True)` the first rejected item:
 
 ## 16. Batch model
 
-> **Status: Planned.** no `Batch`/`BatchPipe`/`BatchPolicy`.
+> **Current gap:** no `Batch`/`BatchPipe`/`BatchPolicy`.
 >
 > **Consumer:** the runtime `batch_feed`/`batch_stream` primitives and their use in streaming
 > `write`/`split`/reducers are planned in [feed-native-streaming.md](feed-native-streaming.md), which
@@ -732,7 +732,7 @@ replacement; natural backpressure comes from bounded queues rather than a pollin
 
 ## 15. Stateful operators
 
-> **Status: Planned.** `StatefulItem` type exists but no checkpoint/persist machinery.
+> **Current gap:** `StatefulItem` type exists but no checkpoint/persist machinery.
 
 Stateful streaming pipes declare:
 
@@ -751,7 +751,7 @@ state_checkpoint: Literal[
 
 ## 22. Memory limits
 
-> **Status: Planned.** no enforced memory/record limits.
+> **Current gap:** no enforced memory/record limits.
 
 Initial limits are item-count based:
 

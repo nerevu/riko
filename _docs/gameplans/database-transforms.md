@@ -238,7 +238,7 @@ D3  optional dbt-ibis evaluation
 
 ## 25. Conversion and dataframe integration
 
-> **Status: Partial.** **Shipped → [IMPLEMENTED.md §25](../IMPLEMENTED.md#25-conversion--export-converters-shipped)**
+> **Shipped:** see [IMPLEMENTED.md §25](../IMPLEMENTED.md#25-conversion--export-converters-shipped)
 > (meza-backed csv/json/geojson/ofx/qif/list/tuple export converters). **Remaining:** the
 > Batch/dataframe path below.
 

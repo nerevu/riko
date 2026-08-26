@@ -339,7 +339,7 @@ runtime contracts.
 
 ## 24. Module registry and plugins
 
-> **Status: Partial.** **Shipped → [IMPLEMENTED.md §24](../IMPLEMENTED.md#24-module-discovery-shipped)**
+> **Shipped:** see [IMPLEMENTED.md §24](../IMPLEMENTED.md#24-module-discovery-shipped)
 > (`pkgutil`-based `list_modules`; built-in name/namespace reservation). **Remaining:** the
 > entry-point/runtime `ModuleRegistry` (P8-planned) below.
 

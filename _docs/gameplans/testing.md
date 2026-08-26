@@ -1,6 +1,6 @@
 # Gameplan: Test-Suite Layering & Consolidation (P13)
 
-> **Status (2026-08):** **Planned — owns P13** ("public/typing/internal test split",
+> **Scope:** owns **P13** ("public/typing/internal test split",
 > [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) § P13 tracker, [MILESTONES.md](../MILESTONES.md)
 > "P13"). Establishes the durable *ownership* rule for the four test layers and the concrete
 > fix/remove/consolidate work to get there. The `tests/typing/{valid,invalid}/` split that P13

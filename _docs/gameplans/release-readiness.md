@@ -7,7 +7,7 @@ Riko's core is mature; the remaining rough edges are places where implementation
 the user model. This plan owns the cross-cutting **DX/API-shape** decisions and the **release/package
 fidelity** gate; it routes the parts owned elsewhere to their owners.
 
-> **Status (2026-08):** **Planned — release gate.** Not a single P-phase; it *pulls forward and
+> **Scope:** A release gate — not a single P-phase; it *pulls forward and
 > sequences* items across P9/P11/P12/P13 plus new API-shape decisions. Guiding triage in § 8.
 >
 > **Provenance.** Folded in from the untracked `_docs/ux_polish.md` scratch analysis.
@@ -228,10 +228,11 @@ A gate *before* the release gate. The
 but its **P0** rows are, because each one is silent: it changes laziness, drains an
 iterator, or drops a value without failing an import or a happy-path test.
 
-**Status (2026-08-24):** R1 fixed; R2 folded into the § 4 split and no longer blocking;
-**R3 fixed** (both the keyed *and* the keyless branch — see the register row).
-**No P0 row now stands between `features` and `main`;** the remaining rows are P1–P3 and
-belong to the release gate, not the merge gate.
+**Merge-gate state (2026-08-24):** R1 and R3 are fixed (R3 in both the keyed *and* the keyless
+branch — see the register row). **R2 remains the one open P0** — deferred to the § 4
+Pipeline/Execution split (fold, don't patch), so it **stays live until that split lands** and the
+`features` → `main` gate is **not** clear. The other rows are P1–P3 and belong to the release
+gate, not the merge gate.
 
 | Row | Blocks the merge because |
 |---|---|

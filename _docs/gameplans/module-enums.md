@@ -1,6 +1,6 @@
 # Gameplan: Module Registry (P8) + Enum Discoverability (P9A)
 
-> **Status (2026-08):** **P9A landed** — P9A.1–P9A.6 all shipped (v0.76.0): the
+> **Shipped (P9A.1–P9A.6; targeted for release v0.76.0):** the
 > `ModuleName` base + `normalize_module_name`, `derive_category` taxonomy, the
 > `riko.ext.codegen` generator + committed `riko/modules/_names.py` (the flat `Modules`
 > namespace + `Sources`/`Transforms`/`Sinks` buckets), value-taking `|`/`.pipe()` chaining,

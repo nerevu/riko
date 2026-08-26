@@ -4,7 +4,7 @@
 
 ## 4. Callable pipes
 
-> **Status: Planned.** `Opts` carries none of the execution-characteristic fields; `map`/`flat_map` callable pipes and strict mode do not exist. `@processor`/`@operator`/`@splitter` exist but are not extended with these fields.
+> **Current gap:** `Opts` carries none of the execution-characteristic fields; `map`/`flat_map` callable pipes and strict mode do not exist. `@processor`/`@operator`/`@splitter` exist but are not extended with these fields.
 
 > **Deferred / not yet implemented.** Per-module Feed-native parsers (a
 > `parser_mode: feed | legacy_stream` classification, review #8) are not built:

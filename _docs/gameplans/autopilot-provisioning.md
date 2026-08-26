@@ -8,7 +8,7 @@ machine, starting from one or more existing hardware-hash CSV files. This is a *
 specializes the generic Microsoft contracts — it owns only Autopilot-specific input models, tag
 rules, state machine, and workflow sequencing.
 
-> **Status (2026-08):** **Planned — P14 external distribution** (`riko-microsoft`), gated behind P8
+> **Dependencies:** P14 external distribution (`riko-microsoft`), gated behind P8
 > (entry points) + P11 (pub/sub) + P12 (errors/events); see
 > [MILESTONES.md](../MILESTONES.md) "External distributions". It is the downstream *consumer* that
 > the [module-enums.md](module-enums.md) plan references as the fake-then-real example extension

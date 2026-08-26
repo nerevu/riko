@@ -5,17 +5,15 @@ Tests documentation-consistency invariants.
 Guards the ``_docs/`` model against the drift catalogued in the doc review: a
 complete ``§0-27`` index, every active gameplan indexed, retired gameplans kept
 out of the active listing, phase status confined to ``PHASE_CHECKLISTS.md``, and
-completion claims not outrunning the packaged version. The last two are
-``strict`` xfail tripwires that flip to failures once the ownership/version
-cleanup lands, forcing the guard to be tightened.
+completion claims not outrunning the packaged version. All checks are hard
+asserts; the ownership-boundary and version cleanups that made the last two pass
+have landed.
 """
 
 import re
 import tomllib
 from collections import Counter
 from pathlib import Path
-
-import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 _DOCS = _REPO / "_docs"
@@ -125,10 +123,6 @@ def test_retired_gameplans_are_marked_retired():
     )
 
 
-@pytest.mark.xfail(
-    reason="gameplans still carry Status: banners; PHASE_CHECKLISTS owns live status",
-    strict=True,
-)
 def test_no_status_banner_in_gameplans():
     offenders = _status_banner_offenders()
     assert not offenders, f"status banners belong only in the tracker: {offenders}"

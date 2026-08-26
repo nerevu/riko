@@ -1,6 +1,6 @@
 # Gameplan: Feed-Native Pipe Migration & Streaming Memory Model
 
-> **Status (2026-08):** **Planned.** Discharges the **P7 carryover** — *bounded-memory streaming
+> **Scope:** Discharges the **P7 carryover** — *bounded-memory streaming
 > export* ([PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) § P7) — and generalizes it: drive the
 > `_materialize_legacy_source` seam down to only genuinely blocking legacy operators.
 >
