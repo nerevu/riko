@@ -317,6 +317,11 @@ reproduced*.
 `Class` is the § 3 taxonomy; `Phase` is § 5; `Owner` is the gameplan that holds the
 design when the fix is more than a local repair.
 
+The register is runtime **defects** only. The dead `riko/data/` files and the two-shape
+`Region` TypedDict are a **C6** redundancy/clarity item, not a defect (nothing
+misbehaves), so they are tracked by [reference-data.md](reference-data.md) and stay off
+this register and out of the merge gate.
+
 | # | Pri | Where | Defect | Class | Phase | Owner |
 |---|:---:|---|---|:---:|:---:|---|
 | R1 | ~~P0~~ **fixed** | `_io.py:271` | Non-memoized **text** fetch requested with `stream=False` (`stream=binary`) then read the already-consumed `r.raw`. Reproduced against a local server: it does not return an empty body, it raises a bare `StopIteration` from meza's `Reencoder.__init__` straight out of `Fetch` (uncaught — neither `RequestException` nor `URLError`). Fixed by `stream=not memoize`; regressions in `tests/internal/test_io.py`, verified failing first. | C11 | A2 | — |

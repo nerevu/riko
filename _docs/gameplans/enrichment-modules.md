@@ -131,7 +131,8 @@ which passed for **any** input, including gibberish.
 Decide per lookup, and do not leave the middle ground:
 
 * **`currency`** — keep. It is the only one that works, and it needs no
-  dependency.
+  dependency. It *consumes* `CURRENCY_CODES`/`LOCATIONS` but does not own them —
+  those tables are owned by [reference-data.md](reference-data.md).
 * **`coordinates`** — either drop the canned `country` (returning just the
   parsed lat/lon is honest and still useful) or resolve it properly via an
   offline dataset. Echoing coordinates back is a legitimate normalization step;

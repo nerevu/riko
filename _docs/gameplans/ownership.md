@@ -41,6 +41,7 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 | desired-state Microsoft administration, ChangePlan, approval, verify/handoff | `microsoft-administration.md` | adapter mechanics from Azure plan |
 | orchestration, external scheduling, durable run boundaries | `orchestration.md` | in-process finite primitive semantics |
 | callable pipe contract | `callable-pipes.md` | domain examples only |
+| currency/location reference tables (`_reference.py`) + `riko.currencies`/`riko.locations` facades | `reference-data.md` | consumers of the tables (`cast_location`, `currencyformat`, geolocate's `currency` type) |
 | extension/plugin registration | `extensibility.md` | package-specific registrations |
 | test-layer ownership (doctest/public/internal/functional) + suite consolidation | `testing.md` | phase-specific typing-split mechanics (`tests/typing/`) in MILESTONES P13 |
 | `bado` ↔ AnyIO version-alignment audit (remove/replace/keep helpers) + async benchmarking/profiling | `bado-anyio-alignment.md` | the async-primitive *runtime semantics* (owned by `execution-semantics.md` Appendix A) |
