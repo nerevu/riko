@@ -51,7 +51,7 @@ Priority **A** = clear win, do first; **B** = worthwhile; **C** = inherently eag
 | `sum` | **A** | incremental async accumulator (`Decimal`) | O(1) ungrouped; O(groups) grouped. |
 | `receive` | **A** → **F1** | yield directly from the AnyIO receive stream | Removes the current result list; pub/sub is already AnyIO-native, so materialization fights the abstraction. **Owned by [fanout-topology F1](fanout-topology.md#5-phase-f1--make-async-receive-truly-streaming)** (that phase's title *is* this row). |
 | `send` | **A** → **F1** | publish → `yield` each item; `complete` in `finally` | Removes the current `sent` list. **Owned by F1** — same DoD, and F5 renames/deletes the `others`/`max_wait`/`complete()`/`ids` vocabulary this row assumes. `complete`-in-`finally` is already done (see below). |
-| `timeout` | **A** | AnyIO cancel scopes (`move_on_after`) around iteration | **Real** cancellation of a blocked `anext()` (today's `AsyncTimeoutIterator` only notices *after* the deadline). |
+| `timeout` | **A** | AnyIO cancel scopes (`move_on_after`) around iteration | Feed-native port needs real cancellation of a blocked `anext()`; the timeout mechanics/fix are owned by [execution-semantics § 7.2](execution-semantics.md#72-a-blocked-anext-outlives-the-deadline). |
 | `split` | **A/B** | bounded broadcast (prototype with `tee`) | Removes the whole-source copy — see §4. |
 | `forever` | **B** | `anyio.itertools.repeat` | Native async infinite source. |
 | `join` | **B/C** | async product/hash join | Possible, but semantics matter more than laziness. |

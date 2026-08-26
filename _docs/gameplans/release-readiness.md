@@ -24,38 +24,22 @@ fidelity** gate; it routes the parts owned elsewhere to their owners.
 
 ## 2. Pub/sub: the minimum 1.0-caliber contract (owned by fanout-topology.md)
 
-The sync pub/sub priming requirement is the clearest mechanics-leak. The **target contract**:
-creating a receiver makes it ready immediately; receiving yields **only** user items; unknown
-receivers fail with a typed exception; buffers never lose data unless a lossy policy was explicitly
-requested; channel state belongs to one execution; sender completion cleanly terminates receivers;
-and the **same rules apply to sync and async**. Concretely (each maps to a topology phase):
+The pre-1.0 gate requires the full pub/sub contract — whose mechanics and rationale (eager
+subscriptions, the no-`PENDING`/blocking-is-a-`Subscription`-property model, lossless buffering,
+execution-scoped hubs, `func`-as-tap, subscription handles) are owned by
+[fanout-topology.md § 2 and phases F1/F4/F5](fanout-topology.md) — to land at release quality.
+Release-readiness does not restate that contract; it gates these outcomes and owns the vocabulary
+alignment (§ below):
 
-- **Eager sync subscriptions — eliminate `next(receiver)` priming.** A `SyncSubscription`
-  registered synchronously at construction; `SyncPipe("receive", …)` keeps working over it. (F5)
-- **Remove `PENDING` records from the data stream.** Waiting is invisible; expose
-  `subscription.state`/`.closed`/timeout instead. Simplifies `Item` typing. **Blocking is a
-  property of the `Subscription`, not of `receive`** — the in-process sync hub is a buffer you
-  drain and never has to wait (`send` pushes on the calling thread, so a blocking wait there
-  could only ever be satisfied by the thread already blocked), while a broker-backed subscription
-  blocks or polls because it has a real remote producer. The *protocol* is therefore uniform
-  across sync and async and the in-process implementation simply never waits; a blocking
-  `Condition`/`Queue` primitive belongs to the `Subscription` implementations that need one, not
-  to `receive`. Non-blocking is the default everywhere, `blocking=True` + timeout is opt-in.
-  (F1/F4/F5a, + P11)
-- **Eliminate silent data loss.** Sync `send()` to a missing receiver must raise
-  `ReceiverUnavailableError` (async already does); default buffers **lossless** (bounded blocking +
-  timeout → typed backpressure/queue-full error); `drop_oldest`/`drop_newest` are explicit opt-ins. (F4)
-- **Scope pub/sub to an execution, not the process.** Move `sync_hub`/`async_hub` off module globals
-  into a `Context` resource bag; `reset_pubsub()` becomes test-only. (F5, + `Context.resources`)
-- **Observable sync/async parity.** Make async `receive` a real async generator (first item before
-  sender completion), matching sync's incremental streaming. (F1)
-- **A receive `func` is a tap, not a transform.** It runs at push time and its return value is
-  discarded; the receiver yields the item that arrived. Today the return is queued *instead of*
-  the item, so `func=append`/`print` put `None` on the stream and `func=len` puts an `int` —
-  neither an `Item`. Transforms stay `udf`'s job. (F5c)
-- **Subscription handles, not hidden id bookkeeping.** Replace `send`'s `ids` dict +
-  `_notify_subscribers()` `DONE` sentinel with explicit generation/token ownership; completion =
-  `subscription.close()`/channel closure. (F5)
+- eager sync subscriptions, no `next(receiver)` priming (F5);
+- no `PENDING` records on the data stream — waiting is exposed via the subscription, not the `Item`
+  type (F1/F4/F5a);
+- no silent data loss — a missing receiver raises a typed error, buffers are lossless by default
+  with explicit opt-in drop policies (F4);
+- pub/sub scoped to an execution, not process globals (`Context.resources`; F5);
+- async `receive` streams incrementally, at parity with sync (F1);
+- `receive`'s `func` is a tap whose return value is discarded (F5c);
+- subscription handles replace the hidden `ids`/`DONE` bookkeeping (F5).
 
 **Vocabulary (P1 of the doc):** `others`→`targets`, `max_len`→`buffer_size`,
 `max_wait`→`timeout`/`idle_timeout`, `receive`'s `func`→`tap`/`on_item` (a misnomer once F5c
@@ -124,11 +108,9 @@ backpressure error from `riko`/`riko.api`.
   "inline", workers=…, concurrency=…, ordered=…, prefetch=…)` returns a **new** definition. **No
   `parallel`/`threads`/`pool`/`pool_scope`/`chunksize` shim** — clean break, single vocabulary.
 - **Execution-mode adaptation is owned by
-  [execution-semantics.md § Execution-mode adaptation](execution-semantics.md).** Native
-  implementation always wins; a sync-only module under async execution runs on a worker; an
-  async-only module under sync execution runs on **one** persistent portal per execution. The
-  `execution=`(`auto`/`inline`/`thread`/`process`) policy is a single `Opts` field (declared on the
-  decorator, overridable per call) — not duplicated here. AnyIO/Asyncer stay **private** (never in
+  [execution-semantics.md § Execution-mode adaptation](execution-semantics.md)** — native-wins
+  resolution, the worker-vs-portal policy, and the `execution=` `Opts` field are that plan's
+  contract, not restated here. Release-gate specifics only: AnyIO/Asyncer stay **private** (never in
   `riko`/`riko.ext`); a sync-only install that needs an async-only module raises an actionable
   `riko[async]` error (§ 6), never a deep `ImportError`.
 - **Decorator DX is owned by [callable-pipes.md § Bare decorators](callable-pipes.md).**
