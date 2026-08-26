@@ -1,11 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Sync/async parity (P7 DoD): the differences between ``SyncPipe`` and
-``AsyncPipe`` are execution mechanics, not observable pipeline semantics. Each
-test builds the *same* pipeline spec on both engines and asserts identical
-output — chaining, assignment, emit, aggregators, one-shot re-iteration, and
-chain-after-partial-run (the remainder-wrapping behavior that was the P5 strict
-``xfail``, cleared in P7.4).
+Sync/async parity: the differences between ``SyncPipe`` and ``AsyncPipe`` are execution
+mechanics, not observable pipeline semantics. Each test builds the *same* pipeline spec
+on both engines and asserts identical output: chaining, assignment, emit, aggregators,
+one-shot re-iteration, and chain-after-partial-run.
 
 Lifecycle/close/split/export parity lives in ``test_pipe_lifecycle.py`` and
 ``test_collections.py`` (mirrored sync/async classes); mode propagation in
