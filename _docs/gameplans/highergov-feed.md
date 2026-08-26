@@ -1,9 +1,9 @@
 # Riko HigherGov Delivery & Async Feed Gameplan
 
-> **Provenance.** Extracted from `docs/ROADMAP.md` Parts III–IV so the roadmap can stay a
-> high-level overview. This is the authoritative detail for the HigherGov-first critical path
-> and the async `Feed` integration it depends on. Section references like §N point back to
-> [ROADMAP.md](../ROADMAP.md) Part I/II (the runtime contract).
+> **Provenance.** Authoritative detail for the HigherGov-first critical path and the async
+> `Feed` integration it depends on. This gameplan owns HG-0…HG-9; see the
+> [ROADMAP.md Index](../ROADMAP.md#index) and [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md)
+> for the core runtime guarantees the `§N` references point at.
 
 ## Mission
 
@@ -66,14 +66,11 @@ provide a callable `.pipe(processor)` or `.output` interface. It already holds a
 `source`, so callable pipes build on that. The target API:
 
 ```python
-flow = SyncPipe(
-    source=dataframe.to_dict("records"),
-    parallel=True,
-    workers=workers,
-    threads=not use_processes,
-).map(processor)
+flow = Pipeline(source=dataframe.to_dict("records")).map(
+    processor, executor="thread", workers=workers, ordered=False
+)
 
-result = pd.DataFrame(flow)
+result = pd.DataFrame(flow.collect())
 ```
 
 For an expanding callable:
@@ -130,11 +127,9 @@ after failures. Map the existing batch function; do not replace Selenium with `r
 unless independently tested and proven equivalent:
 
 ```python
-SyncPipe(
-    source=redirect_batches,
-    parallel=True,
-    workers=max_workers,
-).map(process_redirect_batch)
+Pipeline(source=redirect_batches).map(
+    process_redirect_batch, executor="thread", workers=max_workers, ordered=False
+)
 ```
 
 ### 5. Keep `highergov.utils.riko` small
@@ -329,11 +324,12 @@ processing, benchmark against pandas, migrate only row-local transformations, re
 vectorized and dataframe-wide operations in pandas. The decision is based on memory and
 performance measurements, not line-count reduction.
 
-### Milestone HG-8 — Async Feed
+### Milestone HG-8 — Async Feed streaming & scheduler integration
 
-Then continue with `Feed = AsyncIterable[Item]`, lazy `AsyncPipe` chaining, AnyIO, bounded
-async map, merge, cancellation, timeout, and async source normalization. HigherGov's
-existing async OpenAI path can remain outside Riko until this milestone. See
+`Feed = AsyncIterable[Item]`, lazy async iteration, the AnyIO runtime, and bounded async `map`
+are already shipped (P7 + P10). HG-8 builds on them: the remaining async operators (concurrent
+`merge`, the ordered/unordered result-buffer fix), cancellation semantics, timeout composition,
+and async source normalization for HigherGov's async OpenAI path. See
 [Async Feed integration](#async-feed-integration) below for the Feed integration detail.
 
 ### Milestone HG-9 — RDP and Connect
@@ -345,7 +341,7 @@ rather than throwaway application validation.
 
 ## Dependency change
 
-HigherGov and current Riko both require Python 3.12+. Current Riko is version `0.69.0`.
+HigherGov and current Riko both require Python 3.12+. Current Riko is version `0.75.0`.
 During development, HigherGov should use a pinned Git revision or local workspace source:
 
 ```toml
@@ -495,11 +491,11 @@ flow = (
 )
 ```
 
-Preferable to `SyncPipe(parallel=True)` here because the containing script already has
-async-compatible dependencies, Feed provides bounded submission, cancellation is meaningful
-for long HTTP fetches, and results can be sent to Airtable in batches without waiting for
-every page. The callable still receives Riko's normal kwargs; there is no special context
-signature.
+Preferable to a `Pipeline` with `executor="thread"` here because the containing script already
+has async-compatible dependencies, Feed provides bounded submission with lazy semantics,
+cancellation is meaningful for long HTTP fetches, and results can be sent to Airtable in batches
+without waiting for every page. The callable still receives Riko's normal kwargs; there is no
+special context signature.
 
 ### 3. HigherGov API calls
 

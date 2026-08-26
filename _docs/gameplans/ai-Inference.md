@@ -935,7 +935,7 @@ checkpointer                     explicit state-store interface
 Riko already provides the main sequence abstraction through dynamic SyncPipe and AsyncPipe chaining. Each attribute access constructs another pipe whose source is the preceding pipe.
 
 > **`a | b` is literal, not just attribute chaining.** Native `__or__`/`__ror__` on
-> `SyncPipe`/`AsyncPipe` (planned in [module-enums.md § P9A.4](module-enums.md#p9a4--value-taking-chaining-pipe--__or__),
+> `SyncPipe`/`AsyncPipe` (shipped; see [module-enums.md](module-enums.md),
 > alongside a value-taking `.pipe("filter", …)`) makes `pipe | Transforms.FILTER` and
 > `data | pipe` the direct `RunnableSequence` equivalent for LCEL migrants. This lives **on the pipe
 > itself** — it does **not** reintroduce the forbidden `RikoRunnable` wrapper below; it is sugar over

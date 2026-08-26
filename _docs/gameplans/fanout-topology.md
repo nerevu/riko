@@ -286,50 +286,23 @@ Metrics should expose at least:
 
 The sync receiver priming requirement exposed generator-coroutine mechanics. F5 replaces it
 with a public subscription helper that owns priming and cleanup. It splits into **F5a** (the
-API shape — landed), **F5c** (`func` becomes a tap — next, independently landable), and
-**F5b** (subscription handles + teardown ownership — lands with P11).
+API shape), **F5c** (`func` becomes a tap, independently landable), and
+**F5b** (subscription handles + teardown ownership, with P11).
 
-### 9.1 Phase F5a — subscription API (landed)
+### 9.1 Phase F5a — subscription API
 
-`SyncPipe` gained a subscribe/publish pair that hides the hub entirely:
+`SyncPipe.subscribe`/`publish` (the public subscribe/publish pair with a non-blocking,
+marker-free drain) has landed; as-built detail is in
+[IMPLEMENTED.md](../IMPLEMENTED.md).
 
-```python
-receiver = SyncPipe.subscribe("alerts", func=alerted.append)
-sender = SyncPipe.publish(items, "alerts")
-flow = SyncPipe(source=items).publish("everything").filter(conf=...).publish("breaking")
-```
+The durable rationale that must not be reverted: **blocking is a property of the `Subscription`,
+not of `receive`** ([release-readiness.md § 2](release-readiness.md)). The in-process sync hub is a
+buffer you drain and never has to wait — it has **no producer/consumer concurrency**, so a blocking
+idle wait is unsatisfiable by construction; a broker-backed subscription blocks or polls because it
+has a real remote producer. Non-blocking is therefore the in-process default, and `blocking=True` +
+timeout is opt-in, owned by the `Subscription` implementations that need it (P11).
 
-* `subscribe` registers eagerly through `receive.register_receiver`, so no `next(receiver)`
-  priming call is needed and the coroutine is never visible to the caller.
-* `publish` is one descriptor serving both bindings — `SyncPipe.publish(source, *names)` on
-  the class, `flow.publish(*names)` on an instance (chaining to `send`).
-* **The drain is non-blocking.** `subscribe` pins `conf["max_wait"] = 0`, which makes
-  `parser`'s PENDING branch structurally unreachable: `total_waited` starts at 0, so an
-  empty queue always takes the stop branch before the sleep-and-yield branch. A subscribed
-  receiver therefore never emits a state marker and needs no filtering by the caller or by
-  the collection layer.
-
-The rationale for non-blocking is load-bearing and should not be reverted casually: the sync
-backend has **no producer/consumer concurrency**. `send` pushes only when the sender pipe is
-advanced, on the same thread. While a caller is blocked inside `next(receiver)` waiting for
-an item, nobody can push one — a blocking idle wait is unsatisfiable by construction and can
-only burn `max_wait` before giving up. PENDING existed to let a pull iterator over a push
-queue avoid blocking; removing the block removes the need for the marker.
-
-This generalizes rather than conflicting with the 1.0 contract: **blocking is a property of
-the `Subscription`, not of `receive`** ([release-readiness.md § 2](release-readiness.md)). The
-in-process sync hub is a buffer you drain and never has to wait; a broker-backed subscription
-blocks or polls because it has a real remote producer. Non-blocking is the default everywhere
-and `blocking=True` + timeout is opt-in, owned by the `Subscription` implementations that need
-it (P11) — so `max_wait=0` here is the permanent in-process default, not a stopgap.
-
-**Transitional, not an end state:** the raw `SyncPipe("receive", conf=...)` path still emits
-PENDING for interleaved manual stepping (`next(sender)` / `next(receiver)`), which is what
-`tests/public/test_collections.py` exercises. Two receive behaviors coexist **until F1/F4
-remove `PENDING` from the data stream entirely** — do not harden anything against the raw
-path's marker contract on the assumption that it is permanent.
-
-### 9.2 Phase F5b — subscription handles and teardown ownership (remaining)
+### 9.2 Phase F5b — subscription handles and teardown ownership
 
 > **Scope:** F5b lands **with** the `Publisher`/`Subscription` rewrite (P11 +
 > [release-readiness.md § 2](release-readiness.md)), not before it. The defect below is real
@@ -412,10 +385,10 @@ Exit tests:
   `test_send_signals_done_on_early_close` and `test_send_done_respects_channel_identity`,
   both of which are written against the `DONE` sentinel and need porting to closure semantics.
 
-### 9.3 Phase F5c — `receive`'s `func` becomes a tap (next)
+### 9.3 Phase F5c — `receive`'s `func` becomes a tap
 
-**Independent of F5b and landable now** — it touches only `receive`, not the hub, so it does
-not wait on the `Publisher`/`Subscription` rewrite. This is the next pub/sub step.
+Independent of F5b — it touches only `receive`, not the hub, so it does not wait on the
+`Publisher`/`Subscription` rewrite.
 
 Today `receive` applies `func` to each arriving item and queues **the return value**, so the
 receiver yields whatever `func` produced. That conflates two jobs:
@@ -681,9 +654,9 @@ F1  Streaming AsyncPipe receive
 F2  Binary conditional branch
 F3  Named N-way routing / partitioning
 F4  Per-subscriber buffers and overflow policy
-F5a Subscription lifecycle API (landed)
-F5c Receive `func` becomes a tap (next — independent of F5b)
-F5b Subscription handles + teardown ownership (lands with P11)
+F5a Subscription lifecycle API
+F5c Receive `func` becomes a tap (independent of F5b)
+F5b Subscription handles + teardown ownership (with P11)
 F6  Topology introspection / workflow representation
 F7  Branch-to-union/join ergonomic examples and contracts
 ```
