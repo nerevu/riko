@@ -1,4 +1,4 @@
-# Authoritative Riko Record and Enrichment Module Gameplan
+# Record & enrichment modules gameplan
 
 ## 1. Mission
 

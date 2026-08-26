@@ -1,4 +1,4 @@
-# Authoritative Riko Connector Implementation Gameplan
+# Connectors gameplan
 
 ## 1. Mission
 

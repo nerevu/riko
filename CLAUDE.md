@@ -46,7 +46,7 @@ This file holds the index plus the correctness invariants. Long-form detail live
 | `_docs/PHASE_CHECKLISTS.md` | **the P-track** — authoritative phase tracker (P1–P14) + per-phase detail, done-phase summaries, guiding decisions, "landing a phase" checklist. Live status lives only here |
 | `_docs/MILESTONES.md` | P-track companion — file maps, exit tests, M2 (P8–P14) design & sequencing |
 | `_docs/ROADMAP.md` | pure index: intro + the authoritative `## Gameplans` table + pointer to the P-track |
-| `_docs/gameplans/` | detailed implementation plans (index = ROADMAP's Gameplans table). `productionizing.md` and `repo-refinement.md` are retired redirect stubs |
+| `_docs/gameplans/` | detailed implementation plans (index = ROADMAP's Gameplans grouped tables). `productionizing.md` and `repo-refinement.md` are retired redirect stubs |
 | `_docs/DOCUMENTATION_STANDARD.md` | authoritative docstring/doctest/`__init__.py` standard |
 | `_docs/API_SURFACE.md` | **spec** — the three-tier import contract (STABLE `riko`/`riko.api`, EXTENSION `riko.ext`, PRIVATE) |
 | `docs/CHANGES.rst` | changelog; git tags = milestones (2026 refinement work = `v0.67.0`–`v0.72.0`). Entries are **1–3 lines, no code blocks, no implementation detail** — house style in `_docs/INTERNALS.md` § Tooling |

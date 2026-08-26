@@ -1,4 +1,4 @@
-# Reference-Data Consolidation Gameplan
+# Reference-data consolidation gameplan
 
 ## 1. Mission
 

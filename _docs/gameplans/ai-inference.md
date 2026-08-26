@@ -1,4 +1,4 @@
-# Inference
+# AI inference gameplan
 
 Riko should not depend on Langly or LangChain. Langly should be treated as a prototype containing useful patterns to reimplement natively in Riko.
 

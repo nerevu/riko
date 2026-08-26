@@ -1,4 +1,4 @@
-# Yahoo Pipes module documentation
+# Module documentation gameplan
 
 status.csv cannot be accurately regenerated from the current runtime catalog alone.
 

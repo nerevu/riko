@@ -1,4 +1,4 @@
-# Riko Fan-out, Routing, and Fan-in Gameplan
+# Fan-out, routing & fan-in gameplan
 
 ## 1. Mission
 

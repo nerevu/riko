@@ -1,4 +1,4 @@
-# Riko Execution Semantics Contract Gameplan
+# Execution semantics gameplan
 
 > **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level overview. This gameplan is the authoritative detail for the runtime execution-semantics contract — execution characteristics, async backpressure, timeout, union/merge, retry, errors/dispositions, filter semantics, and the batch model (ROADMAP §5–§8, §11–§13, §16). Section references like §N point back to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md) (the runtime contract); the numbered `## N.` headings are preserved so those references resolve.
 

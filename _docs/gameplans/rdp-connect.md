@@ -1,4 +1,4 @@
-# Riko Data Protocol (RDP) & Connect Gameplan
+# RDP & Connect gameplan
 
 > **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level overview. This gameplan is the authoritative detail for the RDP/Connect end-state contract — lineage/acknowledgements, the Riko Data Protocol, state, schema, batch transports, manifest durability, and the RDP/Connect implementation milestones (ROADMAP §14, §17–§21, §26). The active near-term work is tracked in [../PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) and [../MILESTONES.md](../MILESTONES.md). Section references like §N point back to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md) (the runtime contract); the numbered `## N.` headings are preserved so those references resolve.
 

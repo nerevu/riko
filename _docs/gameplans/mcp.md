@@ -1,4 +1,4 @@
-# Authoritative Riko MCP Implementation Gameplan
+# MCP gameplan
 
 ## 1. Mission
 

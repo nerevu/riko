@@ -1,4 +1,4 @@
-# Correctness audit — carrying the module sweep to the rest of the repo
+# Correctness audit gameplan
 
 ## 1. Mission
 

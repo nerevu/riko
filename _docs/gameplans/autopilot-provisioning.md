@@ -1,4 +1,4 @@
-# Riko Windows Autopilot New-Device Provisioning Gameplan
+# Windows Autopilot provisioning gameplan
 
 ## 1. Mission
 

@@ -1,4 +1,4 @@
-# Gameplan: Pre-1.0 DX Polish & Release Gate
+# Release readiness gameplan
 
 ## 1. Mission
 

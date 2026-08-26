@@ -1,4 +1,4 @@
-# Riko Gameplan Ownership
+# Gameplan ownership
 
 ## 1. Purpose
 

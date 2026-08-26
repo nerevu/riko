@@ -1,4 +1,4 @@
-# Riko Extensibility & Ecosystem Gameplan
+# Extensibility & ecosystem gameplan
 
 > **Provenance.** Extracted from `docs/ROADMAP.md` Part V so the roadmap can stay a
 > high-level overview. This gameplan is the authoritative extensibility/ecosystem plan

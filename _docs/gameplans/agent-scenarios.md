@@ -1,4 +1,4 @@
-# Riko Agent Scenarios, Tools, Retrieval, and Evaluation Gameplan
+# Agent scenarios gameplan
 
 ## 1. Mission
 
@@ -9,7 +9,7 @@ capability catalog and graph infrastructure.
 This plan extends:
 
 * `_docs/gameplans/agents.md` for agent-network topology and execution separation;
-* `_docs/gameplans/ai-Inference.md` for model invocation;
+* `_docs/gameplans/ai-inference.md` for model invocation;
 * `_docs/gameplans/mcp.md` for tool/capability policy;
 * `_docs/gameplans/connectors.md` for external resources.
 

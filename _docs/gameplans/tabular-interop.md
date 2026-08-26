@@ -1,4 +1,4 @@
-# Riko Tabular Interoperability Gameplan
+# Tabular interoperability gameplan
 
 ## 1. Mission
 

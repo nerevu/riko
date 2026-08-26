@@ -1,4 +1,4 @@
-# Riko Callable pipes Contract Gameplan
+# Callable pipes gameplan
 
 > **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level overview. This gameplan is the authoritative detail for the callable-pipe execution contract — the `Opts` execution-characteristic fields, the `@processor`/`@operator`/`@splitter` decorator model, `map`/`flat_map`, strict mode, and callable context / thread / process execution (ROADMAP §4). Section references like §N point back to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md) (the runtime contract); the numbered `## N.` headings are preserved so those references resolve.
 

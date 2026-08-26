@@ -1,4 +1,4 @@
-# Riko Provider Integration, Auth, and External Action Gameplan
+# Provider integrations gameplan
 
 ## 1. Mission
 

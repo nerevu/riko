@@ -1,4 +1,4 @@
-# Riko Azure and Microsoft Adapter Gameplan
+# Azure & Microsoft adapter gameplan
 
 ## 1. Mission
 

@@ -1,4 +1,4 @@
-# Riko HigherGov Delivery & Async Feed Gameplan
+# HigherGov feed gameplan
 
 > **Provenance.** Authoritative detail for the HigherGov-first critical path and the async
 > `Feed` integration it depends on. This gameplan owns HG-0…HG-9; see the

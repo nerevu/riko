@@ -1,4 +1,4 @@
-# Riko Microsoft Administration and Desired-State Automation Gameplan
+# Microsoft administration gameplan
 
 ## 1. Mission
 

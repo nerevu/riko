@@ -1,4 +1,4 @@
-# Riko Persistent Feed Monitoring and Change Detection Gameplan
+# Feed monitoring gameplan
 
 ## 1. Mission
 

@@ -1,4 +1,4 @@
-# Twisted Protocol Server Capabilities Gameplan
+# Twisted protocol servers gameplan
 
 ## 1. Mission
 

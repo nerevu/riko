@@ -1,4 +1,4 @@
-# Riko Artifact Conversion and Report Rendering Gameplan
+# Artifact conversion gameplan
 
 ## 1. Mission
 

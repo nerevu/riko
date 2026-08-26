@@ -1,4 +1,4 @@
-# Gameplan: P8 — Module Registry + Resolution Seam
+# Module registry & resolution seam gameplan
 
 > **Shipped (P8).** The registry, pipeline store, resolver façade, entry-point discovery, and
 > catalog integration are live: an external package adds modules without editing core, and runtime

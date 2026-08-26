@@ -1,4 +1,4 @@
-# Gameplan: Test-Suite Layering & Consolidation (P13)
+# Test-suite layering gameplan
 
 > **Scope:** owns **P13** ("public/typing/internal test split",
 > [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) § P13 tracker, [MILESTONES.md](../MILESTONES.md)

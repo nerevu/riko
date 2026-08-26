@@ -1,4 +1,4 @@
-# Gameplan: Module Registry (P8) + Enum Discoverability (P9A)
+# Module registry & enum discoverability gameplan
 
 > **Shipped (P9A.1–P9A.6; targeted for release v0.76.0):** the
 > `ModuleName` base + `normalize_module_name`, `derive_category` taxonomy, the
@@ -34,7 +34,7 @@ P8/P11/P12); it appears here only as the fake in-repo example extension that pro
   (`pipe.pipe("filter", conf=...)`), and (b) add a native **`__or__`/`__ror__`** so
   `pipe | "filter"` / `pipe | Transforms.FILTER` / `data | pipe` compose. Both are thin sugar
   over `_chain`, not a new object model. This is the literal **`RunnableSequence (a | b)`**
-  equivalent that [ai-Inference.md](ai-Inference.md) (the LangChain-replacement gameplan) maps —
+  equivalent that [ai-inference.md](ai-inference.md) (the LangChain-replacement gameplan) maps —
   and it stays on the pipe itself, **not** a forbidden `RikoRunnable` wrapper (that doc's key
   design rule).
 

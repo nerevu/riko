@@ -1,4 +1,4 @@
-# Gameplan: `bado` ↔ AnyIO 4.14 Alignment & Async Benchmarking
+# bado ↔ AnyIO alignment gameplan
 
 > **Scope:** An unsequenced refinement — not yet a P-track phase; touches the
 > P7 (true async streaming) and P10 (bounded parallelism/backpressure) as-built primitives without

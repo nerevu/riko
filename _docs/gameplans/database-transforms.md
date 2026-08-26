@@ -1,4 +1,4 @@
-# Authoritative Riko SQL and dbt Integration Gameplan
+# SQL & dbt integration gameplan
 
 ## 1. Mission
 
