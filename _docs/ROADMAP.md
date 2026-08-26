@@ -117,6 +117,7 @@ Every detailed plan lives under [gameplans/](gameplans/). The per-`§N` map is t
 | Gameplan | Covers |
 |---|---|
 | [ai-inference.md](gameplans/ai-inference.md) | AI inference — provider `infer` modules, embedding/retrieval adapters. |
+| [ai-inference-research.md](gameplans/ai-inference-research.md) | Prior-art research/ADR notes behind `ai-inference.md` (Langly/LangChain extraction + native-reimplementation sketches) — rationale, not an actionable plan. |
 | [agents.md](gameplans/agents.md) | Agent workflows — agent loop, tools. |
 | [agent-scenarios.md](gameplans/agent-scenarios.md) | Agent scenarios, tools, retrieval & evaluation — a deterministic, policy-aware scenario layer over the capability catalog; extends `agents.md` (topology), `ai-inference.md` (model calls), `mcp.md` (tool policy). |
 | [mcp.md](gameplans/mcp.md) | MCP server implementation. |
