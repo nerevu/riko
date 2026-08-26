@@ -7,7 +7,7 @@ sources and sinks without placing protocol clients, credentials, or a monolithic
 dispatcher in core.
 
 This plan promotes the useful parts of Shelf milestones 5, 6, 11, 12, and 13 while
-aligning them with AnyIO, `ExecutionContext`, the module registry, RDP, MCP policy, and
+aligning them with AnyIO, `Context`, the module registry, RDP, MCP policy, and
 one-shot pipeline semantics.
 
 ## 2. Package boundaries
@@ -15,7 +15,7 @@ one-shot pipeline semantics.
 ```text
 nerevu/riko
     SourcePlan and minimal resolver protocol, only if multiple packages need them
-    ExecutionContext resource lifecycle
+    Context resource lifecycle
     module/export registries
     Feed and one-shot execution
 
@@ -127,7 +127,7 @@ class Connector(Protocol):
     async def open(
         self,
         plan: SourcePlan,
-        context: ExecutionContext,
+        context: Context,
     ) -> Feed: ...
 ```
 
@@ -224,8 +224,10 @@ hash metadata, and bounded retries. API keys are credential references.
 ### 9.2 Prometheus exposition
 
 Parse the current exposition format through a maintained parser when available. Preserve
-metric name, labels, value, timestamp, and sample type. A scrape is finite; continuous
-monitoring belongs in orchestration.
+metric name, labels, value, timestamp, and sample type. A scrape is finite: the connector
+performs one bounded scrape. Scheduling *repeated* scrapes is orchestration's concern, and the
+recurring-observation/checkpoint state across scrapes is owned by
+[feed-monitoring.md](feed-monitoring.md).
 
 ### 9.3 Tabular files
 

@@ -149,43 +149,20 @@ Scenario tools are capability IDs:
 }
 ```
 
-The capability catalog supplies:
-
-```text
-input/output schema
-description
-side-effect/risk classification
-credential requirements
-rate/concurrency metadata
-policy tags
-```
+The capability catalog ([mcp.md § 6–§ 8](mcp.md)) supplies each tool's input/output schema,
+description, effect/risk classification, credential requirements, rate/concurrency metadata, and
+policy tags. Scenarios reference capability IDs and add no tool metadata of their own.
 
 No scenario may reference an import path and cause arbitrary callable loading from
 serialized configuration.
 
 ## 8. OpenAPI-derived tools
 
-AutoGen/Langly demonstrate that OpenAPI can generate useful tool schemas. Riko should reuse
-its MCP/OpenAPI capability machinery:
-
-```text
-trusted OpenAPI document
-→ parse + normalize operations
-→ policy review/allowlist
-→ capability records
-→ optional agent projection
-```
-
-Rules:
-
-* origin and document fingerprint are recorded;
-* network discovery is explicit;
-* newly discovered operations are not automatically executable;
-* destructive/write operations require policy classification;
-* auth is resolved separately through credential references;
-* generated schemas are cached/versioned only after validation.
-
-An agent can propose adding a capability; it cannot grant itself permission to execute it.
+OpenAPI-derived tools are discovered, normalized, fingerprinted, policy-gated, and versioned
+through the shared MCP/OpenAPI capability machinery owned by
+[mcp.md § 11 (discovery) and § 13 (security policy)](mcp.md) — scenarios do not restate those
+rules. The scenario-specific rule: an agent may *propose* adding a discovered capability, but it
+cannot grant itself permission to execute it (discovery never self-authorizes).
 
 ## 9. Tool caller/executor separation
 
