@@ -291,18 +291,6 @@ commands = [
     ["python", "-m", "riko.cli.manage", "lint", "--rst"],
 ]
 
-
-[tool.setuptools]
-packages = ["riko"]
-platforms = ["MacOS X", "Windows", "Linux"]
-
-[tool.setuptools.package-data]
-data = ["riko/data/*"]
-helpers = ["helpers/*"]
-tests = ["tests/*"]
-docs = ["*.rst", "docs/*"]
-examples = ["examples/*"]
-
 [tool.uv.build-backend]
 module-name = "riko"
 module-root = ""
