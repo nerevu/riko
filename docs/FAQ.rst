@@ -628,14 +628,29 @@ How do I send one stream to multiple consumers?
 -----------------------------------------------
 
 Use ``split`` for the simplest finite-stream copy. It eagerly materializes the
-entire ``source`` and returns identical iterators.
+entire ``source`` and returns identical iterators. Use ``publish`` and ``subscribe``
+for lazy in-process fan-out:
 
-Use ``send`` and ``receive`` for lazy in-process fan-out. Receivers must be
-created and primed before the sender is consumed. Consuming the main sender
-drives delivery to each named channel. This is an in-process coordination
-mechanism, not an external message broker.
+.. code-block:: python
 
-The `Cookbook`_ fan-out section include complete recipes for both approaches.
+    >>> from riko import SyncPipe
+    >>>
+    >>> items = [{"title": "quiet"}, {"title": "loud"}]
+    >>> subscriber = SyncPipe.subscribe("alerts")
+    >>>
+    >>> _ = list(SyncPipe.publish(items, "alerts"))
+    >>> [item["title"] for item in subscriber]
+    ['quiet', 'loud']
+
+``SyncPipe.subscribe`` registers the channel. Draining is non-blocking: a subscriber
+whose publisher has not run yields nothing rather than waiting. ``publish`` only pushes
+when *you* advance the publisher. Nothing published before you subscribe is replayed.
+
+``publish`` also chains. The main stream continues while a copy flows to each
+subscriber: ``SyncPipe(source=items).publish("archive").filter(conf=...)``.
+
+This is an in-process coordination mechanism, not an external message broker.
+The `Cookbook`_ fan-out section includes complete recipes for both approaches.
 
 Can I define a pipeline as JSON?
 --------------------------------

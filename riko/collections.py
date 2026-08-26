@@ -109,6 +109,8 @@ from typing import Any, Literal, Protocol, Self, TextIO, TypeGuard, cast, overlo
 
 import pygogo as gogo
 
+from riko.types.modules import ReceiveConf
+
 try:
     from csv2ofx.ofx import OFX
 except ModuleNotFoundError:
@@ -147,6 +149,7 @@ from riko.types.general import (
     Item,
     Items,
     ParserOutput,
+    ReceiveFunc,
     SkipIf,
     SplitterParserOutput,
     Stream,
@@ -339,6 +342,62 @@ class _PoolHandle:
             pool.terminate()
             pool.join()
             self.pool = None
+
+
+class _SendDispatcher:
+    """
+    Binds ``SyncPipe.publish`` to a class or instance form.
+
+    When called as a class method, ``publish`` seeds a new publisher from a source. When
+    called on an instance, it chains ``publish`` into the pipeline. Either way the items
+    pass through unchanged, so a publisher can sit mid-stream as well as terminate one.
+    """
+
+    def __get__(
+        self, obj: "SyncPipe | None", cls: "type[SyncPipe] | None" = None
+    ) -> "partial[SyncPipe]":
+        if cls is not None and obj is None:
+            method = partial(self.cls_send, cls)
+        elif obj is None:
+            raise TypeError("SyncPipe.publish must be called on a class or instance.")
+        else:
+            method = partial(self.inst_send, obj)
+
+        return method
+
+    def cls_send(self, cls: "type[SyncPipe]", source: Items, *names: str) -> "SyncPipe":
+        """
+        Returns a publisher that pushes source items to each named subscriber.
+
+        Raises:
+            TypeError: If no subscriber name is given.
+
+        Examples:
+            >>> items = [{"title": "Gravity paper"}, {"title": "riko 4.0"}]
+            >>> subscriber = SyncPipe.subscribe("papers")
+            >>> _ = list(SyncPipe.publish(items, "papers"))
+            >>> [item["title"] for item in subscriber]
+            ['Gravity paper', 'riko 4.0']
+
+        """
+        return cls("send", source, others=list(names))
+
+    def inst_send(self, obj: "SyncPipe", *names: str) -> "SyncPipe":
+        """
+        Returns a publisher that pushes a pipeline's items to each named subscriber.
+
+        Raises:
+            TypeError: If no subscriber name is given.
+
+        Examples:
+            >>> items = [{"title": "Gravity paper"}, {"title": "riko 4.0"}]
+            >>> subscriber = SyncPipe.subscribe("papers")
+            >>> _ = list(SyncPipe(source=items).publish("papers"))
+            >>> [item["title"] for item in subscriber]
+            ['Gravity paper', 'riko 4.0']
+
+        """
+        return obj._chain("send", others=list(names))
 
 
 def _settle_iter(current: Stream | None) -> Stream:
@@ -645,6 +704,8 @@ class SyncPipe(PyPipe):
 
     """
 
+    publish: _SendDispatcher = _SendDispatcher()
+
     def __init__(
         self,
         name: ModuleNameLike | None = None,
@@ -887,6 +948,86 @@ class SyncPipe(PyPipe):
         """
         return self._chain(name, **kwargs)
 
+    @classmethod
+    def subscribe(
+        cls,
+        name: str,
+        func: ReceiveFunc | None = None,
+        wait: float | None = None,
+        maxlen: int | None = None,
+        assign: str | None = None,
+        context: Context | None = None,
+        inputs: dict[str, Any] | None = None,
+        skip_if: Callable[[Item], bool] | None = None,
+        test: bool | None = None,
+        verbose: bool | None = None,
+        **kwargs: object,
+    ) -> "SyncPipe":
+        """
+        Returns a subscriber bound to a named channel.
+
+        Registers the subscriber. A publisher may publish to ``name`` before the
+        subscriber is drained and no priming call is needed. Draining is non-blocking:
+        the subscriber yields whatever the channel holds, then stops. It never emits a
+        ``StreamState`` marker, so the caller has nothing to filter out.
+
+        Nothing published before ``subscribe`` is replayed; buffering starts here.
+
+        Args:
+            name: Subscriber the publisher sends to.
+
+            func: Applied to each received item. The subscriber yields its return
+                value, so a ``func`` returning ``None`` yields ``None``.
+
+            wait: Seconds to sleep between polls. Applies only while a drain
+                blocks, which it currently never does.
+
+            maxlen: Queue capacity. The oldest item is dropped with a warning
+                once it is full (default: unbounded).
+
+            **kwargs: Passed to ``func``. Only the ones it names reach it, or
+                all of them if it accepts ``**kwargs``. ``conf``, ``assign``,
+                and ``stream`` are reserved and never forwarded.
+
+        Returns:
+            A one-shot pipe over the channel. Draining it a second time yields
+            nothing; subscribe again for another pass.
+
+        Examples:
+            >>> items = [{"title": "Gravity paper"}, {"title": "riko 4.0"}]
+            >>> subscriber = SyncPipe.subscribe("inbox")
+            >>>
+            >>> _ = list(SyncPipe.publish(items, "inbox"))
+            >>> [item["title"] for item in subscriber]
+            ['Gravity paper', 'riko 4.0']
+            >>> # An idle channel drains to nothing rather than waiting on the publisher
+            >>> list(SyncPipe.subscribe("quiet"))
+            []
+
+        """
+        from riko.modules.receive import register_receiver  # noqa: PLC0415
+
+        conf = ReceiveConf({"name": name, "max_wait": 0})
+        extra: dict[str, int | float | None] = {"wait": wait, "max_len": maxlen}
+
+        for key, value in extra.items():
+            if value is not None:
+                conf[key] = value
+
+        receiver = cls(
+            "receive",
+            conf=conf,
+            func=func,
+            assign=assign,
+            context=context,
+            inputs=inputs,
+            skip_if=skip_if,
+            test=test,
+            verbose=verbose,
+        )
+        register_receiver(name, maxlen=maxlen, func=func, **kwargs)
+        return receiver
+
     def _release_pool(self) -> None:
         if self._pool_handle:
             self._pool_handle.close()
@@ -900,8 +1041,8 @@ class SyncPipe(PyPipe):
         Releases the pipe by letting in-flight worker tasks finish.
 
         A borrowed pool is left alone and the one this pipe owns is shut down. A
-        bound sender still signals completion to its receivers, since a graceful
-        close means "no more items left to send".
+        bound publisher still signals completion to its subscribers, since a graceful
+        close means "no more items left to publish".
         """
         self._iter = _settle_iter(self._iter)
         self._release_pool()
@@ -986,9 +1127,9 @@ class SyncPipe(PyPipe):
             else:
                 yield from chain.from_iterable(self._mapped)
         except GeneratorExit:
-            # A graceful close is "no more items left to send", so a bound
-            # sender still signals DONE to its receivers; a real failure below
-            # must not, else a failed sender looks successfully complete.
+            # A graceful close is "no more items left to publish", so a bound
+            # publisher still signals DONE to its subscribers; a real failure below
+            # must not, else a failed publisher looks successfully complete.
             completed = True
             raise
         except BaseException:

@@ -392,6 +392,17 @@ Sync and async pub/sub are two hubs under `riko/_pubsub/` (state via `contextvar
 Ownership migrates to `Context.resources` (P11) before concurrent independent pipelines share a
 process. The eager async receiver (collect batch → `iter`) became an async generator in P7.3.
 
+`SyncPipe.subscribe`/`publish` (fanout-topology F5a) already hide the sync hub behind a public
+pair — eager registration, no `next()` priming, and a non-blocking marker-free drain
+(`max_wait=0`). P11's `Publisher`/`Subscription` should formalize *that* surface, not the raw
+`SyncPipe("receive", …)` one, and **blocking belongs to the `Subscription`, not to `receive`**
+— the in-process hub never has to wait, a broker-backed subscription does
+([release-readiness.md § 2](gameplans/release-readiness.md)). Teardown ownership is still wrong
+(an idle drain destroys the subscription instead of ending one pass); that is
+[F5b](gameplans/fanout-topology.md), **folded into this phase** rather than fixed first,
+because a local fix would build on the `DONE` sentinel and `send`'s `ids` dict that this
+rewrite deletes.
+
 ## Guiding & resolved decisions
 
 Folded in from the retired `REFINEMENT_PLAN.md`. Cross-phase decisions that survived implementation

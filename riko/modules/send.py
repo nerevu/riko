@@ -5,6 +5,9 @@ Pushes items to one or more named receivers.
 Pairs with the ``receive`` module for in-process fan-out: ``send`` publishes to the
 names listed in ``others`` and passes the items through unchanged.
 
+This is the low-level interface. ``riko.SyncPipe.publish`` is the high-level path, both as
+``SyncPipe.publish(items, "alerts")`` and as ``flow.publish("alerts")`` mid-chain.
+
 Examples:
     Basic usage::
 
@@ -34,7 +37,7 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko._pubsub import async_hub, send
+from riko._pubsub import async_hub, sync_hub
 from riko.bado.itertools import as_async
 from riko.modules._prepare import require_kwarg
 from riko.types.configs import SendObjconf
@@ -79,7 +82,7 @@ async def async_parser(
         ReceiverUnavailableError: If a target never starts within ``max_wait``.
 
     """
-    others: list[str] = require_kwarg(kwargs, "others", "send")
+    others: list[str] = require_kwarg(kwargs, "others", "send", strict=True)
     timeout = objconf.max_wait
     sent = []
 
@@ -136,12 +139,12 @@ def parser(
         {'x': 0}
 
     """
-    others: list[str] = require_kwarg(kwargs, "others", "send")
+    others: list[str] = require_kwarg(kwargs, "others", "send", strict=True)
     ids = cast(dict[str, int] | None, kwargs.get("ids"))
 
     for item in stream:
         for target in others:
-            target_id = send(target, item)
+            target_id = sync_hub.send(target, item)
 
             if ids is not None and target_id is not None:
                 ids[target] = target_id

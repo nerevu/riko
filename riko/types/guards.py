@@ -14,9 +14,11 @@ from riko._strutils import replacer
 from riko.types.general import Item
 from riko.types.modules import ConfArg
 from riko.types.values import (
+    MISSING,
     BasicList,
     BasicValue,
     BasicValueType,
+    MissingType,
     Sentinal,
     SentinalValue,
     StatefulItem,
@@ -34,8 +36,12 @@ def is_mapping[D, VT](val: Mapping[D, VT] | object) -> TypeIs[Mapping[D, VT]]:
     return success or (False if failure else isinstance(val, Mapping))
 
 
-def is_stateful_item[VT](val: Item | StatefulItem) -> TypeGuard[StatefulItem]:
+def is_stateful_item(val: Item | StatefulItem) -> TypeGuard[StatefulItem]:
     return isinstance(val.get("state"), StreamState) if is_mapping(val) else False
+
+
+def is_missing_type(val: Item | MissingType | None) -> TypeIs[MissingType]:
+    return val is MISSING
 
 
 def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT, ...]]:

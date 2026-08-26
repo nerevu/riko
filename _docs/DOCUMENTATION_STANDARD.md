@@ -310,6 +310,25 @@ Reducing a module docstring to a bare one-liner is a regression: the description
 may shrink, but the `Examples:` block stays. Package `__init__.py` files are the
 exception — see the `__init__.py` policy below.
 
+**Keep it user-facing.** A module docstring answers *what this is for* and *how
+to use it*. It is the first thing a reader sees, so it must not spend its space
+on mechanism. Leave out the data structures, sentinels, tokens, control flow,
+and cross-module call paths — those belong on the function or method that
+implements them, where a reader arrives already knowing what they are looking
+at. Design rationale, planned changes, and gameplan/phase references belong in
+`_docs/`, never in a docstring.
+
+```text
+Bad:   receivers are primed generators whose items land in a ``deque``;
+       completion uses a DONE sentinel plus per-receiver identity tokens.
+Good:  Delivers items to named receivers within a single synchronous run.
+```
+
+The test: if a sentence would stop being true after a refactor that changed no
+behavior, it is mechanism and does not belong. Applies to *any* module,
+underscore-prefixed or not — a private module's reader is still arriving cold,
+and a stale mechanism summary misleads faster than no summary at all.
+
 ### Private modules
 
 An underscore-prefixed module gets a module-level example **only when it has a

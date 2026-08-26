@@ -32,9 +32,16 @@ and the **same rules apply to sync and async**. Concretely (each maps to a topol
 
 - **Eager sync subscriptions — eliminate `next(receiver)` priming.** A `SyncSubscription`
   registered synchronously at construction; `SyncPipe("receive", …)` keeps working over it. (F5)
-- **Remove `PENDING` records from the data stream.** Replace poll-sleep-yield-`PENDING` with a
-  blocking `Condition`/`Queue` primitive; waiting is invisible; expose `subscription.state`/
-  `.closed`/timeout instead. Simplifies `Item` typing. (F1/F4)
+- **Remove `PENDING` records from the data stream.** Waiting is invisible; expose
+  `subscription.state`/`.closed`/timeout instead. Simplifies `Item` typing. **Blocking is a
+  property of the `Subscription`, not of `receive`** — the in-process sync hub is a buffer you
+  drain and never has to wait (`send` pushes on the calling thread, so a blocking wait there
+  could only ever be satisfied by the thread already blocked), while a broker-backed subscription
+  blocks or polls because it has a real remote producer. The *protocol* is therefore uniform
+  across sync and async and the in-process implementation simply never waits; a blocking
+  `Condition`/`Queue` primitive belongs to the `Subscription` implementations that need one, not
+  to `receive`. Non-blocking is the default everywhere, `blocking=True` + timeout is opt-in.
+  (F1/F4/F5a, + P11)
 - **Eliminate silent data loss.** Sync `send()` to a missing receiver must raise
   `ReceiverUnavailableError` (async already does); default buffers **lossless** (bounded blocking +
   timeout → typed backpressure/queue-full error); `drop_oldest`/`drop_newest` are explicit opt-ins. (F4)
@@ -42,12 +49,17 @@ and the **same rules apply to sync and async**. Concretely (each maps to a topol
   into a `Context` resource bag; `reset_pubsub()` becomes test-only. (F5, + `Context.resources`)
 - **Observable sync/async parity.** Make async `receive` a real async generator (first item before
   sender completion), matching sync's incremental streaming. (F1)
+- **A receive `func` is a tap, not a transform.** It runs at push time and its return value is
+  discarded; the receiver yields the item that arrived. Today the return is queued *instead of*
+  the item, so `func=append`/`print` put `None` on the stream and `func=len` puts an `int` —
+  neither an `Item`. Transforms stay `udf`'s job. (F5c)
 - **Subscription handles, not hidden id bookkeeping.** Replace `send`'s `ids` dict +
   `_notify_subscribers()` `DONE` sentinel with explicit generation/token ownership; completion =
   `subscription.close()`/channel closure. (F5)
 
 **Vocabulary (P1 of the doc):** `others`→`targets`, `max_len`→`buffer_size`,
-`max_wait`→`timeout`/`idle_timeout`, drop the sync-only `wait` interval. **Clean break, no
+`max_wait`→`timeout`/`idle_timeout`, `receive`'s `func`→`tap`/`on_item` (a misnomer once F5c
+discards the return), drop the sync-only `wait` interval. **Clean break, no
 deprecated aliases** — riko has no external consumers pre-1.0, so rename outright rather than
 carry a shim to 1.0. Export `ReceiverUnavailableError`/`DuplicateReceiverError`/the new
 backpressure error from `riko`/`riko.api`.

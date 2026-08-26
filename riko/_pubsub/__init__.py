@@ -1,71 +1,73 @@
 # vim: sw=4:ts=4:expandtab
 """
-Private pub/sub backends: a synchronous generator/deque hub and an asynchronous
-AnyIO-channel hub, exposed as two module-level instances. Ownership is
-process-wide for now (preserving the current receiver-name namespace and
-independent-pipe construction); it will migrate to execution-scoped
-``Context.resources`` before concurrent independent pipelines share a process.
-``reset_pubsub`` exists for test isolation only — runtime correctness does not
+Internal pub/sub backends.
+
+Delivers items from ``send`` to the named receivers that ``receive`` drains, one
+hub per execution model: ``sync_hub`` for synchronous pipelines and
+``async_hub`` for asynchronous ones. The two are independent — a sync sender
+cannot reach an async receiver.
+
+``reset_pubsub`` exists for test isolation only; runtime correctness does not
 depend on it.
 """
 
-from collections.abc import Callable, Generator
+from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-from riko.types.general import Item
-from riko.types.values import StatefulItem
+from riko.types.general import Receiver
 
-from ._async import AsyncPubSubHub, SubscriptionState
+from ._async import AsyncPubSubHub
 from ._sync import SyncPubSubHub
 
 sync_hub = SyncPubSubHub()
 async_hub = AsyncPubSubHub()
 
 
-__all__ = [
-    "AsyncPubSubHub",
-    "SubscriptionState",
-    "SyncPubSubHub",
-    "async_hub",
-    "close",
-    "coroutine",
-    "reset_pubsub",
-    "send",
-    "sync_hub",
-]
+__all__ = ["async_hub", "coroutine", "reset_pubsub", "sync_hub"]
 
 
 def reset_pubsub() -> None:
+    """
+    Clears both hubs.
+
+    For test isolation only. The conftest fixtures call it around every test. Runtime
+    correctness does not depend on it.
+    """
     sync_hub.reset()
     async_hub.reset()
 
 
-def send(target: str, item: Item | StatefulItem) -> int | None:
-    return sync_hub.send(target, item)
-
-
-def close(name: str) -> None:
-    sync_hub.close(name)
-
-
 def coroutine(
-    registry_name: str | None = None, maxlen: int = 256
-) -> Callable[
-    [Callable[..., Generator[None, Item | StatefulItem, None]]],
-    Callable[..., Generator[None, Item | StatefulItem, None]],
-]:
-    """Decorator for generator-based coroutines."""
+    registry_name: str | None = None, maxlen: int | None = None
+) -> Callable[[Callable[..., Receiver]], Callable[..., Receiver]]:
+    """
+    Returns a decorator that registers a generator as a sync receiver.
 
-    def decorator(
-        func: Callable[..., Generator[None, Item | StatefulItem, None]],
-    ) -> Callable[..., Generator[None, Item | StatefulItem, None]]:
+    Calling the decorated function primes the generator to its first ``yield`` and
+    registers it with ``sync_hub``. It is ready to be pushed to before the caller does
+    anything else. The generator itself is returned, not the hub entry.
+
+    Args:
+        registry_name: Channel to register under. Defaults to the decorated
+            function's name, which is only useful for a module-level receiver.
+
+        maxlen: Queue capacity. ``None`` is unbounded; a full bounded queue
+            drops its oldest item.
+
+    Raises:
+        ValueError: If ``maxlen`` is set below 1. A ``0``-length queue would
+            silently discard every item.
+
+    """
+    if maxlen is not None and maxlen < 1:
+        raise ValueError("maxlen must be greater than 0")
+
+    def decorator(func: Callable[..., Receiver]) -> Callable[..., Receiver]:
         name = registry_name or func.__name__
 
         @wraps(func)
-        def wrapper(
-            *args: Any, **kwargs: object
-        ) -> Generator[None, Item | StatefulItem, None]:
+        def wrapper(*args: Any, **kwargs: object) -> Receiver:
             gen = func(*args, **kwargs)
             next(gen)
             sync_hub.seed(name, gen, maxlen)

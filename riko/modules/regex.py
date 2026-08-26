@@ -38,15 +38,13 @@ from riko.dotdict import DotDict
 from riko.types.configs import RegexObjconf
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import RegexConfRule, RegexRule
-from riko.types.values import RikoValue
+from riko.types.values import MISSING, RikoValue
 
 from . import processor
 
 OPTS: Opts = {"listize": True, "extract": "rule", "emit": True}
 DEFAULTS: Defaults = {"multi": False}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
-
-_MISSING = object()
 
 
 async def async_parser(
@@ -94,9 +92,9 @@ async def async_parser(
 
     async def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict[RikoValue]:
         field = rules[0]["field"]
-        word = item.get(field, _MISSING, **kwargs)
+        word = item.get(field, MISSING, **kwargs)
 
-        if word is _MISSING or word is None:
+        if word is MISSING or word is None:
             replacement = word
         elif multi:
             grouped = group_by(rules, "flags")
@@ -105,7 +103,7 @@ async def async_parser(
         else:
             replacement = await coop_reduce(substitute, rules, str(word))
 
-        rewritten = {} if replacement is _MISSING else {field: replacement}
+        rewritten = {} if replacement is MISSING else {field: replacement}
         result = DotDict({**item, **rewritten})
         return cast(DotDict[RikoValue], result)
 
@@ -156,9 +154,9 @@ def parser(
 
     def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict[RikoValue]:
         field = str(rules[0]["field"])
-        word = item.get(field, _MISSING, **kwargs)
+        word = item.get(field, MISSING, **kwargs)
 
-        if word is _MISSING or word is None:
+        if word is MISSING or word is None:
             replacement = word
         elif multi:
             grouped = group_by(rules, "flags")
@@ -167,7 +165,7 @@ def parser(
         else:
             replacement = reduce(substitute, rules, str(word))
 
-        rewritten = {} if replacement is _MISSING else {field: replacement}
+        rewritten = {} if replacement is MISSING else {field: replacement}
         result = DotDict({**item, **rewritten})
         return cast(DotDict[RikoValue], result)
 

@@ -24,6 +24,7 @@ Planned** (nothing ships yet). Find any `§N` via the [ROADMAP §-index](ROADMAP
 - [13. Filter semantics (shipped)](#13-filter-semantics-shipped)
 - [23. AnyIO runtime (shipped)](#23-anyio-runtime-shipped)
 - [24. Module discovery (shipped)](#24-module-discovery-shipped)
+- [Subscription lifecycle — `subscribe` / `publish` (F5a, partial)](#subscription-lifecycle--subscribe--publish-f5a-partial)
 - [25. Conversion — export converters (shipped)](#25-conversion--export-converters-shipped)
 
 ---
@@ -279,6 +280,47 @@ async). Tests: `tests/internal/test_decorators.py`.
 be a `str` or `ModuleName` member anywhere, normalized to its canonical string at the boundary. The
 generated `Modules` tree (P9A) shipped — `pipe | Transforms.FILTER` resolves identically to
 `pipe.filter()`; see §24.
+
+## Subscription lifecycle — `subscribe` / `publish` (F5a, partial)
+
+> **Partial.** `func` becomes a tap → [fanout-topology.md § 9.3 (F5c)](gameplans/fanout-topology.md), next.
+> Subscription handles + teardown ownership → [§ 9.2 (F5b)](gameplans/fanout-topology.md), landing with P11.
+
+`SyncPipe` ships a subscribe/publish pair that hides the pub/sub hub from callers:
+`SyncPipe.subscribe(name, func=…, wait=…, maxlen=…)` registers eagerly via
+`receive.register_receiver`, so the old `next(receiver)` priming call — which leaked
+generator-coroutine mechanics — is gone. `publish` is a single descriptor serving both
+bindings: `SyncPipe.publish(source, *names)` on the class and `flow.publish(*names)` on an
+instance (chaining to `send`).
+
+**The subscribed drain is non-blocking and marker-free.** `subscribe` pins
+`conf["max_wait"] = 0`, which makes `receive.parser`'s PENDING branch structurally
+unreachable — `total_waited` starts at 0, so an empty queue always takes the stop branch
+before the sleep-and-yield branch. Callers never see a `StreamState` marker and nothing
+filters the stream. This is sound because the sync backend has no producer/consumer
+concurrency: `send` pushes only when the sender pipe is advanced, on the same thread, so a
+blocking idle wait could never be satisfied anyway. Per
+[release-readiness.md § 2](gameplans/release-readiness.md), blocking is a property of the
+`Subscription` rather than of `receive`, so this is the permanent in-process default and not
+a stopgap.
+
+The raw `SyncPipe("receive", conf=…)` path is unchanged and still emits PENDING for
+interleaved manual stepping. The two behaviors coexist **transitionally**, until F1/F4 remove
+`PENDING` from the data stream entirely.
+
+**`func` queues its return value, not the received item.** So `func=archived.append` yields
+`None` per item and `func=len` yields an `int` — neither an `Item`, which is why
+`receive.pipe`'s declared return does not satisfy `SyncOperatorParser`, and why chaining
+(`subscribe("x", func=…).sort()`) yields `{'content': None}`. F5c makes `func` a tap and
+resolves both; the pyright error is a symptom, so **do not silence it by widening
+`OperatorParserOutput`** — see [§ 9.3](gameplans/fanout-topology.md).
+
+**Known gap (F5b):** `receive.parser` calls `close(name)` on idle expiry as well as on DONE,
+and `SyncPubSubHub.close` pops receiver, queue, and id together — so an empty drain destroys
+the subscription rather than ending one pass, and the sender's bound id goes stale. Deferred
+deliberately: every mechanism a local fix would build on (the `DONE` sentinel, `send`'s `ids`
+dict) is slated for deletion by the `Publisher`/`Subscription` rewrite, so it lands with P11.
+A `strict` xfail in `tests/public/test_collections.py` marks it.
 
 ## 25. Conversion — export converters (shipped)
 

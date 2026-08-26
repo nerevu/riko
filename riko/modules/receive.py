@@ -5,6 +5,11 @@ Receives items pushed by the send module.
 Pairs with ``send`` for in-process fan-out: ``receive`` subscribes to a sender as named
 ``others``.
 
+This is the low-level interface: it must be primed (the first ``next()`` registers the
+channel) and it emits a ``StreamState.PENDING`` marker on every poll that finds the queue
+empty, so a caller has to filter those out. ``riko.SyncPipe.subscribe`` is the high-level
+path — it registers up front and drains without ever emitting a marker.
+
 Examples:
     Basic usage::
 
@@ -30,7 +35,7 @@ Attributes:
 
 """
 
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import Callable, Iterator
 from inspect import signature
 from logging import Logger
 from time import sleep
@@ -39,62 +44,76 @@ from typing import Any, cast
 import pygogo as gogo
 from meza.fntools import dfilter
 
-from riko._pubsub import async_hub, close, coroutine, sync_hub
+from riko._pubsub import async_hub, coroutine, sync_hub
 from riko._strutils import gen_name
 from riko.cast import BasicCastType
 from riko.types.configs import ReceiveObjconf
-from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
-from riko.types.guards import is_stateful_item
-from riko.types.values import StatefulItem, StreamState
+from riko.types.general import (
+    Defaults,
+    Item,
+    Opts,
+    PipeTuples,
+    ReceiveFunc,
+    Receiver,
+    Stream,
+    StreamOrValueStream,
+)
+from riko.types.guards import is_missing_type, is_stateful_item
+from riko.types.values import MISSING, StatefulItem, StreamState
 
 from . import operator
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "pollable": True}
-DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5}
+DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5, "max_len": 256}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def _apply(
-    func: Callable[[Item | StatefulItem], Item],
-    item: Item | StatefulItem,
-    **fkwargs: object,
-) -> Item | None:
-    if not is_stateful_item(item):
-        try:
-            params = signature(func).parameters
-        except (TypeError, ValueError):
-            kwargs = {}
+def _apply(func: ReceiveFunc, item: Item, **fkwargs: object) -> Item | None:
+    try:
+        params = signature(func).parameters
+    except (TypeError, ValueError):
+        kwargs = {}
+    else:
+        if any(p.kind == p.VAR_KEYWORD for p in params.values()):
+            kwargs = fkwargs
         else:
-            if any(p.kind == p.VAR_KEYWORD for p in params.values()):
-                kwargs = fkwargs
-            else:
-                kwargs = {k: v for k, v in fkwargs.items() if k in params}
+            kwargs = {k: v for k, v in fkwargs.items() if k in params}
 
-        return func(item, **kwargs)
+    return func(item, **kwargs)
 
 
-def _register_receiver(name, objconf, func, kwargs) -> None:
+def register_receiver(
+    name: str,
+    maxlen: int | None = None,
+    func: ReceiveFunc | None = None,
+    **kwargs: object,
+) -> None:
     # See https://github.com/ICRAR/ijson#push-interfaces
     if name not in sync_hub.receivers:
         fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
 
-        @coroutine(registry_name=name, maxlen=objconf.max_len)
-        def receiver() -> Generator[None, Item | StatefulItem, None]:
+        @coroutine(registry_name=name, maxlen=maxlen)
+        def receiver() -> Receiver:
             while True:
                 item = yield
 
                 if item is not None:
-                    state = item["state"] if is_stateful_item(item) else None
-                    result = _apply(func, item, **fkwargs) if func else item
-                    queue = sync_hub.queues[name]
-                    maxlen = queue.maxlen if queue else None
+                    if is_stateful_item(item):
+                        state = item["state"]
+                        result = MISSING
+                    else:
+                        state = None
+                        item = cast(Item, item)
+                        result = _apply(func, item, **fkwargs) if func else item
 
-                    if maxlen is not None and len(queue) >= maxlen:
-                        msg = f"Receiver {name!r} queue full ({maxlen=}); "
+                    queue = sync_hub.queues[name]
+
+                    if queue.maxlen is not None and len(queue) >= queue.maxlen:
+                        msg = f"Receiver {name!r} queue full (maxlen={queue.maxlen}); "
                         msg += "dropping oldest item."
                         logger.warning(msg)
 
-                    queue.append((state, cast(Item, result)))
+                    queue.append((state, result))
 
         receiver()
 
@@ -103,7 +122,7 @@ async def async_parser(
     _: Stream,
     objconf: ReceiveObjconf,
     tuples: PipeTuples,
-    func: Callable[[Item | StatefulItem], Item] | None = None,
+    func: Callable[[Item], Item] | None = None,
     **kwargs: object,
 ) -> Stream:
     """
@@ -116,8 +135,9 @@ async def async_parser(
         objconf: The pipe configuration, containing `name`.
         tuples: Iterable of (item, objconf). Unused.
 
-        func: Applied to each received item. Only the kwargs it declares are
-            passed (default: None).
+        func: Applied to each received item. It gets the kwargs it names, or
+            all of them if it accepts ``**kwargs``. The pipe's own ``conf``,
+            ``assign``, and ``stream`` are always withheld (default: None).
 
     Returns:
         Every item received before the sender finished.
@@ -138,9 +158,9 @@ def parser(
     _: Stream,
     objconf: ReceiveObjconf,
     tuples: PipeTuples,
-    func: Callable[[Item | StatefulItem], Item] | None = None,
+    func: Callable[[Item], Item | None] | None = None,
     **kwargs: object,
-) -> Stream | Iterator[StatefulItem]:
+) -> StreamOrValueStream | Iterator[StatefulItem]:
     """
     Yields items as the sender pushes them.
 
@@ -152,8 +172,9 @@ def parser(
 
         tuples: Iterable of (item, objconf). Unused.
 
-        func: Applied to each received item. Only the kwargs it declares are
-            passed (default: None).
+        func: Applied to each received item. It gets the kwargs it names, or
+            all of them if it accepts ``**kwargs``. The pipe's own ``conf``,
+            ``assign``, and ``stream`` are always withheld (default: None).
 
     Yields:
         Each received item, or ``StreamState.PENDING`` while waiting. Stops
@@ -181,7 +202,7 @@ def parser(
     wait = objconf.wait
     max_wait = objconf.max_wait
     total_waited = 0
-    _register_receiver(name, objconf, func, kwargs)
+    register_receiver(name, maxlen=objconf.max_len, func=func, **kwargs)
 
     while True:
         if _buf := sync_hub.queues[name]:
@@ -189,12 +210,12 @@ def parser(
             state, result = _buf.popleft()
 
             if state is StreamState.DONE:
-                close(name)
+                sync_hub.close(name)
                 break
-            else:
+            elif not is_missing_type(result):
                 yield result
         elif total_waited >= max_wait:
-            close(name)
+            sync_hub.close(name)
             break
         else:
             sleep(wait)
@@ -221,7 +242,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Kwargs:
         func (callable): Applied to each received item before it is yielded.
-            Only the kwargs it declares are passed (default: None).
+            It gets the kwargs it names, or all of them if it accepts
+            ``**kwargs``. The pipe's own ``conf``, ``assign``, and ``stream``
+            are always withheld (default: None).
 
     Yields:
         Every item received before the sender finished.
@@ -235,7 +258,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream | Iterator[StatefulItem]:
+def pipe(*args: Any, **kwargs: object) -> StreamOrValueStream | Iterator[StatefulItem]:
     """
     Receives items pushed by the send module.
 
@@ -256,17 +279,25 @@ def pipe(*args: Any, **kwargs: object) -> Stream | Iterator[StatefulItem]:
                 giving up (default: 5).
 
             max_len (int): Queue capacity. The oldest item is dropped with a
-                warning when full (default: unbounded).
+                warning when full (default: 256).
 
         context (Context): the execution context
 
     Kwargs:
         func (callable): Applied to each received item before it is yielded.
-            Only the kwargs it declares are passed (default: None).
+            It gets the kwargs it names, or all of them if it accepts
+            ``**kwargs``. The pipe's own ``conf``, ``assign``, and ``stream``
+            are always withheld (default: None).
 
     Yields:
         - each received item as the sender pushes it
         - ``{"state": StreamState.PENDING}`` while waiting
+
+    Notes:
+        The marker exists so a poll on an empty queue neither blocks nor ends
+        the stream. Setting ``max_wait`` to 0 makes the drain non-blocking
+        instead, which renders the marker unreachable — that is what
+        ``riko.SyncPipe.subscribe`` does.
 
     Examples:
         >>> from riko.modules.send import pipe as sender

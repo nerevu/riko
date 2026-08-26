@@ -37,13 +37,13 @@ from riko.dotdict import is_mapping
 from riko.modules._prepare import require_kwarg
 from riko.types.configs import JoinObjconf
 from riko.types.general import Defaults, Item, Items, Opts, PipeTuples, Stream
+from riko.types.values import MISSING
 
 from . import operator
 
 OPTS: Opts = Opts()
 DEFAULTS: Defaults = {"join_key": None, "lower": False}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
-_MISSING = object()
 
 
 def parser(
@@ -102,9 +102,9 @@ def parser(
 
     def compare(x: Item, y: Item, x_key: str, y_key: str) -> bool:
         if isinstance(x, Mapping) and isinstance(y, Mapping):
-            x_value, y_value = x.get(x_key, _MISSING), y.get(y_key, _MISSING)
+            x_value, y_value = x.get(x_key, MISSING), y.get(y_key, MISSING)
 
-            if x_value is _MISSING or y_value is _MISSING:
+            if x_value is MISSING or y_value is MISSING:
                 equal = False
             elif (
                 objconf.lower and isinstance(x_value, str) and isinstance(y_value, str)

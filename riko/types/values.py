@@ -15,6 +15,14 @@ if TYPE_CHECKING:
 
 
 # Misc
+class MissingType:
+    def __repr__(self) -> str:
+        return "<MISSING>"
+
+
+MISSING = MissingType()
+
+
 class StreamState(Enum):
     PENDING = auto()
     DONE = auto()

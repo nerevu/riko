@@ -36,6 +36,7 @@ from riko.dotdict import DotDict
 from riko.types.configs import RenameObjconf
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import RenameConfRule
+from riko.types.values import MISSING
 
 from . import processor
 
@@ -44,14 +45,11 @@ DEFAULTS: Defaults = {}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-_MISSING = object()
-
-
 def reducer(item: Item, rule: RenameConfRule) -> Item:
-    value = DotDict(item).get(rule.field, _MISSING)
+    value = DotDict(item).get(rule.field, MISSING)
     reduced = DotDict(item if rule.copy else remove_keys(item, rule.field))
 
-    if rule.newval and value is not _MISSING:
+    if rule.newval and value is not MISSING:
         reduced.update({rule.newval: value})
 
     return cast(Item, reduced)

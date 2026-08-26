@@ -39,6 +39,7 @@ from riko.bado import (
     create_memory_object_stream,
     create_task_group,
 )
+from riko.types.values import MISSING
 
 
 def _cap[T, S](
@@ -246,9 +247,8 @@ async def async_map[T, S](
         raise ValueError("connections cannot be negative")
 
     _func = _cap(partial(func, **kwargs) if kwargs else func, budget)
-    _missing = object()
     items = list(content)
-    results: list[S | object] = [_missing] * len(items)
+    results: list[S | object] = [MISSING] * len(items)
     limiter = CapacityLimiter(connections) if connections else None
 
     async def work(index: int, item: T) -> None:
@@ -262,7 +262,7 @@ async def async_map[T, S](
         for index, item in enumerate(items):
             tg.start_soon(work, index, item)
 
-    return [cast(S, r) for r in results if r is not _missing]
+    return [cast(S, r) for r in results if r is not MISSING]
 
 
 async def _pool_stream[T, S](

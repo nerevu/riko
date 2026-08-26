@@ -678,60 +678,35 @@ Fanning out a stream
 Sometimes you need to consume the same ``stream`` from multiple independent pipelines.
 For example, archiving every item while also sending urgent items, to an alert queue.
 Consuming the iterator twice would exhaust it, and materialising it into a list defeats
-lazy evaluation. ``riko`` solves this with the ``send`` and ``receive`` pipes.
-
-- ``send`` is a transparent pass-through ``operator``: it yields every item
-  unchanged while pushing a copy to one or more named channels.
-- ``receive`` is an independent pull iterator that drains a named receiver as items
-  arrive.
-
-Under the hood, each ``receiver`` is a generator-based coroutine (the same
-push pattern used by `ijson`_). ``send`` calls ``.send(item)`` on the primed
-coroutine directly.
+lazy evaluation. ``riko`` solves this with ``publish`` and ``subscribe``:
 
 .. code-block:: python
 
     >>> from riko import SyncPipe, Transforms
     >>>
     >>> items = [{'title': 'Gravity paper'}, {'title': 'Breaking: riko 4.0'}]
+    >>> subscriber = SyncPipe.subscribe('subscriber')
+    >>> publisher = SyncPipe.publish(items, 'subscriber')
     >>>
-    >>> ### Prime a named receiver ###
-    >>> receiver = SyncPipe(Transforms.RECEIVE, conf={'name': 'receiver'})
-    >>> next(receiver)
-    {'state': <StreamState.PENDING: 1>}
+    >>> ### Consuming the publisher drives the push ###
+    >>> _ = list(publisher)
     >>>
-    >>> ### sender pushes items to 'receiver' ###
-    >>> sender = SyncPipe(Transforms.SEND, items, others=['receiver'])
-    >>>
-    >>> ### Consuming the sender drives the push ###
-    >>> _ = list(sender)
-    >>>
-    >>> ### Drain the receiver independently ###
-    >>> # Note: an idle receiver yields a `PENDING` and `DONE` state markers, so filter
-    >>> # for real items when draining
-    >>> [item['title'] for item in receiver if 'title' in item]
+    >>> ### Drain the subscriber independently ###
+    >>> [item['title'] for item in subscriber]
     ['Gravity paper', 'Breaking: riko 4.0']
 
-``send`` composes naturally in a ``SyncPipe`` chain via ``.send(others=[...])``.
+``publish`` composes naturally in a ``SyncPipe`` chain via ``.publish(...)``.
 The stream continues down the main pipeline while a copy flows to each named
-receiver:
+subscriber:
 
 .. code-block:: python
 
     >>> from riko import SyncPipe, Transforms
     >>>
     >>> ### `archive` and `notify` stand in for your real side effects ###
-    >>> #
-    >>> # Note: a receive `func` automatically filters away state markers, e.g., `PENDING`
     >>> archived, alerted = [], []
-    >>>
-    >>> ### Prime two named channels ###
-    >>> everything = SyncPipe(Transforms.RECEIVE, conf={'name': 'everything'}, func=archived.append)
-    >>> next(everything)
-    {'state': <StreamState.PENDING: 1>}
-    >>> breaking = SyncPipe(Transforms.RECEIVE, conf={'name': 'breaking'}, func=alerted.append)
-    >>> next(breaking)
-    {'state': <StreamState.PENDING: 1>}
+    >>> everything = SyncPipe.subscribe('everything', func=archived.append)
+    >>> breaking = SyncPipe.subscribe('breaking', func=alerted.append)
     >>>
     >>> items = [
     ...     {'title': 'quiet', 'score': 42},
@@ -742,9 +717,9 @@ receiver:
     >>> ### Send ALL items to 'everything', filter, then send matches to 'breaking' ###
     >>> flow = (
     ...     SyncPipe(source=items)
-    ...         .send(others=['everything'])
+    ...         .publish('everything')
     ...         .filter(conf={'rule': [{'field': 'score', 'value': 500, 'op': 'greater'}]})
-    ...         .send(others=['breaking'])
+    ...         .publish('breaking')
     ...         .sort(conf={'rule': [{'field': 'score'}]})
     ... )
     >>>
@@ -752,27 +727,26 @@ receiver:
     >>> [item['title'] for item in flow]  # sorted high score items
     ['also big', 'breaking: riko 4.0']
     >>>
-    >>> ### Drain each receiver: each `func` runs as items arrive ###
-    >>> # When passed `func`, receivers contain the func return value. In this case, our
-    >>> # funcs mutate lists, so we don't care about the return results.
-    >>> _ = list(everything)
+    >>> ### Subscriber funcs already ran as items were published ###
     >>> [item['title'] for item in archived]  # all items in original order
     ['quiet', 'breaking: riko 4.0', 'also big']
-    >>> _ = list(breaking)
     >>> [item['title'] for item in alerted]  # high score items in original order
     ['breaking: riko 4.0', 'also big']
+    >>>
+    >>> ### Drain and discard subscriber output after publishing is complete ###
+    >>> _ = list(breaking)
+    >>> _ = list(everything)
 
-Multiple receivers can listen on different channels from the same ``send`` call by
-passing additional names to ``others``:
+You can publish to multiple subscribers by passing additional names:
 
 .. code-block:: python
 
-    >>> sender = SyncPipe(Transforms.SEND, items, others=['breaking', 'archive', 'metrics'])
+    >>> publisher = SyncPipe.publish(items, 'breaking', 'archive', 'metrics')
 
-Each receiver is drained independently; draining one does not affect the others.
+Each subscriber is drained independently; draining one does not affect the others.
 
-``split`` vs ``send``/``receive``
-''''''''''''''''''''''''''''''''''
+``split`` vs ``publish``/``subscribe``
+''''''''''''''''''''''''''''''''''''''
 
 ``riko`` also has a ``split`` pipe that copies a stream for multiple consumers:
 
@@ -787,11 +761,11 @@ Each receiver is drained independently; draining one does not affect the others.
 
 The difference between them is that ``split`` calls ``list(stream)`` internally, so it
 **eagerly materializes** the ``stream`` into memory before handing out copies.
-``send``/``receive`` are **lazy**: each item is pushed to receivers as it passes
+``publish``/``subscribe`` are **lazy**: item are pushed to subscribers as it passes
 through, with no upfront buffering.
 
 +-------------------------------+---------------------------+----------------------------+
-| Dimension                     | ``split``                 | ``send`` / ``receive``     |
+| Dimension                     | ``split``                 | ``publish`` / ``subscribe``|
 +===============================+===========================+============================+
 | Evaluation                    | Eager — full stream in    | Lazy — one item at a time  |
 |                               | memory before any copy    |                            |
@@ -807,22 +781,22 @@ through, with no upfront buffering.
 +-------------------------------+---------------------------+----------------------------+
 | Infinite / very large streams | Hangs or OOM              | Works                      |
 +-------------------------------+---------------------------+----------------------------+
-| API                           | Returns N iterators       | Receivers primed upfront;  |
-|                               | in one call               | drained independently      |
+| API                           | Returns N iterators       | Subscribers drained        |
+|                               | in one call               | independently              |
 +-------------------------------+---------------------------+----------------------------+
 | Transform per branch          | No. Identical copies.     | Yes. ``func=`` in each     |
-|                               |                           | ``receive``                |
+|                               |                           | ``subscribe``              |
 +-------------------------------+---------------------------+----------------------------+
-| SyncPipe chain                | Returns N streams;        | ``.send(others=[...])``    |
-|                               | not chainable             | stays in the chain         |
+| SyncPipe chain                | Returns N streams;        | ``.publish(...)`` stays in |
+|                               | not chainable             | the chain                  |
 +-------------------------------+---------------------------+----------------------------+
 
 **Use** ``split`` when the stream is small and finite and you want the simplest
 possible API.
 
-**Use** ``send``/``receive`` when the stream is large, potentially infinite, or
+**Use** ``publish``/``subscribe`` when the stream is large, potentially infinite, or
 when the main pipeline must stay lazy (e.g., inside a ``timeout`` or ``truncate``
-composer). ``receive`` also lets you apply a different transform (``func``)
+composer). ``subscribe`` also lets you apply a different transform (``func``)
 to the branched items without touching the main flow.
 
 .. _ijson: https://github.com/ICRAR/ijson/blob/master/notes/design_notes.rst
@@ -938,7 +912,7 @@ Keep the following execution boundaries explicit:
 - Awaiting an ``AsyncPipe`` materializes all remaining ``items``. Prefer
   ``async for`` when streaming behavior matters.
 - ``split`` copies a fully materialized finite ``stream``. Prefer named
-  ``send``/``receive`` channels for lazy fan-out.
+  ``publish``/``subscribe`` channels for lazy fan-out.
 - Don't infer that parallel execution is faster. Measure the actual workload;
   pool startup, serialization, ordering, and I/O behavior can dominate small
   pipelines.

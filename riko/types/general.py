@@ -6,6 +6,7 @@ from collections.abc import (
     AsyncIterator,
     Awaitable,
     Callable,
+    Generator,
     Iterable,
     Iterator,
 )
@@ -71,7 +72,7 @@ type Feed = AsyncItems
 type AsyncSource = Items | Feed | Awaitable[Items | Feed]
 
 type ProcessorParserOutput = Stream | ItemOrValue | AnyLocation | Iterator[str]
-type OperatorParserOutput = Stream | ItemOrValue | Iterator[StatefulItem]
+type OperatorParserOutput = StreamOrValueStream | ItemOrValue | Iterator[StatefulItem]
 type SplitterParserOutput = Streams
 type ParserOutput = ProcessorParserOutput | OperatorParserOutput | SplitterParserOutput
 type ParserMaterializedOutput = list[StatefulItem | ItemOrValue | AnyLocation | Stream]
@@ -99,6 +100,9 @@ type NumericCaster = Callable[[str | NumLike], NumLike]
 type SkipFunc = Callable[[Item], bool]
 type SkipIf = SkipFunc | Skip | Iterable[SkipFunc] | Iterable[Skip]
 type Function = Callable[..., object]
+type Receiver = Generator[None, Item | StatefulItem, None]
+type ReceiveFunc = Callable[[Item], Item | None]
+
 
 # Opener = Callable[[str], tuple[Optional[str | Reencoder], Optional[str]]]
 # TODO: add type hint overloads to Reencoder with decode=True -> str
@@ -146,6 +150,7 @@ class Defaults(TypedDict, total=False):
     limit: int
     lower: bool
     max_wait: int
+    max_len: int
     memoize: bool
     mode: str
     multi: bool

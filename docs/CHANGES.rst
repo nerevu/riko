@@ -51,6 +51,10 @@ New
 - Added ``-v``/``--verbose`` to ``compile-pipe`` to report the modules used and bytes
   written to stderr.
 
+- Added ``SyncPipe.subscribe`` and ``SyncPipe.publish`` for in-process fan-out.
+  ``publish`` both seeds a sender (``SyncPipe.publish(items, "alerts")``) and chains one
+  (``flow.publish("alerts")``).
+
 Changes
 ~~~~~~~
 
@@ -70,6 +74,9 @@ Fixed
 ~~~~~
 
 - ``send`` now accepts a ``Feed`` source and completes on receiver failures
+
+- A pipe called without a required operand (``udf`` without ``func``, ``send`` without
+  ``others``) now raises instead of failing later.
 
 - ``join`` no longer materializes its primary stream. Only ``other`` is retained and
   replayed now; the source is consumed lazily. Output order is unchanged.

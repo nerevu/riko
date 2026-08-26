@@ -6,18 +6,20 @@ Provides pipeline collection tests.
 from collections.abc import Awaitable, Callable, Iterable, Iterator
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import itemgetter
+from time import perf_counter
 from typing import Any, cast
 
 import pytest
 
 from riko import get_path
 from riko._iterutils import noop
-from riko._pubsub import async_hub, close, sync_hub
+from riko._pubsub import async_hub, sync_hub
 from riko.bado import gather_results, issync, run
 from riko.collections import (
     CONVERSION_FUNCS,
     AsyncPipe,
     Executor,
+    PipeState,
     SyncCollection,
     SyncPipe,
     Targets,
@@ -245,7 +247,7 @@ class TestSyncCollections(_CollectionTest):
         )
         assert next(sender) == {"content": "once is 1x"}
 
-        close("r")
+        sync_hub.close("r")
         second = SyncPipe("receive", conf=r_conf)
         next(second)
         sender.close()
@@ -253,6 +255,63 @@ class TestSyncCollections(_CollectionTest):
         r_q = list(sync_hub.queues.get("r") or [])
         assert any(state is StreamState.DONE for state, _ in keep_q)
         assert all(state is not StreamState.DONE for state, _ in r_q)
+
+    def test_subscribe_registers_without_priming(self):
+        """
+        ``subscribe`` registers the channel on construction, so a sender may
+        publish before the receiver is ever iterated. The low-level
+        ``SyncPipe("receive", ...)`` path still registers on first ``next()``.
+        """
+        subscribed = SyncPipe.subscribe("eager")
+        raw = SyncPipe("receive", conf={"name": "lazy", **recv_conf})
+
+        assert "eager" in sync_hub.receivers
+        assert subscribed.state is PipeState.NEW
+        assert "lazy" not in sync_hub.receivers
+
+        # priming the raw pipe both registers it and surfaces a state marker
+        assert next(raw) == {"state": StreamState.PENDING}
+        assert "lazy" in sync_hub.receivers
+
+    def test_subscribe_idle_drain_is_non_blocking(self):
+        """
+        Draining a receiver whose sender has not run yields nothing straight
+        away rather than polling until ``max_wait``.
+
+        The sync backend has no producer/consumer concurrency — ``send`` pushes
+        only when the sender pipe is advanced, on this same thread — so a
+        blocking wait here could never be satisfied by anyone. Timing is the
+        assertion because a blocking drain still *returns* ``[]``; only the
+        elapsed time distinguishes the two.
+        """
+        started = perf_counter()
+        assert list(SyncPipe.subscribe("idle")) == []
+        assert perf_counter() - started < 0.5
+
+    def test_publish_requires_a_channel_name(self):
+        """``others`` is an operand, so an empty one is a call-site error."""
+        with pytest.raises(TypeError, match="requires the 'others' keyword"):
+            list(SyncPipe.publish([{"title": "orphan"}]))
+
+    @pytest.mark.xfail(
+        reason="Idle drain ending the pass is not yet implemented", strict=True
+    )
+    def test_idle_drain_ends_the_pass_not_the_subscription(self):
+        """
+        Draining a receiver before its sender runs must leave the channel
+        registered, so a later publish still lands and a fresh drain sees it.
+
+        Today ``receive.parser`` calls ``close(name)`` on idle expiry as well as
+        on DONE, and ``SyncPubSubHub.close`` drops the receiver, queue, and id
+        together. So the subscription dies with the first empty pass and the
+        sender's bound id goes stale.
+        """
+        items = [{"title": "late"}]
+        assert list(SyncPipe.subscribe("survivor")) == []
+        assert "survivor" in sync_hub.receivers
+
+        _ = list(SyncPipe.publish(items, "survivor"))
+        assert list(SyncPipe.subscribe("survivor")) == items
 
     def test_stream(self):
         """Tests a basic stream pipeline."""
