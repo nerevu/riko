@@ -96,8 +96,8 @@ per integration**.
 | File | Phase | Symbols / purpose |
 |---|---|---|
 | `riko/ext/registry.py` | P8 | `ModuleDefinition`, `ModuleRegistry` (`register(def,*,replace=False)`, `resolve(name, interface)`, `names()`); built-in + entry-point + runtime population |
-| `riko/ext/resolver.py` | P8 | `PipeResolver` façade — the single resolution entry point |
-| `riko/ext/pipelines.py` | P8 | `PipelineResolver`, `PipelineStore(Protocol)` + `Directory/Package/Mapping/Composite` stores (replaces hardcoded `tests.pypipelines` / `tests/pipelines`) |
+| `riko/ext/_resolver.py` | P8 | `PipeResolver` façade — the single resolution entry point |
+| `riko/ext/_pipelines.py` | P8 | `PipelineResolver`, `PipelineStore(Protocol)` + `Directory/Package/Mapping/Composite` stores (replaces hardcoded `tests.pypipelines` / `tests/pipelines`) |
 | `riko/ext/stubs.py` + `riko/modules/__init__.pyi` | P9 | generated `.pyi` fluent stubs from the registry |
 | `riko/ext/pubsub.py` | P11 | `Publisher`/`Subscription` protocols + in-process impl over today's `send`/`receive` |
 | `riko/modules/poll.py` | P11 | `poll` operator (`interval`/`event`/`hybrid`, hybrid default) over a `Subscription` |
@@ -218,7 +218,7 @@ it silently drops the settings the call omitted. See
 | `riko/_execution/plan.py` NEW | resolved steps + eventual sync-island grouping (Deferred) |
 
 **Modified-in-place.** `types/general.py` (`type Pipeline`→`PipeCallable` + `Resolver` typing);
-`ext/{registry,resolver}.py` (`resolve_for_execution(def, execution)` native-wins matrix over the
+`ext/{registry,_resolver}.py` (`resolve_for_execution(def, execution)` native-wins matrix over the
 existing `sync_pipe`/`async_pipe` slots); `modules/_decorators.py` (allow `async def pipe`; kind
 from callable metadata; retain `isasync=`/`async_pipe`); `collections.py` (mechanics migrate into
 `_execution/`; module later renamed); `__init__.py`/`api.py` (export `Pipeline`; **remove**

@@ -256,8 +256,8 @@ The runtime→compiler resolution coupling is inverted behind three **compiler-f
 one overloaded `resolve(name, interface)` contract (`riko/types/general.py::Resolver`):
 `ModuleRegistry` (`riko/ext/registry.py`; built-ins lazy per name, runtime `register`/`reset`, entry
 points under `[project.entry-points."riko.modules"]`; precedence runtime → entry-point → built-in),
-`PipelineResolver` + injectable `ModuleStore`/`DirectoryStore` (`riko/ext/pipelines.py`; core ships
-no locations), and the `PipeResolver` façade (`riko/ext/resolver.py`) doing one symmetric dispatch.
+`PipelineResolver` + injectable `ModuleStore`/`DirectoryStore` (`riko/ext/_pipelines.py`; core ships
+no locations), and the `PipeResolver` façade (`riko/ext/_resolver.py`) doing one symmetric dispatch.
 `riko/collections.py` resolves through the façade; `compile.resolve_module` delegates to it.
 Generated pipelines expose a stable `pipe`/`async_pipe` entry, so a sub-pipeline resolves exactly
 like a built-in. External packages add modules with **no core edit** (`examples/riko-example-ext/`).
