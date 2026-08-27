@@ -8,8 +8,8 @@ for build-completeness:** each section is tagged **Implemented** (fully ships) o
 Planned** (nothing ships yet). Find any `§N` via the [ROADMAP §-index](ROADMAP.md#index).
 
 > **Provenance.** These are shipped facts, not aspirations. If code and this document
-> disagree, the code is authoritative and this document is the bug. Planned behavior lives
-> in ROADMAP.md, never here.
+> disagree, the code is authoritative and this document is the bug. Planned semantics live in
+> their owning gameplans; [ROADMAP.md](ROADMAP.md) routes to those owners.
 
 ## Index
 
@@ -283,8 +283,9 @@ generated `Modules` tree (P9A) shipped — `pipe | Transforms.FILTER` resolves i
 
 ## Subscription lifecycle — `subscribe` / `publish` (F5a, partial)
 
-> **Partial.** `func` becomes a tap → [fanout-topology.md § 9.3 (F5c)](gameplans/fanout-topology.md), next.
-> Subscription handles + teardown ownership → [§ 9.2 (F5b)](gameplans/fanout-topology.md), landing with P11.
+> **Partial.** The shipped compatibility behavior and the revised MVP/F5 staging boundary are
+> documented in [fanout-topology.md §14](gameplans/fanout-topology.md#14-relationship-to-current-send--receive),
+> especially [§14.1](gameplans/fanout-topology.md#141-revised-compatibility-mvp-boundary).
 
 `SyncPipe` ships a subscribe/publish pair that hides the pub/sub hub from callers:
 `SyncPipe.subscribe(name, func=…, wait=…, maxlen=…)` registers eagerly via
@@ -301,26 +302,29 @@ filters the stream. This is sound because the sync backend has no producer/consu
 concurrency: `send` pushes only when the sender pipe is advanced, on the same thread, so a
 blocking idle wait could never be satisfied anyway. Per
 [release-readiness.md § 2](gameplans/release-readiness.md), blocking is a property of the
-`Subscription` rather than of `receive`, so this is the permanent in-process default and not
-a stopgap.
+`Subscription` rather than of `receive`, so this is the permanent in-process compatibility
+default.
 
 The raw `SyncPipe("receive", conf=…)` path is unchanged and still emits PENDING for
-interleaved manual stepping. The two behaviors coexist **transitionally**, until F1/F4 remove
-`PENDING` from the data stream entirely.
+interleaved manual stepping. The two behaviors coexist transitionally on the compatibility
+surface.
 
 **`func` queues its return value, not the received item.** So `func=archived.append` yields
 `None` per item and `func=len` yields an `int` — neither an `Item`, which is why
 `receive.pipe`'s declared return does not satisfy `SyncOperatorParser`, and why chaining
-(`subscribe("x", func=…).sort()`) yields `{'content': None}`. F5c makes `func` a tap and
-resolves both; the pyright error is a symptom, so **do not silence it by widening
-`OperatorParserOutput`** — see [§ 9.3](gameplans/fanout-topology.md).
+(`subscribe("x", func=…).sort()`) yields `{'content': None}`. This transformation behavior is
+preserved during the revised compatibility MVP so sync and async do not diverge. Final F5
+changes **both** modes together to `tap=` semantics, where the callback return is discarded
+and the received item continues. Do not silence the current typing symptom by widening
+`OperatorParserOutput`.
 
-**Known gap (F5b):** `receive.parser` calls `close(name)` on idle expiry as well as on DONE,
+**Known lifecycle gap:** `receive.parser` calls `close(name)` on idle expiry as well as on DONE,
 and `SyncPubSubHub.close` pops receiver, queue, and id together — so an empty drain destroys
-the subscription rather than ending one pass, and the sender's bound id goes stale. Deferred
-deliberately: every mechanism a local fix would build on (the `DONE` sentinel, `send`'s `ids`
-dict) is slated for deletion by the `Publisher`/`Subscription` rewrite, so it lands with P11.
-A `strict` xfail in `tests/public/test_collections.py` marks it.
+the subscription rather than ending one pass, and the sender's bound id goes stale. This is
+intentionally **not** repaired by extending the old DONE/`ids` mechanism. The compatibility
+MVP fixes Feed-native incremental async `send`/`receive`; final F5 replaces lifecycle ownership
+with execution-owned `Publisher`/`Subscription` handles so cleanup no longer depends on a user
+drain. A `strict` xfail in `tests/public/test_collections.py` marks the shipped gap.
 
 ## 25. Conversion — export converters (shipped)
 
