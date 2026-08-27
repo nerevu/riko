@@ -7,17 +7,18 @@ sources and sinks without placing protocol clients, credentials, or a monolithic
 dispatcher in core.
 
 This plan promotes the useful parts of Shelf milestones 5, 6, 11, 12, and 13 while
-aligning them with AnyIO, `Context`, the module registry, RDP, MCP policy, and
-one-shot pipeline semantics.
+aligning them with AnyIO, immutable `Context`/`Resource` definitions, the module registry,
+RDP, MCP policy, and private execution lifecycles.
 
 ## 2. Package boundaries
 
 ```text
 nerevu/riko
     SourcePlan and minimal resolver protocol, only if multiple packages need them
-    Context resource lifecycle
+    Context / Resource definitions and execution-owned resource lifecycle
     module/export registries
-    Feed and one-shot execution
+    Feed / FeedResult / FeedState contracts
+    Publisher / Subscription protocols
 
 nerevu/riko-connect
     source resolver registry
@@ -106,11 +107,14 @@ second GET for every source.
 
 ### 3.6 Streaming and lifecycle
 
-Connectors return lazy records, batches, or artifact references. Sessions open on
-iteration and close on exhaustion, cancellation, error, or early consumer termination.
-Connections are never opened once per item unless the protocol requires it.
+Connectors return lazy records, batches, `FeedResult`s, or artifact references. Sessions are
+resolved as execution-owned resources and close on exhaustion, cancellation, error, or early
+consumer termination. Connections are never opened once per item unless the protocol requires it.
 
-## 4. Resolver registry
+`Context` contains immutable resource definitions; live sessions/clients are not stored on the
+public Context.
+
+## 4. Resolver registry and execution handoff
 
 ```python
 class SourceResolver(Protocol):
@@ -121,15 +125,22 @@ class SourceResolver(Protocol):
         self,
         request: SourceRequest,
     ) -> SourcePlan | None: ...
-
-
-class Connector(Protocol):
-    async def open(
-        self,
-        plan: SourcePlan,
-        context: Context,
-    ) -> Feed: ...
 ```
+
+A connector implementation is bound to a Pipeline node through the normal Riko module/resource
+preparation path. The node declares its direct resource dependencies, and the existing wrapper
+machinery passes the execution-bound `resources` view. Do not introduce a second public
+`ExecutionContext` or a connector-specific dependency-injection system.
+
+Conceptually:
+
+```python
+def parser(plan: SourcePlan, resources, **kwargs):
+    return resources.connector.open(plan)
+```
+
+where `resources.connector` is the live execution-local handle resolved from an immutable
+`Context` `Resource` definition.
 
 Resolution precedence:
 
@@ -195,6 +206,7 @@ Requirements:
 * parsed message metadata and raw MIME content are distinct fields;
 * attachment bodies may become artifacts above a size threshold;
 * mailbox checkpointing uses UID validity and UID, not only timestamps;
+* mailbox state persists through the common `FeedState` / `StateStore` contract;
 * SMTP write operations declare side effects and idempotency limitations;
 * Microsoft 365-specific behavior should prefer the `riko-microsoft` Graph/Exchange
   adapter when mailbox semantics exceed generic IMAP/SMTP.
@@ -210,9 +222,9 @@ Azure Service Bus
 ```
 
 Every adapter declares delivery semantics and acknowledgement behavior. Publishers and
-consumers are paired capabilities. Broker sessions are execution resources. At-least-once
-consumers expose message IDs and acknowledgement handles; best-effort transports clearly
-state message-loss behavior.
+consumers implement/project the shared `Publisher` / `Subscription` protocols where applicable.
+Broker sessions are execution resources. At-least-once consumers expose message IDs and
+acknowledgement handles; best-effort transports clearly state message-loss behavior.
 
 ## 9. Structured source adapters
 
@@ -224,32 +236,37 @@ hash metadata, and bounded retries. API keys are credential references.
 ### 9.2 Prometheus exposition
 
 Parse the current exposition format through a maintained parser when available. Preserve
-metric name, labels, value, timestamp, and sample type. A scrape is finite: the connector
-performs one bounded scrape. Scheduling *repeated* scrapes is orchestration's concern, and the
-recurring-observation/checkpoint state across scrapes is owned by
-[feed-monitoring.md](feed-monitoring.md).
+metric name, labels, value, timestamp, and sample type. One scrape is finite and bounded.
+
+Repeated observations **inside one Riko workflow** use `Pipeline.poll(...)` and the recurring
+observation/state semantics owned by [feed-monitoring.md](feed-monitoring.md). External schedulers may
+rerun the whole finite Pipeline through [orchestration.md](orchestration.md), but orchestration is not
+the only recurrence mechanism.
 
 ### 9.3 Tabular files
 
 CSV remains core-compatible. XLS/XLSX and other optional formats live in connector extras.
 Rows normalize through the accepted frame/Arrow interchange without requiring pandas.
 
-## 10. Singer compatibility through RDP
+## 10. Singer compatibility
 
-Do not add permanent `fetchtap` and `singerexport` core modules that bypass RDP state and
-schema contracts.
+Do not add permanent `fetchtap` and `singerexport` core modules that bypass the common state/schema
+contracts.
 
-Create a Singer adapter:
+Create a Singer adapter whose runtime state maps to core state first:
 
 ```text
-Singer SCHEMA → RDP schema
-Singer RECORD → RDP record/batch
-Singer STATE  → RDP state
+Singer SCHEMA -> RDP/schema projection
+Singer RECORD -> RDP record/batch projection when interchange is required
+Singer STATE  -> FeedState / StateStore
 ```
 
-and the reverse adapter for Singer targets where required. Subprocesses are execution
-resources with cancellation, stderr capture, bounded line size, exit-code validation,
-and secret redaction.
+RDP may project that state for wire interchange, but it does not own a second generic checkpoint
+model. The reverse adapter may emit Singer STATE from the committed source/observation state when a
+Singer target requires it.
+
+Subprocesses are execution resources with cancellation, stderr capture, bounded line size,
+exit-code validation, and secret redaction.
 
 ## 11. SaaS and REST APIs
 
@@ -257,6 +274,10 @@ Generic public APIs remain OpenAPI capabilities in `riko-mcp`. An authorizer-sty
 is simply a configured OpenAPI provider. A token-vending service is a credential provider.
 Do not add one module per SaaS provider unless streaming behavior cannot be represented by
 OpenAPI or a generic HTTP connector.
+
+REST collection traversal/pagination/cursor semantics are owned by
+[rest-incremental.md](rest-incremental.md); connectors provide transport/session capabilities rather
+than a second REST state model.
 
 ## 12. Capability and module projection
 
@@ -304,13 +325,17 @@ execution logic.
 * XLS/XLSX;
 * CKAN;
 * Prometheus;
-* Singer/RDP bridge.
+* Singer/core-state/RDP bridge.
 
 ### C5 — Catalog and CLI integration
 
 * capability projection;
 * source inspection and test commands;
 * deterministic evaluation fixtures.
+
+Forward cross-cutting implementation order is owned by
+[implementation-sequence.md](implementation-sequence.md); these connector phases describe package
+specialization only.
 
 ## 14. Definition of done
 
@@ -319,8 +344,8 @@ execution logic.
 3. Credentials never appear in serialized plans or records.
 4. Resolution can be inspected without execution.
 5. HTTP probing is explicit and bounded.
-6. Every session closes on early termination.
-7. Long-lived sources require checkpoint policy.
-8. Broker delivery semantics are declared and tested.
-9. Singer state and schema map through RDP.
+6. Every execution-owned session closes on early termination.
+7. Long-lived/recurring source state uses common `FeedState` / `StateStore` semantics.
+8. Broker delivery semantics are declared and tested against shared pub/sub protocols where used.
+9. Singer state maps to core state; RDP is an interchange projection rather than the generic owner.
 10. Plugin modules, capabilities, and CLI commands share one execution service.
