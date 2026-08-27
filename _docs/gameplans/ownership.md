@@ -7,6 +7,10 @@ how they consume that contract, but should not restate its API, lifecycle, or in
 
 Use this file as the ownership map when adding or reviewing gameplans.
 
+Implementation dependency order is owned separately by
+[implementation-sequence.md](implementation-sequence.md); it may order contracts but does not
+redefine them.
+
 ## 2. Ownership rule
 
 When two plans need the same concept:
@@ -29,8 +33,7 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 | generic `RetryPolicy`, timeout, error/disposition policy | `execution-semantics.md` | retryable-error classification and provider delay hints |
 | `FeedResult`, `Metadata`, private per-item provenance/identity | `execution-semantics.md` | source/operator-specific metadata meaning |
 | canonical identity/fingerprints/generation/idempotency | `execution-semantics.md` | domain-specific semantic identity hints |
-| `FeedState`, `StateKey`, `StateRecord`, `StateStore`, CAS, `.checkpoint()` | `execution-semantics.md` | typed payload meaning for a particular source/operator |
-| `StateStoreCapabilities` and state serialization preflight | `execution-semantics.md` | backend implementation/documentation |
+| `FeedState`, `StateKey`, `StateRecord`, `StateStore`, CAS, `.checkpoint()` | `execution-semantics.md` | typed payload meaning for a particular source/operator; backend codec support is documented/raises rather than advertised through a generic capability API |
 | connector sessions, transport lifecycle, credential references/resolution | `connectors.md` | provider/protocol credential implementations |
 | REST pagination, endpoint dependencies, REST cursor extraction | `rest-incremental.md` | provider-specific REST vocabulary |
 | recurring source observation/bootstrap/dedupe/change/anomaly policy | `feed-monitoring.md` | source-specific observation/cursor payload meaning |
@@ -55,6 +58,7 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 | Feed-native parser migration/streaming-memory/streaming `write` | `feed-native-streaming.md` | `parser_mode` mechanism from `callable-pipes.md`; batch contract from `execution-semantics.md` |
 | Windows Autopilot provisioning scenario | `autopilot-provisioning.md` | generic Microsoft adapters/admin/wait/module-enum contracts |
 | Pre-1.0 DX/release/package fidelity gate | `release-readiness.md` | target API semantics remain owned by execution/fanout/callable/CLI gameplans |
+| implementation dependency graph / keep-refactor-supersede classification | `implementation-sequence.md` | semantic contracts remain in their owning gameplans |
 | runtime defect taxonomy/open defect register | `correctness-audit.md` | row reference plus owning design/fix |
 
 ## 4. Important boundaries
@@ -75,6 +79,10 @@ checkpoint owner/boundary/restore rules
 `feed-monitoring.md` owns monitoring semantics such as bootstrap, dedupe, changed/anomaly,
 and alert-history payload meaning. `rest-incremental.md` owns REST cursor extraction/encoding.
 Neither defines a parallel `SourceCheckpoint`, `CheckpointStore`, or generic state store.
+
+State-store codec support is intentionally **not** represented by a generic
+`supported_types`/capabilities protocol in the initial design. A backend documents what it can
+persist and raises the shared state codec errors when it cannot serialize or deserialize a value.
 
 ### Transport versus collection semantics
 
@@ -173,6 +181,12 @@ rendering, prompts, and exit codes. Plugins return/register Click commands; they
 receive argparse parser objects. CLI constructs immutable `Context`; domain services create
 private executions when needed.
 
+### Contract ownership versus implementation ordering
+
+`implementation-sequence.md` may state that identity must land before StateStore, or Context/Resource
+before private execution resource opening. That establishes dependency order only. If its API text
+disagrees with a semantic owner, fix the sequence document rather than creating a second contract.
+
 ## 5. Review checklist
 
 Before merging a new gameplan or substantial update:
@@ -181,6 +195,8 @@ Before merging a new gameplan or substantial update:
 - Does it copy a dataclass/protocol/API from another plan?
 - Does it create `ExecutionContext`, `BatchPipe`, `CheckpointStore`, `AgentGraph`, or another
   competing generic runtime abstraction?
+- Does it introduce a generic state-store capability advertisement despite the initial no-capability
+  decision?
 - Does it repeat lifecycle, retry, credential, state, identity, capability, or boundedness
   rules?
 - Is `poll` being used for source recurrence or provider operation waiting?
