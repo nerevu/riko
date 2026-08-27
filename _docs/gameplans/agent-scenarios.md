@@ -3,18 +3,19 @@
 ## 1. Mission
 
 Promote the useful configuration and evaluation patterns from the Langly and AutoGen
-inspiration into a deterministic, policy-aware agent scenario layer that reuses Riko's
-capability catalog and graph infrastructure.
+inspiration into a deterministic, policy-aware scenario layer that reuses Riko's capability
+catalog and ordinary `Pipeline` architecture.
 
 This plan extends:
 
-* `_docs/gameplans/agents.md` for agent-network topology and execution separation;
+* `_docs/gameplans/agents.md` for Pipeline/loop/pubsub agent execution semantics;
 * `_docs/gameplans/ai-inference.md` for model invocation;
 * `_docs/gameplans/mcp.md` for tool/capability policy;
 * `_docs/gameplans/connectors.md` for external resources.
 
 The goal is not to make Riko an agent framework clone. The goal is to make agent-assisted
-Riko workflows serializable, inspectable, testable, and safe.
+Riko workflows serializable, inspectable, testable, and safe without introducing a second
+agent graph or executor.
 
 ## 2. Inspiration integrated by this plan
 
@@ -36,30 +37,37 @@ They also demonstrate patterns Riko should **not** adopt directly:
 * arbitrary local Python execution with no sandbox/policy boundary;
 * tool permissions encoded only in prompt text;
 * hard-coded provider model names as durable workflow semantics;
-* one universal agent executor that obscures pipeline versus agent differences.
+* one universal agent executor that obscures ordinary Pipeline semantics;
+* a second agent-only DAG/schema/runtime parallel to `Pipeline`.
 
 ## 3. Architectural invariant
 
-Share planning/catalog contracts; keep execution semantics distinct:
+Agent scenarios are configuration that compiles to the same Pipeline execution model used by
+ordinary Riko workflows:
 
 ```text
-shared
+shared contracts
     capability catalog
-    DAG representation/query/visualization
-    serialized configuration
+    immutable Pipeline DAG
+    publish / subscribe / split topology
+    loop iterative state
+    Context / Resource definitions
+    FeedState / StateStore
     artifact references
     credential references
     event schema
 
-pipeline executor
-    finite/lazy record processing
-
-agent executor
-    conversational/event-driven turns and tool calls
+scenario layer
+    reviewed agent/model/tool/retrieval/policy configuration
+    lowering into ordinary Pipeline nodes/branches/loop scopes
+    evaluation fixtures and run records
 ```
 
-An agent may invoke a registered Riko capability or a complete pipeline. It does not turn
-every Riko module into an unconstrained LLM tool automatically.
+There is no separate `AgentGraph`, `AgentNetwork`, or agent executor. An agent step may invoke
+a registered model/provider/tool capability, and iterative reasoning/tool use is represented by
+the common `loop` state model while the underlying Pipeline DAG remains acyclic.
+
+A scenario does not turn every Riko module into an unconstrained LLM tool automatically.
 
 ## 4. AgentScenario
 
@@ -79,7 +87,9 @@ class AgentScenario:
     evaluation: EvaluationSpec | None
 ```
 
-Scenario files are data and may be stored, diffed, reviewed, and executed repeatedly.
+Scenario files are data and may be stored, diffed, reviewed, and executed repeatedly. The
+scenario compiler resolves this data into ordinary Pipeline topology and registered capability
+references before execution.
 
 Do not serialize API keys, prompt-time access tokens, arbitrary Python callables, or raw
 credential material.
@@ -100,6 +110,9 @@ class AgentSpec:
 
 `role` is semantic; implementation-specific classes such as `AssistantAgent` or
 `RetrieveUserProxyAgent` are adapter details.
+
+An `AgentSpec` is configuration for one or more ordinary Pipeline nodes/loop steps; it is not a
+runtime actor object with an independently owned event loop or checkpoint store.
 
 ## 6. Semantic model policy
 
@@ -150,24 +163,29 @@ Scenario tools are capability IDs:
 ```
 
 The capability catalog ([mcp.md § 6–§ 8](mcp.md)) supplies each tool's input/output schema,
-description, effect/risk classification, credential requirements, rate/concurrency metadata, and
-policy tags. Scenarios reference capability IDs and add no tool metadata of their own.
+description, effect/risk classification, credential requirements, rate/concurrency metadata,
+and policy tags. Scenarios reference capability IDs and add no tool metadata of their own.
 
-No scenario may reference an import path and cause arbitrary callable loading from
-serialized configuration.
+No scenario may reference an import path and cause arbitrary callable loading from serialized
+configuration.
+
+Tool/provider calls remain ordinary Pipeline side effects and therefore inherit the common
+identity/idempotency, retry, resource, and checkpoint rules from `execution-semantics.md`.
 
 ## 8. OpenAPI-derived tools
 
 OpenAPI-derived tools are discovered, normalized, fingerprinted, policy-gated, and versioned
 through the shared MCP/OpenAPI capability machinery owned by
-[mcp.md § 11 (discovery) and § 13 (security policy)](mcp.md) — scenarios do not restate those
-rules. The scenario-specific rule: an agent may *propose* adding a discovered capability, but it
-cannot grant itself permission to execute it (discovery never self-authorizes).
+[mcp.md § 11 (discovery) and § 13 (security policy)](mcp.md). Scenarios do not restate those
+rules.
+
+The scenario-specific rule: an agent may *propose* adding a discovered capability, but it
+cannot grant itself permission to execute it. Discovery never self-authorizes.
 
 ## 9. Tool caller/executor separation
 
 Earlier agent scenarios encode which agent may call a function and which executes it. Keep
-that useful distinction in policy rather than framework-specific fields:
+that useful distinction in policy rather than framework-specific runtime actor fields:
 
 ```python
 ToolGrant(
@@ -183,6 +201,10 @@ This enables:
 * central execution/audit;
 * separate credentials from model context;
 * safe remote or sandbox execution.
+
+`executor` identifies the authorized capability/runtime service; it does not imply a second
+agent executor. Actual execution still occurs through the ordinary Pipeline/provider/tool
+execution path.
 
 ## 10. Code execution
 
@@ -202,29 +224,41 @@ side-effect classification
 
 Default agent scenarios have no arbitrary code-execution tool.
 
-A deterministic Riko callable pipe remains preferable when the operation is known in
-advance.
+A deterministic Riko callable pipe remains preferable when the operation is known in advance.
 
 ## 11. Agent team topology
 
-Scenarios may represent:
+Scenarios may describe interaction policy such as:
 
 ```text
 supervised
-    one router/supervisor selects the next eligible agent
+    one supervisor/policy step selects the next eligible agent
 
 static DAG
-    events follow declared links
+    values/events follow declared Pipeline branches
 
 peer/unsupervised
-    agents choose among explicitly granted recipients/capabilities
+    an agent may select among explicitly granted recipients/capabilities
 ```
 
-Topology uses the shared `Dag` representation from `agents.md` for validation/querying,
-while the agent runtime retains its own turn/event semantics.
+These are scenario-level routing semantics that lower to the common Pipeline topology:
 
-For peer routing, the allowed edge set is still explicit policy. "Unsupervised" does not
-mean arbitrary network creation at run time.
+```text
+ordinary data edge
+publish / subscribe branch
+split / route branch
+loop iteration
+```
+
+The Pipeline DAG remains acyclic. Repeated agent turns are represented by `loop`, not a cycle in
+a separate agent graph.
+
+For peer routing, the allowed recipient/capability set is explicit policy. "Unsupervised" does
+not mean arbitrary network creation at run time.
+
+Scenario validation may use the same Pipeline DAG query/visualization infrastructure after
+lowering; it does not maintain a parallel shared-DAG object whose semantics can drift from
+Pipeline execution.
 
 ## 12. RetrievalSpec
 
@@ -255,6 +289,9 @@ index namespace
 ```
 
 so results are reproducible enough to diagnose changes.
+
+Live retrievers/vector-store clients are declared resources and remain execution-owned rather
+than being stored as mutable runtime values on public `Context`.
 
 ## 13. Retrieval policy
 
@@ -363,6 +400,7 @@ supervised two-agent routing
 policy-denied write
 OpenAPI capability from pinned local schema
 structured JSON output
+bounded loop/tool iteration with checkpoint fixture
 ```
 
 Network-dependent/provider-dependent evaluations belong to optional integration suites.
@@ -374,18 +412,21 @@ Every scenario execution records:
 ```text
 scenario ID + fingerprint
 resolved scenario parameters
+resolved Pipeline/stateful-owner identity
 agent/profile versions
 model policy + resolved model
 capability/tool versions
 retrieval index fingerprints
 turn/tool-call events
+checkpoint/state references when applicable
 policy decisions
 artifacts
 usage/cost metrics when available
 final status
 ```
 
-This record is the basis for evaluation, replay diagnostics, and cost analysis.
+This record is the basis for evaluation, replay diagnostics, and cost analysis. It does not
+become a second recovery/checkpoint system; recovery uses the common `StateStore` contract.
 
 ## 20. Cost and usage
 
@@ -414,8 +455,11 @@ riko agent run scenario.json --param company=...
 riko agent eval scenario.json
 ```
 
-`describe` can report topology, capabilities, credential references, model policies,
-retrieval sources, and risk without executing the scenario.
+`describe` can report the lowered Pipeline topology, capabilities, credential/resource
+references, stateful loop/checkpoint scopes, model policies, retrieval sources, and risk without
+executing the scenario.
+
+CLI command/plugin mechanics remain owned by `cli.md`.
 
 ## 22. Testing strategy
 
@@ -430,36 +474,44 @@ Required contract tests include:
 7. arbitrary import paths cannot become tools;
 8. code execution is unavailable unless explicitly configured with sandbox policy;
 9. retrieval source permissions prevent cross-namespace access;
-10. static/supervised/peer topology honors allowed links;
-11. deterministic evaluators produce stable results;
-12. tool-call/policy assertions are evaluated;
-13. model judge is labeled non-deterministic and records judge model;
-14. run record contains fingerprints, tool events, artifacts, and usage.
+10. static/supervised/peer semantics lower to valid explicit Pipeline topology;
+11. repeated turns use `loop` rather than a cyclic/parallel agent graph;
+12. loop/checkpoint state uses the common `FeedState` / `StateStore` contract;
+13. deterministic evaluators produce stable results;
+14. tool-call/policy assertions are evaluated;
+15. model judge is labeled non-deterministic and records judge model;
+16. run record contains fingerprints, tool events, artifacts, state references, and usage.
 
 ## 23. Phases
 
 ```text
-AS0  AgentScenario / AgentSpec schema
+AS0  AgentScenario / AgentSpec schema + Pipeline lowering contract
 AS1  semantic model policies
 AS2  capability tool grants and policy
-AS3  shared-DAG team topology adapters
-AS4  RetrievalSpec and provenance
+AS3  Pipeline/pubsub/loop team-routing lowering
+AS4  RetrievalSpec + declared resource/provenance integration
 AS5  profile library
 AS6  deterministic evaluation framework
-AS7  tool-call/safety evaluation
-AS8  CLI validate/describe/run/eval
+AS7  tool-call/safety/state evaluation
+AS8  CLI validate/describe/run/eval adapter
 AS9  OpenAPI discovery proposal workflow
 ```
+
+These scenario phases specialize the common runtime. Forward cross-cutting implementation order
+remains owned by `implementation-sequence.md`, especially R9/R11.
 
 ## 24. Definition of done
 
 1. Agent workflows can be represented as reviewed/versioned data.
-2. Pipeline and agent executors remain separate despite shared graph/catalog machinery.
+2. Scenarios compile to ordinary `Pipeline`/pubsub/loop structures; there is no separate agent
+   executor or graph runtime.
 3. Scenarios reference registered capabilities, not arbitrary imports.
 4. Model selection can use semantic policy while recording the concrete resolved model.
 5. OpenAPI discovery cannot self-authorize execution.
-6. Retrieval has explicit sources, fingerprints, and access policy.
+6. Retrieval has explicit sources, fingerprints, resource bindings, and access policy.
 7. Arbitrary code execution is not a default tool.
-8. Scenario behavior can be evaluated beyond final response text.
-9. Tool-policy violations and side-effect expectations are regression-testable.
-10. Runs emit enough metadata for cost, provenance, and reproducibility analysis.
+8. Repeated turns/checkpoints reuse common loop/`FeedState`/`StateStore` semantics.
+9. Scenario behavior can be evaluated beyond final response text.
+10. Tool-policy violations and side-effect expectations are regression-testable.
+11. Runs emit enough metadata for cost, provenance, state/recovery diagnostics, and reproducibility
+    analysis without defining a second persistence model.
