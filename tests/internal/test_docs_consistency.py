@@ -24,7 +24,9 @@ _PYPROJECT = _REPO / "pyproject.toml"
 
 _EXPECTED_SECTIONS = 28
 
-_STATUS_BANNER = re.compile(r"^\s*>?\s*\*\*status\b", re.IGNORECASE | re.MULTILINE)
+_STATUS_BANNER = re.compile(
+    r"^\s*>?\s*\*\*status\b\s*(?::|\*\*)", re.IGNORECASE | re.MULTILINE
+)
 _SECTION_ROW = re.compile(r"^\|\s*(\d+)\s*\|", re.MULTILINE)
 _GAMEPLAN_LINK = re.compile(r"gameplans/([A-Za-z0-9._-]+\.md)")
 _VERSION = re.compile(r"v?(\d+)\.(\d+)\.(\d+)")
