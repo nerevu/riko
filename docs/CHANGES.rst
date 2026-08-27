@@ -208,6 +208,8 @@ Dev
 
 - ``manage test`` now correctly parses ``stop`` and ``verbose`` options
 
+- Threaded  ``--where`` through ``manage lint --rst`` and ``manage lint``.
+
 v0.75.0 (2026-08-15)
 --------------------
 

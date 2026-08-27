@@ -5,11 +5,13 @@
 import re
 import shutil
 import sys
+from collections.abc import Iterator
 from functools import partial
 from glob import glob
 from io import StringIO
 from os import environ
-from os.path import basename, dirname, exists, getmtime, join
+from os.path import basename, dirname, exists, getmtime, isdir, join
+from pathlib import Path
 from subprocess import CalledProcessError, call, check_call
 from sys import exit
 from typing import Any
@@ -182,15 +184,13 @@ def _ruff_check(where: str | None = "", unsafe_fixes: bool = False) -> int:
     if not ruff:
         raise RuntimeError("ruff not found")
 
+    paths = where.split(" ") if where else []
     args = [ruff, "check"]
 
     if unsafe_fixes:
         args.append("--unsafe-fixes")
 
-    if where:
-        args.extend(where.split(" "))
-
-    return call([*args]) or call([ruff, "format", "--check"])
+    return call([*args, *paths]) or call([ruff, "format", "--check", *paths])
 
 
 TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
@@ -204,15 +204,13 @@ def _github_slug(text: str) -> str:
     return kept.replace(" ", "-")
 
 
-def _doc_files(where: str | None) -> list[str]:
+def _gen_doc_files(where: str | None) -> Iterator[str]:
     """Resolve the RST files to check"""
-    if where:
-        files = where.split(" ")
-    else:
-        roots = glob(str(ROOT_DIR / "*.rst"))
-        files = sorted(roots + glob(str(ROOT_DIR / "docs" / "*.rst")))
-
-    return files
+    for location in where.split(" ") if where else [ROOT_DIR, ROOT_DIR / "docs"]:
+        if isdir(location):
+            yield from glob(str(Path(location) / "*.rst"))
+        elif Path(location).suffix == ".rst":
+            yield str(location)
 
 
 def _render_rst(path: str) -> tuple[str, Any]:
@@ -296,7 +294,7 @@ def _rst_check(where: str | None = None) -> int:
     cache: dict[str, set[str]] = {}
     problems: list[str] = []
 
-    for path in _doc_files(where):
+    for path in _gen_doc_files(where):
         text, doctree = _render_rst(path)
         cache[path] = _doc_anchors(doctree)
         problems.extend(_render_errors(path, doctree))
@@ -362,12 +360,11 @@ def lint(
 
 
 @manager.command()
-@click.option("-w", "--where", help="Modules to check", default=None)
+@click.option("-w", "--where", help="Modules to check", multiple=True)
 @click.option("-s", "--sort/--no-sort", help="Sort module imports", default=True)
 @click.option("-F", "--unsafe-fixes", help="Applies unsafe fixes", is_flag=True)
-def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
+def prettify(where=(), sort=True, gen_config=False, unsafe_fixes=False):
     """Prettify code with ruff"""
-    where = where or ""
     return_code = 0
 
     if sort and ruff:
@@ -378,8 +375,8 @@ def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
             style_cmd.append("--unsafe-fixes")
 
         if where:
-            sort_cmd.extend(where.split(" "))
-            style_cmd.extend(where.split(" "))
+            sort_cmd.extend(where)
+            style_cmd.extend(where)
 
         try:
             check_call(sort_cmd)
@@ -395,7 +392,7 @@ def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
         cmd = [ruff, "format"]
 
         if where:
-            cmd.extend(where.split(" "))
+            cmd.extend(where)
 
         try:
             check_call(cmd)
