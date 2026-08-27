@@ -12,7 +12,7 @@ from io import StringIO
 from os import environ
 from os.path import basename, dirname, exists, getmtime, isdir, join
 from pathlib import Path
-from subprocess import CalledProcessError, call, check_call
+from subprocess import CalledProcessError, call, check_call, check_output
 from sys import exit
 from typing import Any
 
@@ -107,7 +107,16 @@ def help(ctx):
 
 def _clean():
     """Remove Python file and build artifacts"""
-    check_call(ROOT_DIR / "bin" / "clean")
+    for name in ("dist", "build"):
+        shutil.rmtree(ROOT_DIR / name, ignore_errors=True)
+
+    for pattern in ("*.egg-info", "src/*.egg-info"):
+        for path in glob(str(ROOT_DIR / pattern)):
+            shutil.rmtree(path, ignore_errors=True)
+
+    for pattern in ("*.pyc", "*.pyo", "*~"):
+        for path in ROOT_DIR.rglob(pattern):
+            path.unlink(missing_ok=True)
 
 
 def _build():
@@ -306,10 +315,34 @@ def _rst_check(where: str | None = None) -> int:
     return 1 if problems else 0
 
 
+def _staged_py_files() -> list[str]:
+    """List staged Python files (added/copied/modified, not deleted)"""
+    args = ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"]
+    staged = check_output(args, text=True).splitlines()
+    return [name for name in staged if name.endswith(".py")]
+
+
+def _check_staged() -> int:
+    """Lint staged Python files with ruff"""
+    if not ruff:
+        raise RuntimeError("ruff not found")
+
+    files = _staged_py_files()
+
+    if not files:
+        return_code = 0
+    else:
+        return_code = call([ruff, "check", *files]) or call(
+            [ruff, "format", "--check", *files]
+        )
+
+    return return_code
+
+
 @manager.command()
 def check():
-    """Check staged changes for lint errors"""
-    exit(call(ROOT_DIR / "bin" / "check-stage"))
+    """Lint staged Python changes with ruff"""
+    exit(_check_staged())
 
 
 @manager.command()
@@ -488,10 +521,7 @@ def test(paths=(), where=(), stop=None, **kwargs):  # noqa: PT028
 @manager.command()
 def clean():
     """Remove Python file and build artifacts"""
-    try:
-        _clean()
-    except CalledProcessError as e:
-        exit(e.returncode)
+    _clean()
 
 
 @manager.command()

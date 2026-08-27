@@ -210,6 +210,9 @@ Dev
 
 - Threaded  ``--where`` through ``manage lint --rst`` and ``manage lint``.
 
+- Ported the ``bin/clean`` and ``bin/check-stage`` shell scripts to the ``manage clean``
+  and ``manage check`` subcommands.
+
 v0.75.0 (2026-08-15)
 --------------------
 
