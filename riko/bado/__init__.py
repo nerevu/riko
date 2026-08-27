@@ -2,12 +2,13 @@
 """
 riko.bado
 ~~~~~~~~~
+
 AnyIO-backed async runtime for riko pipes.
 
 Async support is available when the ``async`` extra (``anyio`` + ``httpx``) is
 installed; otherwise ``backend == "empty"`` and riko runs sync-only. ``run`` is
 the entry point for async doctests/examples (``run(main)`` where ``main`` is a
-no-argument coroutine function) — anyio needs no reactor.
+no-argument async function) — anyio needs no reactor.
 """
 
 from collections.abc import Awaitable, Callable
@@ -15,6 +16,8 @@ from typing import Any, Protocol, Unpack
 
 
 class Run(Protocol):
+    """The call signature of the async entry point, :data:`run`."""
+
     def __call__[*PosArgsT, T](  # noqa: E704
         self,
         func: Callable[[Unpack[PosArgsT]], Awaitable[T]],

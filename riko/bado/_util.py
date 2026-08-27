@@ -2,10 +2,11 @@
 """
 riko.bado.util
 ~~~~~~~~~~~~~~
+
 AnyIO + httpx implementations of the bado async primitives, plus async
 utilities. Requires the ``async`` extra; :mod:`riko.bado` guards the import and
 falls back to sync-only stubs when it is absent. ``run`` is the entry point
-(``run(main)`` where ``main`` is a no-argument coroutine function).
+(``run(main)`` where ``main`` is a no-argument async function).
 """
 
 from collections.abc import Awaitable, Callable, Iterable
@@ -24,6 +25,12 @@ if TYPE_CHECKING:
 
 
 async def async_get(url: str, **kwargs: Any) -> "Response":
+    """
+    Fetches ``url`` via httpx and follows redirects.
+
+    A ``timeout`` of ``0`` means no timeout, which mirrors the sync backend.
+
+    """
     if kwargs.get("timeout") == 0:
         kwargs["timeout"] = None
 
@@ -42,19 +49,28 @@ async def async_read(  # noqa: E704
 async def async_read(  # noqa: E302
     url: str, binary: bool = False, encoding: str | None = None
 ) -> bytes | str:
+    """Reads a local ``file://`` path as bytes or text."""
     path = anyio.Path(url.replace("file://", ""))
     return await (path.read_bytes() if binary else path.read_text(encoding))
 
 
 async def async_json(response: "Response") -> dict[str, Any]:
+    """Returns the parsed JSON body of ``response``."""
     return response.json()
 
 
 async def async_return[T](value: T) -> T:
+    """Wraps ``value`` in an awaitable, for uniform ``await`` call sites."""
     return value
 
 
 async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> list[T]:
+    """
+    Runs ``awaitables`` concurrently, returning results in submission order.
+
+    ``None`` results are dropped.
+
+    """
     aws = list(awaitables)
     results: list[T | None] = [None] * len(aws)
 
@@ -69,9 +85,11 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
 
 
 async def maybe_deferred[T](func: Callable[..., T], *args: Any, **kwargs: object) -> T:
+    """Calls ``func`` and awaits its result only when it is awaitable."""
     result = func(*args, **kwargs)
     return cast(T, (await result)) if isawaitable(result) else result
 
 
 def async_partial(f, **kwargs):
+    """Binds ``kwargs`` to ``f`` for later awaiting via :func:`maybe_deferred`."""
     return partial(maybe_deferred, f, **kwargs)
