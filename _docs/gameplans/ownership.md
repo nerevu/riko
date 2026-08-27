@@ -33,7 +33,8 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 | generic `RetryPolicy`, timeout, error/disposition policy | `execution-semantics.md` | retryable-error classification and provider delay hints |
 | `FeedResult`, `Metadata`, private per-item provenance/identity | `execution-semantics.md` | source/operator-specific metadata meaning |
 | canonical identity/fingerprints/generation/idempotency | `execution-semantics.md` | domain-specific semantic identity hints |
-| `FeedState`, `StateKey`, `StateRecord`, `StateStore`, CAS, `.checkpoint()` | `execution-semantics.md` | typed payload meaning for a particular source/operator; backend codec support is documented/raises rather than advertised through a generic capability API |
+| `FeedState`, `StateKey`, `StateRecord`, `StateStore`, CAS, `.checkpoint()` | `execution-semantics.md` | typed payload meaning for a particular source/operator |
+| configured `StateStoreCapabilities`, standardized serialization IDs, and `validate_state()` preflight | `execution-semantics.md` | backend-specific codec support/documentation; no exhaustive generic `supported_types` registry |
 | connector sessions, transport lifecycle, credential references/resolution | `connectors.md` | provider/protocol credential implementations |
 | REST pagination, endpoint dependencies, REST cursor extraction | `rest-incremental.md` | provider-specific REST vocabulary |
 | recurring source observation/bootstrap/dedupe/change/anomaly policy | `feed-monitoring.md` | source-specific observation/cursor payload meaning |
@@ -80,9 +81,18 @@ checkpoint owner/boundary/restore rules
 and alert-history payload meaning. `rest-incremental.md` owns REST cursor extraction/encoding.
 Neither defines a parallel `SourceCheckpoint`, `CheckpointStore`, or generic state store.
 
-State-store codec support is intentionally **not** represented by a generic
-`supported_types`/capabilities protocol in the initial design. A backend documents what it can
-persist and raises the shared state codec errors when it cannot serialize or deserialize a value.
+State-store codec visibility is deliberately **coarse plus concrete** rather than exhaustive:
+
+```text
+store.capabilities
+    configured-instance serialization / persistent / portable metadata
+
+store.validate_state(state)
+    authoritative concrete preflight for one FeedState value
+```
+
+Built-in serialization identifiers are standardized, extension formats use `<provider>:<name>`,
+and there is no generic `supported_types` registry.
 
 ### Transport versus collection semantics
 
@@ -195,8 +205,8 @@ Before merging a new gameplan or substantial update:
 - Does it copy a dataclass/protocol/API from another plan?
 - Does it create `ExecutionContext`, `BatchPipe`, `CheckpointStore`, `AgentGraph`, or another
   competing generic runtime abstraction?
-- Does it introduce a generic state-store capability advertisement despite the initial no-capability
-  decision?
+- Does it introduce an exhaustive state-store type registry instead of the agreed coarse
+  capabilities + concrete preflight contract?
 - Does it repeat lifecycle, retry, credential, state, identity, capability, or boundedness
   rules?
 - Is `poll` being used for source recurrence or provider operation waiting?
