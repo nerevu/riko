@@ -368,12 +368,14 @@ implementation the author actually wrote — the runtime adapts the missing side
 @processor
 def pipe(item, **kwargs): ...
 
+
 register(ModuleDefinition(name="example.normalize", sync_pipe=pipe))
 ```
 
 ```python
 @processor
 async def pipe(item, **kwargs): ...
+
 
 register(ModuleDefinition(name="example.lookup", async_pipe=pipe))
 ```

@@ -468,8 +468,7 @@ Provide optional generated facets for display and model serialization:
 
 ```python
 @property
-def facets(self) -> frozenset[str]:
-    ...
+def facets(self) -> frozenset[str]: ...
 ```
 
 Computed facets:
@@ -492,8 +491,7 @@ class CapabilityProvider(Protocol):
         request: CapabilityDiscoveryRequest,
         *,
         context: ExecutionContext,
-    ) -> CapabilityCatalogFragment:
-        ...
+    ) -> CapabilityCatalogFragment: ...
 ```
 
 Initial providers:
@@ -527,11 +525,7 @@ type CapabilityPlan = (
 ## 8.2 Selection outcomes
 
 ```python
-type SelectionOutcome = (
-    CapabilityPlan
-    | CapabilityDiscoveryPlan
-    | NoCapabilityMatch
-)
+type SelectionOutcome = CapabilityPlan | CapabilityDiscoveryPlan | NoCapabilityMatch
 ```
 
 ## 8.3 Native module plan
@@ -967,9 +961,7 @@ class CapabilityExecutionPolicy:
     allow_open_world: bool = False
     allow_private_networks: bool = False
 
-    approval: ExecutionApproval = (
-        ExecutionApproval.POLICY
-    )
+    approval: ExecutionApproval = ExecutionApproval.POLICY
 
     maximum_result_bytes: int = 10_000_000
     timeout_seconds: float = 60
@@ -980,9 +972,7 @@ class CapabilityExecutionPolicy:
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SchemaDiscoveryPolicy:
-    allowed_catalogs: tuple[str, ...] = (
-        "apis_guru",
-    )
+    allowed_catalogs: tuple[str, ...] = ("apis_guru",)
 
     allowed_schema_hosts: tuple[str, ...] = ()
 
@@ -1008,9 +998,7 @@ class ApiExecutionPolicy:
     maximum_response_bytes: int = 10_000_000
     timeout_seconds: float = 30
 
-    approval: ExecutionApproval = (
-        ExecutionApproval.POLICY
-    )
+    approval: ExecutionApproval = ExecutionApproval.POLICY
 ```
 
 A discovered OpenAPI server URL is not automatically added to the execution allowlist.
@@ -1035,8 +1023,7 @@ class McpClientManager:
     async def session(
         self,
         server: str,
-    ) -> AsyncContextManager[McpSession]:
-        ...
+    ) -> AsyncContextManager[McpSession]: ...
 ```
 
 Default scope:
@@ -1084,9 +1071,7 @@ class ResultDisposition(StrEnum):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ResultPolicy:
     maximum_inline_bytes: int = 250_000
-    oversized: ResultDisposition = (
-        ResultDisposition.ARTIFACT
-    )
+    oversized: ResultDisposition = ResultDisposition.ARTIFACT
     preview_bytes: int = 4_096
 ```
 
@@ -1191,16 +1176,14 @@ class CapabilityIndex(Protocol):
     async def upsert(
         self,
         documents: Iterable[CapabilityDocument],
-    ) -> None:
-        ...
+    ) -> None: ...
 
     async def search(
         self,
         query: str,
         *,
         limit: int,
-    ) -> tuple[str, ...]:
-        ...
+    ) -> tuple[str, ...]: ...
 ```
 
 Initial search:

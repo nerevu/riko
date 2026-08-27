@@ -103,8 +103,7 @@ For example, `riko/modules/filter.py` declares behavior appropriate for filterin
     determinism="deterministic",
     state_checkpoint="replay",
 )
-def pipe(stream, extraction, tuples, **kwargs):
-    ...
+def pipe(stream, extraction, tuples, **kwargs): ...
 ```
 
 `riko/modules/sort.py` declares:
@@ -117,8 +116,7 @@ def pipe(stream, extraction, tuples, **kwargs):
     determinism="deterministic",
     require_bounded=True,
 )
-def pipe(stream, extraction, tuples, **kwargs):
-    ...
+def pipe(stream, extraction, tuples, **kwargs): ...
 ```
 
 `riko/modules/union.py` declares:
@@ -130,8 +128,7 @@ def pipe(stream, extraction, tuples, **kwargs):
     side_effects="none",
     determinism="deterministic",
 )
-def pipe(stream, extraction, tuples, **kwargs):
-    ...
+def pipe(stream, extraction, tuples, **kwargs): ...
 ```
 
 Its boundedness is `unknown` by default because the additional streams may not have known boundedness.
@@ -146,8 +143,7 @@ The callable map module declares its own defaults in `riko/modules/map.py`:
     side_effects="none",
     determinism="deterministic",
 )
-def pipe(item, extraction, objconf, **kwargs):
-    ...
+def pipe(item, extraction, objconf, **kwargs): ...
 ```
 
 The callable flat-map module declares:
@@ -160,8 +156,7 @@ The callable flat-map module declares:
     side_effects="none",
     determinism="deterministic",
 )
-def pipe(item, extraction, objconf, **kwargs):
-    ...
+def pipe(item, extraction, objconf, **kwargs): ...
 ```
 
 `flat_map` defaults to unknown boundedness because an arbitrary callable may produce any number of children. A caller that knows the expansion is finite may override it.
@@ -244,19 +239,19 @@ Options that depend on another module option remain the responsibility of that m
 For example, the map module begins with:
 
 ```python
-ordering="preserve"
+ordering = "preserve"
 ```
 
 but resolves:
 
 ```python
-ordered=False
+ordered = False
 ```
 
 to:
 
 ```python
-ordering="destroy"
+ordering = "destroy"
 ```
 
 Likewise:
@@ -331,8 +326,10 @@ configured:
 @processor
 def pipe(item, **kwargs): ...
 
+
 @processor
-async def pipe(item, **kwargs): ...      # single-impl async — no rename to async_pipe
+async def pipe(item, **kwargs): ...  # single-impl async — no rename to async_pipe
+
 
 @processor(emit=False)
 async def pipe(item, **kwargs): ...
@@ -405,8 +402,7 @@ def transform(
     *,
     context: Context,
     **kwargs,
-) -> Item:
-    ...
+) -> Item: ...
 ```
 
 or access it from ordinary keyword arguments:
@@ -600,15 +596,13 @@ class ItemCallable(Protocol):
         self,
         item: Item,
         **kwargs,
-    ) -> Item | Awaitable[Item]:
-        ...
+    ) -> Item | Awaitable[Item]: ...
 ```
 
 The expected simple form is:
 
 ```python
-def transform(item, **kwargs):
-    ...
+def transform(item, **kwargs): ...
 ```
 
 Context is supplied exactly as it is elsewhere in Riko:

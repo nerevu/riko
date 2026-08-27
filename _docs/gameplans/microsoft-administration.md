@@ -143,7 +143,9 @@ Prefer reconciliation capabilities over exposing raw administrative verbs direct
 ```python
 ensure_group_membership(user="user@contoso.org", group="Finance", present=True)
 ensure_channel_owner(user="admin@contoso.org", team=team_id, channel=channel_id)
-ensure_license(user="user@contoso.org", sku="Microsoft 365 Business Premium", present=True)
+ensure_license(
+    user="user@contoso.org", sku="Microsoft 365 Business Premium", present=True
+)
 ensure_saml_application(spec=...)
 ```
 

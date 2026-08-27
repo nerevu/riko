@@ -39,6 +39,7 @@ import api_utils as au
 ```python
 from api_utils import jsonify
 
+
 @app.route("/v1/data")
 def data():
     return jsonify(result=[{"id": 1, "name": "Alice"}], status_code=200)
@@ -50,6 +51,7 @@ def data():
 
 ```python
 from api_utils import cache_header
+
 
 @app.route("/map")
 @cache_header(cache, 60)

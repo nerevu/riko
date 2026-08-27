@@ -38,9 +38,9 @@ ckanutils is intended to be used directly from Python.
 ```python
 from ckanutils import CKAN
 
-ckan = CKAN(remote='http://demo.ckan.org')
-resource_id = '36f33846-cb43-438e-95fd-f518104a32ed'
-r, filepath = ckan.fetch_resource(resource_id, filepath='path/to/file.csv')
+ckan = CKAN(remote="http://demo.ckan.org")
+resource_id = "36f33846-cb43-438e-95fd-f518104a32ed"
+r, filepath = ckan.fetch_resource(resource_id, filepath="path/to/file.csv")
 print(r.encoding)
 ```
 
@@ -90,8 +90,9 @@ Example:
 
 ```python
 from ckanutils import api
-ckan = api.CKAN(hash_table='custom_hash_table')
-hash = ckan.get_hash('36f33846-cb43-438e-95fd-f518104a32ed')
+
+ckan = api.CKAN(hash_table="custom_hash_table")
+hash = ckan.get_hash("36f33846-cb43-438e-95fd-f518104a32ed")
 ```
 
 ## Scripts
