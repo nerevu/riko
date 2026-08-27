@@ -5,10 +5,10 @@
 Catalog the **server-side** protocol capabilities where Twisted has no real asyncio-ecosystem
 equivalent, identify which would genuinely benefit riko, and define the one pattern for adapting
 them: an external package that runs Twisted's protocol code on the shared asyncio loop via
-`twisted.internet.asyncioreactor`, exposing a riko `Feed` / `Publisher` / `Subscription` (P11) —
+`twisted.internet.asyncioreactor`, exposing a Riko `Feed` / `Publisher` / `Subscription` —
 **without** Twisted being the engine's runtime (ROADMAP §23.1).
 
-This is a *shelf* plan (like the other connector gameplans): none of it is on the Milestone-1/2
+This is a *shelf* plan (like the other connector gameplans): none of it is on the core implementation
 critical path. It exists so the "drop Twisted as the runtime" decision doesn't accidentally throw
 away the parts of Twisted that are actually irreplaceable.
 
@@ -18,29 +18,33 @@ riko is a stream-processing engine: a source is something that **emits records o
 **client** side (poll IMAP, connect IRC, SSH-exec) asyncio-native libraries are as good or better
 (`asyncssh`, `bottom`, `aioimaplib`) — use those, no Twisted. Twisted's genuine, unmatched
 strength is **listening**: being a server that accepts connections and turns inbound traffic into a
-stream. That maps exactly to a riko live push source (a `Publisher`/`Feed` that yields as data
-arrives), and it is where asyncio has no batteries-included peer.
+stream. That maps exactly to a Riko live subscription/feed, and it is where asyncio has no
+batteries-included peer.
 
 ## 3. The adaptation pattern (one shape for all of these)
 
 ```text
 riko-<proto>  (external package; entry-point registered per §24)
-    installs twisted.internet.asyncioreactor at import (cooperates with the engine's asyncio loop)
-    builds the Twisted server Factory/Protocol
-    each inbound message  ->  send() into an AnyIO memory object stream (backpressure)
+    installs twisted.internet.asyncioreactor once for the host asyncio loop
+    declares the Twisted listener/session as a Context Resource
+    private execution opens the live listening port/factory handle
+    each inbound message -> bounded AnyIO memory-object-stream bridge
     exposes:
-        a poll/interval or event Subscription (P11)  for pull-style pipes, or
-        a Feed (AsyncIterable[Item])                 for `async for` consumption
-    resources (listening port, factory) live in Context.resources (P11), closed on teardown
+        Subscription[T] / Feed source       for inbound messages
+        Publisher[T]                        when the protocol supports outbound publication
 ```
 
 Rules:
-- The reactor is **installed, not run** — Twisted protocol objects fire their callbacks on the
-  asyncio loop AnyIO already drives. This is not "a private event loop" (connectors.md §3.1).
-- Inbound → `MemoryObjectSendStream.send()` gives backpressure by construction (the Twisted
-  transport's `pauseProducing` is honored automatically when the buffer fills — the producer/
-  consumer bridge the two flow-control models).
-- Credentials/bind config are references, never inline (connectors.md §3.2).
+- The reactor is **installed, not run as a second engine runtime** — Twisted protocol callbacks use
+  the host asyncio loop. Adapter startup must fail clearly if a conflicting reactor is already
+  installed.
+- The bounded bridge does not make Twisted flow control automatic. The adapter must explicitly
+  couple a full/saturated AnyIO stream to Twisted producer `pauseProducing()` and resume it when
+  capacity returns; otherwise an aggressive peer can outrun downstream consumption.
+- Credentials/bind config are references, never inline (`connectors.md`).
+- Immutable `Context` contains `Resource` definitions only. Live listening ports, factories,
+  sessions, send/receive streams, and cleanup state are execution-owned resolved handles.
+- External resources supplied with `external=True` remain caller-owned; Riko never closes them.
 - One package per protocol family; no monolith.
 
 ## 4. Capability catalog
@@ -48,7 +52,7 @@ Rules:
 | Capability | Twisted module | asyncio peer? | riko use case | Verdict |
 |---|---|:--:|---|---|
 | **DNS server / responder** | `twisted.names` | none (asyncio has resolvers, no server) | passive-DNS feed; dynamic/authoritative responder; service-discovery source | **Pursue** — genuinely Twisted-unique |
-| **AMP typed RPC** | `twisted.protocols.amp` | none | distributed riko: worker nodes, inter-pipeline command/result RPC, backpressure-aware fan-out | **Pursue (P14 orchestration)** — Twisted-unique typed async RPC |
+| **AMP typed RPC** | `twisted.protocols.amp` | none | optional distributed-driver/worker RPC, command/result transport | **Pursue conditionally** — useful only if an external distributed driver needs it |
 | **IMAP server (expose results as a mailbox)** | `twisted.mail.imap4` | none (asyncio has clients only) | present a pipeline's output as an IMAP mailbox to existing mail clients | **Niche** — only if a real "riko as mailbox" need appears |
 | **Full mail store (SMTP-in + IMAP/POP3 store)** | `twisted.mail` | partial (`aiosmtpd` = SMTP-in only) | receive mail and retain/serve it, not just ingest-and-forward | **Conditional** — for *ingest only*, prefer `aiosmtpd`; use Twisted only if you need the store |
 | **Custom line/binary TCP-UDP servers** | `twisted.protocols.basic` (`LineReceiver`, `IntNStringReceiver`, `NetstringReceiver`, …) | asyncio `Protocol` + `start_server` | ingest syslog, statsd, custom framed feeds as a source | **Use asyncio by default**; reach for Twisted's framers only to avoid re-implementing a fiddly framer |
@@ -57,11 +61,11 @@ Rules:
 
 ## 5. Prioritization — what is actually worth building
 
-1. **`riko-amp`** (highest leverage). AMP is a typed, async, backpressure-friendly RPC with no
-   asyncio equivalent. It's the natural transport for **distributed riko** (P14 orchestration):
-   ship items between worker processes/nodes, carry the position envelope (§14) and delivery
-   guarantee (§10). Adapting AMP over the asyncio reactor gives distributed execution without
-   inventing a wire protocol.
+1. **`riko-amp`** (conditional high leverage). AMP is typed async RPC with no direct asyncio
+   equivalent. It is a candidate transport for an **optional distributed execution driver**:
+   worker commands/results can carry the canonical Riko item identity/provenance and explicit
+   state/artifact references without inventing a second semantic model. AMP does not become core
+   Pipeline transport merely because the adapter exists.
 2. **`riko-dns`** (unique, moderate use). A passive-DNS / responder source has real telemetry and
    security use cases and is impossible to build on asyncio without hand-rolling a DNS server.
 3. **`riko-mail`** (conditional). Split by role: **ingest** (receive mail → Feed) is better on
@@ -77,24 +81,27 @@ need).
 ## 6. Non-goals and cautions
 
 - **Not a reason to keep Twisted as the runtime.** Every item here is an *adapter* that bridges
-  Twisted onto the asyncio loop; the engine core stays AnyIO (ROADMAP §23.1, §23 P7.6).
-- **One reactor, installed once.** Two packages both installing the asyncio reactor is idempotent,
-  but document the requirement and fail clearly if a different reactor is already installed.
-- **Backpressure must reach the socket.** The inbound bridge must translate a full memory object
-  stream into Twisted transport `pauseProducing`, or an aggressive peer can unbound memory (§22).
+  Twisted onto the asyncio loop; the engine core stays AnyIO (ROADMAP §23.1).
+- **One reactor, installed once.** Adapter packages must coordinate installation and fail clearly
+  if a different reactor is already installed.
+- **Backpressure must reach the socket.** A bounded AnyIO queue alone is insufficient for a callback
+  producer. The bridge must translate saturation into Twisted transport/producer pause and later
+  resume, or an aggressive peer can create unbounded pressure upstream.
 - **Test without the network.** Reuse the `FakeReactor`/memory-reactor pattern (already in
   `riko/bado/mock.py`) so server adapters are testable without real sockets.
-- These are **shelf items** — sequence them after the runtime (P7), registry/entry-points (P8),
-  and pub/sub + poll protocols (P11) exist, and only when a concrete use case lands.
+- These are **shelf items**. Sequence them only after the common `Pipeline` execution/resource and
+  `Publisher`/`Subscription` foundations they consume are available; current forward dependency
+  order lives in [implementation-sequence.md](implementation-sequence.md).
 
 ## 7. Relationship to other plans
 
 - **ROADMAP §23.1** — the runtime/protocol orthogonality principle these adapters embody.
-- **connectors.md §3.1** — asyncio-native protocol clients by default; this plan is the
-  server-side, Twisted-bridged complement for the capabilities with no asyncio peer.
-- **orchestration.md** — `riko-amp` is a candidate transport for distributed runs.
-- **P11 (`docs/MILESTONES.md`)** — `Publisher`/`Subscription`/poll are the interfaces every
-  server adapter here implements.
+- **execution-semantics.md** — immutable Context/resources, private execution lifecycle,
+  `Feed`/`Publisher`/`Subscription`, cancellation, and backpressure semantics.
+- **connectors.md** — protocol-session/resource ownership and credential references.
+- **fanout-topology.md** — publication/subscription topology and branch lifecycle.
+- **orchestration.md / extensibility.md E6** — an AMP adapter is only a candidate transport for an
+  optional distributed driver; it does not redefine Pipeline execution.
 
 ---
 
@@ -136,14 +143,13 @@ must not be conflated. "Twisted is not the runtime" does **not** mean "Twisted p
 banned." Twisted's producer/consumer flow control and its protocol library were once reasons to
 keep it as the loop; both are now covered without that coupling:
 
-* **Flow control** — Twisted's push-producer `pauseProducing`/`resumeProducing` is the
-  callback-era ancestor of AnyIO memory object streams, where a bounded `send()` suspends
-  automatically (backpressure by construction, not by convention). §6 backpressure is built on
-  AnyIO streams, not Twisted producers.
+* **Flow control** — Riko uses bounded AnyIO memory streams for execution backpressure. Callback-
+  driven protocol adapters such as Twisted must explicitly bridge that bounded capacity to the
+  protocol's producer pause/resume mechanism; the two APIs do not couple themselves automatically.
 * **Protocols** — riko ingests/emits streams, so a network protocol is a **source/sink adapter**
-  (a `Feed`, `Publisher`, or `Subscription` — see §11/§24), never a core-runtime concern. The
-  protocol library is a dependency of that adapter, ideally an external package, so a new protocol
-  is a small focused package rather than a core change.
+  (a `Feed`, `Publisher`, or `Subscription`), never a core-runtime concern. The protocol library is
+  a dependency of that adapter, ideally an external package, so a new protocol is a small focused
+  package rather than a core change.
 
 Adapter library selection is on the merits, per protocol, and is mostly asyncio-native:
 
@@ -160,10 +166,9 @@ Adapter library selection is on the merits, per protocol, and is mostly asyncio-
 superior — chiefly **server-side** roles and full-suite completeness (`twisted.names` DNS server,
 `twisted.mail` IMAP/SMTP servers, Twisted's `AMP` RPC) — run it **on the asyncio event loop** via
 `twisted.internet.asyncioreactor` **inside that one adapter package**. riko gains Twisted's
-protocol strengths without Twisted being the engine's loop. See
-this gameplan for the server-side
+protocol strengths without Twisted being the engine's loop. See this gameplan for the server-side
 capabilities worth pursuing this way.
 
-Consequence for §24/connectors: adapters default to asyncio-native protocol libraries and reject
+Consequence for connectors: adapters default to asyncio-native protocol libraries and reject
 Twisted *as a runtime*; a Twisted protocol *implementation* bridged via `asyncioreactor` is
 permitted within an adapter when it is the superior option (almost always a server role).
