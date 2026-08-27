@@ -26,13 +26,13 @@ jobs:
           enable-cache: true
 
       - name: Sort imports
-        run: uvx ruff check --select I --fix
+        run: uvx --from "ruff~=0.16" ruff check --select I --fix
 
       - name: Fix style issues
-        run: uvx ruff check --fix
+        run: uvx --from "ruff~=0.16" ruff check --fix
 
       - name: Format
-        run: uvx ruff format
+        run: uvx --from "ruff~=0.16" ruff format
 
   lint:
     name: lint (py${{ matrix.python-version }})

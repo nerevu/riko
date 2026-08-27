@@ -65,9 +65,9 @@ URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 MATH_WORDS = {"seconds", "minutes", "hours", "days", "weeks", "months", "years"}
 TEXT_WORDS = {"last", "next", "week", "month", "year"}
 GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
-    "coordinates": lambda x: lookup_coordinates(x),
-    "street_address": lambda x: lookup_street_address(x),
-    "ip_address": lambda x: lookup_ip_address(x),
+    "coordinates": lambda x: lookup_coordinates(x),  # noqa: PLW0108
+    "street_address": lambda x: lookup_street_address(x),  # noqa: PLW0108
+    "ip_address": lambda x: lookup_ip_address(x),  # noqa: PLW0108
     "currency": lambda x: CURRENCY_CODES.get(x, {}),
 }
 

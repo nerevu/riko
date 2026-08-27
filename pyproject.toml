@@ -76,7 +76,7 @@ lint = [
     "pygments>=2.20.0",
     "pylint>=4.0.5,<5.0.0",
     "pyright>=1.1.411",
-    "ruff>=0.13.1",
+    "ruff>=0.16.5,<0.17.0",
 ]
 
 dev = [
@@ -116,6 +116,10 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
+# E704 is default-ignored by ruff (formatter conflict) but suppressed for an
+# external flake8 run on overload one-liners; declare it so RUF102 doesn't flag
+# the `# noqa: E704` comments as invalid rule codes.
+external = ["E704"]
 extend-select = [
     "E",    # pycodestyle errors
     "E302", # pycodestyle: Two blank lines before top-level defs
