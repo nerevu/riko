@@ -10,10 +10,13 @@ from collections.abc import AsyncIterable
 from pathlib import Path
 from typing import Protocol, overload
 
-from riko.bado import run
-from riko.collections import AsyncPipe, SyncPipe
+import pytest
+
+from riko import AsyncPipe, SyncPipe, issync, run
 
 TESTS_DIR = Path(__file__).parent.absolute()
+
+skipif_issync = pytest.mark.skipif(issync, reason="async support not available")
 
 
 def aresolve[T](aiterable: AsyncIterable[T]) -> list[T]:

@@ -10,13 +10,11 @@ Lifecycle/close/split/export parity lives in ``test_pipe_lifecycle.py`` and
 ``test_context_modes.py``. This file locks *data-output* equivalence.
 """
 
-import pytest
-
-from riko.bado import issync, run
+from riko.bado import run
 from riko.collections import AsyncPipe, SyncPipe
 from riko.types.general import Item
 from riko.types.modules import ItemBuilderConf, StrReplaceConf, StrReplaceConfRule
-from tests import PipeBuilder, aresolve
+from tests import PipeBuilder, aresolve, skipif_issync
 
 BUILDER_CONF = ItemBuilderConf({"attrs": {"key": "content", "value": "a,bb,ccc"}})
 STRR_CONF = StrReplaceConf({"rule": StrReplaceConfRule(find="c", replace="C")})
@@ -37,7 +35,7 @@ def _tokenize[P: (SyncPipe, AsyncPipe)](pipe: type[P]) -> P:
     return pipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
 
 
-@pytest.mark.skipif(issync, reason="async support not available")
+@skipif_issync
 class TestOutputParity:
     def test_pipe_chaining(self):
         sync_result, async_result = _both(lambda pipe: _tokenize(pipe).count())
@@ -83,7 +81,7 @@ class TestOutputParity:
         assert sync_result == [{"content": "a"}, {"content": "bb"}]
 
 
-@pytest.mark.skipif(issync, reason="async support not available")
+@skipif_issync
 class TestLifecycleObservableParity:
     """One-shot behaviors whose *observable* result must match across engines."""
 

@@ -1,6 +1,16 @@
 Changelog
 =========
 
+v0.77.0 (Unreleased)
+--------------------
+
+Dev
+~~~
+
+- Centralized the various ``skipif(issync)`` test marks into a single ``skipif_issync``.
+
+- Added pub/sub sync/async streaming coverage and strict-xfail tripwire.
+
 v0.76.1 (2026-08-28)
 --------------------
 

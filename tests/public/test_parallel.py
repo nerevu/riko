@@ -16,9 +16,10 @@ contract: same results as sequential, order control, and non-materialization.
 import pytest
 
 from riko import get_path
-from riko.bado import issync, run
+from riko.bado import run
 from riko.collections import AsyncCollection, AsyncPipe
 from riko.types.modules import ItemBuilderConf
+from tests import skipif_issync
 
 BUILDER_CONF = ItemBuilderConf({"attrs": {"key": "content", "value": "a,bb,ccc,dddd"}})
 SOURCES = [{"url": get_path("feed.xml")}, {"url": get_path("ouseful.xml")}]
@@ -28,7 +29,7 @@ def _by_content(items):
     return sorted(items, key=lambda item: item["content"])
 
 
-@pytest.mark.skipif(issync, reason="async support not available")
+@skipif_issync
 class TestAsyncBoundedParallel:
     def test_parallel_matches_sequential_as_multiset(self):
         def build(parallel):
@@ -120,7 +121,7 @@ class TestAsyncBoundedParallel:
         assert first.get("content") is not None
 
 
-@pytest.mark.skipif(issync, reason="async support not available")
+@skipif_issync
 class TestAsyncCollectionParallel:
     def test_ordered_matches_unordered_as_multiset(self):
         async def main():

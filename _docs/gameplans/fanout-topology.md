@@ -398,26 +398,64 @@ lifecycle/tap transition. Do not partially backport F5 semantics into the MVP.
 
 ## 15. Testing strategy
 
-Required target contract tests include:
+The tests below are grouped by **what they constrain**, not by phase. §15.1 are behavioral
+outcomes that any implementation (F1…F5) must satisfy — they assert observable stream behavior, not
+the pub/sub API surface, so they survive the F5 object-first transition unchanged. §15.2 documents
+current compatibility behavior that F5 is *expected to change*; it is characterization, not a forward
+contract. §15.3 asserts the F5 object-first surface itself and must not be frozen as migration tests
+before that surface lands. (Test names below reference behavior only; xfail reasons stay
+API-agnostic — "… not yet implemented" — never an internal F-label.)
+
+### 15.1 Acceptance contracts (behavioral outcomes — decoupled from the API surface)
+
+Encode these now. Where the behavior is not yet true, land a `strict=True` xfail so the guard flips
+(and demands removal) the moment the behavior arrives.
+
+Pub/sub streaming:
 
 1. one source broadcasts incrementally to two subscriptions;
-2. zero-buffer subscription propagates backpressure;
-3. bounded `overflow="drop"` drops oldest only on that configured subscription;
-4. async subscriber sees its first item before publisher completion;
-5. sync and async `tap=` both discard return values and preserve the item;
-6. multiple publishers keep one subscription open until all publishers finish;
-7. multiple same-name subscription objects remain distinct;
-8. external `Subscription` works as a Pipeline source;
-9. `split()` consumes upstream once and streams to active branches;
-10. unused split outputs allocate no runtime branch/backpressure;
-11. split is lossless under slow consumers;
-12. branch routes every item exactly once;
-13. route preserves per-branch order;
-14. `union` preserves sequential concatenation and input provenance;
-15. join retains keyed relational semantics;
-16. cancellation/early close leaks no tasks/channels/subscriptions;
-17. attached publication branches clean up without a user drain;
-18. topology introspection reports stream, fan-in, split, and subscription edges.
+2. an async subscriber sees its first item before the publisher finishes reading its source
+   — *shipped*; `test_async_subscriber_sees_item_before_publisher_completes`;
+3. async `receive` does not materialize its source; the zero-buffer rendezvous channel delivers each
+   item as it is published — *shipped*; `test_async_receive_does_not_materialize`;
+4. async `send` does not buffer its own passthrough return (an unbounded source still returns a
+   stream) — *not yet*; strict-xfail `test_async_send_does_not_buffer_its_source`;
+5. publish/send is transparent: the publisher's own stream passes through unchanged;
+6. zero-buffer subscription propagates backpressure;
+7. lifecycle/state markers never leak into user data — *not yet* (sync `receive` surfaces
+   `PENDING`/`DONE`); strict-xfail `test_lifecycle_markers_do_not_leak_into_user_data`;
+8. bounded `overflow="drop"` drops oldest only on that configured subscription;
+9. multiple publishers keep one subscription open until all publishers finish (completion outcome).
+
+Topology:
+
+10. `split()` consumes upstream once and streams to active branches;
+11. unused split outputs allocate no runtime branch/backpressure;
+12. split is lossless under slow consumers;
+13. branch routes every item exactly once;
+14. route preserves per-branch order;
+15. `union` preserves sequential concatenation and input provenance;
+16. join retains keyed relational semantics;
+17. cancellation/early close leaks no tasks/channels/subscriptions;
+18. attached publication branches clean up without a user drain.
+
+### 15.2 MVP characterization (current compatibility behavior; expected to change under F5)
+
+Keep these to pin present behavior, but do **not** read them as forward contracts:
+
+1. subscriber `func` transformation semantics in both sync and async (`test_pubsub_funcs`) — F5
+   replaces this with `tap=` (return discarded);
+2. sync `receive` currently interleaves `PENDING`/`DONE` markers into the drained stream
+   (`test_pubsub`) — the acceptance target that it must *not* is §15.1(7).
+
+### 15.3 F5 API-shape contracts (assert once the object-first surface lands; not migration tests)
+
+1. object-first `Publisher` / `Subscription` / `Channel` with `Pipeline.subscribe(...)` /
+   `flow.publish(subscription)`;
+2. sync and async `tap=` both discard return values and preserve the item;
+3. multiple same-name subscription objects remain distinct by identity;
+4. external `Subscription` works as a Pipeline source;
+5. topology introspection reports stream, fan-in, split, and subscription edges (F6 surface).
 
 ## 16. Implementation phases
 

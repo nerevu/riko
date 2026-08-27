@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from riko._pubsub import async_hub
-from riko.bado import create_task_group, issync, run
+from riko.bado import create_task_group, run
 from riko.cast import SortableCastType
 from riko.exceptions import ReceiverUnavailableError
 from riko.modules.join import pipe as join_pipe
@@ -17,8 +17,7 @@ from riko.modules.send import async_pipe as async_send
 from riko.modules.sort import pipe as sort_pipe
 from riko.types.general import Feed, Item, ItemOrValue, Stream
 from riko.types.modules import JoinConf, SendConf, SortConf, SortConfRule
-
-marks = pytest.mark.skipif(issync, reason="async support not available")
+from tests import skipif_issync
 
 
 def _values(stream: Any, key: str) -> list[Any]:
@@ -158,7 +157,31 @@ async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrVa
     return out
 
 
-@marks
+async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
+    first: ItemOrValue = {}
+    seen = 0
+
+    async def _snapshot(receive_stream: Any) -> None:
+        nonlocal first, seen
+        idx = 0
+
+        async for item in receive_stream:
+            if idx == 0:
+                first, seen = item, len(consumed)
+
+            idx += 1
+
+    async with (
+        async_hub.subscribe("r-recv-lazy") as receive_stream,
+        create_task_group() as tg,
+    ):
+        tg.start_soon(_snapshot, receive_stream)
+        await async_send(_finite_source(consumed), others=["r-recv-lazy"])
+
+    return (first, seen)
+
+
+@skipif_issync
 @pytest.mark.timeout(10)
 @pytest.mark.xfail(reason="lazy async fan-out is not yet implemented", strict=True)
 def test_async_send_does_not_buffer_its_source():
@@ -173,7 +196,7 @@ def test_async_send_does_not_buffer_its_source():
     assert seen <= _LOOKAHEAD
 
 
-@marks
+@skipif_issync
 @pytest.mark.timeout(10)
 def test_async_send_completes_targets_when_publish_fails():
     """
@@ -187,7 +210,7 @@ def test_async_send_completes_targets_when_publish_fails():
     assert received == [{"x": "foo", "i": 0}]
 
 
-@marks
+@skipif_issync
 @pytest.mark.timeout(10)
 def test_async_send_accepts_a_feed_source():
     """
@@ -203,3 +226,35 @@ def test_async_send_accepts_a_feed_source():
 
     assert out == expected
     assert received == expected
+
+
+@skipif_issync
+@pytest.mark.timeout(10)
+def test_async_receive_does_not_materialize():
+    """
+    The zero-buffer rendezvous channel hands each published item to the
+    subscriber before ``send`` pulls the next one. A subscriber observes its first
+    item while the source is barely read. It never waits for the whole source to
+    materialize. (The eager bound is on ``send``'s own passthrough return; see
+    ``test_async_send_does_not_buffer_its_source``.)
+    """
+    consumed: list[int] = []
+    first, seen = run(_receive_first, consumed)
+
+    assert first == {"x": "foo", "i": 0}
+    assert seen <= _LOOKAHEAD
+
+
+@skipif_issync
+@pytest.mark.timeout(10)
+def test_async_subscriber_sees_item_before_publisher_completes():
+    """
+    The canonical incremental-delivery contract: a subscriber's first item
+    arrives before the publisher finishes reading its source (a weaker bound
+    than ``test_async_receive_does_not_materialize``).
+    """
+    consumed: list[int] = []
+    first, seen = run(_receive_first, consumed)
+
+    assert first == {"x": "foo", "i": 0}
+    assert seen < _SOURCE_LEN

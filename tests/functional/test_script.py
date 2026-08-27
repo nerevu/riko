@@ -13,8 +13,7 @@ from os.path import isfile
 
 import pytest
 
-from riko.bado import issync
-from tests import TESTS_DIR
+from tests import TESTS_DIR, skipif_issync
 
 _BASEDIR = TESTS_DIR.parent
 DEMO_SCRIPT = "run-pipe"
@@ -117,7 +116,7 @@ def test_demo_sync(value):
 
 
 @pytest.mark.anyio
-@pytest.mark.skipif(issync, reason="async support not installed")
+@skipif_issync
 @pytest.mark.parametrize("value", gen_params())
 def test_demo_async(value):
     argument, expected = value

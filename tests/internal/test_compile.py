@@ -13,7 +13,7 @@ from json import loads
 
 import pytest
 
-from riko.bado import issync, run
+from riko.bado import run
 from riko.compile import (
     build_pipeline,
     compile_pipe,
@@ -32,7 +32,7 @@ from riko.types.modules import (
     Param,
     TruncateRawConf,
 )
-from tests import TESTS_DIR
+from tests import TESTS_DIR, skipif_issync
 
 PIPELINE_DIR = TESTS_DIR / "pipelines"
 PYPIPELINE_DIR = TESTS_DIR / "pypipelines"
@@ -301,7 +301,7 @@ def test_convert_dag_generates_ids_when_omitted():
 
 
 @pytest.mark.anyio
-@pytest.mark.skipif(issync, reason="async support not installed")
+@skipif_issync
 def test_async_codegen_matches_sync():
     """
     ``compile(is_async=True)`` emits a runnable anyio pipeline whose output

@@ -19,7 +19,7 @@ import pytest
 from riko._io import Fetch
 from riko._iterutils import listize
 from riko._rssutils import augment_entries, truncate_content
-from riko.bado import issync, run
+from riko.bado import run
 from riko.compile import (
     abuild_pipeline,
     build_pipeline,
@@ -39,7 +39,7 @@ from riko.types.general import (
     SyncPipeParser,
 )
 from riko.types.values import FeedParserRSSEntry, StatefulItem
-from tests import TESTS_DIR
+from tests import TESTS_DIR, skipif_issync
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
@@ -300,7 +300,7 @@ class TestBasics:
         assert item["k:content"].startswith("<p>Hello, I need to fix an application")
         assert item["k:content"].endswith("are welcome to this project.<br><br><b>")
 
-    @pytest.mark.skipif(issync, reason="async support not installed")
+    @skipif_issync
     def test_async_kazeeki1(self):
         """Loads the async kazeeki simple test fetchdata pipeline."""
         pipe_name = "pipe_async_kazeeki1"
@@ -336,7 +336,7 @@ class TestBasics:
         assert item["k:content"].startswith(" With this specification sheet we")
         assert item["k:content"].endswith("for implementing a website for a german...")
 
-    @pytest.mark.skipif(issync, reason="async support not installed")
+    @skipif_issync
     def test_async_kazeeki2(self):
         """Loads the async kazeeki simple test itembuilder pipeline."""
         pipe_name = "pipe_async_kazeeki2"

@@ -13,10 +13,8 @@ global-vs-per-parent ``count`` gap.
 
 from typing import cast
 
-import pytest
-
 import riko.modules.loop as loop_module
-from riko.bado import issync, run
+from riko.bado import run
 from riko.context import Context
 from riko.modules._subpipe import mark_subpipe
 from riko.modules.loop import async_pipe as async_loop
@@ -32,6 +30,7 @@ from riko.types.modules import (
     StrconcatRawConf,
     TokenizerRawConf,
 )
+from tests import skipif_issync
 
 PARENTS = [{"title": "a b"}, {"title": "c d"}]
 TOKENIZER_CONF = TokenizerRawConf({"delimiter": {"type": "text", "value": " "}})
@@ -300,7 +299,7 @@ class TestSubpipeLoop:
         assert closed == ["a", "b"]
 
 
-@pytest.mark.skipif(issync, reason="async support not installed")
+@skipif_issync
 class TestAsyncLoop:
     """
     The lazy-async loop (``async_pipe``) runs the embed once per parent
@@ -366,7 +365,7 @@ class TestAsyncLoop:
         assert seen == ["a b"]
 
 
-@pytest.mark.skipif(issync, reason="async support not installed")
+@skipif_issync
 class TestAsyncSubpipeLoop:
     """
     The lazy-async loop may embed an *async* sub-pipeline (``AsyncSubPipe``): it
