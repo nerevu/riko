@@ -1,4 +1,4 @@
-# Claude Code Implementation Gameplan: Riko Site Pipeline
+# Riko site pipeline gameplan
 
 ## 1. Mission
 

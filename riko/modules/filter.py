@@ -1,29 +1,31 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for filtering (including or excluding) items from a stream.
+Filters (includes or excludes) items from a stream.
 
-With Filter you create rules that compare item elements to values you specify.
+With filter you create rules that compare item elements to values you specify.
 So, for example, you may create a rule that says "permit items where the
 item.description contains 'kittens'". Or a rule that says "omit any items where
 the item.y:published is before yesterday".
 
-A single Filter module can contain multiple rules. You can choose whether those
-rules will Permit or Block items that match those rules. Finally, you can choose
+A single filter module can contain multiple rules. You can choose whether those
+rules will permit or block items that match those rules. Finally, you can choose
 whether an item must match all the rules, or if it can just match any rule.
 
+Lazy: items are tested and yielded one at a time.
+
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.filter import pipe
         >>>
-        >>> items = ({'x': x} for x in range(5))
-        >>> rule = {'field': 'x', 'op': 'is', 'value': 3}
-        >>> next(pipe(items, conf={'rule': rule}))
+        >>> items = ({"x": x} for x in range(5))
+        >>> rule = {"field": "x", "op": "is", "value": 3}
+        >>> next(pipe(items, conf={"rule": rule}))
         {'x': 3}
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Operator wrapper options.
+    DEFAULTS: Default operator configuration.
 
 """
 
@@ -43,12 +45,13 @@ from riko._serialize import repr_cache
 from riko.cast import cast_date
 from riko.dotdict import DotDict
 from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
+from riko.types.guards import is_mapping
 from riko.types.modules import FilterConfRule
 
 from . import operator
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
-DEFAULTS: Defaults = {"combine": "and", "permit": True}
+DEFAULTS: Defaults = {"combine": "and", "permit": True, "stop": False}
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
 SWITCH: dict[str, Callable[..., bool]] = {
@@ -123,15 +126,14 @@ def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
     """
     Examples:
         >>> from meza.fntools import Objectify
-        >>> from riko.dotdict import DotDict
         >>>
-        >>> numeric = Objectify({'field': 'x', 'op': 'atleast', 'value': 3})
-        >>> parse_rule(numeric, DotDict({'x': 5}))
+        >>> numeric = Objectify({"field": "x", "op": "atleast", "value": 3})
+        >>> parse_rule(numeric, {"x": 5})
         True
-        >>> parse_rule(numeric, DotDict({}))
+        >>> parse_rule(numeric, {})
         False
-        >>> unknown = Objectify({'field': 'x', 'op': 'bogus', 'value': 3})
-        >>> parse_rule(unknown, DotDict({'x': 5}))
+        >>> unknown = Objectify({"field": "x", "op": "bogus", "value": 3})
+        >>> parse_rule(unknown, {"x": 5})
         False
 
     """
@@ -140,8 +142,8 @@ def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
 
     if isinstance(item, Objectify):
         _x = getattr(item, rule.field)
-    elif isinstance(item, (dict, DotDict)):
-        _x = item.get(rule.field, **kwargs)
+    elif is_mapping(item):
+        _x = DotDict.dictize(item).get(rule.field, **kwargs)
     else:
         raise TypeError(f"Item is not a mapping: {item!r}.")
 
@@ -177,41 +179,42 @@ def parser(
     _: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Parses the pipe content
+    Yields the items that match (or fail to match) every rule.
+
+    Each rule's ``op`` is validated once up front, so an unsupported operation
+    raises before any item is read.
 
     Args:
-        stream (Iter[dict]): The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        _: The source. Unused; items are read from `tuples` instead.
 
-        rules (List[obj]): the item independent rules (Objectify instances).
+        extract: The item independent rules.
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, rules)
-            `item` is an element in the source stream (a DotDict instance)
-            and `rules` is the rule configuration (an Objectify instance).
-            Note: this shares the `stream` iterator, so consuming it will
-            consume `stream` as well.
-
-        kwargs (dict): Keyword arguments.
+        tuples: Iterable of tuples of (item, objconf) `item` is an element in the
+            source stream and `objconf` is the item configuration. Note: this shares
+            the `stream` iterator, so consuming it will consume `stream` as well.
 
     Yields:
-        dict: The output
+        Each item for which the combined rules match, or fail to match when
+        ``permit`` is False.
+
+    Raises:
+        ValueError: If a rule names an unsupported ``op``.
 
     Examples:
         >>> from meza.fntools import Objectify
-        >>> from riko.dotdict import DotDict
         >>> from itertools import repeat
         >>>
-        >>> conf = DotDict({'permit': True, 'combine': 'and'})
-        >>> kwargs = {'conf': conf}
-        >>> rule = {'field': 'ex', 'op': 'greater', 'value': 3}
+        >>> conf = {"permit": True, "combine": "and"}
+        >>> kwargs = {"conf": conf}
+        >>> rule = {"field": "ex", "op": "greater", "value": 3}
         >>> objconf = Objectify(conf)
         >>> objrule = Objectify(rule)
-        >>> stream = (DotDict({'ex': x}) for x in range(5))
+        >>> stream = ({"ex": x} for x in range(5))
         >>> tuples = zip(stream, repeat(objconf))
         >>> next(parser(stream, [objrule], tuples, **kwargs))
         {'ex': 4}
-        >>> bad = Objectify({'field': 'ex', 'op': 'bogus', 'value': 3})
-        >>> stream = (DotDict({'ex': x}) for x in range(5))
+        >>> bad = Objectify({"field": "ex", "op": "bogus", "value": 3})
+        >>> stream = ({"ex": x} for x in range(5))
         >>> tuples = zip(stream, repeat(objconf))
         >>> next(parser(stream, [bad], tuples, **kwargs))
         Traceback (most recent call last):
@@ -247,48 +250,59 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that asynchronously filters for source items matching
-    the given rules.
+    Asynchronously filters a stream to the items matching the given rules.
+
+    Lazy: items are tested and yielded one at a time.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+
+        conf (dict): The pipe configuration.
+
+            rule (dict | list[dict]): The filter criteria. Required.
+
+                field (str): The item field to search.
+
+                op (str): The comparison, one of "contains", "doesnotcontain",
+                    "matches", "eq", "is", "isnot", "truthy", "falsy",
+                    "greater", "after", "atleast", "less", "before", "atmost".
+
+                value (scalar): The value to compare the item's field to.
+
+            permit (bool): Whether to yield the matches rather than the
+                non-matches (default: True).
+
+            combine (str): How to interpret multiple rules, either "and" (all
+                rules must pass) or "or" (any rule must pass) (default: "and").
+
+            stop (bool): Whether to stop at the first item that fails. Later
+                items are dropped even if they would match (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'rule'. May
-            contain the keys 'permit', 'combine', or 'stop'.
+        assign (str): Field each item is nested under. Ignored when ``emit`` is
+            True (default: "filter").
 
-            permit (bool): returns the matches if True, otherwise
-                returns the non-matches (default: True).
+        emit (bool): Whether to emit each item directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-            rule (dict): can be either a dict or list of dicts. Must contain
-                the keys 'field', 'op', and 'value'.
+    Yields:
+        - ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
 
-                field (str): the item field to search.
-                op (str): the operation, must be one of 'contains',
-                    'doesnotcontain', 'matches', 'is', 'isnot', 'truthy',
-                    'falsy', 'greater', 'less', 'after', or 'before',
-                    'atleast', 'atmost'.
-
-                value (scalar): the value to compare the item's field to.
-
-            combine (str): determines how to interpret multiple rules and must
-                be either 'and' or 'or'. 'and' means all rules must pass, and
-                'or' means any rule must pass (default: 'and')
-
-            stop (bool): stop after first failure (default: False)
-
-    Returns:
-        Awaitable: iterator of the filtered items
+    Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
+        ValueError: If a rule names an unsupported ``op``.
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
-        ...     rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
-        ...     result = await async_pipe(items, conf={'rule': rule})
-        ...     print(next(result)['title'])
+        ...     items = [{"title": "Good job!"}, {"title": "Website Developer"}]
+        ...     rule = {"field": "title", "op": "contains", "value": "web"}
+        ...     result = await async_pipe(items, conf={"rule": rule})
+        ...     print(next(result)["title"])
         >>>
         >>> run(main)
         Website Developer
@@ -300,53 +314,62 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that extracts items matching the given rules.
+    Filters a stream to the items matching the given rules.
+
+    Lazy: items are tested and yielded one at a time.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+
+        conf (dict): The pipe configuration.
+
+            rule (dict | list[dict]): The filter criteria. Required.
+
+                field (str): The item field to search.
+
+                op (str): The comparison, one of "contains", "doesnotcontain",
+                    "matches", "eq", "is", "isnot", "truthy", "falsy",
+                    "greater", "after", "atleast", "less", "before", "atmost".
+
+                value (scalar): The value to compare the item's field to.
+
+            permit (bool): Whether to yield the matches rather than the
+                non-matches (default: True).
+
+            combine (str): How to interpret multiple rules, either "and" (all
+                rules must pass) or "or" (any rule must pass) (default: "and").
+
+            stop (bool): Whether to stop at the first item that fails. Later
+                items are dropped even if they would match (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'rule'. May
-            contain the keys 'permit', 'combine', or 'stop'.
+        assign (str): Field each item is nested under. Ignored when ``emit`` is
+            True (default: "filter").
 
-            permit (bool): returns the matches if True, otherwise
-                returns the non-matches (default: True).
-
-            rule (dict): can be either a dict or list of dicts. Must contain
-                the keys 'field', 'op', and 'value'.
-
-                field (str): the item field to search.
-                op (str): the operation, must be one of 'contains',
-                    'doesnotcontain', 'matches', 'is', 'isnot', 'truthy',
-                    'falsy', 'greater', 'less', 'after', or 'before',
-                    'atleast', 'atmost'.
-
-                value (scalar): the value to compare the item's field to.
-
-            combine (str): determines how to interpret multiple rules and must
-                be either 'and' or 'or'. 'and' means all rules must pass, and
-                'or' means any rule must pass (default: 'and')
-
-            stop (bool): stop after first failure (default: False)
-
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
+        emit (bool): Whether to emit each item directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
     Yields:
-        dict: the filtered items
+        - ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
+
+    Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
+        ValueError: If a rule names an unsupported ``op``.
 
     Examples:
-        >>> items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
-        >>> rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
-        >>> next(pipe(items, conf={'rule': rule}))
+        >>> items = [{"title": "Good job!"}, {"title": "Website Developer"}]
+        >>> rule = {"field": "title", "op": "contains", "value": "web"}
+        >>> next(pipe(items, conf={"rule": rule}))
         {'title': 'Website Developer'}
-        >>> rule['value'] = 'kjhlked'
-        >>> any(pipe(items, conf={'rule': [rule]}))
+        >>> rule["value"] = "kjhlked"
+        >>> any(pipe(items, conf={"rule": [rule]}))
         False
-        >>> items = ({'x': x} for x in range(5))
-        >>> rule = {'field': 'x', 'op': 'less', 'value': 2}
-        >>> result = pipe(items, conf={'rule': rule, 'stop': True})
+        >>> items = ({"x": x} for x in range(5))
+        >>> rule = {"field": "x", "op": "less", "value": 2}
+        >>> result = pipe(items, conf={"rule": rule, "stop": True})
         >>> len(list(result))
         2
 

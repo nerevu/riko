@@ -14,20 +14,13 @@ from importlib import import_module
 from pkgutil import iter_modules as iter_package_modules
 from typing import Literal, cast, overload
 
+from riko._importutils import import_or_else
 from riko._iterutils import broadcast
-from riko.cast import BasicCastType
-from riko.modules._inference import gen_operator_return_kinds
-from riko.types.general import (
-    ModuleParser,
-    ModuleWrapper,
-)
-from riko.types.modules import (
-    ModuleMetadata,
-    ModuleSubtype,
-    ModuleSubtypes,
-    ModuleType,
-    OperatorReturnKind,
-)
+from riko.ext.names import derive_category, normalize_module_name
+from riko.ext.registry import ModuleDefinition, registry
+from riko.types.general import ModuleWrapper
+from riko.types.modules import ModuleCategory, ModuleMetadata, ModuleSubtype, ModuleType
+from riko.types.values import ModuleNameLike
 
 _PACKAGE = "riko.modules"
 
@@ -38,53 +31,6 @@ SUBTYPES: dict[ModuleSubtype, ModuleType] = {
     "composer": "operator",
     "aggregator": "operator",
 }
-
-
-def _derive_operator_subtypes(
-    pipe: ModuleParser,
-) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
-    subtype: ModuleSubtype | None = None
-    subtypes: ModuleSubtypes = set()
-
-    for kind in gen_operator_return_kinds(pipe):
-        if kind == OperatorReturnKind.NONSTREAM:
-            subtype = subtype or "aggregator"
-            subtypes.add(subtype)
-        elif kind == OperatorReturnKind.STREAM:
-            subtype = subtype or "composer"
-            subtypes.add("composer")
-
-        if subtype and subtypes == {"aggregator", "composer"}:
-            break
-
-    if not subtypes:
-        qualified_name = f"{pipe.__module__}.{pipe.__name__}"
-        msg = f"{qualified_name} no supported subtypes found"
-        raise TypeError(msg)
-
-    return subtype, subtypes
-
-
-def derive_loopable(name: str, module_type: ModuleType | str) -> bool:
-    return module_type == "processor" and name != "input"
-
-
-def derive_subtypes(
-    pipe: ModuleParser,
-    module_type: ModuleType | str,
-    ftype: BasicCastType | None = None,
-    **kwargs: object,
-) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
-    if module_type == "processor":
-        none_ftype = ftype == BasicCastType.NONE
-        subtype: ModuleSubtype | None = "source" if none_ftype else "transformer"
-        result = subtype, cast(ModuleSubtypes, {subtype})
-    elif module_type == "splitter":
-        result = "splitter", cast(ModuleSubtypes, {"splitter"})
-    else:
-        result = _derive_operator_subtypes(pipe)
-
-    return result
 
 
 def _metadata_from_targets(
@@ -132,12 +78,13 @@ def _metadata_from_targets(
     return metadata
 
 
-def get_module_metadata(name: str) -> ModuleMetadata | None:
-    module = import_module(f"{_PACKAGE}.{name}")
+def get_module_metadata(name: ModuleNameLike) -> ModuleMetadata | None:
+    canonical = normalize_module_name(name)
+    module = import_module(f"{_PACKAGE}.{canonical}")
     pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
     targets = tuple(cast(ModuleWrapper, pipe) for pipe in pipes if callable(pipe))
     label = module.__name__
-    return _metadata_from_targets(name, targets, label=label, strict_naming=True)
+    return _metadata_from_targets(canonical, targets, label=label, strict_naming=True)
 
 
 def gen_module_catalog(name: str | None = None) -> Iterator[ModuleMetadata]:
@@ -153,12 +100,10 @@ def gen_module_catalog(name: str | None = None) -> Iterator[ModuleMetadata]:
 def gen_registry_catalog() -> Iterator[ModuleMetadata]:
     """
     Metadata for runtime-registered + entry-point modules (the extension
-    surface). Deriving it forces each entry-point extension to import — listing
+    surface). Deriving it forces each entry-point extension to import. Listing
     the catalog is an explicit "show everything" operation. A definition whose
     callables carry no module metadata (e.g. a bare lambda) is skipped.
     """
-    from riko.ext.registry import registry  # noqa: PLC0415
-
     interfaces = ("pipe", "async_pipe")
 
     for name in registry.catalog_names():
@@ -196,27 +141,30 @@ def list_modules(  # noqa: E704
     *,
     type: ModuleType | str | None = ...,  # noqa: A002
     subtype: ModuleSubtype | str | None = ...,
+    category: ModuleCategory | str | None = ...,
     primary: bool = ...,
     loopable: bool | None = ...,
     show_metadata: Literal[False] = ...,
-) -> tuple[str, ...]: ...
+) -> list[str]: ...
 @overload  # noqa: E302
 def list_modules(  # noqa: E704
     *,
     type: ModuleType | str | None = None,  # noqa: A002
     subtype: ModuleSubtype | str | None = None,
+    category: ModuleCategory | str | None = ...,
     primary: bool = ...,
     loopable: bool | None = ...,
     show_metadata: Literal[True],
-) -> tuple[ModuleMetadata, ...]: ...
+) -> list[ModuleMetadata]: ...
 def list_modules(  # noqa: E302
     *,
     type: ModuleType | str | None = None,  # noqa: A002
     subtype: ModuleSubtype | str | None = None,
+    category: ModuleCategory | str | None = None,
     primary: bool = False,
     loopable: bool | None = None,
     show_metadata: bool = False,
-) -> tuple[str, ...] | tuple[ModuleMetadata, ...]:
+) -> list[str] | list[ModuleMetadata]:
     if type and subtype:
         raise ValueError("type and subtype cannot be combined")
     elif primary and not subtype:
@@ -225,7 +173,9 @@ def list_modules(  # noqa: E302
     subtype_match = partial(_matches_subtype, subtype=subtype, primary=primary)
     type_match = lambda module: type is None or module.type == type
     loop_match = lambda module: loopable is None or module.loopable is loopable
-    match = lambda module: all(broadcast(module, subtype_match, type_match, loop_match))
+    user_match = lambda module: category is None or derive_category(module) == category
+    matches = subtype_match, type_match, loop_match, user_match
+    match = lambda module: all(broadcast(module, *matches))
 
     # built-ins first, then registry (runtime + entry-point) modules shadow them
     catalog = {metadata.name: metadata for metadata in gen_module_catalog()}
@@ -233,9 +183,57 @@ def list_modules(  # noqa: E302
 
     # dynamic filter pipe import shadows the builtin filter
     filtered = builtins.filter(match, catalog.values())
-    modules = tuple(sorted(filtered, key=lambda module: module.name))
-    return modules if show_metadata else tuple(module.name for module in modules)
+    modules = sorted(filtered, key=lambda module: module.name)
+    return modules if show_metadata else [module.name for module in modules]
 
 
-def get_pipe_metadata(name: str) -> ModuleMetadata | None:
-    return get_module_metadata(f"{name}")
+def _gen_doc(module: object) -> Iterator[str]:
+    lines = (getattr(module, "__doc__", "") or "").strip().splitlines()
+    return map(str.strip, lines)
+
+
+def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
+    """
+    Returns a module's definition, or None when the name is unknown.
+
+    A built-in is described from its module rather than the registry, so its
+    ``description`` comes from the docstring summary and its pipe callables are
+    read off the module. A registry definition instead reports whatever its
+    registrant supplied, which may leave the callables unset; ``get_pipe``
+    resolves either.
+
+    Args:
+        name: The module name, either a str or a discovery-tree member.
+
+    Returns:
+        The definition, or None when no module answers to ``name``.
+
+    Examples:
+        >>> from riko import Sources
+        >>>
+        >>> fetch = describe_module(Sources.FETCH)
+        >>> fetch.name
+        'fetch'
+        >>> fetch.description
+        'Fetches an RSS feed and yields feed entries.'
+        >>> fetch.sync_pipe.__name__, fetch.async_pipe.__name__
+        ('pipe', 'async_pipe')
+        >>> fetch.get_pipe("pipe") is fetch.sync_pipe
+        True
+        >>> describe_module("does-not-exist")
+
+    """
+    if canonical := normalize_module_name(name):
+        if (definition := registry.definition(canonical)) is None:  # noqa: SIM102
+            if module := import_or_else(f"{_PACKAGE}.{canonical}"):
+                definition = ModuleDefinition(
+                    name=canonical,
+                    module=module,
+                    sync_pipe=getattr(module, "pipe", None),
+                    async_pipe=getattr(module, "async_pipe", None),
+                    description=next(_gen_doc(module), None),
+                )
+    else:
+        definition = None
+
+    return definition

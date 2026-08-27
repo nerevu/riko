@@ -51,7 +51,7 @@ files: list[str] = [
 ]
 
 urls: list[str] = [get_path(f) for f in files]
-confs: list[FetchConf] = [FetchConf({"url": url, "delay": DELAY}) for url in urls]
+confs: list[FetchConf] = [FetchConf({"url": url}) for url in urls]
 sources: list[dict[str, str]] = [{"url": url} for url in urls]
 length: int = len(files)
 iterable: list[float] = [DELAY for _ in files]
@@ -99,9 +99,13 @@ async def baseline_async() -> list[None]:
     return await async_map(async_sleep, iterable)
 
 
+async def delayed_fetch(conf: FetchConf) -> ProcessorWrapperOutput:
+    await async_sleep(DELAY)
+    return await async_fetch({}, conf)
+
+
 async def async_pipeline() -> list[ProcessorWrapperOutput]:
-    func = partial(async_fetch, {})
-    return await async_map(func, confs)
+    return await async_map(delayed_fetch, confs)
 
 
 async def async_pipe2() -> list[ProcessorWrapperOutput]:

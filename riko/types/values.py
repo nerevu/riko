@@ -2,7 +2,8 @@ import ast
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
-from enum import Enum, auto
+from enum import Enum, StrEnum, auto
+from pathlib import PurePath
 from time import struct_time
 from typing import TYPE_CHECKING, NotRequired, Required, TypedDict
 
@@ -14,9 +15,25 @@ if TYPE_CHECKING:
 
 
 # Misc
+class MissingType:
+    def __repr__(self) -> str:
+        return "<MISSING>"
+
+
+MISSING = MissingType()
+
+
 class StreamState(Enum):
     PENDING = auto()
     DONE = auto()
+
+
+class ModuleName(StrEnum):
+    """A type-safe module name."""
+
+
+class TargetName(StrEnum):
+    """A type-safe target name."""
 
 
 class EntryContent(TypedDict, total=False):
@@ -107,14 +124,32 @@ type Temporal = datetime | date | struct_time
 type DateLike = str | int | datetime | date | struct_time
 type SortableValue = Scalar | Temporal
 type PrimitiveValue = SortableValue | None
+type ModuleNameLike = str | ModuleName
+type TargetLike = str | TargetName
+
 
 # Geo/currency
+class Region(TypedDict, total=False):
+    code_2: Required[str]
+    code_3: str
+    continent: Required[str]
+    country: str
+    num: str
+
+
+class CurrencyCode(TypedDict, total=False):
+    code: Required[str]
+    location: Required[str]
+    name: str
+    name_plural: str
+    symbol: str
+    symbol_native: str
+    locale: str
+
+
 type IPAddress = dict[str, str]
 type Location = IPAddress | dict[str, float]
-type CurrencyCode = (
-    Location | dict[str, int] | dict[str, str | int] | dict[str, str | int | float]
-)
-type AnyLocation = CurrencyCode | dict[str, float | str]
+type AnyLocation = Region | CurrencyCode | Location | dict[str, float | str]
 
 # Args
 type BasicMapping = Mapping[str, BasicValue]
@@ -160,7 +195,15 @@ PrimitiveValueType: tuple[type, ...] = (
     date,
     struct_time,
 )
-HashableType: tuple[type, ...] = (str, int, float, Decimal, date, struct_time)
+HashableType: tuple[type, ...] = (
+    str,
+    int,
+    float,
+    Decimal,
+    date,
+    struct_time,
+    PurePath,
+)
 
 NonstreamExpressions: tuple[type, ...] = (
     ast.BinOp,

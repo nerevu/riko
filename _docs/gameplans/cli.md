@@ -1,4 +1,4 @@
-# Authoritative Riko CLI Implementation Gameplan
+# CLI gameplan
 
 ## 1. Mission
 

@@ -1,11 +1,31 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides type casting capabilities
+riko.cast
+~~~~~~~~~
+
+Provides type casting capabilities.
+
+Dispatch is by destination type; ``CAST_SWITCH`` maps each type to its caster
+and default.
+
+Examples:
+    Basic usage::
+
+        >>> from riko.cast import cast_value
+        >>>
+        >>> cast_value("12.25", "float")
+        12.25
+        >>> cast_value("12.25", "int")
+        12
+
+Attributes:
+    CAST_SWITCH: Destination type to caster and default mapping.
+
 """
 
 from ast import literal_eval
 from collections.abc import Callable
-from datetime import UTC, date, timedelta
+from datetime import date, timedelta
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -19,17 +39,15 @@ from urllib.parse import quote, urlparse
 
 import pygogo as gogo
 
-from riko.currencies import CURRENCY_CODES
-from riko.dates import (
-    EPOCH_DATE,
-    EPOCH_DATETIME,
+from riko._date_utils import (
     date_to_tt,
     ensure_tzinfo,
-    get_date,
+    get_local_tz,
     parse_date_string,
-    tt_to_datedict,
     tt_to_datetime,
 )
+from riko.currencies import CURRENCY_CODES
+from riko.dates import get_date, tt_to_datedict
 from riko.locations import LOCATIONS
 from riko.types.general import Opts, PreCaster
 from riko.types.values import (
@@ -60,6 +78,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class LocationType(StrEnum):
+    """The kind of place a geolocation lookup resolves."""
+
     COORDINATES = "coordinates"
     CURRENCY = "currency"
     IP_ADDRESS = "ip_address"
@@ -67,7 +87,10 @@ class LocationType(StrEnum):
 
 
 class BasicCastType(StrEnum):
+    """Cast types a module may set as its ``ftype``/``ptype``."""
+
     DATE = "date"
+    DATETIME = "datetime"
     DECIMAL = "decimal"
     FLOAT = "float"
     INT = "int"
@@ -77,6 +100,8 @@ class BasicCastType(StrEnum):
 
 
 class SortableCastType(StrEnum):
+    """Cast types whose values are orderable, for sort comparisons."""
+
     BOOL = "bool"
     DATE = "date"
     DATETIME = "datetime"
@@ -89,6 +114,8 @@ class SortableCastType(StrEnum):
 
 
 class CastType(StrEnum):
+    """Every destination type ``cast_value`` can dispatch to."""
+
     BOOL = "bool"
     DATE = "date"
     DATETIME = "datetime"
@@ -189,47 +216,70 @@ def lookup_coordinates(
 def cast_location(
     address: BasicValue, loc_type: LocationType = LocationType.STREET_ADDRESS
 ) -> AnyLocation:
-    result = dict(GEOLOCATERS[loc_type](str(address)))
+    result = GEOLOCATERS[loc_type](str(address))
 
     if location := result.get("location"):
-        # TODO: make location a typed dict
-        extra = LOCATIONS.get(str(location), {})
-        result.update(extra)
+        extra = LOCATIONS.get(str(location), cast(dict[str, str], {}))
+        result = cast(AnyLocation, {**result, **extra})
 
     return result
 
 
 # TODO: inherit from meza
 @overload
-def cast_datetime(value: DateLike) -> dt | None: ...  # noqa: E704
-@overload  # noqa: E302
 def cast_datetime(  # noqa: E704
-    value: DateLike, as_date: Literal[True]
-) -> date | None: ...
-@overload  # noqa: E302
-def cast_datetime(  # noqa: E704
-    value: DateLike, as_date: Literal[False] = ...
+    value: DateLike, *, try_local_tz: bool = ...
 ) -> dt | None: ...
 @overload  # noqa: E302
 def cast_datetime(  # noqa: E704
-    value: DateLike, as_date: Literal[True], as_datedict: Literal[True]
+    value: DateLike, as_date: Literal[True], *, try_local_tz: bool = ...
+) -> date | None: ...
+@overload  # noqa: E302
+def cast_datetime(  # noqa: E704
+    value: DateLike, as_date: Literal[False] = ..., *, try_local_tz: bool = ...
+) -> dt | None: ...
+@overload  # noqa: E302
+def cast_datetime(  # noqa: E704
+    value: DateLike,
+    as_date: Literal[True],
+    as_datedict: Literal[True],
+    *,
+    try_local_tz: bool = ...,
 ) -> DateDict | None: ...
 @overload  # noqa: E302
 def cast_datetime(  # noqa: E704
-    value: DateLike, *, as_date: Literal[False] = ..., as_datedict: Literal[True]
+    value: DateLike,
+    *,
+    as_date: Literal[False] = ...,
+    as_datedict: Literal[True],
+    try_local_tz: bool = ...,
 ) -> DateDict | None: ...
 def cast_datetime(  # noqa: E302
     value: DateLike,
     as_date=False,
     as_datedict=False,
+    *,
     try_local_tz=False,
 ) -> date | dt | DateDict | None:
     """
+    Normalizes a date-like value to a ``datetime`` (or ``date``/``DateDict``).
+
+    Accepts real ``date``/``datetime``/``struct_time``/epoch-``int`` values and
+    string shorthands. Named days (``"now"``/``"today"``/``"yesterday"``), counted
+    offsets (``"3 days"``/``"-1 month"``), and ``next``/``last`` word forms resolve
+    against the current time.
+
     Examples:
         >>> type(cast_datetime('now')).__name__
         'datetime'
         >>> type(cast_datetime('today')).__name__
         'date'
+        >>> cast_datetime('-1 day') == cast_datetime('yesterday')
+        True
+        >>> cast_datetime('1 week') == cast_datetime('+7 days')
+        True
+        >>> cast_datetime('next month') == cast_datetime('1 month')
+        True
 
     """
     tt = None
@@ -248,9 +298,10 @@ def cast_datetime(  # noqa: E302
         tt, _date = value, tt_to_datetime(value, as_date=as_date)
     else:
         words = value.split(" ")
-        mathish = set(words).intersection(MATH_WORDS)
+        count = words[0].lstrip("+-")
+        unit = f"{words[-1].rstrip('s')}s" if len(words) == 2 else ""
         textish = set(words).intersection(TEXT_WORDS)
-        now = dt.now(UTC)
+        now = dt.now(get_local_tz(try_local_tz=try_local_tz))
         today = now.date()
         named = {
             "today": today,
@@ -259,9 +310,9 @@ def cast_datetime(  # noqa: E302
             "yesterday": today - timedelta(days=1),
         }
 
-        if value and value[0] in {"+", "-"} and len(mathish) == 1:
+        if unit in MATH_WORDS and count.isdigit():
             op = sub if value.startswith("-") else add
-            _date = get_date("".join(mathish), int(words[0][1:]), op)
+            _date = get_date(unit, int(count), op)
         elif len(textish) == 2:
             op = sub if words[0] == "last" else add
             _date = get_date(f"{words[1]}s", 1, op)
@@ -295,8 +346,8 @@ CAST_SWITCH: dict[str, PreCaster] = {
     "decimal": {"default": Decimal("NaN"), "func": Decimal},
     "int": {"default": 0, "func": lambda i: int(float(i))},
     "text": {"default": "", "func": str},
-    "datetime": {"default": EPOCH_DATETIME, "func": cast_datetime},
-    "date": {"default": EPOCH_DATE, "func": cast_date},
+    "datetime": {"default": None, "func": cast_datetime},
+    "date": {"default": None, "func": cast_date},
     "url": {"default": "", "func": cast_url},
     "location": {"default": {}, "func": cast_location},
     "bool": {"default": False, "func": lambda i: bool(literal_parse(i))},
@@ -310,73 +361,71 @@ def cast_value(content: object) -> str: ...  # noqa: E704
 @overload  # noqa: E302
 def cast_value[T](  # noqa: E704
     content: T,
-    _type: Literal[CastType.PASS],
+    type_: Literal[CastType.PASS],
     **kwargs: object,
 ) -> T: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
     content: object,
-    _type: Literal[CastType.NONE],
+    type_: Literal[CastType.NONE],
     **kwargs: object,
 ) -> None: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
     content: object,
-    _type: Literal[CastType.TEXT],
+    type_: Literal[CastType.TEXT],
     **kwargs: object,
 ) -> str: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
     content: object,
-    _type: Literal[CastType.FLOAT],
+    type_: Literal[CastType.FLOAT],
     **kwargs: object,
 ) -> float: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.DECIMAL], **kwargs: object
+    content: object, type_: Literal[CastType.DECIMAL], **kwargs: object
 ) -> Decimal: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.INT], **kwargs: object
+    content: object, type_: Literal[CastType.INT], **kwargs: object
 ) -> int: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.DATETIME], **kwargs: object
+    content: object, type_: Literal[CastType.DATETIME], **kwargs: object
 ) -> dt: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.DATE], **kwargs: object
+    content: object, type_: Literal[CastType.DATE], **kwargs: object
 ) -> date: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.URL], **kwargs: object
+    content: object, type_: Literal[CastType.URL], **kwargs: object
 ) -> str: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.LOCATION], **kwargs: object
+    content: object, type_: Literal[CastType.LOCATION], **kwargs: object
 ) -> AnyLocation: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.BOOL], **kwargs: object
+    content: object, type_: Literal[CastType.BOOL], **kwargs: object
 ) -> bool: ...
 @overload  # noqa: E302
 def cast_value[T](  # noqa: E704
-    content: T, _type: CastType, **kwargs: object
+    content: T, type_: CastType, **kwargs: object
 ) -> T | PrimitiveValue: ...
 def cast_value[T](  # noqa: E302
-    content: T, _type: CastType = CastType.TEXT, **kwargs: object
+    content: T, type_: CastType = CastType.TEXT, **kwargs: object
 ) -> T | PrimitiveValue | AnyLocation:
     """
-    Convert content from one type to another
+    Converts content from one type to another.
 
     Args:
-        content: The entry to convert
-
-    Kwargs:
-        _type (str): The type to convert to
+        content: The entry to convert.
+        type_: The type to convert to.
 
     Returns:
-        any: The converted content
+        The converted content.
 
     Examples:
         >>> content = '12.25'
@@ -406,24 +455,24 @@ def cast_value[T](  # noqa: E302
         ''
 
     """
-    if _type and _type in CAST_SWITCH:
-        precaster = CAST_SWITCH[_type]
+    if type_ and type_ in CAST_SWITCH:
+        precaster = CAST_SWITCH[type_]
     else:
-        if _type:
-            logger.warning(f"Invalid cast {_type=}. Returning content as is.")
+        if type_:
+            logger.warning(f"Invalid cast {type_=}. Returning content as is.")
 
         precaster = CAST_SWITCH[CastType.PASS]
 
     caster = precaster["func"]
     default = precaster["default"]
 
-    if content is None and _type != CastType.NONE:
+    if content is None and type_ != CastType.NONE:
         value = default
-    elif content is None or _type == CastType.NONE:
+    elif content is None or type_ == CastType.NONE:
         value = None
-    elif _type == CastType.PASS:
+    elif type_ == CastType.PASS:
         value = content
-    elif _type in KWARG_TYPES:
+    elif type_ in KWARG_TYPES:
         try:
             value = caster(content, **kwargs)  # pyright: ignore[reportArgumentType]
         except (TypeError, InvalidOperation, ValueError):
@@ -437,5 +486,5 @@ def cast_value[T](  # noqa: E302
     return value
 
 
-cast_none: Callable[..., None] = partial(cast_value, _type=CastType.NONE)
-cast_pass: Callable[[T], T] = partial(cast_value, _type=CastType.PASS)
+cast_none: Callable[..., None] = partial(cast_value, type_=CastType.NONE)
+cast_pass: Callable[[T], T] = partial(cast_value, type_=CastType.PASS)

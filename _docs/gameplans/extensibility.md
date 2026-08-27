@@ -1,4 +1,4 @@
-# Riko Extensibility & Ecosystem Gameplan
+# Extensibility & ecosystem gameplan
 
 > **Provenance.** Extracted from `docs/ROADMAP.md` Part V so the roadmap can stay a
 > high-level overview. This gameplan is the authoritative extensibility/ecosystem plan
@@ -260,6 +260,13 @@ and one external workflow consumer validate the contracts, and no open P0 correc
 remains in execution, routing, lifecycle, or serialization (see §27 non-goals and §26
 Milestone 10).
 
+> **Boundary:** E7 owns the **ecosystem** side of 1.0 (conformance badges, published stable/
+> extension/contract/schema policies, deprecation/migration windows). The **internal DX/API-shape
+> polish and the release/package-fidelity gate** (config strictness, clean-break Pipeline/Execution
+> split, `Collection`→`Pipeline(source=…)`, `with_config`/`executor=`, pub/sub 1.0 contract,
+> wheel/PyPI CI, the Must-land/Preferred/Can-wait triage) live in
+> [release-readiness.md](release-readiness.md).
+
 ## E8. Prior-art research conclusions
 
 Issue #10 named six projects. Their implementations are dated, but several design ideas
@@ -332,7 +339,7 @@ runtime contracts.
 
 ## 24. Module registry and plugins
 
-> **Status: Partial.** **Shipped → [IMPLEMENTED.md §24](../IMPLEMENTED.md#24-module-discovery-shipped)**
+> **Shipped:** see [IMPLEMENTED.md §24](../IMPLEMENTED.md#24-module-discovery-shipped)
 > (`pkgutil`-based `list_modules`; built-in name/namespace reservation). **Remaining:** the
 > entry-point/runtime `ModuleRegistry` (P8-planned) below.
 
@@ -342,8 +349,37 @@ Initial registry:
 * unqualified names reserved for built-ins
 * namespaces reserved now
 * entry-point discovery deferred
+* **`pipe_` / `pipe:` reserved at registration** — `ext/resolver.py` routes any name with
+  those prefixes to the pipeline resolver *before* consulting `ModuleRegistry`, so a
+  registered leaf extension named `pipe_transform` can never resolve
+  ([correctness-audit **R18**](correctness-audit.md#8-open-defect-register--features-branch-audit)).
+  Registration must reject the prefixes with a riko-owned message rather than accepting a
+  name that silently never resolves; trying the registry first is the alternative, but it
+  makes resolution order depend on install state, which the reservation rule above exists
+  to avoid.
 
 One distribution and internal plugin architecture are sufficient initially. External connectors should use optional dependencies and plugin boundaries.
+
+**One-sided registration (execution-mode adaptation).** A `ModuleDefinition` needs only the
+implementation the author actually wrote — the runtime adapts the missing side
+([execution-semantics.md § Execution-mode adaptation](execution-semantics.md)):
+
+```python
+@processor
+def pipe(item, **kwargs): ...
+
+register(ModuleDefinition(name="example.normalize", sync_pipe=pipe))
+```
+
+```python
+@processor
+async def pipe(item, **kwargs): ...
+
+register(ModuleDefinition(name="example.lookup", async_pipe=pipe))
+```
+
+Supplying both `sync_pipe` and `async_pipe` stays available as an optimization when the two
+implementations genuinely differ; it is never required merely for sync/async parity.
 
 
 ## Prior-art sources

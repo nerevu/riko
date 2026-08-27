@@ -1,33 +1,28 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for fetching the first RSS or Atom feed discovered in a web
-site.
+Fetches the first RSS or Atom feed discovered on a page.
 
-Uses a web site's auto-discovery information to find an RSS or Atom feed. If
-multiple feeds are discovered, only the first one is fetched. If a site changes
-their feed URL in the future, this module can discover the new URL for you (as
-long as the site updates their auto-discovery links). For sites with only one
-stream, this module provides a good alternative to the Fetch Feed module.
+Uses the page's auto-discovery links to find a feed, then fetches and parses it.
+Only the first feed found is used. Because the url is rediscovered on each run,
+a site that later moves its feed keeps working, provided it updates its
+auto-discovery links.
 
-Also note that not all sites provide auto-discovery links on their web site's
-home page.
-
-This module provides a simpler alternative to the Feed Auto-Discovery Module.
-The latter returns a list of information about all the feeds discovered in a
-site, but (unlike this module) doesn't fetch the feed data itself.
+Not every site advertises auto-discovery links. Where one does and you want the
+list of feeds rather than their contents, use the feedautodiscovery module,
+which reports every feed found without fetching any of them.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko import get_path
         >>> from riko.modules.fetchsitefeed import pipe
         >>>
-        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title']
+        >>> next(pipe(conf={"url": get_path("bbc.html")}))["title"]
         "EU sets out 'phased' Brexit strategy"
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -41,6 +36,7 @@ from riko import autorss
 from riko._rssutils import augment_entries
 from riko.bado import io
 from riko.cast import SourceOpts
+from riko.modules._prepare import require_conf
 from riko.parsers import parse_rss
 from riko.types.configs import FetchSiteFeedObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
@@ -57,38 +53,42 @@ async def async_parser(
     _: Item, extraction: Extraction, objconf: FetchSiteFeedObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
-    Asynchronously parses the pipe content
+    Asynchronously discovers the first feed on a page and parses it.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url`.
 
     Returns:
-        Iter[dict]: The stream of items
+        Feed entries, or nothing when the page advertises no feed.
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
-        ...     objconf = Objectify({'url': get_path('bbc.html')})
+        ...     objconf = Objectify({"url": get_path("bbc.html")})
         ...     result = await async_parser(None, None, objconf)
-        ...     print(next(result)['title'])
+        ...     print(next(result)["title"])
         >>>
         >>> run(main)
         EU sets out 'phased' Brexit strategy
 
     """
-    rss = await autorss.async_get_rss(objconf.url)
-    link = str(next(rss)["link"])
-    content = await io.async_url_read(link)
-    entries = parse_rss(content=content)
+    url: str = require_conf(objconf, "url", "fetchsitefeed")
+    rss = await autorss.async_get_rss(url)
+
+    if (first := next(rss, None)) is None:
+        logger.warning(f"No feed found at {url}")
+        entries = []
+    else:
+        content = await io.async_url_read(str(first["link"]))
+        entries = parse_rss(content=content)
+
     return augment_entries(entries)
 
 
@@ -96,60 +96,80 @@ def parser(
     _: Item, extraction: Extraction, objconf: FetchSiteFeedObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
-    Parses the pipe content
+    Discovers the first feed on a page and parses it.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url`.
 
     Returns:
-        Iter[dict]: The stream of items
+        Feed entries, or nothing when the page advertises no feed.
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
-        >>> objconf = Objectify({'url': get_path('bbc.html')})
+        >>> objconf = Objectify({"url": get_path("bbc.html")})
         >>> result = parser(None, None, objconf)
-        >>> next(result)['title']
+        >>> next(result)["title"]
         "EU sets out 'phased' Brexit strategy"
 
     """
-    rss = autorss.get_rss(objconf.url)
-    link = str(next(rss)["link"])
-    entries = parse_rss(link)
+    url: str = require_conf(objconf, "url", "fetchsitefeed")
+    rss = autorss.get_rss(url)
+
+    if (first := next(rss, None)) is None:
+        logger.warning(f"No feed found at {url}")
+        entries = []
+    else:
+        entries = parse_rss(str(first["link"]))
+
     return augment_entries(entries)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
-    A source that fetches and parses the first feed found on a site.
+    Asynchronously fetches and parses the first feed found on a page.
 
     Args:
-        item (dict): The entry to process (not used)
-        kwargs (dict): The keyword arguments passed to the wrapper.
+        item (Item | Items): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The page to examine, local or remote. Required.
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'.
+        assign (str): Field each entry is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The web site to fetch
+        emit (bool): Whether to emit each entry directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-    Returns:
-        Awaitable: an iterator of items
+    Yields:
+        - ``<entry>`` when ``emit`` is True (default)
+        - ``{<assign>: <entry>}`` when ``emit`` is False, no item given
+        - one merged ``{Item, <assign>: [<entry>, ...]}`` when ``emit`` is False and
+          item is given
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
+    Notes:
+        A page advertising no feed yields nothing and logs a warning.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     result = await async_pipe(conf={'url': get_path('bbc.html')})
-        ...     print(next(result)['title'])
+        ...     result = await async_pipe(conf={"url": get_path("bbc.html")})
+        ...     print(next(result)["title"])
         >>>
         >>> run(main)
         EU sets out 'phased' Brexit strategy
@@ -161,23 +181,40 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
-    A source that fetches and parses the first feed found on a site.
+    Fetches and parses the first feed found on a page.
 
     Args:
-        item (dict): The entry to process (not used)
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The page to examine, local or remote. Required.
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'.
+        assign (str): Field each entry is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The web site to fetch
+        emit (bool): Whether to emit each entry directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
     Yields:
-        dict: item
+        - ``<entry>`` when ``emit`` is True (default)
+        - ``{<assign>: <entry>}`` when ``emit`` is False, no item given
+        - one merged ``{Item, <assign>: [<entry>, ...]}`` when ``emit`` is False and
+          item is given
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
+    Notes:
+        A page advertising no feed yields nothing and logs a warning.
 
     Examples:
         >>> from riko import get_path
-        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title']
+        >>>
+        >>> next(pipe(conf={"url": get_path("bbc.html")}))["title"]
         "EU sets out 'phased' Brexit strategy"
 
     """

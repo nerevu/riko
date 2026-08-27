@@ -24,6 +24,7 @@ Planned** (nothing ships yet). Find any `§N` via the [ROADMAP §-index](ROADMAP
 - [13. Filter semantics (shipped)](#13-filter-semantics-shipped)
 - [23. AnyIO runtime (shipped)](#23-anyio-runtime-shipped)
 - [24. Module discovery (shipped)](#24-module-discovery-shipped)
+- [Subscription lifecycle — `subscribe` / `publish` (F5a, partial)](#subscription-lifecycle--subscribe--publish-f5a-partial)
 - [25. Conversion — export converters (shipped)](#25-conversion--export-converters-shipped)
 
 ---
@@ -81,7 +82,7 @@ live.
 
 * `Stream` is synchronous iteration.
 * `Feed` is asynchronous iteration.
-* Boundedness is represented separately through opts.
+* Boundedness is **not** a declared `Opts` field yet (`Opts.boundedness` / `require_bounded` are planned — [execution-semantics.md §5](gameplans/execution-semantics.md#5-execution-characteristics)); the bound that ships is behavioral, in the §6 async primitives.
 
 The public asynchronous source type is:
 
@@ -94,8 +95,12 @@ type AsyncSource = (
 ```
 
 Each asynchronous execution resolves the source once and normalizes it to
-`AsyncIterator[Item]`. The implementation currently accepts `Awaitable[Items]`, awaits it,
-and passes synchronous iterables to module parsers.
+`AsyncIterator[Item]`. `Awaitable[Items]` sources are awaited. A `Feed`
+(`AsyncIterable[Item]`) passed directly to an async operator now flows through the wrapper
+as an `AsyncIterator[Item]` (via `operator.aparse` + async-aware `operator.setup`), so
+composer operators (e.g. `timeout`) consume it lazily via `async for` and can bound an
+infinite `Feed`; the `AsyncPipe` collection path still buffers non-Feed-native parsers at
+the `_materialize_legacy_source` seam.
 
 ## 3. Pipe behavior (shipped)
 
@@ -220,6 +225,31 @@ decorator-set wrapper attributes (`type`, `subtype`, `subtypes`, `pollable`); su
 (runtime-registered + entry-point) modules via `gen_registry_catalog`, so extension modules are
 discoverable too. Unqualified names are reserved for built-ins; dotted namespaces for extensions.
 
+**Typed discovery (P9A, shipped).** `list_modules(*, type, subtype, category)` and
+`describe_module(name) -> ModuleDefinition | None` (`riko/modules/_metadata.py`, on the stable
+`riko`/`riko.api` surface) give filtered runtime truth. **The three filter axes are all lowercase
+`Literal` strings, not enums** — `ModuleType = Literal["operator","processor","splitter"]`,
+`ModuleSubtype`, and `ModuleCategory = Literal["source","transform","sink"]` (the `derive_category`
+return value) — so `list_modules(category="sink")` → `["write"]`. These are a **separate axis** from
+the discovery-tree identifier enums (`Modules`/`Sources`/`Transforms`/`Sinks`, whose member `.value`
+is the module id, for `SyncPipe(...)`/`|` chaining): don't confuse them. In particular
+`category="Sinks"` (the bucket class name) returns `[]` — the value is `"sink"`, lowercase singular.
+(The codegen maps the three category strings to the plural bucket **class** names via `_CATEGORY_CLASS`
+= `{"source": "Sources", "transform": "Transforms", "sink": "Sinks"}`.)
+`derive_category` (`riko/ext/names.py`) buckets each module by **data-flow capability only**.
+`SINK_NAMES` (`{"output","write"}`) is the *criterion*, not the
+membership: a module is a `Sink` iff its name is in that set. The one built-in match is `write`
+(`riko/modules/write.py`) — a pass-through operator that serializes the stream to `conf['url']` via a
+`Targets` converter and yields items unchanged (`Modules.WRITE`/`Sinks.WRITE`). It is **not lazy** —
+serializing needs the whole stream, so `parser`/`async_parser` do `items = list(stream)` and the
+pass-through replays that list (contract §2/§3 streaming does not hold through a `write`). `output` stays
+unmatched (compiler-local passthrough node, not a `riko/modules/*.py` pipe). `write` is the
+in-pipeline counterpart of the one-shot `Targets`/`export` surface (see §25). `riko.ext.codegen` generates the byte-stable
+`riko/modules/_names.py`: the flat `Modules` namespace (every pipe, aliasing bucket members so
+`Modules.FILTER is Transforms.FILTER`) + `Sources`/`Transforms`/`Sinks` bucket enums (member
+`.value` = canonical id; collisions raise). Regenerate with `gen-names`/`manage codegen` (drift guard
+`test_generated_names_match`). Re-exported from `riko`/`riko.api`, **not** `riko.modules`.
+
 ## Module registry & pipe resolution (P8, shipped)
 
 The runtime→compiler resolution coupling is inverted behind three **compiler-free** layers sharing
@@ -231,8 +261,9 @@ no locations), and the `PipeResolver` façade (`riko/ext/resolver.py`) doing one
 `riko/collections.py` resolves through the façade; `compile.resolve_module` delegates to it.
 Generated pipelines expose a stable `pipe`/`async_pipe` entry, so a sub-pipeline resolves exactly
 like a built-in. External packages add modules with **no core edit** (`examples/riko-example-ext/`).
-Remaining P9A discoverability (generated `Module` tree, `available_modules`/`describe_module`,
-`.pyi` stubs) → [module-enums.md](gameplans/module-enums.md).
+P9A discoverability (generated `Modules` tree, `list_modules`/`describe_module`) shipped — see
+§24 above. Remaining P9 (non-P9A): the installed-env aggregate `riko.generated.Modules` + `.pyi`
+stubs → [module-enums.md](gameplans/module-enums.md).
 
 **Pipe authoring:** the `processor`/`operator`/`splitter` decorators infer `isasync`
 (`riko/modules/_decorators.py::_resolve_isasync`) — from an `async def` or the conventional
@@ -247,13 +278,59 @@ async). Tests: `tests/internal/test_decorators.py`.
 `pipe | ("name", conf)`, `pipe | SyncPipe(...)`, `items | SyncPipe(...)`, and `.pipe()`/`.async_pipe()`
 — plus the `ModuleName` `StrEnum` base and `normalize_module_name` (`riko/ext/names.py`); a name may
 be a `str` or `ModuleName` member anywhere, normalized to its canonical string at the boundary. The
-generated `Module` tree is P9A.
+generated `Modules` tree (P9A) shipped — `pipe | Transforms.FILTER` resolves identically to
+`pipe.filter()`; see §24.
+
+## Subscription lifecycle — `subscribe` / `publish` (F5a, partial)
+
+> **Partial.** `func` becomes a tap → [fanout-topology.md § 9.3 (F5c)](gameplans/fanout-topology.md), next.
+> Subscription handles + teardown ownership → [§ 9.2 (F5b)](gameplans/fanout-topology.md), landing with P11.
+
+`SyncPipe` ships a subscribe/publish pair that hides the pub/sub hub from callers:
+`SyncPipe.subscribe(name, func=…, wait=…, maxlen=…)` registers eagerly via
+`receive.register_receiver`, so the old `next(receiver)` priming call — which leaked
+generator-coroutine mechanics — is gone. `publish` is a single descriptor serving both
+bindings: `SyncPipe.publish(source, *names)` on the class and `flow.publish(*names)` on an
+instance (chaining to `send`).
+
+**The subscribed drain is non-blocking and marker-free.** `subscribe` pins
+`conf["max_wait"] = 0`, which makes `receive.parser`'s PENDING branch structurally
+unreachable — `total_waited` starts at 0, so an empty queue always takes the stop branch
+before the sleep-and-yield branch. Callers never see a `StreamState` marker and nothing
+filters the stream. This is sound because the sync backend has no producer/consumer
+concurrency: `send` pushes only when the sender pipe is advanced, on the same thread, so a
+blocking idle wait could never be satisfied anyway. Per
+[release-readiness.md § 2](gameplans/release-readiness.md), blocking is a property of the
+`Subscription` rather than of `receive`, so this is the permanent in-process default and not
+a stopgap.
+
+The raw `SyncPipe("receive", conf=…)` path is unchanged and still emits PENDING for
+interleaved manual stepping. The two behaviors coexist **transitionally**, until F1/F4 remove
+`PENDING` from the data stream entirely.
+
+**`func` queues its return value, not the received item.** So `func=archived.append` yields
+`None` per item and `func=len` yields an `int` — neither an `Item`, which is why
+`receive.pipe`'s declared return does not satisfy `SyncOperatorParser`, and why chaining
+(`subscribe("x", func=…).sort()`) yields `{'content': None}`. F5c makes `func` a tap and
+resolves both; the pyright error is a symptom, so **do not silence it by widening
+`OperatorParserOutput`** — see [§ 9.3](gameplans/fanout-topology.md).
+
+**Known gap (F5b):** `receive.parser` calls `close(name)` on idle expiry as well as on DONE,
+and `SyncPubSubHub.close` pops receiver, queue, and id together — so an empty drain destroys
+the subscription rather than ending one pass, and the sender's bound id goes stale. Deferred
+deliberately: every mechanism a local fix would build on (the `DONE` sentinel, `send`'s `ids`
+dict) is slated for deletion by the `Publisher`/`Subscription` rewrite, so it lands with P11.
+A `strict` xfail in `tests/public/test_collections.py` marks it.
 
 ## 25. Conversion — export converters (shipped)
 
 > **Partial.** Batch/dataframe path (Arrow/Polars/SQL) → [database-transforms.md §25](gameplans/database-transforms.md#25-conversion-and-dataframe-integration).
 
 Meza-backed export converters ship: `csv` / `json` / `geojson` / `ofx` / `qif` / `list` /
-`tuple` (`riko/collections.py`; `list_targets()` lists registered export converters). Meza
-owns conversion work. The Batch/dataframe path (Arrow/Narwhals/Polars/SQL execution
+`tuple` (`riko/collections.py`; `list_targets()` lists registered export converters). The typed
+`Targets` `StrEnum` (stable `riko`/`riko.api` surface) is the export-format layer over that
+registry — `export(items, Targets.JSON)` or the plain string; `CONVERSION_FUNCS` is keyed by
+`Targets` members, drift-guarded by `TestExportTargets`. This is riko's terminal-output surface,
+distinct from the discovery tree's `Sinks` bucket (sink *pipes*, empty for built-ins — see §24).
+Meza owns conversion work. The Batch/dataframe path (Arrow/Narwhals/Polars/SQL execution
 representations selected by capability) is deferred.

@@ -1,23 +1,23 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for fetching RSS feeds.
+Fetches an RSS feed and yields feed entries.
 
-Lets you specify an RSS news feed as input. This module understands feeds in
-RSS, Atom, and RDF formats. Feeds contain one or more items.
+Understands RSS, Atom, and RDF. The url may be local or remote.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko import get_path
         >>> from riko.modules.fetch import pipe
         >>>
-        >>> url = get_path('feed.xml')
-        >>> next(pipe(conf={'url': url}))['title']
+        >>> url = get_path("feed.xml")
+        >>> next(pipe(conf={"url": url}))["title"]
         'Donations'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
+    keys: Entry fields every parsed feed provides.
 
 """
 
@@ -31,6 +31,7 @@ from riko import ENCODING
 from riko._rssutils import augment_entries
 from riko.bado import io
 from riko.cast import SourceOpts
+from riko.modules._prepare import require_conf
 from riko.parsers import parse_rss
 from riko.types.configs import FetchObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
@@ -39,7 +40,7 @@ from riko.types.values import RSSEntry
 from . import processor
 
 OPTS: Opts = SourceOpts
-DEFAULTS: Defaults = {"encoding": ENCODING, "delay": 0}
+DEFAULTS: Defaults = {"encoding": ENCODING}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 keys: set[str] = {
     "author",
@@ -56,110 +57,112 @@ async def async_parser(
     _: Item, extraction: Extraction, objconf: FetchObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
-    Asynchronously parses the pipe content
+    Asynchronously fetches the feed and returns its entries.
+
+    ``encoding`` is honored here; ``memoize`` is not.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
-        conf (dict): The pipe configuration
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url`.
 
     Returns:
-        Awaitable: Iter[dict]
+        Feed entries augmented with the common `keys`.
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
-        ...     objconf = Objectify({'url': get_path('feed.xml'), 'delay': 0})
+        ...     objconf = Objectify({"url": get_path("feed.xml")})
         ...     result = await async_parser(None, None, objconf)
-        ...     print(next(result)['title'])
+        ...     print(next(result)["title"])
         >>>
         >>> run(main)
         Donations
 
     """
-    if objconf.url:
-        content: str = await io.async_url_read(objconf.url, delay=objconf.delay)
-        result = augment_entries(parse_rss(content=content))
-    else:
-        result = iter([])
-
-    return result
+    url: str = require_conf(objconf, "url", "fetch")
+    content: str = await io.async_url_read(url, encoding=objconf.encoding)
+    return augment_entries(parse_rss(content=content))
 
 
 def parser(
     _: Item, extraction: Extraction, objconf: FetchObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
-    Parses the pipe content
+    Fetches the feed and returns its entries.
+
+    ``encoding`` and ``memoize`` are honored here.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
-        conf (dict): The pipe configuration
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url`.
 
     Returns:
-        Iter[dict]: The stream of items
+        Feed entries augmented with the common `keys`.
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
-        >>> objconf = Objectify({'url': get_path('feed.xml'), 'delay': 0})
+        >>> objconf = Objectify({"url": get_path("feed.xml")})
         >>> result = parser(None, None, objconf)
-        >>> next(result)['title']
+        >>> next(result)["title"]
         'Donations'
 
     """
-    if objconf.url:
-        entries = parse_rss(objconf.url, encoding=objconf.encoding)
-        stream = augment_entries(entries)
-    else:
-        stream = iter([])
-
-    return stream
+    url: str = require_conf(objconf, "url", "fetch")
+    entries = parse_rss(url, encoding=objconf.encoding)
+    return augment_entries(entries)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
-    A source that asynchronously fetches and parses a feed to return the
-    entries.
+    Asynchronously fetches an RSS feed and yields one feed entries.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The feed to fetch, local or remote. Required.
+            encoding (str): Feed encoding (default: "utf-8").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the key 'delay'.
+        assign (str): Field each entry is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The web site to fetch.
-            delay (flt): Amount of time to sleep (in secs) before fetching the
-                url. Useful for simulating network latency. Default: 0.
+        emit (bool): Whether to emit each entry directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
+    Yields:
+        - ``<entry>`` when ``emit`` is True (default)
+        - ``{<assign>: <entry>}`` when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<entry>, ...]}`` when ``emit`` is False and
+          item is given
 
-    Returns:
-        Awaitable: iterator of items
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
+
+    Notes:
+        ``memoize`` is ignored on this path.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     result = await async_pipe(conf={'url': get_path('feed.xml')})
+        ...     result = await async_pipe(conf={"url": get_path("feed.xml")})
         ...     print(sorted(keys.intersection(next(result))))
         >>>
         >>> run(main)
@@ -173,32 +176,45 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
-    A source that fetches and parses a feed to return the entries.
+    Fetches an RSS feed and yields one feed entries.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The feed to fetch, local or remote. Required.
+            encoding (str): Feed encoding (default: "utf-8").
+            memoize (bool): Whether to cache the fetched feed (default:
+                False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the key 'delay'.
+        assign (str): Field each entry is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The web site to fetch.
-            delay (flt): Amount of time to sleep (in secs) before fetching the
-                url. Useful for simulating network latency. Default: 0.
+        emit (bool): Whether to emit each entry directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-    Returns:
-        dict: an iterator of items
+    Yields:
+        - ``<entry>`` when ``emit`` is True (default)
+        - ``{<assign>: <entry>}`` when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<entry>, ...]}`` when ``emit`` is False and
+          item is given
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
         >>>
-        >>> url = get_path('feed.xml')
-        >>> item = next(pipe(conf={'url': url}))
+        >>> url = get_path("feed.xml")
+        >>> item = next(pipe(conf={"url": url}))
         >>> sorted(keys.intersection(item))
         ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']
         >>>
-        >>> item = next(pipe(conf={'url': url, 'memoize': True}))
+        >>> item = next(pipe(conf={"url": url, "memoize": True}))
         >>> sorted(keys.intersection(item))
         ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']
 

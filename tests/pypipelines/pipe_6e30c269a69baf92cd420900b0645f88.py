@@ -104,7 +104,6 @@ def pipe(item=None, context: Context | None = None, **_):
                     "rule": [
                         {
                             "singlelinematch": {"type": "bool", "value": True},
-                            "singlematch": {"type": "bool", "value": False},
                             "replace": {"type": "text", "value": ""},
                             "field": {"type": "text", "value": "description"},
                             "casematch": {"type": "bool", "value": True},

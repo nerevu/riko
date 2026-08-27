@@ -13,6 +13,7 @@ Index
 - `What pipes are available`_
 - `How do I discover installed modules`_
 - `What do processor, operator, and splitter mean`_
+- `How does a processor map over items`_
 - `What file types are supported`_
 - `What protocols are supported`_
 - `Which optional dependencies are available`_
@@ -37,10 +38,12 @@ or consumes a ``stream``.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> items = [{'title': 'alpha'}, {'title': 'beta'}]
-    >>> flow = SyncPipe('hash', source=items, field='title', assign='title_hash')
+    >>> flow = SyncPipe(
+    ...     Transforms.HASH, source=items, field='title', assign='title_hash'
+    ... )
     >>> len(list(flow))
     2
 
@@ -68,16 +71,17 @@ Which imports are public?
 
 ``riko`` organizes its public interface into three import tiers:
 
-- **Stable** — the top-level ``riko`` package (mirrored by ``riko.api``) holds the
+- **Stable**: the top-level ``riko`` package (mirrored by ``riko.api``) holds the
   SemVer-guaranteed API: the ``SyncPipe``/``AsyncPipe``/``SyncCollection``/
   ``AsyncCollection`` classes, ``Context``, ``ExecutionMode``, ``PipeState``,
   ``backend``, ``build_pipeline``, ``compile_pipe``, ``convert_dag``, ``export``,
   ``extract_dependencies``, ``get_module_metadata``, ``get_path``, ``isasync``,
-  ``issync``, ``list_modules``, ``list_targets``, ``parse_pipe_def``, ``run``, and the
-  pipeline exceptions.
-- **Extension** — ``riko.ext`` holds the symbols for authoring custom ``pipes``:
+  ``issync``, ``list_modules``, ``describe_module``, ``list_targets``,
+  ``parse_pipe_def``, ``run``, the typed discovery surface (``Modules``/``Sources``/
+  ``Transforms``/``Sinks``/``Targets`` bucket enums), and the pipeline exceptions.
+- **Extension**: ``riko.ext`` holds the symbols for authoring custom ``pipes``:
   the ``processor``/``operator``/``splitter`` decorators and the module-metadata types.
-- **Private** — all import paths outside ``riko``, ``riko.api``, and ``riko.ext``,
+- **Private**: all import paths outside ``riko``, ``riko.api``, and ``riko.ext``,
   including individual ``riko.modules.*`` implementations and other implementation
   modules.
 
@@ -90,8 +94,14 @@ Application code should import from ``riko`` or ``riko.api``.
     ...     AsyncPipe,
     ...     Context,
     ...     ExecutionMode,
+    ...     Modules,
+    ...     Sinks,
+    ...     Sources,
     ...     SyncCollection,
     ...     SyncPipe,
+    ...     Targets,
+    ...     Transforms,
+    ...     describe_module,
     ...     export,
     ...     get_path,
     ...     list_modules,
@@ -114,7 +124,7 @@ What pipes are available?
 Overview
 ^^^^^^^^
 
-``riko`` ships 51 built-in ``pipes``, outlined below [#]_. Runtime discovery is
+``riko`` ships 52 built-in ``pipes``, outlined below [#]_. Runtime discovery is
 the authoritative source for a ``pipe``'s type, subtype, sync/async
 availability, and loopability.
 
@@ -217,9 +227,11 @@ availability, and loopability.
 +----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
 | `uniq`_              | operator  | composer         | filters out non-unique items according to a specified field                                  |
 +----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `urlbuilder`_        | processor | transformer      | builds a URL                                                                                 |
+| `urlbuilder`_        | processor | source           | builds a URL                                                                                 |
 +----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
 | `urlparse`_          | processor | transformer      | parses a URL into its six components                                                         |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `write`_             | operator  | composer         | writes the stream to a file; passes items through unchanged (in-pipeline sink)               |
 +----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
 | `xpathfetchpage`_    | processor | source           | fetches the content of a given website as DOM nodes or a string                              |
 +----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
@@ -233,10 +245,10 @@ Args
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(SyncPipe('reverse', stream))
+    >>> next(SyncPipe(Transforms.REVERSE, stream))
     {'title': 'riko pt. 2'}
 
 A ``processor`` processes individual ``items``. Examples include ``fetchsitefeed``,
@@ -244,10 +256,10 @@ A ``processor`` processes individual ``items``. Examples include ``fetchsitefeed
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> items = [{'title': 'riko pt. 1'}]
-    >>> result = next(SyncPipe('hash', items, field='title'))
+    >>> result = next(SyncPipe(Transforms.HASH, items, field='title'))
     >>> sorted(result)
     ['hash', 'title']
     >>> result['hash']
@@ -293,33 +305,37 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
 
 .. code-block:: python
 
-    >>> from riko import list_modules, list_targets
+    >>> from riko import list_modules, list_targets, Modules
     >>>
-    >>> # filter by decorator type (`operator`, `processor`, `splitter`)
     >>> list_modules()[0]
     'aggregate'
     >>> len(list_modules())
-    51
+    52
+    >>> # filter by decorator type (`operator`, `processor`, `splitter`)
     >>> list_modules(type='operator')[0]
     'aggregate'
     >>> len(list_modules(type='operator'))
-    15
+    16
     >>> # filter by ``loopable``
     >>> list_modules(loopable=True)[0]
     'csv'
     >>> len(list_modules(loopable=True))
     34
-    >>> # filter by ``supported_subtypes``
+    >>> # filter by ``subtype``
     >>> list_modules(subtype='aggregator')[0]
     'count'
     >>> len(list_modules(subtype='aggregator'))
     2
-    >>> # Only modules whose default behavior is aggregation
-    >>> # (``primary=True`` requires ``subtype``)
-    >>> list_modules(subtype='aggregator', primary=True)[0]
-    'count'
-    >>> len(list_modules(subtype='aggregator', primary=True))
-    2
+    >>> # filter by modules whose default behavior
+    >>> list_modules(subtype='composer', primary=True)[0]
+    'aggregate'
+    >>> len(list_modules(subtype='composer', primary=True))
+    14
+    >>> # filter by ``category``
+    >>> list_modules(category='source')[0]
+    'csv'
+    >>> len(list_modules(category='source'))
+    14
     >>> # Full module metadata
     >>> metadata = list_modules(show_metadata=True)[0]
     >>> metadata.name, metadata.type, metadata.subtype
@@ -331,24 +347,66 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
     >>> len(list_targets()) >= 5
     True
 
+``describe_module`` returns a ``ModuleDefinition`` (or ``None`` for an unknown name).
+Both accept a plain ``str`` or a ``StrEnum`` member.
+
+.. code-block:: python
+
+    >>> write = describe_module(Sinks.WRITE)
+    >>> write.name, write.description
+    ('write', 'Writes a stream to a file as a terminal sink.')
+    >>> fetch = describe_module(Sources.FETCH)
+    >>> fetch.module
+    <module 'riko.modules.fetch' from '...fetch.py'>
+    >>> fetch.sync_pipe.__name__, fetch.async_pipe.__name__
+    ('pipe', 'async_pipe')
+    >>> describe_module('does-not-exist')
+
 Notes:
 
 - ``type`` accepts ``processor``, ``operator``, or ``splitter``.
 - ``subtype`` accepts ``source``, ``transformer``, ``composer``, ``aggregator``, and
   ``splitter``
 - ``type`` and ``subtype`` are mutually exclusive: a subtype implies its type.
-- ``supported_subtypes`` includes behaviors reachable through options such as
-  ``emit=True``.
 - Module authors do not declare these metadata attributes; they are derived from the
   decorator type, options, and return annotations.
 - The catalog overlays registry entries: modules added via ``riko.ext.register`` or a
   ``[project.entry-points."riko.modules"]`` entry point appear alongside the packaged
   built-ins (see `Can I create custom modules`_).
-- A module name may be given as a plain ``str`` or a ``riko.ext.ModuleName`` member;
-  ``normalize_module_name`` coerces either to the canonical string accepted
-  everywhere a module name is. Generated, ready-to-use enums grouped by taxonomy
-  (``Sources``/``Transforms``/``Sinks``) are planned; today ``ModuleName`` is the
-  base they will build on.
+- ``category`` (``source``/``transform``/``sink``) is a data-flow axis,
+  independent of the runtime ``type``/``subtype``.
+
+Typed module discovery
+^^^^^^^^^^^^^^^^^^^^^^^
+
+For editor autocompletion and static checks, ``riko`` ships a generated, typed discovery
+surface. ``Modules`` is a flat namespace aliasing **every** built-in ``pipe`` (each
+member *is* the corresponding bucket member, so ``Modules.FILTER is Transforms.FILTER``),
+while ``Sources``/``Transforms``/``Sinks``/``Targets`` are ``StrEnum`` subclasses that
+group by data-flow role. Every bucket member is interchangeable with a module name.
+
+.. code-block:: python
+
+    >>> from riko import Modules, Sources, Transforms, Sinks, Targets
+    >>>
+    >>> Sources.FETCH.value
+    'fetch'
+    >>> Sources.FETCH == 'fetch'
+    True
+    >>> Modules.FETCH is Sources.FETCH
+    True
+    >>> Modules.FILTER is Transforms.FILTER
+    True
+    >>> Modules.WRITE is Sinks.WRITE
+    True
+
+Notes:
+
+- ``Sinks`` classifies *sink pipes* (data-flow role ``output``/``write``). The one
+  built-in is ``write``, which serializes the stream to a file and passes items through
+  the remaining pipeline.
+- ``write`` takes a ``target`` option which can be a string or ``Targets`` enum. See
+  `exporting results`_ for examples.
 
 What do processor, operator, and splitter mean?
 -----------------------------------------------
@@ -361,11 +419,51 @@ local sync pools or bounded async concurrency.
 An ``operator`` works on a whole ``stream``. A ``composer`` returns a
 ``stream``, while an ``aggregator`` reduces a ``stream`` to a non-stream result
 that the wrapper emits as one or more ``items``. Some ``operators`` support both
-behaviors depending on options, so use ``supported_subtypes`` metadata when
-classification matters.
+behaviors depending on options, so use ``subtype`` metadata when classification matters.
 
 A ``splitter`` returns multiple ``streams``. The built-in ``split`` module
 eagerly materializes its ``source`` before creating copies.
+
+How does a processor map over items?
+------------------------------------
+
+A ``processor``'s first argument is normally one ``item``, but it may also be a
+``stream`` of items. ``riko`` normalizes at the stream boundary the same way
+``listize`` does: a ``list``, ``tuple``, ``range``, generator, or iterator maps
+over each element, while a mapping (one record), primitive, string, or ``None``
+is a single ``item``. So the following all behave predictably:
+
+.. code-block:: python
+
+    >>> from riko.modules.udf import pipe
+    >>>
+    >>> func = lambda item: {"y": item["x"] + 3}
+    >>> source = [{"x": 0}, {"x": 1}]
+    >>> next(pipe(source[0], func=func))
+    {'y': 3}
+    >>> next(pipe(iter(source), func=func))
+    {'y': 3}
+    >>> next(pipe(source, func=func))
+    {'y': 3}
+    >>> next(pipe(tuple(source), func=func))
+    {'y': 3}
+
+Only the outermost argument is interpreted as one-or-many, so a list-valued
+*field* inside a record stays a single value:
+
+    >>> item = {"x": 0, "tags": ["a", "b"]}
+    >>> next(pipe(item, func=lambda i: {"tags": i["tags"]}))
+    {'tags': ['a', 'b']}
+
+The supported ``SyncPipe``/``AsyncPipe`` objects behave identically.
+
+    >>> from riko import SyncPipe, Modules
+    >>>
+    >>> source = [{"x": 0}, {"x": 1}]
+    >>> next(SyncPipe(Modules.UDF, iter(source), func=func))
+    {'y': 3}
+    >>> next(SyncPipe(Modules.UDF, source, func=func))
+    {'y': 3}
 
 What file types are supported?
 ------------------------------
@@ -474,9 +572,9 @@ returns an empty ``stream`` rather than silently rerunning work.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
-    >>> flow = SyncPipe('hash', source=[{'content': 'a'}])
+    >>> flow = SyncPipe(Transforms.HASH, source=[{'content': 'a'}])
     >>> len(list(flow))
     1
     >>> list(flow)
@@ -489,32 +587,70 @@ failure raises ``PipelineStateError``.
 Which operations materialize or retain input?
 ---------------------------------------------
 
-Don't assume every ``pipe`` is fully streaming. Plan for full or partial
-materialization when using:
+Don't assume every ``pipe`` is fully streaming. Some read the whole ``stream`` in
+memory, so they cannot be used on an unbounded source. The table below records what each
+retains.
 
-- ``sort``, ``reverse``, and ``tail``;
-- ``split``;
-- aggregators such as ``count``, ``sum``, and ``join``;
-- ``export()`` or serialized exports;
-- awaiting an ``AsyncPipe``; or
-- sync pool mapping with ``parallel=True``.
+===========  ================  =======================================================
+pipe         retains           why
+===========  ================  =======================================================
+``write``    whole ``stream``  Serializing needs every ``item``, so the source is
+                               materialized before the write; the items it passes
+                               through are replayed from that list.
+``split``    whole ``stream``  Copies a materialized finite ``stream`` to each branch.
+``sort``     whole ``stream``  ``sorted()`` cannot rank a partial ``stream``.
+``reverse``  whole ``stream``  The last ``item`` must be known before the first is
+                               emitted.
+``count``    whole ``stream``  Counts the materialized ``stream``, and groups every
+                               ``item`` when ``count_key`` is set.
+``sum``      group only        Streams in O(1) memory without ``group_key``; retains
+                               every ``item`` when grouping.
+``join``     the ``other``     The right-hand side is replayed against each left
+                               ``item``, so it must be finite. The left side streams and
+                               may be unbounded.
+``tail``     last N            Bounded by ``conf['count']``.
+``uniq``     last N keys       Bounded by ``conf['limit']``.
+===========  ================  =======================================================
 
-``AsyncPipe(parallel=True)`` uses bounded concurrency instead of materializing
-an entire ``source``, but it still keeps in-flight and optionally prefetched
-work. See the `Cookbook`_'s performance and memory section for practical guidance.
+``export()`` and serialized exports materialize by the same reasoning as ``write``.
+Awaiting an ``AsyncPipe`` materializes all remaining ``items``, and
+``SyncPipe(parallel=True)``/``SyncCollection(parallel=True)`` materialize the source
+before submission.
+
+``AsyncPipe(parallel=True)`` uses bounded concurrency instead of materializing the
+source, though it still keeps in-flight and optionally prefetched work. Without
+``parallel`` it buffers the source instead. ``AsyncCollection`` ignores ``parallel``.
+It bounds by ``connections``, and streams incrementally (unless ``ordered=True``,
+in which case it fetches each source whole). See the `Cookbook`_'s performance and
+memory section for practical guidance.
 
 How do I send one stream to multiple consumers?
 -----------------------------------------------
 
 Use ``split`` for the simplest finite-stream copy. It eagerly materializes the
-entire ``source`` and returns identical iterators.
+entire ``source`` and returns identical iterators. Use ``publish`` and ``subscribe``
+for lazy in-process fan-out:
 
-Use ``send`` and ``receive`` for lazy in-process fan-out. Receivers must be
-created and primed before the sender is consumed. Consuming the main sender
-drives delivery to each named channel. This is an in-process coordination
-mechanism, not an external message broker.
+.. code-block:: python
 
-The `Cookbook`_ fan-out section include complete recipes for both approaches.
+    >>> from riko import SyncPipe
+    >>>
+    >>> items = [{"title": "quiet"}, {"title": "loud"}]
+    >>> subscriber = SyncPipe.subscribe("alerts")
+    >>>
+    >>> _ = list(SyncPipe.publish(items, "alerts"))
+    >>> [item["title"] for item in subscriber]
+    ['quiet', 'loud']
+
+``SyncPipe.subscribe`` registers the channel. Draining is non-blocking: a subscriber
+whose publisher has not run yields nothing rather than waiting. ``publish`` only pushes
+when *you* advance the publisher. Nothing published before you subscribe is replayed.
+
+``publish`` also chains. The main stream continues while a copy flows to each
+subscriber: ``SyncPipe(source=items).publish("archive").filter(conf=...)``.
+
+This is an in-process coordination mechanism, not an external message broker.
+The `Cookbook`_ fan-out section includes complete recipes for both approaches.
 
 Can I define a pipeline as JSON?
 --------------------------------
@@ -535,9 +671,15 @@ defaults to ``sw-{n}``, so the terse form is just:
     {
         "modules": [
             {"type": "fetchdata", "conf": {"url": "feed.json", "path": "value.items"}},
-            {"type": "truncate", "conf": {"count": {"value": "3"}}}
+            {"type": "truncate", "conf": {"count": 3}}
         ]
     }
+
+A scalar ``conf`` value may be written plainly, as ``count`` is above, or as a
+``{"type": ..., "value": ...}`` mapping (the Yahoo! Pipes form) to have it cast
+from a string. E.g., ``{"count": {"type": "int", "value": "3"}}``. A **bare**
+``{"value": "3"}`` is neither: it carries no ``type``, so it stays an ordinary
+nested mapping rather than being unwrapped to ``3``.
 
 Compact ``[source, target]`` pairs can't represent the secondary fan-in ports
 for modules such as ``join`` and ``union``. Use the full format for those. Chaining
@@ -548,6 +690,13 @@ write to stdout, or to a file via ``-o``):
 
     convert-dag flow.dag.json -o flow.json
     compile-pipe flow.json -o flow.py
+
+Since ``compile-pipe`` reads stdin when given ``-`` (or no path at all), the two
+compose directly. Add ``-v`` to report the modules used and bytes written to stderr:
+
+.. code-block:: bash
+
+    convert-dag flow.dag.json | compile-pipe - -o flow.py -v
 
 
 See the `DAG format`_ doc and the `Cookbook`_ for the full format/expansion rules and
@@ -658,6 +807,7 @@ documentation workflow.
 .. _What pipes are available: #what-pipes-are-available
 .. _How do I discover installed modules: #how-do-i-discover-installed-modules
 .. _What do processor, operator, and splitter mean: #what-do-processor-operator-and-splitter-mean
+.. _How does a processor map over items: #how-does-a-processor-map-over-items
 .. _What file types are supported: #what-file-types-are-supported
 .. _What protocols are supported: #what-protocols-are-supported
 .. _Which optional dependencies are available: #which-optional-dependencies-are-available
@@ -676,6 +826,7 @@ documentation workflow.
 
 .. _README: ../README.rst
 .. _Cookbook: COOKBOOK.rst
+.. _exporting results: COOKBOOK.rst#exporting-results
 .. _installation guide: INSTALLATION.rst
 .. _contributing guide: ../CONTRIBUTING.rst
 .. _issue tracker: https://github.com/nerevu/riko/issues
@@ -733,4 +884,5 @@ documentation workflow.
 .. _uniq: ../riko/modules/uniq.py
 .. _urlbuilder: ../riko/modules/urlbuilder.py
 .. _urlparse: ../riko/modules/urlparse.py
+.. _write: ../riko/modules/write.py
 .. _xpathfetchpage: ../riko/modules/xpathfetchpage.py

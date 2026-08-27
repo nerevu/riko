@@ -1,25 +1,34 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for pushing items of a stream to a function using generator based
-coroutines.
+Pushes items to one or more named receivers.
+
+Pairs with the ``receive`` module for in-process fan-out: ``send`` publishes to the
+names listed in ``others`` and passes the items through unchanged.
+
+This is the low-level interface. ``riko.SyncPipe.publish`` is the high-level path, both as
+``SyncPipe.publish(items, "alerts")`` and as ``flow.publish("alerts")`` mid-chain.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.modules.send import pipe as sender
         >>>
-        >>> target = receiver(conf={'name': 'receiver1', 'wait': 0.01, 'max_wait': 2})
+        >>> target = receiver(conf={"name": "receiver1", "wait": 0.01, "max_wait": 2})
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
-        >>> stream = ({'x': x} for x in range(5))
-        >>> source = sender(stream, others=['receiver1'])
+        >>> stream = ({"x": x} for x in range(5))
+        >>> source = sender(stream, others=["receiver1"])
         >>> next(source)
         {'x': 0}
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
+
+Attributes:
+    OPTS: Operator wrapper options.
+    DEFAULTS: Default operator configuration.
 
 """
 
@@ -28,9 +37,11 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko._pubsub import async_hub, send
+from riko._pubsub import async_hub, sync_hub
+from riko.bado.itertools import as_async
+from riko.modules._prepare import require_kwarg
 from riko.types.configs import SendObjconf
-from riko.types.general import Defaults, Opts, PipeTuples, Stream
+from riko.types.general import Defaults, Feed, Opts, PipeTuples, Stream
 
 from . import operator
 
@@ -40,24 +51,48 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    stream: Stream, objconf: SendObjconf, tuples: PipeTuples, **kwargs: str
+    stream: Stream | Feed, objconf: SendObjconf, tuples: PipeTuples, **kwargs: str
 ) -> Stream:
     """
-    Publishes each stream item to every target's AnyIO channel, then completes
-    (closes the channel) so receivers terminate. Publishing rendezvouses with
-    the receiver, so no startup ordering is needed; a target that is never
-    subscribed is bounded by ``objconf.max_wait`` and raises
-    ``ReceiverUnavailableError``. Returns the original items (passthrough).
+    Asynchronously publishes each item to every target, then returns them.
+
+    Receivers may start before or after the sender, so no startup ordering is
+    needed. Targets are completed even when a publish fails, so a healthy receiver isn't
+    left waiting.
+
+    Args:
+        stream: The source, sync or async. Note: this shares the `tuples`
+            iterator, so consuming it will consume `tuples` as well.
+
+        objconf: The pipe configuration, containing `max_wait`.
+
+        tuples: Iterable of (item, objconf). Note: this shares the `stream`
+            iterator, so consuming it will consume `stream` as well.
+
+    Kwargs:
+        others (list[str]): Receivers to push to. Required.
+
+    Returns:
+        A sync iterator over each source item, unchanged. Awaiting publishes the
+        whole source, so an unbounded one never returns and a finite one is held
+        in memory.
+
+    Raises:
+        TypeError: If ``others`` is not given.
+        ReceiverUnavailableError: If a target never starts within ``max_wait``.
+
     """
-    others = kwargs["others"]
+    others: list[str] = require_kwarg(kwargs, "others", "send", strict=True)
     timeout = objconf.max_wait
     sent = []
 
-    for item in stream:
-        await async_hub.publish(others, item, timeout=timeout)
-        sent.append(item)
+    try:
+        async for item in as_async(stream):
+            await async_hub.publish(others, item, timeout=timeout)
+            sent.append(item)
+    finally:
+        await async_hub.complete(others)
 
-    await async_hub.complete(others)
     return iter(sent)
 
 
@@ -65,39 +100,37 @@ def parser(
     stream: Stream, objconf: SendObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Parses the pipe content
+    Publishes each item to every target, then yields it unchanged.
 
     Args:
-        stream (Iter[dict]): The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        stream: The source. Note: this shares the `tuples` iterator, so
+            consuming it will consume `tuples` as well.
 
-        objconf (obj): the item independent configuration (an Objectify
-            instance).
+        objconf: The pipe configuration. Unused on this path.
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source stream and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the
-            `stream` iterator, so consuming it will consume `stream` as well.
-
-        kwargs (dict): Keyword arguments
+        tuples: Iterable of (item, objconf). Note: this shares the `stream`
+            iterator, so consuming it will consume `stream` as well.
 
     Kwargs:
-        stream (dict): The original item
-        others Iter[(str)]: Target names to receive each stream item.
+        others (list[str]): Receivers to push to. Required.
+        ids (dict[str, int]): Mapping of receiver name to delivery id (default: None).
 
-    Returns:
-        Iter(dict): The output stream
+    Yields:
+        Each source item, unchanged.
+
+    Raises:
+        TypeError: If ``others`` is not given.
 
     Examples:
         >>> from itertools import repeat
         >>> from riko.modules.receive import pipe as receiver
         >>>
-        >>> target = receiver(conf={'name': 'receiver2', 'wait': 0.01, 'max_wait': 2})
+        >>> target = receiver(conf={"name": "receiver2", "wait": 0.01, "max_wait": 2})
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
-        >>> stream = ({'x': x} for x in range(5))
+        >>> stream = ({"x": x} for x in range(5))
         >>> tuples = zip(stream, repeat(None))
-        >>> source = parser(stream, None, tuples, others=['receiver2'])
+        >>> source = parser(stream, None, tuples, others=["receiver2"])
         >>> next(source)
         {'x': 0}
         >>> next(target)
@@ -106,12 +139,12 @@ def parser(
         {'x': 0}
 
     """
-    others = cast(list[str], kwargs["others"])
+    others: list[str] = require_kwarg(kwargs, "others", "send", strict=True)
     ids = cast(dict[str, int] | None, kwargs.get("ids"))
 
     for item in stream:
         for target in others:
-            target_id = send(target, item)
+            target_id = sync_hub.send(target, item)
 
             if ids is not None and target_id is not None:
                 ids[target] = target_id
@@ -122,15 +155,32 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: str) -> Stream:
     """
-    An async operator that pushes stream items to receiver targets over AnyIO
-    channels.
+    Asynchronously pushes items to named receivers.
+
+    Items pass through unchanged, so this can sit mid-pipeline. Every target is
+    completed even when a publish fails, so a receiver on a healthy channel is
+    never left waiting on one nobody will close. Unlike the sync `pipe`, the
+    source is published in full before the first item is observable downstream.
+
+    Args:
+        items (Items | Feed): The source stream, sync or async.
+
+        conf (dict): The pipe configuration.
+
+            max_wait (int | float): Seconds to wait for a target to subscribe
+                before raising (default: 5).
+
+        context (Context): the execution context
 
     Kwargs:
-        others Iter[(str)]: Target names to receive each stream item.
-        conf (dict): The pipe configuration. May contain 'name' and 'max_wait'.
+        others (list[str]): Receiver names each item is pushed to. Required.
 
     Yields:
-        dict: an item
+        Item, unchanged.
+
+    Raises:
+        TypeError: If ``others`` is not given.
+        ReceiverUnavailableError: If a target never subscribes within ``max_wait``.
 
     """
     return await async_parser(*args, **kwargs)
@@ -139,29 +189,32 @@ async def async_pipe(*args: Any, **kwargs: str) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: str) -> Stream:
     """
-    An operator that pushes items of a stream to a function using generator based
-    coroutines.
+    Pushes each items to named receivers.
+
+    Items pass through unchanged, so this can sit mid-pipeline.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+        conf (dict): The pipe configuration. Unused on this path.
+        context (Context): the execution context
 
     Kwargs:
-        others Iter[(str)]: Target names to receive each stream item.
-        conf (dict): The pipe configuration. May contain the key 'name'.
-
-            name (str): The sender identifier
+        others (list[str]): Receiver names each item is pushed to. Required.
+        ids (dict[str, int]): Mapping of receiver name to delivery id (default: None).
 
     Yields:
-        dict: an item
+        Item, unchanged.
+
+    Raises:
+        TypeError: If ``others`` is not given.
 
     Examples:
         >>> from riko.modules.receive import pipe as receiver
         >>>
-        >>> target = receiver(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2})
+        >>> target = receiver(conf={"name": "receiver3", "wait": 0.01, "max_wait": 2})
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
-        >>> source = pipe([{'x': 0}], others=['receiver3'])
+        >>> source = pipe([{"x": 0}], others=["receiver3"])
         >>> next(source)
         {'x': 0}
         >>> next(target)

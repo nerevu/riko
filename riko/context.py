@@ -2,7 +2,20 @@
 """
 riko.context
 ~~~~~~~~~~~~
-The execution context for a pipeline.
+
+Provides the execution context for a pipeline.
+
+Examples:
+    Basic usage::
+
+        >>> from riko.context import Context, ExecutionMode, parse_context
+        >>>
+        >>> context = Context(ExecutionMode.DESCRIBE, test=True)
+        >>> context.describe_input
+        True
+        >>> parse_context(context, inputs={"limit": 5}).inputs
+        {'limit': 5}
+
 """
 
 from copy import copy
@@ -12,6 +25,8 @@ from riko.types.values import Inputs
 
 
 class ExecutionMode(StrEnum):
+    """Whether a run executes the pipeline or only describes it."""
+
     RUN = "run"
     DESCRIBE_INPUTS = "describe_inputs"
     DESCRIBE_DEPENDENCIES = "describe_dependencies"
@@ -20,13 +35,15 @@ class ExecutionMode(StrEnum):
 
 class Context:
     """
-    The context of a pipeline
-    mode = whether to run the pipeline or describe its inputs/dependencies
-    verbose = debug printing during compilation and running
-    test = takes input values from default (skips the console prompt)
-    inputs = a dictionary of values that overrides the defaults
-        e.g. {'name one': 'test value1'}
-    submodule = takes input values from inputs (or default)
+    A pipeline execution context.
+
+    Attributes:
+        mode: Whether to run or describe the pipeline.
+        verbose: Whether to print debug output.
+        test: Whether to use defaults instead of prompting.
+        inputs: Values that override input defaults.
+        submodule: Whether inputs come from a parent pipeline.
+
     """
 
     def __init__(
@@ -36,7 +53,7 @@ class Context:
         verbose: bool | None = False,
         test: bool | None = False,
         submodule: bool | None = False,
-        **kwargs: object,
+        **_: object,
     ) -> None:
         self.mode: ExecutionMode = mode or ExecutionMode.RUN
         self.verbose: bool = bool(verbose)
@@ -46,10 +63,12 @@ class Context:
 
     @property
     def describe_input(self) -> bool:
+        """Whether the run reports the pipeline's inputs."""
         return self.mode in {ExecutionMode.DESCRIBE_INPUTS, ExecutionMode.DESCRIBE}
 
     @property
     def describe_dependencies(self) -> bool:
+        """Whether the run reports the pipeline's module dependencies."""
         return self.mode in {
             ExecutionMode.DESCRIBE_DEPENDENCIES,
             ExecutionMode.DESCRIBE,
@@ -67,7 +86,13 @@ def parse_context(
     inputs: Inputs | None = None,
     **kwargs: bool | None,
 ) -> "Context":
-    # Prevents mutating caller-supplied Context
+    """
+    Returns a Context with its own inputs withoout mutating the caller's.
+
+    Copies a supplied ``context`` (or builds a fresh one) so a shared Context is
+    safe to reuse, then substitutes ``inputs`` when given.
+
+    """
     new_context = copy(context) if context else Context(mode, inputs=inputs, **kwargs)
     new_inputs = new_context.inputs if inputs is None else dict(inputs)
     new_context.inputs = new_inputs

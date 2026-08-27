@@ -6,6 +6,7 @@ from collections.abc import (
     AsyncIterator,
     Awaitable,
     Callable,
+    Generator,
     Iterable,
     Iterator,
 )
@@ -47,6 +48,7 @@ if TYPE_CHECKING:
         AnyModuleRawConf,
         CountValues,
         Skip,
+        TargetLike,
     )
 
 T = TypeVar("T")
@@ -61,15 +63,16 @@ type Stream = Iterator[Item]
 type StreamOrValueStream = Iterator[ItemOrValue]
 type Streams = Iterator[Stream]
 
-type AsyncStream = AsyncIterator[Item]
 type AsyncItems = AsyncIterable[Item]
+type AsyncItemsOrValues = AsyncIterable[ItemOrValue]
+type AsyncStream = AsyncIterator[Item]
 type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
 
 type Feed = AsyncItems
 type AsyncSource = Items | Feed | Awaitable[Items | Feed]
 
 type ProcessorParserOutput = Stream | ItemOrValue | AnyLocation | Iterator[str]
-type OperatorParserOutput = Stream | ItemOrValue | Iterator[StatefulItem]
+type OperatorParserOutput = StreamOrValueStream | ItemOrValue | Iterator[StatefulItem]
 type SplitterParserOutput = Streams
 type ParserOutput = ProcessorParserOutput | OperatorParserOutput | SplitterParserOutput
 type ParserMaterializedOutput = list[StatefulItem | ItemOrValue | AnyLocation | Stream]
@@ -82,9 +85,9 @@ type WrapperOutput = (
 )
 
 type ProcessorWrapperInput = (
-    ProcessorWrapperOutput | OperatorWrapperOutput | ItemOrValue
+    Items | ProcessorWrapperOutput | OperatorWrapperOutput | ItemOrValue
 )
-type OperatorWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
+type OperatorWrapperInput = Items | ProcessorWrapperOutput | OperatorWrapperOutput
 type SplitterWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type WrapperInput = ProcessorWrapperInput | OperatorWrapperInput | SplitterWrapperInput
 
@@ -97,6 +100,9 @@ type NumericCaster = Callable[[str | NumLike], NumLike]
 type SkipFunc = Callable[[Item], bool]
 type SkipIf = SkipFunc | Skip | Iterable[SkipFunc] | Iterable[Skip]
 type Function = Callable[..., object]
+type Receiver = Generator[None, Item | StatefulItem, None]
+type ReceiveFunc = Callable[[Item], Item | None]
+
 
 # Opener = Callable[[str], tuple[Optional[str | Reencoder], Optional[str]]]
 # TODO: add type hint overloads to Reencoder with decode=True -> str
@@ -125,25 +131,28 @@ class PreCaster(TypedDict):
 class Defaults(TypedDict, total=False):
     col_names: list[str] | None
     combine: Literal["and", "or"]
-    convert: bool
     count: int
     count_key: str | None
+    clean: bool
     currency: str  # TODO this should be an enum/literal
     dedupe: bool
     default: BasicArg
-    delay: int
     delimiter: str
+    detag: bool
     encoding: str
     input_key: str
     format: str
     group_key: str | None
     has_header: bool
+    html5: bool
     join_key: str | None
     length: int
     limit: int
     lower: bool
     max_wait: int
+    max_len: int
     memoize: bool
+    mode: str
     multi: bool
     name: str
     prompt: str
@@ -160,8 +169,10 @@ class Defaults(TypedDict, total=False):
     sort: bool
     splits: int
     start: int
+    stop: bool
     strict: bool
     sum_key: str
+    target: TargetLike | None
     test: bool
     token_key: str
     type: str
@@ -333,7 +344,7 @@ class AsyncSubPipe(ModuleWrapper):
 class AsyncOperatorWrapper(ModuleWrapper):
     async def __call__(  # noqa: E704
         self,
-        items: OperatorWrapperInput | None = None,
+        items: OperatorWrapperInput | Feed | None = None,
         conf: Conf | None = None,
         embed: AsyncProcessorWrapper | AsyncSubPipe | None = None,
         context: Context | None = None,

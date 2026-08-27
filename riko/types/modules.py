@@ -1,6 +1,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from re import Pattern, RegexFlag
 from typing import (
     TYPE_CHECKING,
@@ -16,9 +17,10 @@ if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
     from riko.cast import CastType, LocationType, SortableCastType
+    from riko.types._module_ids import LoopableModuleId, ModuleId
     from riko.types.compile import PipeModule
     from riko.types.general import Function
-    from riko.types.values import BasicValue
+    from riko.types.values import BasicValue, TargetLike
 
 
 # Shared
@@ -28,13 +30,11 @@ type NodeList[T: (str | int)] = list[T]
 type SCC[T: (str | int)] = list[tuple[T, ...]]
 
 type ModuleType = Literal["operator", "processor", "splitter"]
+type ModuleCategory = Literal["sink", "source", "transform"]
+type ModuleClass = Literal["Sinks", "Sources", "Transforms"]
 
 type ModuleSubtype = Literal[
-    "aggregator",
-    "composer",
-    "source",
-    "transformer",
-    "splitter",
+    "aggregator", "composer", "source", "transformer", "splitter"
 ]
 
 type ModuleSubtypes = set[ModuleSubtype]
@@ -79,40 +79,12 @@ class ModuleMetadata:
 
 PipeId = NewType("PipeId", str)
 
-
-ModuleId = (
-    Literal[
-        "fetch",
-        "fetchdata",
-        "fetchpage",
-        "forever",
-        "input",
-        "itembuilder",
-        "loop",
-        "output",
-        "regex",
-        "rename",
-        "sort",
-        "strconcat",
-        "tail",
-        "tokenizer",
-        "truncate",
-        "urlbuilder",
-    ]
-    | PipeId
-)
-
 CountValues = Literal["first", "all"]
 
 
 class ConfArg(TypedDict):
     type: str
     value: int | str | bool
-
-
-class CountArg(TypedDict):
-    type: Literal["text"]
-    value: CountValues
 
 
 class Terminal(TypedDict):
@@ -214,18 +186,6 @@ class RssItemBuilderRawConf(TypedDict, total=False):
     title: Value
 
 
-class Embed(TypedDict):
-    type: Literal["module"]
-    value: "EmbeddedModule"
-
-
-class LoopRawConf(TypedDict, total=False):
-    embed: Required[Embed]
-    count: CountArg
-    assign: ConfArg
-    field: ConfArg
-
-
 class CountRawConf(TypedDict, total=False):
     count_key: Value
 
@@ -245,6 +205,8 @@ class CsvRawConf(TypedDict):
 
 class CurrencyFormatRawConf(TypedDict, total=False):
     currency: Value
+    locale: Value
+    clean: Value
 
 
 class DateFormatRawConf(TypedDict, total=False):
@@ -255,7 +217,6 @@ class ExchangeRateRawConf(TypedDict, total=False):
     url: Value | list[Value]
     param: Value
     currency: Value
-    delay: Value
     memoize: Value
     precision: Value
 
@@ -350,7 +311,6 @@ class RegexRawRule(TypedDict, total=False):
     offset: Value
     replace: Value
     series: Value
-    singlematch: Value
     singlelinematch: Value
     casematch: Value
 
@@ -358,7 +318,6 @@ class RegexRawRule(TypedDict, total=False):
 class RegexRawConf(TypedDict):
     rule: RegexRawRule | list[RegexRawRule]
     multi: NotRequired[Value]
-    convert: NotRequired[Value]
 
 
 class RenameRawRule(TypedDict):
@@ -372,7 +331,6 @@ class RenameRawConf(TypedDict):
 
 
 class SendRawConf(TypedDict):
-    name: Value
     max_wait: NotRequired[Value]
 
 
@@ -501,7 +459,6 @@ type AnyModuleRawConf = (
     | InputRawConf
     | ItemBuilderRawConf
     | JoinRawConf
-    | LoopRawConf
     | ReceiveRawConf
     | RefindRawConf
     | RegexRawConf
@@ -535,11 +492,20 @@ type AnyModuleRawConf = (
 
 class EmbedRef(TypedDict):
     id: str
-    type: ModuleId
+    type: Union["ModuleId", "PipeId", Literal["output"]]
+
+
+class LoopableEmbedRef(TypedDict):
+    id: str
+    type: "LoopableModuleId | PipeId"
 
 
 class EmbeddedModule(EmbedRef, total=False):
-    """The legacy nested submodule descriptor (``conf.embed.value``)."""
+    """
+    A loop's embedded submodule hoisted to a standalone ``{id, type, conf}``
+    descriptor for code generation. Built by ``compile.gen_modules(embedded=True)``
+    from the loop's compact top-level ``embed`` plus its ``conf``.
+    """
 
     conf: Required[AnyModuleRawConf]
     emit: ConfArg
@@ -585,7 +551,6 @@ class RegexConfRule:
     default: str | None = None
     casematch: bool | None = None
     singlelinematch: bool | None = None
-    singlematch: bool | None = None
     offset: int = 0
     seriesmatch: bool = True
     replace: str = ""
@@ -628,16 +593,16 @@ class StrTransformConfRule:
         "count",
         "find",
     ]
-    args: str = ""
+    args: "BasicValue | Sequence[BasicValue]" = ""
 
 
 # Confs
 class SortConf(TypedDict):
-    rule: SortConfRule | list[SortConfRule]
+    rule: NotRequired[SortConfRule | list[SortConfRule]]
 
 
 class InputConf(TypedDict, total=False):
-    type: Required["CastType"]
+    type: "CastType"
     prompt: str
     default: str
     test: bool
@@ -646,7 +611,7 @@ class InputConf(TypedDict, total=False):
 
 class FetchConf(TypedDict, total=False):
     url: str
-    delay: float
+    encoding: str = "utf-8"
 
 
 class TailConf(TypedDict):
@@ -673,13 +638,6 @@ class RssItemBuilderConf(TypedDict, total=False):
     title: str
 
 
-class LoopConf(TypedDict, total=False):
-    embed: Required["PipeModule"]
-    count: CountValues
-    assign: str
-    field: str
-
-
 class AggregateConf(TypedDict):
     func: "Function"
 
@@ -688,9 +646,9 @@ class CountConf(TypedDict, total=False):
     count_key: str | None
 
 
-class CsvConf(TypedDict):
-    url: str
-    encoding: str
+class CsvConf(TypedDict, total=False):
+    url: Required[str]
+    encoding: str = "utf-8"
     col_names: NotRequired[Sequence[str] | None]
     delimiter: str = ","
     quotechar: str = '"'
@@ -700,11 +658,13 @@ class CsvConf(TypedDict):
     sanitize: bool = False
 
 
-class CurrencyFormatConf(TypedDict):
+class CurrencyFormatConf(TypedDict, total=False):
     currency: str = "USD"
+    locale: str
+    clean: bool
 
 
-class DateFormatConf(TypedDict):
+class DateFormatConf(TypedDict, total=False):
     format: str = "%m/%d/%Y %H:%M:%S"
 
 
@@ -712,25 +672,27 @@ class ExchangeRateConf(TypedDict, total=False):
     url: str
     param: dict[str, str]
     currency: str = "USD"
-    delay: int = 0
+    encoding: str = "utf-8"
     memoize: bool = True
     precision: int = 6
 
 
-class FeedAutoDiscoveryConf(TypedDict):
-    url: str
+class FeedAutoDiscoveryConf(TypedDict, total=False):
+    url: Required[str]
     strict: bool = True
     sort: bool = False
 
 
 class FetchDataConf(TypedDict):
     url: str
+    encoding: NotRequired[str]
     path: NotRequired[str]
     html5: NotRequired[bool]
 
 
-class FetchPageConf(TypedDict):
-    url: str
+class FetchPageConf(TypedDict, total=False):
+    url: Required[str]
+    encoding: NotRequired[str]
     start: NotRequired[str]
     end: NotRequired[str]
     token: NotRequired[str]
@@ -741,24 +703,24 @@ class FetchSiteFeedConf(TypedDict):
     url: str
 
 
-class FetchTableConf(CsvConf):
+class FetchTableConf(CsvConf, total=False):
     sanitize: bool = True
 
 
-class FetchTextConf(TypedDict):
-    url: str
-    encoding: str
+class FetchTextConf(TypedDict, total=False):
+    url: Required[str]
+    encoding: str = "utf-8"
 
 
-class FilterConf(TypedDict):
-    rule: FilterConfRule | list[FilterConfRule]
+class FilterConf(TypedDict, total=False):
+    rule: Required[FilterConfRule | list[FilterConfRule]]
     combine: Literal["and", "or"] = "and"
     permit: NotRequired[bool] = True
     stop: NotRequired[bool] = False
 
 
 class GeolocateConf(TypedDict):
-    type: "LocationType"
+    type: NotRequired["LocationType"]
 
 
 class JoinConf(TypedDict, total=False):
@@ -769,7 +731,7 @@ class JoinConf(TypedDict, total=False):
 
 class ReceiveConf(TypedDict, total=False):
     name: str
-    wait: int | float = 0.1
+    wait: int | float = 1
     max_wait: int | float = 5
     max_len: int
 
@@ -781,7 +743,6 @@ class RefindConf(TypedDict):
 class RegexConf(TypedDict, total=False):
     rule: Required[RegexConfRule | list[RegexConfRule]]
     multi: bool = False
-    convert: bool = True
 
 
 class RenameConf(TypedDict):
@@ -789,7 +750,6 @@ class RenameConf(TypedDict):
 
 
 class SendConf(TypedDict, total=False):
-    name: str
     max_wait: int | float = 5
 
 
@@ -800,11 +760,11 @@ class SimpleMathConf(TypedDict):
     ]
 
 
-class SlugifyConf(TypedDict):
+class SlugifyConf(TypedDict, total=False):
     separator: str = "-"
 
 
-class SplitConf(TypedDict):
+class SplitConf(TypedDict, total=False):
     splits: int = 2
 
 
@@ -824,17 +784,17 @@ class StrTransformConf(TypedDict):
     rule: StrTransformConfRule | list[StrTransformConfRule]
 
 
-class SubelementConf(TypedDict):
-    path: str
+class SubelementConf(TypedDict, total=False):
+    path: Required[str]
     token_key: str | None = "content"  # noqa: S105
 
 
-class SubstrConf(TypedDict):
+class SubstrConf(TypedDict, total=False):
     start: int = 0
     length: int = 0
 
 
-class SumConf(TypedDict):
+class SumConf(TypedDict, total=False):
     sum_key: str = "content"
     group_key: str | None = None
 
@@ -862,7 +822,7 @@ class TruncateConf(TypedDict, total=False):
 
 
 class TypecastConf(TypedDict):
-    type: "CastType"
+    type: NotRequired["CastType"]
 
 
 class UdfConf(TypedDict):
@@ -885,9 +845,16 @@ class UrlParseConf(TypedDict, total=False):
     parse_key: str = "content"
 
 
+class WriteConf(TypedDict, total=False):
+    url: Required[str | Path]
+    target: "TargetLike | None" = None
+    mode: str = "wb+"
+
+
 class XpathFetchPageConf(TypedDict, total=False):
     url: Required[str]
     xpath: str
+    encoding: str = "utf-8"
     html5: bool = False
 
 
@@ -938,7 +905,6 @@ type AnyModuleConf = (
     | InputConf
     | ItemBuilderConf
     | JoinConf
-    | LoopConf
     | ReceiveConf
     | RefindConf
     | RegexConf
@@ -965,5 +931,6 @@ type AnyModuleConf = (
     | UniqConf
     | UrlBuilderConf
     | UrlParseConf
+    | WriteConf
     | XpathFetchPageConf
 )

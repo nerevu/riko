@@ -1,27 +1,21 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for hashing text.
+Hashes the text of an item field.
 
-Note: If the PYTHONHASHSEED environment variable is set to an integer value,
-it is used as a fixed seed for generating the hash. Its purpose is to allow
-repeatable hashing across python processes and versions. The integer must be a
-decimal number in the range [0, 4294967295].
-
-Specifying the value 0 will disable hash randomization. If this variable is set
-to `random`, a random value is used to seed the hashes. Hash randomization is
-is enabled by default for Python 3.2.3+, and disabled otherwise.
+The field value is cast to text before hashing, so a missing field hashes the
+empty string.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.hash import pipe
         >>>
-        >>> next(pipe({'content': 'hello world'}))['hash']
+        >>> next(pipe({"content": "hello world"}))["hash"]
         1921504423
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -50,26 +44,22 @@ def parser(
     content: str, extraction: Extraction, objconf: DynamicConf, **kwargs: object
 ) -> int:
     """
-    Parsers the pipe content
+    Returns the unsigned 32-bit hash of ``content``.
 
     Args:
-        word (str): The string to hash
-        _ (None): Ignored.
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        assign (str): Attribute to assign parsed content (default: hash)
-        stream (dict): The original item
+        content: The value to hash.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration. Unused.
 
     Returns:
-        dict: The item
+        The hash, wrapped to an unsigned 32-bit integer.
 
     Examples:
         >>> from meza.fntools import Objectify
         >>>
-        >>> item = {'content': 'hello world'}
-        >>> kwargs = {'stream': item}
-        >>> parser(item['content'], None, None, **kwargs)
+        >>> item = {"content": "hello world"}
+        >>> kwargs = {"stream": item}
+        >>> parser(item["content"], None, None, **kwargs)
         1921504423
 
     """
@@ -79,55 +69,80 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> int:
     """
-    A processor module that asynchronously hashes the field of an item.
+    Asynchronously hashes an item field.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+        conf (dict): The pipe configuration. Unused.
+        context (Context): the execution context
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: hash)
-        field (str): Item attribute to operate on (default: 'content')
+        field (str): Item attribute to hash. Its value is cast to text first,
+            so a missing field hashes ``""`` (default: "content").
 
-    Returns:
-       Awaitable: item with hashed content
+        assign (str): Field the hash is assigned to. Ignored when ``emit`` is
+            True (default: "hash").
+
+        emit (bool): Whether to emit the hash in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
+
+    Yields:
+        - merged ``{Item, <assign>: <hash>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <hash>}`` when ``emit`` is False and no item given
+        - ``<hash>`` when ``emit`` is True
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({'content': 'hello world'})
-        ...     print(next(result)['hash'])
+        ...     result = await async_pipe({"content": "hello world"})
+        ...     print(next(result)["hash"])
         >>>
         >>> run(main)
         1921504423
 
     """
-    # TODO: figure out why print(next(x)) errs
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> int:
     """
-    A processor that hashes the field of an item.
+    Hashes an item field.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+        conf (dict): The pipe configuration. Unused.
+        context (Context): the execution context
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: hash)
-        field (str): Item attribute to operate on (default: 'content')
+        field (str): Item attribute to hash. Its value is cast to text first,
+            so a missing field hashes ``""`` (default: "content").
+
+        assign (str): Field the hash is assigned to. Ignored when ``emit`` is
+            True (default: "hash").
+
+        emit (bool): Whether to emit the hash in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
     Yields:
-        dict: an item with hashed content
+        - merged ``{Item, <assign>: <hash>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <hash>}`` when ``emit`` is False and no item given
+        - ``<hash>`` when ``emit`` is True
 
     Examples:
-        >>> next(pipe({'content': 'hello world'}))
+        >>> next(pipe({"content": "hello world"}))
         {'content': 'hello world', 'hash': 1921504423}
-        >>> kwargs = {'field': 'title', 'assign': 'result'}
-        >>> next(pipe({'title': 'greeting'}, **kwargs))['result']
+        >>> kwargs = {"field": "title", "assign": "result"}
+        >>> next(pipe({"title": "greeting"}, **kwargs))["result"]
         528683593
 
     """

@@ -1,19 +1,22 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for parsing a URL into its six components.
+Parses a url into its six components.
+
+Produces one item is per component: ``scheme``, ``netloc``, ``path``, ``params``,
+``query``, and ``fragment``.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.urlparse import pipe
         >>>
-        >>> item = {'content': 'http://yahoo.com'}
+        >>> item = {"content": "http://yahoo.com"}
         >>> next(pipe(item))
         {'component': 'scheme', 'content': 'http'}
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -39,56 +42,69 @@ def parser(
     url: str, extraction: Extraction, objconf: UrlParseObjconf, **kwargs: object
 ) -> Iterator[dict[str, str]]:
     """
-    Parsers the pipe content
+    Yields one item per url component.
 
     Args:
-        url (str): The link to parse
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        assign (str): Attribute to assign parsed content (default: urlparse)
-        stream (dict): The original item
+        url: The link to parse.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `parse_key`.
 
     Returns:
-        dict: The item
+        Six items, each ``{"component": <name>, <parse_key>: <value>}``.
 
     Examples:
         >>> from meza.fntools import Objectify
         >>>
-        >>> objconf = Objectify({'parse_key': 'value'})
-        >>> result = parser('http://yahoo.com', None, objconf)
+        >>> objconf = Objectify({"parse_key": "value"})
+        >>> result = parser("http://yahoo.com", None, objconf)
         >>> next(result)
         {'component': 'scheme', 'value': 'http'}
 
     """
     parsed = urlparse(url)
     items = parsed._asdict().items()
-    stream = ({"component": k, objconf.parse_key: v} for k, v in items)
-    return stream
+    return ({"component": k, objconf.parse_key: v} for k, v in items)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     """
-    A processor module that asynchronously parses a URL into its components.
+    Asynchronously parses a url into its components.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            parse_key (str): Field each component value is stored under
+                (default: "content").
+
+        context (Context): the execution context
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: urlparse)
-        field (str): Item attribute to operate on (default: 'content')
+        field (str): Item attribute holding the url (default: "content").
 
-    Returns:
-       Awaitable: item with parsed content
+        assign (str): Field the components are assigned to. Ignored when ``emit``
+            is True (default: "urlparse").
+
+        emit (bool): Whether to emit each component directly rather than assign
+            them. Overrides ``assign`` (default: True).
+
+    Yields:
+        - ``{"component": <name>, <parse_key>: <value>}`` when ``emit`` is True
+          (default)
+        - ``{<assign>: <component>}`` when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<component>, ...]}`` when ``emit`` is
+          False and item is given
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({'content': 'http://yahoo.com'})
+        ...     result = await async_pipe({"content": "http://yahoo.com"})
         ...     print(next(result))
         >>>
         >>> run(main)
@@ -101,29 +117,42 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     """
-    A processor that parses a URL into its components.
+    Parses a url into its components.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            parse_key (str): Field each component value is stored under
+                (default: "content").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'parse_key'.
+        field (str): Item attribute holding the url (default: "content").
 
-            parse_key (str): Attribute to assign individual tokens (default:
-                content)
+        assign (str): Field the components are assigned to. Ignored when ``emit``
+            is True (default: "urlparse").
 
-        assign (str): Attribute to assign parsed content (default: urlparse)
-        field (str): Item attribute to operate on (default: 'content')
+        emit (bool): Whether to emit each component directly rather than assign
+            them. Overrides ``assign`` (default: True).
 
     Yields:
-        dict: an item with parsed content
+        - ``{"component": <name>, <parse_key>: <value>}`` when ``emit`` is True
+          (default)
+        - ``{<assign>: <component>}`` when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<component>, ...]}`` when ``emit`` is
+          False and item is given
 
     Examples:
-        >>> item = {'content': 'http://yahoo.com'}
+        >>> item = {"content": "http://yahoo.com"}
         >>> next(pipe(item))
         {'component': 'scheme', 'content': 'http'}
-        >>> conf = {'parse_key': 'value'}
+        >>> conf = {"parse_key": "value"}
         >>> next(pipe(item, conf=conf, emit=True))
         {'component': 'scheme', 'value': 'http'}
 

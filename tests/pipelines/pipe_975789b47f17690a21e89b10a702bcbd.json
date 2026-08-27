@@ -147,10 +147,6 @@
                             "type": "text",
                             "value": "title"
                         },
-                        "singlematch": {
-                            "type": "bool",
-                            "value": false
-                        },
                         "match": {
                             "type": "text",
                             "value": " [^#]*"

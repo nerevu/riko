@@ -1,8 +1,10 @@
 # Riko Roadmap
 
 This is riko's **map**: the index of gameplans that hold every detailed plan, plus pointers
-to the authoritative specs. The **runtime contract** (§0–25) lives in
-[RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md); what already ships is in
+to the authoritative specs. The **runtime contract** — only the sections that describe
+guaranteed, shipped behavior — lives in [RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md) (the full
+`§0–27` map is the [Index](#index) below; feature/end-state sections live in gameplans); what
+already ships is in
 [IMPLEMENTED.md](IMPLEMENTED.md) (its as-built companion); implementation status and sequence
 are the P-track ([PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md)
 + [MILESTONES.md](MILESTONES.md)). This document just routes you to them.
@@ -67,29 +69,84 @@ any of them is in [IMPLEMENTED.md](IMPLEMENTED.md).
 ## Gameplans
 
 Every detailed plan lives under [gameplans/](gameplans/). The per-`§N` map is the
-[Index](#index) above; this table lists each gameplan and what it owns. The feature/end-state
+[Index](#index) above; the grouped tables below list each gameplan and what it owns. The feature/end-state
 `§N` (dropped from the bare-bones contract) are **owned** by the gameplan that covers them.
+
+### Core runtime & execution
 
 | Gameplan | Covers |
 |---|---|
-| [agents.md](gameplans/agents.md) | Agent workflows — agent loop, tools. |
-| [ai-Inference.md](gameplans/ai-Inference.md) | AI inference — provider `infer` modules, embedding/retrieval adapters. |
-| [azure-automation.md](gameplans/azure-automation.md) | Azure automation — ARM/PowerShell, Service Bus / Event Grid, desired-state. |
+| [execution-semantics.md](gameplans/execution-semantics.md) | **§5, §11, §12, §15, §16, §22** and the *planned* parts of **§6–§8, §13** — execution characteristics, retry, dispositions, stateful operators, batch model, memory limits, backpressure/timeout/merge/filter internals (incl. `receive`'s unbounded async wait, §7.1); + the async primitive reference (§ Appendix A). |
 | [callable-pipes.md](gameplans/callable-pipes.md) | **§4 callable pipes** — `map`/`flat_map`, `Opts` fields, decorator model, strict mode, thread/process execution (+ impl plan). |
-| [cli.md](gameplans/cli.md) | CLI architecture, command-plugin system, config precedence. |
-| [connectors.md](gameplans/connectors.md) | Source/sink connectors (HTTP, files, mail, brokers, CKAN/Prometheus/tabular, Singer). |
-| [database-transforms.md](gameplans/database-transforms.md) | `riko-sql` / `riko-dbt` (Ibis-backed reads, dbt coordination); owns **§25** (conversion & dataframe). |
-| [dotdict-parsing.md](gameplans/dotdict-parsing.md) | DotDict parsing — business-data key handling. |
-| [enrichment-modules.md](gameplans/enrichment-modules.md) | Record/enrichment modules (coalesce, transforms, near-duplicate, contact extraction). |
-| [execution-semantics.md](gameplans/execution-semantics.md) | **§5, §11, §12, §15, §16, §22** and the *planned* parts of **§6–§8, §13** — execution characteristics, retry, dispositions, stateful operators, batch model, memory limits, backpressure/timeout/merge/filter internals; + the async primitive reference (§ Appendix A). |
-| [extensibility.md](gameplans/extensibility.md) | **Extensibility & ecosystem (E0–E8)** — module contract, plugins, workflow spec, observability, adapters, drivers, GUI + 1.0 readiness; owns **§24** (module registry). Prior-art sources. |
-| [highergov-feed.md](gameplans/highergov-feed.md) | **HigherGov-first critical path** (HG-0…HG-9) + **async `Feed` integration** — riko's first production use: schema contracts, `SyncPipe`/`AsyncPipe` callable pipes, bounded async I/O. |
-| [mcp.md](gameplans/mcp.md) | MCP server implementation. |
-| [module-documentation.md](gameplans/module-documentation.md) | Yahoo! Pipes module reference documentation. |
-| [orchestration.md](gameplans/orchestration.md) | Orchestrator adapters (cron, webhook, Airflow/Prefect/Dagster, dbt). |
-| [rdp-connect.md](gameplans/rdp-connect.md) | **§14, §17–§21, §26, §27** + **Riko Connect** (§1) — RDP/Connect end-state: lineage, Riko Data Protocol, state, schema, batch transports, manifests, implementation milestones, non-goals. |
-| [riko-site.md](gameplans/riko-site.md) | riko site pipeline. |
+| [fanout-topology.md](gameplans/fanout-topology.md) | **Fan-out, routing & fan-in (F0–F7)** — branching topology as a first-class, inspectable concern: `split`, `send`/`receive`, `union`/`join`, conditional/named routing, buffering & slow-subscriber policy, subscriber lifecycle; owns the pub/sub phase mechanics **F1/F4/F5**. |
+| [feed-native-streaming.md](gameplans/feed-native-streaming.md) | **Feed-native pipe migration & streaming memory model** — per-pipe audit, `batch_feed`/`BatchPolicy` batching, streaming `write` (`StreamEncoder`), bounded `split`, sync/async parity, unified stream-boundary source normalization (§7.1); discharges the P7 streaming-export carryover. |
+| [feed-monitoring.md](gameplans/feed-monitoring.md) | Persistent feed monitoring & change detection — repeatedly observing finite sources and emitting new/changed/threshold/anomaly events without becoming a scheduler, daemon, or orchestrator. |
+| [bado-anyio-alignment.md](gameplans/bado-anyio-alignment.md) | **`bado` ↔ AnyIO 4.14 alignment** — remove/replace/keep audit of the async helpers, **missing async helpers** (`async_memoize`, `throttle`) + async benchmarking/profiling methodology (execution-semantics owns the primitive *semantics*). |
 | [twisted-protocol-servers.md](gameplans/twisted-protocol-servers.md) | Server-side Twisted protocols via `asyncioreactor` + the **§23** protocol-adapter design (the §23 *current runtime* is in the contract). |
+
+| [dotdict-parsing.md](gameplans/dotdict-parsing.md) | DotDict parsing — business-data key handling. |
+| [release-readiness.md](gameplans/release-readiness.md) | **Pre-1.0 DX polish & release gate** — pub/sub 1.0 contract, config-validation strictness, API-shape compression (Pipeline/Execution split, `Pipeline(source=…)`, `with_config`/`executor=`), optional-dep UX, wheel/PyPI release fidelity, the Must-land/Preferred/Can-wait triage. |
+| [correctness-audit.md](gameplans/correctness-audit.md) | **Correctness audit of the non-module repo** — the defect taxonomy **C1–C12** (import-time state, unreachable guards, unread config, silent fabrication, leaked dependency errors, weaker duplicates, doc drift, non-determinism, dataclass-vs-TypedDict removal, omitted-vs-`None`, eagerly consumed streams, sync/async divergence), the phased plan (A0–A5) to apply it to `cast`/`types`/parsing/core/async/CLI, and the **open defect register R1–R19** — the verified branch-audit work list, whose P0 rows gate the `features` → `main` merge. |
+
+### Data, sources & connectors
+
+| Gameplan | Covers |
+|---|---|
+| [connectors.md](gameplans/connectors.md) | Source/sink connectors (HTTP, files, mail, brokers, CKAN/Prometheus/tabular, Singer). |
+| [rest-incremental.md](gameplans/rest-incremental.md) | Declarative REST-source layer — first-class pagination, auth references, dependent endpoints, incremental cursors, explicit source state (informed by dlt's `rest_api` and Singer tap/state conventions). |
+| [highergov-feed.md](gameplans/highergov-feed.md) | **HigherGov-first critical path** (HG-0…HG-9) + **async `Feed` integration** — riko's first production use: schema contracts, `SyncPipe`/`AsyncPipe` callable pipes, bounded async I/O. |
+| [rdp-connect.md](gameplans/rdp-connect.md) | **§14, §17–§21, §26, §27** + **Riko Connect** (§1) — RDP/Connect end-state: lineage, Riko Data Protocol, state, schema, batch transports, manifests, implementation milestones, non-goals. |
+| [database-transforms.md](gameplans/database-transforms.md) | `riko-sql` / `riko-dbt` (Ibis-backed reads, dbt coordination); owns **§25** (conversion & dataframe). |
+| [tabular-interop.md](gameplans/tabular-interop.md) | **The authoritative in-memory tabular boundary** — moving finite record streams to/from Pandas, Arrow, and optionally Polars (serialized codecs and rendering → `artifact-conversion.md`). |
+| [artifact-conversion.md](gameplans/artifact-conversion.md) | Serialized codecs, contact/card serialization, template-driven reports & rendered artifacts — the boundary that keeps the record-stream core out of document rendering (in-memory frames → `tabular-interop.md`). |
+| [enrichment-modules.md](gameplans/enrichment-modules.md) | Record/enrichment modules (coalesce, transforms, near-duplicate, contact extraction); **retiring `geolocate`'s stub lookups** (§6b). |
+| [reference-data.md](gameplans/reference-data.md) | **Currency/location reference-data consolidation** — one internal source of truth (`riko/_reference.py`) behind the `riko.currencies`/`riko.locations` facades; deletes the three dead `riko/data/` files; a behavior-preserving refactor (not an R-register defect). |
+
+### Extensibility & tooling
+
+| Gameplan | Covers |
+|---|---|
+| [extensibility.md](gameplans/extensibility.md) | **Extensibility & ecosystem (E0–E8)** — module contract, plugins, workflow spec, observability, adapters, drivers, GUI + 1.0 readiness; owns **§24** (module registry). Prior-art sources. |
+| [module-registry.md](gameplans/module-registry.md) | **P8 module registry + resolution seam** — splitting `resolve_module`'s four conflated concerns so an external package can add modules without editing core and runtime pipe resolution stops importing the compiler. |
+| [module-enums.md](gameplans/module-enums.md) | **Module registry + enum discoverability** — the generated `Modules` tree, `derive_category` taxonomy, and `codegen`/`gen-names` surface. |
+| [cli.md](gameplans/cli.md) | CLI architecture, command-plugin system, config precedence. |
+| [ownership.md](gameplans/ownership.md) | **The gameplan ownership map** — the one-owner-per-contract rule, the authoritative-contract table, and the boundary calls between overlapping plans. Read it before adding or reviewing a gameplan. |
+
+### AI & agents
+
+| Gameplan | Covers |
+|---|---|
+| [ai-inference.md](gameplans/ai-inference.md) | AI inference — provider `infer` modules, embedding/retrieval adapters. |
+| [ai-inference-research.md](gameplans/ai-inference-research.md) | Prior-art research/ADR notes behind `ai-inference.md` (Langly/LangChain extraction + native-reimplementation sketches) — rationale, not an actionable plan. |
+| [agents.md](gameplans/agents.md) | Agent workflows — agent loop, tools. |
+| [agent-scenarios.md](gameplans/agent-scenarios.md) | Agent scenarios, tools, retrieval & evaluation — a deterministic, policy-aware scenario layer over the capability catalog; extends `agents.md` (topology), `ai-inference.md` (model calls), `mcp.md` (tool policy). |
+| [mcp.md](gameplans/mcp.md) | MCP server implementation. |
+
+### Providers, Microsoft & orchestration
+
+| Gameplan | Covers |
+|---|---|
+| [provider-integrations.md](gameplans/provider-integrations.md) | Provider semantics for authenticated SaaS APIs — resource CRUD/search, webhooks, caching, idempotent writes, identity mapping, browser fallback, async provider operations (**not** transport, secrets, REST pagination, retry, or monitoring checkpoints). |
+| [azure-automation.md](gameplans/azure-automation.md) | Azure automation — ARM/PowerShell, Service Bus / Event Grid, desired-state. |
+| [microsoft-administration.md](gameplans/microsoft-administration.md) | Microsoft 365 / Entra / Azure administrative workflow semantics — desired state, preflight, dry-run, approval, verification, audit evidence, certificate lifecycle, manual handoffs; consumes the `azure-automation.md` adapters. |
+| [autopilot-provisioning.md](gameplans/autopilot-provisioning.md) | **Windows Autopilot new-device provisioning** — the first `riko-microsoft` (P14) scenario: CSV→auth→discover→plan→import→sync→profile-fallback→verify; specializes the Microsoft adapter/admin/operation-wait plans. |
+| [orchestration.md](gameplans/orchestration.md) | Orchestrator adapters (cron, webhook, Airflow/Prefect/Dagster, dbt). |
+
+### Documentation & testing
+
+| Gameplan | Covers |
+|---|---|
+| [module-documentation.md](gameplans/module-documentation.md) | Yahoo! Pipes module reference documentation. |
+| [inspiration-coverage.md](gameplans/inspiration-coverage.md) | Coverage index for `_docs/inspiration/` — which preserved Nerevu/external ideas carry forward into which gameplan, and which patterns are intentionally **not** revived (traceability, not a reimplementation commitment). |
+| [riko-site.md](gameplans/riko-site.md) | riko site pipeline. |
+| [testing.md](gameplans/testing.md) | **P13 test-suite layering** — doctest/public/internal/functional ownership rule, the high-priority test-bug fixes, and the file-by-file fix/remove/consolidate plan. |
+
+### Retired redirects
+
+| Gameplan | Covers |
+|---|---|
+| [productionizing.md](gameplans/productionizing.md) | *Retired → redirect.* Superseded by the P-track (its content maps onto P7–P12); RDP-spec draft → `rdp-connect.md`, schema-drift impl → `highergov-feed.md`. |
+| [repo-refinement.md](gameplans/repo-refinement.md) | *Retired → redirect.* Its 18-item order maps 1:1 to P1–P14; extension families 15–18 → `connectors.md`, `database-transforms.md`, `orchestration.md`, `enrichment-modules.md`. |
 
 **Implementation status & sequence** for the runtime contract live in the authoritative
 **P-track**: [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md) (P1–P14 tracker + per-phase detail) +

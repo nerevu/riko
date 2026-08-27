@@ -13,7 +13,7 @@ from typing import cast, overload
 
 from requests.structures import CaseInsensitiveDict
 
-from riko.dates import ensure_tzinfo
+from riko._date_utils import ensure_tzinfo
 from riko.types.general import Stream, StreamOrValueStream, ValueStream
 from riko.types.values import BasicDict, ParserRSSEntry, RikoValue, RSSEntry
 

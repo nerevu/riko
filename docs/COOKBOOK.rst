@@ -21,20 +21,22 @@ count them.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import Sources, SyncPipe
     >>>
     >>> conf = {'attrs': {'key': 'content', 'value': 'a,bb,ccc'}}
     >>> flow = (
-    ...     SyncPipe('itembuilder', conf=conf)
+    ...     SyncPipe(Sources.ITEMBUILDER, conf=conf)
     ...     .tokenizer(emit=True)
     ...     .count()
     ... )
     >>> next(flow)
     {'count': 3}
 
-``SyncPipe`` resolves each chained attribute as a built-in ``pipe``. The
-``flow`` does no work until it is consumed by ``list()``, iteration, ``next()``,
-or an export.
+``SyncPipe`` resolves each chained attribute as a built-in ``pipe``. Its first argument
+can be either a string or (as shown above) a member of the typed discovery tree
+(``Sources``/``Transforms``/``Sinks``). The ``flow`` is lazy, so it does no work until
+it is consumed (i.e., by ``list()``, teration, ``next()``, or an export). See
+`discovering modules`_ in the FAQ for ``list_modules`` and``describe_module``.
 
 Transform, filter, and order items
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -95,9 +97,9 @@ examples deterministic.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, get_path
+    >>> from riko import Sources, SyncPipe, get_path
     >>>
-    >>> flow = SyncPipe('fetchdata', conf={'url': get_path('quote.json')})
+    >>> flow = SyncPipe(Sources.FETCHDATA, conf={'url': get_path('quote.json')})
     >>> next(flow)['base']
     'USD'
 
@@ -112,9 +114,9 @@ Read feeds
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, get_path
+    >>> from riko import Sources, SyncPipe, get_path
     >>>
-    >>> flow = SyncPipe('fetch', conf={'url': get_path('feed.xml')})
+    >>> flow = SyncPipe(Sources.FETCH, conf={'url': get_path('feed.xml')})
     >>> item = next(flow)
     >>> {'author', 'content', 'id', 'link', 'published', 'summary', 'title'} <= set(item)
     True
@@ -132,11 +134,11 @@ strip markup. This example uses an offline HTML fixture.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, get_path
+    >>> from riko import Sources, SyncPipe, get_path
     >>>
     >>> flow = (
     ...     SyncPipe(
-    ...         'fetchpage',
+    ...         Sources.FETCHPAGE,
     ...         conf={
     ...             'url': get_path('users.jyu.fi.html'),
     ...             'start': '<body>',
@@ -164,10 +166,10 @@ of values passed into every ``pipe``).
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import Sources, SyncPipe
     >>>
     >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
-    >>> next(SyncPipe('input', conf=conf, inputs={'content': '30'}))
+    >>> next(SyncPipe(Sources.INPUT, conf=conf, inputs={'content': '30'}))
     30
 
 Intermediate recipes
@@ -182,33 +184,33 @@ Fetching data and feeds
 
 .. code-block:: python
 
-    >>> from riko import get_path, SyncPipe
+    >>> from riko import get_path, Sources, SyncPipe
     >>>
     >>> # Note: `get_path` looks up a cached copy of a URL in the `data`
     >>> # directory, so these examples run offline
     >>>
     >>> ### Fetch a web page ###
-    >>> stream = SyncPipe('fetchpage', conf={'url': get_path('users.jyu.fi.html')})
+    >>> stream = SyncPipe(Sources.FETCHPAGE, conf={'url': get_path('users.jyu.fi.html')})
     >>>
     >>> ### Fetch a data file ###
-    >>> stream = SyncPipe('fetchdata', conf={'url': get_path('quote.json')})
+    >>> stream = SyncPipe(Sources.FETCHDATA, conf={'url': get_path('quote.json')})
     >>>
     >>> ### View the fetched data ###
     >>> item = next(stream)
     >>> item['base']
     'USD'
     >>> ### Fetch an RSS feed ###
-    >>> stream = SyncPipe('fetch', conf={'url': get_path('feed.xml')})
+    >>> stream = SyncPipe(Sources.FETCH, conf={'url': get_path('feed.xml')})
     >>>
     >>> ### Fetch the first RSS feed found on a page ###
-    >>> stream = SyncPipe('fetchsitefeed', conf={'url': get_path('cnn.html')})
+    >>> stream = SyncPipe(Sources.FETCHSITEFEED, conf={'url': get_path('cnn.html')})
     >>>
     >>> ### Find all RSS links on a page and fetch the feeds ###
-    >>> entries = SyncPipe('feedautodiscovery', conf={'url': get_path('bbc.html')})
+    >>> entries = SyncPipe(Sources.FEEDAUTODISCOVERY, conf={'url': get_path('bbc.html')})
     >>> urls = [entry['link'] for entry in entries]
     >>> urls
     ['file://riko/data/bbci.co.uk.xml']
-    >>> stream = SyncPipe('fetch', conf={'url': urls[0]})
+    >>> stream = SyncPipe(Sources.FETCH, conf={'url': urls[0]})
     >>>
     >>> ### Alternatively, create a SyncCollection ###
     >>> #
@@ -235,11 +237,11 @@ This is how compiled ``pipelines`` wire values between modules.
 
 .. code-block:: python
 
-    >>> from riko import get_path, SyncPipe
+    >>> from riko import get_path, Sources, SyncPipe
     >>>
     >>> conf = {'url': {'subkey': 'url'}}
     >>> items = [{'url': get_path('feed.xml')}]
-    >>> result = SyncPipe('fetch', items, conf=conf)
+    >>> result = SyncPipe(Sources.FETCH, items, conf=conf)
     >>> item = next(result)
     >>> {'author', 'content', 'id', 'link', 'published', 'summary', 'title'} <= set(item)
     True
@@ -297,34 +299,34 @@ Notes
 Chaining with the ``|`` operator or ``pipe`` method
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Alongside attribute chaining (``pipe.tokenizer(...)``), a ``pipe`` can be added to
-the ``pipeline`` with the ``|`` operator or the ``pipe`` method. These take the
-module name as a *value*, so they also work when the name is dynamic or dotted
-(``"microsoft.autopilot.ensure"``). Every form resolves to the same string
-identifier.
+Alongside attribute chaining (``pipe.tokenizer(...)``), a ``pipe`` can be added to the
+``pipeline`` with the ``|`` operator or the ``pipe`` method. These take the module name
+as either a string or a typed ``Sources``/``Transforms``/``Sinks`` member. They also
+accept dynamic or dotted name modules, e.g., ``"microsoft.autopilot.ensure"``.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
-    >>> src = [{'content': 'a,b,c,a'}]
+    >>> src = [{"content": "a,b,c,a"}]
     >>>
     >>> # seed a source stream with ``items | pipe``
-    >>> next(src | SyncPipe('tokenizer'))
+    >>> next(src | SyncPipe(Transforms.TOKENIZER))
     {'content': 'a'}
     >>>
     >>> # chain a pipe by name
-    >>> tokens = SyncPipe('tokenizer', source=src)
-    >>> next(tokens | 'hash')
+    >>> tokens = SyncPipe(Transforms.TOKENIZER, source=src)
+    >>> next(tokens | Transforms.HASH)
     {'content': 'a', 'hash': 1267964084}
+    >>>
     >>> # chain a pipe by ``(name, conf)`` pair
-    >>> tokens = SyncPipe('tokenizer', source=src)
-    >>> list(tokens | ('truncate', {'count': 2}))
+    >>> tokens = SyncPipe(Transforms.TOKENIZER, source=src)
+    >>> list(tokens | (Transforms.TRUNCATE, {"count": 2}))
     [{'content': 'a'}, {'content': 'b'}]
     >>>
-    >>> # chosen pipe name at runtime
-    >>> module = 'count'
-    >>> tokens = SyncPipe('tokenizer', source=src).pipe(module)
+    >>> # chain with a dynamic pipe name
+    >>> module = "count"
+    >>> tokens = SyncPipe(Transforms.TOKENIZER, source=src).pipe(module)
     >>> next(tokens)
     {'count': 4}
 
@@ -363,9 +365,9 @@ re-running. You can inspect a pipe's state at any point via its read-only
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
-    >>> flow = SyncPipe('hash', source=[{'content': 'a'}, {'content': 'b'}])
+    >>> flow = SyncPipe(Transforms.HASH, source=[{'content': 'a'}, {'content': 'b'}])
     >>> flow.state
     <PipeState.NEW: 'new'>
     >>> len(list(flow))                    # consume the stream
@@ -379,7 +381,7 @@ Chaining after partial consumption wraps only the remaining ``source``.
 
 .. code-block:: python
 
-    >>> flow = SyncPipe('hash', source=[{'content': 'a'}, {'content': 'b'}])
+    >>> flow = SyncPipe(Transforms.HASH, source=[{'content': 'a'}, {'content': 'b'}])
     >>> next(flow)['content']
     'a'
     >>> list(flow.count())
@@ -391,7 +393,7 @@ the pool is closed; on exceptional exit it is terminated.
 
 .. code-block:: python
 
-    >>> with SyncPipe('hash', source=[{'content': 'a'}], parallel=True) as flow:
+    >>> with SyncPipe(Transforms.HASH, source=[{'content': 'a'}], parallel=True) as flow:
     ...     list(flow)
     [{'content': 'a', 'hash': 1267964084}]
     >>> flow.closed and flow.pool is None  # pool released on exit
@@ -405,30 +407,58 @@ concrete list you can index, measure, and reuse.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
-    >>> flow = SyncPipe('hash', source=[{'title': 'a'}, {'title': 'b'}])
+    >>> flow = SyncPipe(Transforms.HASH, source=[{'title': 'a'}, {'title': 'b'}])
     >>> items = flow.export()
     >>> len(items), items[0]['title']      # unlike the flow, indexable & measurable
     (2, 'a')
 
-For serialized output, the top-level ``export`` converter writes ``items`` to a
-string buffer (or to a file if you pass a path as the third argument, returning
-the number of records written). ``list_targets()`` lists the available targets
-(``ofx``/``qif`` require the optional ``csv2ofx`` dependency).
+You can pass a target as the first argument to change the export type. The target may be
+a plain string or a member of the typed ``Targets`` enum (recommended, for editor
+autocompletion). ``list_targets()`` lists the targets available at
+runtime (``ofx``/``qif`` require the optional ``csv2ofx`` dependency).
+
+    >>> from riko import Targets, list_targets
+    >>>
+    >>> source= [{"title": "a"}, {"title": "b"}]
+    >>> flow = SyncPipe(Transforms.HASH, source=source, field="title")
+    >>> {"csv", "geojson", "json", "list", "tuple"}.issubset(list_targets())
+    True
+    >>> flow.export("tuple")
+    ({'title': 'a', 'hash': 1267964084}, {'title': 'b', 'hash': 2297772648})
+    >>> flow = SyncPipe(Transforms.HASH, source=source, field="title")
+    >>> flow.export(Targets.JSON)
+    '[{"hash": 1267964084, "title": "a"}, {"hash": 2297772648, "title": "b"}]'
+
+
+For serialized output, you can pass a file path or file like object as the second
+argument.
+
+``export()`` is a one-shot terminal call. To write **inside** a pipeline uninterrupted,
+use the ``write`` sink pipe: it serializes the stream to ``conf['url']`` with a
+``Targets`` converter (``target`` defaults to ``'json'``) and passes every item through
+unchanged. This allows you can persist an intermediate result and continue processing.
 
 .. code-block:: python
 
-    >>> from riko import export, list_targets
+    >>> from riko import get_temp_file, SyncPipe, Sources
     >>>
-    >>> items = [{'title': 'a', 'score': 1}, {'title': 'b', 'score': 2}]
-    >>> export(items, 'json').getvalue()
-    '[{"score": 1, "title": "a"}, {"score": 2, "title": "b"}]'
-    >>> {'csv', 'geojson', 'json', 'list', 'tuple'}.issubset(list_targets())
-    True
+    >>> conf = {"attrs": {"key": "content", "value": "a,bb,ccc"}}
+    >>> with get_temp_file() as fp:
+    ...     flow = (
+    ...         SyncPipe(Sources.ITEMBUILDER, conf=conf)
+    ...         .tokenizer()
+    ...         .write(conf={"url": fp.name})
+    ...         .count()
+    ...     )
+    ...     next(flow)
+    ...     fp.read()
+    {'count': 3}
+    b'[{"content": "a"}, {"content": "bb"}, {"content": "ccc"}]'
 
-Exporting, awaiting a pipe, or converting to ``list`` consumes and materializes
-the remaining ``stream``.
+Note that both ``export`` and ``write`` are **eager**: they serialize the complete
+source stream into memory. Don't use them on an unbounded ``stream``.
 
 Asynchronous pipelines
 ----------------------
@@ -446,7 +476,7 @@ Lazy async iteration
 
 .. code-block:: python
 
-    >>> from riko import AsyncPipe, get_path, issync, run
+    >>> from riko import AsyncPipe, Sources, get_path, issync, run
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
@@ -454,7 +484,7 @@ Lazy async iteration
     >>> ### Consume an AsyncPipe item-by-item with `async for` ###
     >>> async def main():
     ...     pipe = (
-    ...         AsyncPipe('fetch', conf=fetch_conf).filter(conf={'rule': filter_rule})
+    ...         AsyncPipe(Sources.FETCH, conf=fetch_conf).filter(conf={'rule': filter_rule})
     ...     )
     ...     titles = [item['title'] async for item in pipe]
     ...     print(titles[0], '/', len(titles))
@@ -491,12 +521,12 @@ cap the number of in-flight items.
 
 .. code-block:: python
 
-    >>> from riko import AsyncPipe, issync, run
+    >>> from riko import AsyncPipe, Sources, issync, run
     >>>
     >>> async def main():
     ...     conf = {'attrs': {'key': 'content', 'value': 'a,bb,ccc'}}
     ...     pipe = (
-    ...         AsyncPipe('itembuilder', conf=conf, parallel=True)
+    ...         AsyncPipe(Sources.ITEMBUILDER, conf=conf, parallel=True)
     ...         .tokenizer(emit=True)
     ...         .hash()
     ...     )
@@ -521,13 +551,13 @@ Re-iteration then yields an empty ``stream``, and attempting to chain a failed
 
 .. code-block:: python
 
-    >>> from riko import PipelineStateError, SyncPipe
+    >>> from riko import PipelineStateError, SyncPipe, Transforms
     >>>
     >>> def broken_source():
     ...     yield {'content': 'first'}
     ...     raise RuntimeError('broken input')
     >>>
-    >>> flow = SyncPipe('hash', source=broken_source())
+    >>> flow = SyncPipe(Transforms.HASH, source=broken_source())
     >>> try:
     ...     list(flow)
     ... except RuntimeError as exc:
@@ -545,7 +575,7 @@ Chaining onto a ``closed`` ``flow`` is also terminal:
 
 .. code-block:: python
 
-    >>> flow = SyncPipe('hash', source=[{'content': 'a'}])
+    >>> flow = SyncPipe(Transforms.HASH, source=[{'content': 'a'}])
     >>> flow.close()
     >>> flow.closed
     True
@@ -568,13 +598,13 @@ It is the simplest option when a transformation is local to one application.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> def add_length(item):
     ...     return {**item, 'length': len(item['content'])}
     >>>
     >>> items = [{'content': 'a'}, {'content': 'abcd'}]
-    >>> flow = SyncPipe('udf', source=items, func=add_length, emit=True)
+    >>> flow = SyncPipe(Transforms.UDF, source=items, func=add_length, emit=True)
     >>> [item['length'] for item in flow]
     [1, 4]
 
@@ -648,60 +678,35 @@ Fanning out a stream
 Sometimes you need to consume the same ``stream`` from multiple independent pipelines.
 For example, archiving every item while also sending urgent items, to an alert queue.
 Consuming the iterator twice would exhaust it, and materialising it into a list defeats
-lazy evaluation. ``riko`` solves this with the ``send`` and ``receive`` pipes.
-
-- ``send`` is a transparent pass-through ``operator``: it yields every item
-  unchanged while pushing a copy to one or more named channels.
-- ``receive`` is an independent pull iterator that drains a named receiver as items
-  arrive.
-
-Under the hood, each ``receiver`` is a generator-based coroutine (the same
-push pattern used by `ijson`_). ``send`` calls ``.send(item)`` on the primed
-coroutine directly.
+lazy evaluation. ``riko`` solves this with ``publish`` and ``subscribe``:
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> items = [{'title': 'Gravity paper'}, {'title': 'Breaking: riko 4.0'}]
+    >>> subscriber = SyncPipe.subscribe('subscriber')
+    >>> publisher = SyncPipe.publish(items, 'subscriber')
     >>>
-    >>> ### Prime a named receiver ###
-    >>> receiver = SyncPipe('receive', conf={'name': 'receiver'})
-    >>> next(receiver)
-    {'state': <StreamState.PENDING: 1>}
+    >>> ### Consuming the publisher drives the push ###
+    >>> _ = list(publisher)
     >>>
-    >>> ### sender pushes items to 'receiver' ###
-    >>> sender = SyncPipe('send', items, others=['receiver'])
-    >>>
-    >>> ### Consuming the sender drives the push ###
-    >>> _ = list(sender)
-    >>>
-    >>> ### Drain the receiver independently ###
-    >>> # Note: an idle receiver yields a `PENDING` and `DONE` state markers, so filter
-    >>> # for real items when draining
-    >>> [item['title'] for item in receiver if 'title' in item]
+    >>> ### Drain the subscriber independently ###
+    >>> [item['title'] for item in subscriber]
     ['Gravity paper', 'Breaking: riko 4.0']
 
-``send`` composes naturally in a ``SyncPipe`` chain via ``.send(others=[...])``.
+``publish`` composes naturally in a ``SyncPipe`` chain via ``.publish(...)``.
 The stream continues down the main pipeline while a copy flows to each named
-receiver:
+subscriber:
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> ### `archive` and `notify` stand in for your real side effects ###
-    >>> #
-    >>> # Note: a receive `func` automatically filters away state markers, e.g., `PENDING`
     >>> archived, alerted = [], []
-    >>>
-    >>> ### Prime two named channels ###
-    >>> everything = SyncPipe('receive', conf={'name': 'everything'}, func=archived.append)
-    >>> next(everything)
-    {'state': <StreamState.PENDING: 1>}
-    >>> breaking = SyncPipe('receive', conf={'name': 'breaking'}, func=alerted.append)
-    >>> next(breaking)
-    {'state': <StreamState.PENDING: 1>}
+    >>> everything = SyncPipe.subscribe('everything', func=archived.append)
+    >>> breaking = SyncPipe.subscribe('breaking', func=alerted.append)
     >>>
     >>> items = [
     ...     {'title': 'quiet', 'score': 42},
@@ -712,9 +717,9 @@ receiver:
     >>> ### Send ALL items to 'everything', filter, then send matches to 'breaking' ###
     >>> flow = (
     ...     SyncPipe(source=items)
-    ...         .send(others=['everything'])
+    ...         .publish('everything')
     ...         .filter(conf={'rule': [{'field': 'score', 'value': 500, 'op': 'greater'}]})
-    ...         .send(others=['breaking'])
+    ...         .publish('breaking')
     ...         .sort(conf={'rule': [{'field': 'score'}]})
     ... )
     >>>
@@ -722,46 +727,45 @@ receiver:
     >>> [item['title'] for item in flow]  # sorted high score items
     ['also big', 'breaking: riko 4.0']
     >>>
-    >>> ### Drain each receiver: each `func` runs as items arrive ###
-    >>> # When passed `func`, receivers contain the func return value. In this case, our
-    >>> # funcs mutate lists, so we don't care about the return results.
-    >>> _ = list(everything)
+    >>> ### Subscriber funcs already ran as items were published ###
     >>> [item['title'] for item in archived]  # all items in original order
     ['quiet', 'breaking: riko 4.0', 'also big']
-    >>> _ = list(breaking)
     >>> [item['title'] for item in alerted]  # high score items in original order
     ['breaking: riko 4.0', 'also big']
+    >>>
+    >>> ### Drain and discard subscriber output after publishing is complete ###
+    >>> _ = list(breaking)
+    >>> _ = list(everything)
 
-Multiple receivers can listen on different channels from the same ``send`` call by
-passing additional names to ``others``:
+You can publish to multiple subscribers by passing additional names:
 
 .. code-block:: python
 
-    >>> sender = SyncPipe('send', items, others=['breaking', 'archive', 'metrics'])
+    >>> publisher = SyncPipe.publish(items, 'breaking', 'archive', 'metrics')
 
-Each receiver is drained independently; draining one does not affect the others.
+Each subscriber is drained independently; draining one does not affect the others.
 
-``split`` vs ``send``/``receive``
-''''''''''''''''''''''''''''''''''
+``split`` vs ``publish``/``subscribe``
+''''''''''''''''''''''''''''''''''''''
 
 ``riko`` also has a ``split`` pipe that copies a stream for multiple consumers:
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> stream1, stream2 = SyncPipe('split', items)
+    >>> stream1, stream2 = SyncPipe(Transforms.SPLIT, items)
     >>> next(stream1), next(stream2)
     ({'title': 'riko pt. 1'}, {'title': 'riko pt. 1'})
 
 The difference between them is that ``split`` calls ``list(stream)`` internally, so it
 **eagerly materializes** the ``stream`` into memory before handing out copies.
-``send``/``receive`` are **lazy**: each item is pushed to receivers as it passes
+``publish``/``subscribe`` are **lazy**: item are pushed to subscribers as it passes
 through, with no upfront buffering.
 
 +-------------------------------+---------------------------+----------------------------+
-| Dimension                     | ``split``                 | ``send`` / ``receive``     |
+| Dimension                     | ``split``                 | ``publish`` / ``subscribe``|
 +===============================+===========================+============================+
 | Evaluation                    | Eager — full stream in    | Lazy — one item at a time  |
 |                               | memory before any copy    |                            |
@@ -777,22 +781,22 @@ through, with no upfront buffering.
 +-------------------------------+---------------------------+----------------------------+
 | Infinite / very large streams | Hangs or OOM              | Works                      |
 +-------------------------------+---------------------------+----------------------------+
-| API                           | Returns N iterators       | Receivers primed upfront;  |
-|                               | in one call               | drained independently      |
+| API                           | Returns N iterators       | Subscribers drained        |
+|                               | in one call               | independently              |
 +-------------------------------+---------------------------+----------------------------+
 | Transform per branch          | No. Identical copies.     | Yes. ``func=`` in each     |
-|                               |                           | ``receive``                |
+|                               |                           | ``subscribe``              |
 +-------------------------------+---------------------------+----------------------------+
-| SyncPipe chain                | Returns N streams;        | ``.send(others=[...])``    |
-|                               | not chainable             | stays in the chain         |
+| SyncPipe chain                | Returns N streams;        | ``.publish(...)`` stays in |
+|                               | not chainable             | the chain                  |
 +-------------------------------+---------------------------+----------------------------+
 
 **Use** ``split`` when the stream is small and finite and you want the simplest
 possible API.
 
-**Use** ``send``/``receive`` when the stream is large, potentially infinite, or
+**Use** ``publish``/``subscribe`` when the stream is large, potentially infinite, or
 when the main pipeline must stay lazy (e.g., inside a ``timeout`` or ``truncate``
-composer). ``receive`` also lets you apply a different transform (``func``)
+composer). ``subscribe`` also lets you apply a different transform (``func``)
 to the branched items without touching the main flow.
 
 .. _ijson: https://github.com/ICRAR/ijson/blob/master/notes/design_notes.rst
@@ -837,6 +841,7 @@ To instead emit a standalone, runnable Python module (equivalent to the
 .. code-block:: python
 
     >>> from riko import compile_pipe
+    >>>
     >>> source = compile_pipe(pipe_def, 'pipe_demo')
     >>> 'def pipe' in source
     True
@@ -847,6 +852,12 @@ Or use the command-line tools:
 
     convert-dag flow.dag.json -o flow.json
     compile-pipe flow.json -o flow.py
+
+Or chain them, since ``compile-pipe`` reads stdin when given ``-`` (or no path):
+
+.. code-block:: bash
+
+    convert-dag flow.dag.json | compile-pipe - -o flow.py -v
 
 Note that fan-in operators such as ``union``/``join`` cannot be expressed with
 the ``[source, target]`` pair format (their secondary inputs need ``_OTHER{n}``
@@ -887,8 +898,10 @@ Performance and memory
 Keep the following execution boundaries explicit:
 
 - A pipeline instance is single-use. Rebuild it for another run.
-- Most item ``transformers`` are iterator-oriented, but ``sort``, ``reverse``,
-  ``tail``, ``split``, aggregators, and exports consume or retain input.
+- Most item ``transformers`` are iterator-oriented, but ``write``, ``split``,
+  ``sort``, ``reverse``, ``count``, and a grouping ``sum`` hold the whole
+  ``stream`` in memory, so none of them can run on an unbounded source. See the
+  `FAQ`_ for the full table of what each retains.
 - ``SyncPipe(parallel=True)`` currently materializes the ``pipe`` ``source`` before
   local thread or process mapping. Don't use it for an unbounded ``stream``.
 - ``AsyncPipe(parallel=True)`` uses bounded concurrency and backpressure for
@@ -899,7 +912,7 @@ Keep the following execution boundaries explicit:
 - Awaiting an ``AsyncPipe`` materializes all remaining ``items``. Prefer
   ``async for`` when streaming behavior matters.
 - ``split`` copies a fully materialized finite ``stream``. Prefer named
-  ``send``/``receive`` channels for lazy fan-out.
+  ``publish``/``subscribe`` channels for lazy fan-out.
 - Don't infer that parallel execution is faster. Measure the actual workload;
   pool startup, serialization, ordering, and I/O behavior can dominate small
   pipelines.
@@ -910,6 +923,7 @@ run ``riko`` inside the relevant worker or task rather than treating ``riko`` as
 the scheduler.
 
 .. _FAQ: FAQ.rst
+.. _discovering modules: FAQ.rst#how-do-i-discover-installed-modules
 .. _Can I create custom modules: FAQ.rst#can-i-create-custom-modules
 .. _riko-example-ext: ../examples/riko-example-ext
 .. _register_module.py: ../examples/register_module.py

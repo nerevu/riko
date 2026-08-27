@@ -1,16 +1,19 @@
-# Riko Callable pipes Contract Gameplan
+# Callable pipes gameplan
 
 > **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level overview. This gameplan is the authoritative detail for the callable-pipe execution contract — the `Opts` execution-characteristic fields, the `@processor`/`@operator`/`@splitter` decorator model, `map`/`flat_map`, strict mode, and callable context / thread / process execution (ROADMAP §4). Section references like §N point back to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md) (the runtime contract); the numbered `## N.` headings are preserved so those references resolve.
 
 ## 4. Callable pipes
 
-> **Status: Planned.** `Opts` carries none of the execution-characteristic fields; `map`/`flat_map` callable pipes and strict mode do not exist. `@processor`/`@operator`/`@splitter` exist but are not extended with these fields.
+> **Current gap:** `Opts` carries none of the execution-characteristic fields; `map`/`flat_map` callable pipes and strict mode do not exist. `@processor`/`@operator`/`@splitter` exist but are not extended with these fields.
 
 > **Deferred / not yet implemented.** Per-module Feed-native parsers (a
 > `parser_mode: feed | legacy_stream` classification, review #8) are not built:
 > today's module parsers consume synchronous `Items`, so a non-parallel async
 > pipe buffers its upstream at the explicit `AsyncPipe._materialize_legacy_source`
-> boundary. Only the bounded/parallel path streams end-to-end (see §3.2, §8).
+> boundary. Only the bounded/parallel path streams end-to-end (see §3.2, §8). This
+> file owns the `parser_mode` **mechanism**; the per-pipe **rollout plan** that
+> consumes it (which pipes go Feed-native, in what order, plus the streaming-memory
+> model and streaming `write`) is [feed-native-streaming.md](feed-native-streaming.md).
 
 ### Pipe execution options
 
@@ -318,6 +321,41 @@ Resolved value:
 ```python
 module.opts["determinism"] == "nondeterministic"
 ```
+
+### Bare decorators and implementation kind
+
+`@processor`, `@operator`, and `@splitter` accept either a sync or an async callable, bare or
+configured:
+
+```python
+@processor
+def pipe(item, **kwargs): ...
+
+@processor
+async def pipe(item, **kwargs): ...      # single-impl async — no rename to async_pipe
+
+@processor(emit=False)
+async def pipe(item, **kwargs): ...
+```
+
+The implementation kind comes from the callable's metadata, not its variable name. The current
+`Module._resolve_isasync()` restriction that **rejects an `async def pipe`** (forcing the name
+`async_pipe`) is lifted — `iscoroutinefunction(pipe)` already detects it.
+
+`isasync=True` and the `async_pipe` name are **retained** — they are not shims:
+
+- `isasync=True` is the explicit override for async implementations Python cannot introspect: a
+  plain `def` that returns a coroutine, or a callable object (`iscoroutinefunction` is `False` for
+  both). It also selects the typed `Literal[True]` overload. See `sort.py` (`def async_pipe`).
+- The `async_pipe` **name is structurally required** in a dual-implementation module: a module
+  cannot define two functions both named `pipe`, so the optimized async form coexists as
+  `async_pipe` alongside the sync `pipe`.
+
+So the only change is **additive**: a single-implementation async module may now write
+`async def pipe`. Dual-implementation modules keep `pipe` + `async_pipe` unchanged. Riko selects the
+native implementation for the execution mode and privately adapts the other side
+([execution-semantics.md § Execution-mode adaptation](execution-semantics.md)); one-sided
+`ModuleDefinition` registration is in [extensibility.md § 24](extensibility.md).
 
 ### Strict mode
 

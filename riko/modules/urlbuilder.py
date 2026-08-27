@@ -1,54 +1,26 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for building a url from parts
+Builds a url from its parts.
 
-Many URLs are long and complex. Modules like Fetch Feed let you provide a URL
-as a starting point for a Pipe, but sometimes you'd like to control how that
-URL is constructed. That's what the URL Builder module does.
-
-To see how this works, and why it can be useful, lets look at an example URL:
-
-    http://finance.yahoo.com/rss/headline?s=yhoo
-
-One of Yahoo! Finance's RSS services lets you get news feeds for companies
-based on their stock market ticker. The URL above returns news stories related
-to Yahoo! (stock ticker YHOO). To get news on another company, for example
-General Motors (stock ticker GM), you'd simply change the URL to:
-
-    http://finance.yahoo.com/rss/headline?s=gm
-
-URLs are built from three main parts. The first is a server name, in our
-example that's "finance.yahoo.com". The second part is a resource path. That's
-everything after the server name, up to (but not including) the question mark
-("/rss/headline"). Finally, after the question mark are a series of parameters.
-
-In our example, there's only one parameter, named s. The parameter name and its
-value are separated by an equal sign, giving us "s=gm" or "s=yhoo".
-
-If we want to use this service in our Pipe, we can just use a Fetch Feed
-module and enter the URL. But then our Pipe is stuck reading data for just one
-ticker symbol. We could wire in a URL Input module, but then the user has to
-enter the whole URL.
-
-The better way is to use URL Builder. This module constructs a URL for you from
-parts. Some parts you may type in, others you may wire in using Text User Input
-modules.
+Allows pipelines to dynamically inject pieces (stock ticker, search term, page number,
+etc.) into a url.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.urlbuilder import pipe
         >>>
-        >>> param = {'key': 's', 'value': 'gm'}
-        >>> path = ['rss', 'headline']
-        >>> base = 'http://finance.yahoo.com'
-        >>> conf = {'base': base, 'path': path, 'param': param}
+        >>> conf = {
+        ...     "base": "http://finance.yahoo.com",
+        ...     "path": ["rss", "headline"],
+        ...     "param": {"key": "s", "value": "gm"},
+        ... }
         >>> next(pipe(conf=conf))
         'http://finance.yahoo.com/rss/headline?s=gm'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -61,14 +33,16 @@ from urllib.parse import urlencode, urljoin
 import pygogo as gogo
 
 from riko._strutils import INVALID_FILECHAR_PATTERN
+from riko.cast import BasicCastType
+from riko.modules._prepare import require_conf
 from riko.types.configs import UrlBuilderObjconf
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import ObjconfParam
 
 from . import processor
 
-OPTS: Opts = {"extract": "param", "listize": True, "emit": True}
-DEFAULTS: Defaults = {}
+OPTS: Opts = {"ftype": BasicCastType.NONE, "extract": "param", "listize": True}
+DEFAULTS: Defaults = {"param": {}}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -76,26 +50,28 @@ def parser(
     _: Item, param: Sequence[ObjconfParam], objconf: UrlBuilderObjconf, **kwargs: object
 ) -> str:
     """
-    Parsers the pipe content
+    Assembles a url from the configured parts.
 
     Args:
-        item (obj): The entry to process (a DotDict instance)
-        param (List[Objectify]): Query parameters
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        _: The item. Unused.
+        param: The parsed query parameters.
+        objconf: The pipe configuration, containing `base`, `path` and `ext`.
 
     Returns:
-        dict: The item
+        The url.
+
+    Raises:
+        TypeError: If ``conf`` has no ``base`` key.
 
     Examples:
         >>> from meza.fntools import Objectify
         >>>
-        >>> param = {'key': 's', 'value': 'gm'}
-        >>> path = ['rss', 'headline']
-        >>> base = 'http://finance.yahoo.com'
-        >>> conf = {'base': base, 'path': path, 'param': param}
+        >>> param = {"key": "s", "value": "gm"}
+        >>> conf = {
+        ...     "base": "http://finance.yahoo.com",
+        ...     "path": ["rss", "headline"],
+        ...     "param": param,
+        ... }
         >>> parser({}, [Objectify(param)], Objectify(conf))
         'http://finance.yahoo.com/rss/headline?s=gm'
 
@@ -111,7 +87,8 @@ def parser(
         paths = []
 
     encoded = urlencode([(p.key, p.value) for p in param if p.key])
-    joined = urljoin(str(objconf.base), "/".join(paths))
+    base: str = require_conf(objconf, "base", "urlbuilder")
+    joined = urljoin(base, "/".join(paths))
     stream = f"{joined}?{encoded}" if encoded else joined
 
     if objconf.ext:
@@ -124,35 +101,60 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> str:
     """
-    A source that asynchronously builds a url.
+    Asynchronously builds a url from its parts.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, supplying values.
+
+        conf (dict): The pipe configuration. Every value is either a literal or
+            a ``{"subkey": ...}`` reference reading it from ``item``.
+
+            base (str): The scheme and server name. Required.
+
+            path (str | list[str]): The resource path. A list is joined with slashes
+                (default: None).
+
+            param (dict | list[dict]): The query parameters (default: none).
+
+                key (str): The parameter name.
+                value (str): The parameter value.
+
+            ext (str): Extension to append, which also rewrites the url as a
+                filename for offline use (default: None).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'base'. May
-            contain the keys 'param' or 'path'.
+        assign (str): Field the url is assigned to. Ignored when ``emit`` is
+            True (default: "content").
 
-            base (str): the sever name
-            path (str): the resource path
-            param (dict): can be either a dict or list of dicts. Must contain
-                the keys 'key' and 'value'.
+        emit (bool): Whether to emit the url directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-                key (str): the parameter name
-                value (str): the parameter value
+    Yields:
+        - ``<url>`` when ``emit`` is True (default)
+        - ``{<assign>: <url>}`` when ``emit`` is False and no item given
+        - merged ``{Item, <assign>: <url>}`` when ``emit`` is False and item is
+          given
 
-    Returns:
-        Awaitable: an iterator of items
+    Raises:
+        TypeError: If ``conf`` has no ``base`` key.
+
+    Notes:
+        A parameter without a ``key`` is skipped.
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     param = {'key': 's', 'value': 'gm'}
-        ...     path = ['rss', 'headline']
-        ...     base = 'http://finance.yahoo.com'
-        ...     conf = {'base': base, 'path': path, 'param': param}
+        ...     conf = {
+        ...         "base": "http://finance.yahoo.com",
+        ...         "path": ["rss", "headline"],
+        ...         "param": {"key": "s", "value": "gm"},
+        ...     }
         ...     result = await async_pipe(conf=conf)
         ...     print(next(result))
         >>>
@@ -166,36 +168,69 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> str:
     """
-    A source that builds a url.
+    Builds a url from its parts.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, supplying values.
+
+        conf (dict): The pipe configuration. Every value is either a literal or
+            a ``{"subkey": ...}`` reference reading it from ``item``.
+
+            base (str): The scheme and server name. Required.
+
+            path (str | list[str]): The resource path. A list is joined with slashes
+                (default: None).
+
+            param (dict | list[dict]): The query parameters (default: none).
+
+                key (str): The parameter name.
+                value (str): The parameter value.
+
+            ext (str): Extension to append, which also rewrites the url as a
+                filename for offline use (default: None).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'base'. May
-            contain the keys 'param' or 'path'.
+        assign (str): Field the url is assigned to. Ignored when ``emit`` is
+            True (default: "content").
 
-            base (str): the sever name
-            ext (str): the file extension (for offline files)
-            path (str): the resource path
-
-            param (dict): can be either a dict or list of dicts. Must contain
-                the keys 'key' and 'value'.
-
-                key (str): the parameter name
-                value (str): the parameter value
+        emit (bool): Whether to emit the url directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
     Yields:
-        dict: a url item
+        - ``<url>`` when ``emit`` is True (default)
+        - ``{<assign>: <url>}`` when ``emit`` is False and no item given
+        - merged ``{Item, <assign>: <url>}`` when ``emit`` is False and item is
+          given
+
+    Raises:
+        TypeError: If ``conf`` has no ``base`` key.
+
+    Notes:
+        A parameter without a ``key`` is skipped.
 
     Examples:
-        >>> param = {'key': 's', 'value': 'gm'}
-        >>> path = ['rss', 'headline']
-        >>> base = 'http://finance.yahoo.com'
-        >>> conf = {'base': base, 'path': path, 'param': param}
+        >>> base = "http://finance.yahoo.com"
+        >>> path = ["rss", "headline"]
+        >>> conf = {
+        ...     "base": base,
+        ...     "path": ["rss", "headline"],
+        ...     "param": {"key": "s", "value": "gm"},
+        ... }
         >>> next(pipe(conf=conf))
         'http://finance.yahoo.com/rss/headline?s=gm'
+        >>> next(pipe(conf={"base": base, "path": path, "param": {"key": "s"}}))
+        'http://finance.yahoo.com/rss/headline?s=None'
+        >>> next(pipe(conf={"base": base, "path": path, "param": {"value": "gm"}}))
+        'http://finance.yahoo.com/rss/headline'
+        >>> next(pipe(conf={"base": base, "path": "rss/headline"}))
+        'http://finance.yahoo.com/rss/headline'
+        >>> next(pipe(conf={"base": base, "path": "rss", "ext": "xml"}))
+        'http___finance.yahoo.com_rss.xml'
 
     """
     return parser(*args, **kwargs)

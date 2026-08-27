@@ -1,4 +1,4 @@
-# DotDict parsing sufficiently protect ordinary business data?
+# DotDict parsing gameplan
 
 It reduces accidental interpretation because only two-element sequences qualify. But this is still structurally ambiguous:
 

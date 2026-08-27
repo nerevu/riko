@@ -1,28 +1,26 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for creating a single-item data source
+Creates a single-item data source from assigned attributes.
 
-With the Item Builder module, you can create a single-item data source by
-assigning values to one or more item attributes. The module lets you assign
-a value to an attribute.
+With the item builder module, you can create a single-item data source by
+assigning values to one or more item attributes.
 
-Item Builder's strength is its ability to restructure and rename multiple
-elements in a stream. When Item Builder is fed an input stream, the assigned
-values can be existing attributes of the stream. These attributes can be
-reassigned or used to create entirely new attributes.
+Its strength is restructuring and renaming several elements at once. When fed an
+input stream, an assigned value can read an existing attribute of that stream,
+so attributes can be reassigned or used to build entirely new ones.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.itembuilder import pipe
         >>>
-        >>> attrs = {'key': 'title', 'value': 'the title'}
-        >>> next(pipe(conf={'attrs': attrs}))['title']
+        >>> attrs = {"key": "title", "value": "the title"}
+        >>> next(pipe(conf={"attrs": attrs}))["title"]
         'the title'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -53,25 +51,25 @@ def parser(
     **kwargs: object,
 ) -> RikoDict:
     """
-    Parses the pipe content
+    Builds one item from the resolved attributes.
+
+    A dotted ``key`` creates a nested value, so ``"desc.content"`` yields
+    ``{"desc": {"content": ...}}``.
 
     Args:
-        _ (None): Ignored
-        attrs (List[dict]): Attributes
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        _: The item. Unused; the attributes arrive already resolved.
+        extraction: The resolved attributes, each with a `key` and `value`.
+        objconf: The pipe configuration. Unused.
 
     Returns:
-        Iter(dict): The stream of items
+        The built item.
 
     Examples:
-        >>> from riko.dotdict import DotDict
         >>> attrs = [
-        ...     {'key': 'title', 'value': 'the title'},
-        ...     {'key': 'desc', 'value': 'the desc'}]
-        >>> parser(None, map(DotDict, attrs), None)
+        ...     {"key": "title", "value": "the title"},
+        ...     {"key": "desc", "value": "the desc"}
+        ... ]
+        >>> parser(None, attrs, None)
         {'title': 'the title', 'desc': 'the desc'}
 
     """
@@ -82,34 +80,46 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
     """
-    A source that asynchronously builds an item.
+    Asynchronously builds a single item from assigned attributes.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, supplying values.
+        conf (dict): The pipe configuration.
+
+            attrs (dict | list[dict]): The attributes to assign. Required.
+
+                key (str): The attribute name. A dotted key nests, so
+                    ``"desc.content"`` yields ``{"desc": {"content": ...}}``.
+                value (str | dict): The attribute value, either a literal or a
+                    ``{"subkey": ...}`` reference reading it from ``item``.
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'attrs'.
+        assign (str): Field the built item is nested under. Ignored when ``emit``
+            is True (default: "content").
 
-            attrs (dict): can be either a dict or list of dicts. Must contain
-                the keys 'key' and 'value'.
+        emit (bool): Whether to emit the built item directly rather than assign
+            it. Overrides ``assign`` (default: True).
 
-                key (str): the attribute name
-                value (str): the attribute value
+    Yields:
+        - the built item when ``emit`` is True (default)
+        - ``{<assign>: <built>}`` when ``emit`` is False and no item given
+        - merged ``{Item, <assign>: <built>}`` when ``emit`` is False and item is given
 
-    Returns:
-        Awaitable: an iterator of items
+    Raises:
+        TypeError: If ``conf`` has no ``attrs`` key.
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
         ...     attrs = [
-        ...         {'key': 'title', 'value': 'the title'},
-        ...         {'key': 'desc.content', 'value': 'the desc'}]
+        ...         {"key": "title", "value": "the title"},
+        ...         {"key": "desc.content", "value": "the desc"}]
         ...
-        ...     result = await async_pipe(conf={'attrs': attrs})
-        ...     print(next(result)['title'])
+        ...     result = await async_pipe(conf={"attrs": attrs})
+        ...     print(next(result)["title"])
         >>>
         >>> run(main)
         the title
@@ -121,29 +131,41 @@ def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> RikoDict:
     """
-    A source that builds an item.
+    Builds a single item from assigned attributes.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, supplying values.
+        conf (dict): The pipe configuration.
+
+            attrs (dict | list[dict]): The attributes to assign. Required.
+
+                key (str): The attribute name. A dotted key nests, so
+                    ``"desc.content"`` yields ``{"desc": {"content": ...}}``.
+                value (str | dict): The attribute value, either a literal or a
+                    ``{"subkey": ...}`` reference reading it from ``item``.
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'attrs'.
+        assign (str): Field the built item is nested under. Ignored when ``emit``
+            is True (default: "content").
 
-            attrs (dict): can be either a dict or list of dicts. Must contain
-                the keys 'key' and 'value'.
-
-                key (str): the attribute name
-                value (str): the attribute value
+        emit (bool): Whether to emit the built item directly rather than assign
+            it. Overrides ``assign`` (default: True).
 
     Yields:
-        dict: an item
+        - the built item when ``emit`` is True (default)
+        - ``{<assign>: <built>}`` when ``emit`` is False and no item given
+        - merged ``{Item, <assign>: <built>}`` when ``emit`` is False and item is given
+
+    Raises:
+        TypeError: If ``conf`` has no ``attrs`` key.
 
     Examples:
         >>> attrs = [
-        ...     {'key': 'title', 'value': 'the title'},
-        ...     {'key': 'desc.content', 'value': 'the desc'}]
-        >>> next(pipe(conf={'attrs': attrs}))
+        ...     {"key": "title", "value": "the title"},
+        ...     {"key": "desc.content", "value": "the desc"}]
+        >>> next(pipe(conf={"attrs": attrs}))
         {'title': 'the title', 'desc': {'content': 'the desc'}}
 
     """

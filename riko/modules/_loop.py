@@ -153,7 +153,7 @@ def loop_embed_sync(
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
     source: Stream,
-    op_module_name: str,
+    module_name: str,
     *,
     field: str | None = None,
     assign: str | None = None,
@@ -169,7 +169,7 @@ def loop_embed_sync(
     through (``looped`` False); no embed at all sets ``handled`` False so the
     caller runs the operator parser instead.
     """
-    embed_type = getattr(embed, "type", None)
+    embed_type = embed.type if embed else None
     handled = True
     looped = False
     stream = source
@@ -187,7 +187,7 @@ def loop_embed_sync(
         logger.error(f"{embed.name} is not loopable and can't be embedded.")
     elif embed and callable(embed):
         logger.error("Custom embedded pipes are not currently supported.")
-    elif op_module_name == "loop":
+    elif module_name == "loop":
         logger.error("No embedded pipe provided!")
     else:
         handled = False
@@ -214,7 +214,7 @@ def loop_embed_async(
     nor runs the embeds concurrently — ordering, backpressure, and early exit on
     ``count="first"`` fall out of sequential iteration.
     """
-    embed_type = getattr(embed, "type", None)
+    embed_type = embed.type if embed else None
     handled = True
     looped = False
     stream = source

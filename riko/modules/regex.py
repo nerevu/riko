@@ -1,27 +1,26 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides functions for modifying the content of a field of an item using
-regular expressions, a powerful type of pattern matching.
+r"""
+Replaces text in item fields using regular expressions.
 
-Think of it as search-and-replace on steriods. You can define multiple Regex
-rules. Each has the general format: "In [field] replace [regex pattern] with
-[text]".
+Search-and-replace on steroids. Each rule reads "in *field*, replace *match*
+with *replace*", and several rules can run in sequence. Unlike most pipes, this
+rewrites fields on the item itself rather than producing a separate value, so
+rules may target different fields in one pass.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.regex import pipe
         >>>
-        >>> match = r'(\\w+)\\s(\\w+)'
-        >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
-        >>> conf = {'rule': rule}
-        >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['content']
+        >>> match = r"(\w+)\s(\w+)"
+        >>> rule = {"field": "content", "match": match, "replace": "$2wide"}
+        >>> item = {"content": "hello world"}
+        >>> next(pipe(item, conf={"rule": rule}))["content"]
         'worldwide'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -39,12 +38,12 @@ from riko.dotdict import DotDict
 from riko.types.configs import RegexObjconf
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import RegexConfRule, RegexRule
-from riko.types.values import RikoValue
+from riko.types.values import MISSING, RikoValue
 
 from . import processor
 
 OPTS: Opts = {"listize": True, "extract": "rule", "emit": True}
-DEFAULTS: Defaults = {"convert": True, "multi": False}
+DEFAULTS: Defaults = {"multi": False}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -55,35 +54,34 @@ async def async_parser(
     **kwargs: object,
 ) -> Item:
     """
-    Asynchronously parsers the pipe content
+    Asynchronously applies each rule to the field it names.
+
+    Rules are grouped by field, so one pass can rewrite several fields.
 
     Args:
-        item (obj): The entry to process (a DotDict instance)
-        rules (List[obj]): the parsed rules (Objectify instances).
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        item: The entry to process.
+        rules: The parsed replacement rules.
+        objconf: The pipe configuration, containing `multi`.
 
     Returns:
-        Awaitable: dict
+        The item with each named field rewritten.
 
     Examples:
         >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> item = DotDict({'content': 'hello world', 'title': 'greeting'})
-        >>> match = r'(\\w+)\\s(\\w+)'
-        >>> replace = '$2wide'
+        >>> item = DotDict({"content": "hello world", "title": "greeting"})
+        >>> match = r"(\\w+)\\s(\\w+)"
+        >>> replace = "$2wide"
         >>>
         >>> async def main():
-        ...     rule = {'field': 'content', 'match': match, 'replace': replace}
-        ...     conf = {'rule': rule, 'multi': False, 'convert': True}
+        ...     rule = {"field": "content", "match": match, "replace": replace}
+        ...     conf = {"rule": rule, "multi": False}
         ...     objconf = Objectify(conf)
         ...     rules = [Objectify(rule)]
-        ...     kwargs = {'stream': item, 'conf': conf}
+        ...     kwargs = {"stream": item, "conf": conf}
         ...     result = await async_parser(item, rules, objconf, **kwargs)
-        ...     print(result['content'])
+        ...     print(result["content"])
         >>>
         >>> run(main)
         worldwide
@@ -94,10 +92,10 @@ async def async_parser(
 
     async def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict[RikoValue]:
         field = rules[0]["field"]
-        word = item.get(field, **kwargs)
+        word = item.get(field, MISSING, **kwargs)
 
-        if word is None:
-            replacement = None
+        if word is MISSING or word is None:
+            replacement = word
         elif multi:
             grouped = group_by(rules, "flags")
             group_rules = [g[1] for g in grouped]
@@ -105,7 +103,8 @@ async def async_parser(
         else:
             replacement = await coop_reduce(substitute, rules, str(word))
 
-        result = DotDict({**item, field: replacement})
+        rewritten = {} if replacement is MISSING else {field: replacement}
+        result = DotDict({**item, **rewritten})
         return cast(DotDict[RikoValue], result)
 
     regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
@@ -121,33 +120,31 @@ def parser(
     **kwargs: object,
 ) -> Item:
     """
-    Parsers the pipe content
+    Applies each rule to the field it names.
+
+    Rules are grouped by field, so one pass can rewrite several fields.
 
     Args:
-        item (obj): The entry to process (a DotDict instance)
-        rules (List[obj]): the parsed rules (Objectify instances).
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        item: The entry to process.
+        rules: The parsed replacement rules.
+        objconf: The pipe configuration, containing `multi`.
 
     Returns:
-        dict: The item
+        The item with each named field rewritten.
 
     Examples:
         >>> from meza.fntools import Objectify
         >>>
-        >>> item = DotDict({'content': 'hello world', 'title': 'greeting'})
-        >>> match = r'(\\w+)\\s(\\w+)'
-        >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
-        >>> conf = {'rule': rule, 'multi': False, 'convert': True}
+        >>> item = DotDict({"content": "hello world", "title": "greeting"})
+        >>> match = r"(\\w+)\\s(\\w+)"
+        >>> rule = {"field": "content", "match": match, "replace": "$2wide"}
+        >>> conf = {"rule": rule, "multi": False}
         >>> objconf = Objectify(conf)
         >>> rules = [Objectify(rule)]
-        >>> kwargs = {'stream': item, 'conf': conf}
-        >>> regexed = parser(item, rules, objconf, **kwargs)
-        >>> regexed
+        >>> kwargs = {"stream": item, "conf": conf}
+        >>> parser(item, rules, objconf, **kwargs)
         {'content': 'worldwide', 'title': 'greeting'}
-        >>> conf['multi'] = True
+        >>> conf["multi"] = True
         >>> parser(item, rules, objconf, **kwargs)
         {'content': 'worldwide', 'title': 'greeting'}
 
@@ -157,10 +154,10 @@ def parser(
 
     def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict[RikoValue]:
         field = str(rules[0]["field"])
-        word = item.get(field, **kwargs)
+        word = item.get(field, MISSING, **kwargs)
 
-        if word is None:
-            replacement = None
+        if word is MISSING or word is None:
+            replacement = word
         elif multi:
             grouped = group_by(rules, "flags")
             group_rules = [g[1] for g in grouped]
@@ -168,7 +165,8 @@ def parser(
         else:
             replacement = reduce(substitute, rules, str(word))
 
-        result = DotDict({**item, field: replacement})
+        rewritten = {} if replacement is MISSING else {field: replacement}
+        result = DotDict({**item, **rewritten})
         return cast(DotDict[RikoValue], result)
 
     regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
@@ -180,51 +178,72 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
-    A processor that asynchronously replaces text in fields of an item
-    using regexes.
+    Asynchronously replaces text in item fields using regexes.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            rule (dict | list[dict]): The replacement criteria. Required.
+
+                field (str): Item attribute to rewrite.
+
+                match (str): Regex to search for.
+
+                replace (str): Replacement text. ``$1``, ``$2``, ... refer to
+                    capture groups.
+
+                default (str): Value to use when nothing matches (default:
+                    None, i.e. keep the original).
+
+                casematch (bool): Whether to match case sensitively
+                    (default: False).
+
+                singlelinematch (bool): Whether to replace only the first match
+                    and confine ``^``, ``$`` and ``.`` to one line
+                    (default: False).
+
+                seriesmatch (bool): Whether to apply this rule in series with
+                    the others (default: True).
+
+            multi (bool): Whether to combine rules sharing a flag set into one
+                pass (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'rule'. May
-            contain the keys 'multi' or 'convert'.
+        assign (str): Field the rewritten item is nested under. Ignored when
+            ``emit`` is True (default: "regex").
 
-            rule (dict): can be either a dict or list of dicts. Must contain
-                the keys 'field', 'match', and 'replace'.
-
-                field (str): The item attribute to search
-                match (str): The regex to apply
-                replace (str): The string replacement
-                default (str): Default if search pattern isn't found (
-                    default: None, i.e, return the original string)
-
-                singlematch (bool): Stop after first match (default: False)
-                singlelinematch (bool): Don't search across newlines with '^',
-                    '$', or '.' (default: False)
-
-                casematch (bool): Perform case sensitive match (default: False)
-
-            multi (bool): Efficiently combine multiple regexes (default: False)
-            convert (bool): Convert regex into a Python compatible format
-                (default: True)
+        emit (bool): Whether to emit the rewritten item directly rather than
+            nest it. Overrides ``assign`` (default: True).
 
     Yields:
-        Awaitable: item with replaced content
+        - the rewritten ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
+
+    Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
+
+    Notes:
+        A rule naming a field the item lacks is skipped, leaving the item
+        untouched.
 
     Examples:
         >>> from riko import run
         >>>
-        >>> item = {'content': 'hello world', 'title': 'greeting'}
-        >>> match = r'(\\w+)\\s(\\w+)'
-        >>> replace = '$2wide'
+        >>> item = {"content": "hello world", "title": "greeting"}
+        >>> match = r"(\\w+)\\s(\\w+)"
         >>>
         >>> async def main():
-        ...     rule = {'field': 'content', 'match': match, 'replace': replace}
-        ...     conf = {'rule': rule, 'multi': False, 'convert': True}
+        ...     rule = {"field": "content", "match": match, "replace": "$2wide"}
+        ...     conf = {"rule": rule, "multi": False}
         ...     result = await async_pipe(item, conf=conf)
-        ...     print(next(result)['content'])
+        ...     print(next(result)["content"])
         >>>
         >>> run(main)
         worldwide
@@ -236,61 +255,81 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Item:
     """
-    A processor that replaces text in fields of an item using regexes.
+    Replaces text in item fields using regexes.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            rule (dict | list[dict]): The replacement criteria. Required.
+
+                field (str): Item attribute to rewrite.
+
+                match (str): Regex to search for.
+
+                replace (str): Replacement text. ``$1``, ``$2``, ... refer to
+                    capture groups.
+
+                default (str): Value to use when nothing matches (default:
+                    None, i.e. keep the original).
+
+                casematch (bool): Whether to match case sensitively
+                    (default: False).
+
+                singlelinematch (bool): Whether to replace only the first match
+                    and confine ``^``, ``$`` and ``.`` to one line
+                    (default: False).
+
+                seriesmatch (bool): Whether to apply this rule in series with
+                    the others (default: True).
+
+            multi (bool): Whether to combine rules sharing a flag set into one
+                pass (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'rule'. May
-            contain the keys 'multi' or 'convert'.
+        assign (str): Field the rewritten item is nested under. Ignored when
+            ``emit`` is True (default: "regex").
 
-            rule (dict): can be either a dict or list of dicts. Must contain
-                the keys 'field', 'match', and 'replace'.
-
-                field (str): The item attribute to search
-                match (str): The regex to apply
-                replace (str): The string replacement
-                default (str): Default if search pattern isn't found (
-                    default: None, i.e, return the original string)
-
-                seriesmatch (bool): Search with rule in series (not parallel with other
-                    rules) (default: True)
-                singlematch (bool): Stop after first match (default: False)
-                singlelinematch (bool): Don't search across newlines with '^',
-                    '$', or '.' (default: False)
-
-                casematch (bool): Perform case sensitive match (default: False)
-
-            multi (bool): Efficiently combine multiple regexes (default: False)
-            convert (bool): Convert regex into a Python compatible format
-                (default: True)
+        emit (bool): Whether to emit the rewritten item directly rather than
+            nest it. Overrides ``assign`` (default: True).
 
     Yields:
-        dict: an item with replaced content
+        - the rewritten ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
+
+    Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
+
+    Notes:
+        A rule naming a field the item lacks is skipped, leaving the item
+        untouched.
 
     Examples:
         >>> # default matching
-        >>> item = {'content': 'hello world', 'title': 'greeting'}
-        >>> match = r'(\\w+)\\s(\\w+)'
-        >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
-        >>> conf = {'rule': rule, 'multi': False, 'convert': True}
-        >>> result = next(pipe(item, conf=conf))
-        >>> result
+        >>> item = {"content": "hello world", "title": "greeting"}
+        >>> match = r"(\\w+)\\s(\\w+)"
+        >>> rule = {"field": "content", "match": match, "replace": "$2wide"}
+        >>> conf = {"rule": rule, "multi": False}
+        >>> next(pipe(item, conf=conf))
         {'content': 'worldwide', 'title': 'greeting'}
         >>> # multiple regex mode
-        >>> conf['multi'] = True
+        >>> conf["multi"] = True
         >>> next(pipe(item, conf=conf))
         {'content': 'worldwide', 'title': 'greeting'}
         >>> # case insensitive matching
-        >>> item = {'content': 'Hello hello'}
-        >>> rule.update({'match': r'hello.*', 'replace': 'bye'})
-        >>> next(pipe(item, conf=conf))['content']
+        >>> item = {"content": "Hello hello"}
+        >>> rule.update({"match": r"hello.*", "replace": "bye"})
+        >>> next(pipe(item, conf=conf))["content"]
         'bye'
         >>> # case sensitive matching
-        >>> rule['casematch'] = True
-        >>> next(pipe(item, conf=conf))['content']
+        >>> rule["casematch"] = True
+        >>> next(pipe(item, conf=conf))["content"]
         'Hello bye'
 
     """

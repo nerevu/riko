@@ -3,8 +3,7 @@
 riko._objectify
 ~~~~~~~~~~~~~~~
 Attribute-access config wrappers: the ``Objectify`` mapping (over meza's
-``Objectify``), the ``DynamicConf`` parsed-config base every module config
-derives from, and the ``objectify`` factory.
+``Objectify``) and the ``objectify`` factory.
 """
 
 from collections.abc import Iterator, Mapping, Sequence

@@ -1,10 +1,10 @@
-# Riko Execution Semantics Contract Gameplan
+# Execution semantics gameplan
 
 > **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level overview. This gameplan is the authoritative detail for the runtime execution-semantics contract — execution characteristics, async backpressure, timeout, union/merge, retry, errors/dispositions, filter semantics, and the batch model (ROADMAP §5–§8, §11–§13, §16). Section references like §N point back to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md) (the runtime contract); the numbered `## N.` headings are preserved so those references resolve.
 
 ## 5. Execution characteristics
 
-> **Status: Planned.** `Opts` does not contain `boundedness`/`ordering`/`side_effects`/`determinism`/`require_bounded`/`state_checkpoint`/`lineage_commit`; the bounded/ordered *behaviors* live in the §6 primitives, not as declared metadata.
+> **Current gap:** `Opts` does not contain `boundedness`/`ordering`/`side_effects`/`determinism`/`require_bounded`/`state_checkpoint`/`lineage_commit`; the bounded/ordered *behaviors* live in the §6 primitives, not as declared metadata.
 
 ### 5.1 Boundedness
 
@@ -92,7 +92,7 @@ These opts influence retry safety, replay warnings, caching, and planner behavio
 
 ## 6. Async execution and backpressure
 
-> **Status: Partial.** **Shipped → [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-execution-and-backpressure-shipped)**
+> **Shipped:** see [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-execution-and-backpressure-shipped)
 > (bounded concurrency, order-preserving streaming via `async_map_stream`/`async_map_ordered_stream`).
 > **Remaining:** true indexed reorder buffer, the `ordered=False` doc/behavior fix, and
 > cancellation/cleanup below.
@@ -166,11 +166,92 @@ When both execution and cleanup fail:
 
 ---
 
+## Execution-mode adaptation (`Pipeline` sync ↔ async)
+
+> **Scope:** Owns the sync↔async adaptation layer behind the public
+> [`Pipeline`](release-readiness.md) (definition) / `SyncExecution` / `AsyncExecution` (one-shot,
+> built fresh per `iter`/`aiter`). API shape → [release-readiness.md § 4](release-readiness.md);
+> decorator DX → [callable-pipes.md](callable-pipes.md); source ingest →
+> [feed-native-streaming.md § 7.1](feed-native-streaming.md). AnyIO/Asyncer are **private** — never
+> surfaced through `riko`/`riko.ext`.
+
+### Native-wins resolution matrix
+
+The resolver returns a module *definition* (its optional `sync_pipe`/`async_pipe` slots), then the
+execution selects an implementation for its mode. A native implementation always wins; adapt only
+when the matching side is absent.
+
+| Module implements | Sync execution | Async execution |
+|---|---|---|
+| sync + async | native sync | native async |
+| sync only | native sync | sync on a worker |
+| async only | async on the execution portal | native async |
+
+### Async-only under sync execution — one persistent portal
+
+A single `SyncExecution` owns **one** lazily-created AnyIO `BlockingPortal`, created only when an
+async component is first encountered and reused by every async step, the async source, and any
+async pub/sub for the life of that execution. **Never one portal per item.**
+
+- Long-lived async resources (HTTP clients, DB pools, task groups, channels, async generators) stay
+  on that portal's loop.
+- If an async step yields an async iterator, `anext()` bridges through the same portal; `aclose()`
+  runs through it during teardown.
+- The portal closes deterministically on normal exhaustion, explicit close, and exceptions;
+  original exceptions propagate.
+- Two independent executions of the same reusable `Pipeline` get **independent** portal lifetimes.
+
+If the `async` extra is absent and a pipeline needs an async-only module, raise a clear riko-level
+error (install `riko[async]`) — never a deep AnyIO/Asyncer `ImportError`.
+
+### Sync-only under async execution — worker policy
+
+Unknown synchronous extension code is potentially blocking and is **safe by default**: it runs on a
+worker thread, not the event-loop thread. riko does **not** inspect imports, bytecode, names,
+timing, or source to guess whether a `def` blocks. The policy is the single `execution` `Opts` field
+(declared on the decorator, overridable per call; the same field used by
+[callable-pipes.md](callable-pipes.md)):
+
+| `execution` | Behavior |
+|---|---|
+| `auto` (default) | native async awaited inline; unknown sync under async → worker |
+| `inline` | explicitly safe to run on the event-loop thread (riko's own pure transforms) |
+| `thread` | worker thread |
+| `process` | existing process machinery; do not expand scope to support it |
+
+Built-in pure transforms are marked `inline` internally because riko owns and tests them.
+Third-party modules declare nothing for correctness — absence of metadata stays safe.
+
+### Do not auto-detect blocking
+
+There is no reliable general test for whether arbitrary Python blocks (it may return immediately,
+call `requests`, read a file, sleep, or run CPU-heavy Python depending on input). Optimize known
+cases via the `execution` policy; never make safety depend on a heuristic.
+
+### Sync islands (Deferred — first performance follow-up)
+
+To avoid one worker hop per tiny pure transform under async execution, the execution plan *may*
+group consecutive `inline`/`thread` sync-only processors into one worker segment
+(`[async fetch] → [filter → strreplace → rename] → [async write]`). Grouping is driven by resolved
+implementation kind + `execution` policy, **never** by inferring whether code blocks. Safe only
+across consecutive sync steps with no native-async step, operator/splitter/whole-stream boundary,
+ordering/concurrency boundary, or resource/side-effect boundary between them. **Not shipped** — the
+planner (`riko/_execution/plan.py`) must allow adding it without API changes; benchmark
+before/after.
+
+### Non-goals
+
+Do not turn the whole runtime into one async engine, force sync execution through AnyIO, spin up an
+async runtime per record, or expose AnyIO/Asyncer types. The cheap native sync path stays cheap.
+
+---
+
 ## 7. Timeout
 
-> **Status: Partial.** **Shipped → [IMPLEMENTED.md §7](../IMPLEMENTED.md#7-timeout-shipped)**
+> **Shipped:** see [IMPLEMENTED.md §7](../IMPLEMENTED.md#7-timeout-shipped)
 > (lifetime `total` timeout, sync + async `TimeoutIterator`). **Remaining:** the `idle`/`item`
-> modes and the `on_timeout` policy described below.
+> modes, the `on_timeout` policy described below, and the unbounded async
+> `receive` wait (§7.1).
 
 ```python
 timeout(
@@ -196,11 +277,67 @@ Definitions:
 
 `on_timeout="error"` enters the configured error policy.
 
+### 7.1 `receive` has no async timeout
+
+The sync and async `receive` pipes wait on entirely different terms, and only
+the sync one can give up:
+
+| | Waits by | Honors `max_wait` |
+|---|---|---|
+| `parser` (sync) | polling the queue, yielding `StreamState.PENDING` | yes — closes and stops |
+| `async_parser` | blocking until the sender finishes | **no** |
+
+`async_parser` reads only `objconf.name`; `wait`, `max_wait` and `max_len` are
+sync-only (`max_len` is applied in `_register_receiver`, which the async path
+never calls). Measured:
+
+```text
+async_pipe(conf={"name": "nosender", "max_wait": 1})   ->  hangs indefinitely
+```
+
+So a mistyped receiver name, or a sender that errors before starting, wedges an
+async pipeline with no diagnostic — while the same mistake on the sync path
+times out and closes cleanly. This is the same hazard as `§7`'s `item` mode: a
+wait with no upper bound.
+
+Fixing it means wrapping the subscribe in `anyio.fail_after`/`move_on_after`
+using `max_wait`, and deciding which of `on_timeout="stop"` (return what
+arrived) or `"error"` applies — so it should land **with** the `on_timeout`
+policy above rather than as a separate patch. Until then the docstrings state
+that the async path has no timeout.
+
+### 7.2 A blocked `anext` outlives the deadline
+
+`AsyncTimeoutIterator.__anext__` bounds the *intervals between* items, not the wait
+itself:
+
+```python
+async def __anext__(self) -> T:
+    self._raise_if_expired()
+    item = await anext(self.aiter)   # unbounded
+    self._raise_if_expired()
+    return item
+```
+
+If the source stalls, the second check is never reached — so the deadline holds only
+while items keep arriving, which is the opposite of what a timeout is for and the same
+unbounded-wait hazard as § 7.1. The claim that `timeout` bounds an infinite `Feed`
+therefore holds only for a *productive* infinite feed.
+
+The fix is an AnyIO cancel scope around the `await` carrying the **remaining** deadline
+(`move_on_after(remaining)`), with expiry mapping onto the same
+`on_timeout="stop" | "error"` policy as § 7 — so it lands with that policy rather than
+before it. `move_on_after` is also what
+[feed-native-streaming § 2](feed-native-streaming.md#2-per-pipe-audit) assumes for the
+Feed-native `timeout` port; doing it twice is wasted work.
+
+Registered as [correctness-audit **R14**](correctness-audit.md#8-open-defect-register--features-branch-audit).
+
 ---
 
 ## 8. Union and merge
 
-> **Status: Partial.** **Shipped → [IMPLEMENTED.md §8](../IMPLEMENTED.md#8-union-shipped)**
+> **Shipped:** see [IMPLEMENTED.md §8](../IMPLEMENTED.md#8-union-shipped)
 > (`union` sequential concatenation; the internal `async_merge` primitive). **Remaining:**
 > the user-facing concurrent async `merge` operator below.
 
@@ -275,7 +412,7 @@ A source may discover partitions internally, but new top-level feeds are not dyn
 
 ## 11. Retry policy
 
-> **Status: Planned.** no retry policy in code.
+> **Current gap:** no retry policy in code.
 
 ```python
 @dataclass(frozen=True)
@@ -322,7 +459,7 @@ Retry policies may be configured separately for:
 
 ## 12. Errors and dispositions
 
-> **Status: Planned.** only `on_error`/`error_key` + basic exception classes; no error/disposition sinks or drop policy.
+> **Current gap:** only `on_error`/`error_key` + basic exception classes; no error/disposition sinks or drop policy.
 
 ### 12.1 Error policies
 
@@ -437,7 +574,7 @@ Per-item events are not required for the normal `complete` path.
 
 ## 13. Filter semantics
 
-> **Status: Partial.** **Shipped → [IMPLEMENTED.md §13](../IMPLEMENTED.md#13-filter-semantics-shipped)**
+> **Shipped:** see [IMPLEMENTED.md §13](../IMPLEMENTED.md#13-filter-semantics-shipped)
 > (`permit`/`combine`/`stop`). **Remaining:** the drop-policy / disposition semantics below.
 
 A filtered-out item with `drop_policy="complete"` is immediately considered complete.
@@ -454,7 +591,11 @@ With `filter(stop=True)` the first rejected item:
 
 ## 16. Batch model
 
-> **Status: Planned.** no `Batch`/`BatchPipe`/`BatchPolicy`.
+> **Current gap:** no `Batch`/`BatchPipe`/`BatchPolicy`.
+>
+> **Consumer:** the runtime `batch_feed`/`batch_stream` primitives and their use in streaming
+> `write`/`split`/reducers are planned in [feed-native-streaming.md](feed-native-streaming.md), which
+> delegates to this `BatchPolicy` rather than exposing a separate per-pipe chunk concept.
 
 ```python
 @dataclass(frozen=True)
@@ -519,6 +660,12 @@ error
 ---
 
 > **Extracted from ROADMAP Appendix A.** Async/sync primitive reference for the runtime-semantics contract. `§N` references point back to [ROADMAP.md](../ROADMAP.md).
+>
+> **Alignment audit (separate concern).** Which of these `bado` helpers to remove/replace/keep as
+> AnyIO adds equivalents (4.14 task handles, `functools.reduce`, async `itertools`) — plus the async
+> benchmarking/profiling methodology — lives in
+> [bado-anyio-alignment.md](bado-anyio-alignment.md). This appendix owns their *semantics*; that
+> gameplan owns the *cleanup*.
 
 ## A. Async primitive reference
 
@@ -585,7 +732,7 @@ replacement; natural backpressure comes from bounded queues rather than a pollin
 
 ## 15. Stateful operators
 
-> **Status: Planned.** `StatefulItem` type exists but no checkpoint/persist machinery.
+> **Current gap:** `StatefulItem` type exists but no checkpoint/persist machinery.
 
 Stateful streaming pipes declare:
 
@@ -604,7 +751,7 @@ state_checkpoint: Literal[
 
 ## 22. Memory limits
 
-> **Status: Planned.** no enforced memory/record limits.
+> **Current gap:** no enforced memory/record limits.
 
 Initial limits are item-count based:
 

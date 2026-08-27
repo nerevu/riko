@@ -7,7 +7,7 @@ conf merging/extraction, and the parser/caster construction that turns opts and
 conf into the callables a wrapper applies to each item.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import partial
 from typing import cast, overload
@@ -50,8 +50,124 @@ from riko.types.values import BasicReturn, PrimitiveValue, RikoDict, RikoList, R
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
+def require_kwarg[T](  # noqa: E704
+    kwargs: Mapping[str, object], name: str, pipe: str, strict: bool = False
+) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
+    """
+    Returns a required pipe argument, or reports which one is unusable.
+
+    A missing operand is a call-site programming error, so this raises rather
+    than degrading. ``None`` counts as missing: the collection API always
+    populates keys such as ``others``/``func`` in ``kwargs``, so checking only
+    for an absent key would never fire through ``SyncPipe``.
+
+    Args:
+        kwargs: The keyword arguments the pipe was called with.
+
+        name: The argument that must be present.
+
+        pipe: The pipe name, used in the error message.
+
+        strict: Whether to also reject a present but falsy value, e.g. an empty
+            ``others`` list that would publish to nobody. Use it only where a
+            falsy value can never be legitimate — never on an argument for
+            which ``0``, ``False`` or ``""`` is a real value (default: False).
+
+    Returns:
+        The value bound to ``name``.
+
+    Raises:
+        TypeError: If ``name`` is absent or ``None``, or is falsy under
+            ``strict``.
+
+    Examples:
+        >>> require_kwarg({"func": len}, "func", "udf")
+        <built-in function len>
+        >>> require_kwarg({}, "func", "udf")
+        Traceback (most recent call last):
+            ...
+        TypeError: the 'udf' pipe requires the 'func' keyword argument
+
+        A falsy value passes unless ``strict`` is set:
+
+        >>> require_kwarg({"others": []}, "others", "send")
+        []
+        >>> require_kwarg({"others": []}, "others", "send", strict=True)
+        Traceback (most recent call last):
+            ...
+        TypeError: the 'send' pipe requires the 'others' keyword argument
+
+    """
+    value = kwargs.get(name)
+
+    if (value is None) or (strict and not value):
+        raise TypeError(f"the {pipe!r} pipe requires the {name!r} keyword argument")
+
+    return cast(T, value)
+
+
+def require_conf[T](  # noqa: E704
+    objconf: DynamicConf, key: str, pipe: str, strict: bool = False
+) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
+    """
+    Returns a required conf value, or reports which one is unusable.
+
+    A missing conf key is a call-site programming error, so this raises rather
+    than degrading — unlike an absent *field* on an item, which is a runtime
+    data condition and is skipped.
+
+    Args:
+        objconf: The parsed pipe configuration.
+
+        key: The conf key that must be set.
+
+        pipe: The pipe name, used in the error message.
+
+        strict: Whether to also reject a present but falsy value, e.g. a ``url``
+            set to ``""``. Use it only where a falsy value can never be
+            legitimate — never on a key for which ``0``, ``False`` or ``""`` is
+            a real value (default: False).
+
+    Returns:
+        The value bound to ``key``.
+
+    Raises:
+        TypeError: If ``key`` is absent or ``None``, or is falsy under
+            ``strict``.
+
+    Examples:
+        >>> from meza.fntools import Objectify
+        >>>
+        >>> require_conf(Objectify({"url": "x"}), "url", "csv")
+        'x'
+        >>> require_conf(Objectify({}), "url", "csv")
+        Traceback (most recent call last):
+            ...
+        TypeError: the 'csv' pipe requires the 'url' conf key
+
+        A falsy value passes unless ``strict`` is set:
+
+        >>> require_conf(Objectify({"url": ""}), "url", "csv")
+        ''
+        >>> require_conf(Objectify({"url": ""}), "url", "csv", strict=True)
+        Traceback (most recent call last):
+            ...
+        TypeError: the 'csv' pipe requires the 'url' conf key
+
+    """
+    value = getattr(objconf, key, None)
+
+    if (value is None) or (strict and not value):
+        raise TypeError(f"the {pipe!r} pipe requires the {key!r} conf key")
+
+    return cast(T, value)
+
+
 def get_pieces_or_conf(
-    parsed_conf: AnyModuleConf | None, defaults: Defaults, opts: Opts
+    parsed_conf: AnyModuleConf | None,
+    defaults: Defaults,
+    opts: Opts,
+    pipe: str = "",
 ) -> tuple[BasicReturn | AnyModuleConf | list[BasicReturn] | None, AnyModuleConf]:
     if is_mapping(parsed_conf):
         merged_conf = cast(AnyModuleConf, {**defaults, **parsed_conf})
@@ -62,8 +178,8 @@ def get_pieces_or_conf(
         try:
             pieces = next(v for k, v in merged_conf.items() if k.lower() == extract)
         except StopIteration:
-            logger.error(f"{extract=} not found in conf {merged_conf}")
-            pieces = None
+            label = f"the {pipe!r} pipe" if pipe else "this pipe"
+            raise TypeError(f"{label} requires the {extract!r} conf key") from None
         else:
             pieces = cast(BasicReturn, pieces)
 
@@ -99,6 +215,7 @@ def parse_and_cast(  # noqa: E704
     casters: CastFuncs | None = ...,
     defaults: Defaults | None = ...,
     field: str | None = ...,
+    pipe: str = ...,
     **kwargs: object,
 ) -> ItemDispatch: ...
 @overload  # noqa: E302
@@ -110,6 +227,7 @@ def parse_and_cast(  # noqa: E704
     casters: CastFuncs | None = ...,
     defaults: Defaults | None = ...,
     field: str | None = ...,
+    pipe: str = ...,
     **kwargs: object,
 ) -> ValueDispatch: ...
 def parse_and_cast(  # noqa: E302
@@ -120,6 +238,7 @@ def parse_and_cast(  # noqa: E302
     casters: CastFuncs | None = None,
     defaults: Defaults | None = None,
     field: str | None = None,
+    pipe: str = "",
     **kwargs: object,
 ) -> ItemOrValueDispatch:
     defaults = defaults or Defaults({})
@@ -131,7 +250,7 @@ def parse_and_cast(  # noqa: E302
         parsed_field, _parsed_conf = item, conf
 
     parsed_conf = cast(AnyModuleConf, _parsed_conf)
-    pieces_or_conf, merged_conf = get_pieces_or_conf(parsed_conf, defaults, opts)
+    pieces_or_conf, merged_conf = get_pieces_or_conf(parsed_conf, defaults, opts, pipe)
     parsed = (parsed_field, pieces_or_conf, merged_conf)
     casted = dispatch(parsed, *casters) if casters else parsed
     _conf = cast(DynamicConf, casted[2])
@@ -170,7 +289,7 @@ def get_casters(opts: Opts) -> CastFuncs:
     extract = opts.get("extract")
 
     if ftype in CAST_SWITCH:
-        _field_func = partial(cast_value, _type=CastType(ftype))
+        _field_func = partial(cast_value, type_=CastType(ftype))
     else:
         if ftype:
             logger.warning(f"Invalid cast {ftype=}. Ignoring.")
@@ -180,7 +299,7 @@ def get_casters(opts: Opts) -> CastFuncs:
     field_func = cast(SyncArgFunc, _field_func)
 
     if ptype in CAST_SWITCH:
-        _caster = partial(cast_value, _type=CastType(ptype))
+        _caster = partial(cast_value, type_=CastType(ptype))
     else:
         if ptype:
             logger.warning(f"Invalid cast {ptype=}. Ignoring.")

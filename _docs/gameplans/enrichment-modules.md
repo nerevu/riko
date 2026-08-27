@@ -1,4 +1,4 @@
-# Authoritative Riko Record and Enrichment Module Gameplan
+# Record & enrichment modules gameplan
 
 ## 1. Mission
 
@@ -104,6 +104,67 @@ after any coalesce pipe that consumes staging columns.
 `regex` remains the replacement module for solicitation-ID normalization. `rename` remains
 field renaming only. Their docs gain cross-references but no new semantics.
 
+## 6b. `geolocate` — retire the stub lookups
+
+Three of `geolocate`'s four `type` values return **fixed placeholder data**, which
+`riko/cast.py` makes plain:
+
+```python
+def lookup_street_address(_: str) -> Location:   # argument ignored
+def lookup_ip_address(_: str) -> IPAddress:      # argument ignored
+```
+
+Measured across varied inputs:
+
+| `type` | Behavior |
+|---|---|
+| `currency` | **Real** — resolves via `CURRENCY_CODES`. |
+| `street_address` | Canned. Any input returns the same US record (`"state"`, `"county"`, `"city"`, `"street"`, postal `"61605"`, lat/lon `0.0`). |
+| `ip_address` | Canned. Same fixed US record for `8.8.8.8`, `1.1.1.1`, or `not-an-ip`. |
+| `coordinates` | Half real — echoes the supplied lat/lon, but `country` is canned, so Tokyo and Sydney both report "United States". |
+
+This is worse than a missing feature: the pipe *succeeds* and yields a plausible
+record, so a pipeline built on it looks correct and is silently wrong. The
+module's doctest asserted `country == "United States"` for a US street address —
+which passed for **any** input, including gibberish.
+
+Decide per lookup, and do not leave the middle ground:
+
+* **`currency`** — keep. It is the only one that works, and it needs no
+  dependency. It *consumes* `CURRENCY_CODES`/`LOCATIONS` but does not own them —
+  those tables are owned by [reference-data.md](reference-data.md).
+* **`coordinates`** — either drop the canned `country` (returning just the
+  parsed lat/lon is honest and still useful) or resolve it properly via an
+  offline dataset. Echoing coordinates back is a legitimate normalization step;
+  the fabricated country is not.
+* **`street_address` / `ip_address`** — remove, or move behind an optional
+  extra that raises when the backing data is absent (§12.5: *"Optional
+  enrichments fail clearly when unavailable"*). Real geocoding means a service
+  or a bundled dataset — either way it belongs with the optional enrichments in
+  §8/§9, not silently inside a core module.
+
+Removing a `type` value is a breaking change to the public conf surface, so it
+is SemVer-gated. Until then the docstrings carry a `Warning:` naming which
+lookups are real.
+
+## 6c. Relative dates — settable timezone
+
+`riko.cast.cast_datetime` is the single implementation of relative-date parsing
+(shorthands, counted offsets, and the `next`/`last` word forms); `datebuilder`
+delegates to it rather than carrying a second, weaker copy.
+
+What remains is that `cast_datetime` timezone should be settable (per call via `conf`,
+or per pipeline via `Context`) with UTC as the default.
+
+This is additive, so it is not SemVer-gated.
+
+**Resolved:** the epoch-default half of this section. `CAST_SWITCH["date"]` and
+`["datetime"]` now default to `None`, so a miss is detectable, and the two roles
+`default` was serving are separated — `def_itemgetter` converts date sort keys to
+epoch floats and fills a miss with `_iterutils.SORT_FILLER` (`-inf`), which cannot
+collide with a real date the way the epoch did. `dateformat` guards on `None` and
+returns `""`.
+
 ## 7. Composition
 
 Do not add public `applys()` or `transform_csv()` abstractions. Users compose named modules
@@ -173,6 +234,7 @@ E2  generated fluent stubs and documentation
 E3  optional near-duplicate package
 E4  optional contact-extraction package
 E5  batch implementations and parity benchmarks
+E6  geolocate stub retirement (SemVer-gated; see 6b)
 ```
 
 ## 12. Definition of done

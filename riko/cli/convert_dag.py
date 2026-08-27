@@ -6,6 +6,7 @@ pairs. With no ``wires`` the modules are chained linearly in listing order, and
 a missing ``id`` defaults to ``sw-{n}``:
 
 >>> from riko.compile import convert_dag
+>>>
 >>> dag = {
 ...     "modules": [
 ...         {"type": "forever", "conf": {}},

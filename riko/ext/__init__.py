@@ -12,7 +12,7 @@ details.
 
 from riko.ext.config import DynamicConf, get_conf_type
 from riko.ext.decorators import operator, processor, splitter
-from riko.ext.names import ModuleName, ModuleNameLike, normalize_module_name
+from riko.ext.names import ModuleName, derive_category, normalize_module_name
 from riko.ext.protocols import (
     AsyncOperatorWrapper,
     AsyncProcessorWrapper,
@@ -23,7 +23,8 @@ from riko.ext.protocols import (
     SyncSplitterWrapper,
 )
 from riko.ext.registry import ModuleDefinition, ModuleRegistry, register
-from riko.modules import ModuleMetadata, ModuleSubtype, ModuleType
+from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
+from riko.types.values import ModuleNameLike
 
 __all__ = [
     "AsyncOperatorWrapper",
@@ -41,6 +42,7 @@ __all__ = [
     "SyncOperatorWrapper",
     "SyncProcessorWrapper",
     "SyncSplitterWrapper",
+    "derive_category",
     "get_conf_type",
     "normalize_module_name",
     "operator",

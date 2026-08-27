@@ -1,4 +1,4 @@
-# Riko Inspiration Coverage and Architecture Decision Index
+# Inspiration coverage gameplan
 
 ## 1. Purpose
 
@@ -55,7 +55,7 @@ When translating inspiration into Riko:
 | `hdx-age-api.md` | async worker jobs, job/result status, timeout/result TTL/error limits | `provider-integrations.md`, `orchestration.md` | Adopt bounded operation-handle contract; RQ implementation optional |
 | `hdx-file-proxy.md` | remote CSV/Excel acquisition, normalized JSON records, chunk limits | `connectors.md`, `artifact-conversion.md` | Adopt connector + codec/chunk boundary; reject permanent proxy service requirement |
 | `hdx-scrapers.md` | many source-specific collectors sharing common normalization/output contracts | `connectors.md`, `provider-integrations.md`, `extensibility.md` | Adopt plugin pattern; source-specific scrapers stay outside core |
-| `langly.md` | JSON scenarios, semantic model tiers, tools, RAG, supervised/peer teams, evaluation, OpenAPI schema conversion | `agent-scenarios.md`, `agents.md`, `ai-Inference.md`, `mcp.md` | Adopt reviewed scenario/evaluation contracts |
+| `langly.md` | JSON scenarios, semantic model tiers, tools, RAG, supervised/peer teams, evaluation, OpenAPI schema conversion | `agent-scenarios.md`, `agents.md`, `ai-inference.md`, `mcp.md` | Adopt reviewed scenario/evaluation contracts |
 | `lego.rst` | multi-source keyed enrichment, threshold comparison, cached lookups, matched/unparsed/unfound outputs | `provider-integrations.md`, `fanout-topology.md`, `enrichment-modules.md` | Adopt join/enrichment/cache/side-output patterns; domain app remains example-level |
 | `meetup.rst` | new/changed entity comparison, dedupe, dry-run, vCard output | `feed-monitoring.md`, `artifact-conversion.md` | Adopt change/dry-run semantics and contact codec boundary |
 | `nerevu-api.md` | modular provider folders inside a monolith, OAuth, mappings/cache, headless fallback, RQ, sync/store/prune/notify | `provider-integrations.md`, `connectors.md`, `orchestration.md` | Extract reusable contracts; explicitly reject rebuilding the monolith |
@@ -149,7 +149,7 @@ deterministic evaluations
 safety/tool-call assertions
 ```
 
-Authoritative extension: `agent-scenarios.md` plus `agents.md`, `ai-Inference.md`, and
+Authoritative extension: `agent-scenarios.md` plus `agents.md`, `ai-inference.md`, and
 `mcp.md`.
 
 ### 4.5 Conversion and rendered artifacts

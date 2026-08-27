@@ -1,10 +1,10 @@
-# Riko Data Protocol (RDP) & Connect Gameplan
+# RDP & Connect gameplan
 
 > **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level overview. This gameplan is the authoritative detail for the RDP/Connect end-state contract — lineage/acknowledgements, the Riko Data Protocol, state, schema, batch transports, manifest durability, and the RDP/Connect implementation milestones (ROADMAP §14, §17–§21, §26). The active near-term work is tracked in [../PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) and [../MILESTONES.md](../MILESTONES.md). Section references like §N point back to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md) (the runtime contract); the numbered `## N.` headings are preserved so those references resolve.
 
 ## 14. Lineage and acknowledgements
 
-> **Status: Planned.** no lineage envelope, positions, or acknowledgements.
+> **Current gap:** no lineage envelope, positions, or acknowledgements.
 
 ### 14.1 Position envelope
 
@@ -135,7 +135,7 @@ Defaults depend on join type.
 
 ## 17. Riko Data Protocol
 
-> **Status: Planned.** no RDP protocol/enums/plan types in code.
+> **Current gap:** no RDP protocol/enums/plan types in code.
 
 ### 17.1 Compatibility position
 
@@ -198,7 +198,7 @@ The plan records:
 
 ## 18. State
 
-> **Status: Planned.** no state store / `Checkpoint`.
+> **Current gap:** no state store / `Checkpoint`.
 
 ### 18.1 State types
 
@@ -246,7 +246,7 @@ A crash after output acknowledgement but before CAS causes replay. Stable batch 
 
 ## 19. Schema
 
-> **Status: Planned.** no `RikoSchema` / registry.
+> **Current gap:** no `RikoSchema` / registry.
 
 ### 19.1 Canonical representation
 
@@ -311,7 +311,7 @@ Fixed-schema batch pipelines freeze the initial schema and reject later widening
 
 ## 20. Batch transports
 
-> **Status: Planned.** no batch-transport selection.
+> **Current gap:** no batch-transport selection.
 
 ```python
 batch_transport: Literal[
@@ -356,7 +356,7 @@ The planner selects IPC only when every restriction is satisfied. Otherwise, it 
 
 ## 21. Manifest durability
 
-> **Status: Planned.** no `Manifest` / commit protocol.
+> **Current gap:** no `Manifest` / commit protocol.
 
 The manifest is the commit marker.
 
@@ -437,25 +437,15 @@ Deliver before major runtime work:
 
 ### Milestone 3 — Lazy Feed runtime
 
-* define `Feed`
-* widen `AsyncSource`
-* normalize to one async iterator per execution
-* remove `_await_stream()` from internal chaining
-* adapt `AsyncCollection.async_pipe()`
-* convert composer operators to lazy Feed processing
-* add compatibility materialization adapters for legacy modules
-* mark materializing pipes in execution plans
+**Landed** (P7). `Feed` (async iteration), lazy evaluation, one-async-iterator-per-execution
+normalization, the composer-operator conversion, and the legacy-materialization adapters shipped.
+See [IMPLEMENTED.md §2](../IMPLEMENTED.md#2-core-item-and-stream-types).
 
 ### Milestone 4 — Async concurrency
 
-* AnyIO task groups
-* bounded channels
-* ordered and unordered map
-* fair and ready merge scheduling
-* concurrent cleanup
-* worker cancellation
-* source-specific sequence tracking
-* dependency-group barriers
+**Landed** (P7 + P10). AnyIO-only runtime, bounded channels, ordered/unordered map, bounded
+concurrency with backpressure, worker cancellation, and fair/ready merge scheduling shipped. See
+[IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-execution-and-backpressure-shipped).
 
 ### Milestone 5 — Disposition and lineage runtime
 
@@ -523,207 +513,13 @@ Deliver before major runtime work:
   stdlib/dependency-free cache. Optional modernization (not legacy cleanup); the Flask concern is
   moot (current ``mezmorize`` depends on ``cachelib``, not Flask). Also drops the ``manage``
   console-script collision with ``mezmorize`` (see root ``CLAUDE.md``).
+  **Pair this with ``async_memoize``** — the async fetch path has no memoization at all, so
+  whatever replaces ``mezmorize`` should be async-aware from the start rather than growing a
+  second, divergent cache. See
+  `bado-anyio-alignment.md <bado-anyio-alignment.md>`_ § 2b.
 * add entry-point plugin discovery if needed
 * upstream temporary Meza adapters
 * remove compatibility materialization pipes where possible
-
----
-
-
----
-
-> **Salvaged from the retired `productionizing.md` §8.** Draft RDP wire specification (intended as `docs/RDP.md`). RDP is beyond P14, so the P-track does not own it.
-
-# RDP specification (draft, salvaged)
-
-## 8.1 Add `docs/RDP.md`
-
-Use one authoritative specification file initially.
-
-Do not split it into many documents until the wire protocol stabilizes.
-
-Required sections:
-
-### 1. Scope
-
-Define RDP as:
-
-* an input superset of Singer;
-* a strict Singer-compatible profile;
-* a native profile for batches, manifests, schema changes, and richer state.
-
-### 2. Message framing
-
-Define JSONL framing and required `type` discrimination.
-
-Singer-compatible messages:
-
-```text
-SCHEMA
-RECORD
-STATE
-```
-
-Native messages:
-
-```text
-BATCH
-SCHEMA_CHANGE
-ACTIVATE_VERSION
-```
-
-### 3. Catalog
-
-Specify:
-
-```text
-ConfiguredRikoCatalog
-```
-
-as canonical, with Singer catalog adapters.
-
-### 4. Schema
-
-State:
-
-* Draft-07 is authoritative;
-* the original unresolved schema is retained;
-* references resolve through an immutable registry;
-* tabular projections may be lossy;
-* projection loss must be reported.
-
-### 5. State
-
-Define:
-
-* `STREAM`
-* `GLOBAL`
-* `LEGACY`
-
-State values remain source-authoritative.
-
-Singer `STATE.value` must be preserved exactly.
-
-### 6. Capabilities
-
-Define required and optional capabilities.
-
-* unknown required capability → fail
-* unknown optional capability → ignore or warn
-
-### 7. Batches and manifests
-
-Specify:
-
-* logical batch envelope;
-* schema ID;
-* lineage envelope;
-* manifest commit sequence;
-* stable batch ID;
-* object checksum and size.
-
-### 8. Transport
-
-Define:
-
-```text
-manifest
-ipc-stream
-auto
-```
-
-with the restricted direct IPC fast path.
-
-### 9. CDC
-
-Specify:
-
-* insert
-* update
-* delete
-* delete projection rules
-* native versus Singer compatibility behavior
-
-### 10. Delivery guarantee
-
-State that Riko Connect is at-least-once by default.
-
-Do not claim global exactly-once behavior.
-
-### 11. Safe degradation
-
-Codify:
-
-```text
-performance difference
-→ automatic fallback
-
-representation difference
-→ explicit projection
-
-correctness difference
-→ fail unless explicitly authorized
-```
-
-### 12. Run status
-
-Define:
-
-```text
-COMPLETED
-PARTIAL
-FAILED
-CANCELLED
-```
-
-and CLI exit codes:
-
-```text
-0 completed
-1 failed
-2 usage/configuration
-3 partial
-```
-
-### 13. Conformance examples
-
-Include examples for:
-
-* Singer schema/record/state
-* native batch
-* schema change
-* stream state
-* global state
-* delete record
-* manifest acknowledgement
-* unsupported required capability
-
-## 8.2 Add examples after prose stabilizes
-
-Later add:
-
-```text
-docs/rdp/examples/singer.jsonl
-docs/rdp/examples/native-batch.jsonl
-docs/rdp/examples/schema-change.jsonl
-docs/rdp/examples/cdc.jsonl
-```
-
-## 8.3 Add machine-readable schemas later
-
-After at least one reader and writer implementation agree:
-
-```text
-docs/rdp/schema/message.schema.json
-docs/rdp/schema/catalog.schema.json
-docs/rdp/schema/manifest.schema.json
-docs/rdp/schema/checkpoint.schema.json
-```
-
-Do not make machine-readable protocol schemas the first deliverable. Otherwise the project will encode unsettled details too early.
-
----
-
 
 ---
 

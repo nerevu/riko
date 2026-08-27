@@ -45,8 +45,6 @@ jobs:
         with:
           name: python-package-distributions
           path: dist/
-      - name: Generate PEP 740 attestations
-        uses: astral-sh/attest-action@v0.0.6
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@v1.14.2
         with:

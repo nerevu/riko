@@ -2,25 +2,51 @@
 """
 riko.ext.names
 ~~~~~~~~~~~~~~
-Typed module-name discovery. Strings stay the canonical runtime identifier;
-enums are an optional, type-safe layer over them.
 
-``ModuleName`` is a deliberately empty ``StrEnum`` base. Generated per-package
-enums (built-in and extension) subclass it, so any of their members is accepted
-anywhere riko accepts a module name. ``normalize_module_name`` collapses either
-form back to the plain string identifier at the public boundary, so the resolver
-never sees an enum.
+Provides module-name normalization and discovery categories.
 """
 
-from enum import StrEnum
+from typing import TYPE_CHECKING, overload
 
-type ModuleNameLike = str | ModuleName
+from riko.types.values import ModuleName
+
+if TYPE_CHECKING:
+    from riko.types.modules import ModuleCategory, ModuleMetadata
+    from riko.types.values import ModuleNameLike
+
+SINK_NAMES: frozenset[str] = frozenset({"output", "write"})
 
 
-class ModuleName(StrEnum):
-    """Base type accepted anywhere riko accepts a module name."""
+def normalize_module_name(name: "ModuleNameLike | None") -> str:
+    """Returns the canonical string module name."""
+    return name.value if isinstance(name, ModuleName) else name or ""
 
 
-def normalize_module_name(name: ModuleNameLike | None) -> str | None:
-    """Collapse a ``str``/``ModuleName`` (or ``None``) to its canonical string."""
-    return name.value if isinstance(name, ModuleName) else name
+@overload
+def derive_category(  # noqa: E704
+    metadata: "ModuleMetadata", *, provider: str = "riko", override: str
+) -> str: ...
+@overload  # noqa: E302
+def derive_category(  # noqa: E704
+    metadata: "ModuleMetadata", *, provider: str = "riko", override: None = ...
+) -> "ModuleCategory": ...
+def derive_category(  # noqa: E302
+    metadata: "ModuleMetadata", *, provider: str = "riko", override: str | None = None
+) -> "ModuleCategory | str":
+    """
+    Returns the user-facing discovery category for a module.
+
+    Categories are based on data-flow role, not the runtime module type.
+    """
+    if override is not None:
+        result = override
+    elif provider != "riko":
+        result = provider
+    elif metadata.name in SINK_NAMES:
+        result = "sink"
+    elif metadata.subtype == "source":
+        result = "source"
+    else:
+        result = "transform"
+
+    return result

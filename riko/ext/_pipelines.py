@@ -1,28 +1,38 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.ext.pipelines
+riko.ext._pipelines
 ~~~~~~~~~~~~~~~~~~~
-Resolution of *named pipelines* (``pipe_*``) — the counterpart to the module
-registry. Where the registry resolves leaf module implementations, this resolves
-whole sub-pipelines: a generated Python module found via a pluggable
-``ModuleStore``, or (as a fallback) a JSON definition compiled from a configured
-directory.
 
-The locations are **injected**, not hardcoded: core ships an empty
-``pipeline_resolver`` (a bare install has no named pipelines), and the test suite
-configures it with a ``PackageStore("tests.pypipelines")`` + ``tests/pipelines``
-directory via ``conftest``. This is what keeps the ``tests.*`` paths out of the
-core compiler.
+Provides resolution for named pipelines.
+
+Pipelines can be loaded from generated modules or JSON definitions.
+
+Examples:
+    Basic usage::
+
+        >>> from types import ModuleType
+        >>> from riko.ext._pipelines import MappingStore, PipelineResolver
+        >>>
+        >>> module = ModuleType("pipe_demo")
+        >>> module.pipe = lambda stream=None, **kwargs: iter([{"x": 1}])
+        >>> resolver = PipelineResolver(store=MappingStore({"pipe_demo": module}))
+        >>> list(resolver.resolve("pipe_demo", "pipe")())
+        [{'x': 1}]
+
+Attributes:
+    pipeline_resolver: Process-global resolver. Core ships it unconfigured, since
+        a bare install has no named pipelines.
+
 """
 
 from collections.abc import Mapping
 from functools import partial, update_wrapper
-from importlib import import_module
 from json import loads
 from pathlib import Path
 from types import ModuleType
 from typing import Literal, Protocol, cast, overload
 
+from riko._importutils import import_or_else
 from riko.exceptions import UnsupportedPipelineError
 from riko.modules._subpipe import is_subpipe, mark_subpipe
 from riko.types.compile import ParsedPipeDef
@@ -32,8 +42,12 @@ from riko.types.modules import ModuleSubtype
 
 def _as_subpipe(pipeline: Pipeline) -> Pipeline:
     """
-    Mark a resolved ``pipe_*`` callable as a sub-pipeline via a fresh wrapper,
-    leaving the original module callable unmutated.
+    Returns a sub-pipeline-marked wrapper around ``pipeline``.
+
+    The marker goes on a fresh ``partial`` because the module callable is shared
+    with anyone importing the generated pipeline directly; marking it in place
+    would leak sub-pipeline semantics into those calls.
+
     """
     if is_subpipe(pipeline):
         subpipe = pipeline
@@ -48,36 +62,23 @@ def _as_subpipe(pipeline: Pipeline) -> Pipeline:
 
 
 class ModuleStore(Protocol):
-    """Locates a generated pipeline module by name (``None`` if absent)."""
+    """Loads generated pipeline modules by name and returns ``None`` if absent."""
 
     def load(self, name: str) -> ModuleType | None: ...  # noqa: E704
 
 
 class PackageStore:
-    """Import ``<package>.<name>`` — the shape generated pipelines ship in."""
+    """Loads pipeline modules from a Python package."""
 
     def __init__(self, package: str) -> None:
         self._package = package
 
     def load(self, name: str) -> ModuleType | None:
-        target = f"{self._package}.{name}"
-
-        try:
-            module = import_module(target)
-        except ModuleNotFoundError as e:
-            if missing_name := e.name:
-                is_target = target == missing_name
-
-                if not (is_target or target.startswith(f"{missing_name}.")):
-                    raise
-
-            module = None
-
-        return module
+        return import_or_else(f"{self._package}.{name}")
 
 
 class MappingStore:
-    """Serve pipeline modules from an in-memory ``{name: module}`` mapping."""
+    """Loads pipeline modules from an in-memory mapping."""
 
     def __init__(self, modules: Mapping[str, ModuleType]) -> None:
         self._modules = dict(modules)
@@ -87,7 +88,7 @@ class MappingStore:
 
 
 class CompositeStore:
-    """Try each store in order; first hit wins."""
+    """Loads a pipeline module from the first store that has it."""
 
     def __init__(self, *stores: ModuleStore) -> None:
         self._stores = stores
@@ -104,9 +105,14 @@ class CompositeStore:
 
 class DirectoryStore:
     """
-    Compile ``<directory>/<name>.json`` into a ``ParsedPipeDef`` (``None`` if
-    the file is absent). The definition is interface-agnostic — the caller
-    builds it sync (``build_pipeline``) or async (``abuild_pipeline``).
+    Loads pipeline definitions from a directory of JSON files.
+
+    Despite the shared ``load`` name, this is not a ``ModuleStore``. It yields a
+    ``ParsedPipeDef`` rather than a module. This is why ``PipelineResolver`` keeps
+    it in its own slot instead of chaining it into a ``CompositeStore``. A loaded
+    definition is interface-agnostic; the caller builds it with ``build_pipeline``
+    or ``abuild_pipeline``.
+
     """
 
     def __init__(self, directory: Path) -> None:
@@ -126,6 +132,17 @@ class DirectoryStore:
 
 
 class PipelineResolver:
+    """
+    Resolves whole sub-pipelines, where the module registry resolves leaf modules.
+
+    Lookup has two independent halves: ``store`` supplies generated Python
+    pipeline modules for ``resolve``, and ``definitions`` supplies JSON pipeline
+    definitions for ``load_definition``. Both are **injected** rather than
+    hardcoded. This is what keeps test-only locations out of the core compiler. The
+    suite points the global at its own package and directory via ``conftest``.
+
+    """
+
     def __init__(
         self,
         *,
@@ -141,11 +158,19 @@ class PipelineResolver:
         store: ModuleStore | None = None,
         definitions: DirectoryStore | None = None,
     ) -> None:
+        """
+        Replaces both halves of the lookup.
+
+        This is a whole-state assignment, not a partial update: an omitted
+        argument is set to ``None`` rather than left alone. Passing only ``store``
+        also clears ``definitions``. Pass both to keep both.
+
+        """
         self._store = store
         self._definitions = definitions
 
     def load(self, name: str) -> ModuleType | None:
-        """The generated pipeline module for ``name``, or ``None``."""
+        """Returns the generated pipeline module for ``name``, or ``None``."""
         return self._store.load(name) if self._store is not None else None
 
     @overload
@@ -158,8 +183,12 @@ class PipelineResolver:
     ) -> AsyncPipeParser: ...
     def resolve(self, name: str, interface: Interface) -> Pipeline:  # noqa: E301
         """
-        Resolve a ``pipe_<id>`` / ``pipe:<id>`` sub-pipeline to its marked
-        callable — the counterpart to ``ModuleRegistry.resolve``.
+        Resolves a ``pipe_<id>`` / ``pipe:<id>`` name to its marked callable.
+
+        Raises:
+            UnsupportedPipelineError: If no store supplies ``name``, or its module
+                has no ``interface`` callable.
+
         """
         from riko.compile import pythonise  # noqa: PLC0415
 
@@ -174,7 +203,14 @@ class PipelineResolver:
     def load_definition(
         self, name: str, *, directory: Path | None = None
     ) -> ParsedPipeDef:
-        """Compile ``name``'s JSON definition, raising if it can't be found."""
+        """
+        Loads a named JSON pipeline definition, overriding the configured
+        directory when ``directory`` is given.
+
+        Raises:
+            UnsupportedPipelineError: If the definition cannot be found.
+
+        """
         store = self._definitions if directory is None else DirectoryStore(directory)
         parsed = store.load(name) if store is not None else None
 

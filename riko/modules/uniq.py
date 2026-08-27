@@ -1,23 +1,23 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for filtering out non unique items from a stream according
-to a specified field.
+Filters out non unique items from a stream according to a specified field.
 
-Removes duplicate items. You select the element to filter on, and Unique
-removes the duplicates
+Deduplication is windowed, not global: only the last ``limit`` values are
+remembered, so a duplicate that falls outside the window is yielded again.
+Lazy, and memory is bounded by ``limit``.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.uniq import pipe
         >>>
-        >>> items = ({'x': x, 'mod': x % 2} for x in range(5))
-        >>> list(pipe(items, conf={'uniq_key': 'mod'}))
+        >>> items = ({"x": x, "mod": x % 2} for x in range(5))
+        >>> list(pipe(items, conf={"uniq_key": "mod"}))
         [{'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Operator wrapper options.
+    DEFAULTS: Default operator configuration.
 
 """
 
@@ -41,43 +41,38 @@ def parser(
     stream: Stream, objconf: UniqObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Parses the pipe content
+    Yields items whose ``uniq_key`` value has not been seen recently.
 
     Args:
-        stream (Iter[dict]): The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        stream: The source. Note: this shares the `tuples` iterator, so consuming
+            it will consume `tuples` as well.
 
-        objconf (obj): The pipe configuration (an Objectify instance)
+        objconf: The pipe configuration, containing `uniq_key` and `limit`.
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, rules)
-            `item` is an element in the source stream (a DotDict instance)
-            and `rules` is the rule configuration (an Objectify instance).
-            Note: this shares the `stream` iterator, so consuming it will
-            consume `stream` as well.
-
-        kwargs (dict): Keyword arguments.
+        tuples: Iterable of (item, objconf). `item` is an element in the source stream.
+            Note: this shares the `stream` iterator, so consuming it will consume
+            `stream` as well.
 
     Yields:
-        dict: The output
+        Each item whose ``uniq_key`` value is not among the last ``limit`` seen.
 
     Examples:
         >>> from itertools import repeat
         >>> from meza.fntools import Objectify
         >>>
-        >>> conf = {'uniq_key': 'mod', 'limit': 256}
+        >>> conf = {"uniq_key": "mod", "limit": 256}
         >>> objconf = Objectify(conf)
-        >>> kwargs = {'conf': conf}
-        >>> stream = ({'x': x, 'mod': x % 2} for x in range(5))
+        >>> kwargs = {"conf": conf}
+        >>> stream = ({"x": x, "mod": x % 2} for x in range(5))
         >>> tuples = zip(stream, repeat(objconf))
         >>> list(parser(stream, objconf, tuples, **kwargs))
         [{'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
 
     """
-    key, limit = objconf.uniq_key, objconf.limit
-    seen = deque(maxlen=limit)
+    seen = deque(maxlen=objconf.limit)
 
     for item in stream:
-        value = item.get(key)
+        value = item.get(objconf.uniq_key)
 
         if value not in seen:
             seen.append(value)
@@ -87,33 +82,40 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that asynchronously filters out non unique items according
-    to a specified field.
+    Asynchronously filters out non unique items according to a specified field.
+
+    Lazy: items stream through and memory is bounded by ``limit``.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+
+        conf (dict): The pipe configuration.
+
+            uniq_key (str): Field which should be unique (default: "content").
+
+            limit (int): Number of recently seen values to remember. A duplicate
+                that falls outside this window is yielded again (default: 1024).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'uniq_key' or
-            'limit'.
+        assign (str): Field each item is nested under. Ignored when ``emit`` is
+            True (default: "uniq").
 
-            uniq_key (str): Item attribute which should be unique (default:
-                'content').
+        emit (bool): Whether to emit each item directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-            limit (int): Maximum number of unique items to track (default:
-                1024)
-
-    Returns:
-        Awaitable: stream
+    Yields:
+        - ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     items = ({'x': x, 'mod': x % 2} for x in range(5))
-        ...     result = await async_pipe(items, conf={'uniq_key': 'mod'})
-        ...     print([i['mod'] for i in result])
+        ...     items = ({"x": x, "mod": x % 2} for x in range(5))
+        ...     result = await async_pipe(items, conf={"uniq_key": "mod"})
+        ...     print([i["mod"] for i in result])
         >>>
         >>> run(main)
         [0, 1]
@@ -125,34 +127,41 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that filters out non unique items according to a specified
-    field.
+    Filters out non unique items according to a specified field.
+
+    Lazy: items stream through and memory is bounded by ``limit``.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+
+        conf (dict): The pipe configuration.
+
+            uniq_key (str): Field which should be unique (default: "content").
+
+            limit (int): Number of recently seen values to remember. A duplicate
+                that falls outside this window is yielded again (default: 1024).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'uniq_key' or
-            'limit'.
+        assign (str): Field each item is nested under. Ignored when ``emit`` is
+            True (default: "uniq").
 
-            uniq_key (str): Item attribute which should be unique (default:
-                'content').
-
-            limit (int): Maximum number of unique items to track (default:
-                1024)
+        emit (bool): Whether to emit each item directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
     Yields:
-        dict: an item
+        - ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
-        >>> items = [{'content': x, 'mod': x % 2} for x in range(5)]
-        >>> list(pipe(items, conf={'uniq_key': 'mod'}))
+        >>> items = [{"content": x, "mod": x % 2} for x in range(5)]
+        >>> list(pipe(items, conf={"uniq_key": "mod"}))
         [{'content': 0, 'mod': 0}, {'content': 1, 'mod': 1}]
         >>> stream = pipe(items)
         >>> next(stream)
         {'content': 0, 'mod': 0}
-        >>> [item['content'] for item in stream]
+        >>> [item["content"] for item in stream]
         [1, 2, 3, 4]
 
     """

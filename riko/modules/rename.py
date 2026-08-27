@@ -1,30 +1,25 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for renaming, copying, and deleting elements of an item.
+Renames, copies, or deletes item fields.
 
-There are several cases when this is useful, for example when the input data is
-not in RSS format (e.g., elements are not named title, link, description, etc.)
-and you want to output it as RSS, or when the input data contains geographic
-data but their element names aren't recognized by the Location Extractor
-module.
-
-You rename an element by creating a mapping between the original name and a new
-element name. You delete an element by not supplying a new element name. You
-copy an element by setting the `copy` field to True.
+Each rule maps an existing ``field`` onto a ``newval``. Omit ``newval`` to
+delete the field instead, or set ``copy`` to keep the original alongside the
+new one. Useful when input data is not in RSS form and you want to emit it as
+RSS.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.rename import pipe
         >>>
-        >>> conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
-        >>> item = {'content': 'hello world'}
+        >>> conf = {"rule": {"field": "content", "newval": "greeting"}}
+        >>> item = {"content": "hello world"}
         >>> next(pipe(item, conf=conf))
         {'greeting': 'hello world'}
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -41,6 +36,7 @@ from riko.dotdict import DotDict
 from riko.types.configs import RenameObjconf
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import RenameConfRule
+from riko.types.values import MISSING
 
 from . import processor
 
@@ -50,9 +46,12 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def reducer(item: Item, rule: RenameConfRule) -> Item:
+    value = DotDict(item).get(rule.field, MISSING)
     reduced = DotDict(item if rule.copy else remove_keys(item, rule.field))
-    new_dict = {rule.newval: item.get(rule.field)} if rule.newval else {}
-    reduced.update(new_dict)
+
+    if rule.newval and value is not MISSING:
+        reduced.update({rule.newval: value})
+
     return cast(Item, reduced)
 
 
@@ -63,27 +62,23 @@ async def async_parser(
     **kwargs: object,
 ) -> Item:
     """
-    Asynchronously parses the pipe content
+    Asynchronously applies each rename rule in turn to ``item``.
 
     Args:
-        item (obj): The entry to process (a DotDict instance)
-        rules (List[obj]): the parsed rules (Objectify instances).
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        item: The entry to process.
+        rules: The parsed rename rules.
+        objconf: The pipe configuration. Unused.
 
     Returns:
-        Awaitable: item
+        The item with each rule applied.
 
     Examples:
         >>> from riko import run
-        >>> from riko.dotdict import DotDict
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
-        ...     item = DotDict({'content': 'hello world'})
-        ...     rule = {'field': 'content', 'newval': 'greeting'}
+        ...     item = {"content": "hello world"}
+        ...     rule = {"field": "content", "newval": "greeting"}
         ...     result = await async_parser(item, [Objectify(rule)], None, stream=item)
         ...     print(result)
         >>>
@@ -101,25 +96,21 @@ def parser(
     **kwargs: object,
 ) -> Item:
     """
-    Parsers the pipe content
+    Applies each rename rule in turn to ``item``.
 
     Args:
-        item (obj): The entry to process (a DotDict instance)
-        rules (List[obj]): the parsed rules (Objectify instances).
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        item: The entry to process.
+        rules: The parsed rename rules.
+        objconf: The pipe configuration. Unused.
 
     Returns:
-        dict: The item
+        The item with each rule applied.
 
     Examples:
-        >>> from riko.dotdict import DotDict
         >>> from meza.fntools import Objectify
         >>>
-        >>> item = DotDict({'content': 'hello world'})
-        >>> rule = {'field': 'content', 'newval': 'greeting'}
+        >>> item = {"content": "hello world"}
+        >>> rule = {"field": "content", "newval": "greeting"}
         >>> args = [item, [Objectify(rule)], None]
         >>> parser(*args, stream=item)
         {'greeting': 'hello world'}
@@ -131,36 +122,54 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
-    A processor module that asynchronously renames or copies fields in an
-    item.
+    Asynchronously renames, copies, or deletes item fields.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            rule (dict | list[dict]): The rename criteria. Required.
+
+                field (str): Item attribute to rename, copy, or delete.
+
+                newval (str): New attribute name. A dotted name nests, so
+                    ``"a.b"`` yields ``{"a": {"b": <value>}}``. Omit it to
+                    delete ``field`` instead (default: None).
+
+                copy (bool): Whether to keep ``field`` as well as adding
+                    ``newval`` (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'rule'.
+        assign (str): Field the rewritten item is nested under. Ignored when
+            ``emit`` is True (default: "rename").
 
-            rule (dict): can be either a dict or list of dicts. Must contain
-                the key 'field'.
+        emit (bool): Whether to emit the rewritten item directly rather than
+            nest it. Overrides ``assign`` (default: True).
 
-                field (str): The item attribute to rename
-                newval (str): The new item attribute name (default: None). If
-                    blank, the field will be deleted.
+    Yields:
+        - the rewritten ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
 
-                copy (bool): Copy the item attribute instead of renaming it
-                    (default: False)
+    Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
 
-    Returns:
-       Awaitable: item with renamed content
+    Notes:
+        A rule naming a field the item lacks is skipped, leaving the item
+        untouched.
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
-        ...     result = await async_pipe({'content': 'hello world'}, conf=conf)
-        ...     print(next(result)['greeting'])
+        ...     conf = {"rule": {"field": "content", "newval": "greeting"}}
+        ...     result = await async_pipe({"content": "hello world"}, conf=conf)
+        ...     print(next(result)["greeting"])
         >>>
         >>> run(main)
         hello world
@@ -172,38 +181,57 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Item:
     """
-    A processor that renames or copies fields in an item.
+    Renames, copies, or deletes item fields.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            rule (dict | list[dict]): The rename criteria. Required.
+
+                field (str): Item attribute to rename, copy, or delete.
+
+                newval (str): New attribute name. A dotted name nests, so
+                    ``"a.b"`` yields ``{"a": {"b": <value>}}``. Omit it to
+                    delete ``field`` instead (default: None).
+
+                copy (bool): Whether to keep ``field`` as well as adding
+                    ``newval`` (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'rule'.
+        assign (str): Field the rewritten item is nested under. Ignored when
+            ``emit`` is True (default: "rename").
 
-            rule (dict): can be either a dict or list of dicts. Must contain
-                the key 'field'. May contain the keys 'newval' or 'copy'.
-
-                field (str): The item attribute to rename
-                newval (str): The new item attribute name (default: None). If
-                    blank, the field will be deleted.
-
-                copy (bool): Copy the item attribute instead of renaming it
-                    (default: False)
+        emit (bool): Whether to emit the rewritten item directly rather than
+            nest it. Overrides ``assign`` (default: True).
 
     Yields:
-        dict: an item with renamed content
+        - the rewritten ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
+
+    Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
+
+    Notes:
+        A rule naming a field the item lacks is skipped, leaving the item
+        untouched.
 
     Examples:
-        >>> rule = {'field': 'content', 'newval': 'greeting'}
-        >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf={'rule': rule}))
+        >>> rule = {"field": "content", "newval": "greeting"}
+        >>> item = {"content": "hello world"}
+        >>> next(pipe(item, conf={"rule": rule}))
         {'greeting': 'hello world'}
-        >>> conf = {'rule': {'field': 'content'}}
-        >>> next(pipe({'content': 'hello world'}, conf=conf))
+        >>> conf = {"rule": {"field": "content"}}
+        >>> next(pipe({"content": "hello world"}, conf=conf))
         {}
-        >>> rule['copy'] = True
-        >>> result = pipe({'content': 'hello world'}, conf={'rule': rule})
+        >>> rule["copy"] = True
+        >>> result = pipe({"content": "hello world"}, conf={"rule": rule})
         >>> sorted(next(result))
         ['content', 'greeting']
 

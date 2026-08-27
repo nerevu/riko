@@ -1,19 +1,19 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for counting the number of items in a stream.
+Counts the number of items in a stream.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.count import pipe
         >>>
-        >>> stream = [{'x': x} for x in range(5)]
-        >>> next(pipe(stream))['count']
+        >>> stream = [{"x": x} for x in range(5)]
+        >>> next(pipe(stream))["count"]
         5
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Operator wrapper options.
+    DEFAULTS: Default operator configuration.
 
 """
 
@@ -34,42 +34,36 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, count_key: str, tuples: PipeTuples, **kwargs: object
+    stream: Stream, count_key: str | None, tuples: PipeTuples, **kwargs: object
 ) -> int | Iterator[dict[str, int]]:
     """
-    Parses the pipe content
+    Counts items, optionally grouping them by a field.
 
     Args:
-        stream (Iter[dict]): The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        stream: The source. Note: this shares the `tuples` iterator, so consuming
+            it will consume `tuples` as well.
 
-        key (str): the field to group by.
+        count_key: Field to group items before counting
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source stream and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the
-            `stream` iterator, so consuming it will consume `stream` as well.
-
-        kwargs (dict): Keyword arguments.
-
-    Kwargs:
-        conf (dict): The pipe configuration.
+        tuples: Iterable of (item, objconf). `item` is an element in the source stream.
+            Note: this shares the `stream` iterator, so consuming it will consume
+            `stream` as well.
 
     Returns:
-        mixed: The output either a dict or iterable of dicts
+        - ``Iterator[{<group>: <count>}]`` when ``count_key`` is set
+        - ``<count>`` when ``count_key`` is unset
 
     Examples:
         >>> from itertools import repeat
         >>>
-        >>> stream = ({'x': x} for x in range(5))
+        >>> stream = ({"x": x} for x in range(5))
         >>> tuples = zip(stream, repeat(None))
         >>> parser(stream, None, tuples)
         5
-        >>> conf = {'count_key': 'word'}
-        >>> kwargs = {'conf': conf}
-        >>> stream = [{'word': 'two'}, {'word': 'one'}, {'word': 'two'}]
-        >>> tuples = zip(stream, repeat(conf['count_key']))
-        >>> counted = parser(stream, conf['count_key'], tuples, **kwargs)
+        >>> count_key = "word"
+        >>> stream = [{"word": "two"}, {"word": "one"}, {"word": "two"}]
+        >>> tuples = zip(stream, repeat(count_key))
+        >>> counted = parser(stream, count_key, tuples)
         >>> next(counted)
         {'two': 2}
         >>> next(counted)
@@ -88,33 +82,37 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
     """
-    An operator that asynchronously and eagerly counts the number of items
-    in a stream. Note that this pipe is not lazy.
+    Asynchronously counts items in a stream.
+
+    Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+
+        conf (dict): The pipe configuration.
+
+            count_key (str): Field to count by. Groups items in the stream by the given
+                key and reports a count for each group (default: None).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'count_key'.
+        assign (str): Field the count is assigned to. Ignored when ``count_key`` is set
+            (the group keys are used instead) or ``emit`` is True (default: "count").
 
-            count_key (str): Item attribute to count by. This will group items
-                in the stream by the given key and report a count for each
-                group (default: None).
+        emit (bool): Whether to emit the count directly rather than assign it.
+            Ignored when ``count_key`` is set. Overrides ``assign`` (default: False).
 
-        assign (str): Attribute to assign parsed content. If `count_key` is set,
-            this is ignored and the group keys are used instead. (default:
-            content)
-
-    Returns:
-        Awaitable: iterator of the number of
-            counted items
+    Yields:
+        - ``{<group>: <count>}`` when ``count_key`` is set
+        - ``{<assign>: <count>}`` when ``emit`` is False and ``count_key`` is unset
+        - ``<count>`` when ``emit`` is True and ``count_key`` is unset
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     items = ({'x': x} for x in range(5))
+        ...     items = ({"x": x} for x in range(5))
         ...     result = await async_pipe(items)
         ...     print(next(result))
         >>>
@@ -128,35 +126,44 @@ def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
     """
-    An operator that eagerly counts the number of items in a stream.
-    Note that this pipe is not lazy.
+    Counts items in a stream.
+
+    Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+
+        conf (dict): The pipe configuration.
+
+            count_key (str): Field to count by. Groups items in the stream by the given
+                key and reports a count for each group (default: None).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'count_key'.
+        assign (str): Field the count is assigned to. Ignored when ``count_key`` is set
+            (the group keys are used instead) or ``emit`` is True (default: "count").
 
-            count_key (str): Item attribute to count by. This will group items
-                in the stream by the given key and report a count for each
-                group (default: None).
-
-        assign (str): Attribute to assign parsed content. If `count_key` is set,
-            this is ignored and the group keys are used instead. (default:
-            content)
+        emit (bool): Whether to emit the count directly rather than assign it.
+            Ignored when ``count_key`` is set. Overrides ``assign`` (default: False).
 
     Yields:
-        dict: the number of counted items
+        - ``{<group>: <count>}`` when ``count_key`` is set
+        - ``{<assign>: <count>}`` when ``emit`` is False and ``count_key`` is unset
+        - ``<count>`` when ``emit`` is True and ``count_key`` is unset
 
     Examples:
-        >>> stream = [{'x': x} for x in range(5)]
-        >>> next(pipe(stream))['count']
+        >>> stream = [{"x": x} for x in range(5)]
+        >>> next(pipe(stream, emit=True))
         5
-        >>> next(pipe(stream, emit=False, assign='content'))
+        >>> next(pipe(stream))["count"]
+        5
+        >>> # Assign the count to "content":
+        >>> next(pipe(stream, assign="content"))
         {'content': 5}
-        >>> stream = [{'word': 'two'}, {'word': 'one'}, {'word': 'two'}]
-        >>> counted = pipe(stream, conf={'count_key': 'word'})
+        >>> # Count by the "word" field:
+        >>> stream = [{"word": "two"}, {"word": "one"}, {"word": "two"}]
+        >>> counted = pipe(stream, conf={"count_key": "word"})
         >>> next(counted)
         {'two': 2}
         >>> next(counted)

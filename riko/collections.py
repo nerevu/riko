@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for creating (a)synchronous riko flows and streams
+Provides functions for creating (a)synchronous riko flows and streams.
 
 Examples:
     sync usage::
@@ -8,33 +8,33 @@ Examples:
         >>> from riko.collections import SyncPipe
         >>> from riko import get_path
         >>>
-        >>> fconf = {'url': get_path('gigs.json'), 'path': 'value.items'}
-        >>> str_conf = {'delimiter': '<br>'}
-        >>> str_kwargs = {'field': 'description', 'emit': True}
-        >>> sort_conf = {'rule': {'field': 'title'}}
+        >>> fconf = {"url": get_path("gigs.json"), "path": "value.items"}
+        >>> str_conf = {"delimiter": "<br>"}
+        >>> str_kwargs = {"field": "description", "emit": True}
+        >>> sort_conf = {"rule": {"field": "title"}}
         >>>
-        >>> list(SyncPipe('fetchdata', conf=fconf)
+        >>> list(SyncPipe("fetchdata", conf=fconf)
         ...     .sort(conf=sort_conf)
         ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count()
         ... )
         [{'count': 169}]
-        >>> list(SyncPipe('fetchdata', conf=fconf, parallel=True)
+        >>> list(SyncPipe("fetchdata", conf=fconf, parallel=True)
         ...     .sort(conf=sort_conf)
         ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count()
         ... )
         [{'count': 169}]
-        >>> list(SyncPipe('fetchdata', conf=fconf, parallel=True, threads=False)
+        >>> list(SyncPipe("fetchdata", conf=fconf, parallel=True, threads=False)
         ...     .sort(conf=sort_conf)
         ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count()
         ... )
         [{'count': 169}]
-        >>> fconf['type'] = 'fetchdata'
-        >>> sources = [{'url': get_path('feed.xml')}, fconf]
+        >>> fconf["type"] = "fetchdata"
+        >>> sources = [{"url": get_path("feed.xml")}, fconf]
         >>> stream = SyncCollection(sources)
-        >>> next(stream)['title']
+        >>> next(stream)["title"]
         'Donations'
         >>> len(list(stream))
         55
@@ -47,33 +47,33 @@ Examples:
         >>> from riko import run, issync
         >>> from riko.collections import AsyncPipe, AsyncCollection
         >>>
-        >>> fconf = {'url': get_path('gigs.json'), 'path': 'value.items'}
-        >>> str_conf = {'delimiter': '<br>'}
-        >>> str_kwargs = {'field': 'description', 'emit': True}
-        >>> sort_conf = {'rule': {'field': 'title'}}
+        >>> fconf = {"url": get_path("gigs.json"), "path": "value.items"}
+        >>> str_conf = {"delimiter": "<br>"}
+        >>> str_kwargs = {"field": "description", "emit": True}
+        >>> sort_conf = {"rule": {"field": "title"}}
         >>>
         >>> async def main():
-        ...     d = await (AsyncPipe('fetchdata', conf=fconf)
+        ...     d = await (AsyncPipe("fetchdata", conf=fconf)
         ...         .sort(conf=sort_conf)
         ...         .tokenizer(conf=str_conf, **str_kwargs)
         ...         .count()
         ...     )
         ...
         ...     print(list(d))
-        ...
+        >>>
         >>> if issync:
-        ...     [{'count': 169}]
+        ...     [{"count": 169}]
         ... else:
         ...     run(main)
         [{'count': 169}]
         >>> async def main():
-        ...     fconf['type'] = 'fetchdata'
-        ...     sources = [{'url': get_path('feed.xml')}, fconf]
+        ...     fconf["type"] = "fetchdata"
+        ...     sources = [{"url": get_path("feed.xml")}, fconf]
         ...     s = await AsyncCollection(sources, ordered=True)
         ...     d = list(s)
-        ...     print(d[0]['title'])
+        ...     print(d[0]["title"])
         ...     print(len(d))
-        ...
+        >>>
         >>> if issync:
         ...     print("Donations")
         ...     print(56)
@@ -105,9 +105,11 @@ from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing.pool import Pool as CPUPoolType
 from multiprocessing.pool import ThreadPool as ThreadPoolType
 from operator import length_hint
-from typing import Any, Literal, Protocol, Self, TypeGuard, cast, overload
+from typing import Any, Literal, Protocol, Self, TextIO, TypeGuard, cast, overload
 
 import pygogo as gogo
+
+from riko.types.modules import ReceiveConf
 
 try:
     from csv2ofx.ofx import OFX
@@ -134,8 +136,8 @@ from riko.bado.itertools import (
 )
 from riko.context import Context, ExecutionMode, parse_context
 from riko.exceptions import PipelineStateError
-from riko.ext.names import ModuleNameLike, normalize_module_name
-from riko.ext.resolver import pipe_resolver
+from riko.ext._resolver import pipe_resolver
+from riko.ext.names import normalize_module_name
 from riko.types.general import (
     AsyncPipeParser,
     AsyncSource,
@@ -147,12 +149,13 @@ from riko.types.general import (
     Item,
     Items,
     ParserOutput,
+    ReceiveFunc,
     SkipIf,
     SplitterParserOutput,
     Stream,
     SyncPipeParser,
 )
-from riko.types.values import BasicValue, Inputs
+from riko.types.values import BasicValue, Inputs, ModuleNameLike, TargetLike, TargetName
 
 type AnyPool = ThreadPoolType | CPUPoolType
 type PoolFactory = Callable[..., AnyPool]
@@ -165,18 +168,22 @@ __all__ = [
     "Executor",
     "SyncCollection",
     "SyncPipe",
+    "Targets",
     "export",
     "list_targets",
 ]
 
 
 class TemplatePipe(Protocol):
+    """A source-less pipe that can be rebound onto a stream."""
+
     name: str
 
     def _prime(self, source: Items) -> Self: ...  # noqa: E704
 
 
 def _is_pipe_spec(obj: object) -> TypeGuard[tuple[str, Conf]]:
+    """A ``(name, conf)`` pair on the right of ``|``."""
     return (
         isinstance(obj, tuple)
         and len(obj) == 2
@@ -203,12 +210,42 @@ def _is_template(obj: object) -> TypeGuard[TemplatePipe]:
     )
 
 
+class Targets(TargetName):
+    """A type-safe ``export`` target."""
+
+    CSV = "csv"
+    GEOJSON = "geojson"
+    JSON = "json"
+    LIST = "list"
+    OFX = "ofx"
+    QIF = "qif"
+    TUPLE = "tuple"
+
+
 class PoolScope(StrEnum):
+    """
+    How long a worker pool outlives the pipe that created it.
+
+    ``PIPELINE`` shares one pool across a whole chain and releases it when the
+    terminal pipe finishes; ``PIPE`` gives each pipe its own and releases it as
+    soon as that pipe is done.
+    """
+
     PIPE = "pipe"
     PIPELINE = "pipeline"
 
 
 class PipeState(StrEnum):
+    """
+    The lifecycle state of a pipe or collection.
+
+    A pipe is one-shot: it advances ``NEW`` → ``RUNNING`` → one of the three
+    terminal states and never restarts. ``EXHAUSTED`` means the stream ran to
+    completion, ``CLOSED`` that it was released early, and ``FAILED`` that it
+    raised. Re-iterating a terminal instance yields nothing. Chaining onto a
+    ``CLOSED`` or ``FAILED`` one raises ``PipelineStateError``.
+    """
+
     NEW = "new"
     RUNNING = "running"
     EXHAUSTED = "exhausted"
@@ -217,6 +254,13 @@ class PipeState(StrEnum):
 
 
 class Executor(StrEnum):
+    """
+    Where a pipe's per-item work runs.
+
+    Derived from ``parallel``/``threads`` rather than set directly: ``INLINE``
+    when ``parallel`` is off, otherwise ``THREAD`` or ``PROCESS``.
+    """
+
     INLINE = "inline"
     THREAD = "thread"
     PROCESS = "process"
@@ -230,32 +274,32 @@ _POOLS: dict[Executor, PoolFactory] = {
 
 class _Lifecycle:
     """
-    One-shot execution state shared by pipes and collections. An instance
-    represents a single execution: iteration is a plain memoized generator, so
-    re-iterating an already-run instance yields nothing (ordinary spent-iterator
-    semantics), and chaining a started or exhausted instance wraps whatever
-    source is left. The mixin only tracks that state for introspection
-    (``state``, ``closed``, ``exhausted``, ``failed``) and refuses to chain onto
-    an instance whose resources are gone, raising ``PipelineStateError`` when it
-    is ``CLOSED`` or ``FAILED``.
+    Tracks one-shot execution state for pipes and collections.
+
+    Re-iterating a completed instance yields no items. Chaining onto a
+    ``CLOSED`` or ``FAILED`` instance raises ``PipelineStateError``.
     """
 
     _state: PipeState = PipeState.NEW
 
     @property
     def state(self) -> PipeState:
+        """The current lifecycle state."""
         return self._state
 
     @property
     def closed(self) -> bool:
+        """Whether the instance was closed or terminated before exhausting."""
         return self._state is PipeState.CLOSED
 
     @property
     def exhausted(self) -> bool:
+        """Whether the stream ran to completion."""
         return self._state is PipeState.EXHAUSTED
 
     @property
     def failed(self) -> bool:
+        """Whether the stream raised while being consumed."""
         return self._state is PipeState.FAILED
 
     def _begin(self) -> None:
@@ -300,22 +344,71 @@ class _PoolHandle:
             self.pool = None
 
 
-def _settle_iter(current: Stream | None) -> Stream:
+class _SendDispatcher:
     """
-    Close *current* if it is a live generator, else install a spent iterator.
+    Binds ``SyncPipe.publish`` to a class or instance form.
 
-    Called on close/terminate so a pipe or collection that is shut down before it
-    ever iterates re-iterates as an empty stream (matching the spent-generator
-    semantics of one that ran first) instead of building and executing a fresh
-    ``_stream()`` on the next accessor call.
+    When called as a class method, ``publish`` seeds a new publisher from a source. When
+    called on an instance, it chains ``publish`` into the pipeline. Either way the items
+    pass through unchanged, so a publisher can sit mid-stream as well as terminate one.
     """
-    if current is not None:
+
+    def __get__(
+        self, obj: "SyncPipe | None", cls: "type[SyncPipe] | None" = None
+    ) -> "partial[SyncPipe]":
+        if cls is not None and obj is None:
+            method = partial(self.cls_send, cls)
+        elif obj is None:
+            raise TypeError("SyncPipe.publish must be called on a class or instance.")
+        else:
+            method = partial(self.inst_send, obj)
+
+        return method
+
+    def cls_send(self, cls: "type[SyncPipe]", source: Items, *names: str) -> "SyncPipe":
+        """
+        Returns a publisher that pushes source items to each named subscriber.
+
+        Raises:
+            TypeError: If no subscriber name is given.
+
+        Examples:
+            >>> items = [{"title": "Gravity paper"}, {"title": "riko 4.0"}]
+            >>> subscriber = SyncPipe.subscribe("papers")
+            >>> _ = list(SyncPipe.publish(items, "papers"))
+            >>> [item["title"] for item in subscriber]
+            ['Gravity paper', 'riko 4.0']
+
+        """
+        return cls("send", source, others=list(names))
+
+    def inst_send(self, obj: "SyncPipe", *names: str) -> "SyncPipe":
+        """
+        Returns a publisher that pushes a pipeline's items to each named subscriber.
+
+        Raises:
+            TypeError: If no subscriber name is given.
+
+        Examples:
+            >>> items = [{"title": "Gravity paper"}, {"title": "riko 4.0"}]
+            >>> subscriber = SyncPipe.subscribe("papers")
+            >>> _ = list(SyncPipe(source=items).publish("papers"))
+            >>> [item["title"] for item in subscriber]
+            ['Gravity paper', 'riko 4.0']
+
+        """
+        return obj._chain("send", others=list(names))
+
+
+def _settle_iter(current: Stream | None) -> Stream:
+    """Closes a live iterator or returns an exhausted iterator."""
+    if current is None:
+        result = iter(())
+    else:
         if (close := getattr(current, "close", None)) is not None:
             close()
 
         result = current
-    else:
-        result = iter(())
 
     return result
 
@@ -327,6 +420,7 @@ async def _spent_aiter() -> AsyncGenerator[Item, None]:
 
 
 def records2ofx(items: Items, **_: object) -> Iterable[str]:
+    """Serializes records as OFX. Registered only with the ``finance`` extra."""
     ofx = OFX(mapping)
     groups = ofx.gen_groups(items)
     trxns = ofx.gen_trxns(groups)
@@ -336,6 +430,7 @@ def records2ofx(items: Items, **_: object) -> Iterable[str]:
 
 
 def records2qif(items: Items, **_: object) -> Iterable[str]:
+    """Serializes records as QIF. Registered only with the ``finance`` extra."""
     qif = QIF(mapping)
     groups = qif.gen_groups(items)
     trxns = qif.gen_trxns(groups)
@@ -344,25 +439,36 @@ def records2qif(items: Items, **_: object) -> Iterable[str]:
     return chain(qif.gen_body(data), qif.footer())
 
 
-CONVERSION_FUNCS: dict[str, ConversionFunc] = {
+CONVERSION_FUNCS: dict[TargetLike, ConversionFunc] = {
     # "array": cv.records2array,
-    "csv": cv.records2csv,
+    Targets.CSV: cv.records2csv,
     # "dataframe": cv.records2df,
-    "geojson": cv.records2geojson,
+    Targets.GEOJSON: cv.records2geojson,
     # 'ical': cv.records2ical,
-    "json": cv.records2json,
+    Targets.JSON: cv.records2json,
     # 'kml': cv.records2kml,
-    "list": lambda items, **_: list(items),
-    "tuple": lambda items, **_: tuple(items),
+    Targets.LIST: lambda items, **_: list(items),
+    Targets.TUPLE: lambda items, **_: tuple(items),
 }
 
 if OFX is not None:
-    CONVERSION_FUNCS["ofx"] = cast(ConversionFunc, records2ofx)
-    CONVERSION_FUNCS["qif"] = cast(ConversionFunc, records2qif)
+    CONVERSION_FUNCS[Targets.OFX] = cast(ConversionFunc, records2ofx)
+    CONVERSION_FUNCS[Targets.QIF] = cast(ConversionFunc, records2qif)
 
 
-def list_targets() -> tuple[str, ...]:
-    return tuple(sorted(CONVERSION_FUNCS))
+def list_targets() -> list[str]:
+    """
+    Returns every available ``export`` target, sorted.
+
+    ``ofx`` and ``qif`` are present only with the ``finance`` extra installed.
+
+    Examples:
+        >>> targets = list_targets()
+        >>> targets[:4]
+        ['csv', 'geojson', 'json', 'list']
+
+    """
+    return sorted(map(str, CONVERSION_FUNCS))
 
 
 @overload
@@ -371,34 +477,79 @@ def export(items: Items) -> list[Item]: ...  # noqa: E704
 def export(items: Items, **kwargs: Any) -> list[Item]: ...  # noqa: E704
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: Literal["list"], **kwargs: Any
+    items: Items, type_: Literal["list", Targets.LIST], **kwargs: Any
 ) -> list[Item]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: Literal["tuple"], **kwargs: Any
+    items: Items, type_: Literal["tuple", Targets.TUPLE], **kwargs: Any
 ) -> tuple[Item]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: Any
+    items: Items,
+    type_: Literal[
+        "csv", "json", "geojson", Targets.CSV, Targets.JSON, Targets.GEOJSON
+    ],
+    f: str,
+    **kwargs: Any,
 ) -> int: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
     items: Items,
-    _type: Literal["csv", "json", "geojson"],
+    type_: Literal[
+        "csv", "json", "geojson", Targets.CSV, Targets.JSON, Targets.GEOJSON
+    ],
     f: None = ...,
     **kwargs: Any,
 ) -> StringIO: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: str = ..., **kwargs: Any
+    items: Items, type_: TargetLike = ..., **kwargs: Any
 ) -> StringIO | Items | None: ...
 def export(  # noqa: E302
-    items: Items, _type: str = "list", f: str | None = None, **kwargs: Any
+    items: Items,
+    type_: TargetLike = Targets.LIST,
+    f: str | TextIO | None = None,
+    **kwargs: Any,
 ) -> int | StringIO | Items | None:
+    """
+    Converts a stream to ``type_``, optionally writing it to ``f``.
+
+    Args:
+        items: The stream to convert.
+
+        type_: An ``export`` target. ``list``/``tuple`` return the records
+            themselves; the rest serialize.
+
+        f: Destination path or file object. When given, the serialized output is
+            written there and the byte count is returned instead.
+
+        kwargs: Passed through to the underlying converter and writer.
+
+    Returns:
+        The records for ``list``/``tuple``, a ``StringIO`` for a serializing
+        target, or the number of bytes written when ``f`` is given.
+
+    Raises:
+        ValueError: If ``type_`` is not a known target.
+
+    Examples:
+        >>> items = [{"x": 1}, {"x": 2}]
+        >>>
+        >>> export(items)
+        [{'x': 1}, {'x': 2}]
+        >>> export(items, "csv").getvalue().splitlines()
+        ['x', '1', '2']
+
+    """
     result = None
 
-    if converter := CONVERSION_FUNCS.get(_type):
-        _result = converter(items, **kwargs)
+    if converter := CONVERSION_FUNCS.get(type_):
+        if type_ in {Targets.LIST, Targets.TUPLE}:
+            records = list(items)
+        else:
+            records = [dict(item) for item in items]
+
+        _result = converter(records, **kwargs)
 
         if f:
             result = cast(int, io.write(f, _result, **kwargs))
@@ -406,21 +557,26 @@ def export(  # noqa: E302
             result = _result
     else:
         valid = ", ".join(CONVERSION_FUNCS)
-        raise ValueError(f"Invalid export type {_type!r}. Must be one of: {valid}.")
+        raise ValueError(f"Invalid export type {type_!r}. Must be one of: {valid}.")
 
     return result
 
 
 class PyPipe(_Lifecycle):
     """
-    A riko module fetching object
+    One module invocation, bound to a name, a source, and its options.
 
-    Kwargs:
+    The engine-agnostic half of a pipe: it resolves the module name, merges
+    call-time options into the kwargs the module parser receives, and tracks
+    lifecycle state. ``SyncPipe`` and ``AsyncPipe`` add the execution model.
 
-    verbose = debug printing during compilation and running
-    test = takes input values from default (skips the console prompt)
-    inputs = a dictionary of values that overrides the defaults
-        e.g. {'name one': 'test value1'}
+    Args:
+        name: Module to run. A source pipe takes no ``source``.
+        source: Upstream stream, or another pipe to chain onto.
+        verbose: Whether to print debug output while running.
+        test: Whether to use input defaults instead of prompting.
+        inputs: Values that override the input defaults.
+
     """
 
     def __init__(
@@ -445,7 +601,7 @@ class PyPipe(_Lifecycle):
     ):
 
         self._state = PipeState.NEW
-        self.name: str | None = normalize_module_name(name)
+        self.name: str = normalize_module_name(name)
         self.source = source
         self.parallel = parallel
         self.conf: Conf = conf or {}
@@ -488,6 +644,13 @@ class PyPipe(_Lifecycle):
         skip_if: SkipIf | None = None,
         **kwargs: object,
     ) -> Self:
+        """
+        Merges call-time options into this pipe and returns it.
+
+        Mutates in place rather than copying, which is what lets a chained
+        ``.tokenizer(emit=True)`` resolve the module by attribute and then apply
+        its options by call.
+        """
         updates = {
             "assign": assign,
             "conf": conf,
@@ -510,17 +673,38 @@ class PyPipe(_Lifecycle):
 
     def _definitional_kwargs(self) -> dict[str, object]:
         """
-        Module-behavior kwargs (``field``/``assign``/``emit``/…), excluding runtime
-        settings carried separately (``conf``/``context``/ ``inputs``/``mode``). Used
-        to rebind a source-less template onto a new source while preserving what the
-        pipe *does*.
+        Returns module options used to rebind a pipe template.
+
+        E.g., ``field``/``assign``/``emit``/…
         """
         skip = {"conf", "context", "inputs", "mode"}
         return {k: v for k, v in self.kwargs.items() if k not in skip and v is not None}
 
 
 class SyncPipe(PyPipe):
-    """A synchronous Pipe object"""
+    """
+    A lazily evaluated, one-shot synchronous pipe.
+
+    Chain by attribute (``.sort()``), by name (``.pipe("sort")``), or with
+    ``|``; nothing runs until the result is iterated. Set ``parallel`` to map
+    items across a worker pool, which ``pool_scope`` shares along the chain or
+    confines to one pipe.
+
+    Args:
+        name: Module to run. A source pipe takes no ``source``.
+        source: Upstream stream, or another pipe to chain onto.
+        conf: The module's configuration.
+        chunksize: Items dispatched per worker task when ``parallel``.
+        ordered: Whether parallel results keep source order.
+        parallel: Whether to map items across a worker pool.
+        pool: An existing pool to borrow. Never closed by this pipe.
+        pool_scope: Whether a pool spans the chain or just this pipe.
+        threads: Whether a parallel pool uses threads rather than processes.
+        workers: Pool size. Derived from the source length when unset.
+
+    """
+
+    publish: _SendDispatcher = _SendDispatcher()
 
     def __init__(
         self,
@@ -625,16 +809,16 @@ class SyncPipe(PyPipe):
 
     @property
     def pool(self) -> AnyPool | None:
+        """The live worker pool, or ``None`` when inline or already released."""
         return self._pool_handle.pool if self._pool_handle else None
 
     def _chain(self, name: ModuleNameLike, **kwargs: object) -> "SyncPipe":
         """
-        Create the next pipe, propagating all runtime and execution
-        settings. Context (and its inputs) stays authoritative across the chain.
+        Returns the next pipe with the current runtime settings.
 
         Examples:
-            >>> conf = {'key': 'a', 'value': 'b'}
-            >>> flow = SyncPipe('itembuilder', conf=conf, inputs={'x': '1'})
+            >>> conf = {"key": "a", "value": "b"}
+            >>> flow = SyncPipe("itembuilder", conf=conf, inputs={"x": "1"})
             >>> chained = flow.hash()
             >>> str(chained.context) == str(flow.context)
             True
@@ -672,6 +856,14 @@ class SyncPipe(PyPipe):
         return child
 
     def __getattr__(self, name: str) -> "SyncPipe":
+        """
+        Chains any module by attribute, so ``.sort()`` runs the sort pipe.
+
+        Every unknown non-underscore attribute is treated as a module name, so a
+        typo surfaces as a module-resolution failure rather than
+        ``AttributeError``. Mapping names are excluded to keep a pipe from
+        looking dict-like to duck-typed callers.
+        """
         if name.startswith("_") or name in {"keys", "values", "items", "get"}:
             raise AttributeError(name)
 
@@ -679,21 +871,18 @@ class SyncPipe(PyPipe):
 
     def __or__(self, other: object) -> "SyncPipe":
         """
-        Chain the next pipe via ``|``.
-
-        The right side may be a module name, a ``(name, conf)`` pair, or a
-        source-less ``SyncPipe`` template (``pipe | SyncPipe("sort", ...)``).
+        Chains a module name, config pair, or pipe template using ``|``.
 
         Examples:
-            >>> flow = SyncPipe('itembuilder')
-            >>> piped = flow | 'hash'
+            >>> flow = SyncPipe("itembuilder")
+            >>> piped = flow | "hash"
             >>> piped.name, piped.source is flow
             ('hash', True)
-            >>> piped = SyncPipe('itembuilder') | ('sort', {'combine': 'a'})
+            >>> piped = SyncPipe("itembuilder") | ("sort", {"combine": "a"})
             >>> piped.name, piped.conf
             ('sort', {'combine': 'a'})
-            >>> template = SyncPipe('sort', conf={'combine': 'a'})
-            >>> piped = SyncPipe('itembuilder') | template
+            >>> template = SyncPipe("sort", conf={"combine": "a"})
+            >>> piped = SyncPipe("itembuilder") | template
             >>> piped.name, piped.conf, piped.source is flow
             ('sort', {'combine': 'a'}, False)
 
@@ -713,11 +902,11 @@ class SyncPipe(PyPipe):
 
     def __ror__(self, other: object) -> "SyncPipe":
         """
-        Seed a stream on the left of ``|``: ``items | SyncPipe("filter")``.
+        Seeds a stream on the left of ``|``.
 
         Examples:
-            >>> items = [{'x': 1}, {'x': 2}]
-            >>> piped = items | SyncPipe('sort')
+            >>> items = [{"x": 1}, {"x": 2}]
+            >>> piped = items | SyncPipe("sort")
             >>> piped.name, list(piped.source) == items
             ('sort', True)
 
@@ -730,10 +919,7 @@ class SyncPipe(PyPipe):
         return primed
 
     def _prime(self, source: Items) -> "SyncPipe":
-        """
-        Rebind a source-less pipe template onto a new source, returning a fresh
-        pipe instance. The original template is left intact.
-        """
+        """Returns a copy of this pipe template bound to ``source``."""
         self._require_usable("chain")
         skwargs = {
             "chunksize": self.chunksize,
@@ -751,19 +937,96 @@ class SyncPipe(PyPipe):
 
     def pipe(self, name: ModuleNameLike, **kwargs: Any) -> "SyncPipe":
         """
-        Chain the next pipe by name (the method form of ``pipe | name``).
-
-        Accepts arbitrary pipe kwargs (``conf``/``field``/``assign``/…) that the
-        terse ``|`` form can't. Runtime settings propagate via ``_chain``.
+        Chains the next pipe by name.
 
         Examples:
-            >>> flow = SyncPipe('itembuilder')
-            >>> chained = flow.pipe('hash')
+            >>> flow = SyncPipe("itembuilder")
+            >>> chained = flow.pipe("hash")
             >>> chained.name, chained.source is flow
             ('hash', True)
 
         """
         return self._chain(name, **kwargs)
+
+    @classmethod
+    def subscribe(
+        cls,
+        name: str,
+        func: ReceiveFunc | None = None,
+        wait: float | None = None,
+        maxlen: int | None = None,
+        assign: str | None = None,
+        context: Context | None = None,
+        inputs: dict[str, Any] | None = None,
+        skip_if: Callable[[Item], bool] | None = None,
+        test: bool | None = None,
+        verbose: bool | None = None,
+        **kwargs: object,
+    ) -> "SyncPipe":
+        """
+        Returns a subscriber bound to a named channel.
+
+        Registers the subscriber. A publisher may publish to ``name`` before the
+        subscriber is drained and no priming call is needed. Draining is non-blocking:
+        the subscriber yields whatever the channel holds, then stops. It never emits a
+        ``StreamState`` marker, so the caller has nothing to filter out.
+
+        Nothing published before ``subscribe`` is replayed; buffering starts here.
+
+        Args:
+            name: Subscriber the publisher sends to.
+
+            func: Applied to each received item. The subscriber yields its return
+                value, so a ``func`` returning ``None`` yields ``None``.
+
+            wait: Seconds to sleep between polls. Applies only while a drain
+                blocks, which it currently never does.
+
+            maxlen: Queue capacity. The oldest item is dropped with a warning
+                once it is full (default: unbounded).
+
+            **kwargs: Passed to ``func``. Only the ones it names reach it, or
+                all of them if it accepts ``**kwargs``. ``conf``, ``assign``,
+                and ``stream`` are reserved and never forwarded.
+
+        Returns:
+            A one-shot pipe over the channel. Draining it a second time yields
+            nothing; subscribe again for another pass.
+
+        Examples:
+            >>> items = [{"title": "Gravity paper"}, {"title": "riko 4.0"}]
+            >>> subscriber = SyncPipe.subscribe("inbox")
+            >>>
+            >>> _ = list(SyncPipe.publish(items, "inbox"))
+            >>> [item["title"] for item in subscriber]
+            ['Gravity paper', 'riko 4.0']
+            >>> # An idle channel drains to nothing rather than waiting on the publisher
+            >>> list(SyncPipe.subscribe("quiet"))
+            []
+
+        """
+        from riko.modules.receive import register_receiver  # noqa: PLC0415
+
+        conf = ReceiveConf({"name": name, "max_wait": 0})
+        extra: dict[str, int | float | None] = {"wait": wait, "max_len": maxlen}
+
+        for key, value in extra.items():
+            if value is not None:
+                conf[key] = value
+
+        receiver = cls(
+            "receive",
+            conf=conf,
+            func=func,
+            assign=assign,
+            context=context,
+            inputs=inputs,
+            skip_if=skip_if,
+            test=test,
+            verbose=verbose,
+        )
+        register_receiver(name, maxlen=maxlen, func=func, **kwargs)
+        return receiver
 
     def _release_pool(self) -> None:
         if self._pool_handle:
@@ -774,26 +1037,36 @@ class SyncPipe(PyPipe):
             self._pool_handle.terminate()
 
     def close(self) -> None:
+        """
+        Releases the pipe by letting in-flight worker tasks finish.
+
+        A borrowed pool is left alone and the one this pipe owns is shut down. A
+        bound publisher still signals completion to its subscribers, since a graceful
+        close means "no more items left to publish".
+        """
         self._iter = _settle_iter(self._iter)
         self._release_pool()
         self._close()
 
     def terminate(self) -> None:
+        """
+        Releases the pipe by abandoning in-flight worker tasks.
+
+        The abrupt counterpart to :meth:`close`, used on an exceptional context
+        exit.
+        """
         self._iter = _settle_iter(self._iter)
         self._terminate_pool()
         self._close()
 
     def __enter__(self) -> Self:
         """
-        Use a pipe as a context manager. When a parallel pipe creates its own
-        thread/process pool, that pool is shut down when the block exits (or
-        terminated if the block raises). A pool passed in by the caller is left
-        running.
+        Enters the pipe context and manages any owned worker pool.
 
         Examples:
-            >>> src = [{'content': 'a'}, {'content': 'b'}]
+            >>> src = [{"content": "a"}, {"content": "b"}]
             >>>
-            >>> with (flow := SyncPipe('hash', source=src, parallel=True)):
+            >>> with (flow := SyncPipe("hash", source=src, parallel=True)):
             ...     results = list(flow)
             ...     flow.pool  # the worker pool is live inside the block
             <multiprocessing.pool.ThreadPool state=RUN pool_size=2>
@@ -802,8 +1075,8 @@ class SyncPipe(PyPipe):
             2
             >>> # the pool is *terminated* if the block raises
             >>> try:
-            ...     with (flow := SyncPipe('hash', source=src, parallel=True)):
-            ...         raise RuntimeError('boom')
+            ...     with (flow := SyncPipe("hash", source=src, parallel=True)):
+            ...         raise RuntimeError("boom")
             ... except RuntimeError:
             ...     pass
             >>> flow.pool
@@ -854,9 +1127,9 @@ class SyncPipe(PyPipe):
             else:
                 yield from chain.from_iterable(self._mapped)
         except GeneratorExit:
-            # A graceful close is "no more items on this channel", so a bound
-            # sender still signals DONE to its receivers; a real failure below
-            # must not, else a failed sender looks successfully complete.
+            # A graceful close is "no more items left to publish", so a bound
+            # publisher still signals DONE to its subscribers; a real failure below
+            # must not, else a failed publisher looks successfully complete.
             completed = True
             raise
         except BaseException:
@@ -890,6 +1163,19 @@ class SyncPipe(PyPipe):
         return next(self._iter)
 
     def split(self, **kwargs: object) -> SplitterParserOutput:
+        """
+        Eagerly returns independent copies of the stream.
+
+        The source is materialized so each copy can be consumed at its own pace. Use
+        ``publish`` for lazy fan-out over an unbounded source.
+
+        Examples:
+            >>> items = [{"x": 1}, {"x": 2}]
+            >>> first, second = SyncPipe(source=items).split()
+            >>> next(first), next(second)
+            ({'x': 1}, {'x': 1})
+
+        """
         splits = self._chain("split", **kwargs)
         return cast(SplitterParserOutput, splits)
 
@@ -897,22 +1183,36 @@ class SyncPipe(PyPipe):
     def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     def export(  # noqa: E704
-        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: object
+        self, type_: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     def export(  # noqa: E301
         self, *args: Any, **kwargs: object
-    ) -> int | StringIO | Items | None:
+    ) -> int | str | Items | None:
         try:
             result = export(self, *args, **kwargs)
         except AttributeError as e:
             # Reraise as TypeError to avoid confusion with missing SyncPipe attributes
             raise TypeError(f"Erred while exporting: {e}") from e
 
-        return result
+        return result.getvalue() if isinstance(result, StringIO) else result
 
 
 class PyCollection(_Lifecycle):
-    """A riko bulk url fetching object"""
+    """
+    A bulk fetch over many sources, merged into one stream.
+
+    The engine-agnostic half of a collection. Each source is a ``conf`` mapping
+    carrying at least a ``url``, plus an optional ``type`` naming the fetch
+    module to use. ``SyncCollection`` and ``AsyncCollection`` add the execution
+    model.
+
+    Args:
+        sources: One conf mapping per source.
+        conf: Defaults merged under every source's own conf.
+        workers: Pool size when ``parallel``. Derived from the source count when unset.
+        parallel: Whether to fetch sources concurrently.
+
+    """
 
     def __init__(
         self,
@@ -933,11 +1233,12 @@ class PyCollection(_Lifecycle):
 
 class SyncCollection(PyCollection):
     """
-    A synchronous PyCollection object
+    A synchronous PyCollection object.
 
     Examples:
         >>> from riko import get_path
-        >>> sources = [{'url': get_path(f)} for f in ['feed.xml', 'gawker.xml']]
+        >>>
+        >>> sources = [{"url": get_path(f)} for f in ["feed.xml", "gawker.xml"]]
         >>> stream = SyncCollection(sources, parallel=True)
         >>> len(list(stream))
         32
@@ -991,6 +1292,7 @@ class SyncCollection(PyCollection):
 
     @property
     def pool(self) -> AnyPool | None:
+        """The live worker pool, or ``None`` when inline or already released."""
         return self._pool_handle.pool if self._pool_handle else None
 
     def __iter__(self) -> Stream:
@@ -1014,24 +1316,33 @@ class SyncCollection(PyCollection):
             self._pool_handle.terminate()
 
     def close(self) -> None:
+        """
+        Releases the collection by letting in-flight fetches finish.
+
+        A borrowed pool is left alone and the one this collection owns is shut down.
+        """
         self._iter = _settle_iter(self._iter)
         self._release_pool()
         self._close()
 
     def terminate(self) -> None:
+        """
+        Releases the collection by abandoning in-flight fetches.
+
+        The abrupt counterpart to :meth:`close`, used on an exceptional context exit.
+        """
         self._iter = _settle_iter(self._iter)
         self._terminate_pool()
         self._close()
 
     def __enter__(self) -> Self:
         """
-        Use a collection as a context manager. A parallel collection creates its
-        own thread/process pool, which is shut down when the block exits (or
-        terminated if the block raises).
+        Enters the collection context and manages any owned worker pool.
 
         Examples:
             >>> from riko import get_path
-            >>> sources = [{'url': get_path(f)} for f in ['feed.xml', 'gawker.xml']]
+            >>>
+            >>> sources = [{"url": get_path(f)} for f in ["feed.xml", "gawker.xml"]]
             >>>
             >>> with (stream := SyncCollection(sources, parallel=True)):
             ...     results = list(stream)
@@ -1043,7 +1354,7 @@ class SyncCollection(PyCollection):
             >>> # the pool is *terminated* if the block raises
             >>> try:
             ...     with (stream := SyncCollection(sources, parallel=True)):
-            ...         raise RuntimeError('boom')
+            ...         raise RuntimeError("boom")
             ... except RuntimeError:
             ...     pass
             >>> stream.pool
@@ -1060,7 +1371,7 @@ class SyncCollection(PyCollection):
         return False
 
     def _stream(self) -> Stream:
-        """Fetch all source urls"""
+        """Fetches every source url."""
         self._begin()
 
         try:
@@ -1087,11 +1398,11 @@ class SyncCollection(PyCollection):
 
     def pipe(self, name: ModuleNameLike | None = None, **kwargs: Any) -> "SyncPipe":
         """
-        Chain the next pipe by name: ``pipe.pipe("filter", conf=...)``.
+        Chains the next pipe by name.
 
         Examples:
-            >>> flow = SyncPipe('itembuilder')
-            >>> chained = flow.pipe('hash')
+            >>> flow = SyncPipe("itembuilder")
+            >>> chained = flow.pipe("hash")
             >>> chained.name, chained.source is flow
             ('hash', True)
 
@@ -1103,31 +1414,35 @@ class SyncCollection(PyCollection):
     def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     def export(  # noqa: E704
-        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: object
+        self, type_: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     def export(  # noqa: E301
         self, *args: Any, **kwargs: object
-    ) -> int | StringIO | Items | None:
-        return export(self, *args, **kwargs)
+    ) -> int | str | Items | None:
+        result = export(self, *args, **kwargs)
+        return result.getvalue() if isinstance(result, StringIO) else result
 
 
 class AsyncPipe(PyPipe):
     """
-    An asynchronous PyPipe object.
+    A lazily evaluated, one-shot asynchronous pipe.
 
-    Note: eager-concurrent execution under *partial* consumption:
-        A loopable ``pipe`` mapped over its ``source`` runs its items
-        concurrently. So *partially* consuming an ``AsyncPipe`` (``anext``, an
-        early ``break``, or a downstream ``count="first"``/``truncate``) may run
-        that pipe's function for items you never yield. This is in contrast to
-        ``SyncPipe``, which is lazy and sequential and runs it only for consumed items.
-        Fully draining the pipe yields the *same* result on both engines.
+    The ``AsyncPipe`` counterpart of ``SyncPipe``: chain the same way, then
+    ``await`` the result or iterate it with ``async for``. Concurrency comes
+    from ``connections`` rather than a worker pool.
 
-        This matters only when a pipe has side effects (e.g. ``send``, an
-        external write). Then bound the work at the pipe, not the consumer: pass
-        it ``count``/``truncate`` or fully drain it, so it never runs for
-        un-yielded items. ``parallel=True`` *bounds* the over-run to the
-        in-flight window but doesn't eliminate it (a worker prefetches ahead).
+    Loopable pipes may process ahead of partial consumption, so a pipe's
+    function can run for items that are never yielded. Limit side-effecting work
+    at the pipe (via ``count``/``truncate``) or fully consume the stream. Fully
+    draining yields the same result as ``SyncPipe``.
+
+    Args:
+        name: Module to run. A source pipe takes no ``source``.
+        source: Upstream stream, feed, or another pipe to chain onto.
+        conf: The module's configuration.
+        connections: Maximum concurrent item tasks. ``0`` is unlimited.
+        ordered: Whether results keep source order.
+
     """
 
     def __init__(
@@ -1191,6 +1506,12 @@ class AsyncPipe(PyPipe):
             self.pollable = self.loopable = self.mapify = False
 
     def __getattr__(self, name: str) -> "AsyncPipe":
+        """
+        Chains any module by attribute, so ``.sort()`` runs the sort pipe.
+
+        The async counterpart of :meth:`SyncPipe.__getattr__`; every unknown
+        non-underscore attribute is treated as a module name.
+        """
         if name.startswith("_"):
             raise AttributeError(name)
 
@@ -1198,21 +1519,18 @@ class AsyncPipe(PyPipe):
 
     def __or__(self, other: object) -> "AsyncPipe":
         """
-        Chain the next pipe via ``|``.
-
-        The right side may be a module name, a ``(name, conf)`` pair, or a
-        source-less ``AsyncPipe`` template (``pipe | AsyncPipe("sort", ...)``).
+        Chains a module name, config pair, or pipe template using ``|``.
 
         Examples:
-            >>> flow = AsyncPipe('itembuilder')
-            >>> piped = flow | 'hash'
+            >>> flow = AsyncPipe("itembuilder")
+            >>> piped = flow | "hash"
             >>> piped.name, piped.source is flow
             ('hash', True)
-            >>> piped = AsyncPipe('itembuilder') | ('sort', {'combine': 'a'})
+            >>> piped = AsyncPipe("itembuilder") | ("sort", {"combine": "a"})
             >>> piped.name, piped.conf
             ('sort', {'combine': 'a'})
-            >>> template = AsyncPipe('sort', conf={'combine': 'a'})
-            >>> piped = AsyncPipe('itembuilder') | template
+            >>> template = AsyncPipe("sort", conf={"combine": "a"})
+            >>> piped = AsyncPipe("itembuilder") | template
             >>> piped.name, piped.conf, piped.source is flow
             ('sort', {'combine': 'a'}, False)
 
@@ -1232,11 +1550,11 @@ class AsyncPipe(PyPipe):
 
     def __ror__(self, other: object) -> "AsyncPipe":
         """
-        Seed a stream on the left of ``|``: ``items | AsyncPipe("filter")``.
+        Seeds a stream on the left of ``|``.
 
         Examples:
-            >>> items = [{'x': 1}, {'x': 2}]
-            >>> piped = items | AsyncPipe('sort')
+            >>> items = [{"x": 1}, {"x": 2}]
+            >>> piped = items | AsyncPipe("sort")
             >>> piped.name, list(piped.source) == items
             ('sort', True)
 
@@ -1249,10 +1567,7 @@ class AsyncPipe(PyPipe):
         return primed
 
     def _prime(self, source: Items) -> "AsyncPipe":
-        """
-        Rebind a source-less pipe template onto a new source, returning a fresh
-        pipe instance. The original template is left intact.
-        """
+        """Returns a copy of this pipe template bound to ``source``."""
         self._require_usable("chain")
         skwargs = {
             "conf": self.conf,
@@ -1267,7 +1582,7 @@ class AsyncPipe(PyPipe):
         return AsyncPipe(self.name, source=source, **skwargs)
 
     def async_pipe(self, name: ModuleNameLike, **kwargs: Any) -> "AsyncPipe":
-        """Chain the next pipe by name (the method form of ``pipe | name``)."""
+        """Chains the next pipe by name."""
         return self._chain(name, **kwargs)
 
     def __aiter__(self) -> AsyncStream:
@@ -1283,6 +1598,11 @@ class AsyncPipe(PyPipe):
         return await anext(self._aiter)
 
     def __await__(self) -> Generator[Any, None, Stream]:
+        """
+        Drains the pipe and returns a **sync** iterator over the result.
+
+        Awaiting is the eager form; use ``async for`` to consume incrementally.
+        """
         return self._await_stream().__await__()
 
     async def __aenter__(self) -> Self:
@@ -1293,7 +1613,7 @@ class AsyncPipe(PyPipe):
         return False
 
     async def aclose(self) -> None:
-        """Close the pipe: stop the underlying async generator (idempotent)."""
+        """Closes the pipe by stopping the underlying async generator."""
         if self._aiter is None:
             self._aiter = _spent_aiter()
         else:
@@ -1302,6 +1622,12 @@ class AsyncPipe(PyPipe):
         self._close()
 
     async def split(self, **kwargs: object) -> SplitterParserOutput:
+        """
+        Returns independent copies of the stream.
+
+        The async counterpart of :meth:`SyncPipe.split`, and equally eager: the
+        source is drained so each copy can be consumed at its own pace.
+        """
         splits = await self._chain("split", **kwargs)
         return cast(SplitterParserOutput, splits)
 
@@ -1309,11 +1635,11 @@ class AsyncPipe(PyPipe):
     async def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     async def export(  # noqa: E704
-        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: object
+        self, type_: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     async def export(  # noqa: E301
         self, *args: Any, **kwargs: object
-    ) -> int | StringIO | Items | None:
+    ) -> int | str | Items | None:
         items = [item async for item in self]
 
         try:
@@ -1322,13 +1648,10 @@ class AsyncPipe(PyPipe):
             # Reraise as TypeError to avoid confusion with missing AsyncPipe attributes
             raise TypeError(f"Erred while exporting: {e}") from e
 
-        return result
+        return result.getvalue() if isinstance(result, StringIO) else result
 
     def _chain(self, name: ModuleNameLike, **kwargs: object) -> "AsyncPipe":
-        """
-        Create the next async pipe, propagating runtime and execution
-        settings and consuming this pipe's single execution (not restarting it).
-        """
+        """Returns the next async pipe with the current runtime settings."""
         self._require_usable("chain")
         skwargs = {
             "connections": self.connections,
@@ -1342,12 +1665,7 @@ class AsyncPipe(PyPipe):
         return AsyncPipe(name, source=self, **skwargs)
 
     async def _normalize_source(self) -> Feed | None:
-        """
-        Normalize the configured source into a lazy async iterable.
-
-        ``None`` remains ``None`` to distinguish a source-less pipe from an
-        upstream source that happens to be empty.
-        """
+        """Returns the source as a lazy async iterable, preserving ``None``."""
         source = self.source
 
         if source is None:
@@ -1364,15 +1682,12 @@ class AsyncPipe(PyPipe):
 
     async def _materialize_legacy_source(self, feed: Feed | None) -> Items | None:
         """
-        Drain a Feed into a list for a non-Feed-native module parser.
+        Drains a Feed into a list for a non-Feed-native module parser.
 
-        This is the **explicit legacy-parser boundary**, not the default way
-        pipes communicate. Today's module parsers still require synchronous
-        ``Items`` rather than a ``Feed``, so a non-parallel async pipe buffers
-        its whole upstream here: everything *before* this point streams lazily,
-        everything *after* it has been materialized. The bounded/parallel path
-        (``_stream``) is the only fully-lazy end-to-end route; per-module opt-in
-        to Feed-native parsers (ROADMAP §4/§8) will shrink this boundary.
+        This is the legacy-parser boundary: everything before it streams
+        lazily, everything after it has been materialized. The bounded parallel
+        path in ``_stream`` is the only fully-lazy route.
+
         """
         return None if feed is None else [item async for item in feed]
 
@@ -1435,12 +1750,31 @@ class AsyncPipe(PyPipe):
             self._end()
 
     async def _await_stream(self) -> Stream:
-        """Converts the AsyncIterator stream to an Awaitable"""
+        """Converts the AsyncIterator stream to an Awaitable."""
         return iter([item async for item in self])
 
 
 class AsyncCollection(PyCollection):
-    """An asynchronous PyCollection object"""
+    """
+    A bulk fetch over many sources, merged into one asynchronous stream.
+
+    The ``AsyncCollection`` counterpart of ``SyncCollection``: ``await`` the
+    result or iterate it with ``async for``. Concurrency comes from
+    ``connections``; unordered results are merged as each source lands rather
+    than batched.
+
+    Examples:
+        >>> from riko import get_path, issync, run
+        >>>
+        >>> sources = [{"url": get_path(f)} for f in ["feed.xml", "gawker.xml"]]
+        >>>
+        >>> async def main():
+        ...     print(len(list(await AsyncCollection(sources))))
+        >>>
+        >>> print(32) if issync else run(main)
+        32
+
+    """
 
     def __init__(
         self,
@@ -1488,7 +1822,7 @@ class AsyncCollection(PyCollection):
         return False
 
     async def aclose(self) -> None:
-        """Close the collection: stop the underlying async generator (idempotent)."""
+        """Closes the collection by stopping the underlying async generator."""
         if self._aiter is None:
             self._aiter = _spent_aiter()
         else:
@@ -1499,23 +1833,24 @@ class AsyncCollection(PyCollection):
     def async_pipe(
         self, name: ModuleNameLike | None = None, **kwargs: Any
     ) -> "AsyncPipe":
-        """Chain the next pipe by name: ``pipe.async_pipe("filter", conf=...)``."""
+        """Chains the next pipe by name."""
         return AsyncPipe(name, source=self, **kwargs)
 
     @overload
     async def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     async def export(  # noqa: E704
-        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: object
+        self, type_: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     async def export(  # noqa: E301
         self, *args: Any, **kwargs: object
-    ) -> int | StringIO | Items | None:
+    ) -> int | str | Items | None:
         items = [item async for item in self]
-        return export(items, *args, **kwargs)
+        result = export(items, *args, **kwargs)
+        return result.getvalue() if isinstance(result, StringIO) else result
 
     async def _stream(self) -> AsyncGenerator[Item, None]:
-        """Fetch all source urls"""
+        """Fetches every source url."""
         self._begin()
 
         try:
@@ -1559,15 +1894,17 @@ class AsyncCollection(PyCollection):
             self._end()
 
     async def _await_stream(self) -> Stream:
-        """Converts the AsyncIterator stream to an Awaitable"""
+        """Converts the AsyncIterator stream to an Awaitable."""
         return iter([item async for item in self])
 
 
 def get_chunksize(length: int, workers: int) -> int:
+    """Returns items per worker task, targeting four batches per worker."""
     return (length // (workers * 4)) or 1
 
 
 def get_worker_cnt(length: int, threads: bool | None = True) -> int:
+    """Returns a pool size, capped at the core count (doubled for threads)."""
     multiplier = 2 if threads else 1
     maximum = cpu_count() * multiplier
     return min(length, maximum) if length else maximum
@@ -1576,6 +1913,7 @@ def get_worker_cnt(length: int, threads: bool | None = True) -> int:
 def listpipe(
     args: tuple[Item, SyncPipeParser], **kwargs: BasicValue
 ) -> list[ParserOutput]:
+    """Runs one item through a pipeline, materialized so it can cross a pool."""
     source, pipeline = args
     result = pipeline(source, **kwargs)
     return list(listize(result))
@@ -1584,6 +1922,7 @@ def listpipe(
 def _fetch_source[T: SyncPipe | AsyncPipe](
     args: tuple[Mapping[str, str], Conf], pipe: type[T]
 ) -> T:
+    """Builds the fetch pipe for one collection source, merging conf under it."""
     source, _conf = args
     conf = {**_conf, **source}
     pipe_name = str(source.get("type", "fetch"))
@@ -1593,6 +1932,7 @@ def _fetch_source[T: SyncPipe | AsyncPipe](
 def fetch_source(
     args: tuple[Mapping[str, str], Conf], pipe: type[SyncPipe] = SyncPipe
 ) -> Stream:
+    """Returns a lazy, unstarted iterator over one collection source."""
     return iter(_fetch_source(args, pipe))
 
 
@@ -1600,11 +1940,11 @@ def afetch_source(
     args: tuple[Mapping[str, str], Conf], pipe: type[AsyncPipe] = AsyncPipe
 ) -> AsyncStream:
     """
-    Return a lazy, unstarted async feed for one collection source.
+    Returns a lazy, unstarted async feed for one collection source.
 
-    Unlike ``afetch_source_eager`` (which materializing the whole source), this
-    hands back the source's async iterator so ``async_merge`` can stream its records
-    incrementally.
+    Unlike ``afetch_source_eager``, this hands back the source's async iterator
+    so ``async_merge`` can stream its records incrementally.
+
     """
     return aiter(_fetch_source(args, pipe))
 
@@ -1612,4 +1952,5 @@ def afetch_source(
 async def afetch_source_eager(
     args: tuple[Mapping[str, str], Conf], pipe: type[AsyncPipe] = AsyncPipe
 ) -> Stream:
+    """Drains one collection source, for the ordered path that needs it whole."""
     return await _fetch_source(args, pipe)

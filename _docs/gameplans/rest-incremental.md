@@ -1,4 +1,4 @@
-# Riko REST and Incremental Source Gameplan
+# REST & incremental source gameplan
 
 ## 1. Mission
 

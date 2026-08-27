@@ -85,7 +85,7 @@ Never in any `__all__`. Import path signals instability. Enforced by
 | metadata derivation | `_derive_subtypes`, `_derive_operator_subtypes`, `_derive_loopable`, `gen_module_catalog`, `SUBTYPES` | `riko/modules/_metadata.py` | P3 |
 | wrappers | sync/async exec wrappers, lifecycle hooks | `riko/modules/_wrappers.py` | P3/P5 |
 | decorator impl | `Module`, `processor`/`operator`/`splitter` classes | `riko/modules/_decorators.py` | P3 |
-| resolution | `PipeResolver`, `PipelineResolver`, `PipelineStore`, stores | `riko/ext/resolver.py`, `riko/ext/pipelines.py` | P8 |
+| resolution | `PipeResolver`, `PipelineResolver`, `PipelineStore`, stores | `riko/ext/_resolver.py`, `riko/ext/_pipelines.py` | P8 |
 | concurrency | executor abstraction, `prefetch`/budget helpers, `async_map_stream` | `riko/concurrency.py`, `riko/bado/streams.py` | P10 |
 | pub/sub state | `_registry`, `_receive_queue`, `send`/`receive` impl, `coroutine` | `riko/utils.py`, `riko/resources.py` | P11 |
 | pool handles | `_PoolHandle`, `_owns_pool` | `riko/collections.py` | — |
@@ -126,13 +126,18 @@ annotated attrs (the "global list of every possible config attribute" P2 kills).
 ## 6. DoD checks (map to tests)
 
 - Every STABLE name importable from `riko` **and** `riko.api`; sets equal —
-  `test_imports.py::test_stable_all`.
+  `test_imports.py::test_stable_all_matches_api`, `::test_stable_all_is_expected_set`,
+  `::test_stable_names_importable`.
 - Every EXT name importable from `riko.ext`; no STABLE-only name leaks into `riko.ext` and vice
-  versa — `test_imports.py::test_extension_all`.
-- No PRIVATE symbol in any `__all__`; underscore-module imports flagged by Pyright in
-  `tests/typing/invalid/` — `test_no_accidental_internal_exports`.
+  versa — `test_imports.py::test_extension_all_is_expected_set`,
+  `::test_extension_names_importable`, `::test_stable_and_extension_are_disjoint`.
+- No PRIVATE symbol in any `__all__` — `test_imports.py::test_no_private_names_in_public_all`,
+  `::test_no_accidental_internal_exports`, `::test_no_leaked_public_functions`. Resolution
+  internals additionally have no public import path —
+  `::test_resolution_internals_have_no_public_path`. A Pyright-based check that flags
+  underscore-module imports from user code is still planned.
 - Moved names (`Context`, decorators, `ModuleMetadata`) importable from **both** old and new
-  paths during the window — `test_imports.py::test_compat_shims`.
+  paths during the window — `test_imports.py::test_context_shim_is_same_object`.
 
 ## Churn-isolation note
 

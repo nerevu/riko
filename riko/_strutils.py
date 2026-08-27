@@ -2,19 +2,25 @@
 """
 riko._strutils
 ~~~~~~~~~~~~~~
-String helpers: identifier/key sanitization (``replacer``, ``slugify``) plus
-regex rule construction and multi-pass substitution.
+String helpers: identifier/key sanitization (``replacer``, ``slugify``), regex
+rule construction and multi-pass substitution, and the shared find/extract used
+by the ``refind`` and ``strfind`` pipes.
+
+Attributes:
+    PARAMS: Match selectors for ``first`` and ``last``.
+    OPS: Handlers for each find ``location``.
+
 """
 
 import itertools as it
 import re
-from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import is_dataclass
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from dataclasses import fields, is_dataclass
 from operator import itemgetter
 from random import choice
 
 from riko.types.configs import DynamicConf
-from riko.types.modules import RegexConfRule, RegexRule
+from riko.types.modules import FindConfRule, RegexConfRule, RegexRule
 from riko.types.values import BasicValue
 
 INVALID_FILECHAR_PATTERN = re.compile(r'[<>:"/\\\|\*?%]')
@@ -226,7 +232,11 @@ def make_regex_rule(
 def get_regex_rule(
     rule: DynamicConf | RegexConfRule, recompile: bool = False
 ) -> RegexRule:
-    rule = rule if is_dataclass(rule) else RegexConfRule(**rule)
+    if not is_dataclass(rule):
+        keys = {f.name for f in fields(RegexConfRule)}
+        filtered = {k: v for k, v in rule.items() if k in keys}
+        rule = RegexConfRule(**filtered)
+
     flags = 0 if rule.casematch else re.IGNORECASE
 
     if not rule.singlelinematch:
@@ -254,6 +264,57 @@ def get_regex_rule(
     }
 
     return RegexRule(**nrule)
+
+
+PARAMS: dict[str, Callable[[list[re.Match[str]]], re.Match[str]]] = {
+    "first": lambda matches: matches[0],
+    "last": lambda matches: matches[-1],
+}
+
+OPS: dict[str, Callable[[str, re.Match[str]], str]] = {
+    "before": lambda word, match: word[: match.start()],
+    "after": lambda word, match: word[match.end() :],
+    "at": lambda _, match: match.group(),
+}
+
+
+def reduce_find(word: str, rule: FindConfRule, literal: bool = False) -> str:
+    """
+    Returns the text around the match ``rule`` selects.
+
+    Slicing is by match position, so the original text is preserved exactly —
+    reassembling it from the pattern would corrupt any non-literal ``find``.
+
+    Args:
+        word: The string to search.
+        rule: The find criteria, holding `find`, `location` and `param`.
+        literal: Whether to treat ``find`` as a literal rather than a regex.
+
+    Returns:
+        The extracted text, stripped. Nothing matching gives ``""``, except
+        ``location="after"`` which gives the whole word.
+
+    Examples:
+        >>> from meza.fntools import Objectify
+        >>>
+        >>> rule = Objectify({"find": "[aiou]", "location": "before"})
+        >>> reduce_find("hello world", rule)
+        'hell'
+        >>> reduce_find("hello world", rule, literal=True)
+        ''
+
+    """
+    pattern = re.escape(rule.find) if literal else rule.find
+    matches = list(re.finditer(pattern, word)) if pattern else []
+
+    if matches:
+        pick = PARAMS.get(rule.param or "first", PARAMS["first"])
+        op = OPS.get(rule.location, OPS["before"])
+        result = op(word, pick(matches))
+    else:
+        result = word if rule.location == "after" else ""
+
+    return result.strip()
 
 
 def slugify(text: str) -> str:

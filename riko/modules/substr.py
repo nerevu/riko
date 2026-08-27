@@ -1,29 +1,28 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for obtaining a portion of a string.
+Returns a portion of a string.
 
 You enter two numbers to tell the module the starting character position and
 the length of the resulting substring. If your input string is "ABCDEFG", then
-a From value of 2 and length of 4 gives you a resulting string of "CDEF".
-Notice that the first character in the original string is 0, not 1.
+a start of 2 and length of 4 gives you a resulting string of "CDEF". Notice
+that the first character in the original string is 0, not 1.
 
-If you enter too long a length, the module just returns a substring to the end
-of the input string, so if you enter a From of 3 and a length of 100, you'll
-get a result of "DEFG".
+A length past the end of the string just returns the remainder, so a start of 3
+and a length of 100 gives "DEFG".
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.substr import pipe
         >>>
-        >>> conf = {'start': '3', 'length': '4'}
-        >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['substr']
+        >>> conf = {"start": "3", "length": "4"}
+        >>> item = {"content": "hello world"}
+        >>> next(pipe(item, conf=conf))["substr"]
         'lo w'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -49,26 +48,23 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 def parser(word: str, _: Extraction, objconf: SubstrObjconf, **kwargs: object) -> str:
     """
-    Parses the pipe content
+    Returns the slice of ``word`` described by the configuration.
 
     Args:
-        word (str): The string to parse
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        assign (str): Attribute to assign parsed content (default: substr)
-        stream (dict): The original item
+        word: The string to slice.
+        _: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `start` and `length`.
 
     Returns:
-        dict: The item
+        The substring, or the remainder of ``word`` when ``length`` is 0 or
+        runs past the end.
 
     Examples:
         >>> from meza.fntools import Objectify
         >>>
-        >>> item = {'content': 'hello world'}
-        >>> conf = {'start': 3, 'length': 4}
-        >>> parser(item['content'], None, Objectify(conf), stream=item)
+        >>> item = {"content": "hello world"}
+        >>> conf = {"start": 3, "length": 4}
+        >>> parser(item["content"], None, Objectify(conf), stream=item)
         'lo w'
 
     """
@@ -79,33 +75,47 @@ def parser(word: str, _: Extraction, objconf: SubstrObjconf, **kwargs: object) -
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> str:
     """
-    A processor module that asynchronously returns a substring of a field
-    of an item.
+    Asynchronously returns a substring of an item field.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration. Each value is cast to an int, so a
+            numeric string is accepted.
+
+            start (int): Zero-based position to start at (default: 0).
+
+            length (int): Number of characters to return. 0 returns the
+                remainder, as does any length past the end (default: 0).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'start' or
-            'length'.
+        field (str): Item attribute to slice. Its value is cast to text first,
+            so a missing field yields ``""`` (default: "content").
 
-            start (int): starting position (default: 0)
-            length (int): count of characters to return (default: 0, i.e., all)
+        assign (str): Field the substring is assigned to. Ignored when ``emit``
+            is True (default: "substr").
 
-        assign (str): Attribute to assign parsed content (default: substr)
-        field (str): Item attribute to operate on (default: 'content')
+        emit (bool): Whether to emit the substring in place of the item rather
+            than assign it. Overrides ``assign`` (default: False).
 
-    Returns:
-       Awaitable: item with transformed content
+    Yields:
+        - merged ``{Item, <assign>: <substring>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <substring>}`` when ``emit`` is False and no item given
+        - ``<substring>`` when ``emit`` is True
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     conf = {'start': '3', 'length': '4'}
-        ...     result = await async_pipe({'content': 'hello world'}, conf=conf)
-        ...     print(next(result)['substr'])
+        ...     conf = {"start": "3", "length": "4"}
+        ...     result = await async_pipe({"content": "hello world"}, conf=conf)
+        ...     print(next(result)["substr"])
         >>>
         >>> run(main)
         lo w
@@ -117,33 +127,48 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> str:
     """
-    A processor that returns a substring of a field of an item.
+    Returns a substring of an item field.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration. Each value is cast to an int, so a
+            numeric string is accepted.
+
+            start (int): Zero-based position to start at (default: 0).
+
+            length (int): Number of characters to return. 0 returns the
+                remainder, as does any length past the end (default: 0).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'start' or
-            'length'.
+        field (str): Item attribute to slice. Its value is cast to text first,
+            so a missing field yields ``""`` (default: "content").
 
-            start (int): starting position (default: 0)
-            length (int): count of characters to return (default: 0, i.e., all)
+        assign (str): Field the substring is assigned to. Ignored when ``emit``
+            is True (default: "substr").
 
-        assign (str): Attribute to assign parsed content (default: substr)
-        field (str): Item attribute to operate on (default: 'content')
+        emit (bool): Whether to emit the substring in place of the item rather
+            than assign it. Overrides ``assign`` (default: False).
 
     Yields:
-        dict: an item with the substring
+        - merged ``{Item, <assign>: <substring>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <substring>}`` when ``emit`` is False and no item given
+        - ``<substring>`` when ``emit`` is True
 
     Examples:
-        >>> conf = {'start': '3', 'length': '4'}
-        >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['substr']
+        >>> conf = {"start": "3", "length": "4"}
+        >>> item = {"content": "hello world"}
+        >>> next(pipe(item, conf=conf))["substr"]
         'lo w'
-        >>> conf = {'start': '3'}
-        >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
-        >>> next(pipe({'title': 'Greetings'}, **kwargs))['result']
+        >>> conf = {"start": "3"}
+        >>> kwargs = {"conf": conf, "field": "title", "assign": "result"}
+        >>> next(pipe({"title": "Greetings"}, **kwargs))["result"]
         'etings'
 
     """

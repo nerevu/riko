@@ -5,19 +5,23 @@
 import re
 import shutil
 import sys
+from collections.abc import Iterator
 from functools import partial
 from glob import glob
 from io import StringIO
 from os import environ
-from os.path import basename, dirname, exists, getmtime, join
-from subprocess import CalledProcessError, call, check_call
+from os.path import basename, dirname, exists, getmtime, isdir, join
+from pathlib import Path
+from subprocess import CalledProcessError, call, check_call, check_output
 from sys import exit
 from typing import Any
 
 import click
+from click import Choice
 
 from riko._logging import exception_hook
 from riko.cli.gen_config import main as gen_config_main
+from riko.cli.gen_names import main as gen_names_main
 from riko.paths import ROOT_DIR
 
 try:
@@ -68,6 +72,30 @@ def hello():
 
 
 @manager.command()
+@click.option(
+    "-m",
+    "--mode",
+    help="Which file to generate",
+    type=Choice(["config", "names"], case_sensitive=False),
+    default="config",
+)
+def codegen(mode="config"):
+    """Regenerate configuration or riko/modules/_names.py files"""
+    gen_config = mode == "config"
+    gen_names = mode == "names"
+    return_code = gen_config_main() if gen_config else gen_names_main()
+
+    if gen_config and return_code:
+        raise RuntimeError("Error updating configuration file!")
+    if gen_names and return_code:
+        raise RuntimeError("Error regenerating module names!")
+    elif gen_config:
+        print("Successfully updated configuration file.")
+    elif gen_names:
+        print("Successfully regenerated module names.")
+
+
+@manager.command()
 @click.pass_context
 def help(ctx):
     """Show available commands"""
@@ -79,7 +107,16 @@ def help(ctx):
 
 def _clean():
     """Remove Python file and build artifacts"""
-    check_call(ROOT_DIR / "bin" / "clean")
+    for name in ("dist", "build"):
+        shutil.rmtree(ROOT_DIR / name, ignore_errors=True)
+
+    for pattern in ("*.egg-info", "src/*.egg-info"):
+        for path in glob(str(ROOT_DIR / pattern)):
+            shutil.rmtree(path, ignore_errors=True)
+
+    for pattern in ("*.pyc", "*.pyo", "*~"):
+        for path in ROOT_DIR.rglob(pattern):
+            path.unlink(missing_ok=True)
 
 
 def _build():
@@ -156,15 +193,13 @@ def _ruff_check(where: str | None = "", unsafe_fixes: bool = False) -> int:
     if not ruff:
         raise RuntimeError("ruff not found")
 
+    paths = where.split(" ") if where else []
     args = [ruff, "check"]
 
     if unsafe_fixes:
         args.append("--unsafe-fixes")
 
-    if where:
-        args.extend(where.split(" "))
-
-    return call([*args]) or call([ruff, "format", "--check"])
+    return call([*args, *paths]) or call([ruff, "format", "--check", *paths])
 
 
 TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
@@ -178,15 +213,13 @@ def _github_slug(text: str) -> str:
     return kept.replace(" ", "-")
 
 
-def _doc_files(where: str | None) -> list[str]:
+def _gen_doc_files(where: str | None) -> Iterator[str]:
     """Resolve the RST files to check"""
-    if where:
-        files = where.split(" ")
-    else:
-        roots = glob(str(ROOT_DIR / "*.rst"))
-        files = sorted(roots + glob(str(ROOT_DIR / "docs" / "*.rst")))
-
-    return files
+    for location in where.split(" ") if where else [ROOT_DIR, ROOT_DIR / "docs"]:
+        if isdir(location):
+            yield from glob(str(Path(location) / "*.rst"))
+        elif Path(location).suffix == ".rst":
+            yield str(location)
 
 
 def _render_rst(path: str) -> tuple[str, Any]:
@@ -270,7 +303,7 @@ def _rst_check(where: str | None = None) -> int:
     cache: dict[str, set[str]] = {}
     problems: list[str] = []
 
-    for path in _doc_files(where):
+    for path in _gen_doc_files(where):
         text, doctree = _render_rst(path)
         cache[path] = _doc_anchors(doctree)
         problems.extend(_render_errors(path, doctree))
@@ -282,10 +315,34 @@ def _rst_check(where: str | None = None) -> int:
     return 1 if problems else 0
 
 
+def _staged_py_files() -> list[str]:
+    """List staged Python files (added/copied/modified, not deleted)"""
+    args = ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"]
+    staged = check_output(args, text=True).splitlines()
+    return [name for name in staged if name.endswith(".py")]
+
+
+def _check_staged() -> int:
+    """Lint staged Python files with ruff"""
+    if not ruff:
+        raise RuntimeError("ruff not found")
+
+    files = _staged_py_files()
+
+    if not files:
+        return_code = 0
+    else:
+        return_code = call([ruff, "check", *files]) or call(
+            [ruff, "format", "--check", *files]
+        )
+
+    return return_code
+
+
 @manager.command()
 def check():
-    """Check staged changes for lint errors"""
-    exit(call(ROOT_DIR / "bin" / "check-stage"))
+    """Lint staged Python changes with ruff"""
+    exit(_check_staged())
 
 
 @manager.command()
@@ -336,20 +393,14 @@ def lint(
 
 
 @manager.command()
-@click.option("-w", "--where", help="Modules to check", default=None)
-@click.option(
-    "-g", "--gen-config", help="Generate the configuration file", is_flag=True
-)
+@click.option("-w", "--where", help="Modules to check", multiple=True)
 @click.option("-s", "--sort/--no-sort", help="Sort module imports", default=True)
 @click.option("-F", "--unsafe-fixes", help="Applies unsafe fixes", is_flag=True)
-def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
+def prettify(where=(), sort=True, gen_config=False, unsafe_fixes=False):
     """Prettify code with ruff"""
-    where = where or ""
     return_code = 0
 
-    if gen_config:
-        return_code = gen_config_main()
-    elif sort and ruff:
+    if sort and ruff:
         sort_cmd = [ruff, "check", "--select", "I", "--fix"]
         style_cmd = [ruff, "check", "--fix"]
 
@@ -357,8 +408,8 @@ def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
             style_cmd.append("--unsafe-fixes")
 
         if where:
-            sort_cmd.extend(where.split(" "))
-            style_cmd.extend(where.split(" "))
+            sort_cmd.extend(where)
+            style_cmd.extend(where)
 
         try:
             check_call(sort_cmd)
@@ -370,15 +421,11 @@ def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
     elif sort:
         raise RuntimeError("ruff not found")
 
-    if gen_config and return_code:
-        raise RuntimeError("Error updating configuration file!")
-    elif gen_config:
-        print("Successfully updated configuration file.")
-    elif ruff and not return_code:
+    if ruff and not return_code:
         cmd = [ruff, "format"]
 
         if where:
-            cmd.extend(where.split(" "))
+            cmd.extend(where)
 
         try:
             check_call(cmd)
@@ -428,13 +475,18 @@ def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
 def test(paths=(), where=(), stop=None, **kwargs):  # noqa: PT028
     """Run pytest, tox, and script tests"""
     where = [*where, *paths]
-    quiet = kwargs.get("quiet") and not kwargs.get("verbose")
-    verbosity = "-q" if quiet else "-v"
-    opts = f"-x{verbosity}" if stop else verbosity
+
+    if kwargs.get("quiet"):
+        verbosity = "q"
+    elif kwargs.get("verbose"):
+        verbosity = "vv --tb=long -ra"
+    else:
+        verbosity = "v --tb=short -ra"
+
+    opts = f"-x{verbosity}" if stop else f"-{verbosity}"
     opts += " --cov=riko" if kwargs.get("cov") else " --no-cov"
     opts += "" if kwargs.get("capture") else " -s"
     opts += " --last-failed" if kwargs.get("failed") else ""
-    opts += " -vv --tb=long -ra" if kwargs.get("verbose") else " --tb=short -ra"
 
     if kwargs.get("watch") and kwargs.get("capture"):
         opts += " --looponfail"
@@ -469,10 +521,7 @@ def test(paths=(), where=(), stop=None, **kwargs):  # noqa: PT028
 @manager.command()
 def clean():
     """Remove Python file and build artifacts"""
-    try:
-        _clean()
-    except CalledProcessError as e:
-        exit(e.returncode)
+    _clean()
 
 
 @manager.command()

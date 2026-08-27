@@ -1,62 +1,42 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for extracting sub-elements from an item
+Extracts sub-elements buried in an item's hierarchy.
 
-Sometimes the data you need from a stream is buried deep in its hierarchy. You
-need to extract just those select sub-elements from the stream. This is what the
-Sub-element module is for.
-
-Let's suppose we have a Sonnet of William Shakespeare rendered as an item, with
-the structure as shown in this (abbreviated) example.
-
-    {
-        'author': 'William Shakespeare',
-        'title': 'Sonnet 21',
-        'stanzas': [
-            {
-                'id': 'st1',
-                'verses': ["So is it not with me...", "Stirr'd by a paint...,"]
-            }, {
-                'id': 'st2',
-                ...
-            },
-            ...
-        ]
-    }
-
-When fed the path 'stanza.verse', the Sub-element module will extract just the
-verses from each stanza (and any child elements), and discard all the fields
-above them (stanza, title, and author).
+``path`` names the element to pull out, and everything above it is discarded.
+Feeding a item the path ``"stanzas.verses"`` yields each verse of each stanza
+on its own. It drops the stanza and all other first level fields.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.subelement import pipe
         >>>
         >>> sonnet = {
-        ...     'author': 'William Shakespeare',
-        ...     'title': 'Sonnet 21',
-        ...     'stanzas': [
-        ...         {'id': 'st1', 'verses': ['st1v1', 'st1v2', 'st1v3']},
-        ...         {'id': 'st2', 'verses': ['st2v1', 'st2v2', 'st2v3']},
-        ...         {'id': 'st3', 'verses': ['st3v1', 'st3v2', 'st3v3']}]}
+        ...     "author": "William Shakespeare",
+        ...     "title": "Sonnet 21",
+        ...     "stanzas": [
+        ...         {"id": "st1", "verses": ["st1v1", "st1v2", "st1v3"]},
+        ...         {"id": "st2", "verses": ["st2v1", "st2v2", "st2v3"]},
+        ...     ],
+        ... }
         >>>
-        >>> conf = {'path': 'stanzas.verses'}
-        >>> next(pipe(sonnet, conf=conf))
+        >>> next(pipe(sonnet, conf={"path": "stanzas.verses"}))
         {'content': 'st1v1'}
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
+from collections.abc import Sequence
 from logging import Logger
 from typing import Any
 
 import pygogo as gogo
 
 from riko._rssutils import gen_items
+from riko.modules._prepare import require_conf
 from riko.types.configs import SubelementObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 from riko.types.values import RikoValue
@@ -72,34 +52,38 @@ def parser(
     item: Item, extraction: Extraction, objconf: SubelementObjconf, **kwargs: RikoValue
 ) -> Stream:
     """
-    Parses the pipe content
+    Extracts the element ``path`` names from ``item``.
 
     Args:
-        item (obj): The entry to process (a DotDict instance)
-        objconf (obj): The pipe configuration (an Objectify instance)
+        item: The entry to process.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `path` and `token_key`.
 
     Returns:
-        Iter[dict]: The stream of items
+        The extracted flattened tokens. Or nothing when the path is absent.
+
+    Raises:
+        TypeError: If ``conf`` has no ``path`` key.
 
     Examples:
         >>> from riko.dotdict import DotDict
         >>> from meza.fntools import Objectify
         >>>
-        >>> conf = {'path': 'stanzas.verses', 'token_key': 'content'}
+        >>> conf = {"path": "stanzas.verses", "token_key": "content"}
         >>> objconf = Objectify(conf)
+        >>> stanza = {"verses": ["verse1", "verse2"]}
         >>>
-        >>> sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
-        >>> next(parser(DotDict(sonnet), None, objconf))
+        >>> next(parser(DotDict({"stanzas": [stanza]}), None, objconf))
         {'content': 'verse1'}
-        >>> sonnet = {'stanzas': {'verses': ['verse1', 'verse2']}}
-        >>> next(parser(DotDict(sonnet), None, objconf))
+        >>> next(parser(DotDict({"stanzas": stanza}), None, objconf))
         {'content': 'verse1'}
-        >>> sonnet = {'stanzas': {'verses': 'verse1'}}
-        >>> next(parser(DotDict(sonnet), None, objconf))
+        >>> sonnet = DotDict({"stanzas": {"verses": "verse1"}})
+        >>> next(parser(sonnet, None, objconf))
         {'content': 'verse1'}
 
     """
-    path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
+    raw: str | Sequence[str] = require_conf(objconf, "path", "subelement")
+    path = raw if isinstance(raw, str) else ".".join(raw)
     element = item.get(path, **kwargs)
     return gen_items(element, objconf.token_key or "")
 
@@ -107,32 +91,50 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
     """
-    A processor that asynchronously extracts sub-elements from an item.
+    Asynchronously extracts sub-elements from an item.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            path (str | list[str]): Dotted path to the element to extract. A list is
+                joined with dots. Required.
+
+            token_key (str): Field each token is assigned to, or None to yield
+                the raw text instead of a dict (default: "content").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'path'. May
-            contain the key 'token_key'.
+        assign (str): Field the tokens are nested under. Ignored when ``emit``
+            is True (default: "subelement").
 
-            path (str): Path to the element to extract
-            token_key (str): Attribute to assign individual tokens (default:
-                content). Set to `None` to output raw text.
+        emit (bool): Whether to emit each token directly rather than nest them.
+            Overrides ``assign`` (default: True).
 
-        assign (str): Attribute to assign parsed content (default: subelement)
+    Yields:
+        - ``<token>`` when ``emit`` is True (default)
+        - ``{<assign>: <token>}`` when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<token>, ...]}`` when ``emit`` is False
+          and item is given
 
-    Returns:
-       Awaitable: sub-element item
+    Raises:
+        TypeError: If ``conf`` has no ``path`` key.
+
+    Notes:
+        Nested lists are flattened and ``None`` values are dropped. So tokens
+        arrive as one flat stream. A path the item lacks yields nothing.
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
-        ...     conf = {'path': 'stanzas.verses'}
-        ...     result = await async_pipe(sonnet, conf=conf)
+        ...     sonnet = {"stanzas": [{"verses": ["verse1", "verse2"]}]}
+        ...     result = await async_pipe(sonnet, conf={"path": "stanzas.verses"})
         ...     print(next(result))
         >>>
         >>> run(main)
@@ -145,45 +147,67 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: RikoValue) -> Stream:
     """
-    A processor that extracts sub-elements from an item.
+    Extracts sub-elements from an item.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            path (str | list[str]): Dotted path to the element to extract. A list is
+                joined with dots. Required.
+
+            token_key (str): Field each token is assigned to, or None to yield
+                the raw text instead of a dict (default: "content").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'path'. May
-            contain the key 'token_key'.
+        assign (str): Field the tokens are nested under. Ignored when ``emit``
+            is True (default: "subelement").
 
-            path (str): Path to the element to extract
-            token_key (str): Attribute to assign individual tokens (default:
-                content). Set to `None` to output raw text.
-
-        assign (str): Attribute to assign parsed content (default: subelement)
+        emit (bool): Whether to emit each token directly rather than nest them.
+            Overrides ``assign`` (default: True).
 
     Yields:
-        dict: a sub-element item
+        - ``<token>`` when ``emit`` is True (default)
+        - ``{<assign>: <token>}`` when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<token>, ...]}`` when ``emit`` is False
+          and item is given
+
+    Raises:
+        TypeError: If ``conf`` has no ``path`` key.
+
+    Notes:
+        Nested lists are flattened and ``None`` values are dropped. So tokens
+        arrive as one flat stream. A path the item lacks yields nothing.
 
     Examples:
         >>> sonnet = {
-        ...     'author': 'William Shakespeare',
-        ...     'title': 'Sonnet 21',
-        ...     'stanzas': [
-        ...         {'id': 'st1', 'verses': ['st1v1', 'st1v2', 'st1v3']},
-        ...         {'id': 'st2', 'verses': ['st2v1', 'st2v2', 'st2v3']},
-        ...         {'id': 'st3', 'verses': ['st3v1', 'st3v2', 'st3v3']}]}
+        ...     "author": "William Shakespeare",
+        ...     "title": "Sonnet 21",
+        ...     "stanzas": [
+        ...         {"id": "st1", "verses": ["st1v1", "st1v2", "st1v3"]},
+        ...         {"id": "st2", "verses": ["st2v1", "st2v2", "st2v3"]},
+        ...         {"id": "st3", "verses": ["st3v1", "st3v2", "st3v3"]},
+        ...     ],
+        ... }
         >>>
-        >>> conf = {'path': 'stanzas.verses'}
+        >>> conf = {"path": "stanzas.verses"}
         >>> verses = list(pipe(sonnet, conf=conf))
         >>> len(verses)
         9
-        >>> verses[0]
-        {'content': 'st1v1'}
-        >>> verses[8]
-        {'content': 'st3v3'}
-        >>> conf.update({'token_key': 'verse'})
+        >>> verses[0], verses[8]
+        ({'content': 'st1v1'}, {'content': 'st3v3'})
+        >>> conf.update({"token_key": "verse"})
         >>> next(pipe(sonnet, conf=conf))
         {'verse': 'st1v1'}
+        >>> conf.update({"token_key": None})
+        >>> next(pipe(sonnet, conf=conf))
+        'st1v1'
 
     """
     return parser(*args, **kwargs)

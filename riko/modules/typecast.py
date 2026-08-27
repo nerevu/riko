@@ -1,19 +1,21 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for casting fields into specific types.
+Casts an item field into a specific type.
+
+Useful as terminal data. Loopable.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.typecast import pipe
         >>>
-        >>> conf = {'type': 'date'}
-        >>> next(pipe({'content': '5/4/82'}, conf=conf))['typecast'].year
+        >>> conf = {"type": "date"}
+        >>> next(pipe({"content": "5/4/82"}, conf=conf))["typecast"].year
         1982
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -39,27 +41,23 @@ def parser(
     content: str, extraction: Extraction, objconf: TypecastObjconf, **kwargs: object
 ) -> PrimitiveValue:
     """
-    Parsers the pipe content
+    Casts ``content`` to the configured type.
 
     Args:
-        content (scalar): The content to cast
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        assign (str): Attribute to assign parsed content (default: typecast)
-        stream (dict): The original item
+        content: The value to cast.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `type`.
 
     Returns:
-        dict: The item
+        The cast value, or ``content`` unchanged when ``type`` is unset.
 
     Examples:
         >>> from meza.fntools import Objectify
         >>>
-        >>> item = {'content': '1.0'}
-        >>> objconf = Objectify({'type': 'int'})
-        >>> kwargs = {'stream': item, 'assign': 'content'}
-        >>> parser(item['content'], None, objconf, **kwargs)
+        >>> item = {"content": "1.0"}
+        >>> objconf = Objectify({"type": "int"})
+        >>> kwargs = {"stream": item, "assign": "content"}
+        >>> parser(item["content"], None, objconf, **kwargs)
         1
 
     """
@@ -69,30 +67,44 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     """
-    A processor that asynchronously converts a text string into a variety of
-    different types, e.g., int, bool, date, etc. Useful as terminal data. Loopable.
+    Asynchronously casts an item field into another type.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            type (str): Type to cast to, one of "bool", "date", "datetime",
+                "decimal", "float", "int", "location", "none", "pass", "text",
+                "url" (default: "text").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'type'.
-            type (str): The object type to cast to. Must be one of 'text', 'int',
-            'float', 'bool', 'url', 'location', or 'date' (default: text).
+        field (str): Item attribute to cast. A missing field casts ``None``
+            (default: "content").
 
-        assign (str): Attribute to assign parsed content (default: typecast)
-        field (str): Item attribute to operate on (default: 'content')
+        assign (str): Field the cast value is assigned to. Ignored when ``emit``
+            is True (default: "typecast").
 
-    Returns:
-       Awaitable: item with type casted content
+        emit (bool): Whether to emit the cast value in place of the item rather
+            than assign it. Overrides ``assign`` (default: False).
+
+    Yields:
+        - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <value>}`` when ``emit`` is False and no item given
+        - ``<value>`` when ``emit`` is True
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({'content': '1.0'}, conf={'type': 'int'})
-        ...     print(next(result)['typecast'])
+        ...     result = await async_pipe({"content": "1.0"}, conf={"type": "int"})
+        ...     print(next(result)["typecast"])
         >>>
         >>> run(main)
         1
@@ -104,41 +116,55 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     """
-    A processor that converts a text string into a variety of different types, e.g.,
-    int, bool, date, etc. Useful as terminal data. Loopable.
+    Casts an item field into another type.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            type (str): Type to cast to, one of "bool", "date", "datetime",
+                "decimal", "float", "int", "location", "none", "pass", "text",
+                "url" (default: "text").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'type'.
-            type (str): The object type to cast to. Must be one of 'text', 'int',
-            'float', 'bool', 'url', 'location', or 'date' (default: text).
+        field (str): Item attribute to cast. A missing field casts ``None``
+            (default: "content").
 
-        assign (str): Attribute to assign parsed content (default: typecast)
-        field (str): Item attribute to operate on (default: 'content')
+        assign (str): Field the cast value is assigned to. Ignored when ``emit``
+            is True (default: "typecast").
+
+        emit (bool): Whether to emit the cast value in place of the item rather
+            than assign it. Overrides ``assign`` (default: False).
 
     Yields:
-        dict: an item with type casted content
+        - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <value>}`` when ``emit`` is False and no item given
+        - ``<value>`` when ``emit`` is True
 
     Examples:
         >>> from datetime import datetime as dt
-        >>> next(pipe({'content': '1.0'}, conf={'type': 'int'}))['typecast']
+        >>>
+        >>> next(pipe({"content": "1.0"}, conf={"type": "int"}))["typecast"]
         1
-        >>> item = {'content': '5/4/82'}
-        >>> conf = {'type': 'datetime'}
-        >>> date = next(pipe(item, conf=conf, emit=True))
-        >>> date.isoformat()
+        >>> conf = {"type": "datetime"}
+        >>> item = {"content": "5/4/82"}
+        >>> next(pipe(item, conf=conf, emit=True)).isoformat()
         '1982-05-04T00:00:00+00:00'
-        >>> item = {'content': dt(1982, 5, 4).timetuple()}
-        >>> date = next(pipe(item, conf=conf, emit=True))
-        >>> date.isoformat()
+        >>> next(pipe({"content": "bogus"}, conf=conf, emit=True))
+        >>> item = {"content": dt(1982, 5, 4).timetuple()}
+        >>> next(pipe(item, conf=conf, emit=True)).isoformat()
         '1982-05-04T00:00:00+00:00'
-        >>> item = {'content': None}
+        >>> item = {"content": None}
         >>> next(pipe(item, emit=True))
         ''
-        >>> conf = {'type': 'bool'}
+        >>> conf = {"type": "bool"}
         >>> next(pipe(item, conf=conf, emit=True))
         False
 

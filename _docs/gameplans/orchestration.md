@@ -1,4 +1,4 @@
-# Authoritative Riko Orchestration Implementation Gameplan
+# Orchestration gameplan
 
 ## 1. Mission
 

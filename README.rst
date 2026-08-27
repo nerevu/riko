@@ -40,7 +40,7 @@ number of times each word appears.
 
 .. code-block:: python
 
-    >>> from riko import get_path, SyncPipe
+    >>> from riko import get_path, Sources, SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -58,7 +58,7 @@ number of times each word appears.
     ... }
     >>>
     >>> flow = (
-    ...     SyncPipe('fetchpage', conf=fetch_conf)            # 2
+    ...     SyncPipe(Sources.FETCHPAGE, conf=fetch_conf)      # 2
     ...     .strreplace(conf=replace_conf, assign='content')  # 3
     ...     .tokenizer(conf={'delimiter': ' '}, emit=True)    # 4
     ...     .count(conf={'count_key': 'content'})             # 5
@@ -222,10 +222,10 @@ E.g., ``count``, ``filter``, and ``reverse``.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> stream = SyncPipe('reverse', items)
+    >>> stream = SyncPipe(Transforms.REVERSE, items)
     >>> next(stream)
     {'title': 'riko pt. 2'}
 
@@ -234,10 +234,10 @@ threads or processes. E.g., ``fetchsitefeed``, ``hash``, ``itembuilder``, and ``
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> items = [{'title': 'riko pt. 1'}]
-    >>> stream = SyncPipe('hash', items, field='title')
+    >>> stream = SyncPipe(Transforms.HASH, items, field='title')
     >>> next(stream)['hash']
     1104819838
 
@@ -245,10 +245,10 @@ Some ``processors``, e.g., ``tokenizer``, return multiple results.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> items = [{'title': 'riko pt. 1'}]
-    >>> stream = SyncPipe('tokenizer', items, conf={'delimiter': ' '}, field='title')
+    >>> stream = SyncPipe(Transforms.TOKENIZER, items, conf={'delimiter': ' '}, field='title')
     >>> list(stream)
     [{'content': 'riko'}, {'content': 'pt.'}, {'content': '1'}]
 
@@ -260,10 +260,10 @@ some or all ``items`` of an input ``stream``.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> items = [{'title': 'riko pt 1'}, {'title': 'riko pt 2'}]
-    >>> list(SyncPipe('count', items))
+    >>> list(SyncPipe(Transforms.COUNT, items))
     [{'count': 2}]
 
 Astute observers may have noticed from the "Word Count" example up top, that ``count``
@@ -271,9 +271,9 @@ can return multiple items if you pass in the ``count_key`` config option.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
-    >>> stream = SyncPipe('count', items, conf={'count_key': 'title'})
+    >>> stream = SyncPipe(Transforms.COUNT, items, conf={'count_key': 'title'})
     >>> list(stream)
     [{'riko pt 1': 1}, {'riko pt 2': 1}]
 
@@ -283,10 +283,10 @@ a ``transformer``, e.g. ``hash`` can only transform a source ``item``.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import Sources, SyncPipe
     >>>
     >>> attrs = {'key': 'title', 'value': 'riko pt. 1'}
-    >>> next(SyncPipe('itembuilder', conf={'attrs': attrs}))
+    >>> next(SyncPipe(Sources.ITEMBUILDER, conf={'attrs': attrs}))
     {'title': 'riko pt. 1'}
 
 The following table summarizes these observations:
@@ -306,56 +306,59 @@ The following table summarizes these observations:
 +-----------+-----------------+-----------------------------+-----------------------------------+
 
 Note: Since some ``pipes`` support more than one subtype depending on their options,
-view the `FAQ`_ for steps on runtime discovery via `discovering modules`_
+view the `FAQ`_ for steps on runtime discovery via `discovering modules`_.
 
 If you are unsure of the type of ``pipe`` you have, check its metadata.
 
 .. code-block:: python
 
-    >>> from riko import get_module_metadata
+    >>> from riko import get_module_metadata, Sources, Transforms
     >>>
-    >>> metadata = get_module_metadata('fetchpage')
+    >>> metadata = get_module_metadata(Sources.FETCHPAGE)
     >>> metadata.name, metadata.type, metadata.subtype
     ('fetchpage', 'processor', 'source')
-    >>> metadata = get_module_metadata('count')
+    >>> metadata = get_module_metadata(Transforms.COUNT)
     >>> metadata.name, metadata.type, metadata.subtype
     ('count', 'operator', 'aggregator')
+
+Note: ``type`` and ``subtype`` are mutually exclusive: a subtype implies its type.
 
 ``SyncPipe``/``AsyncPipe`` perform this check for you to allow for convenient method
 chaining and transparent parallelization.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import Sources, SyncPipe
     >>>
     >>> attrs = [
     ...     {'key': 'title', 'value': 'riko pt. 1'},
     ...     {'key': 'content', 'value': "Let's talk about riko!"}
     ... ]
-    >>> flow = SyncPipe('itembuilder', conf={'attrs': attrs}).hash()
+    >>> flow = SyncPipe(Sources.ITEMBUILDER, conf={'attrs': attrs}).hash()
     >>> item = next(flow)
     >>> item['title'], item['content'], item['hash']
     ('riko pt. 1', "Let's talk about riko!", 197222720)
 
-The ``|`` operator chains the same way, taking a module name or a
-``(name, conf)`` tuple — handy when the next ``pipe``'s name is computed:
+The ``|`` operator chains the same way. It takes a module name or a ``(name, conf)``
+tuple. The later is handy when the next ``pipe``'s name is computed. A name may be a
+plain string or a member of the typed discovery tree (``Sources``/``Transforms``/
+``Sinks``).
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import Sources, SyncPipe, Transforms
     >>>
     >>> attrs = [
     ...     {'key': 'title', 'value': 'riko pt. 1'},
     ...     {'key': 'content', 'value': "Let's talk about riko!"}
     ... ]
-    >>> item = next(SyncPipe('itembuilder', conf={'attrs': attrs}) | 'hash')
+    >>> conf = {'attrs': attrs}
+    >>> item = next(SyncPipe(Sources.ITEMBUILDER, conf=conf) | Transforms.HASH)
     >>> item['title'], item['hash']
     ('riko pt. 1', 197222720)
 
 View the `Cookbook`_ for advanced examples including how to wire in
 values from other pipes or accept user input.
-
-Note: ``type`` and ``subtype`` are mutually exclusive: a subtype implies its type.
 
 Usage
 -----
@@ -380,9 +383,9 @@ filepaths via ``source`` ``pipes``:
 
 .. code-block:: python
 
-    >>> from riko import get_path, SyncPipe
+    >>> from riko import get_path, Sources, SyncPipe
     >>>
-    >>> stream = SyncPipe('fetch', conf={'url': get_path('feed.xml')})
+    >>> stream = SyncPipe(Sources.FETCH, conf={'url': get_path('feed.xml')})
     >>> item = next(stream)
     >>> {'author', 'content', 'id', 'link', 'published', 'summary', 'title'} <= set(item)
     True
@@ -400,7 +403,7 @@ Synchronous processing
 
 .. code-block:: python
 
-    >>> from riko import get_path, SyncPipe
+    >>> from riko import get_path, Sources, SyncPipe
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
@@ -413,7 +416,7 @@ Synchronous processing
     >>> # Note: sorting is not lazy so take caution when using this pipe
     >>>
     >>> flow = (
-    ...     SyncPipe('fetch', conf=fetch_conf)         # 1
+    ...     SyncPipe(Sources.FETCH, conf=fetch_conf)   # 1
     ...     .filter(conf={'rule': filter_rule})        # 2
     ...     .sort(conf={'rule': {'field': 'title'}})   # 3
     ... )
@@ -430,7 +433,7 @@ An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
 
 .. code-block:: python
 
-    >>> from riko import get_path, SyncPipe
+    >>> from riko import get_path, Sources, SyncPipe
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
@@ -442,7 +445,7 @@ An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
     >>> # Note: no point in sorting after the filter since parallel fetching doesn't
     >>> # guarantee order
     >>> flow = (
-    ...     SyncPipe('fetch', conf=fetch_conf, parallel=True, workers=4)  # 1
+    ...     SyncPipe(Sources.FETCH, conf=fetch_conf, parallel=True, workers=4)  # 1
     ...     .filter(conf={'rule': filter_rule})                           # 2
     ... )
     >>>
@@ -451,7 +454,7 @@ An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
 
 Notes
 
-.. [#] You can instead enable a ``ProcessPool`` by additionally passing ``threads=False`` to ``SyncPipe``, i.e., ``SyncPipe('fetch', conf={'url': url}, parallel=True, threads=False)``.
+.. [#] You can instead enable a ``ProcessPool`` by additionally passing ``threads=False`` to ``SyncPipe``, i.e., ``SyncPipe(Sources.FETCH, conf={'url': url}, parallel=True, threads=False)``.
 
 Asynchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -464,7 +467,7 @@ To enable asynchronous processing, you must install the ``async`` extra.
 
 .. code-block:: python
 
-    >>> from riko import AsyncPipe, get_path, issync, run
+    >>> from riko import AsyncPipe, get_path, issync, run, Sources
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
@@ -475,7 +478,7 @@ To enable asynchronous processing, you must install the ``async`` extra.
     >>>
     >>> async def main():
     ...     stream = await (
-    ...         AsyncPipe('fetch', conf=fetch_conf)                 # 1
+    ...         AsyncPipe(Sources.FETCH, conf=fetch_conf)           # 1
     ...             .filter(conf={'rule': filter_rule}))            # 2
     ...
     ...     print(next(stream)['title'])
@@ -486,7 +489,7 @@ To enable asynchronous processing, you must install the ``async`` extra.
 Built-in pipes
 ^^^^^^^^^^^^^^
 
-``riko`` ships `51 built-in`_ ``pipes``. The table below summarizes them.
+``riko`` ships `52 built-in`_ ``pipes``. The table below summarizes them.
 
 +-----------------------------+----------------------------------------------------------+--------------------------------------------------+
 | Group                       | Representative pipes                                     | Purpose                                          |
@@ -503,7 +506,9 @@ Built-in pipes
 +-----------------------------+----------------------------------------------------------+--------------------------------------------------+
 | Control & extension         | ``loop``, ``udf``, ``send``, ``receive``                 | run submodules, call funcs, fan out items        |
 +-----------------------------+----------------------------------------------------------+--------------------------------------------------+
-| Feed & location helpers     | ``fetchsitefeed``, ``exchangerate``, ``geolocate``       | feeds and network-backed transformations         |
+| Feed & location helpers     | ``fetchsitefeed``, ``exchangerate``, ``geolocate``       | feed and network-backed transformations          |
++-----------------------------+----------------------------------------------------------+--------------------------------------------------+
+| Sinks & writers             | ``write``                                                | serialize a stream to a file (materializes it)   |
 +-----------------------------+----------------------------------------------------------+--------------------------------------------------+
 
 Pipeline lifecycle
@@ -517,9 +522,9 @@ worker pool deterministically.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
-    >>> flow = SyncPipe('hash', source=[{'content': 'a'}, {'content': 'b'}])
+    >>> flow = SyncPipe(Transforms.HASH, source=[{'content': 'a'}, {'content': 'b'}])
     >>> flow.state
     <PipeState.NEW: 'new'>
     >>> len(list(flow))
@@ -540,14 +545,14 @@ a ``flow`` and processes the resulting ``stream``. E.g., ``flow.py``
 
 .. code-block:: python
 
-    from riko import SyncPipe
+    from riko import Sources, SyncPipe
 
     conf1 = {'attrs': [{'value': 'https://google.com', 'key': 'content'}]}
     conf2 = {'rule': [{'find': 'com', 'replace': 'co.uk'}]}
 
     def pipe(test=False):
         kwargs = {'conf': conf1, 'test': test}
-        flow = SyncPipe('itembuilder', **kwargs).strreplace(conf=conf2)
+        flow = SyncPipe(Sources.ITEMBUILDER, **kwargs).strreplace(conf=conf2)
         for i in flow:
             print(i)
 
@@ -681,7 +686,7 @@ License
 .. _FAQ: docs/FAQ.rst
 .. _pipes: docs/FAQ.rst#what-pipes-are-available
 .. _discovering modules: docs/FAQ.rst#how-do-i-discover-installed-modules
-.. _51 built-in: docs/FAQ.rst#what-pipes-are-available
+.. _52 built-in: docs/FAQ.rst#what-pipes-are-available
 .. _file types: docs/FAQ.rst#what-file-types-are-supported
 .. _protocols: docs/FAQ.rst#what-protocols-are-supported
 .. _installation doc: docs/INSTALLATION.rst

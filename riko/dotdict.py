@@ -128,17 +128,17 @@ def parse_sentinel[D, VT](  # noqa: E302
         parsed = value["value"]
 
         if (
-            not (_type := value.get("type"))
-            or (_type == CastType.TEXT)
+            not (type_ := value.get("type"))
+            or (type_ == CastType.TEXT)
             and isinstance(parsed, str)
         ):
             pass
-        elif _type == CastType.LOCATION:
+        elif type_ == CastType.LOCATION:
             logger.warning(f"Location type not supported! Not casting {parsed=}.")
-        elif _type in CAST_SWITCH:
-            parsed = cast_value(parsed, _type=CastType(_type))
-        elif _type != "module":
-            logger.warning(f"Invalid cast type={_type}! Not casting {parsed=}.")
+        elif type_ in CAST_SWITCH:
+            parsed = cast_value(parsed, type_=CastType(type_))
+        elif type_ != "module":
+            logger.warning(f"Invalid cast type={type_}! Not casting {parsed=}.")
     else:
         _parsed = {}
 
@@ -239,9 +239,9 @@ def gen_dict[VT](  # noqa: E302
     """
     >>> r = DotDict({'a': {'value': 'bar'}})
     >>> r
-    {'a': 'bar'}
+    {'a': {'value': 'bar'}}
     >>> dict(gen_dict(r))
-    {'a': 'bar'}
+    {'a': {'value': 'bar'}}
     >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
     >>> r
     {'a': 'baz'}
@@ -752,9 +752,9 @@ class DotDict(CaseInsensitiveDict[VT]):
         """
         >>> r = DotDict({'a': {'value': 'bar'}})
         >>> r
-        {'a': 'bar'}
+        {'a': {'value': 'bar'}}
         >>> r.asdict()
-        {'a': 'bar'}
+        {'a': {'value': 'bar'}}
         >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
         >>> r
         {'a': 'baz'}

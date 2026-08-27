@@ -16,35 +16,27 @@ Edit those objects (not this file), then regenerate with ``gen-config``.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
-from riko._objectify import Objectify
+from riko.types.base import DynamicConf
 
 if TYPE_CHECKING:
     from riko.cast import CastType, LocationType
     from riko.types.modules import (
-        CountValues,
         FilterConfRule,
         FindConfRule,
         Function,
         ParsedParam,
-        PipeModule,
+        Path,
         RegexConfRule,
         RenameConfRule,
         SortConfRule,
         StrReplaceConfRule,
         StrTransformConfRule,
         Subkey,
+        TargetLike,
         Terminal,
     )
-
-
-class DynamicConf(Objectify[Any]):
-    """
-    A parsed configuration bag with case-insensitive attribute and mapping
-    access. The base type every parsed module config is, and the fallback
-    config type for modules without a precise config.
-    """
 
 
 class SortObjconf(DynamicConf):
@@ -61,7 +53,7 @@ class InputObjconf(DynamicConf):
 
 class FetchObjconf(DynamicConf):
     url: str
-    delay: float
+    encoding: str
 
 
 class TailObjconf(DynamicConf):
@@ -88,13 +80,6 @@ class RssItemBuilderObjconf(DynamicConf):
     title: str
 
 
-class LoopObjconf(DynamicConf):
-    embed: PipeModule
-    count: CountValues
-    assign: str
-    field: str
-
-
 class AggregateObjconf(DynamicConf):
     func: Function
 
@@ -117,6 +102,8 @@ class CsvObjconf(DynamicConf):
 
 class CurrencyFormatObjconf(DynamicConf):
     currency: str
+    locale: str
+    clean: bool
 
 
 class DateFormatObjconf(DynamicConf):
@@ -127,7 +114,7 @@ class ExchangeRateObjconf(DynamicConf):
     url: str
     param: dict[str, str]
     currency: str
-    delay: int
+    encoding: str
     memoize: bool
     precision: int
 
@@ -140,12 +127,14 @@ class FeedAutoDiscoveryObjconf(DynamicConf):
 
 class FetchDataObjconf(DynamicConf):
     url: str
+    encoding: str
     path: str
     html5: bool
 
 
 class FetchPageObjconf(DynamicConf):
     url: str
+    encoding: str
     start: str
     end: str
     token: str
@@ -196,7 +185,6 @@ class RefindObjconf(DynamicConf):
 class RegexObjconf(DynamicConf):
     rule: RegexConfRule | list[RegexConfRule]
     multi: bool
-    convert: bool
 
 
 class RenameObjconf(DynamicConf):
@@ -204,7 +192,6 @@ class RenameObjconf(DynamicConf):
 
 
 class SendObjconf(DynamicConf):
-    name: str
     max_wait: int | float
 
 
@@ -300,7 +287,14 @@ class UrlParseObjconf(DynamicConf):
     parse_key: str
 
 
+class WriteObjconf(DynamicConf):
+    url: str | Path
+    target: TargetLike | None
+    mode: str
+
+
 class XpathFetchPageObjconf(DynamicConf):
     url: str
     xpath: str
+    encoding: str
     html5: bool

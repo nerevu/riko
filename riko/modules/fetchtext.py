@@ -1,23 +1,24 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for fetching text data sources.
+Fetches a text file and yields one item per line.
 
-Accesses and extracts data from text sources on the web. This data can then be
-merged with other data in your Pipe.
+Each line is stripped of surrounding whitespace. Unlike the other fetch pipes
+this yields bare strings rather than records, so it is usually assigned to a
+field or fed to a pipe that builds one.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko import get_path
         >>> from riko.modules.fetchtext import pipe
         >>>
-        >>> conf = {'url': get_path('lorem.txt')}
+        >>> conf = {"url": get_path("lorem.txt")}
         >>> next(pipe(conf=conf))
         'What is Lorem Ipsum?'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -31,6 +32,7 @@ from riko import ENCODING
 from riko._io import Fetch, auto_close
 from riko.bado import io
 from riko.cast import BasicCastType
+from riko.modules._prepare import require_conf
 from riko.types.configs import FetchTextObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
 
@@ -45,103 +47,107 @@ async def async_parser(
     _: Item, extraction: Extraction, objconf: FetchTextObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
-    Asynchronously parses the pipe content
+    Asynchronously reads the file into a stream of stripped lines.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url` and `encoding`.
 
     Returns:
-        Iter[dict]: The stream of items
+        Stripped lines. The source closes when the stream is exhausted.
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
-        ...     url = get_path('lorem.txt')
-        ...     objconf = Objectify({'url': url, 'encoding': ENCODING})
-        ...     result = await async_parser(None, None, objconf, assign='content')
+        ...     url = get_path("lorem.txt")
+        ...     objconf = Objectify({"url": url, "encoding": ENCODING})
+        ...     result = await async_parser(None, None, objconf, assign="content")
         ...     print(next(result))
         >>>
         >>> run(main)
         What is Lorem Ipsum?
 
     """
-    f = await io.async_url_open(objconf.url, encoding=objconf.encoding)
-    stream = auto_close(map(str.strip, f), f)
-    return stream
+    url: str = require_conf(objconf, "url", "fetchtext")
+    f = await io.async_url_open(url, encoding=objconf.encoding)
+    return auto_close(map(str.strip, f), f)
 
 
 def parser(
     _: Item, extraction: Extraction, objconf: FetchTextObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
-    Parses the pipe content
+    Reads the file into a stream of stripped lines.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url` and `encoding`.
 
     Returns:
-        Iter[dict]: The stream of items
+        Stripped lines. The source closes when the stream is exhausted.
+
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
-        >>> url = get_path('lorem.txt')
-        >>> objconf = Objectify({'url': url, 'encoding': ENCODING})
-        >>> result = parser(None, None, objconf, assign='content')
+        >>> url = get_path("lorem.txt")
+        >>> objconf = Objectify({"url": url, "encoding": ENCODING})
+        >>> result = parser(None, None, objconf, assign="content")
         >>> next(result)
         'What is Lorem Ipsum?'
 
     """
-    f = Fetch(objconf.url, encoding=objconf.encoding)
-    stream = auto_close(map(str.strip, f), f)
-    return stream
+    url: str = require_conf(objconf, "url", "fetchtext")
+    f = Fetch(url, encoding=objconf.encoding)
+    return auto_close(map(str.strip, f), f)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     """
-    A source that asynchronously fetches and parses an XML or JSON file to
-    return the entries.
+    Asynchronously fetches a text file and yields lines.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The file to fetch, local or remote. Required.
+            encoding (str): File encoding (default: "utf-8").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the key 'encoding'.
+        assign (str): Field each line is assigned to. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The web site to fetch.
-            encoding (str): The file encoding (default: utf-8).
+        emit (bool): Whether to emit each line directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-        assign (str): Attribute to assign parsed content (default: content)
+    Yields:
+        - ``<line>`` when ``emit`` is True (default)
+        - ``{<assign>: <line>}`` when ``emit`` is False, no item given
+        - one merged ``{Item, <assign>: [<line>, ...]}`` when ``emit`` is False and
+          item is given
 
-
-    Returns:
-        Awaitable: stream of items
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     conf = {'url': get_path('lorem.txt')}
+        ...     conf = {"url": get_path("lorem.txt")}
         ...     result = await async_pipe(conf=conf)
         ...     print(next(result))
         >>>
@@ -155,29 +161,38 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     """
-    A source that fetches and parses an XML or JSON file to
-    return the entries.
+    Fetches a text file and yields lines.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The file to fetch, local or remote. Required.
+            encoding (str): File encoding (default: "utf-8").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the key 'encoding'.
+        assign (str): Field each line is assigned to. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The web site to fetch
-            encoding (str): The file encoding (default: utf-8).
+        emit (bool): Whether to emit each line directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-        assign (str): Attribute to assign parsed content (default: content)
+    Yields:
+        - ``<line>`` when ``emit`` is True (default)
+        - ``{<assign>: <line>}`` when ``emit`` is False, no item given
+        - one merged ``{Item, <assign>: [<line>, ...]}`` when ``emit`` is False and
+          item is given
 
-    Returns:
-        dict: an iterator of items
+    Raises:
+        TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
         >>> from riko import get_path
         >>>
-        >>> conf = {'url': get_path('lorem.txt')}
+        >>> conf = {"url": get_path("lorem.txt")}
         >>> next(pipe(conf=conf))
         'What is Lorem Ipsum?'
 

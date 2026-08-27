@@ -7,7 +7,7 @@ decides whether a parser result is a single value or a stream and how it is
 assigned onto the item.
 """
 
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterable, Iterator
 from copy import copy
 from functools import partial
 from itertools import chain, islice
@@ -23,6 +23,8 @@ from riko.types.general import (
     AsyncProcessorWrapper,
     AsyncSubPipe,
     Item,
+    ItemOrValue,
+    ItemsOrValues,
     OperatorParserOutput,
     OperatorWrapperInput,
     ProcessorParserOutput,
@@ -133,23 +135,23 @@ def get_assignment(  # noqa: E302
 
 
 @overload
-def gen_assignments[T: StreamOrValueStream](  # noqa: E704
+def gen_assignments[T: ItemOrValue](  # noqa: E704
     item: DotDict[RikoValue],
-    assignment: T,
+    assignment: Iterable[T],
     assign: str = ...,
     one: Literal[False] = ...,
-) -> T: ...
+) -> Iterator[T]: ...
 @overload  # noqa: E302
 def gen_assignments(  # noqa: E704
     item: DotDict[RikoValue],
-    assignment: StreamOrValueStream,
+    assignment: ItemsOrValues,
     assign: str = ...,
     *,
     one: Literal[True],
 ) -> Stream: ...
 def gen_assignments(  # noqa: E302
     item: DotDict[RikoValue],
-    assignment: Item | StreamOrValueStream,
+    assignment: Item | ItemsOrValues,
     assign: str | None = None,
     one=False,
     **_,
@@ -167,10 +169,10 @@ def gen_assignments(  # noqa: E302
         elif item and value_is_iterator:
             yield item | {assign: list(value)}
         elif value_is_iterator:
-            yield from cast(StreamOrValueStream, ({assign: v} for v in value))
+            yield from cast(ItemsOrValues, ({assign: v} for v in value))
         else:
             yield item | {assign: value}
     elif value_is_iterator:
         yield from map(DotDict.dictize, value)
     else:
-        yield DotDict.dictize(value)
+        yield cast(Item, DotDict.dictize(value))

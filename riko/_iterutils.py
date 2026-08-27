@@ -17,6 +17,8 @@ from collections.abc import (
     Mapping,
     Sequence,
 )
+from datetime import UTC, date, tzinfo
+from datetime import datetime as dt
 from decimal import Decimal
 from functools import partial
 from inspect import signature
@@ -24,16 +26,22 @@ from itertools import chain, dropwhile, repeat, takewhile
 from logging import Logger
 from math import isnan
 from time import struct_time
-from typing import Any, Literal, TypeVar, cast, overload
+from typing import Any, Literal, TypeGuard, TypeVar, cast, overload
 
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
+from riko._date_utils import date_to_datetime, ensure_tzinfo
 from riko.cast import CAST_SWITCH, CastType, cast_value
 from riko.types.general import Function
 from riko.types.values import PrimitiveValue, PrimitiveValueType, SortableValue
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+SORT_FILLER = float("-inf")
+DATELIKE_TYPES = frozenset({CastType.DATE, CastType.DATETIME})
+INVALID_DEF_TYPES = frozenset({CastType.LOCATION, CastType.NONE})
+INVALID_TYPES = frozenset({CastType.LOCATION, CastType.PASS, CastType.NONE})
+
 NON_SORTABLE = (Mapping, Sequence)
 
 B = TypeVar("B", Literal[True], Literal[False])
@@ -130,15 +138,20 @@ def _warn_and_default(type_name: str, default: SortableValue) -> SortableValue:
 
 
 def _resolve_default(
-    _type: str | None, invalid_type: bool | None, default: PrimitiveValue | None
+    type_: str | None, invalid_type: bool | None, default: PrimitiveValue | None
 ) -> SortableValue:
     resolved = ""
 
     if invalid_type and default is None:
-        logger.warning(f"Invalid cast type={_type}. Setting default to empty string.")
-    elif _type and default is None:
-        _default = CAST_SWITCH[_type].get("default")
-        resolved = cast(SortableValue, _default) if _default is not None else ""
+        logger.warning(f"Invalid cast type={type_}. Setting default to empty string.")
+    elif type_ and default is None:
+        _default = CAST_SWITCH[type_].get("default")
+        unorderable = isinstance(_default, (float, Decimal)) and isnan(_default)
+
+        if unorderable or type_ in DATELIKE_TYPES:
+            resolved = SORT_FILLER
+        elif _default is not None:
+            resolved = cast(SortableValue, _default)
     elif isinstance(default, Mapping):
         logger.warning(f"Invalid {default=}. Setting to empty string.")
     elif default is not None:
@@ -148,38 +161,43 @@ def _resolve_default(
 
 
 def def_itemgetter(
-    attr: str, default: PrimitiveValue | None = None, _type: str | None = None
+    attr: str,
+    default: PrimitiveValue | None = None,
+    type_: str | None = None,
+    fallback_tzinfo: tzinfo = UTC,
 ) -> Callable[[Mapping | PrimitiveValue], SortableValue]:
     """
     Like operator.itemgetter but fills in missing keys with a typed default.
 
     Examples:
-        >>> keyfunc = def_itemgetter('n', _type='int')
+        >>> keyfunc = def_itemgetter('n', type_='int')
         >>> keyfunc({'n': 5})
         5
         >>> keyfunc({})
         0
+        >>> # an invalid number sorts via -inf, not NaN
+        >>> keyfunc = def_itemgetter('n', type_='float')
+        >>> keyfunc({}), keyfunc({'n': 'abc'})
+        (-inf, -inf)
 
     """
-    _invalid_type = _type in {CastType.LOCATION, CastType.NONE}
-    invalid_type = bool(_invalid_type or (_type and _type not in CAST_SWITCH))
-    default = _resolve_default(_type, invalid_type, default)
-
-    _invalid_type = _type in {CastType.LOCATION, CastType.PASS, CastType.NONE}
-    invalid_type = _invalid_type or (_type and _type not in CAST_SWITCH)
+    not_switch = type_ and type_ not in CAST_SWITCH
+    invalid_def_type = bool((type_ in INVALID_DEF_TYPES) or not_switch)
+    default = _resolve_default(type_, invalid_def_type, default)
+    invalid_type = bool((type_ in INVALID_TYPES) or not_switch)
 
     def keyfunc(item: Mapping | PrimitiveValue) -> SortableValue:
         if isinstance(item, (dict, CaseInsensitiveDict, Mapping)):
-            value = item.get(attr, default)
+            value = item.get(attr)
         else:
             value = item
 
-        msg = f"Invalid cast type={_type} for key '{attr}'."
+        msg = f"Invalid cast type={type_} for key '{attr}'."
 
         if invalid_type:
             casted = _resolve_uncastable(value, msg, default)
-        elif _type:
-            _casted = cast_value(value, CastType(_type))
+        elif type_:
+            _casted = cast_value(value, CastType(type_))
             casted = cast(PrimitiveValue, _casted)
         elif isinstance(value, (str, int, struct_time)):
             casted = value
@@ -189,6 +207,14 @@ def def_itemgetter(
             casted = value
         else:
             casted = default
+
+        if type_ in DATELIKE_TYPES and isinstance(casted, (date, dt)):
+            if isinstance(casted, dt):
+                aware = ensure_tzinfo(casted, fallback_tzinfo=fallback_tzinfo)
+            else:
+                aware = date_to_datetime(casted, fallback_tzinfo=fallback_tzinfo)
+
+            casted = aware.timestamp()
 
         if casted is None or (isinstance(casted, (float, Decimal)) and isnan(casted)):
             casted = default
@@ -364,6 +390,47 @@ def select_by_id[T](
     return result
 
 
+def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
+    """
+    Reports whether a value is listlike (a multi-item iterable).
+
+    A listlike value is any iterable that is not a mapping, primitive, or ``None``.
+
+    Args:
+        value: The object to classify
+
+    Returns:
+        True when value maps over items, False when it is one item
+
+    Examples:
+    >>> is_listlike([1, 2])
+    True
+    >>> is_listlike((1, 2))
+    True
+    >>> is_listlike(iter([1, 2]))
+    True
+    >>> is_listlike(range(3))
+    True
+    >>> is_listlike({"a": 1})
+    False
+    >>> is_listlike("ab")
+    False
+    >>> is_listlike(0)
+    False
+    >>> is_listlike(None)
+    False
+
+    """
+    if value is None or isinstance(
+        value, (PrimitiveValueType, dict, CaseInsensitiveDict, Mapping)
+    ):
+        result = False
+    else:
+        result = isinstance(value, (Iterable, Sequence))
+
+    return result
+
+
 # TODO: move back to meza
 @overload
 def listize[T](value: list[T]) -> list[T]: ...  # noqa: E704
@@ -387,7 +454,7 @@ def listize[T](value: Iterable[T]) -> Iterable[T]: ...  # noqa: E704
 def listize[T](value: T) -> list[T]: ...  # noqa: E704
 def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
     """
-    Create a listlike object from any value
+    Creates a listlike object from any value.
 
     Args:
         value: The object to convert
@@ -416,9 +483,7 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
     """
     if value is None:
         result = []
-    elif isinstance(value, (PrimitiveValueType, dict, CaseInsensitiveDict, Mapping)):
-        result = [value]
-    elif isinstance(value, (Iterable, Sequence)):
+    elif is_listlike(value):
         result = value
     else:
         result = [value]

@@ -43,6 +43,38 @@ logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 
 
+def ext_from_content_type(content_type: str | None) -> str | None:
+    """
+    Returns the file extension implied by a content type.
+
+    Args:
+        content_type: The response content type, if the source reported one.
+
+    Returns:
+        ``"xml"``/``"json"`` for the feed types, otherwise the content subtype,
+        or ``None`` when no content type is available.
+
+    Examples:
+        >>> ext_from_content_type("application/json; charset=utf-8")
+        'json'
+        >>> ext_from_content_type("text/html")
+        'html'
+        >>> ext_from_content_type(None) is None
+        True
+
+    """
+    if not content_type:
+        ext = None
+    elif "xml" in content_type:
+        ext = "xml"
+    elif "json" in content_type:
+        ext = "json"
+    else:
+        ext = content_type.split("/")[1].split(";")[0]
+
+    return ext
+
+
 def make_blocking(f: RawIOBase | TextIOBase) -> None:
     if fcntl is not None:
         fd = f.fileno()
@@ -100,14 +132,19 @@ def buffer(  # noqa: E704
 def buffer(  # noqa: E704
     f: BinaryFileTypes, binary: bool = ..., *, encoding: str
 ) -> SpooledTemporaryFile[str]: ...
+@overload  # noqa: E302
+def buffer(  # noqa: E704
+    f: FileTypes, binary: bool | None = ..., encoding: str | None = ...
+) -> SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]: ...
 def buffer(  # noqa: E302
     f: FileTypes, binary: bool | None = None, encoding: str | None = None
 ) -> SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]:
     """
-    Materialize *f* into a bounded, re-readable spool (in-memory then disk).
+    Returns a buffered, re-readable copy of ``f``.
 
-    Decodes to text when *encoding* is given for a byte source. *binary* is
-    auto-detected from the first chunk when not supplied.
+    The spool stays in memory until it exceeds the streaming threshold, then
+    spills to disk. Byte streams are decoded when ``encoding`` is set; ``binary``
+    is auto-detected from the first chunk when not supplied.
     """
     chunks = iter(f)
     first = None
@@ -119,7 +156,9 @@ def buffer(  # noqa: E302
     decode = binary and encoding
     encoding = encoding or ""
     mode = "w+b" if binary and not decode else "w+"
-    spool = SpooledTemporaryFile(max_size=STREAMING_THRESHOLD, mode=mode)  # noqa: SIM115
+    spool = SpooledTemporaryFile(  # noqa: SIM115
+        max_size=STREAMING_THRESHOLD, mode=mode
+    )
 
     if first is not None:
         spool.write(cast(bytes, first).decode(encoding) if decode else first)
@@ -131,11 +170,43 @@ def buffer(  # noqa: E302
     return spool
 
 
+def seekable(
+    f: FileTypes, binary: bool | None = None, encoding: str | None = None
+) -> FileTypes | SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]:
+    """
+    Returns ``f`` rewound, or a buffered copy when it cannot be rewound.
+
+    A fetched stream is forward-only, so readers that need a second pass (e.g.
+    a headerless csv) get a spooled copy instead. ``f`` is consumed when it is
+    buffered, so close it separately.
+
+    Args:
+        f: The file to rewind or copy.
+        binary: Whether the chunks are bytes. Auto-detected when omitted.
+        encoding: Encoding used to decode byte chunks while buffering.
+
+    Returns:
+        ``f`` itself when it rewound, otherwise a rewound spooled copy.
+
+    """
+    seek = getattr(f, "seek", None)
+    rewound = False
+
+    if callable(seek):
+        try:
+            seek(0)
+        except (OSError, ValueError, AttributeError):
+            pass
+        else:
+            rewound = True
+
+    return f if rewound else buffer(f, binary=binary, encoding=encoding)
+
+
 @overload
 def opener(  # noqa: E704
     url: str,
     memoize: Literal[True],
-    delay: int = ...,
     encoding: str = ...,
     params: Mapping[str, str | bytes | int | float] | None = ...,
     offline: bool = ...,
@@ -148,7 +219,6 @@ def opener(  # noqa: E704
 def opener(  # noqa: E704
     url: str,
     memoize: Literal[False] = ...,
-    delay: int = ...,
     encoding: str = ...,
     params: Mapping[str, str | bytes | int | float] | None = ...,
     offline: bool = ...,
@@ -161,7 +231,6 @@ def opener(  # noqa: E704
 def opener(  # noqa: E704
     url: str,
     memoize: Literal[True],
-    delay: int = ...,
     encoding: str = ...,
     params: Mapping[str, str | bytes | int | float] | None = ...,
     offline: bool = ...,
@@ -173,7 +242,6 @@ def opener(  # noqa: E704
 def opener(  # noqa: E704
     url: str,
     memoize: Literal[False] = ...,
-    delay: int = ...,
     encoding: str = ...,
     params: Mapping[str, str | bytes | int | float] | None = ...,
     offline: bool = ...,
@@ -184,7 +252,6 @@ def opener(  # noqa: E704
 def opener(  # noqa: E302
     url: str,
     memoize: bool = False,
-    delay: int = 0,
     encoding: str = ENCODING,
     params: Mapping[str, str | bytes | int | float] | None = None,
     offline: bool = True,
@@ -192,12 +259,15 @@ def opener(  # noqa: E302
     timeout: float | None = None,
     **_: object,
 ) -> tuple[FileTypes, str | None]:
+    if not url:
+        raise TypeError("a url is required")
+
     params = params or {}
     url = get_abspath(url, offline=offline)
     r = None
 
     if url.startswith("http"):
-        r = requests.get(url, params=params, stream=binary, timeout=timeout)
+        r = requests.get(url, params=params, stream=not memoize, timeout=timeout)
         r.raise_for_status()
         r.raw.decode_content = True
 
@@ -215,9 +285,6 @@ def opener(  # noqa: E302
             response = cast(StreamReader, reencoded)
     else:
         req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
-
-        if delay:
-            logger.debug("Request delaying not currently implemented.")
 
         if (r := urlopen(req, timeout=timeout)) and binary:  # noqa: S310
             response = buffer(r, binary=True) if memoize else cast(RawIOBase, r)
@@ -372,13 +439,4 @@ class Fetch[B: (Literal[True], Literal[False])]:
 
     @property
     def ext(self) -> str | None:
-        if not self.content_type:
-            ext = None
-        elif "xml" in self.content_type:
-            ext = "xml"
-        elif "json" in self.content_type:
-            ext = "json"
-        else:
-            ext = self.content_type.split("/")[1].split(";")[0]
-
-        return ext
+        return ext_from_content_type(self.content_type)

@@ -7,7 +7,16 @@ sequencing). Consolidates the former `P1/P2/P5/P6/P7/P10_CHECKLIST.md` and the f
 
 ## Progress tracker (authoritative)
 
-Suite: **709 passed** (pyright/ruff clean). Branch: `features` (the user commits).
+Suite: **802 passed** (pyright/ruff clean). Branch: `features` (the user commits).
+
+**Merge gate (`features` → `main`): blocked on R2.** R1 and R3 are fixed; R2
+(`PyPipe.__call__` silently drops omitted kwargs — [correctness-audit register](gameplans/correctness-audit.md#8-open-defect-register--features-branch-audit))
+is the one open P0. By the 2026-08-24 decision it is **deferred, not discharged**: the fix is
+folded into the Pipeline/Execution split (fold, don't patch), so **R2 stays live on `features`
+until that split lands** ([MILESTONES § split](MILESTONES.md) · [release-readiness § 9.1](gameplans/release-readiness.md#91-merge-gate-features--main)).
+Planning the fix is not discharging it — the gate does not clear until the split removes the
+defect. The other register rows are P1–P3 and belong to the release gate — next up is R4 (async
+`send` buffers its whole stream).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -17,26 +26,41 @@ Suite: **709 passed** (pyright/ruff clean). Branch: `features` (the user commits
 | **P4** inference diagnostics | ✅ done | § P4; `ReturnInference` |
 | **P5** one-shot lifecycle | ✅ done | § P5; `PipeState` |
 | **P6** `ExecutionMode` | ✅ done | § P6 |
-| **P7** sync/async parity + true async streaming | ✅ done | § P7. **Carryover:** bounded-memory streaming *export*. |
+| **P7** sync/async parity + true async streaming | ✅ done | § P7. **Carryover:** bounded-memory streaming *export* → design in [gameplans/feed-native-streaming.md](gameplans/feed-native-streaming.md). |
 | **P8** module registry + entry points | ✅ done | § P8; `ext/{registry,pipelines,resolver}.py`, `Resolver` protocol, symmetric dispatch |
-| **P9** fluent discoverability | ⏳ next | value-taking chaining (`.pipe`/`\|`) + `ModuleName` base shipped; **P9A** = generated `Module` tree + `available_modules`/`__dir__`/stubs (reads P8) → [gameplans/module-enums.md](gameplans/module-enums.md) |
+| **P9** fluent discoverability | ⏳ in progress | **P9A done** (§ P9A): generated flat `Modules` namespace + `Sources`/`Transforms`/`Sinks` bucket tree (`riko/modules/_names.py`), `derive_category` taxonomy, `riko.ext.codegen` + `gen-names` CLI/drift guard, `list_modules`/`describe_module`, value-taking `.pipe`/`\|`. **Remaining (non-P9A):** installed-env aggregate `riko.generated.Modules` + `.pyi` stubs → [gameplans/module-enums.md](gameplans/module-enums.md) |
 | **P10** bounded parallelism + backpressure | ✅ done | § P10. **Carryover:** pipe-level budget via `Context` → P14. |
 | **P11** pub/sub + poll protocols | ⬜ pending | `Publisher`/`Subscription`/`.poll` |
 | **P12** stable errors + events | ⬜ pending | `RikoError` tree, `EventSink` |
-| **P13** public/typing/internal test split | ⬜ pending | `tests/typing/` |
+| **P13** public/typing/internal test split | ⬜ pending | `tests/typing/`; test-layering audit + fix/remove/consolidate plan → [gameplans/testing.md](gameplans/testing.md) |
 | **P14** extensions outside core | ⬜ pending | `riko-microsoft`, `riko-ai` |
 
 **Milestone 1 (P1–P7): complete** (P10 landed early, out of sequence, at the user's request). **P8
-landed** (the M2 seam), so the current/next phase is **P9** (the tracker's ⏳ row above); pending-phase
-design + file maps + exit tests are in [MILESTONES.md](MILESTONES.md).
+landed** (the M2 seam). **P9A is complete**, targeted for release v0.76.0: the generated `Modules` tree +
+`derive_category` taxonomy + `riko.ext.codegen`/`gen-names` + `list_modules`/`describe_module`
+(on top of the v0.75.0 prerequisites — value-taking `|`/`.pipe()`, `ModuleName` base, `isasync`
+inference). **Concrete next action: the remaining non-P9A P9 work** — the installed-environment
+aggregate `riko.generated.Modules` (covering entry-point extensions) and `.pyi` fluent stubs. Full
+plan: [gameplans/module-enums.md](gameplans/module-enums.md). Other pending-phase design + file maps
++ exit tests are in [MILESTONES.md](MILESTONES.md).
 
 **Accepted/deferred (documented, not bugs):** sync/async **udf-count divergence under partial
 consumption** (eager-concurrent async vs lazy-sequential sync — see the `AsyncPipe` docstring +
-§ P7); bare `async for … break` without close emits GC noise. Migration shims in
-`MIGRATION_SHIMS.md` (row 18: `threads` → `executor`).
+§ P7); bare `async for … break` without close emits GC noise. The former `parallel`/`threads` →
+`executor` migration is **subsumed by the pre-1.0 clean break** (§ release gate): `parallel`/
+`threads` live only on the removed `SyncPipe`/`SyncCollection`, so `executor=` becomes the sole
+concurrency vocabulary and `Pipeline.with_config` never grows them — no shim doc.
 
 **Done phases** below carry a full summary (what landed / decisions / carryovers). Guiding &
 resolved decisions are at the bottom.
+
+> **Pre-1.0 release gate.** The cross-cutting DX/API-shape polish that *sequences* items across
+> P9/P11/P12/P13 (pub/sub 1.0 contract, config-validation strictness, **clean-break**
+> Pipeline/Execution split, `Collection`→`Pipeline(source=…)`, `with_config`/`executor=` cleanup,
+> wheel/PyPI release fidelity) plus its Must-land/Preferred/Can-wait triage lives in
+> [gameplans/release-readiness.md](gameplans/release-readiness.md); its file map · sequence · exit
+> tests · DoD live in [MILESTONES.md](MILESTONES.md) § Pipeline/Execution split. Phase *status*
+> still lives only in this tracker.
 
 > **Landing a phase → update (single-source-of-truth checklist):** (1) this tracker row +
 > suite count; (2) add a done-phase summary section below (migrate the design out of
@@ -267,7 +291,7 @@ wrapper** (the generated module fn is never mutated). Codegen emits a **stable `
 entry**, so a sub-pipeline resolves exactly like a built-in — this removed the overloaded `pipe_name`
 argument (P8.6). `list_modules` overlays registry (runtime + entry-point) modules. `mark_subpipe`
 widened (it only stamps metadata). Speculative `ModuleDefinition` discovery fields
-(`provider`/`enum_name`/`user_type`/`docs_url`) dropped until P9A needs them. Entry-point group name:
+(`provider`/`enum_name`/`category`/`docs_url`) dropped until P9A needs them. Entry-point group name:
 `riko.modules`.
 
 **Pipe-authoring ergonomics (landed alongside).** The decorators now **infer `isasync`**
@@ -278,8 +302,56 @@ callable not named `async_pipe` (a lambda), or a sync `def async_pipe` handed to
 overloads make `@operator()` on a coroutine statically async. Also on this branch: `pool_scope`'s
 `"stage"` value renamed to `"pipe"` (vs `"pipeline"`). Tests: `tests/internal/test_decorators.py`.
 
-**Carryover:** none. Unblocks **P9A** (the generated `Module.<Type>.<Subtype>.<NAME>` tree reads the
-registry/catalog). Tests: `tests/internal/test_resolver.py`.
+**Carryover:** none. Unblocks **P9A** (the generated flat `Modules` namespace +
+`Sources`/`Transforms`/`Sinks` bucket tree reads the registry/catalog). Tests:
+`tests/internal/test_resolver.py`.
+
+## P9A — enum + taxonomy discoverability
+
+**Landed on `features`; targeted for release v0.76.0.** A typed *discovery* layer over the canonical string ids — strings stay
+canonical everywhere (JSON, entry points, resolver); every enum member's `.value` **is** the id.
+
+- **Taxonomy (`derive_category`, `riko/ext/names.py`).** Pure/total `category` derivation from
+  **data-flow capability only** (never the runtime `type`/`subtype` axis) into
+  `ModuleCategory = Literal["source", "transform", "sink"]` (lowercase singular — this is the
+  `list_modules(category=…)` filter vocabulary): precedence `override → provider (non-`riko` →
+  provider namespace) → `md.name in SINK_NAMES` → `md.subtype == "source"` (≡ `ftype is NONE`) →
+  `"transform"`. `SINK_NAMES` = `frozenset({"output", "write"})`. Codegen maps those three strings to
+  the plural bucket **enum class names** (`_CATEGORY_CLASS`: `source`→`Sources`, `transform`→
+  `Transforms`, `sink`→`Sinks`). **`Sinks` now has one built-in: `write`** (`riko/modules/write.py`, a
+  pass-through operator serializing the stream to `conf['url']` via a `Targets` converter); `output`
+  stays unmatched (compiler-local passthrough, absent from the pkgutil catalog).
+- **Generator (`riko/ext/codegen.py`).** `enum_member_name` (uppercase; `._-/`+ws → `_`; collapse
+  repeats; leading-digit → `_`-prefix; `enum_name` override) — **collisions raise `ValueError`** with
+  both ids, never silently disambiguate. `generate_module_names` emits leaf `StrEnum`s grouped by
+  `category` (+ a flat `Modules` wrapper so `Modules.FETCH is Sources.FETCH` — ids are globally unique,
+  so the wrapper needs no category segment), sorted by id, fixed header, no timestamps →
+  byte-stable/VCS-checkable. `catalog_entries()` reads built-ins only.
+- **Committed surface (`riko/modules/_names.py`).** `Modules`/`Sources`/`Transforms`/`Sinks`
+  re-exported from the **stable `riko`/`riko.api`** surface — *not* `riko.modules`, whose `Module`
+  already names the decorator base (unflagged collision; see Guiding decisions). Canonical import is
+  `riko.modules._names`. `ModuleName` base stays an `riko.ext` symbol.
+- **Introspection (`riko/modules/_metadata.py`).** `list_modules(*, type, subtype, category)`
+  (runtime truth via `list_modules`; the three axes are lowercase `Literal` strings —
+  `ModuleType`/`ModuleSubtype`/`ModuleCategory`, e.g. `category="sink"` — **not** the discovery-tree
+  identifier enums, which are a separate axis) + `describe_module` (`ModuleDefinition | None`;
+  graceful, no raise). Both on the stable surface.
+- **CLI.** `manage codegen` + `gen-names` script (`riko.cli.gen_names:main`), idempotent, parallels
+  `gen-config`. Drift guard `test_generated_names_match`.
+
+**Import-cycle note:** `riko.ext` depends on `riko.modules` (`operator`/`processor`/`splitter` +
+types), so `riko.modules._names` (→ `riko.ext.names` → `riko.ext.__init__`) can only be imported
+*after* `riko.modules` is fully initialized. That, plus the `Module` name collision, is why the
+discovery tree is re-exported from the stable surface (late `# noqa: E402` block in `riko/__init__`)
+rather than from `riko.modules`.
+
+**Tests:** `tests/internal/test_codegen_names.py` (taxonomy golden, member normalization, collision
+diagnostic, byte-stability, drift guard); `TestModuleNameEnum` + `TestExportTargets`
+(`tests/public/test_collections.py`, enum≡string resolution via ctor/`|`/`.pipe()`, export targets);
+`list_modules` filtering in `tests/public/test_modules.py`; surface-export presence
+(`Modules`/`Sources`/`Transforms`/`Sinks`/`describe_module`) in `tests/public/test_imports.py`. (The
+separate `test_fluent_discovery.py` was dropped as redundant — its coverage lives in those homes.)
+**Carryover:** the non-P9A P9 work — installed-env aggregate `riko.generated.Modules` + `.pyi` stubs.
 
 ## P10 — Bounded parallelism + backpressure
 
@@ -324,6 +396,17 @@ Sync and async pub/sub are two hubs under `riko/_pubsub/` (state via `contextvar
 Ownership migrates to `Context.resources` (P11) before concurrent independent pipelines share a
 process. The eager async receiver (collect batch → `iter`) became an async generator in P7.3.
 
+`SyncPipe.subscribe`/`publish` (fanout-topology F5a) already hide the sync hub behind a public
+pair — eager registration, no `next()` priming, and a non-blocking marker-free drain
+(`max_wait=0`). P11's `Publisher`/`Subscription` should formalize *that* surface, not the raw
+`SyncPipe("receive", …)` one, and **blocking belongs to the `Subscription`, not to `receive`**
+— the in-process hub never has to wait, a broker-backed subscription does
+([release-readiness.md § 2](gameplans/release-readiness.md)). Teardown ownership is still wrong
+(an idle drain destroys the subscription instead of ending one pass); that is
+[F5b](gameplans/fanout-topology.md), **folded into this phase** rather than fixed first,
+because a local fix would build on the `DONE` sentinel and `send`'s `ids` dict that this
+rewrite deletes.
+
 ## Guiding & resolved decisions
 
 Folded in from the retired `REFINEMENT_PLAN.md`. Cross-phase decisions that survived implementation
@@ -344,6 +427,19 @@ Folded in from the retired `REFINEMENT_PLAN.md`. Cross-phase decisions that surv
 7. **Layer internally, unify externally** — `ModuleRegistry` (modules) + `PipelineResolver`
    (composed pipelines) behind one `PipeResolver` façade; invert the runtime→compiler dependency
    (P8 — see MILESTONES M2).
+8. **Enums are discovery, strings are canonical** — the generated `Modules` tree is a typed layer
+   over string ids; `.value` is always the id; serialization emits the string (P9A). The discovery
+   `Modules` wrapper is re-exported from the **stable `riko`/`riko.api`** surface, **not**
+   `riko.modules` — `riko.modules.Module` already names the decorator base (`_decorators.Module`), a
+   collision the gameplan hadn't flagged (resolved by naming the wrapper `Modules`, plural); keeping
+   both required the tree to live on the stable surface.
+9. **A defect in an API that is being deleted is fixed by the replacement, not twice** — decided
+   2026-08-24 for correctness-audit **R2** (`PyPipe.__call__` erasing omitted config). The
+   `Pipeline`/`Execution` split removes the class, so the repair is immutable reconfiguration in
+   the new API. The price is explicit: the defect stays live until the split lands, so the deferral
+   is recorded in the register, the merge gate, and the split's DoD — a deferral that is only
+   written in one place turns into a silently shipped bug. Corollary: the replacement must
+   distinguish **omitted from explicit `None`** with a sentinel, or it inherits the same defect.
 
 **Backward-compatibility contract (evergreen).** Every phase ships compat shims (moved-name
 re-exports, `describe_*` properties, re-homed exceptions keep old bases); raw pipeline JSON must
