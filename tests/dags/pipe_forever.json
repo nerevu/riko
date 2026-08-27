@@ -8,7 +8,7 @@
             "type": "truncate",
             "conf": {
                 "count": {
-                    "type": "float",
+                    "type": "int",
                     "value": "3"
                 }
             }
