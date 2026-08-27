@@ -136,8 +136,8 @@ from riko.bado.itertools import (
 )
 from riko.context import Context, ExecutionMode, parse_context
 from riko.exceptions import PipelineStateError
+from riko.ext._resolver import pipe_resolver
 from riko.ext.names import normalize_module_name
-from riko.ext.resolver import pipe_resolver
 from riko.types.general import (
     AsyncPipeParser,
     AsyncSource,

@@ -28,7 +28,7 @@ from riko.compile import (
 )
 from riko.context import Context, ExecutionMode
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
-from riko.ext.pipelines import pipeline_resolver
+from riko.ext._pipelines import pipeline_resolver
 from riko.parsers import IS_LXML
 from riko.types.general import (
     AsyncPipelineDependencies,

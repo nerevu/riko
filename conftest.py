@@ -2,7 +2,7 @@ import pytest
 
 from riko._pubsub import reset_pubsub
 from riko.bado import issync
-from riko.ext.pipelines import DirectoryStore, PackageStore, pipeline_resolver
+from riko.ext._pipelines import DirectoryStore, PackageStore, pipeline_resolver
 from riko.parsers import IS_LXML
 from riko.paths import ROOT_DIR
 

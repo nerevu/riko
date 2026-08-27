@@ -45,8 +45,8 @@ from riko._iterutils import listize
 from riko._strutils import replacer
 from riko.context import Context, ExecutionMode
 from riko.dotdict import DotDict
+from riko.ext._resolver import pipe_resolver
 from riko.ext.codegen import ruff_format
-from riko.ext.resolver import pipe_resolver
 from riko.pprint2 import Id, repr_arg, repr_args
 from riko.topsort import topological_sort
 from riko.types.compile import (

@@ -11,7 +11,7 @@ import pytest
 from riko.collections import SyncPipe
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.ext import register
-from riko.ext.pipelines import (
+from riko.ext._pipelines import (
     CompositeStore,
     DirectoryStore,
     MappingStore,
@@ -19,8 +19,8 @@ from riko.ext.pipelines import (
     PipelineResolver,
     pipeline_resolver,
 )
+from riko.ext._resolver import PipeResolver, pipe_resolver
 from riko.ext.registry import ModuleDefinition, registry, reset_registry
-from riko.ext.resolver import PipeResolver, pipe_resolver
 from riko.modules import list_modules, tokenizer
 from riko.paths import ROOT_DIR
 
