@@ -84,6 +84,9 @@ Changes
   moves to ``Sources`` in the discovery tree and its ``assign`` default changes from
   ``"urlbuilder"`` to ``"content"`` (observable only with ``emit=False``).
 
+- ``riko.ext.resolver`` and ``riko.ext.pipelines`` are now explicitly private under
+  ``riko.ext._resolver`` and ``riko.ext._pipelines``.
+
 Fixed
 ~~~~~
 
