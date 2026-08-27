@@ -14,7 +14,7 @@ When two plans need the same concept:
 1. choose one authoritative owner;
 2. keep the complete contract, API shape, lifecycle, and tests in that owner;
 3. replace copies in dependent plans with a short specialization note and link;
-4. only repeat details when the dependent plan changes the semantics materially;
+4. only repeat details when the dependent plan materially specializes semantics;
 5. update this table if ownership changes.
 
 Cross-plan examples are acceptable. Parallel specifications are not.
@@ -22,124 +22,156 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 ## 3. Authoritative contracts
 
 | Contract | Authoritative gameplan | Other plans should contain only |
-| --- | --- | --- |
+|---|---|---|
+| immutable `Pipeline`, private sync/async execution, immutable `Context` | `execution-semantics.md` | domain-specific construction/execution examples |
+| resource ownership/lifecycle/dependencies/bindings | `execution-semantics.md` | resource implementations and required local names |
 | execution modes, boundedness, cancellation, ordering | `execution-semantics.md` | domain-specific constraints |
 | generic `RetryPolicy`, timeout, error/disposition policy | `execution-semantics.md` | retryable-error classification and provider delay hints |
+| `FeedResult`, `Metadata`, private per-item provenance/identity | `execution-semantics.md` | source/operator-specific metadata meaning |
+| canonical identity/fingerprints/generation/idempotency | `execution-semantics.md` | domain-specific semantic identity hints |
+| `FeedState`, `StateKey`, `StateRecord`, `StateStore`, CAS, `.checkpoint()` | `execution-semantics.md` | typed payload meaning for a particular source/operator |
+| `StateStoreCapabilities` and state serialization preflight | `execution-semantics.md` | backend implementation/documentation |
 | connector sessions, transport lifecycle, credential references/resolution | `connectors.md` | provider/protocol credential implementations |
 | REST pagination, endpoint dependencies, REST cursor extraction | `rest-incremental.md` | provider-specific REST vocabulary |
-| source checkpoints, checkpoint stores, dedupe/change/anomaly monitoring state | `feed-monitoring.md` | source-specific cursor encoding |
-| recurring source polling/bootstrap semantics | `feed-monitoring.md` | deployment cadence or source specialization |
-| Pandas, Arrow, Polars, frame/batch conversion | `tabular-interop.md` | where a frame boundary is used |
+| recurring source observation/bootstrap/dedupe/change/anomaly policy | `feed-monitoring.md` | source-specific observation/cursor payload meaning |
+| Pipeline batch semantics/backend negotiation | `execution-semantics.md` | representation-specific conversion details |
+| Pandas, Arrow, Polars/frame boundaries | `tabular-interop.md` | where a frame boundary is used |
 | file/artifact codecs, report contexts, rendering, artifact lineage | `artifact-conversion.md` | domain-specific artifact consumers |
 | provider resources/actions, auth lifecycle projection, webhooks | `provider-integrations.md` | provider-specific capability implementations |
-| `OperationHandle` and interval/event/hybrid operation waiting | `provider-integrations.md` | provider status normalization and terminal-state mapping |
+| `OperationHandle` and interval/event/hybrid **operation waiting** | `provider-integrations.md` | provider status normalization and terminal-state mapping |
 | common `CapabilityInfo`, effects, catalog, discovery/execution policy | `mcp.md` | domain-specific metadata attached to shared capability IDs |
 | fan-out, routing, subscriber lifecycle, `union`/`join` topology | `fanout-topology.md` | domain-specific branch examples |
-| shared DAG structure/query/visualization for agents and pipelines | `agents.md` | scenario-specific topology policy |
-| serialized agent scenarios, model policy, retrieval, evaluation | `agent-scenarios.md` | underlying DAG/model/tool contracts |
-| Microsoft Graph/ARM/PowerShell adapters and `MicrosoftContext` | `azure-automation.md` | administrative policy specialization |
+| iterative agent workflow semantics | `agents.md` | scenario-specific model/tool policy; agents reuse Pipeline/loop |
+| serialized agent scenarios, model policy, retrieval, evaluation | `agent-scenarios.md` | underlying Pipeline/loop/model/tool contracts |
+| Microsoft Graph/ARM/PowerShell adapters and Microsoft resource implementations | `azure-automation.md` | administrative policy specialization |
 | desired-state Microsoft administration, ChangePlan, approval, verify/handoff | `microsoft-administration.md` | adapter mechanics from Azure plan |
-| orchestration, external scheduling, durable run boundaries | `orchestration.md` | in-process finite primitive semantics |
-| callable pipe contract | `callable-pipes.md` | domain examples only |
-| currency/location reference tables (`_reference.py`) + `riko.currencies`/`riko.locations` facades | `reference-data.md` | consumers of the tables (`cast_location`, `currencyformat`, geolocate's `currency` type) |
+| orchestration, external scheduling, `PipelineRunRequest`/`PipelineRef`, durable run boundaries | `orchestration.md` | in-process finite primitive semantics |
+| callable Pipeline node contract | `callable-pipes.md` | domain examples only |
+| Click-native CLI/plugin contract | `cli.md` | package-owned Click commands calling reusable services |
+| currency/location reference tables (`_reference.py`) + facades | `reference-data.md` | consumers of the tables |
 | extension/plugin registration | `extensibility.md` | package-specific registrations |
-| test-layer ownership (doctest/public/internal/functional) + suite consolidation | `testing.md` | phase-specific typing-split mechanics (`tests/typing/`) in MILESTONES P13 |
-| `bado` ↔ AnyIO version-alignment audit (remove/replace/keep helpers) + async benchmarking/profiling | `bado-anyio-alignment.md` | the async-primitive *runtime semantics* (owned by `execution-semantics.md` Appendix A) |
-| Feed-native pipe migration, streaming-memory model, streaming `write`/`STREAM_ENCODERS`, bounded `split`, sync/async streaming parity | `feed-native-streaming.md` | the `parser_mode` mechanism (`callable-pipes.md`), `BatchPolicy` (`execution-semantics.md` §16), serialized codecs (`artifact-conversion.md`), AnyIO floor (`bado-anyio-alignment.md`) |
-| Windows Autopilot new-device provisioning scenario (input model, canonical tags, state machine, workflow) | `autopilot-provisioning.md` | generic Microsoft adapters (`azure-automation.md`), desired-state/ChangePlan/verify (`microsoft-administration.md`), `OperationHandle` waiting (`provider-integrations.md`), module-enum codegen (`module-enums.md`) |
-| Pre-1.0 DX/API-shape polish + release/package fidelity gate (config strictness, Pipeline/Execution split, Collection→`Pipeline(source=…)`, `with_config`/`executor=`, optional-dep UX, wheel/PyPI CI, release triage) | `release-readiness.md` | *ecosystem* 1.0 conformance/deprecation windows (`extensibility.md` E7), pub/sub phases (`fanout-topology.md` F1/F4/F5), sync↔async execution adaptation (`execution-semantics.md`), decorator one-sided DX (`callable-pipes.md`), errors (P12), discoverability (`module-enums.md`), unified CLI (`cli.md`) |
-| runtime defect taxonomy (C1–C12), audit method/phases (A0–A5), and the open defect register (`R` rows — one verified row per known non-module defect) | `correctness-audit.md` | a **row reference plus the design** when a fix is more than a local repair (`execution-semantics.md` §7.2 timeout scopes, `feed-native-streaming.md` §2 laziness, `bado-anyio-alignment.md` §2/§2c helpers + encoding, `module-enums.md` P9A.7 identifiers, `extensibility.md` §24 name reservation, `release-readiness.md` §9.1 merge gate); the regression coverage lives in `testing.md` §2b |
+| test-layer ownership + suite consolidation | `testing.md` | phase-specific typing/file-map mechanics |
+| `bado` <-> AnyIO helper/version audit + benchmarking | `bado-anyio-alignment.md` | async primitive runtime semantics from `execution-semantics.md` |
+| Feed-native parser migration/streaming-memory/streaming `write` | `feed-native-streaming.md` | `parser_mode` mechanism from `callable-pipes.md`; batch contract from `execution-semantics.md` |
+| Windows Autopilot provisioning scenario | `autopilot-provisioning.md` | generic Microsoft adapters/admin/wait/module-enum contracts |
+| Pre-1.0 DX/release/package fidelity gate | `release-readiness.md` | target API semantics remain owned by execution/fanout/callable/CLI gameplans |
+| runtime defect taxonomy/open defect register | `correctness-audit.md` | row reference plus owning design/fix |
 
 ## 4. Important boundaries
 
+### Core state versus domain state
+
+`execution-semantics.md` owns the persistence primitives and lifecycle:
+
+```text
+FeedState[T]
+StateKey[T]
+StateRecord[T]
+StateStore / AsyncStateStore
+CAS
+checkpoint owner/boundary/restore rules
+```
+
+`feed-monitoring.md` owns monitoring semantics such as bootstrap, dedupe, changed/anomaly,
+and alert-history payload meaning. `rest-incremental.md` owns REST cursor extraction/encoding.
+Neither defines a parallel `SourceCheckpoint`, `CheckpointStore`, or generic state store.
+
 ### Transport versus collection semantics
 
-`connectors.md` owns HTTP sessions, credentials, response envelopes, and lifecycle.
-`rest-incremental.md` owns how a REST collection is traversed: record selection, pagination,
-dependent endpoints, and extraction cursors.
-
-### Source state versus REST cursors
-
-`feed-monitoring.md` owns `SourceCheckpoint`, checkpoint stores, commit ordering, observation
-state, dedupe, and change detection. `rest-incremental.md` only defines how REST requests and
-responses encode/decode a cursor.
+`connectors.md` owns sessions, credentials, response envelopes, acknowledgements, and
+transport lifecycle. `rest-incremental.md` owns how a REST collection is traversed: record
+selection, pagination, dependent endpoints, and cursor extraction.
 
 ### Source polling versus operation waiting
 
 These are intentionally different contracts:
 
 ```text
-feed-monitoring.md
-    periodically observe a finite data source for new/changed records
+Pipeline.poll / feed-monitoring.md
+    repeat independent finite source observations
 
-provider-integrations.md
-    wait for one already-started provider operation to reach terminal state
+provider-integrations.md wait_operation
+    track one already-started provider operation to terminal state
 ```
 
-A source poll may create many independent records across repeated observations. An operation
-wait tracks one operation identity and repeatedly re-reads its authoritative status.
-
-Do not expose both as competing generic `.poll()` APIs.
+Do not expose interval/event/hybrid provider-operation waiting as a competing generic
+`.poll()` API. `Pipeline.poll(source, interval=...)` is source recurrence; `Subscription.poll`
+uses the same recurrence vocabulary for a subscription source.
 
 ### Retry versus recurrence versus orchestration rerun
 
-`execution-semantics.md` owns retrying an operation **inside a Riko run**.
+`execution-semantics.md` owns retrying one operation inside a Riko execution.
+`feed-monitoring.md` may define the delay/policy between independent finite observations.
+`orchestration.md` may rerun the whole `PipelineRunRequest`. Only one layer retries a given
+failure domain. `CheckpointConflictError` is not automatically reloaded/rerun by StateStore.
 
-`feed-monitoring.md` may define delay/backoff between independent source observations after
-a failed finite poll, but it should use the shared retry contract for retries within one
-attempt.
+### Batch semantics versus frame conversion
 
-`orchestration.md` may rerun the entire `PipelineRunRequest`. That is a run-level retry, not
-another `RetryPolicy` implementation.
+`execution-semantics.md` owns:
 
-Only one layer should retry a given failure domain.
+```python
+Pipeline(batch=True, batch_size=...)
+batch_backend=...
+```
+
+and the native -> Arrow -> Polars -> Pandas -> Python-list negotiation order.
+`tabular-interop.md` owns concrete Pandas/Arrow/Polars boundaries and scalar/index/null
+conversion. There is no public `BatchPipe` or `BatchPolicy` owner.
 
 ### Frames versus artifacts
 
-`tabular-interop.md` owns in-memory Pandas/Arrow/Polars boundaries. `artifact-conversion.md`
-owns serialized formats and rendered artifacts such as CSV/XLSX/Parquet/vCard/HTML/PDF.
-A connector may transport either records or an artifact, but it does not own frame APIs.
+`tabular-interop.md` owns in-memory representations. `artifact-conversion.md` owns serialized
+formats/rendered artifacts such as CSV/XLSX/Parquet/vCard/HTML/PDF. A connector may transport
+either records or artifacts but does not own frame APIs.
+
+### Context/resources versus live runtime handles
+
+`Context` is immutable configuration/resource definition. Live clients/sessions/handles are
+execution-owned resolved resources. Domain plans may define resource implementations or
+required aliases, but must not introduce a public `ExecutionContext` or treat
+`Context.resources` as a mutable handle bag.
 
 ### Provider authentication versus credential storage
 
-`connectors.md` owns the rule that serialized workflows contain credential references and
-the execution context resolves/redacts secret material.
-
-`provider-integrations.md` may define provider-facing lifecycle capabilities such as setup,
-status, refresh, or revoke, but must not redefine secret storage/resolution.
-
-Provider packages such as `riko-microsoft` implement the shared credential-provider
-contract rather than introducing their own generic token-provider protocol.
+`connectors.md` owns credential reference/resolution/redaction rules.
+`provider-integrations.md` owns provider-facing setup/status/refresh/revoke projections.
+Provider packages implement shared credential/resource contracts rather than a new generic
+token store.
 
 ### Provider semantics versus common capability metadata
 
-`provider-integrations.md` owns provider-specific resource/action meaning, identity,
-environments, batching, upsert, and operation behavior.
+`provider-integrations.md` owns provider-specific resource/action meaning, environments,
+batching, upsert, webhook, identity-map and operation behavior. `mcp.md` owns common capability
+identity/schemas/effects/catalog/discovery/execution/approval policy.
 
-`mcp.md` owns common capability identity, schemas, data shapes, effects, cataloging,
-discovery, and execution/approval policy.
+### Fan-out versus shared ancestry
 
-Provider, Microsoft, or agent plans should project into the common capability catalog rather
-than maintain parallel `ToolSpec`/catalog definitions.
+`fanout-topology.md` owns explicit branch semantics. Shared DAG ancestry does not imply
+broadcast. Branching is represented explicitly by `split()` or `publish()`. Public Python
+vocabulary is `publish`/`subscribe`/`Publisher`/`Subscription`; low-level compatibility
+`send`/`receive` names do not redefine the public target contract.
+
+### Agent iteration versus DAG structure
+
+`agents.md` does **not** own a second `AgentGraph`. Agent workflows are ordinary Pipeline
+DAGs; the DAG remains acyclic and existing `loop` owns iterative state/termination. Agent
+scenario plans configure model/tool/retrieval/evaluation policy over those primitives.
 
 ### Microsoft adapter versus administration policy
 
-`azure-automation.md` owns Microsoft execution mechanics: `MicrosoftContext`, credential
-implementations, Graph/ARM/PowerShell clients, throttle/error classification, and mapping
-provider responses to `OperationHandle`.
+`azure-automation.md` owns Microsoft execution adapters/resource implementations and maps
+provider responses to shared provider-operation contracts. `microsoft-administration.md`
+owns desired-state/risk/ChangePlan/approval/verification/audit/handoff policy.
 
-`microsoft-administration.md` owns desired-state planning, Microsoft administrative
-risk/scope metadata, ChangePlan, plan-bound approval, dry-run, verification, audit evidence,
-and human handoffs.
+Generic retry/state/idempotency comes from `execution-semantics.md`; common capability policy
+from `mcp.md`; operation waiting from `provider-integrations.md`.
 
-Generic retry comes from `execution-semantics.md`; generic capability policy from `mcp.md`;
-operation waiting from `provider-integrations.md`.
+### CLI adapter versus domain services
 
-### Agent graph versus scenario configuration
-
-`agents.md` owns shared graph structure and pipeline-versus-agent execution separation.
-`agent-scenarios.md` owns serialized rosters, model policies, tool grants, retrieval, and
-evaluation. It should reference graph behavior rather than specifying a second DAG model.
+`cli.md` owns native Click command/plugin registration, terminal configuration assembly,
+rendering, prompts, and exit codes. Plugins return/register Click commands; they do not
+receive argparse parser objects. CLI constructs immutable `Context`; domain services create
+private executions when needed.
 
 ## 5. Review checklist
 
@@ -147,10 +179,12 @@ Before merging a new gameplan or substantial update:
 
 - Does it introduce a contract already owned above?
 - Does it copy a dataclass/protocol/API from another plan?
-- Does it repeat generic lifecycle, retry, credential, checkpoint, capability, or boundedness
+- Does it create `ExecutionContext`, `BatchPipe`, `CheckpointStore`, `AgentGraph`, or another
+  competing generic runtime abstraction?
+- Does it repeat lifecycle, retry, credential, state, identity, capability, or boundedness
   rules?
-- Is it using `poll` to mean source recurrence, operation waiting, or both?
-- Could the repeated section become one paragraph linking to the owner?
+- Is `poll` being used for source recurrence or provider operation waiting?
+- Could the repeated section become one paragraph linking to its owner?
 - Are tests for the shared contract located only in the owner?
 - Does the dependent plan test only its specialization/integration?
 
