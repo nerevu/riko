@@ -78,7 +78,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class LocationType(StrEnum):
-    """The kind of place a geolocation lookup resolves."""
+    """The kind of lookup ``cast_location`` performs."""
 
     COORDINATES = "coordinates"
     CURRENCY = "currency"
