@@ -25,14 +25,12 @@ New
 - Added the ``gen-names`` script (and ``manage codegen``) to regenerate
   ``riko/modules/_names.py`` from the built-in catalog.
 
-- Added a ``write`` sink pipe (``riko/modules/write.py``) that serializes a stream to
-  ``conf['url']`` with a ``Targets`` converter (defaults to ``json``). Both the ``pipe``
-  and``async_pipe`` interfaces skip the write when ``url`` is unset or ``target`` is
-  ``list``/``tuple``.
+- Added a ``write`` sink pipe that serializes a stream to ``conf['url']`` (a ``str`` or
+  ``Path``) with a ``Targets`` converter. ``target`` defaults to the url's extension
+  when it names a known converter, else ``json``.
 
-- Added ``riko.async_write`` and ``riko.get_async_temp_file``: ``async_write`` is the
-  anyio-native counterpart of ``meza.io.write``; ``get_async_temp_file`` is the async
-  analog of ``get_temp_file``, usable as ``async with get_async_temp_file() as fp``.
+- Added ``riko.async_write`` (anyio-native counterpart of ``meza.io.write``) and
+  ``riko.get_async_temp_file`` (async analog of ``get_temp_file``).
 
 - Added ``BasicCastType.DATETIME``, so a pipe's ``ftype``/``ptype`` can preserve the
   time of day rather than truncating to a date.
@@ -55,8 +53,24 @@ New
   ``publish`` both seeds a sender (``SyncPipe.publish(items, "alerts")``) and chains one
   (``flow.publish("alerts")``).
 
+- ``udf`` and ``aggregate`` now await an async ``func`` on the ``async_pipe`` path.
+
+- Added ``currencyformat`` conf keys ``locale`` (override the currency's own locale) and
+  ``clean`` (render the result's non-breaking space as a plain space).
+
+- ``encoding`` is now a declared conf key for ``fetch``, ``exchangerate``,
+  ``fetchdata``, ``fetchpage``, and ``xpathfetchpage``.
+
 Changes
 ~~~~~~~
+
+- A single-key ``{"value": X}`` mapping is no longer treated as a type/value sentinel,
+  so ``DotDict`` leaves it nested instead of unwrapping it to ``X``. Only a mapping
+  carrying both ``type`` and ``value`` is unwrapped now.
+
+- ``currencyformat`` formats each currency in its own locale rather than ``en_US``.
+  E.g., ``EUR`` now renders ``1.000,33 €``. ``CURRENCY_CODES`` entries gained ``locale``
+  and dropped ``decimal_digits``/``rounding``.
 
 - ``rssitembuilder`` is now categorized as a ``source`` rather than a ``transformer``,
   so it moves to ``Sources`` in the discovery tree and its ``assign`` default changes
@@ -73,17 +87,56 @@ Changes
 Fixed
 ~~~~~
 
-- ``send`` now accepts a ``Feed`` source and completes on receiver failures
+- Async operators now accept a ``Feed`` (async-iterable) source instead of raising
+  ``TypeError: 'async_generator' object is not iterable``. ``send`` also completes its
+  receivers when one of them fails.
 
-- A pipe called without a required operand (``udf`` without ``func``, ``send`` without
-  ``others``) now raises instead of failing later.
+- A pipe called without a required operand (e.g., ``udf`` without ``func``, ``send``
+  without ``others``) now raises instead of failing later.
+
+- A pipe whose ``conf`` lacks a required key now raises instead of degrading:
+  ``filter``/``refind``/``regex``/``rename``/``strfind``/``strreplace``/``strtransform``
+  need a ``rule``, ``itembuilder`` its ``attrs``, and ``strconcat`` its ``part``.
+
+- A source pipe called without a ``url`` now raises instead of returning an empty
+  stream. ``simplemath`` requires both ``op`` and ``other`` (and reports an unsupported
+  ``op`` clearly rather than raising ``KeyError``), and ``subelement`` requires
+  ``path``.
+
+- ``csv`` and ``fetchtable`` no longer crash with ``has_header=False``, which buffers to
+  memory or disk; the default ``has_header=True`` still streams.
+
+- ``hash`` now hashes the text form of non-string fields.
+
+- ``strconcat`` drops only ``None`` parts, so a falsy part (``0``, ``False``, ``""``) is
+  concatenated rather than silently skipped.
+
+- ``refind`` and ``strfind`` now slice the source text at the match position instead of
+  splitting and re-joining on the pattern. This fixes ``strfind`` with ``location="at"``
+  (returned ``""``), ``refind`` with ``location="before"`` and ``param="last"``
+  (re-joined on the regex source), and ``refind`` with ``location="at"`` and
+  ``param="last"`` (returned a capture group, not the full match).
+
+- ``strtransform`` accepts a list of rule ``args`` instead of raising ``AttributeError``,
+  and its ``count``/``find`` transforms may return an ``int``.
+
+- async ``fetch`` now honors ``conf['encoding']``.
+
+- async ``fetchdata`` infers the parse format from the response ``Content-Type`` when the
+  url has no extension.
+
+- ``describe_module`` re-raises a nested ``ModuleNotFoundError`` naming the missing
+  dependency, instead of returning ``None`` as if the module did not exist.
+
+- Optional conf keys are no longer required by the typed conf contracts. So omitting one
+  (e.g. ``sort``'s ``rule``, ``csv``'s ``encoding``) is no longer a pyright error.
 
 - ``join`` no longer materializes its primary stream. Only ``other`` is retained and
   replayed now; the source is consumed lazily. Output order is unchanged.
 
-- Stream Fetch requests whenever the response is read lazily via ``r.raw``; the memoized
-  branches still buffer via ``r.text``/``r.content``. Now text resources without
-  ``memoize`` no longer fail with ``StopIteration``.
+- Fetch streams requests whenever the response is read lazily via ``r.raw`` (the
+  memoized branches still buffer via ``r.text``/``r.content``). Now text resources
+  without ``memoize`` no longer fail with ``StopIteration``.
 
 - ``rename`` and ``regex`` no longer create a field the item lacks; a rule naming an
   absent field is skipped. A field holding ``None`` is still renamed or rewritten.
@@ -136,6 +189,9 @@ Fixed
 
 Removed
 ~~~~~~~
+
+- Removed the ``delay`` conf key from ``fetch`` and ``exchangerate``, along with the
+  ``delay`` parameter on ``riko.bado.io.async_url_read``.
 
 - Removed ``send``'s unused ``name`` conf key.
 
