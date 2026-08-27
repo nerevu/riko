@@ -25,7 +25,6 @@ Examples:
 
 import builtins
 import keyword
-from codecs import open
 from collections import defaultdict
 from collections.abc import Awaitable, Iterable, Iterator, Mapping, Sequence
 from datetime import date
@@ -162,7 +161,7 @@ class CustomEncoder(JSONEncoder):
 
 
 def _as_named_pipe(module_name: str, interface: Interface, module_id: str) -> Pipeline:
-    """Return a renamed wrapper without modifying the imported pipeline."""
+    """Returns a renamed wrapper without modifying the imported pipeline."""
     pipeline = resolve_module(module_name, interface)
     name = str(f"pipe_{module_id}")
     wrapper = cast(Pipeline, partial(pipeline))
@@ -207,7 +206,7 @@ def extract_dependencies(  # noqa: E302
     pipe_def: PipeDef | ParsedPipeDef | None = None,
     pipeline: PipelineDependencies | None = None,
 ) -> Awaitable[list[str]] | list[str]:
-    """Extract modules used by a pipe"""
+    """Returns the modules used by a pipe."""
     if pipe_def:
         pydeps = gen_dependencies(pipe_def)
     elif pipeline:
@@ -245,10 +244,11 @@ def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str, ...]]:
 
 def get_input(conf: InputRawConf, **kwargs: object) -> str | int | bool:
     """
-    Gets a user parameter, either from the console or from an outer
-     submodule/system
+    Resolves a user parameter from ``inputs``, the console, or its default.
 
-    Assumes conf has name, default, prompt and debug
+    Expects ``conf`` to carry ``name``, ``prompt``, and a ``default``/``debug``
+    value. Console prompting is skipped when ``test`` is set.
+
     """
     name = str(conf["name"]["value"])
     prompt = conf["prompt"]["value"]
@@ -288,7 +288,7 @@ def extract_input(  # noqa: E302
     pipe_def: PipeDef | ParsedPipeDef | None = None,
     pipeline: PipelineDependencies | None = None,
 ) -> PyInput:
-    """Extract inputs required by a pipe"""
+    """Returns the inputs required by a pipe."""
     if pipe_def:
         pyinput = gen_input(pipe_def)
     elif pipeline:
@@ -305,7 +305,7 @@ def pythonise(
     replace: Sequence[str] = ("-", ":", "/", ""),
     key: str | None = None,
 ) -> str:
-    """Return a Python-friendly id"""
+    """Returns a Python-friendly id."""
     if not isinstance(content, str):
         if key:
             resolved = DotDict(content).get(key)
@@ -407,7 +407,7 @@ def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list[str]]]:
 
 
 def gen_parented_graph[T: str | int](graph: Graph[T]) -> Iterator[tuple[T, Nodes[T]]]:
-    """Remove any orphan nodes"""
+    """Yields graph nodes, dropping any orphans."""
     for node, value in graph.items():
         if value or any(node in v for v in graph.values()):
             yield (node, value)
@@ -731,17 +731,19 @@ def resolve_module(  # noqa: E704
     module_name: str, interface: Literal["async_pipe"]
 ) -> AsyncPipeParser: ...
 @overload  # noqa: E302
-def resolve_module(module_name: str, interface: Interface) -> Pipeline: ...  # noqa: E704
+def resolve_module(  # noqa: E704
+    module_name: str, interface: Interface
+) -> Pipeline: ...
 def resolve_module(module_name: str, interface: Interface) -> Pipeline:  # noqa: E302
     """
-    Resolve a leaf module or a generated ``pipe_*`` sub-pipeline to its callable.
+    Resolves a leaf module or generated ``pipe_*`` sub-pipeline to its callable.
     JSON pipeline *definitions* are a separate concern — see
     ``pipeline_resolver.load_definition``.
 
     Examples:
-        >>> resolve_module('filter', 'pipe')
+        >>> resolve_module("filter", "pipe")
         <function pipe at ...>
-        >>> resolve_module('does_not_exist', 'pipe')
+        >>> resolve_module("does_not_exist", "pipe")
         Traceback (most recent call last):
             ...
         riko.exceptions.UnsupportedModuleError: Unsupported riko module: does_not_exist
@@ -835,7 +837,7 @@ def get_wire(
 
 def convert_dag(dag: PipeDag) -> PipeDef:
     """
-    Expand a bare-bones DAG into a full JSON pipeline
+    Expands a bare-bones DAG into a full JSON pipeline.
 
     A DAG lists ``modules`` (``id``/``type``/opaque ``conf``) and, optionally,
     ``wires`` as ``[source_id, target_id]`` pairs. When ``wires`` is omitted or
@@ -868,16 +870,14 @@ def convert_dag(dag: PipeDag) -> PipeDef:
 
 def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPipeDef:
     """
-    Parse pipe JSON into internal structures
+    Parses pipe JSON into internal structures.
 
-    Parameters
-    ----------
-    pipe_def -- JSON representation of the pipe
-    pipe_name -- a name for the pipe (used for linking pipes)
+    Args:
+        pipe_def: JSON representation of the pipe.
+        pipe_name: Name used to link this pipe to others.
 
-    Returns
-    -------
-    pipe -- an internal representation of a pipe
+    Returns:
+        An internal representation of the pipe.
 
     """
     graph = defaultdict(list, gen_embed_graph(pipe_def))
@@ -981,10 +981,10 @@ def build_pipeline(
     **kwargs: bool,
 ) -> Stream:
     """
-    Convert a pipe into an executable Python pipeline
+    Builds an executable Python pipeline from a parsed pipe definition.
 
-    If describe_input or describe_dependencies then just
-    return that instead of the pipeline
+    Describe modes yield their descriptions instead of the pipeline.
+
     """
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
     module_ids = topological_sort(parsed_pipe_def["graph"])
@@ -1009,10 +1009,10 @@ async def abuild_pipeline(
     **kwargs: bool,
 ) -> AsyncStream:
     """
-    Convert a pipe into an executable Python pipeline
+    Builds an executable Python pipeline from a parsed pipe definition.
 
-    If describe_input or describe_dependencies then just
-    return that instead of the pipeline
+    Describe modes yield their descriptions instead of the pipeline.
+
     """
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
     module_ids = topological_sort(parsed_pipe_def["graph"])
@@ -1041,7 +1041,7 @@ def stringify_pipe(
     inputs: Inputs | None = None,
     **kwargs: bool,
 ) -> str:
-    """Convert a pipe into Python script (async/anyio variant when ``is_async``)."""
+    """Converts a pipe into a Python script, using AnyIO when ``is_async``."""
     module_ids = topological_sort(parsed_pipe_def["graph"], strict=True)
     module_names = gen_names(module_ids, parsed_pipe_def)
     pipe_names = gen_names(module_ids, parsed_pipe_def, ntype="pipe")
@@ -1098,7 +1098,7 @@ def compile_pipe(
     inputs: Inputs | None = None,
     **kwargs: bool,
 ) -> str:
-    """Compile a JSON pipe definition into a Python module"""
+    """Compiles a JSON pipe definition into a Python module."""
     parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
     args = (parsed_pipe_def, context)
     return stringify_pipe(*args, mode=mode, inputs=inputs, **kwargs)

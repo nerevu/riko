@@ -1,6 +1,26 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides type casting capabilities
+riko.cast
+~~~~~~~~~
+
+Provides type casting capabilities.
+
+Dispatch is by destination type; ``CAST_SWITCH`` maps each type to its caster
+and default.
+
+Examples:
+    Basic usage::
+
+        >>> from riko.cast import cast_value
+        >>>
+        >>> cast_value("12.25", "float")
+        12.25
+        >>> cast_value("12.25", "int")
+        12
+
+Attributes:
+    CAST_SWITCH: Destination type to caster and default mapping.
+
 """
 
 from ast import literal_eval
@@ -58,6 +78,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class LocationType(StrEnum):
+    """The kind of place a geolocation lookup resolves."""
+
     COORDINATES = "coordinates"
     CURRENCY = "currency"
     IP_ADDRESS = "ip_address"
@@ -65,6 +87,8 @@ class LocationType(StrEnum):
 
 
 class BasicCastType(StrEnum):
+    """Cast types a module may set as its ``ftype``/``ptype``."""
+
     DATE = "date"
     DATETIME = "datetime"
     DECIMAL = "decimal"
@@ -76,6 +100,8 @@ class BasicCastType(StrEnum):
 
 
 class SortableCastType(StrEnum):
+    """Cast types whose values are orderable, for sort comparisons."""
+
     BOOL = "bool"
     DATE = "date"
     DATETIME = "datetime"
@@ -88,6 +114,8 @@ class SortableCastType(StrEnum):
 
 
 class CastType(StrEnum):
+    """Every destination type ``cast_value`` can dispatch to."""
+
     BOOL = "bool"
     DATE = "date"
     DATETIME = "datetime"
@@ -234,6 +262,13 @@ def cast_datetime(  # noqa: E302
     try_local_tz=False,
 ) -> date | dt | DateDict | None:
     """
+    Normalizes a date-like value to a ``datetime`` (or ``date``/``DateDict``).
+
+    Accepts real ``date``/``datetime``/``struct_time``/epoch-``int`` values and
+    string shorthands. Named days (``"now"``/``"today"``/``"yesterday"``), counted
+    offsets (``"3 days"``/``"-1 month"``), and ``next``/``last`` word forms resolve
+    against the current time.
+
     Examples:
         >>> type(cast_datetime('now')).__name__
         'datetime'
@@ -383,16 +418,14 @@ def cast_value[T](  # noqa: E302
     content: T, type_: CastType = CastType.TEXT, **kwargs: object
 ) -> T | PrimitiveValue | AnyLocation:
     """
-    Convert content from one type to another
+    Converts content from one type to another.
 
     Args:
-        content: The entry to convert
-
-    Kwargs:
-        _type (str): The type to convert to
+        content: The entry to convert.
+        type_: The type to convert to.
 
     Returns:
-        any: The converted content
+        The converted content.
 
     Examples:
         >>> content = '12.25'

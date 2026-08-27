@@ -1,6 +1,18 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides utility classes and functions
+riko.parsers
+~~~~~~~~~~~~
+
+Parses feeds, XML/HTML documents, and pipe configuration into items.
+
+Attributes:
+    XML_PARSER: Hardened lxml parser (entity, DTD, and network access
+        disabled), or ``None`` when lxml is unavailable.
+
+    SKIP_SWITCH: Named text predicates backing ``get_skip``.
+
+    ESCAPE: XML/HTML special-character to entity-reference map.
+
 """
 
 import re
@@ -178,6 +190,7 @@ class LinkParser(HTMLParser):
 
 
 def get_text(html: str, convert_charrefs: bool = False) -> str:
+    """Extracts the concatenated text of ``html`` via ``LinkParser``."""
     try:
         parser = LinkParser(convert_charrefs=convert_charrefs)
     except TypeError:
@@ -202,6 +215,7 @@ def parse_rss(**kwargs: Any) -> list[ParserRSSEntry]: ...  # noqa: E704
 def parse_rss(  # noqa: E302
     url: BasicArg = "", *, content: str | bytes | None = None, **kwargs: BasicArg
 ) -> list[ParserRSSEntry]:
+    """Fetches (or reads) and parses an RSS/Atom feed into its entries."""
     f = None
 
     if content is None:
@@ -253,11 +267,11 @@ def extract_namespace(tree: AnyElementTree | AnyElement) -> str | None:
     Extracts the XML namespace URI from an element's tag.
 
     Args:
-        tree (AnyElementTree): An element whose tag may contain a Clark-notation
-            namespace, e.g. ``{http://example.com/ns}root``.
+        tree: An element whose tag may contain a Clark-notation namespace, e.g.
+            ``{http://example.com/ns}root``.
 
     Returns:
-        str | None: The namespace URI, or ``None`` if the tag has no namespace.
+        The namespace URI, or ``None`` if the tag has no namespace.
 
     Examples:
         >>> from xml.etree.ElementTree import fromstring
@@ -289,13 +303,13 @@ def verify_pos(tree: AnyElementTree | AnyElement, pos: int, *tags: str) -> int:
     the comparison.
 
     Args:
-        tree (AnyElementTree): The root element to inspect.
-        pos (int): Current position in *tags*.
-        *tags (str): Ordered tag names derived from the XPath expression.
+        tree: The root element to inspect.
+        pos: Current position in *tags*.
+        *tags: Ordered tag names derived from the XPath expression.
 
     Returns:
-        int: ``pos + 1`` if the local tag of *tree* equals ``tags[pos]``,
-            otherwise *pos* unchanged.
+        ``pos + 1`` if the local tag of *tree* equals ``tags[pos]``, otherwise *pos*
+        unchanged.
 
     Examples:
         >>> from xml.etree.ElementTree import fromstring
@@ -347,15 +361,18 @@ def xpath(
     descendant searches start at the correct level.
 
     Args:
-        tree (AnyElementTree): The root element to search.
-        path (str): An XPath-like expression. A leading ``/`` indicates an
-            absolute path (sets initial *pos* to 1). Defaults to ``"/"``.
-        pos (int | None): Starting index into the tag list. ``None`` triggers
-            automatic detection via :func:`verify_pos`.
-        namespace (str | None): Namespace URI for prefixed searches.
-            Auto-detected from *tree* when ``None``.
-        ns_prefix (str): Prefix token used in namespace-qualified path
-            segments. Defaults to ``"ns"``.
+        tree: The root element to search.
+
+        path: An XPath-like expression. A leading ``/`` indicates an absolute
+            path (sets initial *pos* to 1).
+
+        pos: Starting index into the tag list. ``None`` triggers automatic
+            detection via :func:`verify_pos`.
+
+        namespace: Namespace URI for prefixed searches. Auto-detected from
+            *tree* when ``None``.
+
+        ns_prefix: Prefix token used in namespace-qualified path segments.
 
     Yields:
         AnyElement: Each matched element.
@@ -423,7 +440,7 @@ def xml2etree(  # noqa: E302
     html5: bool = False,
 ) -> AnyElementTree:
     """
-    Parse XML/HTML into an ElementTree. External XML is parsed with a hardened
+    Parses XML/HTML into an ElementTree. External XML is parsed with a hardened
     policy: entity resolution, DTD loading, and network access are disabled to
     guard against XXE and entity-expansion attacks.
 
@@ -486,7 +503,7 @@ def _make_content(
 
 
 def element2dict(element: AnyElement) -> StringyDict:
-    """Convert an element tree into a dict imitating how Yahoo Pipes does it."""
+    """Converts an element tree into a dict imitating how Yahoo Pipes does it."""
     i: StringyDict = dict(element.items())
     text = element.text
     content = _make_content(i, text, strip=True)
@@ -513,12 +530,15 @@ def any2dict(
     html5: bool = False,
     path: str | None = None,
 ) -> Stream:
-    """Path should be the location to a list of items"""
+    """
+    Yields items parsed from ``content`` (XML/HTML/JSON, mapping, or list).
+
+    ``path`` locates the list of items within a parsed document.
+
+    """
     path = path or ""
 
-    if content is None:
-        pass
-    elif isinstance(content, DotDict):
+    if isinstance(content, DotDict):
         yield content.asdict()
     elif isinstance(content, (dict, CaseInsensitiveDict, Mapping)):
         yield content
@@ -605,6 +625,8 @@ def _conf_is_dynamic_cached(conf: object, **kwargs: object) -> bool:
 
 def conf_is_dynamic(conf: object, memoize: bool = False, **kwargs: object) -> bool:
     """
+    Whether ``conf`` holds a ``subkey`` or sentinel needing per-item parsing.
+
     Examples:
         >>> _conf_is_dynamic_cached.cache_clear()
         >>> conf_is_dynamic({'type': 'text', 'value': 'hello'}, True)
@@ -677,49 +699,52 @@ def parse_conf[VT](
     **kwargs: VT,
 ) -> VT | None:
     """
-    Examples
-    --------
-    >>> param = {
-    ...     "key": {"type": "text", "value": "q"},
-    ...     "value": {"type": "text", "subkey": "title"}
-    ... }
-    >>> params = [
-    ...     param,
-    ...     {
-    ...         "key": {"type": "text", "value": "v"},
-    ...         "value": {"type": "text", "value": "1.0"}
-    ...     }
-    ... ]
-    >>> conf = {
-    ...     "count": {"type": "text", "value": "all"},
-    ...     "type": "urlbuilder",
-    ...     "BASE": {"type": "text", "value": "http://example.com"},
-    ...     "PARAM": params
-    ... }
-    >>> item = {"title": "the title"}
-    >>> parsed = parse_conf(item, conf=conf, objectify=True)
-    >>> parsed["count"], parsed["base"]
-    ('all', 'http://example.com')
-    >>> parsed["param"]
-    [{'key': 'q', 'value': 'the title'}, {'key': 'v', 'value': '1.0'}]
-    >>> conf = DotDict({"terminal": "attrs_1", "type": "text"})
-    >>> conf.get(attrs_1=iter([{'content': 'baz'}]))
-    {'content': 'baz'}
-    >>> _parse_conf_cached.cache_clear()
-    >>> parse_conf(conf={'type': 'text', 'value': 'hello'})
-    'hello'
-    >>> _parse_conf_cached.cache_info().hits
-    0
-    >>> _ = parse_conf(conf={'type': 'text', 'value': 'hello'})
-    >>> _parse_conf_cached.cache_info().hits
-    1
-    >>> parse_conf(conf={'type': 'text', 'value': 'hello'}, memoize=False)
-    'hello'
-    >>> _parse_conf_cached.cache_info().hits
-    1
-    >>> _ = parse_conf(conf={'type': 'text', 'value': 'hello'}, memoize=True)
-    >>> _parse_conf_cached.cache_info().hits
-    2
+    Resolves a pipe ``conf`` against an ``item`` by expanding subkeys and sentinels.
+
+    Static confs are memoized by default. ``memoize`` forces the choice.
+
+    Examples:
+        >>> param = {
+        ...     "key": {"type": "text", "value": "q"},
+        ...     "value": {"type": "text", "subkey": "title"}
+        ... }
+        >>> params = [
+        ...     param,
+        ...     {
+        ...         "key": {"type": "text", "value": "v"},
+        ...         "value": {"type": "text", "value": "1.0"}
+        ...     }
+        ... ]
+        >>> conf = {
+        ...     "count": {"type": "text", "value": "all"},
+        ...     "type": "urlbuilder",
+        ...     "BASE": {"type": "text", "value": "http://example.com"},
+        ...     "PARAM": params
+        ... }
+        >>> item = {"title": "the title"}
+        >>> parsed = parse_conf(item, conf=conf, objectify=True)
+        >>> parsed["count"], parsed["base"]
+        ('all', 'http://example.com')
+        >>> parsed["param"]
+        [{'key': 'q', 'value': 'the title'}, {'key': 'v', 'value': '1.0'}]
+        >>> conf = DotDict({"terminal": "attrs_1", "type": "text"})
+        >>> conf.get(attrs_1=iter([{'content': 'baz'}]))
+        {'content': 'baz'}
+        >>> _parse_conf_cached.cache_clear()
+        >>> parse_conf(conf={'type': 'text', 'value': 'hello'})
+        'hello'
+        >>> _parse_conf_cached.cache_info().hits
+        0
+        >>> _ = parse_conf(conf={'type': 'text', 'value': 'hello'})
+        >>> _parse_conf_cached.cache_info().hits
+        1
+        >>> parse_conf(conf={'type': 'text', 'value': 'hello'}, memoize=False)
+        'hello'
+        >>> _parse_conf_cached.cache_info().hits
+        1
+        >>> _ = parse_conf(conf={'type': 'text', 'value': 'hello'}, memoize=True)
+        >>> _parse_conf_cached.cache_info().hits
+        2
 
     """
     if memoize is None:
@@ -731,14 +756,14 @@ def parse_conf[VT](
 
 def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> bool:
     """
-    Determine whether or not to skip an item
+    Determines whether or not to skip an item.
 
     Args:
-        item (dict): The entry to process
-        skip_if (func or Iter[dict]): The skipping criteria
+        item: The entry to process.
+        skip_if: The skipping criteria.
 
     Returns:
-        bool: whether or not to skip
+        Whether or not to skip.
 
     Examples:
         >>> item = {'content': 'Some content'}
@@ -790,6 +815,7 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
 def get_field(
     item: ItemOrValue | None = None, field: str = "", **kwargs: ItemOrValue
 ) -> ItemOrValue:
+    """Returns ``item[field]``, or ``item`` itself when no field is given."""
     if field and isinstance(item, DotDict):
         value = item.get(field, **kwargs)
     elif field and isinstance(item, dict):
@@ -801,13 +827,13 @@ def get_field(
 
 
 def text2entity(text: str) -> str:
-    """Convert HTML/XML special chars to entity references"""
+    """Converts HTML/XML special chars to entity references."""
     return ESCAPE.get(text, text)
 
 
 def entity2text(entitydef: str) -> str:
     """
-    Convert an HTML entity reference into unicode.
+    Converts an HTML entity reference into unicode.
     http://stackoverflow.com/a/58125/408556
     """
     if entitydef.startswith("&#x"):
