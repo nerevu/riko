@@ -1,623 +1,291 @@
 # Callable pipes gameplan
 
-> **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level overview. This gameplan is the authoritative detail for the callable-pipe execution contract — the `Opts` execution-characteristic fields, the `@processor`/`@operator`/`@splitter` decorator model, `map`/`flat_map`, strict mode, and callable context / thread / process execution (ROADMAP §4). Section references like §N point back to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md) (the runtime contract); the numbered `## N.` headings are preserved so those references resolve.
+> **Provenance.** Extracted from `docs/ROADMAP.md`. This plan is authoritative for callable-node behavior; common execution/state/resource/identity contracts live in [execution-semantics.md](execution-semantics.md).
 
 ## 4. Callable pipes
 
-> **Current gap:** `Opts` carries none of the execution-characteristic fields; `map`/`flat_map` callable pipes and strict mode do not exist. `@processor`/`@operator`/`@splitter` exist but are not extended with these fields.
-
-> **Deferred / not yet implemented.** Per-module Feed-native parsers (a
-> `parser_mode: feed | legacy_stream` classification, review #8) are not built:
-> today's module parsers consume synchronous `Items`, so a non-parallel async
-> pipe buffers its upstream at the explicit `AsyncPipe._materialize_legacy_source`
-> boundary. Only the bounded/parallel path streams end-to-end (see §3.2, §8). This
-> file owns the `parser_mode` **mechanism**; the per-pipe **rollout plan** that
-> consumes it (which pipes go Feed-native, in what order, plus the streaming-memory
-> model and streaming `write`) is [feed-native-streaming.md](feed-native-streaming.md).
-
-### Pipe execution options
-
-Pipe execution behavior is represented using the existing `Opts` typed dictionary.
-
-Do not introduce:
-
-* `PipeTraits`
-* `TraitOverrides`
-* `@riko.pipe`
-* a separate traits mapping
-* a separate trait-resolution object
-
-### Extend `Opts`
+Callable transforms are ordinary nodes on the single immutable `Pipeline[T]` abstraction.
+The same definition runs through sync or async execution; the target API does not define
+separate final `SyncPipe.map` and `AsyncPipe.map` contracts.
 
 ```python
-class Opts(TypedDict, total=False):
-    # Existing options
-    ftype: Required[BasicCastType]
-    ptype: Required[BasicCastType]
-    assign: str
-    count: Literal["first", "all"]
-    emit: bool
-    extract: str
-    field: str
-    listize: bool
-    objectify: bool
-    parse: bool
-    pollable: bool
-    debug: bool
-    skip_if: SkipIf
-
-    # Execution characteristics
-    boundedness: Literal[
-        "preserve",
-        "finite",
-        "unbounded",
-        "unknown",
-    ]
-
-    ordering: Literal[
-        "preserve",
-        "destroy",
-        "establish",
-    ]
-
-    side_effects: Literal[
-        "none",
-        "idempotent",
-        "non_idempotent",
-    ]
-
-    determinism: Literal[
-        "deterministic",
-        "nondeterministic",
-    ]
-
-    # Specialized execution requirements
-    require_bounded: bool
-
-    state_checkpoint: Literal[
-        "replay",
-        "persist",
-    ]
-
-    lineage_commit: Literal[
-        "per_output",
-        "on_complete",
-    ]
+flow = Pipeline(source=items).map(normalize)
 ```
 
-`Defaults` remains reserved for module configuration defaults such as delimiters, field names, counts, and parsing behavior.
+### Existing decorator model
 
-Execution characteristics belong in `Opts` because they describe how the wrapper and runtime execute the module rather than the contents of its `conf`.
-
-### Defaults live in pipe modules
-
-Each pipe module declares its own defaults through the existing `processor`, `operator`, or `splitter` decorator.
-
-For example, `riko/modules/filter.py` declares behavior appropriate for filtering:
+Continue to use the existing module definition/preparation machinery:
 
 ```python
-@operator(
-    boundedness="preserve",
-    ordering="preserve",
-    side_effects="none",
-    determinism="deterministic",
-    state_checkpoint="replay",
-)
-def pipe(stream, extraction, tuples, **kwargs):
-    ...
+@processor(...)
+@operator(...)
+@splitter(...)
 ```
 
-`riko/modules/sort.py` declares:
+Do not add a parallel `PipeTraits`, `TraitOverrides`, `@riko.pipe`, signature-injection, or
+callable-context framework.
+
+Execution/planning characteristics may extend existing module options/metadata, including:
 
 ```python
-@operator(
-    boundedness="preserve",
-    ordering="establish",
-    side_effects="none",
-    determinism="deterministic",
-    require_bounded=True,
-)
-def pipe(stream, extraction, tuples, **kwargs):
-    ...
+boundedness: Literal["preserve", "finite", "unbounded", "unknown"]
+ordering: Literal["preserve", "destroy", "establish"]
+require_bounded: bool
+stable_order: bool
 ```
 
-`riko/modules/union.py` declares:
+The earlier proposed:
 
 ```python
-@operator(
-    boundedness="unknown",
-    ordering="preserve",
-    side_effects="none",
-    determinism="deterministic",
-)
-def pipe(stream, extraction, tuples, **kwargs):
-    ...
+state_checkpoint: Literal["replay", "persist"]
 ```
 
-Its boundedness is `unknown` by default because the additional streams may not have known boundedness.
+is superseded by `FeedState`, `StateStore`, stateful owners, and explicit `.checkpoint()`.
 
-The callable map module declares its own defaults in `riko/modules/map.py`:
+Execution `ordered=True` and semantic `stable_order=True` are distinct: one controls
+concurrent presentation, the other guarantees deterministic semantic ordering for identity
+derivation.
 
-```python
-@processor(
-    emit=True,
-    boundedness="preserve",
-    ordering="preserve",
-    side_effects="none",
-    determinism="deterministic",
-)
-def pipe(item, extraction, objconf, **kwargs):
-    ...
-```
-
-The callable flat-map module declares:
-
-```python
-@processor(
-    emit=True,
-    boundedness="unknown",
-    ordering="preserve",
-    side_effects="none",
-    determinism="deterministic",
-)
-def pipe(item, extraction, objconf, **kwargs):
-    ...
-```
-
-`flat_map` defaults to unknown boundedness because an arbitrary callable may produce any number of children. A caller that knows the expansion is finite may override it.
-
-### Normal call-site overrides
-
-Overrides are ordinary pipe kwargs:
-
-```python
-pipe.map(
-    fn=normalize,
-    side_effects="idempotent",
-    determinism="nondeterministic",
-)
-```
-
-There is no `trait_overrides` argument.
-
-The existing module preparation flow resolves the options:
-
-```python
-self.opts = Opts(self._opts)
-self.opts.update(cast(Opts, kwargs))
-```
+### One callable API
 
 Conceptually:
 
-```text
-module decorator options
-        ↓
-      _opts
-        ↓ copy
-       opts
-        ↓ overlay invocation kwargs
-resolved module options
-```
-
-### Callable method signatures
-
-The public callable methods expose ordinary execution options:
-
 ```python
-SyncPipe.map(
+flow.map(
     fn,
     *,
-    execution="inline",
-    boundedness=None,
-    ordering=None,
-    side_effects=None,
-    determinism=None,
+    version=MISSING,
+    resources=(),
+    identity=None,
+    stable_order=None,
+    execution=None,
     **kwargs,
 )
 ```
 
+and:
+
 ```python
-AsyncPipe.map(
+flow.flat_map(
     fn,
     *,
-    ordered=True,
-    execution="inline",
-    reorder_buffer=None,
-    boundedness=None,
-    ordering=None,
-    side_effects=None,
-    determinism=None,
+    version=MISSING,
+    resources=(),
+    identity=None,
+    stable_order=None,
+    strict=None,
+    execution=None,
     **kwargs,
 )
 ```
 
-The optional values are passed through the existing pipe kwargs mechanism and become part of `Opts`.
+Exact signatures may be narrowed during implementation. The contract is:
 
-`None` means that the method does not override the default declared in `riko/modules/map.py`.
+* declare the callable node once;
+* choose sync/async mode when iterating the Pipeline;
+* use common `version=` for semantic-version/fingerprint escape;
+* use common `resources=` declaration/binding;
+* use common `preserve` / `derive` / `combine` identity semantics for ambiguous custom
+  operators.
 
-The same applies to `flat_map`.
-
-### Module-specific derived behavior
-
-Options that depend on another module option remain the responsibility of that module.
-
-For example, the map module begins with:
-
-```python
-ordering="preserve"
-```
-
-but resolves:
+Execution-wide settings belong to:
 
 ```python
-ordered=False
+flow.with_execution(executor="thread", concurrency=8, ordered=False)
 ```
 
-to:
+A retained node-level `execution=` hint only describes adaptation safety for that callable;
+it does not mutate Pipeline-wide execution settings.
 
-```python
-ordering="destroy"
-```
+### Sync and async implementations
 
-Likewise:
-
-* `sort` derives ordering details from its normalized sort rules
-* `timeout` derives boundedness from its mode and timeout behavior
-* `merge` derives ordering from its scheduling mode
-* reducers apply their configured `lineage_commit`
-* stateful modules apply their configured `state_checkpoint`
-
-This logic belongs in the respective pipe module, not in a centralized traits resolver.
-
-### Planning and provenance
-
-The execution planner may record the existing option dictionaries directly:
-
-```python
-declared = Opts(module._opts)
-resolved = Opts(module.opts)
-```
-
-Provenance can be represented as ordinary plan data:
-
-```python
-{
-    "boundedness": {
-        "declared": "unknown",
-        "resolved": "finite",
-        "source": "call",
-    }
-}
-```
-
-This is execution-plan output, not a new runtime primitive.
-
-### Revised decorator model
-
-Built-in module:
-
-```python
-@operator(
-    boundedness="preserve",
-    ordering="preserve",
-    side_effects="none",
-    determinism="deterministic",
-)
-def pipe(...):
-    ...
-```
-
-Call-site override:
-
-```python
-pipe.filter(
-    ...,
-    determinism="nondeterministic",
-)
-```
-
-Resolved value:
-
-```python
-module.opts["determinism"] == "nondeterministic"
-```
-
-### Bare decorators and implementation kind
-
-`@processor`, `@operator`, and `@splitter` accept either a sync or an async callable, bare or
-configured:
+Decorators may wrap sync or async functions, bare or configured:
 
 ```python
 @processor
 def pipe(item, **kwargs): ...
 
 @processor
-async def pipe(item, **kwargs): ...      # single-impl async — no rename to async_pipe
-
-@processor(emit=False)
 async def pipe(item, **kwargs): ...
 ```
 
-The implementation kind comes from the callable's metadata, not its variable name. The current
-`Module._resolve_isasync()` restriction that **rejects an `async def pipe`** (forcing the name
-`async_pipe`) is lifted — `iscoroutinefunction(pipe)` already detects it.
+A single async implementation need not be renamed `async_pipe`. `isasync=True` remains the
+explicit escape hatch when Python cannot classify the callable reliably. Dual
+implementations may still use `pipe` + `async_pipe` so both forms can coexist in one module.
 
-`isasync=True` and the `async_pipe` name are **retained** — they are not shims:
+Native implementation wins for the execution mode. Sync execution bridges async-only
+components through the execution's shared portal; async execution adapts unknown sync work
+to a worker unless explicitly inline-safe. Never create an async runtime per item.
 
-- `isasync=True` is the explicit override for async implementations Python cannot introspect: a
-  plain `def` that returns a coroutine, or a callable object (`iscoroutinefunction` is `False` for
-  both). It also selects the typed `Literal[True]` overload. See `sort.py` (`def async_pipe`).
-- The `async_pipe` **name is structurally required** in a dual-implementation module: a module
-  cannot define two functions both named `pipe`, so the optimized async form coexists as
-  `async_pipe` alongside the sync `pipe`.
+### Feed-native parser inference
 
-So the only change is **additive**: a single-implementation async module may now write
-`async def pipe`. Dual-implementation modules keep `pipe` + `async_pipe` unchanged. Riko selects the
-native implementation for the execution mode and privately adapts the other side
-([execution-semantics.md § Execution-mode adaptation](execution-semantics.md)); one-sided
-`ModuleDefinition` registration is in [extensibility.md § 24](extensibility.md).
+An async generator parser is inferred as Feed-native. A legacy coroutine returning a
+completed iterable remains a compatibility fallback. `parser_mode=` is only an escape hatch
+when inference is ambiguous. Rollout by module is owned by `feed-native-streaming.md`.
 
-### Strict mode
+### Callable Context
 
-Strictness is inherited from the pipe and may be overridden per pipe.
+Callable invocation continues through the ordinary wrapper-prepared kwargs path:
 
 ```python
-pipe = AsyncPipe(..., strict=True)
-pipe.flat_map(fn)
-pipe.flat_map(other_fn, strict=False)
+result = fn(item, **pipe_kwargs)
 ```
 
-With `strict=False`:
-
-* the result is iterated without special type checking
-* a mistakenly returned mapping may be flattened into its keys
-* later pipes may surface the error
-
-With `strict=True`:
-
-* a bare mapping result is rejected
-* the result must be iterable or async iterable
-* each emitted value must be a valid `Item`
-
-### 4.3 Callable context
-
-Callable pipes use Riko's existing `Context` primitive and existing keyword propagation model.
-
-#### Callable invocation
-
-A callable pipe invokes its function using the item followed by the normal pipe keyword arguments:
+The public `Context` may be supplied as the immutable environment/configuration definition:
 
 ```python
-result = fn(item, **kwargs)
-```
-
-The existing pipeline context is available as:
-
-```python
-kwargs["context"]
-```
-
-A callable that needs context may declare it explicitly:
-
-```python
-def transform(
-    item: Item,
-    *,
-    context: Context,
-    **kwargs,
-) -> Item:
+def transform(item: Item, *, context: Context, **kwargs) -> Item:
     ...
 ```
 
-or access it from ordinary keyword arguments:
+Do not turn `Context` into mutable per-item execution state. Position, item key, generation,
+and observation live in the private `_FeedItem` runtime wrapper; task groups, state-store
+adapters, channels, portals, and live resource handles stay on the private execution.
+
+There is no public `ExecutionContext`, `CallableContext`, `call_kwargs`, or per-item
+`context.bind(...)` execution model.
+
+### Declared resources
+
+Callable nodes use the common declaration shape:
 
 ```python
-def transform(item: Item, **kwargs) -> Item:
-    context = kwargs["context"]
-    ...
+resources="db"
+resources=("db", "cache")
+resources={"db": "primary_db", "cache": "redis"}
 ```
 
-A callable that does not need specific keyword values may ignore them:
+Accepted input is normalized immediately from:
 
 ```python
-def transform(item: Item, **_) -> Item:
-    return item | {"normalized": True}
+type ResourcesLike = str | Iterable[str] | Mapping[str, str]
 ```
 
-This matches the existing Riko module convention, where wrapped functions receive their parsed positional arguments followed by `**kwargs`.
+to an immutable local-name -> Context-name mapping.
 
-#### Map API
+Resolved handles are passed through the existing module wrapper/preparation machinery in
+the same way current `stream`, `objconf`, and `tuples` arguments are prepared. Only directly
+declared bindings are visible to the callable/parser. Transitive resource dependencies
+affect lifecycle/fingerprinting but are not implicitly exposed.
+
+The local alias is identity-significant; the Context lookup target name is not. The resolved
+effective resource definition is identity-significant. Missing bindings fail preparation
+before resource opening/source consumption.
+
+### Callable fingerprints and `version=`
+
+Semantic fingerprints are resolved during execution preparation and fixed for that run.
+Inspectable Python callables use normalized AST while ignoring formatting, comments, source
+locations, docstrings, and annotations. Relevant defaults, kwdefaults, closure nonlocals,
+durable referenced globals, decorators, and captured configuration participate.
+
+`functools.partial` includes the wrapped callable and bound arguments. Bound methods and
+callable instances include durable instance configuration. Stable builtins/stdlib use
+qualified identity. Opaque third-party/native implementations require a resolvable package
+identity/version or an explicit node version.
 
 ```python
-SyncPipe.map(
-    fn,
-    *,
-    execution="inline",
-    **kwargs,
-)
+version: NonNullHashable | MissingType = MISSING
 ```
+
+`MISSING` means automatic inspection; `None` is invalid. Explicit `version=` replaces
+automatic implementation inspection for callables owned by the node while stable namespace
+and non-callable configuration still participate.
+
+### Identity semantics
+
+Built-ins infer identity behavior from known semantics/module metadata. Ambiguous custom
+operators expose only:
 
 ```python
-AsyncPipe.map(
-    fn,
-    *,
-    ordered=True,
-    execution="inline",
-    reorder_buffer=None,
-    **kwargs,
-)
+identity: Literal["preserve", "derive", "combine"]
 ```
 
-Invocation is conceptually:
+* `preserve`: 1 -> 1 identity/generation preservation;
+* `derive`: deterministic child identity/generation;
+* `combine`: output identity/generation from all contributors.
+
+For derive operations, semantic child identity is preferred. Positional fallback requires a
+stable semantic ordering guarantee. Combine semantics may declare whether contributor order
+is significant.
+
+### Strict flat-map
+
+With `strict=False`, normal Python iterable semantics apply. With `strict=True`, accidental
+bare mappings are rejected, the result must be iterable/async iterable as required, and
+emitted values must satisfy the Riko item contract.
+
+Strictness is a node semantic option, not an execution type.
+
+### Process execution
+
+Process execution preserves the logical callable interface but only serializable
+configuration/definition values cross the process boundary. Live runtime objects do not:
+
+```text
+open files/sockets
+resolved resource handles
+StateStore adapter
+publish/subscription channels
+task groups/portal
+worker pools
+```
+
+Planning fails before workers start when required configuration cannot be safely serialized.
+No process-only public Context type is introduced.
+
+### Side effects and idempotency
+
+Pure callables need no idempotency contract. A side-effecting callable declares the
+capability needed by execution validation and accepts the centrally derived idempotency key.
+The callable does not reconstruct provenance itself.
+
+The common dimensions are:
+
+```text
+(node_id, fingerprint, item_key, generation, iteration)
+```
+
+If the destination cannot genuinely honor idempotency, retryable/resumable validation fails
+unless the node explicitly opts out with `require_idempotency=False`.
+
+### State/checkpoints
+
+Callable nodes do not select replay/persist modes. State uses:
 
 ```python
-fn(item, **pipe_kwargs)
+FeedState[T]
+StateKey[T]
+StateRecord[T]
+StateStore / AsyncStateStore
 ```
 
-where `pipe_kwargs` is the ordinary resolved pipe kwargs and includes:
+and an explicit boundary is:
 
 ```python
-{
-    ...,
-    "context": pipe.context,
-}
+flow.checkpoint(id="after-normalize")
 ```
 
-#### Flat-map API
+A checkpoint in a reusable callable fragment resolves to exactly one enclosing stateful
+owner when the concrete Pipeline is compiled. Restore belongs to that owner.
 
-```python
-SyncPipe.flat_map(
-    fn,
-    *,
-    strict=None,
-    drop_policy=None,
-    **kwargs,
-)
-```
+### Planning diagnostics
 
-```python
-AsyncPipe.flat_map(
-    fn,
-    *,
-    strict=None,
-    ordered=True,
-    drop_policy=None,
-    **kwargs,
-)
-```
+Planner output should expose declared/resolved semantic metadata without a second trait
+runtime. Useful fields include boundedness, ordering, stable order, sync/async availability,
+adaptation policy, identity mode, side-effect/idempotency support, declared resources,
+callable/resource fingerprint source, and Feed-native vs legacy parser mode.
 
-Invocation uses the same rule:
+Structural compilation may be cached; execution-sensitive callable/resource fingerprints
+are recomputed at execution preparation.
 
-```python
-fn(item, **pipe_kwargs)
-```
+### Definition of done
 
-There is no special context-aware flat-map path.
-
-#### Context propagation
-
-`PyPipe` already establishes the root context and includes it in normal pipe kwargs:
-
-```python
-self.context = context or Context(**kwargs)
-
-self.kwargs.update(
-    {
-        "conf": self.conf,
-        "inputs": self.inputs,
-        "context": self.context,
-    }
-)
-```
-
-Callable pipes should reuse that behavior rather than introducing a new context delivery mechanism.
-
-The same `Context` instance is propagated through chained pipes unless a narrower context is intentionally created for:
-
-* an embedded module
-* a Connect run
-* a pipe
-* a source
-* a positioned item
-
-#### Scoped contexts
-
-Per-pipe or per-item execution metadata must not be written onto a single shared mutable context during concurrent execution.
-
-When narrower execution metadata is needed, Riko derives a child `Context`:
-
-```python
-item_context = context.bind(
-    pipe_id=pipe_id,
-    source_id=position.source_id,
-    position=position,
-    schema_id=schema_id,
-)
-```
-
-That child is then placed into the same ordinary kwargs mapping:
-
-```python
-item_kwargs = {
-    **pipe_kwargs,
-    "context": item_context,
-}
-
-result = fn(item, **item_kwargs)
-```
-
-This is still normal Riko keyword propagation. It is not a separate public `call_kwargs` concept.
-
-#### Inline and thread execution
-
-Inline and thread workers receive the appropriate `Context` through the ordinary `context` keyword.
-
-Each concurrent item receives its own bound child context when item-specific fields are required.
-
-```python
-fn(
-    item,
-    context=item_context,
-    **kwargs,
-)
-```
-
-Riko does not inspect whether the callable declares `context`, `**kwargs`, or neither. A callable used as a Riko pipe is responsible for accepting the keyword arguments Riko supplies.
-
-#### Process execution
-
-Process execution preserves the same callable interface:
-
-```python
-fn(item, context=context, **kwargs)
-```
-
-Before submission, Riko validates and serializes the process-safe portions of the ordinary pipe kwargs.
-
-The `context` value remains a `Context`, reconstructed in the worker from a serializable snapshot.
-
-No alternate process-only context type is exposed.
-
-Runtime-owned objects that cannot cross a process boundary remain unavailable in the worker, including:
-
-* open files and sockets
-* state-store clients
-* sinks
-* callbacks
-* task groups
-* worker pools
-* arbitrary registries
-
-If the resolved kwargs cannot be safely serialized, planning fails before process workers start.
-
-#### Callable contract
-
-The practical callable protocol is:
-
-```python
-class ItemCallable(Protocol):
-    def __call__(
-        self,
-        item: Item,
-        **kwargs,
-    ) -> Item | Awaitable[Item]:
-        ...
-```
-
-The expected simple form is:
-
-```python
-def transform(item, **kwargs):
-    ...
-```
-
-Context is supplied exactly as it is elsewhere in Riko:
-
-```python
-context = kwargs["context"]
-```
-
-There is no `with_context` parameter, no signature inspection, no `CallableContext` type,
-and no `call_kwargs` primitive.
-
----
+1. `Pipeline.map` / `Pipeline.flat_map` are mode-neutral callable APIs.
+2. Existing decorators/module preparation remain the definition mechanism.
+3. No `state_checkpoint="replay|persist"` option remains.
+4. Public `Context` remains immutable/environmental; per-item provenance remains private.
+5. Resources use the common declaration/preparation model.
+6. Callable fingerprints and `version=` support durable state/idempotency identity.
+7. Ambiguous custom identity uses only `preserve` / `derive` / `combine`.
+8. Sync/async/process adaptation does not introduce alternate callable interfaces.
