@@ -3,8 +3,10 @@
 This is riko's **map**: the index of gameplans that hold detailed plans plus pointers to the
 authoritative specs. The shipped runtime contract lives in
 [RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md); as-built detail lives in
-[IMPLEMENTED.md](IMPLEMENTED.md); live implementation status/sequence lives in the P-track
-([PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md) + [MILESTONES.md](MILESTONES.md)).
+[IMPLEMENTED.md](IMPLEMENTED.md); live P-track status lives in
+[PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md). Historical/pending P-track file maps and exit tests live
+in [MILESTONES.md](MILESTONES.md), while forward implementation dependency order lives in
+[implementation-sequence.md](gameplans/implementation-sequence.md).
 
 Planned/end-state architecture is owned by the matching gameplan, not by the shipped runtime
 contract. In particular, the reconciled Pipeline/Context/resource/pubsub/state/identity/batch
@@ -18,7 +20,8 @@ architecture is authoritative in
 | What the engine **guarantees today** | [RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md) |
 | What **actually ships / where it lives** | [IMPLEMENTED.md](IMPLEMENTED.md) |
 | **Live phase status** | [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md) |
-| **Pending phase file maps / exit tests / order** | [MILESTONES.md](MILESTONES.md) |
+| **P-track file maps / exit tests / phase history** | [MILESTONES.md](MILESTONES.md) |
+| **Forward implementation dependency order** | [implementation-sequence.md](gameplans/implementation-sequence.md) |
 | **Detailed target design** | matching [gameplan](#gameplans) |
 | Public / EXT / private import surface | [API_SURFACE.md](API_SURFACE.md) |
 | User migration / changelog | [MIGRATION.rst](MIGRATION.rst) · [CHANGES.rst](CHANGES.rst) |
@@ -28,7 +31,8 @@ Tie-breakers:
 - shipped behavior -> RUNTIME_CONTRACT;
 - as-built location -> IMPLEMENTED;
 - live status -> PHASE_CHECKLISTS;
-- pending phase mechanics/history -> MILESTONES;
+- P-track mechanics/history/file maps -> MILESTONES;
+- forward implementation dependency order -> implementation-sequence;
 - target/end-state API semantics -> owning gameplan.
 
 `§N` contract topics and `PN` implementation phases are separate axes.
@@ -65,7 +69,7 @@ The complete `§0–27` routing map:
 | 23 | AnyIO & Twisted | [contract](RUNTIME_CONTRACT.md#23-anyio-and-twisted) · [twisted-protocol-servers](gameplans/twisted-protocol-servers.md#23-anyio-and-twisted) |
 | 24 | Module registry & plugins | [extensibility](gameplans/extensibility.md#24-module-registry-and-plugins) |
 | 25 | Conversion & dataframe | [database-transforms](gameplans/database-transforms.md#25-conversion-and-dataframe-integration) · [tabular-interop](gameplans/tabular-interop.md) |
-| 26 | Implementation roadmap | [rdp-connect](gameplans/rdp-connect.md#26-implementation-roadmap) · P-track docs |
+| 26 | Implementation roadmap | [implementation-sequence](gameplans/implementation-sequence.md) (forward dependency order) · [rdp-connect](gameplans/rdp-connect.md#26-implementation-roadmap) (RDP projection) · P-track docs (history/status) |
 | 27 | Explicit non-goals | [rdp-connect](gameplans/rdp-connect.md#27-explicit-non-goals-for-the-initial-implementation) |
 
 ## Gameplans
@@ -108,6 +112,7 @@ The complete `§0–27` routing map:
 | [module-enums.md](gameplans/module-enums.md) | Generated module enum/tree/discovery naming. |
 | [cli.md](gameplans/cli.md) | Click-native CLI/plugin API, configuration, immutable Context assembly, output/events/approval/exit codes, PipelineRef run adapters. |
 | [ownership.md](gameplans/ownership.md) | One-owner-per-contract map and boundary calls. |
+| [implementation-sequence.md](gameplans/implementation-sequence.md) | Forward implementation dependency graph; classifies existing work as keep/refactor/supersede without redefining semantic contracts. |
 
 ### AI & agents
 
@@ -146,6 +151,7 @@ The complete `§0–27` routing map:
 | [repo-refinement.md](gameplans/repo-refinement.md) | Retired redirect into P-track and current extension gameplans. |
 
 Implementation status remains authoritative only in
-[PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md); pending phase file maps/exit tests remain in
-[MILESTONES.md](MILESTONES.md). Historical phase language in those documents must not override
-newer target API decisions in the owning gameplans.
+[PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md). P-track phase history/file maps/exit tests remain in
+[MILESTONES.md](MILESTONES.md). Forward implementation dependency order is authoritative in
+[implementation-sequence.md](gameplans/implementation-sequence.md). Historical phase language in
+P-track documents must not override newer target API decisions in the owning gameplans.
