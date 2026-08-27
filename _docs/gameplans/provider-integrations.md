@@ -8,14 +8,15 @@ provider operations without recreating the monolithic API gateways found in earl
 projects.
 
 This plan owns **provider semantics**, not generic transport, secrets, REST pagination,
-retry, monitoring checkpoints, or the common capability catalog.
+retry, monitoring persistence, or the common capability catalog.
 
 Related authoritative plans:
 
 * `connectors.md` — transport/session lifecycle and credential references/resolution;
 * `rest-incremental.md` — REST collection, pagination, dependent endpoints, cursor encoding;
-* `feed-monitoring.md` — source checkpoints, dedupe/change/anomaly monitoring state;
-* `execution-semantics.md` — retry, timeout, cancellation, and error policy;
+* `feed-monitoring.md` — dedupe/change/anomaly monitoring policy;
+* `execution-semantics.md` — `Context`, resources, `StateStore`, identity/idempotency, retry,
+  timeout, cancellation, and error policy;
 * `mcp.md` — common `CapabilityInfo`, effects, catalog, policy, and OpenAPI projection;
 * `orchestration.md` — durable run boundaries and external scheduling.
 
@@ -51,8 +52,8 @@ resource CRUD/search semantics
 multi-provider enrichment policy
 provider response caching policy
 explicit browser fallback
-provider batch/write/idempotency policy
-IdentityMap
+provider batch/write policy
+IdentityMap logical semantics
 provider webhook EventEnvelope
 OperationHandle + wait_operation semantics
 provider diagnostics
@@ -64,7 +65,8 @@ It does not redefine:
 ```text
 CredentialProvider / secret material    connectors.md
 REST pagination / source cursor         rest-incremental.md
-SourceCheckpoint / observation state    feed-monitoring.md
+FeedState / StateStore / checkpoints    execution-semantics.md
+monitoring observation policy           feed-monitoring.md
 RetryPolicy / timeout / cancellation    execution-semantics.md
 CapabilityInfo / CapabilityCatalog      mcp.md
 ```
@@ -78,7 +80,7 @@ credential reference + policy
     ↓
 resource/action semantics
     ↓
-shared connector/session service
+declared Context resources + execution-owned connector session
     ↓
 normalized records / action result / OperationHandle
     ↓
@@ -90,7 +92,7 @@ Provider packages describe semantics. Core Riko continues to process records.
 Do not introduce:
 
 ```text
-riko → one giant provider proxy service → every external API
+riko -> one giant provider proxy service -> every external API
 ```
 
 as a required architecture.
@@ -101,9 +103,10 @@ Suggested ownership:
 
 ```text
 riko core
-    ExecutionContext
-    ordinary record processing
-    generic execution/retry primitives
+    immutable Context + Resource definitions
+    private SyncExecution / AsyncExecution runtime
+    ordinary Pipeline record processing
+    identity / StateStore / retry primitives
 
 riko-connect
     HTTP/file/storage/mail connectors
@@ -118,8 +121,9 @@ provider extras
     behavior not faithfully represented by generic REST/OpenAPI
 ```
 
-A provider-specific adapter is justified by distinctive pagination, streaming, mutation,
-state, auth, or operation semantics—not merely a brand name.
+There is no public `ExecutionContext`. A provider-specific adapter is justified by
+distinctive pagination, streaming, mutation, state, auth, or operation semantics—not merely
+a brand name.
 
 ## 6. Provider definition
 
@@ -139,7 +143,8 @@ class ProviderSpec:
 Provider definitions may be generated from OpenAPI and then augmented with explicit
 provider policy/semantic overrides.
 
-`credential` is a reference only; raw secret material is resolved by `connectors.md`.
+`credential` is a reference only; raw secret material is resolved by declared resources
+through `connectors.md`.
 
 ## 7. Authentication lifecycle projection
 
@@ -161,7 +166,7 @@ Secret storage, token retrieval, redaction, and serialized credential references
 by `connectors.md`. This plan only defines how a provider exposes setup/control operations.
 
 Interactive authorization belongs to setup/control-plane tooling, not an implicit side
-effect during record iteration.
+effect during item iteration.
 
 ## 8. Provider environments
 
@@ -210,7 +215,7 @@ stable provider identity first.
 Provider search vocabularies may be richer than a generic HTTP request:
 
 ```python
-pipe.capability(
+flow.capability(
     "ebay.search",
     conf={
         "query": "...",
@@ -223,7 +228,8 @@ pipe.capability(
 The implementation may still use generic REST/OpenAPI machinery.
 
 Pagination, rate limiting, dependent endpoints, and incremental cursor encoding defer to
-`rest-incremental.md`; durable source-position state defers to `feed-monitoring.md`.
+`rest-incremental.md`; durable source position uses the common `FeedState` / `StateStore`
+contract.
 
 ## 11. Multi-provider enrichment
 
@@ -231,10 +237,10 @@ A reusable pattern is:
 
 ```text
 base records
-→ selected enrichment providers
-→ merge normalized fields + provenance
-→ clean
-→ optional upsert
+-> selected enrichment providers
+-> merge normalized fields + provenance
+-> clean
+-> optional upsert
 ```
 
 Selection is explicit:
@@ -256,9 +262,12 @@ Requirements:
 * merge precedence is explicit;
 * providers cannot silently overwrite higher-priority data.
 
+N-to-1/N-to-N enrichment provenance follows the common generation/combine rules rather than
+creating provider-specific record identities.
+
 ## 12. HTTP caching and conditional requests
 
-Provider response caching is an optimization, not correctness state.
+Provider response caching is an optimization, not correctness/recovery state.
 
 Prefer standard validators when available:
 
@@ -272,7 +281,7 @@ Requirements:
 
 * cache key/namespace derivation is stable and inspectable;
 * cache bypass/refresh is available for troubleshooting;
-* response cache is distinct from source checkpoints and identity maps;
+* response cache is distinct from committed `StateStore` source/recovery state;
 * credentials are never cached in ordinary result records;
 * connector response/session rules still come from `connectors.md`.
 
@@ -284,8 +293,8 @@ Rules:
 
 * REST execution never silently launches a browser;
 * credentials remain references;
-* browser contexts are execution-scoped resources;
-* contexts close on success, error, timeout, or cancellation;
+* browser clients/contexts are declared resources;
+* live contexts are execution-owned and close on success, error, timeout, or cancellation;
 * concurrency is tightly bounded;
 * plan/events disclose browser fallback;
 * rendered-page parsing remains a downstream parser where practical.
@@ -302,27 +311,16 @@ batch={
 }
 ```
 
-Batching must preserve provider ordering/idempotency rules and expose item-level partial
-failures where the provider permits it.
+Provider-native batching must preserve ordering/idempotency rules and expose item-level
+partial failures where the provider permits it.
 
-Do not materialize an unbounded stream solely to use a provider batch endpoint.
-
-Generic batch execution semantics belong to the runtime/RDP plans; this section only owns
-provider batch limits and response interpretation.
+Do not materialize an unbounded stream solely to use a provider batch endpoint. Generic
+batch execution uses the single `Pipeline(batch=True, ...)` model from
+`execution-semantics.md`; there is no provider `BatchPipe` contract.
 
 ## 15. Idempotent and change-aware writes
 
-Generalize the CKAN-style persisted-hash pattern as provider sink policy:
-
-```python
-write_policy="if_changed"
-fingerprint={
-    "algorithm": "sha256",
-    "canonicalization": "records-v1",
-}
-```
-
-Possible policies:
+Possible provider write policies:
 
 ```text
 always
@@ -332,16 +330,32 @@ create_only
 update_only
 ```
 
-`if_changed` requires a comparable committed or provider-native version/fingerprint.
+`if_changed` requires a comparable committed/provider-native version or content fingerprint.
 Prefer ETags/version IDs over redownloading content solely to hash it when equivalent safety
 is available.
+
+Provider content hashing is distinct from Riko's canonical identity digest. Riko-generated
+idempotency identity is derived centrally from:
+
+```text
+(node_id, fingerprint, item_key, generation, iteration)
+```
+
+A provider sink declares whether/how its backend genuinely honors that idempotency key.
+Retryable/resumable validation fails when a side effect cannot honor idempotency unless the
+node explicitly opts out:
+
+```python
+.write(..., require_idempotency=False)
+```
 
 Artifact content fingerprinting/lineage is owned by `artifact-conversion.md`; this section
 owns the **remote write decision**.
 
 ## 16. Identity mapping
 
-Provider synchronization often needs durable local-to-remote identity mapping:
+Provider synchronization often needs durable local-to-remote identity mapping. Keep a
+provider-friendly logical facade:
 
 ```python
 class IdentityMap(Protocol):
@@ -351,10 +365,14 @@ class IdentityMap(Protocol):
 
 Prefer provider-native external IDs/upsert keys when available.
 
-Identity mapping is application/provider state. It is distinct from:
+When Riko owns persistence for an identity map, back it with the common `StateStore` rather
+than defining an independent generic key/value persistence protocol. A provider/application
+may also supply an external `IdentityMap` resource whose lifecycle/storage semantics it owns.
+
+Identity mapping remains logically distinct from:
 
 ```text
-source checkpoint      where acquisition resumes
+source position       where acquisition resumes
 response cache         acquisition optimization
 observation state      whether an entity changed
 artifact version       durable output identity
@@ -366,10 +384,10 @@ Normalize provider webhook processing as:
 
 ```text
 raw request bytes + headers
-→ provider signature verification
-→ replay/idempotency validation
-→ EventEnvelope
-→ registered capability/pipeline
+-> provider signature verification
+-> replay/idempotency validation
+-> EventEnvelope
+-> registered capability/PipelineRef
 ```
 
 ```python
@@ -385,7 +403,7 @@ class EventEnvelope:
 Provider signature algorithms belong to adapters and use exact raw bytes when required.
 
 Never route an arbitrary URL-supplied function/import name directly to Python execution.
-Dispatch only to registered, policy-authorized capability or pipeline IDs.
+Dispatch only to registered, policy-authorized capability or pipeline IDs/references.
 
 ## 18. Asynchronous provider operations
 
@@ -420,6 +438,9 @@ result = await wait_operation(
 )
 ```
 
+Here `context` is the public immutable `Context`; execution-owned resource/session handles
+are resolved privately when the capability runs.
+
 ### Interval mode
 
 Periodically read the authoritative status capability until terminal state or timeout.
@@ -441,12 +462,12 @@ Rules:
 * use caller/provider correlation IDs when the final operation ID does not yet exist;
 * unrelated events do not satisfy the waiter;
 * timeout/cancellation follow `execution-semantics.md`;
-* transient status-read retries use `RetryPolicy` from `execution-semantics.md`;
+* transient status-read retries use the common `RetryPolicy`;
 * only the provider adapter defines terminal status mapping;
 * the waiter never owns scheduling of future independent pipeline runs.
 
 This contract is deliberately named **operation waiting**, not source polling. Periodically
-checking a data source for new records remains `feed-monitoring.md`.
+checking a data source for new records remains `Pipeline.poll(...)` / `feed-monitoring.md`.
 
 ## 19. Retry ownership
 
@@ -463,7 +484,8 @@ provider-specific conflict/eventual-consistency signals
 ```
 
 Do not wrap a capability in an independent retry loop when Riko is already applying its
-configured retry policy.
+configured retry policy. State-store `CheckpointConflictError` is not an instruction for a
+provider adapter to reload/rerun automatically.
 
 ## 20. Provider diagnostics
 
@@ -488,9 +510,9 @@ Provider resources/actions project into that model:
 
 ```text
 ProviderSpec / ResourceSpec / ActionSpec
-→ CapabilityInfo / provider-specific CapabilitySpec
-→ CapabilityCatalog
-→ CLI / MCP / docs / agents
+-> CapabilityInfo / provider-specific CapabilitySpec
+-> CapabilityCatalog
+-> CLI / MCP / docs / agent-oriented Pipelines
 ```
 
 Do not maintain a second provider-only catalog containing duplicate fields such as input
@@ -521,30 +543,32 @@ Contract tests should cover:
 3. sandbox/production endpoint selection;
 4. resource CRUD/search semantics project to the common catalog;
 5. search pagination uses shared REST machinery;
-6. bounded multi-provider enrichment with deterministic merge precedence;
-7. HTTP validator/cache behavior distinct from checkpoint state;
-8. explicit browser-fallback lifecycle;
+6. bounded multi-provider enrichment with deterministic merge precedence/provenance;
+7. HTTP validator/cache behavior distinct from `StateStore` state;
+8. explicit browser-fallback lifecycle via declared resources;
 9. partial provider batch-write failures;
 10. `if_changed` suppresses identical writes;
-11. identity-map-backed upsert survives recreation;
-12. webhook signature/replay validation precedes dispatch;
-13. unregistered webhook targets cannot execute;
-14. `OperationHandle` status/result normalization;
-15. interval/event/hybrid wait modes re-read authoritative status;
-16. operation waiter respects timeout/cancellation and shared RetryPolicy;
-17. provider adapters do not create nested retry loops;
-18. provider projections use the common capability catalog;
-19. logs redact credentials and sensitive payload fields.
+11. execution-derived idempotency key remains stable across retry;
+12. unsupported idempotency fails retryable/resumable validation unless opted out;
+13. identity-map-backed upsert survives recreation;
+14. webhook signature/replay validation precedes dispatch;
+15. unregistered webhook targets cannot execute;
+16. `OperationHandle` status/result normalization;
+17. interval/event/hybrid wait modes re-read authoritative status;
+18. operation waiter respects timeout/cancellation and shared RetryPolicy;
+19. provider adapters do not create nested retry loops;
+20. provider projections use the common capability catalog;
+21. logs redact credentials and sensitive payload fields.
 
 ## 24. Phases
 
 ```text
 P0  ProviderSpec / ResourceSpec / ActionSpec
-P1  auth lifecycle projection
+P1  auth lifecycle projection + Context resource bindings
 P2  resource CRUD/search semantics
 P3  cache + HTTP validator policy
-P4  batch and idempotent write policy
-P5  identity mapping and upsert
+P4  provider batch + common idempotency policy
+P5  identity mapping/upsert backed by StateStore or external resource
 P6  multi-provider enrichment service
 P7  explicit browser fallback
 P8  verified webhook EventEnvelope
@@ -558,13 +582,15 @@ P11 sensitivity/provenance metadata
 1. A provider integration is an adapter/capability, not a mandatory proxy service.
 2. Raw credentials never enter provider specs or serialized workflows.
 3. Common resource operations share semantics without erasing provider differences.
-4. REST pagination/cursors, checkpoint state, retry, and capability metadata reuse their
-   authoritative gameplans.
-5. Multi-provider enrichment has explicit selection, provenance, and merge policy.
-6. Browser automation is explicit and optional.
-7. Remote writes can be batched, upserted, and skipped when unchanged.
-8. Webhooks verify/authenticate before registered dispatch.
-9. Long-running actions use one `OperationHandle`/`wait_operation` contract.
-10. CLI, MCP, docs, and agents discover provider operations through the shared capability
-    catalog rather than a second provider registry.
-11. Provider-specific dependencies remain outside core unless broadly justified.
+4. REST pagination/cursors, `FeedState`/`StateStore`, retry, and capability metadata reuse
+   their authoritative contracts.
+5. Provider clients/browser contexts are declared resources with execution-owned lifecycle.
+6. Multi-provider enrichment has explicit selection, provenance, and merge policy.
+7. Browser automation is explicit and optional.
+8. Remote writes can be batched, upserted, skipped when unchanged, and participate in the
+   common idempotency contract.
+9. Webhooks verify/authenticate before registered dispatch.
+10. Long-running actions use one `OperationHandle`/`wait_operation` contract.
+11. CLI, MCP, docs, and agent-oriented Pipelines discover provider operations through the
+    shared capability catalog rather than a second provider registry.
+12. Provider-specific dependencies remain outside core unless broadly justified.
