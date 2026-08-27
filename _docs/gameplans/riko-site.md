@@ -24,6 +24,10 @@ The system must allow Riko to:
 
 The architecture must not make Mithril, Jinja, htpy, Lektor, or Pelican the canonical site model. `SiteSpec` is the canonical boundary.
 
+Pipeline definition/execution, Context/resource lifecycle, sync/async adaptation, and source
+replayability are owned by [execution-semantics.md](execution-semantics.md). `riko-site` consumes
+those contracts and does not define a second pipeline lifecycle.
+
 ---
 
 # 2. Repositories and package boundaries
@@ -171,24 +175,35 @@ The site export target may accept either:
 * a stream of `SiteArtifact` records; or
 * a single assembled `SiteSpec`.
 
-## 3.3 Riko pipes remain one-shot executions
+This plan owns the site-specific export target and renderer contracts. It does not redefine the
+core Pipeline execution API; final placement of export convenience on the Pipeline surface follows
+the core export/artifact API when that surface is finalized.
 
-Do not make a consumed pipeline restartable.
+## 3.3 Pipeline definitions are reusable; executions are one-shot
 
-For multiple render targets:
+`Pipeline` is an immutable reusable definition. Each `iter(flow)` or `aiter(flow)` creates a fresh
+private one-shot execution; an exhausted execution is never cached on the definition.
+
+Replayability follows the source itself. A definition backed by replayable inputs may be executed
+again. A generator instance or other one-shot source remains consumed and is never secretly buffered
+to make the definition replayable.
+
+For multiple render targets, materialize the canonical `SiteSpec` once when that is the desired
+boundary:
 
 ```python
-site = next(
-    site_artifacts().sitespec(
-        conf={"validate": True}
-    )
+site_flow = site_artifacts().sitespec(
+    conf={"validate": True}
 )
+site = next(iter(site_flow))
 
 site.render("mithril", ...)
 site.render("html", engine="htpy", ...)
 ```
 
-Alternatively, reconstruct the artifact pipeline for each export.
+If the site pipeline itself must be evaluated again, iterate the same definition again only when
+its sources are replayable; otherwise provide fresh one-shot sources. Do not reconstruct the
+Pipeline definition merely because a previous execution finished.
 
 ## 3.4 Component types declare runtimes
 
@@ -333,12 +348,12 @@ Routes must be generated before rendering through `SiteArtifact` records.
 The implementation should support code shaped like this.
 
 ```python
-from riko import SyncPipe
+from riko import Pipeline
 
 
-def site_artifacts() -> SyncPipe:
+def site_artifacts() -> Pipeline[SiteArtifact]:
     structure = (
-        SyncPipe(
+        Pipeline(
             "fetchdata",
             conf={"url": "site/structure.json"},
         )
@@ -346,7 +361,7 @@ def site_artifacts() -> SyncPipe:
     )
 
     programs = (
-        SyncPipe(
+        Pipeline(
             "fetchdata",
             conf={
                 "url": DATA_API,
@@ -387,7 +402,7 @@ def site_artifacts() -> SyncPipe:
     )
 
     blog = (
-        SyncPipe(
+        Pipeline(
             "fetchdata",
             conf={
                 "url": CONTENT_API,
@@ -712,7 +727,7 @@ Capture current behavior and lock the agreed decisions before implementation.
    * `SiteSpec as canonical boundary`;
    * `renderer and runtime model`;
    * `publication approval and content ownership`;
-   * `one-shot pipeline lifecycle`.
+   * `reusable Pipeline definition and private one-shot execution lifecycle`.
 5. Record current `wei-app` `pages.json` and collection-loading behavior as compatibility fixtures.
 
 ### Acceptance criteria
@@ -728,6 +743,9 @@ Capture current behavior and lock the agreed decisions before implementation.
 ### Goal
 
 Replace the hardcoded conversion-function assumption with a generic export-target abstraction without breaking existing exports.
+
+This is a compatibility refactor over the currently shipped export surface. It must not introduce a
+second Pipeline execution/terminal contract; final Pipeline/export placement remains owned by core.
 
 ### Core API
 
@@ -764,7 +782,7 @@ class ExportRegistry:
 
 1. Introduce `ExportRegistry`.
 2. Wrap existing conversion functions in a `FunctionExportTarget`.
-3. Preserve all current public `export()` signatures and behavior.
+3. Preserve all current public `export()` signatures and behavior during this registry refactor.
 4. Add entry-point discovery:
 
 ```toml
@@ -792,6 +810,7 @@ site = "riko_site.exports.site:target"
 * No site types.
 * No renderer registry.
 * No `riko-site` code in Riko core.
+* No new Pipeline lifecycle or execution API.
 
 ---
 
@@ -951,13 +970,14 @@ flow.review(
 * Do not use `Objconf` in new site modules.
 * Infer module config type from parser annotations.
 * Do not manually specify stream return kinds where generator/annotation inference is sufficient.
-* Provide sync behavior first.
-* Structure interfaces so async parity can be added without changing configuration contracts.
+* Use the common Pipeline module contract; do not create sync-only site-pipeline APIs.
+* Native sync and/or async parser implementations may be supplied as appropriate; the common
+  execution bridge provides parity when only one side exists.
 
 ### Tests
 
 * Each module independently.
-* Complete chained public API.
+* Complete chained public Pipeline API in sync and async execution where applicable.
 * Parser annotation discovery.
 * Generator return inference for `sitestructure` and `siteroutes`.
 * Invalid config errors.
@@ -1657,7 +1677,7 @@ Do not use internal helpers in contract tests.
 Examples:
 
 ```python
-from riko import SyncPipe
+from riko import Pipeline
 from riko_site import SiteSpec
 ```
 
@@ -1716,9 +1736,10 @@ Do not require full benchmark infrastructure in the first pull request.
 
 ## Riko
 
-* Existing export targets must behave identically.
-* Existing dynamic module chaining must continue working.
-* Do not change current pipeline lifecycle in these PRs.
+* Existing export targets must behave identically during the compatibility registry refactor.
+* Existing dynamic module chaining must continue working while it remains part of the shipped API.
+* Do not implement or fork core Pipeline lifecycle semantics in these PRs; consume the target
+  contract from `execution-semantics.md` as it lands.
 * Do not remove `aggregate`.
 * Do not add `.pipe(callable)`.
 * Do not require site dependencies for base Riko installation.
@@ -1767,7 +1788,7 @@ Do not implement these during the initial sequence:
 * replacing the full `wei-app` SPA with islands;
 * a general-purpose CMS;
 * distributed artifact storage before the local-directory implementation works;
-* async site rendering before sync contracts are stable;
+* async site rendering before sync renderer contracts are stable;
 * automatic publication of approval-required AI content.
 
 ---
@@ -1864,13 +1885,13 @@ Requirements:
 2. Run the existing test and type-check commands before making changes.
 3. Introduce a generic ExportTarget protocol and ExportRegistry.
 4. Adapt all existing conversion functions through compatibility wrappers.
-5. Preserve every current export signature, return type, and file-writing behavior.
+5. Preserve every current export signature, return type, and file-writing behavior during this registry refactor.
 6. Add lazy entry-point discovery for the `riko.export_targets` group.
 7. Preserve list_targets() behavior while including installed plugin targets.
 8. Require replace=True for duplicate registrations.
 9. Add characterization, regression, registry, and entry-point tests.
 10. Do not add `.pipe(callable)`.
-11. Do not modify pipeline lifecycle behavior.
+11. Do not introduce or modify the core Pipeline lifecycle/execution contract; that is owned by `execution-semantics.md`.
 12. Do not add a dependency on riko-site.
 
 Before editing, provide:
