@@ -15,11 +15,7 @@ import pytest
 from riko.bado import issync, run
 from riko.collections import AsyncPipe, SyncPipe
 from riko.types.general import Item
-from riko.types.modules import (
-    ItemBuilderConf,
-    StrReplaceConf,
-    StrReplaceConfRule,
-)
+from riko.types.modules import ItemBuilderConf, StrReplaceConf, StrReplaceConfRule
 from tests import PipeBuilder, aresolve
 
 BUILDER_CONF = ItemBuilderConf({"attrs": {"key": "content", "value": "a,bb,ccc"}})

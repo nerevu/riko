@@ -32,7 +32,6 @@ def test_input_test_flag_scoped_to_test_context(monkeypatch):
 
 def test_filter_non_loopable_modules():
     modules = list_modules(loopable=False, show_metadata=True)
-
     assert modules
     assert all(not module.loopable for module in modules)
 
@@ -63,7 +62,6 @@ def test_primary_requires_subtype():
 
 def test_operator_metadata():
     metadata = get_module_metadata("count")
-
     assert metadata.type == "operator"
     assert metadata.subtype == "aggregator"
     assert metadata.subtypes == {"aggregator", "composer"}
@@ -86,7 +84,6 @@ def test_processor_metadata():
 
 def test_splitter_metadata():
     metadata = get_module_metadata("split")
-
     assert metadata.type == "splitter"
     assert metadata.subtype == "splitter"
     assert metadata.subtypes == {"splitter"}

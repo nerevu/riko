@@ -213,11 +213,10 @@ def parse_rss(  # noqa: E302
             source, source_name = source_name, "content"
         else:
             if f.file and IS_FASTFEEDPARSER:
-                # include_content=True, include_tags=True, include_media=True,
-                # include_enclosures=True
+                # fastfeedparser.parse takes str/bytes only (no file-like input)
                 source = f.read()
             elif f.file:
-                source = f.file
+                source = f.file  # feedparser reads the file object directly
             else:
                 source = b""
     else:

@@ -402,13 +402,13 @@ class _SendDispatcher:
 
 def _settle_iter(current: Stream | None) -> Stream:
     """Closes a live iterator or returns an exhausted iterator."""
-    if current is not None:
+    if current is None:
+        result = iter(())
+    else:
         if (close := getattr(current, "close", None)) is not None:
             close()
 
         result = current
-    else:
-        result = iter(())
 
     return result
 

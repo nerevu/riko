@@ -169,7 +169,7 @@ def loop_embed_sync(
     through (``looped`` False); no embed at all sets ``handled`` False so the
     caller runs the operator parser instead.
     """
-    embed_type = getattr(embed, "type", None)
+    embed_type = embed.type if embed else None
     handled = True
     looped = False
     stream = source
@@ -214,7 +214,7 @@ def loop_embed_async(
     nor runs the embeds concurrently — ordering, backpressure, and early exit on
     ``count="first"`` fall out of sequential iteration.
     """
-    embed_type = getattr(embed, "type", None)
+    embed_type = embed.type if embed else None
     handled = True
     looped = False
     stream = source
