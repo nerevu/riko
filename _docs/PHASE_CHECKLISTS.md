@@ -1,9 +1,11 @@
 # riko Phase Checklists & Tracker (P1–P14)
 
 The **authoritative P-track**: the live phase tracker plus per-phase detail for done phases.
-Companion: [MILESTONES.md](MILESTONES.md) (file maps + exit tests + the M2/P8–P14 design and
-sequencing). Consolidates the former `P1/P2/P5/P6/P7/P10_CHECKLIST.md` and the former
-`REFINEMENT_PLAN.md` (tracker + guiding decisions folded in here; pending-phase design → MILESTONES).
+Companion: [MILESTONES.md](MILESTONES.md) retains P-track history, file maps, and exit-test
+references. Forward implementation dependency order lives in
+[gameplans/implementation-sequence.md](gameplans/implementation-sequence.md), while target semantics
+live in their owning gameplans. This file consolidates the former
+`P1/P2/P5/P6/P7/P10_CHECKLIST.md` and the former `REFINEMENT_PLAN.md` tracker/guiding decisions.
 
 ## Progress tracker (authoritative)
 
@@ -15,8 +17,9 @@ is the one open P0. By the 2026-08-24 decision it is **deferred, not discharged*
 folded into the Pipeline/Execution split (fold, don't patch), so **R2 stays live on `features`
 until that split lands** ([MILESTONES § split](MILESTONES.md) · [release-readiness § 9.1](gameplans/release-readiness.md#91-merge-gate-features--main)).
 Planning the fix is not discharging it — the gate does not clear until the split removes the
-defect. The other register rows are P1–P3 and belong to the release gate — next up is R4 (async
-`send` buffers its whole stream).
+defect. In the correctness-audit register, the next open row after R2 is R4 (async `send` buffers its
+whole stream); that audit ordering is separate from the forward architecture dependency graph in
+[implementation-sequence.md](gameplans/implementation-sequence.md).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -29,8 +32,8 @@ defect. The other register rows are P1–P3 and belong to the release gate — n
 | **P7** sync/async parity + true async streaming | ✅ done | § P7. **Carryover:** bounded-memory streaming *export* → design in [gameplans/feed-native-streaming.md](gameplans/feed-native-streaming.md). |
 | **P8** module registry + entry points | ✅ done | § P8; `ext/{registry,pipelines,resolver}.py`, `Resolver` protocol, symmetric dispatch |
 | **P9** fluent discoverability | ⏳ in progress | **P9A done** (§ P9A): generated flat `Modules` namespace + `Sources`/`Transforms`/`Sinks` bucket tree (`riko/modules/_names.py`), `derive_category` taxonomy, `riko.ext.codegen` + `gen-names` CLI/drift guard, `list_modules`/`describe_module`, value-taking `.pipe`/`\|`. **Remaining (non-P9A):** installed-env aggregate `riko.generated.Modules` + `.pyi` stubs → [gameplans/module-enums.md](gameplans/module-enums.md) |
-| **P10** bounded parallelism + backpressure | ✅ done | § P10. **Carryover:** pipe-level budget via `Context` → P14. |
-| **P11** pub/sub + poll protocols | ⬜ pending | `Publisher`/`Subscription`/`.poll` |
+| **P10** bounded parallelism + backpressure | ✅ done | § P10. Shared-budget mechanics retained; target execution-wide wiring is owned by the private execution model, not mutable `Context` state. |
+| **P11** pub/sub + poll protocols | ⬜ pending | `Publisher`/`Subscription`/`.poll`; reshaped by fanout/execution owners and sequenced as R7 after Pipeline execution foundations |
 | **P12** stable errors + events | ⬜ pending | `RikoError` tree, `EventSink` |
 | **P13** public/typing/internal test split | ⬜ pending | `tests/typing/`; test-layering audit + fix/remove/consolidate plan → [gameplans/testing.md](gameplans/testing.md) |
 | **P14** extensions outside core | ⬜ pending | `riko-microsoft`, `riko-ai` |
@@ -39,32 +42,36 @@ defect. The other register rows are P1–P3 and belong to the release gate — n
 landed** (the M2 seam). **P9A is complete**, targeted for release v0.76.0: the generated `Modules` tree +
 `derive_category` taxonomy + `riko.ext.codegen`/`gen-names` + `list_modules`/`describe_module`
 (on top of the v0.75.0 prerequisites — value-taking `|`/`.pipe()`, `ModuleName` base, `isasync`
-inference). **Concrete next action: the remaining non-P9A P9 work** — the installed-environment
-aggregate `riko.generated.Modules` (covering entry-point extensions) and `.pyi` fluent stubs. Full
-plan: [gameplans/module-enums.md](gameplans/module-enums.md). Other pending-phase design + file maps
-+ exit tests are in [MILESTONES.md](MILESTONES.md).
+inference). The remaining non-P9A P9 work is the installed-environment aggregate
+`riko.generated.Modules` (covering entry-point extensions) and `.pyi` fluent stubs; its domain plan
+is [gameplans/module-enums.md](gameplans/module-enums.md). This is the next unfinished **P-track**
+work, not a claim that it precedes the cross-cutting R0–R12 dependency graph. Forward implementation
+order lives in [gameplans/implementation-sequence.md](gameplans/implementation-sequence.md).
 
 **Accepted/deferred (documented, not bugs):** sync/async **udf-count divergence under partial
 consumption** (eager-concurrent async vs lazy-sequential sync — see the `AsyncPipe` docstring +
 § P7); bare `async for … break` without close emits GC noise. The former `parallel`/`threads` →
 `executor` migration is **subsumed by the pre-1.0 clean break** (§ release gate): `parallel`/
-`threads` live only on the removed `SyncPipe`/`SyncCollection`, so `executor=` becomes the sole
-concurrency vocabulary and `Pipeline.with_config` never grows them — no shim doc.
+`threads` live only on the removed `SyncPipe`/`SyncCollection`, so execution-wide concurrency moves
+to `Pipeline.with_execution(executor=..., concurrency=..., ordered=...)`; `with_config()` does not
+grow execution knobs.
 
 **Done phases** below carry a full summary (what landed / decisions / carryovers). Guiding &
 resolved decisions are at the bottom.
 
 > **Pre-1.0 release gate.** The cross-cutting DX/API-shape polish that *sequences* items across
 > P9/P11/P12/P13 (pub/sub 1.0 contract, config-validation strictness, **clean-break**
-> Pipeline/Execution split, `Collection`→`Pipeline(source=…)`, `with_config`/`executor=` cleanup,
+> Pipeline/Execution split, `Collection`→`Pipeline(source=…)`, execution-setting cleanup,
 > wheel/PyPI release fidelity) plus its Must-land/Preferred/Can-wait triage lives in
-> [gameplans/release-readiness.md](gameplans/release-readiness.md); its file map · sequence · exit
-> tests · DoD live in [MILESTONES.md](MILESTONES.md) § Pipeline/Execution split. Phase *status*
-> still lives only in this tracker.
+> [gameplans/release-readiness.md](gameplans/release-readiness.md). Target semantics live in their
+> owning gameplans; forward dependency order and exit sequencing live in
+> [gameplans/implementation-sequence.md](gameplans/implementation-sequence.md); retained P-track file
+> maps and exit-test references remain in [MILESTONES.md](MILESTONES.md). Phase *status* still lives
+> only in this tracker.
 
 > **Landing a phase → update (single-source-of-truth checklist):** (1) this tracker row +
-> suite count; (2) add a done-phase summary section below (migrate the design out of
-> [MILESTONES.md](MILESTONES.md), don't copy it); (3) its as-built entry in
+> suite count; (2) add a done-phase summary section below (keep historical file-map detail in
+> [MILESTONES.md](MILESTONES.md), don't duplicate target semantics); (3) its as-built entry in
 > [IMPLEMENTED.md](IMPLEMENTED.md) (+ an `As-built:` pointer in
 > [RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md) if the section is newly shipping); (4) any gameplan
 > stub. **Phase status lives only in this tracker; "what ships" only in IMPLEMENTED.md** — no
@@ -365,10 +372,10 @@ threaded through `async_map*` as opt-in `budget=`, wrapping **leaf** I/O to cap 
 without multiplication or hold-and-wait deadlock).
 
 **Carryovers.**
-- **Pipe-level budget wiring via `Context`** — the `Semaphore` foundation is opt-in; threading one
-  budget through `Context` down into the pipe/collection `async_map*` calls is deferred to a concrete
-  fetch-heavy nesting site (P14). Core has no deep multiplicative nesting today (pipes/loop/subpipe
-  are sequential), so the blow-up is latent.
+- **Shared-budget execution wiring** — the shipped `Semaphore` foundation is retained, but the old
+  proposal to thread a live budget through mutable `Context`/P14 is superseded. Final execution-wide
+  concurrency belongs to private `SyncExecution`/`AsyncExecution` preparation and
+  `Pipeline.with_execution(...)`; `Context` remains immutable environment/resource definition.
 - **Sync `prefetch` window** — sync uses `chunksize` (pool imap), not a `prefetch` buffer; deferred
   (lower value than the async seam).
 
@@ -378,7 +385,8 @@ under P7.5 — see P7 above.)
 ### Async pub/sub hub (as-built)
 
 > Salvaged from the retired `FEATURES_AUDIT.md` (the "Async Pub/Sub Cleanup" pass, now shipped).
-> This is the current implementation P11 will formalize behind `Publisher`/`Subscription`.
+> This is the current compatibility implementation. The revised compatibility MVP and final F5
+> boundary are owned by [fanout-topology.md §14.1](gameplans/fanout-topology.md#141-revised-compatibility-mvp-boundary).
 
 Sync and async pub/sub are two hubs under `riko/_pubsub/` (state via `contextvars`;
 `reset_pubsub()` resets both for test isolation):
@@ -393,19 +401,17 @@ Sync and async pub/sub are two hubs under `riko/_pubsub/` (state via `contextvar
   bounded by `objconf.max_wait` → `ReceiverUnavailableError`; single active subscriber per slot
   (`DuplicateReceiverError`); slots carry a `generation` + `SubscriptionState`.
 
-Ownership migrates to `Context.resources` (P11) before concurrent independent pipelines share a
-process. The eager async receiver (collect batch → `iter`) became an async generator in P7.3.
+The compatibility MVP keeps this AnyIO zero-buffer/rendezvous backend and string-target
+`SyncPipe`/`AsyncPipe` surface while making async `send`/`receive` Feed-native and incremental.
+Subscriber `func` remains a transformation in both modes during that MVP. `asyncio.create_task()` is
+acceptable for compatibility subscriber concurrency when tasks are tracked and cleaned up.
 
-`SyncPipe.subscribe`/`publish` (fanout-topology F5a) already hide the sync hub behind a public
-pair — eager registration, no `next()` priming, and a non-blocking marker-free drain
-(`max_wait=0`). P11's `Publisher`/`Subscription` should formalize *that* surface, not the raw
-`SyncPipe("receive", …)` one, and **blocking belongs to the `Subscription`, not to `receive`**
-— the in-process hub never has to wait, a broker-backed subscription does
-([release-readiness.md § 2](gameplans/release-readiness.md)). Teardown ownership is still wrong
-(an idle drain destroys the subscription instead of ending one pass); that is
-[F5b](gameplans/fanout-topology.md), **folded into this phase** rather than fixed first,
-because a local fix would build on the `DONE` sentinel and `send`'s `ids` dict that this
-rewrite deletes.
+Do **not** move live hub/channel state onto `Context.resources`; `Context` owns immutable Resource
+definitions. Final F5/R7 moves live subscription/channel/task ownership into each private execution,
+changes sync and async together from transformation-shaped `func` to `tap=`, removes hidden
+PENDING/DONE/id lifecycle bookkeeping, and makes cleanup independent of draining ignored branch
+output. The current idle-drain teardown bug remains characterized rather than being repaired by
+extending the old DONE/`ids` machinery.
 
 ## Guiding & resolved decisions
 
@@ -440,6 +446,11 @@ Folded in from the retired `REFINEMENT_PLAN.md`. Cross-phase decisions that surv
    is recorded in the register, the merge gate, and the split's DoD — a deferral that is only
    written in one place turns into a silently shipped bug. Corollary: the replacement must
    distinguish **omitted from explicit `None`** with a sentinel, or it inherits the same defect.
+10. **Compatibility pub/sub streaming and final F5 semantics are separate steps.** The revised MVP
+    keeps string targets, the current AnyIO rendezvous backend, and `func` transformation semantics
+    while making async `send`/`receive` Feed-native. Final F5 changes both modes together to
+    object-first Publisher/Subscription lifecycle, `tap=`, and execution-owned cleanup. Do not
+    extend compatibility DONE/id machinery or partially backport F5 semantics.
 
 **Backward-compatibility contract (evergreen).** Every phase ships compat shims (moved-name
 re-exports, `describe_*` properties, re-homed exceptions keep old bases); raw pipeline JSON must
