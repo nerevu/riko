@@ -12,17 +12,19 @@ Target shape:
 observe RSS/API/page
 → identify new or changed records
 → evaluate threshold/change/anomaly rules
-→ fan out interesting events
-→ commit source/observation state
+→ explicit fan-out of interesting events
+→ commit observation/source state through StateStore
 → repeat
 ```
 
-This plan owns **recurring source observation and monitoring state**.
+This plan owns **recurring source observation and monitoring policy**. It does not define a
+second persistence/checkpoint abstraction.
 
 Related authoritative plans:
 
+* `execution-semantics.md` — `Pipeline`, `FeedResult`, `FeedState`, `StateStore`, checkpoints,
+  identity/generation, retry, timeout, cancellation, error/disposition policy;
 * `orchestration.md` — deployment schedules, durable run boundaries, external workers;
-* `execution-semantics.md` — `RetryPolicy`, timeout, cancellation, error/disposition policy;
 * `rest-incremental.md` — REST cursor extraction/encoding;
 * `provider-integrations.md` — `OperationHandle` and waiting for an already-started provider
   operation;
@@ -66,11 +68,15 @@ alert state
     did a rule already fire, transition, or enter cooldown?
 ```
 
+All persisted forms use the common `FeedState[T]` / `StateStore` infrastructure; the
+logical payload type and stateful owner distinguish source position, monitoring history,
+and alert state.
+
 This plan does **not** own generic provider-operation waiting:
 
 ```text
 feed monitoring
-    repeat independent source observations and emit records
+    repeat independent finite source observations and emit records
 
 provider operation wait
     track one OperationHandle until terminal status
@@ -90,26 +96,31 @@ Do not add to core:
 * a general complex-event-processing engine;
 * ML anomaly models;
 * provider-specific notification clients;
-* another generic retry or operation-wait implementation.
+* another generic retry, checkpoint store, state store, or operation-wait implementation.
 
 ## 5. M0 — finite observation contract
 
-One observation is bounded:
+One observation is bounded and returns a rich result:
 
 ```python
-result = await poll_once(source, context)
+result: FeedResult[AsyncIterable[Item]] = await poll_once(source, context)
 ```
 
-It returns records plus source metadata and closes finite source resources before returning.
+The result exposes items, source metadata, and optional `FeedState`. Finite source resources
+close on exhaustion, error, cancellation, or explicit early close.
+
+For finite results, final source state becomes committable only after `result.items`
+completes successfully. A downstream failure before that point must not commit final source
+position.
 
 A recurring monitor composes those observations:
 
 ```text
-load committed checkpoint/state
+load owner state from StateStore
 → poll once
 → process records
 → successful required handoff
-→ commit checkpoint/state
+→ CAS-commit observation/source state
 → cancellation-aware recurrence delay
 → repeat
 ```
@@ -119,29 +130,35 @@ sensor, or an agent worker.
 
 ## 6. M1 — periodic source and bounded iterations
 
-Applications that own a long-lived process may use an async-native periodic source:
+Applications that own a long-lived process use the common polling vocabulary:
 
 ```python
-flow = AsyncPipe.poll(
-    "fetch",
-    interval=60,
-    iterations=None,
-    conf={"url": "https://example.com/feed.xml"},
-)
+flow = Pipeline.poll(source, interval=60)
 ```
+
+A subscription can use the same concept:
+
+```python
+flow = subscription.poll(interval=5)
+```
+
+A finite iteration limit may be exposed for deterministic tests/CLI without defining an
+`AsyncPipe.poll`-only API.
 
 Requirements:
 
-* AnyIO cancellation-aware delay;
+* cancellation-aware delay;
 * no private event loop;
 * fixed-delay cadence initially;
-* known unboundedness when `iterations=None`;
-* deterministic finite `iterations` for tests/CLI;
+* known unboundedness when recurrence is unlimited;
+* deterministic bounded iteration for tests/CLI;
 * clean close on cancellation;
 * retries **within one observation attempt** use `RetryPolicy` from
   `execution-semantics.md`.
 
 `interval` controls recurrence between completed observations; it is not a retry policy.
+The same `Pipeline` definition remains executable in sync or async mode through the common
+execution bridge.
 
 ## 7. M2 — bootstrap and backfill policy
 
@@ -155,9 +172,9 @@ bootstrap_count: int | None = None
 Semantics:
 
 ```text
-all      emit all current items, then checkpoint
+all      emit all current items, then establish state
 latest   emit only newest current item
-none     establish checkpoint without emitting current items
+none     establish state without emitting current items
 count    emit newest N current items
 ```
 
@@ -169,58 +186,77 @@ after="2026-08-01T00:00:00Z"
 
 Source-specific timestamp/cursor interpretation remains inside the source/connector.
 
-## 8. M3 — SourceCheckpoint
+## 8. M3 — source position is a FeedState payload
 
-Source position answers: **where should acquisition resume?**
+The previous standalone `SourceCheckpoint` type is superseded by the shared state model.
+Source position answers **where should acquisition resume?**, but the source owns the
+payload semantics:
 
 ```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SourceCheckpoint:
-    source_id: str
-    cursor: JsonValue
-    observed_at: datetime
-    metadata: Mapping[str, JsonValue]
+@dataclass(frozen=True)
+class FeedState[T]:
+    checkpoint: T | MissingType = MISSING
+    observation: Metadata | None = None
 ```
 
-Examples:
+Representative checkpoint payloads:
 
 ```text
-RSS/Atom    item id/guid + publication metadata
+RSS/Atom    item id/guid + publication position
 REST API    timestamp/id/continuation cursor
 IMAP        UIDVALIDITY + UID
 Kafka       partition offsets
 file tail   file identity + byte offset
 ```
 
-The connector/source owns cursor meaning. This plan owns checkpoint lifecycle,
-serialization, and commit ordering.
+A source may use an owner-level `StateKey[T]` (`item_key=None`, `generation=None`) for
+intrinsic source progress. Explicit incremental recovery boundaries use `.checkpoint()` and
+the enclosing stateful owner's identity rules from `execution-semantics.md`.
 
-## 9. M4 — checkpoint and observation stores
+## 9. M4 — one StateStore, heterogeneous state
 
-Source position and observation history are separate:
+Do not define separate `CheckpointStore` and monitoring `StateStore` protocols. One
+non-generic store holds heterogeneous typed records through phantom-generic keys:
 
 ```python
-class CheckpointStore(Protocol):
-    async def load(self, source_id: str) -> SourceCheckpoint | None: ...
-    async def save(self, source_id: str, checkpoint: SourceCheckpoint) -> None: ...
-
-
 class StateStore(Protocol):
-    async def get(self, namespace: str, key: str) -> JsonValue | None: ...
-    async def set(self, namespace: str, key: str, value: JsonValue) -> None: ...
-    async def delete(self, namespace: str, key: str) -> None: ...
+    def load[T](self, key: StateKey[T]) -> StateRecord[T] | None: ...
+    def save[T](
+        self,
+        key: StateKey[T],
+        state: FeedState[T],
+        *,
+        boundary_id: str | None = None,
+        expected_version: StateVersion | MissingType = MISSING,
+    ) -> StateVersion: ...
+    def delete[T](
+        self,
+        key: StateKey[T],
+        *,
+        expected_version: StateVersion,
+    ) -> None: ...
 ```
 
-Initial implementations may be memory and JSON-file stores. Optional packages may provide
-Redis, SQLite, databases, or object storage.
+`AsyncStateStore` uses the same method names with awaitable operations. Execution resolves
+one mode-specific adapter per run.
+
+Initial implementations may be memory and file/SQLite stores; optional packages may
+provide Redis, databases, or object storage. Backend physical serialization is backend-owned.
+Configured stores expose coarse `StateStoreCapabilities` plus `validate_state(state)` so
+monitoring payload compatibility can be checked without a second codec/type registry.
+
+All writes are CAS-only. A conflict raises `CheckpointConflictError`; monitoring does not
+automatically reload and rerun the observation.
 
 Commit rule:
 
 ```text
 acquire
 → required downstream handoff succeeds
-→ commit checkpoint and observation state
+→ CAS-commit source/observation state
 ```
+
+A serialization or CAS failure is non-mutating.
 
 ## 10. M5 — exact deduplication
 
@@ -238,8 +274,9 @@ Requirements:
 * order is preserved;
 * missing-key policy is explicit;
 * retention is bounded by count and/or duration;
-* hashing uses stable canonical serialization;
-* state scope is explicit.
+* identity/fingerprints reuse the canonical freezing/digest contract in
+  `execution-semantics.md`;
+* persisted history uses `StateStore`, with an explicit stateful owner/scope.
 
 `uniq` remains the finite-stream deterministic operator. Monitored dedupe owns cross-poll
 history.
@@ -262,7 +299,9 @@ Rules:
 * never silently substitute approximate for exact state;
 * report configured capacity/error rate;
 * document that false positives may suppress genuinely new records;
-* use exact state when missed records are unacceptable.
+* use exact state when missed records are unacceptable;
+* persistence still uses the configured `StateStore` rather than a backend-specific
+  monitoring state API.
 
 Near-duplicate content similarity such as Simhash/Nilsimsa belongs to
 `enrichment-modules.md`, not exact logical identity.
@@ -280,7 +319,7 @@ flow.changed(
 ```
 
 Optional metadata may report previous/current selected values and changed fields. Metadata
-is namespaced and opt-in.
+uses the common `Metadata` model and is namespaced/opt-in.
 
 This is independent of source cursor advancement: an API may advance its cursor while the
 selected business fields remain unchanged.
@@ -300,7 +339,8 @@ records
 
 Provider write semantics belong to `provider-integrations.md`; artifact fingerprint/lineage
 belongs to `artifact-conversion.md`. Monitoring may produce the changed event but does not
-own the remote-write contract.
+own the remote-write contract. Side-effecting writes use the execution-derived idempotency
+key where the destination can honor it.
 
 ## 14. M9 — bounded windows and anomaly vocabulary
 
@@ -336,6 +376,9 @@ flow.anomaly(
 
 Do not add distributed watermarks, late-data correction, or ML model hosting to core.
 
+Window/alert persistence uses the same stateful-owner and `StateStore` rules when state
+must survive executions.
+
 ## 15. M10 — alert rule and firing state
 
 Monitoring needs rule identity/history, not only a threshold function:
@@ -355,11 +398,11 @@ Semantics:
 
 ```text
 every_match   emit every matching observation
-transition    emit only non-match → match
+transition    emit only non-match -> match
 cooldown      re-emit only after configured quiet period
 ```
 
-State may record:
+State payload may record:
 
 ```text
 last_evaluated_at
@@ -369,20 +412,25 @@ fire_count
 last_event_id
 ```
 
-Disable/re-enable preserves rule history.
+Disable/re-enable preserves rule history. Persistent rule state is a typed `FeedState`
+payload under the rule/stateful owner's `StateKey`, not a separate store schema.
 
 ## 16. M11 — actions are ordinary sinks/fan-out
 
 Do not hard-code notification clients into anomaly operators:
 
-```text
-monitor
-→ changed/anomaly
-→ send("alerts")
-      ├── email provider
-      ├── webhook provider
-      └── audit/archive sink
+```python
+alerts = Pipeline.subscribe("alerts")
+
+flow = monitor.publish(alerts)
+email = alerts.write(...)
+webhook = alerts.write(...)
+audit = alerts.write(...)
 ```
+
+Low-level compatibility modules may remain `send`/`receive`, but monitoring documentation
+uses the public `publish`/`subscribe` vocabulary. Attached local branches are execution-owned
+and do not require user drains for cleanup.
 
 Monitoring decides **what happened**; delivery adapters decide **how to notify**.
 
@@ -396,7 +444,7 @@ monitor(..., dry_run=True)
 
 Dry-run may acquire/evaluate, but must not:
 
-* advance durable checkpoints unless explicitly requested;
+* advance persistent source/checkpoint state unless explicitly requested;
 * mutate external observation state;
 * invoke side-effecting notification sinks.
 
@@ -405,7 +453,7 @@ an alert would have fired.
 
 ## 18. Feed-aware identity defaults
 
-Recommended RSS/Atom identity precedence:
+Recommended RSS/Atom logical identity precedence:
 
 ```text
 entry id/guid
@@ -414,18 +462,12 @@ entry id/guid
 → stable record hash only when explicitly enabled
 ```
 
-A convenience helper may compose the generic primitives:
+These values seed the private per-item `_FeedItem` identity/provenance model. Root identity
+is automatically namespaced by source node identity, and generation remains stable across
+retries.
 
-```python
-flow = AsyncPipe.monitor_feed(
-    url,
-    interval=300,
-    bootstrap="none",
-    checkpoint="feed:example",
-)
-```
-
-It must not create a second monitoring runtime.
+A convenience helper may compose the generic primitives, but it must return an ordinary
+`Pipeline` and must not create a second monitoring runtime.
 
 ## 19. Retry, failed observations, and recurrence
 
@@ -454,14 +496,15 @@ monitor={
 }
 ```
 
-The underlying source/pipe uses the normal `RetryPolicy`; this plan does not introduce a
-second `retry={...}` schema.
+The underlying source/pipeline uses the normal `RetryPolicy`; this plan does not introduce
+a second `retry={...}` schema.
 
-Cancellation interrupts both retries (through execution semantics) and recurrence delays.
-A failed observation or failed required handoff never advances the source checkpoint.
+Cancellation interrupts both retries and recurrence delays. A failed observation or failed
+required handoff never advances source/observation state.
 
 Notification/provider delivery has its own provider idempotency and may use the same generic
-`RetryPolicy`; it must not cause source state to commit prematurely.
+`RetryPolicy`; it must not cause source state to commit prematurely. A state-store CAS
+conflict propagates; it is not treated as an instruction to reload/rerun automatically.
 
 ## 20. Deployment styles
 
@@ -469,9 +512,9 @@ Notification/provider delivery has its own provider idempotency and may use the 
 
 ```text
 application/service
-→ AsyncPipe.poll(...)
+→ Pipeline.poll(...)
 → dedupe/changed/window/anomaly
-→ sink/fan-out
+→ publish/sink
 ```
 
 ### Orchestrated finite observations
@@ -481,12 +524,12 @@ cron / Prefect / Airflow / sensor
 → finite poll_once
 → stateful monitoring operators
 → durable handoff
-→ checkpoint commit
+→ StateStore commit
 → exit
 ```
 
 `orchestration.md` owns scheduling and run retries; both deployment styles reuse the same
-checkpoint/state contracts defined here.
+core state contracts.
 
 ## 21. Observability
 
@@ -496,12 +539,12 @@ Emit normalized events/metrics for:
 * records acquired/emitted/suppressed;
 * bootstrap policy/count;
 * cursor before/after;
-* checkpoint/state backend;
+* configured state backend/capabilities;
 * changed entities;
 * anomaly/rule evaluations/firings;
 * RetryPolicy activity through runtime events;
 * failed-observation policy/recurrence delay;
-* checkpoint commits;
+* checkpoint/state commits and CAS conflicts;
 * sink delivery outcome;
 * dry-run decisions;
 * cancellation.
@@ -513,38 +556,39 @@ Never log credentials or sensitive payloads by default.
 Required tests include:
 
 1. periodic source emits multiple finite observations;
-2. finite `iterations` stops deterministically;
+2. finite recurrence stops deterministically;
 3. bootstrap `all/latest/none/count` behavior;
 4. timestamp lower-bound behavior where supported;
 5. cancellation closes resources and interrupts recurrence delay;
-6. checkpoint resumes after restart simulation;
-7. failed handoff does not advance checkpoint;
+6. `FeedState` resumes after restart simulation with a persistent store;
+7. failed handoff does not advance source state;
 8. source retries use the shared `RetryPolicy` rather than a monitoring-specific retry type;
-9. failed-observation `raise`/`record_and_continue` behavior;
-10. exact dedupe remains bounded;
-11. approximate dedupe reports its error semantics;
-12. `changed` reports selected-field changes only;
-13. count/duration windows remain bounded;
-14. deterministic threshold/z-score fixtures;
-15. transition/cooldown firing semantics;
-16. dry-run performs no external mutation;
-17. in-process and orchestrated finite observation produce equivalent logical deltas.
+9. CAS conflict propagates and leaves state unchanged;
+10. failed-observation `raise`/`record_and_continue` behavior;
+11. exact dedupe remains bounded;
+12. approximate dedupe reports its error semantics;
+13. `changed` reports selected-field changes only;
+14. count/duration windows remain bounded;
+15. deterministic threshold/z-score fixtures;
+16. transition/cooldown firing semantics;
+17. dry-run performs no external mutation;
+18. in-process and orchestrated finite observation produce equivalent logical deltas.
 
 ## 23. Phases
 
 ```text
-M0   finite observation contract
-M1   periodic source + bounded iterations
+M0   finite FeedResult observation contract
+M1   Pipeline.poll + bounded recurrence
 M2   bootstrap/backfill policy
-M3   SourceCheckpoint
-M4   checkpoint/state stores
+M3   source-position FeedState payloads
+M4   StateStore integration/capability validation
 M5   exact dedupe
 M6   optional approximate membership
 M7   changed
 M8   write-if-changed composition boundary
 M9   bounded windows + anomaly vocabulary
 M10  alert rule/firing state
-M11  action/sink composition
+M11  publish/subscription action composition
 M12  dry-run/explainability
 M13  RSS/Atom monitoring helper
 ```
@@ -554,12 +598,14 @@ M13  RSS/Atom monitoring helper
 1. Riko can repeatedly observe finite sources without a private event loop.
 2. Source observation polling is clearly distinct from provider operation waiting.
 3. First-observation/backfill semantics are explicit.
-4. Source position is separate from observation/alert state.
-5. State can persist without a mandatory service dependency.
+4. Source position, observation history, and alert state are distinct logical payloads but
+   reuse one `FeedState` / `StateStore` infrastructure.
+5. State can persist without a mandatory service dependency, and configured store
+   capabilities are inspectable/validatable.
 6. Exact and approximate dedupe have explicit, distinct semantics.
 7. Change detection and lightweight anomaly rules are configuration-friendly.
 8. Monitoring reuses generic `RetryPolicy` instead of defining another retry contract.
 9. Alert transition/cooldown behavior prevents accidental notification spam.
-10. Actions remain ordinary provider/sink/fan-out operations.
+10. Actions remain ordinary provider/sink/`publish` operations.
 11. Dry-run explains behavior without external mutation.
 12. Scheduling/restart policy remains outside the monitoring core.
