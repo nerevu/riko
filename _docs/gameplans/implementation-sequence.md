@@ -274,9 +274,16 @@ Deliver public semantic types/protocols:
 - recovery checkpoint deletion on successful owner completion;
 - durable intrinsic source/poll state retained after success;
 - backend-owned physical key/state serialization;
-- codec failures leave records untouched;
-- no store capability-advertisement system initially;
+- standardized configured-instance capability visibility through `StateStoreCapabilities`,
+  `StateStoreCapabilitiesLike`, `StateSerializationId`, and `StateSerializationLike`;
+- coarse `persistent` / `portable` / `serialization` metadata, not an exhaustive supported-type list;
+- concrete `validate_state(state) -> None` preflight with `StateSerializationError` on failure;
+- `save()` repeats authoritative serialization validation and remains non-mutating on codec failure;
 - no generic leases.
+
+Third-party serialization IDs use the standardized `<provider>:<name>` namespace. Capability values
+describe the configured store instance, so the same backend may report different persistence or
+portability depending on its actual configuration/codec.
 
 Central execution also derives idempotency keys from
 `(node_id, fingerprint, item_key, generation, iteration)` and injects them into side-effecting nodes
