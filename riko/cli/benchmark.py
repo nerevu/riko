@@ -124,7 +124,7 @@ def parse_results(results: list[float]) -> tuple[float, str]:
 
     for places in [0, 3, 6]:
         factor = pow(10, places)
-        if 1 / best // factor == 0:
+        if 1 / best < factor:
             break
 
     return round(best * factor, 2), switch[places]

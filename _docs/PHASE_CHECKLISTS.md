@@ -275,10 +275,10 @@ equivalent to looping it:
   name lazily; precedence **runtime → entry-point → built-in**) + `ModuleDefinition`
   (`module=` by-convention *or* explicit `sync_pipe`/`async_pipe`; `name` optional, stamped from the
   entry-point key with a mismatch guard).
-- **`riko/ext/pipelines.py`** — `PipelineResolver` + an injectable `ModuleStore`
+- **`riko/ext/_pipelines.py`** — `PipelineResolver` + an injectable `ModuleStore`
   (`Package`/`Mapping`/`Composite`) and `DirectoryStore`; core ships no locations (conftest injects
   the suite's `tests.pypipelines` / `tests/pipelines`, so no `tests.*` in `riko/`).
-- **`riko/ext/resolver.py`** — the `PipeResolver` façade: one symmetric dispatch
+- **`riko/ext/_resolver.py`** — the `PipeResolver` façade: one symmetric dispatch
   (`pipe*` → pipelines, else registry). `collections` resolves through it; `compile.resolve_module`
   is now a one-line delegate to it (P8.11).
 

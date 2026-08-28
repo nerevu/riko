@@ -13,11 +13,11 @@
   `ModuleDefinition` + `register(defn, *, replace=False)` / `resolve(name, interface)` / `names()`.
   Populated from built-ins + entry points + runtime registrations. **Never loads JSON, never invokes
   the compiler.**
-- **`PipelineResolver`** (`riko/ext/pipelines.py`) — resolves named **composed pipelines** (`pipe_*`,
+- **`PipelineResolver`** (`riko/ext/_pipelines.py`) — resolves named **composed pipelines** (`pipe_*`,
   JSON defs, generated py) via an injected `ModuleStore(Protocol).load`, with
   `Directory`/`Package`/`Mapping`/`Composite` stores. Core ships **no `tests.*` reference** — the
   test suite injects its own stores via `conftest.py`.
-- **`PipeResolver`** (`riko/ext/resolver.py`) — the single façade.
+- **`PipeResolver`** (`riko/ext/_resolver.py`) — the single façade.
   Precedence **runtime registration → entry-point → built-in → named pipeline** (`register` needs
   `replace=True` to shadow).
 
@@ -50,7 +50,7 @@ calls `resolve(self.name, "pipe")`, `AsyncPipe` calls `"async_pipe"`.
 
 ## Remaining deltas
 
-- **R18 — `pipe_`/`pipe:` prefix collision.** `riko/ext/resolver.py` routes any `pipe_`/`pipe:`
+- **R18 — `pipe_`/`pipe:` prefix collision.** `riko/ext/_resolver.py` routes any `pipe_`/`pipe:`
   prefix to the pipeline resolver unconditionally, so a registered **leaf** extension named
   `pipe_transform` can never resolve through `ModuleRegistry`. Either reserve the prefixes at
   registration time or try registered modules first. See

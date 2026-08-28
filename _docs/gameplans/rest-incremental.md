@@ -270,12 +270,7 @@ GET /issues/{number}/comments
 Declarative shape:
 
 ```python
-{
-    "name": "comments",
-    "endpoint": {
-        "path": "issues/{resources.issues.number}/comments"
-    }
-}
+{"name": "comments", "endpoint": {"path": "issues/{resources.issues.number}/comments"}}
 ```
 
 Map this to existing Riko topology rather than a second execution engine:

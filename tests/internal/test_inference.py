@@ -197,7 +197,7 @@ def test_infer_from_source_direct():
 
 @pytest.mark.parametrize(
     "pipe",
-    [len, lambda items: undefined(items)],  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
+    [len, lambda items: undefined(items)],  # noqa: F821, PLW0108 # pyright: ignore[reportUndefinedVariable]
 )
 def test_every_unknown_is_actionable(pipe):
     for inference in gen_return_inferences(pipe):

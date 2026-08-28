@@ -73,11 +73,27 @@ Normalize every CSV row into hardware, then combine with deployment intent (froz
 dataclasses):
 
 ```python
-class AutopilotHardware:      serial_number, hardware_hash, product_id=None
-class FormFactor(StrEnum):    DESKTOP="Desktop"; LAPTOP="Laptop"
-class DeviceMode(StrEnum):    ADMIN="Admin";     SHARED="Shared"
-class Ownership(StrEnum):     CLIENT="Client";   MSP="MSP"
-class AutopilotDeviceSpec:    hardware, form_factor, mode, ownership, assigned_user=None
+class AutopilotHardware:
+    serial_number, hardware_hash, product_id = None
+
+
+class FormFactor(StrEnum):
+    DESKTOP = "Desktop"
+    LAPTOP = "Laptop"
+
+
+class DeviceMode(StrEnum):
+    ADMIN = "Admin"
+    SHARED = "Shared"
+
+
+class Ownership(StrEnum):
+    CLIENT = "Client"
+    MSP = "MSP"
+
+
+class AutopilotDeviceSpec:
+    hardware, form_factor, mode, ownership, assigned_user = None
 ```
 
 `group_tag` is **derived, never primary input** — `f"{form_factor}-{mode}-{ownership}"`, so the

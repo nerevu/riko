@@ -92,7 +92,7 @@ def match_key(data: object, key: str) -> str | None:
 
 def raw_get[VT](data: Mapping[str, VT], key: str) -> VT:
     if isinstance(data, CaseInsensitiveDict):
-        value = CaseInsensitiveDict.__getitem__(data, key)
+        value = CaseInsensitiveDict.__getitem__(data, key)  # noqa: PLC2801
     else:
         value = data[key]
 
@@ -234,7 +234,7 @@ def gen_dict[VT](  # noqa: E302
     default_key: str | None = "self",
     **kwargs: VT,
 ) -> Iterator[
-    tuple[str, VT | None] | VT | None | list[VT | None] | dict[str, VT | None]
+    tuple[str, VT | None] | VT | list[VT | None] | dict[str, VT | None] | None
 ]:
     """
     >>> r = DotDict({'a': {'value': 'bar'}})
@@ -375,7 +375,7 @@ class DotDict(CaseInsensitiveDict[VT]):
     def dictize[V](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
         cls, value: Mapping[str, V] | V
     ) -> DotDict[V] | V: ...
-    @classmethod  # noqa: E30
+    @classmethod  # noqa: E301
     def dictize[T, V](
         cls,
         value: Mapping[str, V] | V,
@@ -678,7 +678,7 @@ class DotDict(CaseInsensitiveDict[VT]):
         rest, last = keys[:-1], keys[-1]
 
         if len(keys) == 1 and match_key(self, key):
-            CaseInsensitiveDict.__delitem__(self, key)
+            CaseInsensitiveDict.__delitem__(self, key)  # noqa: PLC2801
         elif (reduced := reduce(reducer, rest, self)) is not None and (
             matched := match_key(reduced, last)
         ) is not None:
@@ -729,7 +729,7 @@ class DotDict(CaseInsensitiveDict[VT]):
                 _dict = cast(dict[str, VT], {**data, **kwargs})
             else:
                 for key, value in data.items():
-                    CaseInsensitiveDict.__setitem__(self, key, value)
+                    CaseInsensitiveDict.__setitem__(self, key, value)  # noqa: PLC2801
 
                 return
         elif data:

@@ -98,7 +98,7 @@ pyconvert may also be used directly from Python.
 ```python
 from pyconvert import convert
 
-with open('file.csv') as source, open('file.json', 'w') as dest:
+with open("file.csv") as source, open("file.json", "w") as dest:
     convert(source, dest)
 ```
 
