@@ -97,7 +97,7 @@ except ImportError:
     ijson = None
     IJSON_IS_NATIVE = False
 else:
-    IJSON_IS_NATIVE = ijson.backend != "python"
+    IJSON_IS_NATIVE = getattr(ijson, "backend", "python") != "python"
 
 if TYPE_CHECKING:
     from xml.etree.ElementTree import Element as nativeElement

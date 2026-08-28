@@ -29,7 +29,6 @@ from riko.compile import (
 from riko.context import Context, ExecutionMode
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.ext._pipelines import pipeline_resolver
-from riko.parsers import IS_LXML
 from riko.types.general import (
     AsyncPipelineDependencies,
     AsyncPipeParser,
@@ -464,7 +463,7 @@ class TestBasics:
         item = cast(dict, items[0])
         assert item["title"].startswith("Running “Native” Data Wrangling Applicati")
 
-    @pytest.mark.skipif(not IS_LXML, reason="lxml not installed")
+    @pytest.mark.perf
     def test_feed(self):
         """
         Loads a simple test pipeline and compiles and executes it to check
@@ -503,7 +502,7 @@ class TestBasics:
         item = cast(dict, items[0])
         assert item["title"].startswith("Running “Native” Data Wrangling Applicat")
 
-    @pytest.mark.skipif(not IS_LXML, reason="lxml not installed")
+    @pytest.mark.perf
     def test_european_performance_cars(self):
         """Loads a pipeline containing a sort"""
         pipe_name = "pipe_8NMkiTW32xGvMbDKruymrA"
@@ -854,7 +853,7 @@ class TestBasics:
             f'<img src="{chart_url}" alt="QRcode" /><br/>'
         )
 
-    @pytest.mark.skipif(not IS_LXML, reason="lxml not installed")
+    @pytest.mark.perf
     def test_createrss(self):
         """
         Loads a pipeline containing rssitembuilder

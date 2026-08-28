@@ -503,14 +503,28 @@ def export(  # noqa: E704
 ) -> StringIO: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
+    items: Items,
+    type_: Literal["ofx", "qif", Targets.OFX, Targets.QIF],
+    f: str,
+    **kwargs: Any,
+) -> int: ...
+@overload  # noqa: E302
+def export(  # noqa: E704
+    items: Items,
+    type_: Literal["ofx", "qif", Targets.OFX, Targets.QIF],
+    f: None = ...,
+    **kwargs: Any,
+) -> Iterable[str]: ...
+@overload  # noqa: E302
+def export(  # noqa: E704
     items: Items, type_: TargetLike = ..., **kwargs: Any
-) -> StringIO | Items | None: ...
+) -> StringIO | Items | Iterable[str] | None: ...
 def export(  # noqa: E302
     items: Items,
     type_: TargetLike = Targets.LIST,
     f: str | TextIO | None = None,
     **kwargs: Any,
-) -> int | StringIO | Items | None:
+) -> int | StringIO | Items | Iterable[str] | None:
     """
     Converts a stream to ``type_``, optionally writing it to ``f``.
 

@@ -354,6 +354,7 @@ class TestSyncCollections(_CollectionTest):
         assert first_item == {"content": 396558121}
         assert self.runs == 1
 
+    @pytest.mark.slow
     @pytest.mark.timeout(30)
     def test_pstream(self):
         """Tests a parallel stream pipeline."""
@@ -380,6 +381,7 @@ class TestSyncCollections(_CollectionTest):
         assert self.runs == 3
 
 
+@pytest.mark.slow
 class TestSyncPipeExecutor:
     def test_process_executor_creates_pool(self):
         with SyncPipe("hash", source=SRC, parallel=True, threads=False) as pipe:

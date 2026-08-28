@@ -219,6 +219,9 @@ timeout = 300
 markers = [
     "anyio: requires the async optional dependencies (anyio + httpx)",
     "smoke: fast install-validation subset run against the built wheel/sdist",
+    "perf: requires the perf extra (lxml/ijson/fastfeedparser); auto-skips if missing",
+    "finance: requires the finance extra (csv2ofx); auto-skips if missing",
+    "slow: slow test (thread/process pools, parallelism); exclude with -m 'not slow'",
     "simulated_network: exercises HTTP against a loopback server (no real internet)",
 ]
 

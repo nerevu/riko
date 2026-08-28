@@ -21,6 +21,8 @@ from riko.collections import AsyncCollection, AsyncPipe
 from riko.types.modules import ItemBuilderConf
 from tests import skipif_issync
 
+pytestmark = pytest.mark.slow
+
 BUILDER_CONF = ItemBuilderConf({"attrs": {"key": "content", "value": "a,bb,ccc,dddd"}})
 SOURCES = [{"url": get_path("feed.xml")}, {"url": get_path("ouseful.xml")}]
 
