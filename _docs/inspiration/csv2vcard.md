@@ -35,7 +35,7 @@ from csv2vcard.vcard import vCard, gen_cards
 from csv2vcard.mappings.default import mapping
 
 vcard = vCard(mapping)
-records = read_csv("path/to/file.csv")
+records = read_csv('path/to/file.csv')
 
 for card in gen_cards(records, vcard):
     print(card.serialize())
@@ -93,7 +93,7 @@ optional arguments:
 If you would like to import csv files with field names different from the default, you can modify the mapping file or create your own. New mappings must be placed in the `csv2vcard/mappings` folder. The mapping object consists of a dictionary whose keys are vCard attributes and whose values can be either a value or a function which returns the corresponding value from a record (csv row). The mapping function will take in a record, e.g.,
 
 ```python
-{"first_name": "first", "last_name": "last", "company": "Work Inc."}
+{'first_name': 'first', 'last_name': 'last', 'company': 'Work Inc.'}
 ```
 
 The most basic mapping function just returns a specific field, e.g.,
@@ -102,18 +102,16 @@ The most basic mapping function just returns a specific field, e.g.,
 from operator import itemgetter
 
 mapping = {
-    "given_name": itemgetter("first_name"),
-    "family_name": itemgetter("last_name"),
-}
+    'given_name': itemgetter('first_name'),
+    'family_name': itemgetter('last_name')}
 ```
 
 But more complex parsing is also possible, e.g.,
 
 ```python
 mapping = {
-    "given_name": lambda r: r["name"].split(" ")[0],
-    "family_name": lambda r: r["name"].split(" ")[1],
-}
+    'given_name': lambda r: r['name'].split(' ')[0],
+    'family_name': lambda r: r['name'].split(' ')[1]}
 ```
 
 ### Required attributes

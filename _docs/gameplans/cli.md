@@ -270,7 +270,8 @@ class CommandProvider(Protocol):
     distribution: str
     api_version: int
 
-    def commands(self) -> tuple["CommandSpec", ...]: ...
+    def commands(self) -> tuple["CommandSpec", ...]:
+        ...
 ```
 
 Initial API version:
@@ -327,7 +328,7 @@ On collision:
 Runtime test registration may support:
 
 ```python
-replace = True
+replace=True
 ```
 
 Installed entry-point plugins may not replace built-in commands by default.
@@ -549,7 +550,9 @@ class CommandResult:
     summary: str | None = None
 
     warnings: tuple[str, ...] = ()
-    metadata: Mapping[str, JsonValue] = field(default_factory=dict)
+    metadata: Mapping[str, JsonValue] = field(
+        default_factory=dict
+    )
 
     exit_code: int = 0
 ```
@@ -721,7 +724,8 @@ class PromptService(Protocol):
     async def approve(
         self,
         request: ApprovalRequest,
-    ) -> ApprovalDecision: ...
+    ) -> ApprovalDecision:
+        ...
 ```
 
 ## 13.1 Approval presentation

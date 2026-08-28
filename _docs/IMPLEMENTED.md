@@ -65,7 +65,12 @@ error/disposition callbacks and sinks. **Riko Connect** is not started.
 The core item and stream types exist as described, in `riko/types/general.py`:
 
 ```python
-type Item = RikoDict | dict[str, RikoValue] | RSSEntry | DotDict[RikoValue]
+type Item = (
+    RikoDict
+    | dict[str, RikoValue]
+    | RSSEntry
+    | DotDict[RikoValue]
+)
 
 type Items = Iterable[Item]
 type Stream = Iterator[Item]
@@ -82,7 +87,11 @@ live.
 The public asynchronous source type is:
 
 ```python
-type AsyncSource = Items | Feed | Awaitable[Items | Feed]
+type AsyncSource = (
+    Items
+    | Feed
+    | Awaitable[Items | Feed]
+)
 ```
 
 Each asynchronous execution resolves the source once and normalizes it to
@@ -121,7 +130,7 @@ across the run). The `"pipe"` value was renamed from `"stage"`.
 async for item in pipe:
     ...
 
-result = await pipe  # collects output, returns the historical sync-style result
+result = await pipe          # collects output, returns the historical sync-style result
 ```
 
 Async chaining is lazy at the pipe boundary. The non-bounded legacy-parser path still

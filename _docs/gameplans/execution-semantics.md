@@ -32,7 +32,7 @@ Examples:
 Blocking operators use:
 
 ```python
-require_bounded = True
+require_bounded=True
 ```
 
 When enabled:
@@ -104,13 +104,13 @@ Shipped as-built — see [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-executio
 ### 6.2 Ordering
 
 ```python
-ordered = True
+ordered=True
 ```
 
 preserves input order.
 
 ```python
-ordered = False
+ordered=False
 ```
 
 emits completion order.
@@ -264,7 +264,7 @@ timeout(
 Default:
 
 ```python
-on_timeout = "stop"
+on_timeout="stop"
 ```
 
 Definitions:
@@ -314,7 +314,7 @@ itself:
 ```python
 async def __anext__(self) -> T:
     self._raise_if_expired()
-    item = await anext(self.aiter)  # unbounded
+    item = await anext(self.aiter)   # unbounded
     self._raise_if_expired()
     return item
 ```
@@ -367,8 +367,8 @@ merge(
 Defaults:
 
 ```python
-scheduling = "fair"
-on_source_error = "fail"
+scheduling="fair"
+on_source_error="fail"
 ```
 
 Each input receives its own bounded channel.

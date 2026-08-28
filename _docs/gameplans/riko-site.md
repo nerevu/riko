@@ -222,8 +222,8 @@ Instance-level runtime settings may override definition defaults.
 The direct HTML renderer uses:
 
 ```python
-renderer = "html"
-engine = "htpy"
+renderer="html"
+engine="htpy"
 ```
 
 Do not integrate htpy fragments into Lektor or Pelican in the first implementation.
@@ -337,10 +337,13 @@ from riko import SyncPipe
 
 
 def site_artifacts() -> SyncPipe:
-    structure = SyncPipe(
-        "fetchdata",
-        conf={"url": "site/structure.json"},
-    ).sitestructure()
+    structure = (
+        SyncPipe(
+            "fetchdata",
+            conf={"url": "site/structure.json"},
+        )
+        .sitestructure()
+    )
 
     programs = (
         SyncPipe(
@@ -736,7 +739,8 @@ class ExportTarget(Protocol):
         self,
         items: Iterable[Item],
         **kwargs: object,
-    ) -> object: ...
+    ) -> object:
+        ...
 ```
 
 ```python
@@ -746,11 +750,14 @@ class ExportRegistry:
         target: ExportTarget,
         *,
         replace: bool = False,
-    ) -> None: ...
+    ) -> None:
+        ...
 
-    def resolve(self, name: str) -> ExportTarget: ...
+    def resolve(self, name: str) -> ExportTarget:
+        ...
 
-    def names(self) -> tuple[str, ...]: ...
+    def names(self) -> tuple[str, ...]:
+        ...
 ```
 
 ### Tasks
@@ -1005,7 +1012,8 @@ class ApprovalStore(Protocol):
     def get(
         self,
         review_id: str,
-    ) -> ApprovalDecision | None: ...
+    ) -> ApprovalDecision | None:
+        ...
 ```
 
 ### Tests

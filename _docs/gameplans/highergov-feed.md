@@ -106,8 +106,10 @@ each chunk invocation, signs in, processes the chunk, and quits the driver. The 
 migration maps **chunk items**, not individual opportunities:
 
 ```python
-items = [{"records": chunk.to_dict("records")} for chunk in dataframe_chunks]
-
+items = [
+    {"records": chunk.to_dict("records")}
+    for chunk in dataframe_chunks
+]
 
 def scrape_chunk(item, **kwargs):
     frame = pd.DataFrame(item["records"])
@@ -414,13 +416,18 @@ implementation processes entries lazily with bounded concurrency:
 async def entry_feed(entries: pd.DataFrame):
     for row in entries.itertuples(index=False):
         yield {
-            column: value for column, value in zip(entries.columns, row, strict=True)
+            column: value
+            for column, value in zip(entries.columns, row, strict=True)
         }
 
 
 async def analyze_entry(item: dict, **kwargs) -> dict:
     description = str(
-        {key: value for key, value in item.items() if key != "id" and pd.notna(value)}
+        {
+            key: value
+            for key, value in item.items()
+            if key != "id" and pd.notna(value)
+        }
     )
 
     return await _aanalyze_entry(
@@ -430,8 +437,9 @@ async def analyze_entry(item: dict, **kwargs) -> dict:
     )
 
 
-flow = AsyncPipe(source=entry_feed(entries_df), context=context).map(
-    analyze_entry, concurrency=MAX_CONCURRENT, ordered=False, question=question
+flow = (
+    AsyncPipe(source=entry_feed(entries_df), context=context)
+    .map(analyze_entry, concurrency=MAX_CONCURRENT, ordered=False, question=question)
 )
 
 answers = [answer async for answer in flow]
@@ -470,13 +478,16 @@ def fetch_finder_content(item: dict, **kwargs) -> dict:
     return {**item, "Finder Webpage Content": content}
 
 
-flow = AsyncPipe(source=finder_opportunity_feed(dataframe)).map(
-    fetch_finder_content,
-    execution="thread",
-    concurrency=3,
-    ordered=False,
-    side_effects="none",
-    determinism="nondeterministic",
+flow = (
+    AsyncPipe(source=finder_opportunity_feed(dataframe))
+    .map(
+        fetch_finder_content,
+        execution="thread",
+        concurrency=3,
+        ordered=False,
+        side_effects="none",
+        determinism="nondeterministic",
+    )
 )
 ```
 
@@ -497,13 +508,16 @@ def call_highergov_api(item: dict, **kwargs) -> dict:
     return result if result is not None else item
 
 
-flow = AsyncPipe(source=dataframe_feed(cleaned_higher_df)).map(
-    call_highergov_api,
-    execution="thread",
-    concurrency=4,
-    ordered=False,
-    side_effects="none",
-    determinism="nondeterministic",
+flow = (
+    AsyncPipe(source=dataframe_feed(cleaned_higher_df))
+    .map(
+        call_highergov_api,
+        execution="thread",
+        concurrency=4,
+        ordered=False,
+        side_effects="none",
+        determinism="nondeterministic",
+    )
 )
 ```
 
@@ -615,13 +629,16 @@ def scrape_chunk(item: dict, **kwargs) -> dict:
     return {"start": item["start"], "records": result.to_dict("records")}
 
 
-flow = AsyncPipe(source=dataframe_chunk_feed(opportunities, 15)).map(
-    scrape_chunk,
-    execution="thread",
-    concurrency=1 if IS_HEROKU else 3,
-    ordered=False,
-    side_effects="non_idempotent",
-    determinism="nondeterministic",
+flow = (
+    AsyncPipe(source=dataframe_chunk_feed(opportunities, 15))
+    .map(
+        scrape_chunk,
+        execution="thread",
+        concurrency=1 if IS_HEROKU else 3,
+        ordered=False,
+        side_effects="non_idempotent",
+        determinism="nondeterministic",
+    )
 )
 ```
 
@@ -636,13 +653,16 @@ final reducer combines dictionaries and failure lists. Do not convert to one URL
 invocation:
 
 ```python
-flow = AsyncPipe(source=url_batch_feed(pairs, batch_size=20)).map(
-    process_redirect_batch,
-    execution="thread",
-    concurrency=3,
-    ordered=False,
-    side_effects="none",
-    determinism="nondeterministic",
+flow = (
+    AsyncPipe(source=url_batch_feed(pairs, batch_size=20))
+    .map(
+        process_redirect_batch,
+        execution="thread",
+        concurrency=3,
+        ordered=False,
+        side_effects="none",
+        determinism="nondeterministic",
+    )
 )
 ```
 

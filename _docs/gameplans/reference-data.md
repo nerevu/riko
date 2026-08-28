@@ -93,8 +93,8 @@ Create `riko/_reference.py` with **separate** `CONTINENTS`, `COUNTRIES`,
 `CURRENCY_CODES`, `CURRENCY_SYMBOLS` constants, then derive the combined map:
 
 ```python
-CONTINENTS: dict[str, Region] = {...}  # the 6 continent records
-COUNTRIES: dict[str, Region] = {...}  # the full ISO country records
+CONTINENTS: dict[str, Region] = {...}   # the 6 continent records
+COUNTRIES: dict[str, Region] = {...}    # the full ISO country records
 LOCATIONS: dict[str, Region] = {**CONTINENTS, **COUNTRIES}
 ```
 

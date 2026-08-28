@@ -148,18 +148,25 @@ class AiProvider(Protocol):
     async def generate(
         self,
         request: InferenceRequest,
-    ) -> InferenceResult: ...
+    ) -> InferenceResult:
+        ...
 
     async def generate_structured[T](
         self,
         request: StructuredInferenceRequest[T],
-    ) -> StructuredInferenceResult[T]: ...
+    ) -> StructuredInferenceResult[T]:
+        ...
 ```
 
 ## Content
 
 ```python
-type AiContent = AiTextContent | AiImageContent | AiToolProposal | AiReasoningSummary
+type AiContent = (
+    AiTextContent
+    | AiImageContent
+    | AiToolProposal
+    | AiReasoningSummary
+)
 ```
 
 Do not expose private reasoning or provider-specific chain-of-thought fields.
@@ -277,7 +284,9 @@ Do not hard-code stale prices in selection logic.
 class ModelSelectionPolicy:
     optimization: OptimizationTier
 
-    required_capabilities: frozenset[ModelCapability]
+    required_capabilities: (
+        frozenset[ModelCapability]
+    )
 
     minimum_quality_score: float | None = None
     maximum_cost: Decimal | None = None
@@ -488,7 +497,11 @@ class PlanStep:
     depends_on: tuple[str, ...]
     input_bindings: Mapping[str, ValueBinding]
 
-    resolution: CapabilityPlan | CapabilityDiscoveryPlan | None
+    resolution: (
+        CapabilityPlan
+        | CapabilityDiscoveryPlan
+        | None
+    )
 
     output_key: str | None
     verification: VerificationPolicy | None
