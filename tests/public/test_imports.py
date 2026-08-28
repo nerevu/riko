@@ -98,6 +98,7 @@ def test_stable_all_matches_api():
     assert set(riko.__all__) == set(riko.api.__all__)
 
 
+@pytest.mark.smoke
 def test_stable_all_is_expected_set():
     assert set(riko.__all__) == STABLE
 
@@ -107,6 +108,7 @@ def test_stable_names_importable(name):
     assert hasattr(riko, name)
 
 
+@pytest.mark.smoke
 def test_extension_all_is_expected_set():
     assert set(riko.ext.__all__) == EXTENSION
 

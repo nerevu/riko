@@ -23,6 +23,22 @@ jobs:
           enable-cache: true
       - name: Build
         run: uv build
+      - name: Smoke test (wheel)
+        run: |
+          tmp="$(mktemp -d)"
+          cp -r tests "$tmp/tests"
+          cd "$tmp"
+          uv run --isolated --no-project --with "$GITHUB_WORKSPACE"/dist/*.whl --with pytest \
+            pytest -p no:cacheprovider -o addopts="" -m smoke \
+            tests/public/test_imports.py tests/public/test_collections.py
+      - name: Smoke test (source distribution)
+        run: |
+          tmp="$(mktemp -d)"
+          cp -r tests "$tmp/tests"
+          cd "$tmp"
+          uv run --isolated --no-project --with "$GITHUB_WORKSPACE"/dist/*.tar.gz --with pytest \
+            pytest -p no:cacheprovider -o addopts="" -m smoke \
+            tests/public/test_imports.py tests/public/test_collections.py
       - name: Store the distribution packages
         uses: actions/upload-artifact@v5
         with:

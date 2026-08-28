@@ -219,6 +219,7 @@ doctest_optionflags = ["ELLIPSIS"]
 timeout = 300
 markers = [
     "anyio: requires the async optional dependencies (anyio + httpx)",
+    "smoke: fast install-validation subset run against the built wheel/sdist",
 ]
 asyncio_default_fixture_loop_scope = "function"
 

@@ -338,6 +338,7 @@ class TestSyncCollections(_CollectionTest):
         _ = list(SyncPipe.publish(items, "survivor"))
         assert list(SyncPipe.subscribe("survivor")) == items
 
+    @pytest.mark.smoke
     def test_stream(self):
         """Tests a basic stream pipeline."""
         stream = (
