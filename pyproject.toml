@@ -219,6 +219,7 @@ timeout = 300
 markers = [
     "anyio: requires the async optional dependencies (anyio + httpx)",
     "smoke: fast install-validation subset run against the built wheel/sdist",
+    "simulated_network: exercises HTTP against a loopback server (no real internet)",
 ]
 
 [tool.pylint.format]
