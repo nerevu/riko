@@ -2,8 +2,12 @@
 """
 riko._io
 ~~~~~~~~
-HTTP/file I/O: URL/file openers, the ``Fetch`` context manager, response
-introspection, and blocking-fd helpers.
+
+Provides HTTP and file I/O helpers.
+
+Attributes:
+    STREAMING_THRESHOLD: Response size above which content is streamed.
+
 """
 
 from codecs import StreamReader
@@ -45,7 +49,7 @@ STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 
 def ext_from_content_type(content_type: str | None) -> str | None:
     """
-    Returns the file extension implied by a content type.
+    Maps a content type to its file extension.
 
     Args:
         content_type: The response content type, if the source reported one.
@@ -76,6 +80,19 @@ def ext_from_content_type(content_type: str | None) -> str | None:
 
 
 def make_blocking(f: RawIOBase | TextIOBase) -> None:
+    """
+    Clears the ``O_NONBLOCK`` flag on ``f`` so its reads block.
+
+    riko's readers expect blocking reads; a non-blocking descriptor would not
+    wait for data. A no-op where ``fcntl`` is unavailable (e.g. Windows).
+
+    Args:
+        f: The file whose descriptor is switched to blocking mode.
+
+    Raises:
+        io.UnsupportedOperation: If ``f`` has no underlying file descriptor.
+
+    """
     if fcntl is not None:
         fd = f.fileno()
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
@@ -87,13 +104,40 @@ def make_blocking(f: RawIOBase | TextIOBase) -> None:
 
 def default_user_agent(name: str = "riko") -> str:
     """
-    Return a string representing the default user agent.
-    :rtype: str
+    Formats the default user agent as ``name/version``.
+
+    Args:
+        name: The product name in the ``name/version`` string.
+
+    Returns:
+        The ``name/version`` user agent string.
+
+    Examples:
+        >>> default_user_agent("app")  # doctest: +ELLIPSIS
+        'app/...'
+
     """
     return f"{name}/{__version__}"
 
 
 def get_response_content_type(r: HTTPResponse | addinfourl | requests.Response) -> str:
+    """
+    Reads the response's ``Content-Type`` header.
+
+    Args:
+        r: The HTTP response to inspect.
+
+    Returns:
+        The lowercased content type, or ``""`` when the header is absent.
+
+    Examples:
+        >>> from types import SimpleNamespace
+        >>>
+        >>> r = SimpleNamespace(headers={"Content-Type": "Application/JSON"})
+        >>> get_response_content_type(r)
+        'application/json'
+
+    """
     content_type = r.headers.get("Content-Type", "")
     return content_type.lower()
 
@@ -101,6 +145,27 @@ def get_response_content_type(r: HTTPResponse | addinfourl | requests.Response) 
 def get_response_encoding(
     r: HTTPResponse | addinfourl, def_encoding: str = ENCODING
 ) -> str:
+    """
+    Resolves the response's charset.
+
+    Args:
+        r: The HTTP response to inspect.
+        def_encoding: The fallback used when no charset is declared.
+
+    Returns:
+        The declared charset, otherwise ``def_encoding``.
+
+    Examples:
+        >>> from types import SimpleNamespace
+        >>>
+        >>> ct = "text/html; charset=latin-1"
+        >>> get_response_encoding(SimpleNamespace(headers={"Content-Type": ct}))
+        'latin-1'
+        >>> plain = SimpleNamespace(headers={"Content-Type": "text/html"})
+        >>> get_response_encoding(plain, "utf-8")
+        'utf-8'
+
+    """
     content_type = get_response_content_type(r)
 
     if "charset=" in content_type:
@@ -114,6 +179,30 @@ def get_response_encoding(
 
 # https://docs.python.org/3.3/reference/expressions.html#examples
 def auto_close[T](stream: Iterable[T], f: FileTypes) -> Iterator[T]:
+    """
+    Passes ``stream`` through so it closes ``f`` when iteration ends.
+
+    Pairs a fetched stream with the file backing it. Closing runs in a
+    ``finally``, so ``f`` is released on exhaustion, an early ``break``, or an
+    exception.
+
+    Args:
+        stream: The items to yield.
+        f: The file closed once iteration finishes.
+
+    Yields:
+        The elements of ``stream``.
+
+    Examples:
+        >>> from io import StringIO
+        >>>
+        >>> f = StringIO("hi")
+        >>> list(auto_close(f, f))
+        ['hi']
+        >>> f.closed
+        True
+
+    """
     try:
         yield from stream
     finally:
@@ -140,11 +229,27 @@ def buffer(  # noqa: E302
     f: FileTypes, binary: bool | None = None, encoding: str | None = None
 ) -> SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]:
     """
-    Returns a buffered, re-readable copy of ``f``.
+    Buffers ``f`` into a re-readable copy.
 
     The spool stays in memory until it exceeds the streaming threshold, then
     spills to disk. Byte streams are decoded when ``encoding`` is set; ``binary``
     is auto-detected from the first chunk when not supplied.
+
+    Args:
+        f: The forward-only stream to copy.
+        binary: Whether the chunks are bytes. Auto-detected when omitted.
+        encoding: Encoding used to decode byte chunks while buffering.
+
+    Returns:
+        A rewound spool holding the contents of ``f``.
+
+    Examples:
+        >>> from io import StringIO
+        >>>
+        >>> spool = buffer(StringIO("abc"))
+        >>> spool.read()
+        'abc'
+
     """
     chunks = iter(f)
     first = None
@@ -174,7 +279,7 @@ def seekable(
     f: FileTypes, binary: bool | None = None, encoding: str | None = None
 ) -> FileTypes | SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]:
     """
-    Returns ``f`` rewound, or a buffered copy when it cannot be rewound.
+    Rewinds ``f``, or buffers a copy when it cannot be rewound.
 
     A fetched stream is forward-only, so readers that need a second pass (e.g.
     a headerless csv) get a spooled copy instead. ``f`` is consumed when it is
@@ -187,6 +292,13 @@ def seekable(
 
     Returns:
         ``f`` itself when it rewound, otherwise a rewound spooled copy.
+
+    Examples:
+        >>> from io import StringIO
+        >>>
+        >>> f = StringIO("abc")
+        >>> seekable(f) is f
+        True
 
     """
     seek = getattr(f, "seek", None)
@@ -259,6 +371,31 @@ def opener(  # noqa: E302
     timeout: float | None = None,
     **_: object,
 ) -> tuple[FileTypes, str | None]:
+    """
+    Opens a url or file.
+
+    ``http(s)`` urls go through ``requests``; anything else through ``urllib``
+    or the filesystem. The stream is lazy unless ``memoize`` is set. In that case
+    it buffers the body so it can be re-read. ``binary`` selects bytes over decoded
+    text, and ``encoding`` decodes byte streams.
+
+    Args:
+        url: The resource to open.
+        memoize: Whether to buffer the body for re-reading.
+        encoding: Encoding used to decode byte streams.
+        params: Query parameters for http requests.
+        offline: Whether to treat a schemeless path as a local file (not an http host).
+        binary: Whether to return bytes rather than decoded text.
+        timeout: Per-request timeout in seconds.
+
+    Returns:
+        A ``(stream, content_type)`` pair; ``content_type`` is ``None`` when the
+        source reports none.
+
+    Raises:
+        TypeError: If ``url`` is empty.
+
+    """
     if not url:
         raise TypeError("a url is required")
 
@@ -313,12 +450,20 @@ def opener(  # noqa: E302
 @repr_cache
 def get_opener(memoize: bool = False, **kwargs: object) -> Opener:
     """
+    Builds a URL opener cached by call arguments.
+
+    Args:
+        memoize: Whether the returned opener buffers responses for re-reading.
+
+    Returns:
+        An opener callable; identical arguments return the cached opener.
+
     Examples:
         >>> get_opener.cache_clear()
         >>> o1 = get_opener()
         >>> o1 is get_opener()
         True
-        >>> o1 is get_opener(encoding='utf-8')
+        >>> o1 is get_opener(encoding="utf-8")
         False
         >>> get_opener.cache_info().hits
         1
@@ -340,6 +485,20 @@ def get_opener(memoize: bool = False, **kwargs: object) -> Opener:
 
 
 class Fetch[B: (Literal[True], Literal[False])]:
+    """
+    Opens a url or file as an iterable byte or text stream.
+
+    Degrades on a failed fetch: a ``URLError``/``RequestException`` is logged and
+    the instance yields a single empty chunk instead of raising. A broken source drops
+    out of a pipeline rather than aborting it.
+
+    Args:
+        url: The resource to open; empty yields an empty stream.
+        memoize: Whether to buffer the body so it can be re-read.
+        binary: Whether to expose bytes rather than decoded text.
+
+    """
+
     binary: B
     file: FileTypes | None
     content_type: str | None
@@ -439,4 +598,5 @@ class Fetch[B: (Literal[True], Literal[False])]:
 
     @property
     def ext(self) -> str | None:
+        """The file extension implied by the response content type."""
         return ext_from_content_type(self.content_type)

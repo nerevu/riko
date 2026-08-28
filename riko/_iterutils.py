@@ -169,15 +169,25 @@ def def_itemgetter(
     """
     Like operator.itemgetter but fills in missing keys with a typed default.
 
+    Args:
+        attr: The key read from each item.
+        default: The value used when the key is missing or uncastable.
+        type_: Optional cast type applied to the value.
+        fallback_tzinfo: Timezone assigned to naive datetimes before they are
+            reduced to sortable timestamps.
+
+    Returns:
+        A key function mapping an item to a sortable value.
+
     Examples:
-        >>> keyfunc = def_itemgetter('n', type_='int')
-        >>> keyfunc({'n': 5})
+        >>> keyfunc = def_itemgetter("n", type_="int")
+        >>> keyfunc({"n": 5})
         5
         >>> keyfunc({})
         0
         >>> # an invalid number sorts via -inf, not NaN
-        >>> keyfunc = def_itemgetter('n', type_='float')
-        >>> keyfunc({}), keyfunc({'n': 'abc'})
+        >>> keyfunc = def_itemgetter("n", type_="float")
+        >>> keyfunc({}), keyfunc({"n": "abc"})
         (-inf, -inf)
 
     """
@@ -266,18 +276,19 @@ def betwix[T](
     inc: bool = False,
 ) -> Iterator[T]:
     """
-    Extract selected elements from an iterable. But unlike `islice`,
-    extract based on the element's value instead of its position.
+    Extracts elements from an iterable by value rather than position.
+
+    Unlike ``islice``, the bounds match on an element's value.
 
     Args:
-        iterable (iter): The initial sequence
-        start (str): The fragment to begin with (inclusive)
-        stop (str): The fragment to finish at (exclusive)
-        inc (bool): Make stop operate inclusively (useful if reading a file and
-            the start and stop fragments are on the same line)
+        iterable: The initial sequence.
+        start: The fragment to begin with (inclusive).
+        stop: The fragment to finish at (exclusive).
+        inc: Whether stop operates inclusively (useful if reading a file and
+            the start and stop fragments are on the same line).
 
     Returns:
-        Iter: New dict with specified keys removed
+        The matching elements as an iterator.
 
     Examples:
         >>> from io import StringIO
@@ -321,9 +332,9 @@ def betwix[T](
 
 def dispatch[T, VT](split: Sequence[VT], *funcs: Callable[[VT], T]) -> tuple[T, ...]:
     r"""
-    Takes a tuple of items and delivers each one to a different function
+    Delivers each item of a sequence to a different function.
 
-    Differs from `map` which applies multiple items to the same function.
+    Differs from ``map``, which applies multiple items to the same function::
 
            /--> item1 --> double(item1) -----> \
           /                                     \
@@ -331,21 +342,20 @@ def dispatch[T, VT](split: Sequence[VT], *funcs: Callable[[VT], T]) -> tuple[T, 
           \                                     /
            \--> item3 --> max(item3) --------> /
 
-    One way to construct such a flow in code would be::
+    Args:
+        split: The items to distribute.
+        funcs: One function per item, applied positionally.
 
-    Example:
-    >>> split = (3, 8365641317588141140, ['a', 'b', 'r'])
-    >>> double = lambda item: item * 2
-    >>> _OUTPUT = dispatch(split, double, oct, max)
-    >>> _OUTPUT
-    (6, '0o720305647221513002124', 'r')
+    Returns:
+        The result of each function, in order.
+
+    Examples:
+        >>> split = (3, 8365641317588141140, ["a", "b", "r"])
+        >>> double = lambda item: item * 2
+        >>> dispatch(split, double, oct, max)
+        (6, '0o720305647221513002124', 'r')
 
     """
-    # split = list(split)
-    # for item, func in zip(split, funcs):
-    #     v = func(item)
-    #     print(f"dispatch: {func}({item}) = {v}")
-
     return tuple(func(item) for item, func in zip(split, funcs, strict=False))
 
 
@@ -355,7 +365,7 @@ def broadcast[T, VT](
     r"""
     Delivers the same item to different functions.
 
-    Differs from `map` which applies multiple items to the same function.
+    Differs from ``map``, which applies multiple items to the same function::
 
            /--> item --> len(item) --------> \
           /                                   \
@@ -363,19 +373,24 @@ def broadcast[T, VT](
           \                                   /
            \--> item --> sorted(item) -----> /
 
-    One way to construct such a flow in code would be::
+    Args:
+        item: The value passed to every function.
+        funcs: The functions applied to ``item``.
+        kwargs: Extra keyword arguments forwarded to each function.
 
-    Example:
-    >>> split = broadcast('bar', len, hash, sorted)
-    >>> split
-    (3, -6516517828960271057, ['a', 'b', 'r'])
+    Returns:
+        The result of each function, in order.
+
+    Examples:
+        >>> broadcast("bar", len, hash, sorted)
+        (3, -6516517828960271057, ['a', 'b', 'r'])
 
     """
     return tuple(func(item, **kwargs) for func in funcs)
 
 
 def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterable[T]:
-    """Combine multiple generators into one"""
+    """Combines multiple iterables into a single stream."""
     return chain.from_iterable(sources)
 
 
@@ -397,28 +412,28 @@ def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
     A listlike value is any iterable that is not a mapping, primitive, or ``None``.
 
     Args:
-        value: The object to classify
+        value: The object to classify.
 
     Returns:
-        True when value maps over items, False when it is one item
+        True when ``value`` maps over items, False when it is one item.
 
     Examples:
-    >>> is_listlike([1, 2])
-    True
-    >>> is_listlike((1, 2))
-    True
-    >>> is_listlike(iter([1, 2]))
-    True
-    >>> is_listlike(range(3))
-    True
-    >>> is_listlike({"a": 1})
-    False
-    >>> is_listlike("ab")
-    False
-    >>> is_listlike(0)
-    False
-    >>> is_listlike(None)
-    False
+        >>> is_listlike([1, 2])
+        True
+        >>> is_listlike((1, 2))
+        True
+        >>> is_listlike(iter([1, 2]))
+        True
+        >>> is_listlike(range(3))
+        True
+        >>> is_listlike({"a": 1})
+        False
+        >>> is_listlike("ab")
+        False
+        >>> is_listlike(0)
+        False
+        >>> is_listlike(None)
+        False
 
     """
     if value is None or isinstance(
@@ -457,28 +472,28 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
     Creates a listlike object from any value.
 
     Args:
-        value: The object to convert
+        value: The object to convert.
 
     Returns:
-        value as a listlike object (wrapped in a list or the value itself)
+        ``value`` as a listlike object (wrapped in a list, or itself).
 
     Examples:
-    >>> listize(x for x in range(3))  # doctest: +ELLIPSIS
-    <generator object <genexpr> at 0x...>
-    >>> listize([x for x in range(3)])
-    [0, 1, 2]
-    >>> listize(iter(x for x in range(3)))  # doctest: +ELLIPSIS
-    <generator object <genexpr> at 0x...>
-    >>> listize(range(3))
-    range(0, 3)
-    >>> listize(0)
-    [0]
-    >>> listize(False)
-    [False]
-    >>> listize("")
-    ['']
-    >>> listize(None)
-    []
+        >>> listize(x for x in range(3))  # doctest: +ELLIPSIS
+        <generator object <genexpr> at 0x...>
+        >>> listize([x for x in range(3)])
+        [0, 1, 2]
+        >>> listize(iter(x for x in range(3)))  # doctest: +ELLIPSIS
+        <generator object <genexpr> at 0x...>
+        >>> listize(range(3))
+        range(0, 3)
+        >>> listize(0)
+        [0]
+        >>> listize(False)
+        [False]
+        >>> listize("")
+        ['']
+        >>> listize(None)
+        []
 
     """
     if value is None:

@@ -2,8 +2,16 @@
 """
 riko._objectify
 ~~~~~~~~~~~~~~~
-Attribute-access config wrappers: the ``Objectify`` mapping (over meza's
-``Objectify``) and the ``objectify`` factory.
+A corrected ``Objectify`` (over meza's ``Objectify``) plus an ``objectify`` factory.
+It fixes:
+
+* casing: meza keys on the raw attribute names, so ``kw.KEY`` and ``kw.key``
+  diverge; here every key is lowercased at construction, so mixed-case input is
+  always reached through its lowercase name.
+* the ``Mapping`` contract: meza's class is a bare object with no ``__len__``;
+  here it subclasses ``Mapping`` and adds ``__len__``, so ``len()`` and the
+  mapping ABC work.
+
 """
 
 from collections.abc import Iterator, Mapping, Sequence
@@ -22,8 +30,10 @@ if TYPE_CHECKING:
 
     class Objectify(Mapping[str, _VT]):
         """
-        Creates an object with dynamically set attributes. Useful
-        for accessing the kwargs of a function as attributes.
+        A case-normalized mapping with attribute access to its items.
+
+        Input keys are lowercased at construction, so a function's kwargs can be
+        read as attributes (``kw.key``) regardless of their original casing.
         """
 
         def __init__(  # noqa: E704
@@ -38,25 +48,28 @@ else:
 
     class Objectify(_Objectify, Mapping[str, _VT]):
         """
-        Creates an object with dynamically set attributes. Useful
-        for accessing the kwargs of a function as attributes.
+        A case-normalized mapping with attribute access to its items.
+
+        Input keys are lowercased at construction, so a function's kwargs can be
+        read as attributes (``kw.key``) regardless of their original casing.
         """
 
         def __init__(self, data, *args, **kwargs):
             """
-            Objectify constructor
+            Initializes the object with lowercased attribute names.
 
             Args:
-                data (dict): The attributes to set
-                defaults (dict): The default attributes
+                data: The attributes to set.
+                func: Optional callable applied to each value on access.
+                defaults: Default attributes, used for keys absent from ``data``.
 
             Examples:
-                >>> kw = Objectify({'KEY': 'foo'})
+                >>> kw = Objectify({"KEY": "foo"})
                 >>> kw.key
                 'foo'
-                >>> kw['key']
+                >>> kw["key"]
                 'foo'
-                >>> kw.get('key')
+                >>> kw.get("key")
                 'foo'
 
             """
@@ -86,6 +99,19 @@ def objectify[T](  # noqa: E704
 def objectify[T](  # noqa: E302
     data: T, func: SyncArgFunc | None = None, **defaults: object
 ) -> T | ItemOrValue | Objectify[T] | list[T] | list[ItemOrValue | Objectify[object]]:
+    """
+    Wraps a mapping as ``Objectify`` and applies ``func`` to any other value.
+
+    Args:
+        data: The value to objectify.
+        func: Optional callable applied to non-mapping values.
+        defaults: Default attributes for the resulting ``Objectify``.
+
+    Returns:
+        An ``Objectify`` for a mapping, a list for a sequence, ``func(data)``
+        for any other value, or ``data`` unchanged when no ``func`` is given.
+
+    """
     if isinstance(data, (dict, CaseInsensitiveDict, Mapping)):
         objectified = Objectify(data, func=func, **defaults)
     elif func:

@@ -355,13 +355,28 @@ compact executable example clarifies non-obvious behavior.
 - Triple-double-quoted; the summary is a concise descriptive line
   (placed per the house formatting above).
 - Summaries read as *this object does X* — use **third-person present**
-  (`Counts`, `Returns`, `Configures`), not the imperative (`Count`, `Return`,
+  (`Counts`, `Formats`, `Configures`), not the imperative (`Count`, `Format`,
   `Configure`). D401 is disabled precisely to allow this. A noun-phrase summary
   is fine for a class/type (`A pipeline execution context.`).
+- A summary **never begins with `Returns`/`Yields`** — describing the output is
+  the `Returns:`/`Yields:` section's job, and a `Returns`-led summary only
+  restates it (and usually the function name too). Lead with the *action*:
+  `default_user_agent` → not `"""Returns the default user agent string."""`
+  (echoes the name, duplicates `Returns:`) but
+  `"""Formats the default user agent as name/version."""`.
 - Blank line after the summary only when more detail follows.
 - Do not repeat the signature or annotated types; document semantics, not syntax.
-- Sections, only when needed: `Args:` `Returns:` `Yields:` `Raises:` `Examples:`
-  `Attributes:` `Notes:`. Never leave an empty section.
+- Sections, only when needed, and always in this order: `Args:` →
+  `Returns:`/`Yields:` → `Raises:` → `Examples:` → `Notes:`. `Examples:` is
+  never first among the sections — a docstring that jumps from the summary
+  straight to `Examples:`, skipping `Args:`/`Returns:`, is the single most
+  common miss. Never leave an empty section.
+- Once a function earns a multi-section docstring, give it the sections its
+  signature implies: `Args:` for its parameters, `Returns:`/`Yields:` for its
+  output. Model it on the file's *fullest* docstring, not its thinnest — in
+  `riko/_io.py` that is `ext_from_content_type`/`seekable`, not a bare summary.
+  (This does not override the PRIVATE-tier rule that an *obvious* helper needs
+  no docstring at all; it governs helpers you have already chosen to document.)
 - Do not document `self` or `cls`.
 - Do not restate defaults obvious from the signature unless the default has
   semantic importance.
@@ -369,6 +384,12 @@ compact executable example clarifies non-obvious behavior.
   for a single value. Describe what the caller observes, not how the function is
   implemented — a `pipe` that is `return parser(...)` still uses `Yields:`,
   because every `pipe` hands back an iterator (see "The two returns of a pipe").
+- The summary names what the helper is *for*; the output description belongs in
+  `Returns:`/`Yields:`, never in the summary. So do not lead with `Returns`/
+  `Yields` (see the rule above) and do not narrate the body:
+  `"""Yields from stream, then closes f."""` both restates the section and
+  describes the loop. Write `"""Passes stream through, closing f when iteration
+  ends."""` plus a `Yields:` section naming the element.
 - Classes document the abstraction + constructor semantics; do not duplicate the
   class docstring in `__init__`. Give `__init__` its own docstring only for
   initialization behavior not reasonably documented on the class.
