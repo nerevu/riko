@@ -49,7 +49,7 @@ This file holds the index plus the correctness invariants. Long-form detail live
 | `_docs/gameplans/` | detailed implementation plans (index = ROADMAP's Gameplans grouped tables). `productionizing.md` and `repo-refinement.md` are retired redirect stubs |
 | `_docs/DOCUMENTATION_STANDARD.md` | authoritative docstring/doctest/`__init__.py` standard |
 | `_docs/API_SURFACE.md` | **spec** — the three-tier import contract (STABLE `riko`/`riko.api`, EXTENSION `riko.ext`, PRIVATE) |
-| `docs/CHANGES.rst` | changelog; git tags = milestones (2026 refinement work = `v0.67.0`–`v0.72.0`). Entries are **1–3 lines, no code blocks, no implementation detail** — house style in `_docs/INTERNALS.md` § Tooling |
+| `docs/CHANGES.rst` | changelog; git tags = milestones (2026 refinement work = `v0.67.0`–`v0.72.0`). Entries are **1–2 lines, no code blocks, no implementation detail** — house style in `_docs/INTERNALS.md` § Tooling |
 | `docs/MIGRATION.rst` | consolidated user migration guide: Part 1 = verified `legacy`-branch → current diffs, Part 2 = milestone notes. **No Twisted anywhere; `bado` is AnyIO and NOT deprecated** |
 | `docs/DAG_FORMAT.rst` | bare-bones DAG format + `convert-dag`/`compile-pipe` |
 | `README.rst`, `docs/{FAQ,COOKBOOK,INSTALLATION}.rst`, `CONTRIBUTING.rst` | user-facing docs (house style → `_docs/INTERNALS.md`) |

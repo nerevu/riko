@@ -1,6 +1,16 @@
 Changelog
 =========
 
+v0.76.1 (2026-08-28)
+--------------------
+
+Dev
+~~~
+
+- Upgraded and pinned ``ruff`` (with the accompanying lint/format fixups).
+
+- Fixed a false positive in the docs-consistency test's status-banner matching.
+
 v0.76.0 (2026-08-27)
 --------------------
 
@@ -76,7 +86,7 @@ Changes
   so it moves to ``Sources`` in the discovery tree and its ``assign`` default changes
   from ``"rssitembuilder"`` to ``"content"`` (observable only with ``emit=False``).
 
-- Processors now maps over **all** non-mapping iterables (e.g., ``list``/``tuple``), not
+- Processors now map over **all** non-mapping iterables (e.g., ``list``/``tuple``), not
   just iterators. Previously, processors treated ``list``/``tuple``/etc. as a single
   value. See the "How does a processor map over items?" FAQ.
 
