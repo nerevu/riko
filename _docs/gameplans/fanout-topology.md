@@ -62,7 +62,11 @@ The final public vocabulary is object-first:
 
 ```python
 class Publisher[T](Protocol): ...
+
+
 class Subscription[T](Protocol): ...
+
+
 class Channel[T](Publisher[T], Subscription[T], Protocol): ...
 ```
 
@@ -163,6 +167,7 @@ A subscriber `tap=` may be sync or async. Its return value is discarded:
 ```python
 def archive(item):
     saved.append(item)
+
 
 subscription = Pipeline.subscribe("archive", tap=archive)
 ```

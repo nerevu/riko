@@ -9,18 +9,14 @@
 `Pipeline[T]` is the sole reusable public pipeline definition. A pipeline is an immutable DAG; fluent chaining is shorthand for creating a new definition that shares prior structure.
 
 ```python
-flow = (
-    Pipeline("fetchdata", conf={"url": url})
-    .filter(conf=filter_conf)
-    .map(normalize)
-)
+flow = Pipeline("fetchdata", conf={"url": url}).filter(conf=filter_conf).map(normalize)
 ```
 
 Execution is deliberately separate from definition:
 
 ```python
-list(flow)       # fresh private SyncExecution
-aiter(flow)      # fresh private AsyncExecution
+list(flow)  # fresh private SyncExecution
+aiter(flow)  # fresh private AsyncExecution
 ```
 
 `iter(flow)` creates a new one-shot private `SyncExecution`; `aiter(flow)` creates a new one-shot private `AsyncExecution`. Reusing the same pipeline definition creates independent executions with independent resource, portal, state-store-adapter, and fan-out lifetimes. There is no normal public `Execution(...)` construction API.
@@ -67,7 +63,7 @@ Child contexts may shadow parent modules/resources; names must be unique within 
 ### Resource ownership
 
 ```python
-Resource(spec)                   # Riko owns lifecycle
+Resource(spec)  # Riko owns lifecycle
 Resource(client, external=True)  # caller owns; Riko never closes
 Resource.from_factory(make_db)
 ```
@@ -100,9 +96,9 @@ resources["db"]
 Nodes declare resources using the common metadata input:
 
 ```python
-resources="db"
-resources=("db", "cache")
-resources={"db": "primary_db", "cache": "redis"}
+resources = "db"
+resources = ("db", "cache")
+resources = {"db": "primary_db", "cache": "redis"}
 ```
 
 The accepted public form is:
@@ -160,7 +156,11 @@ The public vocabulary is object-first:
 
 ```python
 class Publisher[T](Protocol): ...
+
+
 class Subscription[T](Protocol): ...
+
+
 class Channel[T](Publisher[T], Subscription[T], Protocol): ...
 ```
 
@@ -198,8 +198,8 @@ Sync subscribers execute inline by default. Execution concurrency is an explicit
 Async subscriptions default to rendezvous behavior:
 
 ```python
-buffer_size=0
-overflow="block"
+buffer_size = 0
+overflow = "block"
 ```
 
 For bounded buffering:
@@ -446,9 +446,7 @@ class StateSerialization(StrEnum):
     AVRO = "avro"
 
 
-type StateSerializationLike = (
-    str | StateSerialization | StateSerializationId
-)
+type StateSerializationLike = str | StateSerialization | StateSerializationId
 
 
 class StateStoreCapabilitiesRaw(TypedDict):
@@ -464,9 +462,7 @@ class StateStoreCapabilities:
     portable: bool
 
 
-type StateStoreCapabilitiesLike = (
-    StateStoreCapabilities | StateStoreCapabilitiesRaw
-)
+type StateStoreCapabilitiesLike = StateStoreCapabilities | StateStoreCapabilitiesRaw
 ```
 
 Known formats use Riko's canonical identifiers. Third-party formats use `<provider>:<name>`, for example `acme:state-v2`. `"memory"` is not a serialization format; an in-memory Python-object store reports `serialization="python"`.
@@ -530,13 +526,15 @@ The configured state-store implementation itself is infrastructure and is exclud
 Stateful owners use three-way key semantics:
 
 ```python
-item_key=MISSING       # infer
-item_key=None          # explicit owner-level/no per-item identity
-item_key="id"          # or callable
+item_key = MISSING  # infer
+item_key = None  # explicit owner-level/no per-item identity
+item_key = "id"  # or callable
 
-generation_key=MISSING # infer; fail when stable generation is required but unavailable
-generation_key=None    # item_key itself uniquely identifies the logical occurrence
-generation_key="version"  # or callable
+generation_key = (
+    MISSING  # infer; fail when stable generation is required but unavailable
+)
+generation_key = None  # item_key itself uniquely identifies the logical occurrence
+generation_key = "version"  # or callable
 ```
 
 Python APIs may accept callables directly. Serialized forms use symbolic Context references rather than serialized arbitrary Python callables.
@@ -639,13 +637,13 @@ Bound concurrency rather than spawning work proportional to source size. Backpre
 ### 6.2 Ordering
 
 ```python
-ordered=True
+ordered = True
 ```
 
 preserves input order for operators whose semantics permit it.
 
 ```python
-ordered=False
+ordered = False
 ```
 
 emits completion order.
@@ -702,7 +700,7 @@ timeout(
 Default:
 
 ```python
-on_timeout="stop"
+on_timeout = "stop"
 ```
 
 Definitions:

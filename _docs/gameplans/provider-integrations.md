@@ -246,7 +246,7 @@ base records
 Selection is explicit:
 
 ```python
-providers={
+providers = {
     "allow": ["sam", "highergov", "apollo"],
     "deny": ["browser-only-provider"],
 }
@@ -304,7 +304,7 @@ Rules:
 Remote writes may expose provider-native batch endpoints:
 
 ```python
-batch={
+batch = {
     "max_items": 500,
     "max_bytes": 5_000_000,
     "flush_interval": 2.0,
@@ -360,7 +360,9 @@ provider-friendly logical facade:
 ```python
 class IdentityMap(Protocol):
     async def get_remote(self, provider: str, local_id: str) -> str | None: ...
-    async def set_remote(self, provider: str, local_id: str, remote_id: str) -> None: ...
+    async def set_remote(
+        self, provider: str, local_id: str, remote_id: str
+    ) -> None: ...
 ```
 
 Prefer provider-native external IDs/upsert keys when available.
@@ -527,8 +529,8 @@ Provider records may contain personal, financial, or administrative data.
 Provider-specific metadata may augment shared capability policy with hints such as:
 
 ```python
-sensitivity="personal"
-fields={"email": "pii", "phone": "pii"}
+sensitivity = "personal"
+fields = {"email": "pii", "phone": "pii"}
 ```
 
 These hints inform logging/redaction/artifact policy without changing ordinary record

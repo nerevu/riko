@@ -330,11 +330,7 @@ type CapabilityPlan = (
 )
 
 
-type SelectionOutcome = (
-    CapabilityPlan
-    | CapabilityDiscoveryPlan
-    | NoCapabilityMatch
-)
+type SelectionOutcome = CapabilityPlan | CapabilityDiscoveryPlan | NoCapabilityMatch
 ```
 
 Plans are immutable and carry capability/catalog/schema identity needed for revalidation.

@@ -129,7 +129,7 @@ failure domain. `CheckpointConflictError` is not automatically reloaded/rerun by
 
 ```python
 Pipeline(batch=True, batch_size=...)
-batch_backend=...
+batch_backend = ...
 ```
 
 and the native -> Arrow -> Polars -> Pandas -> Python-list negotiation order.

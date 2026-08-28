@@ -62,8 +62,8 @@ The core types (`riko/types/general.py`):
 ```python
 type Item = RikoDict | dict[str, RikoValue] | RSSEntry | DotDict[RikoValue]
 type Items = Iterable[Item]
-type Stream = Iterator[Item]          # synchronous iteration
-type Feed = AsyncIterable[Item]       # asynchronous iteration
+type Stream = Iterator[Item]  # synchronous iteration
+type Feed = AsyncIterable[Item]  # asynchronous iteration
 type AsyncSource = Items | Feed | Awaitable[Items | Feed]
 ```
 

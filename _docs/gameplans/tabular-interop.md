@@ -225,7 +225,7 @@ This is a preference order, not a requirement to install every backend.
 An explicit:
 
 ```python
-batch_backend="arrow"
+batch_backend = "arrow"
 ```
 
 forces the requested supported backend. If unavailable/incompatible, raise rather than

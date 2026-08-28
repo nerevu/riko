@@ -158,7 +158,7 @@ vCard/report outputs often require destination-specific field mapping.
 Support a bounded expression/mapping vocabulary:
 
 ```python
-mapping={
+mapping = {
     "given_name": {"field": "first_name"},
     "family_name": {"field": "last_name"},
     "organization": {"field": "company"},

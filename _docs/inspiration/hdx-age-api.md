@@ -120,14 +120,14 @@ initialize
 # init requirements
 import requests
 
-endpoint = 'http://localhost:3000/v1'
+endpoint = "http://localhost:3000/v1"
 ```
 
 *Check the status of the API*
 
 ```python
 # request
-r = requests.get('%s/status/' % endpoint)
+r = requests.get("%s/status/" % endpoint)
 
 # response
 r.json()

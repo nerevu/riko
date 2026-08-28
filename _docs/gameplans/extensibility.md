@@ -395,6 +395,7 @@ One-sided module implementations remain valid because execution adapts the missi
 @processor
 def pipe(item, **kwargs): ...
 
+
 register(ModuleDefinition(name="example.normalize", sync_pipe=pipe))
 ```
 
@@ -403,6 +404,7 @@ or:
 ```python
 @processor
 async def pipe(item, **kwargs): ...
+
 
 register(ModuleDefinition(name="example.lookup", async_pipe=pipe))
 ```

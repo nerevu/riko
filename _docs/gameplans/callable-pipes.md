@@ -105,6 +105,7 @@ Decorators may wrap sync or async functions, bare or configured:
 @processor
 def pipe(item, **kwargs): ...
 
+
 @processor
 async def pipe(item, **kwargs): ...
 ```
@@ -134,8 +135,7 @@ result = fn(item, **pipe_kwargs)
 The public `Context` may be supplied as the immutable environment/configuration definition:
 
 ```python
-def transform(item: Item, *, context: Context, **kwargs) -> Item:
-    ...
+def transform(item: Item, *, context: Context, **kwargs) -> Item: ...
 ```
 
 Do not turn `Context` into mutable per-item execution state. Position, item key, generation,
@@ -150,9 +150,9 @@ There is no public `ExecutionContext`, `CallableContext`, `call_kwargs`, or per-
 Callable nodes use the common declaration shape:
 
 ```python
-resources="db"
-resources=("db", "cache")
-resources={"db": "primary_db", "cache": "redis"}
+resources = "db"
+resources = ("db", "cache")
+resources = {"db": "primary_db", "cache": "redis"}
 ```
 
 Accepted input is normalized immediately from:

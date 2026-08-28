@@ -83,14 +83,14 @@ initialize
 # init requirements
 import requests
 
-endpoint = 'http://localhost:3000/v1'
+endpoint = "http://localhost:3000/v1"
 ```
 
 *Check the data returned from HDX API*
 
 ```python
 # request
-r = requests.get('%s/data/' % endpoint)
+r = requests.get("%s/data/" % endpoint)
 
 # response
 r.json()

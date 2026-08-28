@@ -111,10 +111,7 @@ invocation, signs in, processes that chunk, and quits the driver. The first Riko
 **chunk items**, not individual opportunities:
 
 ```python
-items = [
-    {"records": chunk.to_dict("records")}
-    for chunk in dataframe_chunks
-]
+items = [{"records": chunk.to_dict("records")} for chunk in dataframe_chunks]
 
 
 def scrape_chunk(item, **kwargs):
@@ -372,8 +369,7 @@ An async source can yield items lazily:
 async def entry_feed(entries: pd.DataFrame):
     for row in entries.itertuples(index=False):
         yield {
-            column: value
-            for column, value in zip(entries.columns, row, strict=True)
+            column: value for column, value in zip(entries.columns, row, strict=True)
         }
 ```
 

@@ -181,7 +181,7 @@ count    emit newest N current items
 Sources with meaningful timestamps may also accept a lower bound such as:
 
 ```python
-after="2026-08-01T00:00:00Z"
+after = "2026-08-01T00:00:00Z"
 ```
 
 Source-specific timestamp/cursor interpretation remains inside the source/connector.
@@ -490,7 +490,7 @@ recurrence delay
 Example monitoring policy:
 
 ```python
-monitor={
+monitor = {
     "on_poll_failure": "raise",  # raise | record_and_continue
     "failure_delay": 60,
 }

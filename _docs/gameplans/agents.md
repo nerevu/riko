@@ -38,12 +38,7 @@ Pipeline nodes and branches:
 incoming = Pipeline.subscribe("incoming")
 alerts = Pipeline.subscribe("alerts")
 
-flow = (
-    Pipeline(source=incoming)
-    .map(normalize)
-    .map(classify)
-    .publish(alerts)
-)
+flow = Pipeline(source=incoming).map(normalize).map(classify).publish(alerts)
 ```
 
 No separate graph definition is required. Shared graph construction, validation,
@@ -84,7 +79,11 @@ Agent/event integrations reuse the common protocols:
 
 ```python
 class Publisher[T](Protocol): ...
+
+
 class Subscription[T](Protocol): ...
+
+
 class Channel[T](Publisher[T], Subscription[T], Protocol): ...
 ```
 
