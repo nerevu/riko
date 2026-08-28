@@ -115,7 +115,6 @@ def test_demo_sync(value):
     assert_output_matches(output, expected, command=command)
 
 
-@pytest.mark.anyio
 @skipif_issync
 @pytest.mark.parametrize("value", gen_params())
 def test_demo_async(value):

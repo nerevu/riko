@@ -439,7 +439,6 @@ class TestAsyncCollections(_CollectionTest):
         assert self.runs == 9
         assert captured.out == "{'content': 396558121}\n"
 
-    @pytest.mark.anyio
     @pytest.mark.timeout(10)
     def test_pubsub(self):
         """
@@ -509,7 +508,6 @@ class TestAsyncCollections(_CollectionTest):
         captured = capsys.readouterr()
         assert captured.out.split("\n")[0] == "{'content': 'once is 1x'}"
 
-    @pytest.mark.anyio
     @pytest.mark.timeout(10)
     def test_pubsub_missing_receiver_times_out(self):
         """

@@ -11,9 +11,10 @@ from typing import cast
 
 import pytest
 
-from riko.bado import isasync, run
+from riko.bado import run
 from riko.modules.write import async_pipe, pipe
 from riko.types.modules import WriteConf
+from tests import skipif_issync
 
 ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
 
@@ -36,13 +37,13 @@ class TestWritePassthrough:
         conf = WriteConf({"url": str(tmp_path / "out.json")})
         assert list(pipe(ITEMS, conf=conf)) == ITEMS
 
-    @pytest.mark.skipif(not isasync, reason="anyio not installed")
+    @skipif_issync
     def test_async_preserves_sequence(self, tmp_path):
         conf = WriteConf({"url": str(tmp_path / "out.json")})
         assert _run_async_pipe(ITEMS, conf=conf) == ITEMS
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 class TestWriteParity:
     """The sync and async parsers serialize identical bytes."""
 
@@ -50,7 +51,7 @@ class TestWriteParity:
         with open(path, mode="rb") as f:
             return f.read()
 
-    @pytest.mark.skipif(not isasync, reason="anyio not installed")
+    @skipif_issync
     def test_json_parity(self, tmp_path):
         sync_path, async_path = tmp_path / "sync.json", tmp_path / "async.json"
         list(pipe(ITEMS, conf=WriteConf({"url": sync_path, "target": "json"})))
@@ -59,7 +60,7 @@ class TestWriteParity:
         assert self._read(sync_path) == expected
         assert self._read(async_path) == expected
 
-    @pytest.mark.skipif(not isasync, reason="anyio not installed")
+    @skipif_issync
     def test_csv_parity(self, tmp_path):
         sync_path, async_path = tmp_path / "sync.csv", tmp_path / "async.csv"
         list(pipe(ITEMS, conf=WriteConf({"url": sync_path, "target": "csv"})))
@@ -84,7 +85,7 @@ class TestWriteSkips:
     @pytest.mark.parametrize(
         "target", ["bogus", "list", "tuple"], ids=["invalid", "list", "tuple"]
     )
-    @pytest.mark.skipif(not isasync, reason="anyio not installed")
+    @skipif_issync
     def test_async_bad_target_skips_but_passes_through(self, tmp_path, target):
         path = tmp_path / "out"
         conf = WriteConf({"url": str(path), "target": target})
@@ -95,7 +96,7 @@ class TestWriteSkips:
         conf = cast(WriteConf, {"target": "json"})
         assert list(pipe(ITEMS, conf=conf)) == ITEMS
 
-    @pytest.mark.skipif(not isasync, reason="anyio not installed")
+    @skipif_issync
     def test_async_missing_url_skips_but_passes_through(self):
         conf = cast(WriteConf, {"target": "json"})
         assert _run_async_pipe(ITEMS, conf=conf) == ITEMS
@@ -113,7 +114,7 @@ class TestWriteTargetFromExtension:
         list(pipe(ITEMS, conf=WriteConf({"url": path})))
         assert self._read(path).split() == [b"x", b"0", b"1", b"2"]
 
-    @pytest.mark.skipif(not isasync, reason="anyio not installed")
+    @skipif_issync
     def test_async_csv_extension(self, tmp_path):
         path = tmp_path / "out.csv"
         _run_async_pipe(ITEMS, conf=WriteConf({"url": str(path)}))

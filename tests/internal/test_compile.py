@@ -300,7 +300,6 @@ def test_convert_dag_generates_ids_when_omitted():
     assert edges == [("sw-1", "sw-2"), ("sw-2", "_OUTPUT")]
 
 
-@pytest.mark.anyio
 @skipif_issync
 def test_async_codegen_matches_sync():
     """

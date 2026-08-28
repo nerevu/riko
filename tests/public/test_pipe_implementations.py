@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from riko._pubsub import async_hub
-from riko.bado import create_task_group, run
+from riko.bado import create_task_group
 from riko.cast import SortableCastType
 from riko.exceptions import ReceiverUnavailableError
 from riko.modules.join import pipe as join_pipe
@@ -181,24 +181,26 @@ async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
     return (first, seen)
 
 
+@pytest.mark.anyio
 @skipif_issync
 @pytest.mark.timeout(10)
 @pytest.mark.xfail(reason="lazy async fan-out is not yet implemented", strict=True)
-def test_async_send_does_not_buffer_its_source():
+async def test_async_send_does_not_buffer_its_source():
     """
     Async ``send`` collects sent items and only returns after complete. So an unbounded
     source never returns.
     """
     consumed: list[int] = []
-    first, seen = run(_send_first, consumed)
+    first, seen = await _send_first(consumed)
 
     assert first == {"x": "foo", "i": 0}
     assert seen <= _LOOKAHEAD
 
 
+@pytest.mark.anyio
 @skipif_issync
 @pytest.mark.timeout(10)
-def test_async_send_completes_targets_when_publish_fails():
+async def test_async_send_completes_targets_when_publish_fails():
     """
     A failed publish must still close the targets that did subscribe.
 
@@ -206,13 +208,14 @@ def test_async_send_completes_targets_when_publish_fails():
     outlasts ``max_wait``.
     """
     received: list[Item] = []
-    run(_send_missing_target, received)
+    await _send_missing_target(received)
     assert received == [{"x": "foo", "i": 0}]
 
 
+@pytest.mark.anyio
 @skipif_issync
 @pytest.mark.timeout(10)
-def test_async_send_accepts_a_feed_source():
+async def test_async_send_accepts_a_feed_source():
     """
     An async source reaches the parser as an ``AsyncIterator``, not a list.
 
@@ -222,15 +225,16 @@ def test_async_send_accepts_a_feed_source():
     consumed: list[int] = []
     received: list[Item] = []
     expected = [{"x": "foo", "i": i} for i in range(_SOURCE_LEN)]
-    out = run(_send_feed, consumed, received)
+    out = await _send_feed(consumed, received)
 
     assert out == expected
     assert received == expected
 
 
+@pytest.mark.anyio
 @skipif_issync
 @pytest.mark.timeout(10)
-def test_async_receive_does_not_materialize():
+async def test_async_receive_does_not_materialize():
     """
     The zero-buffer rendezvous channel hands each published item to the
     subscriber before ``send`` pulls the next one. A subscriber observes its first
@@ -239,22 +243,23 @@ def test_async_receive_does_not_materialize():
     ``test_async_send_does_not_buffer_its_source``.)
     """
     consumed: list[int] = []
-    first, seen = run(_receive_first, consumed)
+    first, seen = await _receive_first(consumed)
 
     assert first == {"x": "foo", "i": 0}
     assert seen <= _LOOKAHEAD
 
 
+@pytest.mark.anyio
 @skipif_issync
 @pytest.mark.timeout(10)
-def test_async_subscriber_sees_item_before_publisher_completes():
+async def test_async_subscriber_sees_item_before_publisher_completes():
     """
     The canonical incremental-delivery contract: a subscriber's first item
     arrives before the publisher finishes reading its source (a weaker bound
     than ``test_async_receive_does_not_materialize``).
     """
     consumed: list[int] = []
-    first, seen = run(_receive_first, consumed)
+    first, seen = await _receive_first(consumed)
 
     assert first == {"x": "foo", "i": 0}
     assert seen < _SOURCE_LEN

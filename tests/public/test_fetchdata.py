@@ -12,9 +12,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from riko.bado import isasync, run
+from riko.bado import run
 from riko.bado.io import async_url_open
 from riko.modules.fetchdata import async_pipe
+from tests import skipif_issync
 
 URL = "https://example.test/data"
 JSON = b'{"items": [{"title": "A"}, {"title": "B"}]}'
@@ -38,7 +39,7 @@ def _titles(conf):
     return [item["title"] for item in captured]
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 class TestExtensionlessAsyncUrlOpen:
     """``async_url_open`` exposes an ``ext`` derived from the content type."""
 
@@ -64,7 +65,7 @@ class TestExtensionlessAsyncUrlOpen:
         assert captured["content_type"] == content_type
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 class TestExtensionlessFetchdata:
     """``fetchdata`` infers the parser for an extensionless HTTP URL."""
 

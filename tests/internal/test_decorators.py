@@ -20,10 +20,11 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from riko import isasync, run
+from riko import run
 from riko.ext import operator, processor
 from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.types.general import Item, ProcessorWrapper
+from tests import skipif_issync
 
 
 def _create_wrapper(name: str, *, iscoro: bool, isasync: bool) -> ProcessorWrapper:
@@ -77,7 +78,7 @@ class TestExplicitIsasyncRequired:
     def test_lambda_needs_explicit_isasync(self):
         assert processor(isasync=True)(shout).isasync is True
 
-    @pytest.mark.skipif(not isasync, reason="anyio not installed")
+    @skipif_issync
     def test_explicit_lambda_runs_as_async_pipe(self):
         async_shout = processor(isasync=True)(shout)
 
@@ -119,7 +120,7 @@ class TestInvalidCombinations:
 class TestAsyncGeneratorSource:
     """An async-generator (Feed) source flows through an async operator wrapper."""
 
-    @pytest.mark.skipif(not isasync, reason="anyio not installed")
+    @skipif_issync
     def test_feed_source_through_timeout(self):
         async def feed():
             for x in range(3):
@@ -131,7 +132,7 @@ class TestAsyncGeneratorSource:
 
         assert run(main) == [{"x": 0}, {"x": 1}, {"x": 2}]
 
-    @pytest.mark.skipif(not isasync, reason="anyio not installed")
+    @skipif_issync
     def test_feed_delivered_lazily_to_parser(self):
         received = {}
 
