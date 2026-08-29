@@ -6,9 +6,9 @@ A developer must be able to tell stable / extension / private from the import
 path alone. These are black-box tests: they import, they never reach inside.
 """
 
-import types
 from importlib import import_module
 from operator import attrgetter
+from types import BuiltinFunctionType, FunctionType
 
 import pytest
 
@@ -151,7 +151,7 @@ def test_no_leaked_public_functions():
         for name, val in vars(riko).items()
         if not name.startswith("_")
         and name not in allowed
-        and isinstance(val, (types.FunctionType, types.BuiltinFunctionType))
+        and isinstance(val, (FunctionType, BuiltinFunctionType))
     )
     assert leaked == []
 

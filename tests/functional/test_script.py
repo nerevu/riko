@@ -28,6 +28,7 @@ BENCHMARK_TEXTS = [
     "sync_collection - 1 repetitions/loop, best of 1 loops",
     "par_sync_collection - 1 repetitions/loop, best of 1 loops",
 ]
+DEMO_PARAMS = [("demo", DEMO_TEXT), ("simple1", "'farechart'\n")]
 
 
 def run_command(script: str, argument: str, *opts: str) -> str:
@@ -99,11 +100,7 @@ def assert_output_matches(
             assert not diffs, msg
 
 
-def gen_params():
-    yield from [("demo", DEMO_TEXT), ("simple1", "'farechart'\n")]
-
-
-@pytest.mark.parametrize("value", gen_params())
+@pytest.mark.parametrize("value", DEMO_PARAMS)
 def test_demo_sync(value):
     argument, expected = value
     command = f"{DEMO_SCRIPT} {argument}"
@@ -112,7 +109,7 @@ def test_demo_sync(value):
 
 
 @skipif_issync
-@pytest.mark.parametrize("value", gen_params())
+@pytest.mark.parametrize("value", DEMO_PARAMS)
 def test_demo_async(value):
     argument, expected = value
     opts = ["-a"]

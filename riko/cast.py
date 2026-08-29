@@ -34,7 +34,7 @@ from json import loads
 from logging import Logger
 from operator import add, sub
 from time import gmtime, struct_time
-from typing import Literal, TypeVar, cast, overload
+from typing import Literal, cast, overload
 from urllib.parse import quote, urlparse
 
 import pygogo as gogo
@@ -64,8 +64,6 @@ GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
     "ip_address": lambda x: lookup_ip_address(x),  # noqa: PLW0108
     "currency": lambda x: CURRENCY_CODES.get(x, {}),
 }
-
-T = TypeVar("T")
 
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
@@ -469,4 +467,7 @@ def cast_value[T](  # noqa: E302
 
 
 cast_none: Callable[..., None] = partial(cast_value, type_=CastType.NONE)
-cast_pass: Callable[[T], T] = partial(cast_value, type_=CastType.PASS)
+
+
+def cast_pass[T](content: T, **kwargs: object) -> T:
+    return cast_value(content, type_=CastType.PASS, **kwargs)
