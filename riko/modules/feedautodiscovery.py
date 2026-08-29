@@ -45,8 +45,9 @@ import pygogo as gogo
 from riko import autorss
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
-from riko.types.configs import FeedAutoDiscoveryObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts, Stream
+from riko.types._configs import FeedAutoDiscoveryObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Item, Stream
 
 from . import processor
 
@@ -56,7 +57,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
 ) -> Stream:
     """
     Asynchronously discovers the feed links advertised by a page.
@@ -92,7 +93,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
 ) -> Stream:
     """
     Discovers the feed links advertised by a page.

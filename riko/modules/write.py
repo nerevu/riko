@@ -45,9 +45,11 @@ import pygogo as gogo
 from meza import io
 
 from riko.bado.io import async_write
-from riko.types.configs import WriteObjconf
-from riko.types.general import Defaults, Opts, PipeTuples, Stream
-from riko.types.values import TargetLike
+from riko.types._configs import WriteObjconf
+from riko.types._names import TargetLike
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Stream
+from riko.types._wrappers import PipeTuples
 
 from . import operator
 

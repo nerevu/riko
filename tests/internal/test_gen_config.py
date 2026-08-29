@@ -10,7 +10,7 @@ import pathlib
 
 from riko.cli.gen_config import objconf_structure, own_fields, render
 
-_CONFIGS = pathlib.Path("riko/types/configs.py")
+_CONFIGS = pathlib.Path("riko/types/_configs.py")
 
 
 def _committed_structure() -> dict[str, tuple[str, dict[str, str]]]:

@@ -28,7 +28,7 @@ from riko.bado import (
     fail_after,
 )
 from riko.exceptions import DuplicateReceiverError, ReceiverUnavailableError
-from riko.types.general import Item
+from riko.types._streams import Item
 
 
 class SubscriptionState(StrEnum):

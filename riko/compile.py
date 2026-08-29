@@ -48,6 +48,27 @@ from riko.ext._resolver import pipe_resolver
 from riko.ext.codegen import ruff_format
 from riko.pprint2 import Id, repr_arg, repr_args
 from riko.topsort import topological_sort
+from riko.types._collections import Inputs
+from riko.types._pipeline import (
+    AsyncPipelineDependencies,
+    AsyncPyInput,
+    PipelineDependencies,
+    PyInput,
+    Step,
+    Steps,
+    StepValue,
+    SyncPipelineDependencies,
+    SyncPyInput,
+)
+from riko.types._streams import AsyncStream, Stream
+from riko.types._wrappers import (
+    AsyncPipeItems,
+    AsyncPipeParser,
+    Interface,
+    ParserOutput,
+    Pipeline,
+    SyncPipeParser,
+)
 from riko.types.compile import (
     AbbrevStringModule,
     LoopModule,
@@ -60,25 +81,6 @@ from riko.types.compile import (
     TemplateData,
     Wire,
 )
-from riko.types.general import (
-    AsyncPipeItems,
-    AsyncPipelineDependencies,
-    AsyncPipeParser,
-    AsyncPyInput,
-    AsyncStream,
-    Interface,
-    ParserOutput,
-    Pipeline,
-    PipelineDependencies,
-    PyInput,
-    Step,
-    Steps,
-    StepValue,
-    Stream,
-    SyncPipelineDependencies,
-    SyncPipeParser,
-    SyncPyInput,
-)
 from riko.types.modules import (
     AnyModuleRawConf,
     ConfArg,
@@ -89,7 +91,6 @@ from riko.types.modules import (
     Nodes,
     Value,
 )
-from riko.types.values import Inputs
 
 _RAW_CONFS = {
     "count": "CountRawConf",

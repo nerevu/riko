@@ -28,7 +28,7 @@ Attributes:
 
 """
 
-from riko.types.values import CurrencyCode
+from riko.types._locations import CurrencyCode
 
 CURRENCY_SYMBOLS = {
     "$": "USD",

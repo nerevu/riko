@@ -28,8 +28,8 @@ from urllib.parse import urlparse
 import pygogo as gogo
 
 from riko.cast import BasicCastType
-from riko.types.configs import UrlParseObjconf
-from riko.types.general import Defaults, Extraction, Opts
+from riko.types._configs import UrlParseObjconf
+from riko.types._options import Defaults, Opts
 
 from . import processor
 
@@ -39,7 +39,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    url: str, extraction: Extraction, objconf: UrlParseObjconf, **kwargs: object
+    url: str, extraction: object, objconf: UrlParseObjconf, **kwargs: object
 ) -> Iterator[dict[str, str]]:
     """
     Yields one item per url component.

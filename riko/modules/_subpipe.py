@@ -12,7 +12,7 @@ loopable — so the metadata is **declared** here rather than inferred.
 from collections.abc import Awaitable, Callable
 from typing import cast, overload
 
-from riko.types.general import AsyncSubPipe, SubPipe, SyncSubPipe
+from riko.types._wrappers import AsyncSubPipe, SubPipe, SyncSubPipe
 from riko.types.modules import ModuleSubtype
 
 SUBPIPE_TYPE = "pipe"

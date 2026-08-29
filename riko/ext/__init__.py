@@ -23,8 +23,8 @@ from riko.ext.protocols import (
     SyncSplitterWrapper,
 )
 from riko.ext.registry import ModuleDefinition, ModuleRegistry, register
+from riko.types._names import ModuleNameLike
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
-from riko.types.values import ModuleNameLike
 
 __all__ = [
     "AsyncOperatorWrapper",

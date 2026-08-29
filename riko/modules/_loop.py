@@ -30,19 +30,21 @@ from riko.bado.itertools import async_iter
 from riko.context import Context
 from riko.modules._assignment import get_subpipe
 from riko.modules._subpipe import is_subpipe
-from riko.types.compile import EmbedKwargs
-from riko.types.general import (
-    AsyncProcessorWrapper,
+from riko.types._streams import (
     AsyncStreamOrValueStream,
-    AsyncSubPipe,
     Item,
     Items,
     ItemsOrValues,
     Stream,
     StreamOrValueStream,
+)
+from riko.types._wrappers import (
+    AsyncProcessorWrapper,
+    AsyncSubPipe,
     SyncProcessorWrapper,
     SyncSubPipe,
 )
+from riko.types.compile import EmbedKwargs
 from riko.types.modules import CountValues
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger

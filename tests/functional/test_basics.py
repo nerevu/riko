@@ -29,15 +29,15 @@ from riko.compile import (
 from riko.context import Context, ExecutionMode
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.ext._pipelines import pipeline_resolver
-from riko.types.general import (
-    AsyncPipelineDependencies,
+from riko.types._pipeline import AsyncPipelineDependencies, SyncPipelineDependencies
+from riko.types._rss import FeedParserRSSEntry
+from riko.types._streams import StatefulItem
+from riko.types._wrappers import (
     AsyncPipeParser,
     ParserMaterializedOutput,
     ParserOutput,
-    SyncPipelineDependencies,
     SyncPipeParser,
 )
-from riko.types.values import FeedParserRSSEntry, StatefulItem
 from tests import TESTS_DIR, skipif_issync
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}

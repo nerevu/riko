@@ -20,14 +20,14 @@ from riko.collections import (
 )
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
-from riko.types.general import (
+from riko.types._rss import RSSEntry
+from riko.types._streams import Items
+from riko.types._wrappers import (
     AsyncPipeParser,
-    Items,
     ParserMaterializedOutput,
     ProcessorWrapperOutput,
 )
 from riko.types.modules import FetchConf
-from riko.types.values import RSSEntry
 
 NUMBER = 1
 LOOPS = 1

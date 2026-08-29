@@ -26,8 +26,8 @@ from typing import Any
 import pygogo as gogo
 
 from riko.cast import BasicCastType
-from riko.types.configs import TokenizerObjconf
-from riko.types.general import Defaults, Extraction, Opts
+from riko.types._configs import TokenizerObjconf
+from riko.types._options import Defaults, Opts
 
 from . import processor
 
@@ -45,7 +45,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    content: str, extraction: Extraction, objconf: TokenizerObjconf, **kwargs: object
+    content: str, extraction: object, objconf: TokenizerObjconf, **kwargs: object
 ) -> Iterator[dict[str, str]]:
     """
     Splits ``content`` on the configured delimiter.

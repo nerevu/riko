@@ -29,8 +29,10 @@ from typing import Any, cast
 import pygogo as gogo
 
 from riko.dotdict import DotDict
-from riko.types.configs import DynamicConf
-from riko.types.general import Defaults, Opts, PipeTuples, Stream
+from riko.types._dynamic_conf import DynamicConf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Stream
+from riko.types._wrappers import PipeTuples
 
 from . import operator
 

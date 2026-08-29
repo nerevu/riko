@@ -23,8 +23,9 @@ from typing import Any, cast
 
 from riko import AsyncPipe, SyncPipe, run
 from riko.ext import ModuleDefinition, operator, register
-from riko.types.configs import DynamicConf
-from riko.types.general import Item, PipeTuples, Stream
+from riko.types._dynamic_conf import DynamicConf
+from riko.types._streams import Item, Stream
+from riko.types._wrappers import PipeTuples
 
 
 def _shout(item: Item) -> Item:

@@ -32,9 +32,10 @@ import pygogo as gogo
 
 from riko.cast import BasicCastType
 from riko.dotdict import DotDict
-from riko.types.configs import RssItemBuilderObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts
-from riko.types.values import RikoValue
+from riko.types._collections import RikoValue
+from riko.types._configs import RssItemBuilderObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Item
 
 from . import processor
 
@@ -65,7 +66,7 @@ RSS = cast(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: RssItemBuilderObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: RssItemBuilderObjconf, **kwargs: object
 ) -> DotDict[RikoValue]:
     """
     Builds an RSS item from the configured attributes.

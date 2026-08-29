@@ -39,8 +39,8 @@ from riko._reencode import reencode
 from riko._rssutils import truncate_content
 from riko._serialize import repr_cache
 from riko.paths import get_abspath
-from riko.types.general import BinaryFileTypes, FileTypes, Opener, StringFileTypes
-from riko.types.values import BasicArg
+from riko.types._collections import BasicArg
+from riko.types._io import BinaryFileTypes, FileTypes, Opener, StringFileTypes
 
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 

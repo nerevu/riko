@@ -27,8 +27,9 @@ from riko.collections import (
 )
 from riko.exceptions import ReceiverUnavailableError
 from riko.ext.names import ModuleName, normalize_module_name
-from riko.types.general import Item, Items
-from riko.types.guards import is_stateful_item
+from riko.types._guards import is_stateful_item
+from riko.types._sentinels import StreamState
+from riko.types._streams import Item, Items
 from riko.types.modules import (
     ItemBuilderConf,
     ParsedParam,
@@ -36,7 +37,6 @@ from riko.types.modules import (
     StrReplaceConf,
     StrReplaceConfRule,
 )
-from riko.types.values import StreamState
 from tests import PipeBuilder, skipif_issync
 
 value = "once is 1x,twice is 2x,thrice is 3x"

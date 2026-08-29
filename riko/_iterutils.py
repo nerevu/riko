@@ -33,8 +33,7 @@ from requests.structures import CaseInsensitiveDict
 
 from riko._date_utils import date_to_datetime, ensure_tzinfo
 from riko.cast import CAST_SWITCH, CastType, cast_value
-from riko.types.general import Function
-from riko.types.values import PrimitiveValue, PrimitiveValueType, SortableValue
+from riko.types._scalars import PrimitiveValue, PrimitiveValueType, SortableValue
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 SORT_FILLER = float("-inf")
@@ -52,10 +51,10 @@ noop: Callable[[T], T] = lambda item: item
 
 class Chainable:
     data: object
-    method: Function | None
+    method: Callable | None
     list: builtins.list[object]
 
-    def __init__(self, data: object, method: Function | None = None) -> None:
+    def __init__(self, data: object, method: Callable | None = None) -> None:
         self.data = data
         self.method = method
         self.list = listize(data)

@@ -15,7 +15,7 @@ from riko.exceptions import ReceiverUnavailableError
 from riko.modules.join import pipe as join_pipe
 from riko.modules.send import async_pipe as async_send
 from riko.modules.sort import pipe as sort_pipe
-from riko.types.general import Feed, Item, ItemOrValue, Stream
+from riko.types._streams import Feed, Item, ItemOrValue, Stream
 from riko.types.modules import JoinConf, SendConf, SortConf, SortConfRule
 from tests import skipif_issync
 

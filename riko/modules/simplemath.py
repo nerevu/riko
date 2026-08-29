@@ -32,8 +32,9 @@ import pygogo as gogo
 
 from riko.cast import BasicCastType, CastType, cast_value
 from riko.modules._prepare import require_conf
-from riko.types.configs import SimpleMathObjconf
-from riko.types.general import Defaults, Extraction, NumLike, Opts
+from riko.types._configs import SimpleMathObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._scalars import NumLike
 
 from . import processor
 
@@ -62,7 +63,7 @@ OPS: dict[str, Callable[[Any, Any], NumLike]] = {
 
 
 def parser(
-    num: Decimal, extraction: Extraction, objconf: SimpleMathObjconf, **kwargs: object
+    num: Decimal, extraction: object, objconf: SimpleMathObjconf, **kwargs: object
 ) -> NumLike:
     """
     Applies the configured operation to ``num`` and ``other``.

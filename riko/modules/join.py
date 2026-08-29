@@ -35,9 +35,11 @@ from meza.process import merge
 
 from riko.dotdict import is_mapping
 from riko.modules._prepare import require_kwarg
-from riko.types.configs import JoinObjconf
-from riko.types.general import Defaults, Item, Items, Opts, PipeTuples, Stream
-from riko.types.values import MISSING
+from riko.types._configs import JoinObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._sentinels import MISSING
+from riko.types._streams import Item, Items, Stream
+from riko.types._wrappers import PipeTuples
 
 from . import operator
 

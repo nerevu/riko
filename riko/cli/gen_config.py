@@ -2,7 +2,7 @@
 """
 riko.cli.gen_config
 ~~~~~~~~~~~~~~~~~~~~~~
-Generator and drift guard for :mod:`riko.types.configs`. The parse-time
+Generator and drift guard for :mod:`riko.types._configs`. The parse-time
 ``<Name>Objconf`` types are derived from the nonraw ``<Name>Conf`` TypedDict
 contracts in :mod:`riko.types.modules`: strip ``Required``/``NotRequired`` and the
 ``= default`` doc-hints, dereference forward-ref strings, and rebase onto
@@ -21,14 +21,14 @@ from riko.paths import PACKAGE_DIR
 
 _TYPES_DIR = PACKAGE_DIR / "types"
 _MODULES = _TYPES_DIR / "modules.py"
-_CONFIGS = _TYPES_DIR / "configs.py"
+_CONFIGS = _TYPES_DIR / "_configs.py"
 _CAST_TYPES = {"CastType", "LocationType"}
 _TYPING_TYPES = {"Any", "Literal"}
 _ABC_TYPES = {"Callable", "Sequence"}
 _BUILTINS = {"str", "int", "float", "bool", "list", "dict", "tuple", "set", "None"}
 _DOCSTRING = '''# vim: sw=4:ts=4:expandtab
 """
-riko.types.configs
+riko.types._configs
 ~~~~~~~~~~~~~~~~~~~
 Parse-time ``objconf`` config types, one per module. Each subclasses
 ``DynamicConf`` (case-insensitive attribute + mapping access; missing keys return
@@ -139,7 +139,7 @@ def _import_block(structure) -> str:
     lines += [
         f"from typing import {', '.join(typing)}",
         "",
-        "from riko.types.base import DynamicConf",
+        "from riko.types._dynamic_conf import DynamicConf",
     ]
     guarded = ["", "if TYPE_CHECKING:"]
     guarded += [f"    from riko.cast import {', '.join(cast)}"] if cast else []

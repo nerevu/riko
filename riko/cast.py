@@ -49,17 +49,11 @@ from riko._date_utils import (
 from riko.currencies import CURRENCY_CODES
 from riko.dates import get_date, tt_to_datedict
 from riko.locations import LOCATIONS
-from riko.types.general import Opts, PreCaster
-from riko.types.values import (
-    AnyLocation,
-    BasicArg,
-    BasicValue,
-    DateDict,
-    DateLike,
-    IPAddress,
-    Location,
-    PrimitiveValue,
-)
+from riko.types._collections import BasicArg
+from riko.types._locations import AnyLocation, IPAddress, Location
+from riko.types._options import Opts
+from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
+from riko.types._wrappers import PreCaster
 
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 MATH_WORDS = {"seconds", "minutes", "hours", "days", "weeks", "months", "years"}

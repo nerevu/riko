@@ -28,9 +28,9 @@ from typing import Any
 import pygogo as gogo
 
 from riko.cast import BasicCastType, CastType, cast_value
-from riko.types.configs import GeolocateObjconf
-from riko.types.general import Defaults, Extraction, Opts
-from riko.types.values import AnyLocation
+from riko.types._configs import GeolocateObjconf
+from riko.types._locations import AnyLocation
+from riko.types._options import Defaults, Opts
 
 from . import processor
 
@@ -40,7 +40,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    address: str, extraction: Extraction, objconf: GeolocateObjconf, **kwargs: object
+    address: str, extraction: object, objconf: GeolocateObjconf, **kwargs: object
 ) -> AnyLocation:
     """
     Resolves ``address`` to a location of the configured type.

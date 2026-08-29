@@ -14,8 +14,9 @@ from typing import cast, overload
 from requests.structures import CaseInsensitiveDict
 
 from riko._date_utils import ensure_tzinfo
-from riko.types.general import Stream, StreamOrValueStream, ValueStream
-from riko.types.values import BasicDict, ParserRSSEntry, RikoValue, RSSEntry
+from riko.types._collections import BasicDict, RikoValue
+from riko.types._rss import ParserRSSEntry, RSSEntry
+from riko.types._streams import Stream, StreamOrValueStream, ValueStream
 
 
 def _get_entry_text(entry: ParserRSSEntry) -> str:

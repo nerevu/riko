@@ -38,23 +38,13 @@ from riko._io import STREAMING_THRESHOLD, Fetch
 from riko._iterutils import listize
 from riko._rssutils import truncate_content
 from riko._serialize import repr_cache
-from riko.dotdict import DotDict, is_sentinal, is_type_value
-from riko.types.general import (
-    FileTypes,
-    Item,
-    ItemOrValue,
-    SkipFunc,
-    SkipIf,
-    Stream,
-)
+from riko.dotdict import DotDict, is_sentinel, is_type_value
+from riko.types._collections import BasicArg, RikoDict, Stringy, StringyDict
+from riko.types._io import FileTypes
+from riko.types._options import SkipFunc, SkipIf
+from riko.types._rss import ParserRSSEntry
+from riko.types._streams import Item, ItemOrValue, Stream
 from riko.types.modules import Skip
-from riko.types.values import (
-    BasicArg,
-    ParserRSSEntry,
-    RikoDict,
-    Stringy,
-    StringyDict,
-)
 
 try:
     from lxml import etree, html
@@ -607,7 +597,7 @@ def _conf_is_dynamic_uncached(conf: object, **kwargs: object) -> bool:
     is_dynamic = False
 
     if isinstance(conf, Mapping):
-        if "subkey" in conf or is_sentinal(conf, **kwargs):
+        if "subkey" in conf or is_sentinel(conf, **kwargs):
             is_dynamic = True
         else:
             values = conf.values()
@@ -661,7 +651,7 @@ def _parse_conf_uncached[VT](
         if subkey := dd_conf.get("subkey"):
             dd_item = DotDict.dictize(item) if item else DotDict()
             parsed = dd_item.get(cast(str, subkey), **kwargs)
-        elif is_sentinal(dd_conf, **kwargs) or is_type_value(dd_conf):
+        elif is_sentinel(dd_conf, **kwargs) or is_type_value(dd_conf):
             # parsed = next(gen_dict(dd_conf, key=None, default_key=None, **kwargs))
             parsed = cast(DotDict[VT], dd_conf).get()
         else:

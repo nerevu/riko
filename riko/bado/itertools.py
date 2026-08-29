@@ -41,7 +41,7 @@ from riko.bado import (
     create_memory_object_stream,
     create_task_group,
 )
-from riko.types.values import MISSING
+from riko.types._sentinels import MISSING
 
 
 def _cap[T, S](

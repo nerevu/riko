@@ -28,8 +28,9 @@ from typing import Any
 import pygogo as gogo
 
 from riko.modules._prepare import require_kwarg
-from riko.types.configs import UdfObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts
+from riko.types._configs import UdfObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Item
 
 from . import processor
 
@@ -40,7 +41,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs: object
+    item: Item, extraction: object, objconf: UdfObjconf, **kwargs: object
 ) -> Item:
     """
     Asynchronously applies ``func`` to one item.
@@ -77,7 +78,7 @@ async def async_parser(
 
 
 def parser(
-    item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs: object
+    item: Item, extraction: object, objconf: UdfObjconf, **kwargs: object
 ) -> Item:
     """
     Applies ``func`` to one item.

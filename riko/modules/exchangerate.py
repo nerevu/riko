@@ -38,8 +38,8 @@ from riko import ENCODING
 from riko._io import Fetch
 from riko.bado import async_get, async_json, io
 from riko.cast import BasicCastType
-from riko.types.configs import ExchangeRateObjconf
-from riko.types.general import Defaults, Extraction, Opts
+from riko.types._configs import ExchangeRateObjconf
+from riko.types._options import Defaults, Opts
 
 from . import processor
 
@@ -99,7 +99,7 @@ def calc_rate(
 
 
 async def async_parser(
-    base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs: object
+    base: str, extraction: object, objconf: ExchangeRateObjconf, **kwargs: object
 ) -> Decimal:
     """
     Asynchronously looks up the rate from ``base`` to the target currency.
@@ -153,7 +153,7 @@ async def async_parser(
 
 
 def parser(
-    base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs: object
+    base: str, extraction: object, objconf: ExchangeRateObjconf, **kwargs: object
 ) -> Decimal:
     """
     Looks up the rate from ``base`` to the target currency.

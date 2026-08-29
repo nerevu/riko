@@ -6,7 +6,7 @@ from typing import cast
 
 from riko import get_path
 from riko.collections import AsyncPipe, SyncPipe
-from riko.types.general import Items
+from riko.types._streams import Items
 from riko.types.modules import (
     CurrencyFormatConf,
     CurrencyFormatRawConf,

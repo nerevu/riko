@@ -32,8 +32,9 @@ from riko._io import Fetch, auto_close, seekable
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
-from riko.types.configs import CsvObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts, Stream
+from riko.types._configs import CsvObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Item, Stream
 
 from . import processor
 
@@ -53,7 +54,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: CsvObjconf, **kwargs: object
 ) -> Stream:
     """
     Asynchronously reads the csv file into a stream of rows.
@@ -97,7 +98,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: CsvObjconf, **kwargs: object
 ) -> Stream:
     """
     Reads the csv file into a stream of rows.

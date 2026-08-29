@@ -19,9 +19,9 @@ from dataclasses import fields, is_dataclass
 from operator import itemgetter
 from random import choice
 
-from riko.types.configs import DynamicConf
+from riko.types._dynamic_conf import DynamicConf
+from riko.types._scalars import BasicValue
 from riko.types.modules import FindConfRule, RegexConfRule, RegexRule
-from riko.types.values import BasicValue
 
 INVALID_FILECHAR_PATTERN = re.compile(r'[<>:"/\\\|\*?%]')
 

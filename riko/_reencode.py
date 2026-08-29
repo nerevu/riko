@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from typing import Protocol
 
-    from riko.types.general import FileTypes
+    from riko.types._io import FileTypes
 
     class _Closeable(Protocol):
         def close(self) -> None: ...  # noqa: E704

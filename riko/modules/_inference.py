@@ -33,7 +33,6 @@ from riko.types.modules import (
     OperatorReturnKind,
     ReturnInference,
 )
-from riko.types.values import NonstreamExpressions
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -69,6 +68,22 @@ _PASSTHROUGH_NAMESPACES = ("asyncio.", "bado.", "riko.bado.")
 _FIX_HINT = (
     "add an explicit return annotation, e.g. `-> Iterator[Item]` for a stream "
     "or `-> int` for a single value"
+)
+
+NonstreamExpressions: tuple[type, ...] = (
+    ast.BinOp,
+    ast.Compare,
+    ast.Constant,
+    ast.Dict,
+    ast.DictComp,
+    ast.JoinedStr,
+    ast.Lambda,
+    ast.List,
+    ast.ListComp,
+    ast.Set,
+    ast.SetComp,
+    ast.Tuple,
+    ast.UnaryOp,
 )
 
 

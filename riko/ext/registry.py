@@ -33,7 +33,7 @@ from typing import Literal, cast, overload
 
 from riko._importutils import import_or_else
 from riko.exceptions import UnsupportedModuleError
-from riko.types.general import (
+from riko.types._wrappers import (
     AsyncPipeCallable,
     AsyncPipeParser,
     Interface,

@@ -21,7 +21,8 @@ from typing import TYPE_CHECKING, Any, TypeVar, overload
 from meza.fntools import Objectify as _Objectify
 from requests.structures import CaseInsensitiveDict
 
-from riko.types.general import ItemOrValue, SyncArgFunc
+from riko.types._streams import ItemOrValue
+from riko.types._wrappers import ArgCaster
 
 _VT = TypeVar("_VT")
 
@@ -86,18 +87,18 @@ def objectify[T](data: Mapping[str, T]) -> Objectify[T]: ...  # noqa: E704
 def objectify[T](data: T) -> T: ...  # noqa: E704
 @overload  # noqa: E302
 def objectify[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
-    data: Mapping[str, T], func: SyncArgFunc
+    data: Mapping[str, T], func: ArgCaster
 ) -> Objectify[T]: ...
 @overload  # noqa: E302
 def objectify[T](  # noqa: E704
-    data: Sequence[T], func: SyncArgFunc
+    data: Sequence[T], func: ArgCaster
 ) -> list[ItemOrValue | Objectify[object]]: ...
 @overload  # noqa: E302
 def objectify[T](  # noqa: E704
-    data: T, func: SyncArgFunc
+    data: T, func: ArgCaster
 ) -> T | ItemOrValue: ...
 def objectify[T](  # noqa: E302
-    data: T, func: SyncArgFunc | None = None, **defaults: object
+    data: T, func: ArgCaster | None = None, **defaults: object
 ) -> T | ItemOrValue | Objectify[T] | list[T] | list[ItemOrValue | Objectify[object]]:
     """
     Wraps a mapping as ``Objectify`` and applies ``func`` to any other value.

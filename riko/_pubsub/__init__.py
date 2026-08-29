@@ -15,10 +15,9 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-from riko.types.general import Receiver
-
 from ._async import AsyncPubSubHub
 from ._sync import SyncPubSubHub
+from ._types import Receiver
 
 sync_hub = SyncPubSubHub()
 async_hub = AsyncPubSubHub()

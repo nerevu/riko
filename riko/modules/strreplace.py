@@ -32,8 +32,8 @@ import pygogo as gogo
 
 from riko.bado.itertools import coop_reduce
 from riko.cast import BasicCastType
-from riko.types.configs import StrReplaceObjconf
-from riko.types.general import Defaults, Opts
+from riko.types._configs import StrReplaceObjconf
+from riko.types._options import Defaults, Opts
 from riko.types.modules import StrReplaceConfRule
 
 from . import processor

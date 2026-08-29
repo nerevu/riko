@@ -35,8 +35,8 @@ from typing import Literal, Protocol, cast, overload
 from riko._importutils import import_or_else
 from riko.exceptions import UnsupportedPipelineError
 from riko.modules._subpipe import is_subpipe, mark_subpipe
+from riko.types._wrappers import AsyncPipeParser, Interface, Pipeline, SyncPipeParser
 from riko.types.compile import ParsedPipeDef
-from riko.types.general import AsyncPipeParser, Interface, Pipeline, SyncPipeParser
 from riko.types.modules import ModuleSubtype
 
 

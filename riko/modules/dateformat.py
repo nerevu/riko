@@ -28,8 +28,8 @@ from typing import Any
 import pygogo as gogo
 
 from riko.cast import BasicCastType
-from riko.types.configs import DateFormatObjconf
-from riko.types.general import Defaults, Extraction, Opts
+from riko.types._configs import DateFormatObjconf
+from riko.types._options import Defaults, Opts
 
 from . import processor
 
@@ -40,7 +40,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 def parser(
     date: datetime.date | None,
-    extraction: Extraction,
+    extraction: object,
     objconf: DateFormatObjconf,
     **kwargs: object,
 ) -> str:

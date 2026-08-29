@@ -18,9 +18,9 @@ from riko._importutils import import_or_else
 from riko._iterutils import broadcast
 from riko.ext.names import derive_category, normalize_module_name
 from riko.ext.registry import ModuleDefinition, registry
-from riko.types.general import ModuleWrapper
+from riko.types._names import ModuleNameLike
+from riko.types._wrappers import ModuleWrapper
 from riko.types.modules import ModuleCategory, ModuleMetadata, ModuleSubtype, ModuleType
-from riko.types.values import ModuleNameLike
 
 _PACKAGE = "riko.modules"
 

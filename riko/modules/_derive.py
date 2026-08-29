@@ -10,7 +10,7 @@ from typing import cast
 
 from riko.cast import BasicCastType
 from riko.modules._inference import gen_operator_return_kinds
-from riko.types.general import ModuleParser
+from riko.types._wrappers import ModuleParser
 from riko.types.modules import (
     ModuleSubtype,
     ModuleSubtypes,

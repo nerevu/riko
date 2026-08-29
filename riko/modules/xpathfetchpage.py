@@ -41,8 +41,10 @@ from riko.bado import io
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import any2dict
-from riko.types.configs import XpathFetchPageObjconf
-from riko.types.general import Defaults, Extraction, FileTypes, Item, Stream
+from riko.types._configs import XpathFetchPageObjconf
+from riko.types._io import FileTypes
+from riko.types._options import Defaults
+from riko.types._streams import Item, Stream
 
 from . import processor
 
@@ -57,7 +59,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: XpathFetchPageObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: XpathFetchPageObjconf, **kwargs: object
 ) -> Stream:
     """
     Asynchronously reads the page and returns the nodes at ``xpath``.
@@ -116,7 +118,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: XpathFetchPageObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: XpathFetchPageObjconf, **kwargs: object
 ) -> Stream:
     """
     Reads the page and returns the nodes at ``xpath``.

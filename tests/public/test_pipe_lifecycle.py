@@ -24,7 +24,7 @@ from riko.collections import (
     SyncPipe,
 )
 from riko.exceptions import PipelineStateError
-from riko.types.general import Items
+from riko.types._streams import Items
 from riko.types.modules import ItemBuilderConf
 from tests import skipif_issync
 

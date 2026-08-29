@@ -25,13 +25,9 @@ from riko.compile import (
 )
 from riko.context import Context
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.types._streams import Item
 from riko.types.compile import DagModule, LoopModule, PipeDag, PipeDef, PipeModule
-from riko.types.general import Item
-from riko.types.modules import (
-    ItemBuilderRawConf,
-    Param,
-    TruncateRawConf,
-)
+from riko.types.modules import ItemBuilderRawConf, Param, TruncateRawConf
 from tests import TESTS_DIR, skipif_issync
 
 PIPELINE_DIR = TESTS_DIR / "pipelines"

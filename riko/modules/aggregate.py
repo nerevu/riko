@@ -32,8 +32,10 @@ import pygogo as gogo
 
 from riko._iterutils import listize
 from riko.modules._prepare import require_kwarg
-from riko.types.configs import AggregateObjconf
-from riko.types.general import Defaults, Item, PipeTuples, Stream
+from riko.types._configs import AggregateObjconf
+from riko.types._options import Defaults
+from riko.types._streams import Item, Stream
+from riko.types._wrappers import PipeTuples
 
 from . import operator
 

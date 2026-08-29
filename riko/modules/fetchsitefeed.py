@@ -38,9 +38,10 @@ from riko.bado import io
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import parse_rss
-from riko.types.configs import FetchSiteFeedObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts
-from riko.types.values import RSSEntry
+from riko.types._configs import FetchSiteFeedObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._rss import RSSEntry
+from riko.types._streams import Item
 
 from . import processor
 
@@ -50,7 +51,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FetchSiteFeedObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: FetchSiteFeedObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Asynchronously discovers the first feed on a page and parses it.
@@ -93,7 +94,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FetchSiteFeedObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: FetchSiteFeedObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Discovers the first feed on a page and parses it.

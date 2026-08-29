@@ -33,9 +33,10 @@ from riko.bado import io
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import parse_rss
-from riko.types.configs import FetchObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts
-from riko.types.values import RSSEntry
+from riko.types._configs import FetchObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._rss import RSSEntry
+from riko.types._streams import Item
 
 from . import processor
 
@@ -54,7 +55,7 @@ keys: set[str] = {
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FetchObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: FetchObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Asynchronously fetches the feed and returns its entries.
@@ -91,7 +92,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FetchObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: FetchObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Fetches the feed and returns its entries.

@@ -23,7 +23,8 @@ from riko.modules.regex import pipe as regex
 from riko.modules.strconcat import pipe as strconcat
 from riko.modules.tokenizer import async_pipe as async_tok
 from riko.modules.tokenizer import pipe as tokenizer
-from riko.types.general import AsyncStream, Item, OperatorWrapperOutput, Stream
+from riko.types._streams import AsyncStream, Item, Stream
+from riko.types._wrappers import OperatorWrapperOutput
 from riko.types.modules import (
     RegexRawConf,
     RegexRawRule,

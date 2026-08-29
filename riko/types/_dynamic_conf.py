@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.types.base
+riko.types._dynamic_conf
 ~~~~~~~~~~~~~~~
 
 Provides hand-maintained base types for generated module configurations.

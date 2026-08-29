@@ -25,9 +25,9 @@ from typing import Any
 import pygogo as gogo
 
 from riko.cast import CastType, cast_value
-from riko.types.configs import TypecastObjconf
-from riko.types.general import Defaults, Extraction, Opts
-from riko.types.values import PrimitiveValue
+from riko.types._configs import TypecastObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._scalars import PrimitiveValue
 
 from . import processor
 
@@ -38,7 +38,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    content: str, extraction: Extraction, objconf: TypecastObjconf, **kwargs: object
+    content: str, extraction: object, objconf: TypecastObjconf, **kwargs: object
 ) -> PrimitiveValue:
     """
     Casts ``content`` to the configured type.

@@ -23,7 +23,8 @@ import pytest
 from riko import run
 from riko.ext import operator, processor
 from riko.modules.timeout import async_pipe as timeout_async_pipe
-from riko.types.general import Item, ProcessorWrapper
+from riko.types._streams import Item
+from riko.types._wrappers import ProcessorWrapper
 from tests import skipif_issync
 
 

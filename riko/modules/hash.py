@@ -26,8 +26,8 @@ from typing import Any
 import pygogo as gogo
 
 from riko.cast import BasicCastType
-from riko.types.configs import DynamicConf
-from riko.types.general import Defaults, Extraction, Opts
+from riko.types._dynamic_conf import DynamicConf
+from riko.types._options import Defaults, Opts
 
 from . import processor
 
@@ -41,7 +41,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    content: str, extraction: Extraction, objconf: DynamicConf, **kwargs: object
+    content: str, extraction: object, objconf: DynamicConf, **kwargs: object
 ) -> int:
     """
     Returns the unsigned 32-bit hash of ``content``.

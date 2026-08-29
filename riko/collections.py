@@ -109,7 +109,11 @@ from typing import Any, Literal, Protocol, Self, TextIO, TypeGuard, cast, overlo
 
 import pygogo as gogo
 
-from riko.types.modules import ReceiveConf
+from riko._pubsub._types import ReceiveFunc
+from riko.types._collections import Inputs
+from riko.types._options import SkipIf
+from riko.types._scalars import BasicValue
+from riko.types.modules import Conf, ReceiveConf
 
 try:
     from csv2ofx.ofx import OFX
@@ -138,24 +142,15 @@ from riko.context import Context, ExecutionMode, parse_context
 from riko.exceptions import PipelineStateError
 from riko.ext._resolver import pipe_resolver
 from riko.ext.names import normalize_module_name
-from riko.types.general import (
+from riko.types._names import ModuleNameLike, TargetLike, TargetName
+from riko.types._streams import AsyncSource, AsyncStream, Feed, Item, Items, Stream
+from riko.types._wrappers import (
     AsyncPipeParser,
-    AsyncSource,
-    AsyncStream,
-    Conf,
     ConversionFunc,
-    Feed,
-    Function,
-    Item,
-    Items,
     ParserOutput,
-    ReceiveFunc,
-    SkipIf,
     SplitterParserOutput,
-    Stream,
     SyncPipeParser,
 )
-from riko.types.values import BasicValue, Inputs, ModuleNameLike, TargetLike, TargetName
 
 type AnyPool = ThreadPoolType | CPUPoolType
 type PoolFactory = Callable[..., AnyPool]
@@ -602,7 +597,7 @@ class PyPipe(_Lifecycle):
         conf: Conf | None = None,
         context: Context | None = None,
         field: str | None = None,
-        func: Function | None = None,
+        func: Callable | None = None,
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
         others: Iterable[str] | Iterable[Stream] | None = None,
@@ -651,7 +646,7 @@ class PyPipe(_Lifecycle):
         *,
         assign: str | None = None,
         field: str | None = None,
-        func: Function | None = None,
+        func: Callable | None = None,
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
         others: Iterable[str] | Iterable[Stream] | None = None,
@@ -731,7 +726,7 @@ class SyncPipe(PyPipe):
         chunksize: int | None = None,
         context: Context | None = None,
         field: str | None = None,
-        func: Function | None = None,
+        func: Callable | None = None,
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
         ordered: bool | None = False,
@@ -1469,7 +1464,7 @@ class AsyncPipe(PyPipe):
         connections: int = DEF_CONNECTION_COUNT,
         context: Context | None = None,
         field: str | None = None,
-        func: Function | None = None,
+        func: Callable | None = None,
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
         ordered: bool = False,

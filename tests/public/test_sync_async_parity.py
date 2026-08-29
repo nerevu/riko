@@ -12,7 +12,7 @@ Lifecycle/close/split/export parity lives in ``test_pipe_lifecycle.py`` and
 
 from riko.bado import run
 from riko.collections import AsyncPipe, SyncPipe
-from riko.types.general import Item
+from riko.types._streams import Item
 from riko.types.modules import ItemBuilderConf, StrReplaceConf, StrReplaceConfRule
 from tests import PipeBuilder, aresolve, skipif_issync
 

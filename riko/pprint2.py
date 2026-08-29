@@ -8,12 +8,7 @@ from functools import total_ordering
 from typing import cast
 
 from riko.context import Context
-from riko.types.modules import (
-    AnyModuleRawConf,
-    ConfArg,
-    RawConfValues,
-    Value,
-)
+from riko.types.modules import AnyModuleRawConf, ConfArg, RawConfValues, Value
 
 
 def cmp(a: object, b: object) -> int:

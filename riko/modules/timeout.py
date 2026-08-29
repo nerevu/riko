@@ -48,8 +48,10 @@ import pygogo as gogo
 
 from riko.bado.itertools import async_iter
 from riko.cast import BasicCastType
-from riko.types.configs import TimeoutObjconf
-from riko.types.general import Defaults, Feed, Opts, PipeTuples, Stream
+from riko.types._configs import TimeoutObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Feed, Stream
+from riko.types._wrappers import PipeTuples
 
 from . import operator
 

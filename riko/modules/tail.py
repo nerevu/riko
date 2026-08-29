@@ -31,8 +31,10 @@ from typing import Any
 import pygogo as gogo
 
 from riko.cast import BasicCastType
-from riko.types.configs import TailObjconf
-from riko.types.general import Defaults, Opts, PipeTuples, Stream
+from riko.types._configs import TailObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Stream
+from riko.types._wrappers import PipeTuples
 
 from . import operator
 

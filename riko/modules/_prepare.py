@@ -26,28 +26,30 @@ from riko.cast import (
 )
 from riko.dotdict import DotDict, is_mapping
 from riko.parsers import conf_is_dynamic, get_field, parse_conf
-from riko.types.configs import DynamicConf
-from riko.types.general import (
+from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
+from riko.types._dynamic_conf import DynamicConf
+from riko.types._options import (
     Casted,
-    CastFuncs,
-    Conf,
     Defaults,
-    Extraction,
-    Item,
     ItemDispatch,
-    ItemOrValue,
     ItemOrValueDispatch,
     Opts,
-    ParseFuncs,
-    ParserOutput,
-    SyncArgFunc,
-    SyncConfCastFunc,
     ValueDispatch,
 )
-from riko.types.modules import AnyModuleConf
-from riko.types.values import BasicReturn, PrimitiveValue, RikoDict, RikoList, RikoValue
+from riko.types._scalars import PrimitiveValue
+from riko.types._streams import Item, ItemOrValue
+from riko.types._wrappers import (
+    ArgCaster,
+    CastFuncs,
+    ParseFuncs,
+    ParserOutput,
+    SyncConfCastFunc,
+)
+from riko.types.modules import AnyModuleConf, Conf
 
 logger = gogo.Gogo(__name__, monolog=True).logger
+
+SyncArgFunc = ArgCaster
 
 
 def require_kwarg[T](  # noqa: E704
@@ -164,10 +166,7 @@ def require_conf[T](  # noqa: E704
 
 
 def get_pieces_or_conf(
-    parsed_conf: AnyModuleConf | None,
-    defaults: Defaults,
-    opts: Opts,
-    pipe: str = "",
+    parsed_conf: AnyModuleConf | None, defaults: Defaults, opts: Opts, pipe: str = ""
 ) -> tuple[BasicReturn | AnyModuleConf | list[BasicReturn] | None, AnyModuleConf]:
     if is_mapping(parsed_conf):
         merged_conf = cast(AnyModuleConf, {**defaults, **parsed_conf})
@@ -194,53 +193,56 @@ def get_pieces_or_conf(
 
 
 @dataclass(frozen=True)
-class PreparedModule:
+class PreparedModule[T, E]:
     name: str
     conf: Conf
     opts: Opts
     parsers: ParseFuncs
-    casters: CastFuncs | None
+    casters: CastFuncs[ItemOrValue, E]
     assign: str
     emit: bool | Callable[[ParserOutput], bool] | None
     is_source: bool
-    static_casted: tuple[SyncArgFunc, Extraction, DynamicConf] | None
+    static_casted: tuple[ArgCaster[T], E, DynamicConf] | None
 
 
 @overload
-def parse_and_cast(  # noqa: E704
+def parse_and_cast[T, E](  # noqa: E704
     item: Item | RikoDict | DotDict[RikoValue],
     opts: Opts,
     conf: Conf,
-    parsers: ParseFuncs | None = ...,
-    casters: CastFuncs | None = ...,
+    *,
+    parsers: ParseFuncs,
+    casters: CastFuncs[T, E],
     defaults: Defaults | None = ...,
     field: str | None = ...,
     pipe: str = ...,
     **kwargs: object,
-) -> ItemDispatch: ...
+) -> ItemDispatch[T, E]: ...
 @overload  # noqa: E302
-def parse_and_cast(  # noqa: E704
+def parse_and_cast[T, E](  # noqa: E704
     item: PrimitiveValue | RikoList,
     opts: Opts,
     conf: Conf,
-    parsers: ParseFuncs | None = ...,
-    casters: CastFuncs | None = ...,
+    *,
+    parsers: ParseFuncs,
+    casters: CastFuncs[T, E],
     defaults: Defaults | None = ...,
     field: str | None = ...,
     pipe: str = ...,
     **kwargs: object,
-) -> ValueDispatch: ...
-def parse_and_cast(  # noqa: E302
+) -> ValueDispatch[T, E]: ...
+def parse_and_cast[T, E](  # noqa: E302
     item: ItemOrValue,
     opts: Opts,
     conf: Conf,
-    parsers: ParseFuncs | None = None,
-    casters: CastFuncs | None = None,
+    *,
+    parsers: ParseFuncs,
+    casters: CastFuncs[T, E],
     defaults: Defaults | None = None,
     field: str | None = None,
     pipe: str = "",
     **kwargs: object,
-) -> ItemOrValueDispatch:
+) -> ItemOrValueDispatch[T, E]:
     defaults = defaults or Defaults({})
     field = field or opts.get("field")
 
