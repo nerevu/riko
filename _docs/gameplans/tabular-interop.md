@@ -85,11 +85,7 @@ The caller may choose item or batch mode:
 ```python
 rows = Pipeline.from_frame(df, batch=False)
 
-batches = Pipeline.from_frame(
-    df,
-    batch=True,
-    batch_size=10_000,
-)
+batches = Pipeline.from_frame(df, batch=True, batch_size=10_000)
 ```
 
 ## 5. Pandas input
@@ -127,11 +123,7 @@ df = flow.to_pandas()
 Possible options:
 
 ```python
-flow.to_pandas(
-    columns=None,
-    index=None,
-    dtype_backend=None,
-)
+flow.to_pandas(columns=None, index=None, dtype_backend=None)
 ```
 
 Requirements:

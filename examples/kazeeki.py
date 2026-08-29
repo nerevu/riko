@@ -69,9 +69,7 @@ def add_id[T: SyncPipe | AsyncPipe](source: T, rule, field="link") -> T:
 
 
 def add_posted[T: SyncPipe | AsyncPipe](
-    source: T,
-    rule: FindConfRule | list[FindConfRule] | None = None,
-    field="summary",
+    source: T, rule: FindConfRule | list[FindConfRule] | None = None, field="summary"
 ) -> T:
     if rule:
         conf = StrfindConf({"rule": rule})
@@ -122,10 +120,7 @@ def add_tags[T: SyncPipe | AsyncPipe](
 
 
 def add_budget[T: SyncPipe | AsyncPipe](
-    source: T,
-    fixed_text="",
-    hourly_text="",
-    double: bool | str = True,
+    source: T, fixed_text="", hourly_text="", double: bool | str = True
 ) -> T:
     codes = "$£€₹"
     no_raw_budget = Skip({"field": "k:budget_raw"})
@@ -135,12 +130,7 @@ def add_budget[T: SyncPipe | AsyncPipe](
     isnt_fixed = Skip({"field": "summary", "text": fixed_text, "include": True})
     isnt_hourly = Skip({"field": "summary", "text": hourly_text, "include": True})
     no_symbol = Skip(
-        {
-            "field": "k:budget_raw",
-            "text": codes,
-            "op": "intersection",
-            "include": True,
-        }
+        {"field": "k:budget_raw", "text": codes, "op": "intersection", "include": True}
     )
     code_or_no_raw_budget = [has_code, no_raw_budget]
     def_cur_or_no_raw_budget = [is_def_cur, no_raw_budget]

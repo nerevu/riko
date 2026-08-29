@@ -253,7 +253,7 @@ pipe.azure(
             "/providers/Microsoft.Compute/virtualMachines"
         ),
         "api_version": "...",
-    },
+    }
 )
 ```
 

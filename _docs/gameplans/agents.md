@@ -166,12 +166,7 @@ cycles to the Pipeline DAG.
 Conceptual example:
 
 ```python
-flow = Pipeline(...).loop(
-    embed=step,
-    until=done,
-    max_iterations=20,
-    id="research-loop",
-)
+flow = Pipeline(...).loop(embed=step, until=done, max_iterations=20, id="research-loop")
 ```
 
 Iterative semantics:

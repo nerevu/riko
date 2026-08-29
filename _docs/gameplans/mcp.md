@@ -293,10 +293,7 @@ class CapabilityProvider(Protocol):
     name: str
 
     async def discover(
-        self,
-        request: CapabilityDiscoveryRequest,
-        *,
-        context: Context,
+        self, request: CapabilityDiscoveryRequest, *, context: Context
     ) -> CapabilityCatalogFragment: ...
 ```
 
@@ -351,9 +348,7 @@ Example Context override:
 
 ```python
 context = Context(
-    resources={
-        "capabilities": Resource.from_factory(make_capability_manager),
-    }
+    resources={"capabilities": Resource.from_factory(make_capability_manager)}
 )
 ```
 

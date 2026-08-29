@@ -34,8 +34,7 @@ _COMPLETION = re.compile(
     r"\b(complete|completed|delivered|shipped|landed|done)\b", re.IGNORECASE
 )
 _TARGET = re.compile(
-    r"\b(target|targeted|planned|plan|next|prerequisite|prereq|future)\b",
-    re.IGNORECASE,
+    r"\b(target|targeted|planned|plan|next|prerequisite|prereq|future)\b", re.IGNORECASE
 )
 
 

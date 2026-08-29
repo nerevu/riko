@@ -40,10 +40,7 @@ def run() -> None:
         formatter_class=RawTextHelpFormatter,
     )
 
-    parser.add_argument(
-        dest="path",
-        help="Path to the bare-bones DAG definition.",
-    )
+    parser.add_argument(dest="path", help="Path to the bare-bones DAG definition.")
 
     parser.add_argument(
         "-o",

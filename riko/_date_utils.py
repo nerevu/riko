@@ -191,9 +191,7 @@ def tt_to_datetime(  # noqa: E704
     def_tzinfo: tzinfo | None = ...,
 ) -> AwareDT | NaiveDT: ...
 def tt_to_datetime(  # noqa: E302
-    tt: struct_time | None,
-    as_date: bool = False,
-    def_tzinfo: tzinfo | None = None,
+    tt: struct_time | None, as_date: bool = False, def_tzinfo: tzinfo | None = None
 ) -> date | dt | None:
     # convert and account for leapseconds
     if tt:

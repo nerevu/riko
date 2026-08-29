@@ -97,13 +97,7 @@ resolved through declared `Context` resources and execution-owned connector sess
 REST is a first-class Riko module rather than an overload of RSS-oriented `fetch`:
 
 ```python
-flow = Pipeline(
-    "rest",
-    conf={
-        "base_url": "https://api.example.com/",
-        "path": "events",
-    },
-)
+flow = Pipeline("rest", conf={"base_url": "https://api.example.com/", "path": "events"})
 ```
 
 Serialized form:

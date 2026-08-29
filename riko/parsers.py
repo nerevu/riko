@@ -425,9 +425,7 @@ def xpath(
 
 
 def xml2etree(  # noqa: E302
-    f: str | FileTypes,
-    xml: bool = True,
-    html5: bool = False,
+    f: str | FileTypes, xml: bool = True, html5: bool = False
 ) -> AnyElementTree:
     """
     Parses XML/HTML into an ElementTree. External XML is parsed with a hardened

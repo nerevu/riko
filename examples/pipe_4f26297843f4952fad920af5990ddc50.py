@@ -15,13 +15,7 @@ def pipe(item=None, context: Context | None = None, **_):
             ("2", "zone_input", "enter time zone", "text", "EST"),
         ]
     elif context and context.describe_dependencies:
-        output = [
-            "datebuilder",
-            "dateformat",
-            "itembuilder",
-            "output",
-            "input",
-        ]
+        output = ["datebuilder", "dateformat", "itembuilder", "output", "input"]
     else:
         sw_120 = _input(
             conf=InputRawConf(
@@ -33,7 +27,7 @@ def pipe(item=None, context: Context | None = None, **_):
                     "name": {"type": "text", "value": "format_input"},
                     "debug": {"type": "text", "value": "%B %d, %Y"},
                 }
-            ),
+            )
         )
 
         sw_124 = _input(
@@ -46,7 +40,7 @@ def pipe(item=None, context: Context | None = None, **_):
                     "name": {"type": "text", "value": "zone_input"},
                     "debug": {"type": "text", "value": "EST"},
                 }
-            ),
+            )
         )
 
         sw_112 = datebuilder({"content": "12/3/2014"}, emit=True)
@@ -57,7 +51,7 @@ def pipe(item=None, context: Context | None = None, **_):
             conf=DateFormatRawConf(
                 {
                     # "timezone": {"terminal": "timezone", "type": "text"},
-                    "format": {"terminal": "format", "type": "text"},
+                    "format": {"terminal": "format", "type": "text"}
                 }
             ),
             format=sw_120,

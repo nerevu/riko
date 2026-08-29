@@ -10,11 +10,7 @@ Extension authors should prefer the supported contracts in ``riko.ext``.
 """
 
 from riko.modules._decorators import operator, processor, splitter
-from riko.modules._metadata import (
-    describe_module,
-    get_module_metadata,
-    list_modules,
-)
+from riko.modules._metadata import describe_module, get_module_metadata, list_modules
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
 __all__ = [

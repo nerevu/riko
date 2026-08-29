@@ -53,9 +53,7 @@ class PipelineRunRequest:
 
 
 request = PipelineRunRequest(
-    pipeline=PipelineRef("daily-report"),
-    parameters={},
-    run_id="run-123",
+    pipeline=PipelineRef("daily-report"), parameters={}, run_id="run-123"
 )
 ```
 

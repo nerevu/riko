@@ -153,9 +153,7 @@ def _infer_callable_kind(node: ast.expr) -> Inference:
 
 
 def _infer_expression_kind(
-    node: ast.expr,
-    assignments: dict[str, ast.expr],
-    seen: frozenset[str] = frozenset(),
+    node: ast.expr, assignments: dict[str, ast.expr], seen: frozenset[str] = frozenset()
 ) -> Inference:
     kind = OperatorReturnKind.UNKNOWN
     reason = None

@@ -78,11 +78,7 @@ class TestAsyncBoundedParallel:
 
         async def main():
             pipe = AsyncPipe(
-                "hash",
-                source=tracking(),
-                parallel=True,
-                ordered=ordered,
-                connections=2,
+                "hash", source=tracking(), parallel=True, ordered=ordered, connections=2
             )
             first = await anext(pipe)
             await pipe.aclose()

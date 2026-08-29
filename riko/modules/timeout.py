@@ -32,13 +32,7 @@ Attributes:
 
 """
 
-from collections.abc import (
-    AsyncIterable,
-    AsyncIterator,
-    Generator,
-    Iterable,
-    Iterator,
-)
+from collections.abc import AsyncIterable, AsyncIterator, Generator, Iterable, Iterator
 from datetime import timedelta
 from logging import Logger
 from time import monotonic_ns
@@ -68,9 +62,7 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
     timeout_ns: int
 
     def __init__(
-        self,
-        elements: AsyncIterable[T] | Iterable[T],
-        timeout_ms: int = 0,
+        self, elements: AsyncIterable[T] | Iterable[T], timeout_ms: int = 0
     ) -> None:
         if isinstance(elements, AsyncIterable):
             self.aiter = aiter(elements)

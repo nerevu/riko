@@ -215,14 +215,7 @@ stable provider identity first.
 Provider search vocabularies may be richer than a generic HTTP request:
 
 ```python
-flow.capability(
-    "ebay.search",
-    conf={
-        "query": "...",
-        "limit": 100,
-        "sort": "price",
-    },
-)
+flow.capability("ebay.search", conf={"query": "...", "limit": 100, "sort": "price"})
 ```
 
 The implementation may still use generic REST/OpenAPI machinery.
@@ -246,10 +239,7 @@ base records
 Selection is explicit:
 
 ```python
-providers = {
-    "allow": ["sam", "highergov", "apollo"],
-    "deny": ["browser-only-provider"],
-}
+providers = {"allow": ["sam", "highergov", "apollo"], "deny": ["browser-only-provider"]}
 ```
 
 Requirements:
@@ -304,11 +294,7 @@ Rules:
 Remote writes may expose provider-native batch endpoints:
 
 ```python
-batch = {
-    "max_items": 500,
-    "max_bytes": 5_000_000,
-    "flush_interval": 2.0,
-}
+batch = {"max_items": 500, "max_bytes": 5_000_000, "flush_interval": 2.0}
 ```
 
 Provider-native batching must preserve ordering/idempotency rules and expose item-level

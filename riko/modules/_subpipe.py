@@ -27,10 +27,7 @@ def mark_subpipe(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
 ) -> AsyncSubPipe: ...
 @overload  # noqa: E302
 def mark_subpipe(  # noqa: E704
-    pipe: Callable[..., object],
-    *,
-    subtype: ModuleSubtype = ...,
-    loopable: bool = ...,
+    pipe: Callable[..., object], *, subtype: ModuleSubtype = ..., loopable: bool = ...
 ) -> SyncSubPipe: ...
 def mark_subpipe(  # noqa: E302
     pipe: Callable[..., object],

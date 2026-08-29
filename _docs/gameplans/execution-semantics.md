@@ -38,11 +38,7 @@ Step configuration is fixed when that step is declared. `with_config()` does not
 Execution-wide settings use a separate immutable definition operation:
 
 ```python
-flow = flow.with_execution(
-    executor="thread",
-    concurrency=8,
-    ordered=False,
-)
+flow = flow.with_execution(executor="thread", concurrency=8, ordered=False)
 ```
 
 There are no executing `collect()` / `first()` terminals in the target API. Normal execution remains Python iteration (`list(flow)`, `for`, `async for`). `take()` remains a transform.
@@ -499,10 +495,7 @@ flow = flow.checkpoint(id="normalized")
 Conceptually the payload is:
 
 ```python
-FeedState(
-    checkpoint=current_value,
-    observation=current_observation,
-)
+FeedState(checkpoint=current_value, observation=current_observation)
 ```
 
 Checkpointing commits state; it does not independently decide how to restore. Restore belongs to an enclosing resumable/stateful owner such as `loop`, polling, or a stateful source.
@@ -572,12 +565,7 @@ An explicit loop `id=` stabilizes the stateful owner's logical identity when str
 ### 5.1 Boundedness
 
 ```python
-boundedness: Literal[
-    "preserve",
-    "finite",
-    "unbounded",
-    "unknown",
-]
+boundedness: Literal["preserve", "finite", "unbounded", "unknown"]
 ```
 
 Examples:
@@ -597,11 +585,7 @@ Blocking operators may declare `require_bounded=True`; `unbounded` and `unknown`
 ### 5.2 Ordering
 
 ```python
-ordering: Literal[
-    "preserve",
-    "destroy",
-    "establish",
-]
+ordering: Literal["preserve", "destroy", "establish"]
 ```
 
 | pipe | ordering |
@@ -690,11 +674,7 @@ Built-in pure transforms may be marked inline because Riko owns/tests them. A fu
 > **Shipped:** see [IMPLEMENTED.md §7](../IMPLEMENTED.md#7-timeout-shipped) for the current total-timeout primitive. **Remaining:** complete idle/item semantics and ensure a blocked `anext()` itself is bounded.
 
 ```python
-timeout(
-    seconds,
-    mode="total" | "idle" | "item",
-    on_timeout="stop" | "error",
-)
+timeout(seconds, mode="total" | "idle" | "item", on_timeout="stop" | "error")
 ```
 
 Default:
@@ -788,11 +768,7 @@ Codec/identity/configuration errors are not transient merely because retry exist
 ### 12.1 Error policies
 
 ```python
-error_policy: Literal[
-    "fail",
-    "skip",
-    "dead_letter",
-]
+error_policy: Literal["fail", "skip", "dead_letter"]
 ```
 
 `skip` requires explicit data-loss authorization. `dead_letter` advances only after the durable error sink acknowledges the failed item. A failure that is not successfully disposed must not advance resumable state past that item.
@@ -840,11 +816,7 @@ The earlier public `Batch` / `BatchPipe` / `BatchPolicy` proposal is superseded.
 ```python
 Pipeline(source=source, batch=False)
 
-Pipeline(
-    source=source,
-    batch=True,
-    batch_size=3,
-)
+Pipeline(source=source, batch=True, batch_size=3)
 ```
 
 `batch_size` is invalid unless `batch=True`.

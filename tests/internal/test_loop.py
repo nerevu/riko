@@ -228,11 +228,7 @@ class TestImplicitLooping:
     def test_matches_explicit_loop(self):
         parents = [{"title": "a b"}, {"title": "c d"}]
         implicit = tokenizer(
-            iter(parents),
-            conf=TOKENIZER_CONF,
-            field="title",
-            count="first",
-            emit=True,
+            iter(parents), conf=TOKENIZER_CONF, field="title", count="first", emit=True
         )
         explicit = _tokenizer_loop(iter(parents), count="first", emit=True)
         assert list(implicit) == list(explicit)

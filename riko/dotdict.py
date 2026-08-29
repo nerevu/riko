@@ -10,15 +10,7 @@ from datetime import date
 from decimal import Decimal
 from functools import reduce
 from logging import Logger
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Self,
-    TypeGuard,
-    TypeVar,
-    cast,
-    overload,
-)
+from typing import TYPE_CHECKING, Any, Self, TypeGuard, TypeVar, cast, overload
 
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
@@ -173,10 +165,7 @@ def gen_dict[VT](  # noqa: E704
 ) -> Iterator[tuple[str, VT | None]]: ...
 @overload  # noqa: E302
 def gen_dict[VT](  # noqa: E704
-    data: DotDict[VT] | Mapping[str, VT],
-    key: Key,
-    default_key: None,
-    **kwargs: VT,
+    data: DotDict[VT] | Mapping[str, VT], key: Key, default_key: None, **kwargs: VT
 ) -> Iterator[dict[str, VT | None]]: ...
 @overload  # noqa: E302
 def gen_dict[VT](  # noqa: E704
@@ -559,10 +548,7 @@ class DotDict(CaseInsensitiveDict[VT]):
     @overload
     def get(self, **kwargs: VT) -> VT | None: ...  # noqa: E704
     def get(  # noqa: E301  # pyright: ignore[reportInconsistentOverload]
-        self,
-        key: Key | None = None,
-        default: D | None = None,
-        **kwargs: VT,
+        self, key: Key | None = None, default: D | None = None, **kwargs: VT
     ) -> Self | VT | D | Item | dict[str, VT] | PrimitiveValue:
         """
         >>> r = DotDict({'key': 'bar'})

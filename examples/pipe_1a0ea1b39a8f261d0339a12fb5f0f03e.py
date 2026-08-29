@@ -20,7 +20,7 @@ def pipe(item=None, context: Context | None = None, **kwargs):
             conf=DateFormatRawConf(
                 {
                     # "timezone": {"type": "text", "value": ""},
-                    "format": {"type": "text", "value": "%B %d, %Y"},
+                    "format": {"type": "text", "value": "%B %d, %Y"}
                 }
             ),
         )

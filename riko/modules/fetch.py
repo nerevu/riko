@@ -43,15 +43,7 @@ from . import processor
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {"encoding": ENCODING}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
-keys: set[str] = {
-    "author",
-    "dc:creator",
-    "id",
-    "link",
-    "pubDate",
-    "summary",
-    "title",
-}
+keys: set[str] = {"author", "dc:creator", "id", "link", "pubDate", "summary", "title"}
 
 
 async def async_parser(

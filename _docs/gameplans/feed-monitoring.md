@@ -230,10 +230,7 @@ class StateStore(Protocol):
         expected_version: StateVersion | MissingType = MISSING,
     ) -> StateVersion: ...
     def delete[T](
-        self,
-        key: StateKey[T],
-        *,
-        expected_version: StateVersion,
+        self, key: StateKey[T], *, expected_version: StateVersion
     ) -> None: ...
 ```
 
@@ -286,12 +283,7 @@ history.
 Approximate duplicate suppression is optional and explicit:
 
 ```python
-flow.dedupe(
-    key="guid",
-    backend="bloom",
-    capacity=1_000_000,
-    false_positive_rate=0.001,
-)
+flow.dedupe(key="guid", backend="bloom", capacity=1_000_000, false_positive_rate=0.001)
 ```
 
 Rules:
@@ -311,11 +303,7 @@ Near-duplicate content similarity such as Simhash/Nilsimsa belongs to
 Change detection answers: **has a known entity changed in selected business fields?**
 
 ```python
-flow.changed(
-    key="product_id",
-    fields=["price", "availability"],
-    first="emit",
-)
+flow.changed(key="product_id", fields=["price", "availability"], first="emit")
 ```
 
 Optional metadata may report previous/current selected values and changed fields. Metadata
@@ -365,12 +353,7 @@ Example:
 
 ```python
 flow.anomaly(
-    conf={
-        "field": "latency_ms",
-        "method": "zscore",
-        "window": 100,
-        "threshold": 3.0,
-    }
+    conf={"field": "latency_ms", "method": "zscore", "window": 100, "threshold": 3.0}
 )
 ```
 

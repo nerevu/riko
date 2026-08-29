@@ -24,10 +24,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 class RSSLinkParser(LinkParser):
     def __init__(
-        self,
-        *,
-        link_type: str | Iterable[str] | None = None,
-        **kwargs: bool,
+        self, *, link_type: str | Iterable[str] | None = None, **kwargs: bool
     ) -> None:
         super().__init__(rss_only=True, link_type=link_type, **kwargs)
 

@@ -249,11 +249,7 @@ def cast_datetime(  # noqa: E704
     try_local_tz: bool = ...,
 ) -> DateDict | None: ...
 def cast_datetime(  # noqa: E302
-    value: DateLike,
-    as_date=False,
-    as_datedict=False,
-    *,
-    try_local_tz=False,
+    value: DateLike, as_date=False, as_datedict=False, *, try_local_tz=False
 ) -> date | dt | DateDict | None:
     """
     Normalizes a date-like value to a ``datetime`` (or ``date``/``DateDict``).
@@ -354,27 +350,19 @@ CAST_SWITCH: dict[str, PreCaster] = {
 def cast_value(content: object) -> str: ...  # noqa: E704
 @overload  # noqa: E302
 def cast_value[T](  # noqa: E704
-    content: T,
-    type_: Literal[CastType.PASS],
-    **kwargs: object,
+    content: T, type_: Literal[CastType.PASS], **kwargs: object
 ) -> T: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object,
-    type_: Literal[CastType.NONE],
-    **kwargs: object,
+    content: object, type_: Literal[CastType.NONE], **kwargs: object
 ) -> None: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object,
-    type_: Literal[CastType.TEXT],
-    **kwargs: object,
+    content: object, type_: Literal[CastType.TEXT], **kwargs: object
 ) -> str: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object,
-    type_: Literal[CastType.FLOAT],
-    **kwargs: object,
+    content: object, type_: Literal[CastType.FLOAT], **kwargs: object
 ) -> float: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704

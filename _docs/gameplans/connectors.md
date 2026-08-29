@@ -121,10 +121,7 @@ class SourceResolver(Protocol):
     name: str
     schemes: frozenset[str]
 
-    def resolve(
-        self,
-        request: SourceRequest,
-    ) -> SourcePlan | None: ...
+    def resolve(self, request: SourceRequest) -> SourcePlan | None: ...
 ```
 
 A connector implementation is bound to a Pipeline node through the normal Riko module/resource

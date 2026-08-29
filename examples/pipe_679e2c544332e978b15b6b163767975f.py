@@ -44,7 +44,7 @@ def pipe(item=None, context: Context | None = None, **kwargs):
                         "param": {"type": "text", "value": "first"},
                         "replace": {"type": "text", "value": "USD"},
                     }
-                ),
+                )
             }
         )
 

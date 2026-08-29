@@ -489,9 +489,7 @@ def _gen_embed_subpipe_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
                 yield pythonise(embed["type"])
 
 
-def _get_sources(
-    conf: AnyModuleRawConf | None,
-) -> list[dict[str, str]] | None:
+def _get_sources(conf: AnyModuleRawConf | None) -> list[dict[str, str]] | None:
     if conf and (url := conf.get("url")) and isinstance(url, list):
         urls = cast(list[Value], url)
         return [{"url": cast(str, url["value"])} for url in urls]
@@ -904,15 +902,11 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPip
 
 @overload
 def _build_pipeline(  # noqa: E704
-    *args: Any,
-    is_async: Literal[True],
-    **kwargs: Any,
+    *args: Any, is_async: Literal[True], **kwargs: Any
 ) -> AsyncPipeParser | AsyncPipeItems: ...
 @overload  # noqa: E302
 def _build_pipeline(  # noqa: E704
-    *args: Any,
-    is_async: Literal[False] = ...,
-    **kwargs: Any,
+    *args: Any, is_async: Literal[False] = ..., **kwargs: Any
 ) -> SyncPipeParser | ParserOutput: ...
 def _build_pipeline(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,

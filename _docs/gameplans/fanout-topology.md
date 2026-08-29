@@ -229,13 +229,7 @@ Broadcast and routing are separate. A binary branch sends each item to exactly o
 
 ```python
 matched, unmatched = flow.branch(
-    conf={
-        "rule": {
-            "field": "score",
-            "op": "greater",
-            "value": 500,
-        }
-    }
+    conf={"rule": {"field": "score", "op": "greater", "value": 500}}
 )
 ```
 
@@ -256,11 +250,7 @@ Do not call this operation `split`; `split` means broadcast duplication.
 After binary branch semantics are stable, N-way routing may support:
 
 ```python
-flow.route(
-    field="customer_id",
-    branches=["a", "b", "c"],
-    strategy="hash",
-)
+flow.route(field="customer_id", branches=["a", "b", "c"], strategy="hash")
 ```
 
 Initial strategies may include:
@@ -304,10 +294,7 @@ Conceptually:
 
 ```python
 matched, unmatched = flow.branch(conf=rule)
-result = Pipeline.union(
-    matched.transform(...),
-    unmatched.transform(...),
-)
+result = Pipeline.union(matched.transform(...), unmatched.transform(...))
 ```
 
 and relational branches may feed `join`.

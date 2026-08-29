@@ -66,14 +66,9 @@ The CLI is a thin adapter over reusable application services.
 
 ```python
 async def plan_command(
-    request: ApiPlanRequest,
-    *,
-    context: CliContext,
+    request: ApiPlanRequest, *, context: CliContext
 ) -> CommandResult:
-    outcome = await context.services.capabilities.plan(
-        request,
-        context=context.riko,
-    )
+    outcome = await context.services.capabilities.plan(request, context=context.riko)
     return CommandResult(data=outcome)
 ```
 

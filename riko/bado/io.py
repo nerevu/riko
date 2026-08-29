@@ -119,10 +119,7 @@ async def async_url_open(  # noqa: E302
 
 
 async def async_url_read(
-    url: str,
-    timeout: float = 0,
-    encoding: str = ENCODING,
-    **kwargs: object,
+    url: str, timeout: float = 0, encoding: str = ENCODING, **kwargs: object
 ) -> str:
     url = get_abspath(url, offline=True)
 

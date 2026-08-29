@@ -50,10 +50,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    item: Item,
-    rules: Sequence[RegexConfRule],
-    objconf: RegexObjconf,
-    **kwargs: object,
+    item: Item, rules: Sequence[RegexConfRule], objconf: RegexObjconf, **kwargs: object
 ) -> Item:
     """
     Asynchronously applies each rule to the field it names.
@@ -116,10 +113,7 @@ async def async_parser(
 
 
 def parser(
-    item: Item,
-    rules: Sequence[RegexConfRule],
-    objconf: RegexObjconf,
-    **kwargs: object,
+    item: Item, rules: Sequence[RegexConfRule], objconf: RegexObjconf, **kwargs: object
 ) -> Item:
     """
     Applies each rule to the field it names.

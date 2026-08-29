@@ -353,38 +353,17 @@ from riko import Pipeline
 
 def site_artifacts() -> Pipeline[SiteArtifact]:
     structure = Pipeline(
-        "fetchdata",
-        conf={"url": "site/structure.json"},
+        "fetchdata", conf={"url": "site/structure.json"}
     ).sitestructure()
 
     programs = (
-        Pipeline(
-            "fetchdata",
-            conf={
-                "url": DATA_API,
-                "path": "programs",
-            },
-        )
-        .filter(
-            conf={
-                "rule": {
-                    "field": "active",
-                    "op": "is",
-                    "value": True,
-                }
-            }
-        )
+        Pipeline("fetchdata", conf={"url": DATA_API, "path": "programs"})
+        .filter(conf={"rule": {"field": "active", "op": "is", "value": True}})
         .rename(
             conf={
                 "rule": [
-                    {
-                        "field": "name",
-                        "newval": "title",
-                    },
-                    {
-                        "field": "college_name",
-                        "newval": "college",
-                    },
+                    {"field": "name", "newval": "title"},
+                    {"field": "college_name", "newval": "college"},
                 ]
             }
         )
@@ -399,39 +378,17 @@ def site_artifacts() -> Pipeline[SiteArtifact]:
     )
 
     blog = (
-        Pipeline(
-            "fetchdata",
-            conf={
-                "url": CONTENT_API,
-                "path": "objects",
-            },
-        )
-        .filter(
-            conf={
-                "rule": {
-                    "field": "published",
-                    "op": "is",
-                    "value": True,
-                }
-            }
-        )
+        Pipeline("fetchdata", conf={"url": CONTENT_API, "path": "objects"})
+        .filter(conf={"rule": {"field": "published", "op": "is", "value": True}})
         .infer(
-            conf={
-                "field": "body",
-                "prompt": "Write a two-sentence summary.",
-            },
+            conf={"field": "body", "prompt": "Write a two-sentence summary."},
             assign="description",
         )
         .review(
             conf={
                 "policy": "approval",
                 "default_status": "draft",
-                "approval_sources": [
-                    {
-                        "type": "json",
-                        "path": ".riko/approvals.json",
-                    }
-                ],
+                "approval_sources": [{"type": "json", "path": ".riko/approvals.json"}],
             }
         )
         .siteartifact(
@@ -442,20 +399,10 @@ def site_artifacts() -> Pipeline[SiteArtifact]:
                 "materialization": "hybrid",
             }
         )
-        .siteroutes(
-            conf={
-                "collection": "blog",
-                "pattern": "/news/{id}",
-            }
-        )
+        .siteroutes(conf={"collection": "blog", "pattern": "/news/{id}"})
     )
 
-    return structure.union(
-        others=[
-            programs,
-            blog,
-        ]
-    )
+    return structure.union(others=[programs, blog])
 ```
 
 Mithril compatibility export:
@@ -501,11 +448,7 @@ result = site_artifacts().export(
     output="preview",
     components="site.components",
     layout="site.layout:page",
-    publication_statuses=(
-        "approved",
-        "draft",
-        "rejected",
-    ),
+    publication_statuses=("approved", "draft", "rejected"),
     draft_labels=True,
 )
 ```
@@ -750,21 +693,12 @@ second Pipeline execution/terminal contract; final Pipeline/export placement rem
 class ExportTarget(Protocol):
     name: str
 
-    def export(
-        self,
-        items: Iterable[Item],
-        **kwargs: object,
-    ) -> object: ...
+    def export(self, items: Iterable[Item], **kwargs: object) -> object: ...
 ```
 
 ```python
 class ExportRegistry:
-    def register(
-        self,
-        target: ExportTarget,
-        *,
-        replace: bool = False,
-    ) -> None: ...
+    def register(self, target: ExportTarget, *, replace: bool = False) -> None: ...
 
     def resolve(self, name: str) -> ExportTarget: ...
 
@@ -928,12 +862,7 @@ Produces route artifacts before rendering.
 Example:
 
 ```python
-flow.siteroutes(
-    conf={
-        "collection": "blog",
-        "pattern": "/news/{id}",
-    }
-)
+flow.siteroutes(conf={"collection": "blog", "pattern": "/news/{id}"})
 ```
 
 ### `review`
@@ -947,12 +876,7 @@ flow.review(
     conf={
         "policy": "approval",
         "default_status": "draft",
-        "approval_sources": [
-            {
-                "type": "json",
-                "path": ".riko/approvals.json",
-            }
-        ],
+        "approval_sources": [{"type": "json", "path": ".riko/approvals.json"}],
     }
 )
 ```
@@ -1022,10 +946,7 @@ Support Git-managed review decisions without requiring an editorial system.
 
 ```python
 class ApprovalStore(Protocol):
-    def get(
-        self,
-        review_id: str,
-    ) -> ApprovalDecision | None: ...
+    def get(self, review_id: str) -> ApprovalDecision | None: ...
 ```
 
 ### Tests
@@ -1441,11 +1362,7 @@ site_artifacts().export(
     "site",
     renderer="lektor",
     project="lektor-site",
-    ownership={
-        "pages": "editor",
-        "news": "riko",
-        "programs": "riko",
-    },
+    ownership={"pages": "editor", "news": "riko", "programs": "riko"},
     generated_root="content/_riko_generated",
     enrichment="databags/riko-enrichment.json",
 )

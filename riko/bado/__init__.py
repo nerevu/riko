@@ -19,9 +19,7 @@ class Run(Protocol):
     """The call signature of the async entry point, :data:`run`."""
 
     def __call__[*PosArgsT, T](  # noqa: E704
-        self,
-        func: Callable[[Unpack[PosArgsT]], Awaitable[T]],
-        *args: *PosArgsT,
+        self, func: Callable[[Unpack[PosArgsT]], Awaitable[T]], *args: *PosArgsT
     ) -> T: ...
 
 

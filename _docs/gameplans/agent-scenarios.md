@@ -125,10 +125,7 @@ Example:
 ModelPolicy(
     id="balanced",
     objective="balanced",
-    requirements={
-        "tool_calling": True,
-        "context_tokens": 32_000,
-    },
+    requirements={"tool_calling": True, "context_tokens": 32_000},
 )
 ```
 
@@ -188,11 +185,7 @@ Earlier agent scenarios encode which agent may call a function and which execute
 that useful distinction in policy rather than framework-specific runtime actor fields:
 
 ```python
-ToolGrant(
-    capability="browser.search",
-    caller="researcher",
-    executor="tool-runtime",
-)
+ToolGrant(capability="browser.search", caller="researcher", executor="tool-runtime")
 ```
 
 This enables:

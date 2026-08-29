@@ -176,11 +176,7 @@ native replayability semantics; Pipeline immutability does not recreate consumed
 Feed-native sources/parsers may return:
 
 ```python
-FeedResult(
-    items=...,
-    metadata=...,
-    state=...,
-)
+FeedResult(items=..., metadata=..., state=...)
 ```
 
 Ordinary transforms propagate state/metadata while truthful. Final finite `FeedResult.state`

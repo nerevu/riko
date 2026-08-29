@@ -9,14 +9,7 @@ dedup, chainable retry binding, and sort-key construction.
 import builtins
 import itertools
 from collections import defaultdict
-from collections.abc import (
-    Callable,
-    ItemsView,
-    Iterable,
-    Iterator,
-    Mapping,
-    Sequence,
-)
+from collections.abc import Callable, ItemsView, Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, date, tzinfo
 from datetime import datetime as dt
 from decimal import Decimal
@@ -110,9 +103,7 @@ def multi_try[T, S](
 
 
 def _resolve_uncastable(
-    value: Mapping | Sequence | PrimitiveValue,
-    msg: str,
-    default: SortableValue,
+    value: Mapping | Sequence | PrimitiveValue, msg: str, default: SortableValue
 ) -> SortableValue | None:
     if isinstance(value, (str, int, struct_time)):
         msg += ". Returning value without casting."

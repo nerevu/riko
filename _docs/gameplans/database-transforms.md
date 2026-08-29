@@ -188,11 +188,7 @@ mode and the current item in record mode.
 
 ```python
 class DbtRunner(Protocol):
-    async def run(
-        self,
-        request: DbtRunRequest,
-        context: Context,
-    ) -> DbtRunResult: ...
+    async def run(self, request: DbtRunRequest, context: Context) -> DbtRunResult: ...
 ```
 
 `Context` is the public immutable environment/configuration input. Any live dbt/database

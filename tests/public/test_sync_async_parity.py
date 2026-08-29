@@ -53,20 +53,12 @@ class TestOutputParity:
         )
         sync_result, async_result = _both(build)
         assert sync_result == async_result
-        assert sync_result == [
-            {"content": "a"},
-            {"content": "bb"},
-            {"content": "CCC"},
-        ]
+        assert sync_result == [{"content": "a"}, {"content": "bb"}, {"content": "CCC"}]
 
     def test_aggregator_reverse(self):
         sync_result, async_result = _both(lambda pipe: _tokenize(pipe).reverse())
         assert sync_result == async_result
-        assert sync_result == [
-            {"content": "ccc"},
-            {"content": "bb"},
-            {"content": "a"},
-        ]
+        assert sync_result == [{"content": "ccc"}, {"content": "bb"}, {"content": "a"}]
 
     def test_aggregator_tail(self):
         conf = {"count": 1}

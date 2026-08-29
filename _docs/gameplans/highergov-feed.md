@@ -51,11 +51,7 @@ HigherGov code should be written against the final mode-neutral Pipeline definit
 flow = (
     Pipeline(source=dataframe.to_dict("records"))
     .map(processor)
-    .with_execution(
-        executor="thread",
-        concurrency=workers,
-        ordered=False,
-    )
+    .with_execution(executor="thread", concurrency=workers, ordered=False)
 )
 
 result = pd.DataFrame(list(flow))
@@ -165,11 +161,7 @@ model described by `callable-pipes.md`.
 Conceptually:
 
 ```python
-@processor(
-    emit=True,
-    boundedness="preserve",
-    ordering="preserve",
-)
+@processor(emit=True, boundedness="preserve", ordering="preserve")
 def pipe(item, fn, objconf, **kwargs):
     return fn(item, **kwargs)
 ```
@@ -399,11 +391,7 @@ Blocking functions can run through the common async adaptation path:
 flow = (
     Pipeline(source=finder_opportunity_feed(dataframe))
     .map(fetch_finder_content)
-    .with_execution(
-        executor="thread",
-        concurrency=3,
-        ordered=False,
-    )
+    .with_execution(executor="thread", concurrency=3, ordered=False)
 )
 ```
 
@@ -422,11 +410,7 @@ def call_highergov_api(item: dict, **kwargs) -> dict:
 flow = (
     Pipeline(source=dataframe_feed(cleaned_higher_df))
     .map(call_highergov_api)
-    .with_execution(
-        executor="thread",
-        concurrency=4,
-        ordered=False,
-    )
+    .with_execution(executor="thread", concurrency=4, ordered=False)
 )
 ```
 

@@ -45,11 +45,7 @@ def run_command(script: str, argument: str, *opts: str) -> str:
         cmd.append(argument)
 
     result = subprocess.run(
-        cmd,
-        cwd=_BASEDIR,
-        capture_output=True,
-        text=True,
-        check=False,
+        cmd, cwd=_BASEDIR, capture_output=True, text=True, check=False
     )
 
     if result.stderr:

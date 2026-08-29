@@ -30,12 +30,7 @@ Attributes:
 
 from riko.types._locations import CurrencyCode
 
-CURRENCY_SYMBOLS = {
-    "$": "USD",
-    "£": "GBP",
-    "€": "EUR",
-    "₹": "INR",
-}
+CURRENCY_SYMBOLS = {"$": "USD", "£": "GBP", "€": "EUR", "₹": "INR"}
 
 CURRENCY_CODES: dict[str, CurrencyCode] = {
     "AED": {
@@ -1094,9 +1089,5 @@ CURRENCY_CODES: dict[str, CurrencyCode] = {
         "symbol": "ZK",
         "symbol_native": "ZK",
     },
-    "ZWL": {
-        "code": "ZWL",
-        "location": "Zimbabwe",
-        "locale": "en_ZW",
-    },
+    "ZWL": {"code": "ZWL", "location": "Zimbabwe", "locale": "en_ZW"},
 }

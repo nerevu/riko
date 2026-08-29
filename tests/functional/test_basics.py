@@ -671,13 +671,7 @@ class TestBasics:
 
         expected = [
             ("", "dateinput1", "dateinput1", "datetime", "10/14/2010"),
-            (
-                "",
-                "locationinput1",
-                "locationinput1",
-                "location",
-                "isle of wight, uk",
-            ),
+            ("", "locationinput1", "locationinput1", "location", "isle of wight, uk"),
             ("", "numberinput1", "numberinput1", "float", "12121"),
             ("", "privateinput1", "privateinput1", "text", ""),
             (

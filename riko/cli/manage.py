@@ -467,10 +467,7 @@ def prettify(where=(), sort=True, gen_config=False, unsafe_fixes=False):
     "-q", "--quiet", help="Suppress per-test output (overridden by -v)", is_flag=True
 )
 @click.option(
-    "-p",
-    "--parallel",
-    help="Run tests in parallel in multiple processes",
-    is_flag=True,
+    "-p", "--parallel", help="Run tests in parallel in multiple processes", is_flag=True
 )
 def test(paths=(), where=(), stop=None, **kwargs):  # noqa: PT028
     """Run pytest, tox, and script tests"""

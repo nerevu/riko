@@ -114,6 +114,9 @@ extend-exclude = [
     "dist/*",
 ]
 
+[tool.ruff.format]
+skip-magic-trailing-comma = true
+
 [tool.ruff.lint]
 # E704 is default-ignored by ruff (formatter conflict) but suppressed for an
 # external flake8 run on overload one-liners; declare it so RUF102 doesn't flag
@@ -185,6 +188,7 @@ max-complexity = 11
 
 [tool.ruff.lint.isort]
 known-first-party = ["riko"]
+split-on-trailing-comma = false
 
 [tool.ruff.lint.extend-per-file-ignores]
 "tests/**/*" = [
