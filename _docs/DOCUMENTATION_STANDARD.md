@@ -529,8 +529,10 @@ source.
 error, not a runtime condition, and it is the one case where degrading is worse
 than stopping: `aggregate`/`udf` without `func` would emit *untransformed items
 that look correct*, so the mistake surfaces far from its cause as silent wrong
-data. Use `require_kwarg` (`riko/modules/_prepare.py`), which names both the
-pipe and the argument, and document it under `Raises:`.
+data. Use `require_arg` (`riko/modules/_prepare.py`), which names both the
+pipe and the argument, and document it under `Raises:`. The argument is an
+explicit keyword-only parser parameter typed `T | None = None` — optional to
+Python so Riko can raise its own error, required to Riko.
 
 ```text
 Bad:   KeyError: 'func'

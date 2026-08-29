@@ -12,9 +12,13 @@ from riko._pubsub import async_hub
 from riko.bado._backend import create_task_group
 from riko.cast import SortableCastType
 from riko.exceptions import ReceiverUnavailableError
+from riko.modules.aggregate import pipe as aggregate_pipe
 from riko.modules.join import pipe as join_pipe
+from riko.modules.receive import pipe as receive_pipe
 from riko.modules.send import async_pipe as async_send
+from riko.modules.send import pipe as send_pipe
 from riko.modules.sort import pipe as sort_pipe
+from riko.modules.udf import pipe as udf_pipe
 from riko.types._streams import Feed, Item, ItemOrValue, Stream
 from riko.types.modules import JoinConf, SendConf, SortConf, SortConfRule
 from tests import skipif_issync
@@ -92,6 +96,53 @@ def test_natural_join_does_not_materialize_its_primary():
 
     assert next(joined) == {"x": "foo", "i": 0, "c": 5}
     assert len(consumed) <= _LOOKAHEAD
+
+
+@pytest.mark.parametrize(
+    ("pipe", "operand"),
+    [
+        (udf_pipe, "func"),
+        (aggregate_pipe, "func"),
+        (join_pipe, "other"),
+        (send_pipe, "others"),
+    ],
+)
+def test_omitting_an_operand_raises(pipe: Any, operand: str):
+    """
+    An omitted operand is a call-site error, so ``require_arg`` names it.
+    """
+    with pytest.raises(TypeError, match=f"requires the {operand!r} keyword"):
+        list(pipe([{"x": 0}]))
+
+
+@pytest.mark.parametrize(
+    ("pipe", "operand", "value"),
+    [
+        (udf_pipe, "func", 0),
+        (aggregate_pipe, "func", 0),
+        (join_pipe, "other", []),
+        (send_pipe, "others", []),
+    ],
+)
+def test_passing_an_empty_operand_raises(pipe: Any, operand: str, value: object):
+    """
+    An empty operand is a call-site error, so ``require_arg`` names it.
+    """
+    kwargs = {operand: value}
+
+    with pytest.raises(TypeError, match=f"requires the {operand!r} keyword"):
+        list(pipe([{"x": 0}], **kwargs))
+
+
+def test_send_populates_ids_when_given():
+    """
+    The explicit ``ids`` parameter records each target's delivery id.
+    """
+    receiver = receive_pipe(conf={"name": "id-target", "wait": 0.01, "max_wait": 2})
+    next(receiver)
+    ids: dict[str, int] = {}
+    list(send_pipe([{"x": 0}], others=["id-target"], ids=ids))
+    assert isinstance(ids.get("id-target"), int)
 
 
 def _finite_source(consumed: list[int]) -> Stream:

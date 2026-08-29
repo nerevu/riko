@@ -8,7 +8,7 @@ conf merging/extraction, and the parser/caster construction that turns opts and
 conf into the callables a wrapper applies to each item.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
 from typing import cast, overload
@@ -52,21 +52,21 @@ from riko.types.modules import AnyModuleConf, Conf
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def require_kwarg[T](  # noqa: E704
-    kwargs: Mapping[str, object], name: str, pipe: str, strict: bool = False
-) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
+def require_arg[T](value: T | None, name: str, pipe: str, strict: bool = False) -> T:
     """
-    Returns a required pipe argument, or reports which one is unusable.
+    Narrows a required pipe argument, or reports which one is unusable.
 
-    A missing operand is a call-site programming error, so this raises rather
-    than degrading. ``None`` counts as missing: the collection API always
-    populates keys such as ``others``/``func`` in ``kwargs``, so checking only
-    for an absent key would never fire through ``SyncPipe``.
+    A known pipe argument lives in the parser signature typed ``T | None`` and
+    defaulting to ``None``: optional to Python so Riko can raise its own
+    meaningful missing-argument error, required to Riko. This validates that
+    runtime invariant — ``None`` means the argument was not supplied — and
+    narrows ``T | None`` to ``T``. A missing operand is a call-site programming
+    error, so this raises rather than degrading.
 
     Args:
-        kwargs: The keyword arguments the pipe was called with.
+        value: The supplied argument value, or ``None`` when omitted.
 
-        name: The argument that must be present.
+        name: The argument being validated, used in the error message.
 
         pipe: The pipe name, used in the error message.
 
@@ -76,36 +76,33 @@ def require_kwarg[T](  # noqa: E704
             which ``0``, ``False`` or ``""`` is a real value (default: False).
 
     Returns:
-        The value bound to ``name``.
+        The value, narrowed to ``T``.
 
     Raises:
-        TypeError: If ``name`` is absent or ``None``, or is falsy under
-            ``strict``.
+        TypeError: If ``value`` is ``None``, or is falsy under ``strict``.
 
     Examples:
-        >>> require_kwarg({"func": len}, "func", "udf")
+        >>> require_arg(len, "func", "udf")
         <built-in function len>
-        >>> require_kwarg({}, "func", "udf")
+        >>> require_arg(None, "func", "udf")
         Traceback (most recent call last):
             ...
         TypeError: the 'udf' pipe requires the 'func' keyword argument
 
         A falsy value passes unless ``strict`` is set:
 
-        >>> require_kwarg({"others": []}, "others", "send")
+        >>> require_arg([], "others", "send")
         []
-        >>> require_kwarg({"others": []}, "others", "send", strict=True)
+        >>> require_arg([], "others", "send", strict=True)
         Traceback (most recent call last):
             ...
         TypeError: the 'send' pipe requires the 'others' keyword argument
 
     """
-    value = kwargs.get(name)
-
     if (value is None) or (strict and not value):
         raise TypeError(f"the {pipe!r} pipe requires the {name!r} keyword argument")
 
-    return cast(T, value)
+    return value
 
 
 def require_conf[T](  # noqa: E704
