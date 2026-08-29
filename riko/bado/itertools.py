@@ -31,8 +31,8 @@ from functools import partial
 from inspect import isawaitable
 from typing import cast, overload
 
-from riko import DEF_CONNECTION_COUNT
-from riko.bado import (
+from riko._constants import DEF_CONNECTION_COUNT
+from riko.bado._backend import (
     CapacityLimiter,
     MemoryObjectSendStream,
     Semaphore,

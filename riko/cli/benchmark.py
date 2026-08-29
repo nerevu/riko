@@ -6,9 +6,8 @@ from multiprocessing.dummy import Pool as ThreadPool
 from time import sleep, time
 from timeit import repeat
 
-from riko import get_path
-from riko.bado import async_sleep, isasync
-from riko.bado import run as async_run
+from riko.bado._backend import async_sleep, isasync
+from riko.bado._backend import run as async_run
 from riko.bado.itertools import async_map
 from riko.collections import (
     AsyncCollection,
@@ -20,6 +19,7 @@ from riko.collections import (
 )
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
+from riko.paths import get_path
 from riko.types._rss import RSSEntry
 from riko.types._streams import Items
 from riko.types._wrappers import (

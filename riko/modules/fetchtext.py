@@ -28,9 +28,9 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko import ENCODING
+from riko._constants import ENCODING
 from riko._io import Fetch, auto_close
-from riko.bado import io
+from riko.bado.io import async_url_open
 from riko.cast import BasicCastType
 from riko.modules._prepare import require_conf
 from riko.types._configs import FetchTextObjconf
@@ -76,7 +76,7 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchtext")
-    f = await io.async_url_open(url, encoding=objconf.encoding)
+    f = await async_url_open(url, encoding=objconf.encoding)
     return auto_close(map(str.strip, f), f)
 
 

@@ -8,22 +8,22 @@ Migrating riko
 API Stability
 -------------
 
-riko follows semantic versioning for its public surface. What an import path is
-tells you what stability guarantee it carries.
+riko follows semantic versioning for its stable application and extension
+surfaces. ``riko.bado`` is additionally documented as the supported async-runtime
+namespace.
 
 Tiers
 ^^^^^
 
-Stable: ``riko`` / ``riko.api``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Stable: ``riko``
+~~~~~~~~~~~~~~~~
 
 Application-facing API: ``AsyncCollection``, ``AsyncPipe``, ``async_return``, ``async_sleep``,
 ``Context``, ``SyncCollection``, ``SyncPipe``, ``backend``, ``build_pipeline``, ``compile_pipe``,
 ``convert_dag``, ``ExecutionMode``, ``export``, ``extract_dependencies``, ``get_module_metadata``,
 ``get_path``, ``isasync``, ``issync``, ``list_modules``, ``list_targets``, ``parse_pipe_def``,
 ``PipeState``, ``run``, and the public exceptions.
-Breaking changes require a major version bump. ``riko.__all__`` equals
-``riko.api.__all__``.
+Breaking changes to this surface require the corresponding SemVer treatment.
 
 Extension: ``riko.ext``
 ~~~~~~~~~~~~~~~~~~~~~~~

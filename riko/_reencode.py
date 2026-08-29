@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 
 from meza.io import Reencoder as _Reencoder
 
-from riko import ENCODING
+from riko._constants import ENCODING
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

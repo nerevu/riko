@@ -34,7 +34,7 @@ import pygogo as gogo
 
 from riko import autorss
 from riko._rssutils import augment_entries
-from riko.bado import io
+from riko.bado.io import async_url_read
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import parse_rss
@@ -87,7 +87,7 @@ async def async_parser(
         logger.warning(f"No feed found at {url}")
         entries = []
     else:
-        content = await io.async_url_read(str(first["link"]))
+        content = await async_url_read(str(first["link"]))
         entries = parse_rss(content=content)
 
     return augment_entries(entries)

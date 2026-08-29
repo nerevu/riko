@@ -173,7 +173,7 @@ documentation standard (``_docs/DOCUMENTATION_STANDARD.md``): annotations own
 types, documentation audience follows the STABLE/EXTENSION/PRIVATE tiers, and
 doctests show real returned values.
 
-- Import application APIs from ``riko`` or ``riko.api``.
+- Import application APIs from ``riko``.
 - Import supported module-authoring decorators and protocols from ``riko.ext``.
 - Treat underscore-prefixed modules and implementation details as private.
 - Preserve sync and async output parity when a module exposes both paths.

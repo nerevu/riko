@@ -7,7 +7,7 @@ Tests the AnyIO streaming primitives in riko.bado.itertools: ``async_map_stream`
 
 import pytest
 
-from riko.bado import Semaphore, async_sleep, lowlevel, run
+from riko.bado._backend import Semaphore, async_sleep, lowlevel, run
 from riko.bado.itertools import (
     async_map,
     async_map_ordered_stream,

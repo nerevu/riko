@@ -1,9 +1,9 @@
 from typing import cast
 
-from riko import get_path
 from riko._io import Fetch
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.parsers import any2dict
+from riko.paths import get_path
 from riko.types.modules import XpathFetchPageConf
 
 

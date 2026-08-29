@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from riko._pubsub import async_hub
-from riko.bado import create_task_group
+from riko.bado._backend import create_task_group
 from riko.cast import SortableCastType
 from riko.exceptions import ReceiverUnavailableError
 from riko.modules.join import pipe as join_pipe

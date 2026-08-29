@@ -27,10 +27,10 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko import ENCODING
+from riko._constants import ENCODING
 from riko._io import Fetch, auto_close
 from riko._iterutils import listize
-from riko.bado import io
+from riko.bado.io import async_url_open
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import any2dict
@@ -85,7 +85,7 @@ async def async_parser(
     path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
     # TODO: Figure out if html/xml files should be parsed as binary too.
     binary = ext == "json"
-    f = await io.async_url_open(url, encoding=objconf.encoding, binary=binary)
+    f = await async_url_open(url, encoding=objconf.encoding, binary=binary)
     ext = ext or getattr(f, "ext", None) or ""
     content = any2dict(f, ext, objconf.html5, path=path)
     return auto_close(content, f)

@@ -11,7 +11,7 @@ from typing import cast
 
 import pytest
 
-from riko.bado import run
+from riko.bado._backend import run
 from riko.modules.write import async_pipe, pipe
 from riko.types.modules import WriteConf
 from tests import skipif_issync

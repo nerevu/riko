@@ -42,8 +42,8 @@ Fetching feeds
 
 from typing import cast
 
-from riko import get_path
 from riko.collections import AsyncPipe, SyncPipe
+from riko.paths import get_path
 from riko.types.modules import FetchPageConf, StrReplaceConf, StrReplaceConfRule
 
 replace_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="\n", replace=" ")})

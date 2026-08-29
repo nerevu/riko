@@ -4,8 +4,7 @@ from functools import partial
 from pprint import pprint
 from typing import cast
 
-from riko import get_path
-from riko.collections import AsyncPipe, SyncPipe
+from riko import AsyncPipe, SyncPipe, get_path
 from riko.types._streams import Items
 from riko.types.modules import (
     CurrencyFormatConf,

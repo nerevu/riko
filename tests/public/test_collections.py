@@ -11,10 +11,10 @@ from typing import Any, cast
 
 import pytest
 
-from riko import get_path
 from riko._iterutils import noop
 from riko._pubsub import async_hub, sync_hub
-from riko.bado import gather_results, run
+from riko.bado._backend import run
+from riko.bado._util import gather_results
 from riko.collections import (
     CONVERSION_FUNCS,
     AsyncPipe,
@@ -27,6 +27,7 @@ from riko.collections import (
 )
 from riko.exceptions import ReceiverUnavailableError
 from riko.ext.names import ModuleName, normalize_module_name
+from riko.paths import get_path
 from riko.types._guards import is_stateful_item
 from riko.types._sentinels import StreamState
 from riko.types._streams import Item, Items

@@ -214,13 +214,12 @@ the call site.
 
 Determine a symbol's documentation tier in this order:
 
-1. Exported from `riko` / `riko.api` → **STABLE**
+1. Exported from `riko` → **STABLE**
 2. Exported from `riko.ext` → **EXTENSION**
 3. Otherwise → **PRIVATE** unless a documented sub-API says otherwise
 
 An underscore is a strong private signal, but `__all__` and the API-surface
-contract are authoritative — a symbol implemented in an ordinary module is STABLE
-if `riko.api.__all__` re-exports it.
+contract are authoritative.
 
 - **STABLE** — explain user-visible behavior and normal workflows; prefer
   executable examples; hide implementation machinery.
@@ -332,7 +331,7 @@ and a stale mechanism summary misleads faster than no summary at all.
 ### Private modules
 
 An underscore-prefixed module gets a module-level example **only when it has a
-public API** — a name it defines that is re-exported from `riko`, `riko.api`,
+public API** — a name it defines that is re-exported from `riko`, `riko.bado`,
 `riko.ext`, or `riko.modules`. When it does, the example imports through that
 public path, never the private one:
 

@@ -12,7 +12,8 @@ from typing import Protocol, overload
 
 import pytest
 
-from riko import AsyncPipe, SyncPipe, issync, run
+from riko.bado._backend import issync, run
+from riko.collections import AsyncPipe, SyncPipe
 
 TESTS_DIR = Path(__file__).parent.absolute()
 

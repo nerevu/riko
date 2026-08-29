@@ -5,8 +5,7 @@ Provides functions for creating (a)synchronous riko flows and streams.
 Examples:
     sync usage::
 
-        >>> from riko.collections import SyncPipe
-        >>> from riko import get_path
+        >>> from riko import get_path, SyncPipe
         >>>
         >>> fconf = {"url": get_path("gigs.json"), "path": "value.items"}
         >>> str_conf = {"delimiter": "<br>"}
@@ -43,9 +42,7 @@ Examples:
 
     async usage::
 
-        >>> from riko import get_path
-        >>> from riko import run, issync
-        >>> from riko.collections import AsyncPipe, AsyncCollection
+        >>> from riko import AsyncPipe, AsyncCollection, get_path, run, issync
         >>>
         >>> fconf = {"url": get_path("gigs.json"), "path": "value.items"}
         >>> str_conf = {"delimiter": "<br>"}
@@ -127,10 +124,10 @@ else:
 from meza import convert as cv
 from meza import io
 
-from riko import DEF_CONNECTION_COUNT
+from riko._constants import DEF_CONNECTION_COUNT
 from riko._iterutils import listize
 from riko._pubsub import sync_hub
-from riko.bado import async_return
+from riko.bado._util import async_return
 from riko.bado.itertools import (
     async_iter,
     async_map,

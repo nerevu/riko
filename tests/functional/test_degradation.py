@@ -14,7 +14,7 @@ contract.
 
 import importlib.util
 
-from riko import list_targets
+from riko.collections import list_targets
 from riko.parsers import IJSON_IS_NATIVE, IS_FASTFEEDPARSER, IS_LXML
 
 

@@ -8,10 +8,10 @@ from typing import Any
 
 import pytest
 
-from riko import get_module_metadata
 from riko.cast import CastType
 from riko.context import Context
 from riko.modules import describe_module, list_modules, operator
+from riko.modules._metadata import get_module_metadata
 from riko.modules.input import pipe as input_pipe
 from riko.types.modules import InputConf
 

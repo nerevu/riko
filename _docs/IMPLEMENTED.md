@@ -218,7 +218,7 @@ discoverable too. Unqualified names are reserved for built-ins; dotted namespace
 
 **Typed discovery (P9A, shipped).** `list_modules(*, type, subtype, category)` and
 `describe_module(name) -> ModuleDefinition | None` (`riko/modules/_metadata.py`, on the stable
-`riko`/`riko.api` surface) give filtered runtime truth. **The three filter axes are all lowercase
+`riko` surface) give filtered runtime truth. **The three filter axes are all lowercase
 `Literal` strings, not enums** — `ModuleType = Literal["operator","processor","splitter"]`,
 `ModuleSubtype`, and `ModuleCategory = Literal["source","transform","sink"]` (the `derive_category`
 return value) — so `list_modules(category="sink")` → `["write"]`. These are a **separate axis** from
@@ -239,7 +239,7 @@ in-pipeline counterpart of the one-shot `Targets`/`export` surface (see §25). `
 `riko/modules/_names.py`: the flat `Modules` namespace (every pipe, aliasing bucket members so
 `Modules.FILTER is Transforms.FILTER`) + `Sources`/`Transforms`/`Sinks` bucket enums (member
 `.value` = canonical id; collisions raise). Regenerate with `gen-names`/`manage codegen` (drift guard
-`test_generated_names_match`). Re-exported from `riko`/`riko.api`, **not** `riko.modules`.
+`test_generated_names_match`). Re-exported from `riko`, **not** `riko.modules`.
 
 ## Module registry & pipe resolution (P8, shipped)
 
@@ -323,7 +323,7 @@ drain. A `strict` xfail in `tests/public/test_collections.py` marks the shipped 
 
 Meza-backed export converters ship: `csv` / `json` / `geojson` / `ofx` / `qif` / `list` /
 `tuple` (`riko/collections.py`; `list_targets()` lists registered export converters). The typed
-`Targets` `StrEnum` (stable `riko`/`riko.api` surface) is the export-format layer over that
+`Targets` `StrEnum` (stable `riko` surface) is the export-format layer over that
 registry — `export(items, Targets.JSON)` or the plain string; `CONVERSION_FUNCS` is keyed by
 `Targets` members, drift-guarded by `TestExportTargets`. This is riko's terminal-output surface,
 distinct from the discovery tree's `Sinks` bucket (sink *pipes*, empty for built-ins — see §24).

@@ -27,9 +27,9 @@ from typing import Any, cast
 import pygogo as gogo
 from meza.io import read_csv
 
-from riko import ENCODING
+from riko._constants import ENCODING
 from riko._io import Fetch, auto_close, seekable
-from riko.bado import io
+from riko.bado.io import async_url_open
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.types._configs import CsvObjconf
@@ -88,7 +88,7 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "csv")
-    r = await io.async_url_open(url, encoding=objconf.encoding)
+    r = await async_url_open(url, encoding=objconf.encoding)
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
     source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)

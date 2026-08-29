@@ -27,9 +27,9 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko import ENCODING
+from riko._constants import ENCODING
 from riko._rssutils import augment_entries
-from riko.bado import io
+from riko.bado.io import async_url_read
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import parse_rss
@@ -79,7 +79,7 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetch")
-    content: str = await io.async_url_read(url, encoding=objconf.encoding)
+    content: str = await async_url_read(url, encoding=objconf.encoding)
     return augment_entries(parse_rss(content=content))
 
 

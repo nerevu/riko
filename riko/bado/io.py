@@ -21,15 +21,18 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 import pygogo as gogo
 from meza.fntools import chunk as _chunk
 
-from riko import ENCODING, bado
+from riko._constants import ENCODING
 from riko._io import ext_from_content_type
-from riko.bado import async_get, async_read, open_file
 from riko.paths import get_abspath
+
+from . import _backend
+from ._backend import open_file
+from ._util import async_get, async_read
 
 if TYPE_CHECKING:
     from _typeshed import OpenBinaryMode, OpenTextMode
 
-    from riko.bado import NamedTemporaryFile
+    from ._backend import NamedTemporaryFile
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -189,4 +192,4 @@ async def async_write(
 
 
 def get_async_temp_file() -> "NamedTemporaryFile[bytes]":
-    return bado.NamedTemporaryFile(delete=True, delete_on_close=False)
+    return _backend.NamedTemporaryFile(delete=True, delete_on_close=False)

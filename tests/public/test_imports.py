@@ -8,14 +8,18 @@ path alone. These are black-box tests: they import, they never reach inside.
 
 import types
 from importlib import import_module
+from operator import attrgetter
 
 import pytest
 
 import riko
-import riko.api
+import riko.bado
 import riko.context
 import riko.ext
 import riko.modules
+
+MODULES = (riko, riko.bado, riko.ext, riko.modules)
+
 
 PRIVATE_RESOLUTION = {
     "CompositeStore",
@@ -94,10 +98,6 @@ EXTENSION = {
 }
 
 
-def test_stable_all_matches_api():
-    assert set(riko.__all__) == set(riko.api.__all__)
-
-
 @pytest.mark.smoke
 def test_stable_all_is_expected_set():
     assert set(riko.__all__) == STABLE
@@ -123,24 +123,13 @@ def test_context_shim_is_same_object():
 
 
 def test_no_private_names_in_public_all():
-    leaked = [n for n in (*riko.__all__, *riko.ext.__all__) if n.startswith("_")]
-    assert leaked == []
+    assert not any(n.startswith("_") for module in MODULES for n in module.__all__)
 
 
 def test_no_accidental_internal_exports():
-    """
-    ``API_SURFACE.md`` §3 PRIVATE names stay out of every public ``__all__``.
-
-    ``riko.ext`` is a public namespace, so resolution internals are private by
-    *declaration* rather than by path. Nothing stops them being re-exported by accident.
-    """
-    public = {
-        *riko.__all__,
-        *riko.api.__all__,
-        *riko.ext.__all__,
-        *riko.modules.__all__,
-    }
-    assert PRIVATE_RESOLUTION & public == set()
+    """Private resolution internals stay out of public namespace exports."""
+    public = (n for module in MODULES for n in module.__all__)
+    assert PRIVATE_RESOLUTION.isdisjoint(public)
 
 
 @pytest.mark.parametrize("path", ["riko.ext.resolver", "riko.ext.pipelines"])
@@ -167,13 +156,11 @@ def test_no_leaked_public_functions():
     assert leaked == []
 
 
-def test_stable_and_extension_are_disjoint():
+def test_stable_and_extension_do_not_intersect():
     assert STABLE.isdisjoint(EXTENSION)
 
 
-@pytest.mark.parametrize(
-    "module", [riko, riko.api, riko.ext, riko.modules], ids=lambda m: m.__name__
-)
+@pytest.mark.parametrize("module", MODULES, ids=attrgetter("__name__"))
 def test_all_has_no_duplicates(module):
     names = module.__all__
     assert len(names) == len(set(names))

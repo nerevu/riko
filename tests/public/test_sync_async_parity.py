@@ -10,7 +10,7 @@ Lifecycle/close/split/export parity lives in ``test_pipe_lifecycle.py`` and
 ``test_context_modes.py``. This file locks *data-output* equivalence.
 """
 
-from riko.bado import run
+from riko.bado._backend import run
 from riko.collections import AsyncPipe, SyncPipe
 from riko.types._streams import Item
 from riko.types.modules import ItemBuilderConf, StrReplaceConf, StrReplaceConfRule

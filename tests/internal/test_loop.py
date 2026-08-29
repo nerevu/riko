@@ -14,7 +14,7 @@ global-vs-per-parent ``count`` gap.
 from typing import cast
 
 import riko.modules.loop as loop_module
-from riko.bado import run
+from riko.bado._backend import run
 from riko.context import Context
 from riko.modules._subpipe import mark_subpipe
 from riko.modules.loop import async_pipe as async_loop

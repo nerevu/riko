@@ -34,7 +34,8 @@ import pygogo as gogo
 import requests
 from mezmorize.utils import get_cache_type
 
-from riko import ENCODING, __version__
+from riko._constants import ENCODING, STREAMING_THRESHOLD
+from riko._metadata import __version__
 from riko._reencode import reencode
 from riko._rssutils import truncate_content
 from riko._serialize import repr_cache
@@ -43,8 +44,6 @@ from riko.types._collections import BasicArg
 from riko.types._io import BinaryFileTypes, FileTypes, Opener, StringFileTypes
 
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
-
-STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 
 
 def ext_from_content_type(content_type: str | None) -> str | None:

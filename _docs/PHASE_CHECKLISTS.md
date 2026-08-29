@@ -81,15 +81,15 @@ resolved decisions are at the bottom.
 
 ## P1 — API boundaries
 
-**Delivered.** A three-tier import surface knowable from the path alone — STABLE (`riko`/`riko.api`),
+**Delivered.** A three-tier import surface knowable from the path alone — STABLE (`riko`),
 EXT (`riko.ext`), PRIVATE (`_*`). New `riko/api.py` (stable hub), `riko/context.py` (Context home),
-`riko/py.typed`, `riko/ext/` (`decorators`/`protocols`/`__init__`). `riko.__all__ == riko.api.__all__`.
+`riko/py.typed`, `riko/ext/` (`decorators`/`protocols`/`__init__`).
 `Context` moved to `context.py` behind a top-level re-export shim; demoted utils
 (`Objectify`/`objectify`/`listize`/`get_path`/`get_abspath`/`replacer`) stay importable but absent
 from `__all__`.
 
 **Decisions.** `riko/__init__.py` binds `Context` (+ `objectify`/`listize`) *before* the bottom
-`from riko.api import *` — the only cycle-sensitive ordering. DoD: stability tier inferable from
+`from riko import *` — the only cycle-sensitive ordering. DoD: stability tier inferable from
 import path (gated by `tests/public/test_imports.py`). No carryover.
 
 ## P2 — Objconf → DynamicConf (`ParsedConf` collapsed away)
@@ -335,7 +335,7 @@ canonical everywhere (JSON, entry points, resolver); every enum member's `.value
   so the wrapper needs no category segment), sorted by id, fixed header, no timestamps →
   byte-stable/VCS-checkable. `catalog_entries()` reads built-ins only.
 - **Committed surface (`riko/modules/_names.py`).** `Modules`/`Sources`/`Transforms`/`Sinks`
-  re-exported from the **stable `riko`/`riko.api`** surface — *not* `riko.modules`, whose `Module`
+  re-exported from the **stable `riko`** surface — *not* `riko.modules`, whose `Module`
   already names the decorator base (unflagged collision; see Guiding decisions). Canonical import is
   `riko.modules._names`. `ModuleName` base stays an `riko.ext` symbol.
 - **Introspection (`riko/modules/_metadata.py`).** `list_modules(*, type, subtype, category)`
@@ -435,7 +435,7 @@ Folded in from the retired `REFINEMENT_PLAN.md`. Cross-phase decisions that surv
    (P8 — see MILESTONES M2).
 8. **Enums are discovery, strings are canonical** — the generated `Modules` tree is a typed layer
    over string ids; `.value` is always the id; serialization emits the string (P9A). The discovery
-   `Modules` wrapper is re-exported from the **stable `riko`/`riko.api`** surface, **not**
+   `Modules` wrapper is re-exported from the **stable `riko`** surface, **not**
    `riko.modules` — `riko.modules.Module` already names the decorator base (`_decorators.Module`), a
    collision the gameplan hadn't flagged (resolved by naming the wrapper `Modules`, plural); keeping
    both required the tree to live on the stable surface.

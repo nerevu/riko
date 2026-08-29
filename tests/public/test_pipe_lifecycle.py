@@ -13,8 +13,7 @@ mirror each other test-for-test.
 
 import pytest
 
-from riko import get_path
-from riko.bado import run
+from riko.bado._backend import run
 from riko.bado.itertools import async_iter
 from riko.collections import (
     AsyncCollection,
@@ -24,6 +23,7 @@ from riko.collections import (
     SyncPipe,
 )
 from riko.exceptions import PipelineStateError
+from riko.paths import get_path
 from riko.types._streams import Items
 from riko.types.modules import ItemBuilderConf
 from tests import skipif_issync

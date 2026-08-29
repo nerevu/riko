@@ -1015,7 +1015,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             >>> # call an async function
             >>> async def async_pipe2(stream, objconf, tuples, **kwargs):
             ...     words = (len(item['content'].split()) for item in stream)
-            ...     word_cnt = await bado.maybe_deferred(sum, words)
+            ...     word_cnt = await bado._util.maybe_deferred(sum, words)
             ...     return word_cnt
             ...
             >>> wrapped_async_pipe1 = async_wrapper(async_pipe1)

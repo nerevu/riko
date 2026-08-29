@@ -76,7 +76,7 @@ legacy low-level modules may retain compatibility names while they exist.
 > `with_execution(...)`.
 
 - **`Pipeline` is the sole public pipeline concept.** A reusable, immutable definition lives in
-  `riko/pipeline.py`, exported from `riko` and `riko.api`. `Pipeline("fetch", source=...)` or
+  `riko/pipeline.py`, exported from `riko`. `Pipeline("fetch", source=...)` or
   `Pipeline(source=...)` creates a definition; fluent composition returns new definitions and never
   mutates the original.
 - **Definition vs execution — the full split.** `iter(flow)` builds a fresh private

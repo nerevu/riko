@@ -30,10 +30,10 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko import ENCODING
+from riko._constants import ENCODING
 from riko._io import Fetch
 from riko._iterutils import betwix
-from riko.bado import io
+from riko.bado.io import async_url_read
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import get_text
@@ -94,7 +94,7 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchpage")
-    content = await io.async_url_read(url)
+    content = await async_url_read(url)
     parsed = get_string(content, objconf.start or "", objconf.end or "")
     detagged = get_text(parsed) if objconf.detag else parsed
     split = detagged.split(objconf.token) if objconf.token else [detagged]

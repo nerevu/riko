@@ -71,8 +71,8 @@ Which imports are public?
 
 ``riko`` organizes its public interface into three import tiers:
 
-- **Stable**: the top-level ``riko`` package (mirrored by ``riko.api``) holds the
-  SemVer-guaranteed API: the ``SyncPipe``/``AsyncPipe``/``SyncCollection``/
+- **Stable**: the top-level ``riko`` package holds the SemVer-guaranteed API: the
+  ``SyncPipe``/``AsyncPipe``/``SyncCollection``/
   ``AsyncCollection`` classes, ``Context``, ``ExecutionMode``, ``PipeState``,
   ``backend``, ``build_pipeline``, ``compile_pipe``, ``convert_dag``, ``export``,
   ``extract_dependencies``, ``get_module_metadata``, ``get_path``, ``isasync``,
@@ -81,11 +81,11 @@ Which imports are public?
   ``Transforms``/``Sinks``/``Targets`` bucket enums), and the pipeline exceptions.
 - **Extension**: ``riko.ext`` holds the symbols for authoring custom ``pipes``:
   the ``processor``/``operator``/``splitter`` decorators and the module-metadata types.
-- **Private**: all import paths outside ``riko``, ``riko.api``, and ``riko.ext``,
+- **Private**: all import paths outside ``riko``, ``riko.bado``, and ``riko.ext``,
   including individual ``riko.modules.*`` implementations and other implementation
   modules.
 
-Application code should import from ``riko`` or ``riko.api``.
+Application code should import from ``riko``.
 
 .. code-block:: python
 

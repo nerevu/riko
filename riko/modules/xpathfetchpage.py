@@ -35,9 +35,9 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko import ENCODING
+from riko._constants import ENCODING
 from riko._io import Fetch, auto_close
-from riko.bado import io
+from riko.bado.io import async_url_open
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import any2dict
@@ -112,7 +112,7 @@ async def async_parser(
         ext = "html"
 
     # TODO: centralize error handling and retry logic
-    f = await io.async_url_open(url, encoding=objconf.encoding)
+    f = await async_url_open(url, encoding=objconf.encoding)
     content = any2dict(f, ext, objconf.html5, path=objconf.xpath)
     return auto_close(content, f)
 

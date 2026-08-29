@@ -19,7 +19,7 @@ import pytest
 from riko._io import Fetch
 from riko._iterutils import listize
 from riko._rssutils import augment_entries, truncate_content
-from riko.bado import run
+from riko.bado._backend import run
 from riko.compile import (
     abuild_pipeline,
     build_pipeline,

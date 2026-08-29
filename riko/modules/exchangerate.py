@@ -34,9 +34,10 @@ from typing import Any, TypedDict, cast
 
 import pygogo as gogo
 
-from riko import ENCODING
+from riko._constants import ENCODING
 from riko._io import Fetch
-from riko.bado import async_get, async_json, io
+from riko.bado._util import async_json
+from riko.bado.io import async_get, async_url_read
 from riko.cast import BasicCastType
 from riko.types._configs import ExchangeRateObjconf
 from riko.types._options import Defaults, Opts
@@ -141,7 +142,7 @@ async def async_parser(
         r = await async_get(objconf.url, params=objconf.param)
         rates = await async_json(r)
     else:
-        content = await io.async_url_read(objconf.url)
+        content = await async_url_read(objconf.url)
         rates = cast(dict[str, Any], loads(content).get("rates", {}))
 
     if rates and not same_currency:

@@ -6,7 +6,7 @@ from importlib.util import module_from_spec, spec_from_file_location
 from os.path import basename, splitext
 from types import ModuleType
 
-from riko.bado import run as async_run
+from riko.bado._backend import run as async_run
 from riko.types._wrappers import AsyncPipeParser
 
 io_error = FileNotFoundError

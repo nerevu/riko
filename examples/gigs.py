@@ -1,7 +1,6 @@
 from pprint import pprint
 
-from riko import get_path
-from riko.collections import AsyncPipe, SyncPipe
+from riko import AsyncPipe, SyncPipe, get_path
 from riko.types.modules import (
     FetchDataConf,
     FilterConf,

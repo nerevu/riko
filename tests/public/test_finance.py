@@ -9,7 +9,7 @@ when it is absent (see the collection hook in ``conftest.py``).
 
 import pytest
 
-from riko import Targets, export, list_targets
+from riko.collections import Targets, export, list_targets
 
 pytestmark = pytest.mark.finance
 

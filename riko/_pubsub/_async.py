@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from riko.bado import (
+from riko.bado._backend import (
     MemoryObjectReceiveStream,
     MemoryObjectSendStream,
     create_memory_object_stream,

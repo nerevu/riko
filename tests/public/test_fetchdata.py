@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from riko.bado import run
+from riko.bado._backend import run
 from riko.bado.io import async_url_open
 from riko.modules.fetchdata import async_pipe
 from tests import skipif_issync

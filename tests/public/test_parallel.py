@@ -15,9 +15,9 @@ contract: same results as sequential, order control, and non-materialization.
 
 import pytest
 
-from riko import get_path
-from riko.bado import run
+from riko.bado._backend import run
 from riko.collections import AsyncCollection, AsyncPipe
+from riko.paths import get_path
 from riko.types.modules import ItemBuilderConf
 from tests import skipif_issync
 

@@ -13,7 +13,7 @@ from json import loads
 
 import pytest
 
-from riko.bado import run
+from riko.bado._backend import run
 from riko.compile import (
     build_pipeline,
     compile_pipe,
