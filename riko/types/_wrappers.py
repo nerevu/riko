@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterable, Iterator
 from io import StringIO
 from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, TypedDict, overload
 
@@ -60,7 +60,8 @@ class PreCaster(TypedDict):
     func: Caster
 
 
-type ConversionFunc = Callable[..., Items | StringIO]
+type ConversionOutput = Items | Iterable[str] | StringIO
+type ConversionFunc = Callable[..., ConversionOutput]
 
 # Sync
 type SyncFieldParseFunc = Callable[..., ItemOrValue]

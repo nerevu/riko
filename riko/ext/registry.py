@@ -117,10 +117,14 @@ class ModuleRegistry:
     def _entry_point_definition(self, name: str) -> ModuleDefinition | None:
         if name not in self._loaded and (ep := self._discover_entry_points().get(name)):
             loaded = ep.load()
-            _definition = loaded() if callable(loaded) else loaded
-            definition = cast(ModuleDefinition, _definition)
+            definition = loaded() if callable(loaded) else loaded
 
-            if not definition.name:
+            if not isinstance(definition, ModuleDefinition):
+                raise TypeError(
+                    f"entry point {ep.name!r} returned "
+                    f"{type(definition).__name__}, expected ModuleDefinition"
+                )
+            elif not definition.name:
                 definition = _replace(definition, name=ep.name)
             elif definition.name != ep.name:
                 raise ValueError(

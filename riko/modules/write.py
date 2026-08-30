@@ -36,10 +36,10 @@ Attributes:
 
 """
 
-from io import StringIO
+from io import BytesIO, StringIO
 from logging import Logger
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pygogo as gogo
 from meza import io
@@ -141,8 +141,10 @@ async def async_parser(
         logger.warning(f"The target {target} is not a known converter")
     elif (content := convert([dict(item) for item in items])) is None:
         logger.warning(f"The {target} converter produced no content")
+    elif not isinstance(content, str | bytes | BytesIO | StringIO):
+        logger.warning(f"The {target} converter produced unwritable content")
     else:
-        await async_write(objconf.url, cast(StringIO, content), mode=objconf.mode)
+        await async_write(objconf.url, content, mode=objconf.mode)
 
     return iter(items)
 
@@ -195,6 +197,8 @@ def parser(
         logger.warning(f"The target {target} is not a known converter")
     elif (content := convert([dict(item) for item in items])) is None:
         logger.warning(f"The {target} converter produced no content")
+    elif not isinstance(content, str | bytes | BytesIO | StringIO):
+        logger.warning(f"The {target} converter produced unwritable content")
     else:
         io.write(objconf.url, content, mode=objconf.mode)
 

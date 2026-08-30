@@ -24,7 +24,7 @@ from functools import partial, wraps
 from inspect import isawaitable, iscoroutinefunction
 from itertools import chain
 from logging import Logger
-from typing import Literal, cast, overload
+from typing import ClassVar, Literal, cast, overload
 
 import pygogo as gogo
 
@@ -113,6 +113,7 @@ class Module[B: (Literal[True], Literal[False])]:
     """
 
     isasync: B
+    module_type: ClassVar[ModuleType]
 
     @overload
     def __init__(  # noqa: E704
@@ -204,7 +205,7 @@ class Module[B: (Literal[True], Literal[False])]:
             TypeError: When the class name is not a known module type.
 
         """
-        module_type = cast(ModuleType, type(self).__name__)
+        module_type = self.module_type
 
         if module_type not in {"operator", "processor", "splitter"}:
             raise TypeError(f"Unsupported module type: {module_type!r}")
@@ -350,6 +351,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     """Creates a pipe that processes individual items."""
 
     isasync: B
+    module_type: ClassVar[ModuleType] = "processor"
 
     @overload
     def __init__(  # noqa: E704
@@ -833,6 +835,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     """Creates a pipe that processes an entire stream."""
 
     isasync: B
+    module_type: ClassVar[ModuleType] = "operator"
 
     @overload
     def __init__(  # noqa: E704
@@ -1347,6 +1350,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     """Creates a pipe that splits a stream into multiple streams."""
 
     isasync: B
+    module_type: ClassVar[ModuleType] = "splitter"
 
     @overload
     def __init__(  # noqa: E704

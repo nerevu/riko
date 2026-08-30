@@ -460,9 +460,8 @@ def cast_datetime(  # noqa: E302
     return result
 
 
-cast_date: Callable[[DateLike], date | None] = cast(
-    Callable[[DateLike], date | None], partial(cast_datetime, as_date=True)
-)
+def cast_date(value: DateLike) -> date | None:
+    return cast_datetime(value, as_date=True)
 
 
 CAST_SWITCH: dict[str, PreCaster] = {

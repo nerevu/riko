@@ -26,7 +26,7 @@ Attributes:
 from collections.abc import Awaitable, Callable
 from inspect import isawaitable
 from logging import Logger
-from typing import Any, cast
+from typing import Any
 
 import pygogo as gogo
 
@@ -34,7 +34,7 @@ from riko._iterutils import listize
 from riko.modules._prepare import require_arg
 from riko.types._configs import AggregateObjconf
 from riko.types._options import Defaults
-from riko.types._streams import Item, Stream
+from riko.types._streams import Item, Items, Stream
 from riko.types._wrappers import PipeTuples
 
 from . import operator
@@ -42,13 +42,16 @@ from . import operator
 DEFAULTS: Defaults = Defaults()
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
+type AggregateResult = Item | Items
+
 
 async def async_parser(
     stream: Stream,
     objconf: AggregateObjconf,
     tuples: PipeTuples,
     *,
-    func: Callable[[Stream], Item | Stream | Awaitable[Item | Stream]] | None = None,
+    func: Callable[[Stream], AggregateResult | Awaitable[AggregateResult]]
+    | None = None,
     **kwargs: object,
 ) -> Stream:
     """
@@ -94,8 +97,7 @@ async def async_parser(
     func = require_arg(func, "func", "aggregate", strict=True)
     unawaited = func(stream)
     result = await unawaited if isawaitable(unawaited) else unawaited
-    listed = listize(result)
-    return iter(cast(list[Item], listed))
+    return iter(listize(result))
 
 
 def parser(
@@ -103,7 +105,7 @@ def parser(
     objconf: AggregateObjconf,
     tuples: PipeTuples,
     *,
-    func: Callable[[Stream], Item | Stream] | None = None,
+    func: Callable[[Stream], AggregateResult] | None = None,
     **kwargs: object,
 ) -> Stream:
     """
@@ -142,8 +144,7 @@ def parser(
     """
     func = require_arg(func, "func", "aggregate", strict=True)
     result = func(stream)
-    listed = listize(result)
-    return iter(cast(list[Item], listed))
+    return iter(listize(result))
 
 
 @operator(DEFAULTS, isasync=True)

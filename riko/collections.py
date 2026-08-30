@@ -444,8 +444,8 @@ CONVERSION_FUNCS: dict[TargetLike, ConversionFunc] = {
 }
 
 if OFX is not None:
-    CONVERSION_FUNCS[Targets.OFX] = cast(ConversionFunc, records2ofx)
-    CONVERSION_FUNCS[Targets.QIF] = cast(ConversionFunc, records2qif)
+    CONVERSION_FUNCS[Targets.OFX] = records2ofx
+    CONVERSION_FUNCS[Targets.QIF] = records2qif
 
 
 def list_targets() -> list[str]:

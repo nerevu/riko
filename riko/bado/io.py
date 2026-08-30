@@ -20,6 +20,8 @@ Examples:
 
 """
 
+from __future__ import annotations
+
 from collections.abc import Awaitable, Callable, Generator, Iterator
 from io import BytesIO, StringIO, TextIOWrapper
 from logging import Logger
@@ -28,6 +30,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import pygogo as gogo
 from meza.fntools import chunk as _chunk
+from typing_extensions import TypeIs
 
 from riko._constants import ENCODING
 from riko._io import ext_from_content_type
@@ -44,13 +47,48 @@ if TYPE_CHECKING:
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
+type TextChunk = str | list[str]
+type BinaryChunk = bytes | list[int]
+type Chunk = TextChunk | BinaryChunk
 
-def chunk(
+
+_MODE_KINDS = frozenset("rwxa")
+_MODE_DUPLEX = frozenset("bt")
+_MODE_CHARS = _MODE_KINDS | _MODE_DUPLEX | {"+"}
+
+
+def _is_open_mode(mode: str) -> TypeIs[OpenBinaryMode | OpenTextMode]:
+    """Validates at runtime whether a string is a well-formed open-file mode."""
+    return (
+        _MODE_CHARS.issuperset(mode)
+        and len(mode) == len(_MODE_CHARS.intersection(mode))
+        and len(_MODE_KINDS.intersection(mode)) == 1
+        and not _MODE_DUPLEX.issubset(mode)
+    )
+
+
+@overload
+def chunk(  # noqa: E704
+    content: str, chunksize: int | None = None, *args: int, **kwargs: int
+) -> Iterator[list[str]]: ...
+@overload  # noqa: E302
+def chunk(  # noqa: E704
+    content: StringIO, chunksize: int | None = None, *args: int, **kwargs: int
+) -> Iterator[str]: ...
+@overload  # noqa: E302
+def chunk(  # noqa: E704
+    content: bytes, chunksize: int | None = None, *args: int, **kwargs: int
+) -> Iterator[list[int]]: ...
+@overload  # noqa: E302
+def chunk(  # noqa: E704
+    content: BytesIO, chunksize: int | None = None, *args: int, **kwargs: int
+) -> Iterator[bytes]: ...
+def chunk(  # noqa: E302
     content: str | bytes | BytesIO | StringIO,
     chunksize: int | None = None,
     *args: int,
     **kwargs: int,
-) -> Iterator[str | bytes | list[bytes | int | str]]:
+) -> Iterator[Chunk]:
     """
     Splits content into chunks by delegating to :func:`meza.fntools.chunk`.
 
@@ -64,16 +102,64 @@ def chunk(
         **kwargs: Extra keyword arguments forwarded to meza.
 
     Yields:
-        Each chunk; a ``str``/``bytes`` for an unsized whole, or a ``list`` of
-        elements (characters, bytes or ints) when sized.
+        Each chunk; a bare ``str``/``bytes`` for a file-like source (read via
+        ``.read``), or a ``list`` of characters or ints for a ``str``/``bytes``
+        source.
 
     Examples:
         >>> list(chunk("abcdef", 3))
         [['a', 'b', 'c'], ['d', 'e', 'f']]
+        >>> list(chunk(b"abcdef", 3))
+        [[97, 98, 99], [100, 101, 102]]
 
     """
     result = _chunk(content, chunksize, *args, **kwargs)
-    return cast(Iterator[str | bytes | list[int | str | bytes]], result)
+    return cast(Iterator[Chunk], result)
+
+
+@overload
+def _chunk_content(  # noqa: E704
+    content: str | StringIO, chunksize: int | None = None
+) -> Iterator[str]: ...
+@overload  # noqa: E302
+def _chunk_content(  # noqa: E704
+    content: bytes | BytesIO, chunksize: int | None = None
+) -> Iterator[bytes]: ...
+def _chunk_content(  # noqa: E302
+    content: str | bytes | BytesIO | StringIO, chunksize: int | None = None
+) -> Iterator[str | bytes]:
+    """
+    Splits content into whole ``str`` or ``bytes`` chunks for the write path.
+
+    Dispatches on the ``content`` type. :func:`chunk` yields a ``list`` of characters
+    or ints for a ``str``/``bytes`` source, but a bare ``str``/``bytes`` for a file-like
+    one. Joins the former into a scalar and passes the latter through. The caller always
+    receives a whole ``str``/``bytes`` per chunk.
+
+    Args:
+        content: The source data to split.
+        chunksize: The number of units per chunk, or ``None`` for a single chunk.
+
+    Yields:
+        Each chunk as a ``str`` for a text source or ``bytes`` for a binary one.
+
+    Examples:
+        >>> list(_chunk_content("abcdef", 3))
+        ['abc', 'def']
+        >>> list(_chunk_content(b"abcdef", 3))
+        [b'abc', b'def']
+
+    """
+    if isinstance(content, str):
+        for raw in chunk(content, chunksize):
+            yield "".join(raw)
+    elif isinstance(content, StringIO):
+        yield from chunk(content, chunksize)
+    elif isinstance(content, bytes):
+        for raw in chunk(content, chunksize):
+            yield bytes(raw)
+    else:
+        yield from chunk(content, chunksize)
 
 
 def _coerce_chunk(raw: str | bytes, binary: bool, encoding: str) -> str | bytes:
@@ -316,25 +402,16 @@ async def async_write(
         b'Hello World'
 
     """
-    if binary := "b" in mode:
-        mode = cast("OpenBinaryMode", mode)
-    else:
-        mode = cast("OpenTextMode", mode)
+    if not _is_open_mode(mode):
+        raise ValueError(f"the file mode {mode!r} is invalid")
 
     progress = 0
-    opener = open_file(filepath, mode, encoding=None if binary else encoding)
+    binary = "b" in mode
+    open_encoding = None if binary else encoding
+    opener = open_file(filepath, mode, encoding=open_encoding)
 
     async with await opener as f:
-        for raw in chunk(content, chunksize):
-            if isinstance(raw, (str, bytes)):
-                normalized = raw
-            elif isinstance(raw[0], str):
-                normalized = "".join(cast(list[str], raw))
-            elif isinstance(raw[0], bytes):
-                normalized = b"".join(cast(list[bytes], raw))
-            else:
-                normalized = bytes(cast(list[int], raw))
-
+        for normalized in _chunk_content(content, chunksize):
             data = _coerce_chunk(normalized, binary, encoding)
             await f.write(data)  # pyright: ignore[reportArgumentType]
             progress += len(data)
@@ -343,7 +420,7 @@ async def async_write(
     return written
 
 
-def get_async_temp_file() -> "NamedTemporaryFile[bytes]":
+def get_async_temp_file() -> NamedTemporaryFile[bytes]:
     """
     Creates an auto-deleting named temporary file for async use.
 

@@ -21,13 +21,13 @@ from typing import (
     NamedTuple,
     TypeAliasType,
     Union,
-    cast,
     get_args,
     get_origin,
     get_type_hints,
 )
 
 import pygogo as gogo
+from typing_extensions import TypeIs
 
 from riko.types.modules import (
     Inference,
@@ -283,6 +283,10 @@ def _infer_expression_kind(
     return kind, reason
 
 
+def _is_function_def(node: ast.AST) -> TypeIs[FunctionDef | AsyncFunctionDef]:
+    return isinstance(node, (FunctionDef, AsyncFunctionDef))
+
+
 def infer_from_source(pipe: Callable) -> ReturnInference:
     """
     Infers the return kind of a short, unannotated pipe from its source.
@@ -323,20 +327,14 @@ def infer_from_source(pipe: Callable) -> ReturnInference:
     kind = OperatorReturnKind.UNKNOWN
     reason = None
     name = getattr(pipe, "__qualname__", repr(pipe))
-    is_func = lambda node: isinstance(node, (FunctionDef, AsyncFunctionDef))
 
     try:
         module = ast.parse(textwrap.dedent(getsource(unwrap(pipe))))
-
-        if function := next(builtins.filter(is_func, module.body), None):
-            statement = cast(FunctionDef, function).body[-1]
     except (OSError, TypeError, SyntaxError, IndexError) as e:
         exc_type = type(e).__name__
         reason = f"source could not be inspected or parsed: {exc_type}: {e}"
     else:
-        if function := next(builtins.filter(is_func, module.body), None):
-            function = cast(FunctionDef | AsyncFunctionDef, function)
-
+        if function := next(builtins.filter(_is_function_def, module.body), None):
             if not function.body:
                 reason = "function body is empty"
             elif not isinstance(statement := function.body[-1], ast.Return):

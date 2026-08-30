@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from ._scalars import BasicValue
     from ._sentinels import MissingType, Sentinel
     from ._streams import Item, StatefulItem
+    from .compile import LoopModule, PipeModule
     from .modules import ConfArg
 
 
@@ -71,3 +72,7 @@ def is_sentinel[VT](val: Mapping[str, VT], **kwargs: object) -> TypeGuard[Sentin
 
 def is_type_value(val: Mapping[Any, Any]) -> TypeGuard[ConfArg]:
     return len(val) == 2 and "type" in val and "value" in val
+
+
+def is_loop_module(module: PipeModule) -> TypeGuard[LoopModule]:
+    return module["type"] == "loop" and "embed" in module

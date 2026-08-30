@@ -37,6 +37,7 @@ from requests.structures import CaseInsensitiveDict
 from riko._date_utils import date_to_datetime, ensure_tzinfo
 from riko.cast import CAST_SWITCH, CastType, cast_value
 from riko.types._scalars import PrimitiveValue, PrimitiveValueType, SortableValue
+from riko.types._streams import Item
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 SORT_FILLER = float("-inf")
@@ -643,6 +644,10 @@ def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
 
 
 # TODO: move back to meza
+@overload
+def listize(  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    value: Item | Iterable[Item],
+) -> Iterable[Item]: ...
 @overload
 def listize[T](value: list[T]) -> list[T]: ...  # noqa: E704
 @overload  # noqa: E302
