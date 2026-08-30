@@ -226,13 +226,29 @@ contract are authoritative.
 - **EXTENSION** — explain the contract an extension author must satisfy
   (lifecycle, invariants, protocols, callbacks, configuration, runtime
   interactions); include an example when it clarifies how to implement.
-- **PRIVATE** — document only non-obvious implementation knowledge: why the
-  helper exists, invariants, assumptions, ownership, ordering, mutation,
-  consumption, concurrency, or coupling. An obvious helper needs no docstring;
-  `"""Get the field."""` is worse than none.
+- **PRIVATE** — document non-obvious implementation knowledge: why the helper
+  exists, invariants, assumptions, ownership, ordering, mutation, consumption,
+  concurrency, or coupling.
 
-Do not add `Args`/`Returns`/`Examples` mechanically to private helpers. A private
-docstring earns its place by documenting a **why, invariant, assumption, or trap**.
+Within a private module, split the rule by name:
+
+- A **non-underscore function** — the module's own internal API, e.g.
+  `gen_return_inferences` — carries **all** the sections its signature implies
+  (`Args:`, `Returns:`/`Yields:`, `Raises:`) **plus an `Examples:` doctest**,
+  **always**, even when it looks obvious, exactly like a STABLE or EXTENSION
+  object. The summary and any prose lead with the **why, invariant, assumption,
+  or trap**; the sections stack on top, never in place of it.
+- An **underscore-prefixed helper may omit the sections — or the docstring
+  entirely — when it is obvious**: `_matches_abc(candidate, abc) -> bool` needs
+  none, and `"""Get the field."""` is worse than nothing. But the moment a `_`
+  helper documents a why/invariant/trap, complete the sections its signature
+  implies rather than stopping at prose.
+
+The `Examples:` doctest is **required for the non-underscore case** and stays
+**optional for underscore helpers** (reserved for where a compact executable
+example clarifies non-obvious behavior). Either way it is real, meaningful
+executable doctest demonstrating the function's own behavior — never illustrative
+pseudocode padded in to satisfy the rule.
 
 ## House formatting (ruff-enforced)
 
@@ -370,12 +386,14 @@ compact executable example clarifies non-obvious behavior.
   never first among the sections — a docstring that jumps from the summary
   straight to `Examples:`, skipping `Args:`/`Returns:`, is the single most
   common miss. Never leave an empty section.
-- Once a function earns a multi-section docstring, give it the sections its
-  signature implies: `Args:` for its parameters, `Returns:`/`Yields:` for its
-  output. Model it on the file's *fullest* docstring, not its thinnest — in
-  `riko/_io.py` that is `ext_from_content_type`/`seekable`, not a bare summary.
-  (This does not override the PRIVATE-tier rule that an *obvious* helper needs
-  no docstring at all; it governs helpers you have already chosen to document.)
+- Give every non-underscore function the sections its signature implies: `Args:`
+  for its parameters, `Returns:`/`Yields:` for its output. Model it on the file's
+  *fullest* docstring, not its thinnest — in `riko/_io.py` that is
+  `ext_from_content_type`/`seekable`, not a bare summary. This holds across all
+  tiers: a private module's public-named function is documented as completely as a
+  STABLE one. An underscore-prefixed helper may still stay bare when obvious (see
+  the PRIVATE-tier rule above), but once documented it never stops at prose when
+  its signature implies `Args:`/`Returns:`/`Yields:`.
 - Do not document `self` or `cls`.
 - Do not restate defaults obvious from the signature unless the default has
   semantic importance.

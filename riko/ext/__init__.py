@@ -2,12 +2,11 @@
 """
 riko.ext
 ~~~~~~~~
-The supported extension-author API: pipe decorators, parsed config types,
-module metadata, and parser protocols. SemVer-guaranteed for a smaller audience
-than the stable :mod:`riko.api` surface.
 
-``register`` joins this surface in a later phase. See docs/MIGRATION.rst for additional
-details.
+Stable, SemVer-guaranteed API for riko extension authors.
+
+This namespace contains pipe decorators, configuration helpers, module
+metadata and naming types, wrapper protocols, and registry interfaces.
 """
 
 from riko.ext.config import DynamicConf, get_conf_type

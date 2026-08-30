@@ -2,8 +2,18 @@
 """
 riko._iterutils
 ~~~~~~~~~~~~~~~
+
 Functional/iterable helpers: fan-out (``dispatch``/``broadcast``), grouping,
 dedup, chainable retry binding, and sort-key construction.
+
+Attributes:
+    SORT_FILLER: Orderable stand-in (``-inf``) for a missing sort key.
+    DATELIKE_TYPES: Cast types reduced to epoch timestamps for sorting.
+    INVALID_DEF_TYPES: Cast types with no usable typed default.
+    INVALID_TYPES: Cast types that cannot be cast at all.
+    NON_SORTABLE: Types (mappings, sequences) that fall back to the default key.
+    noop: Identity function returning its argument unchanged.
+
 """
 
 import builtins
@@ -43,6 +53,20 @@ noop: Callable[[T], T] = lambda item: item
 
 
 class Chainable:
+    """
+    A fluent wrapper that resolves and applies methods across namespaces.
+
+    Attribute access looks the name up on the wrapped data, then ``builtins``,
+    then ``itertools``, and returns a new ``Chainable`` bound to the found method.
+    Calling it applies the method with the data as the first argument when the
+    method's signature accepts it there, else as the second.
+
+    Examples:
+        >>> Chainable([3, 1, 2]).sorted().data
+        [1, 2, 3]
+
+    """
+
     data: object
     method: Callable | None
     list: builtins.list[object]
@@ -81,6 +105,20 @@ class Chainable:
 
 
 def invert_dict[K, V](d: dict[K, V]) -> dict[V, K]:
+    """
+    Swaps a dict's keys and values.
+
+    Args:
+        d: The dict to invert; its values must be hashable and unique.
+
+    Returns:
+        A new dict mapping each value back to its key.
+
+    Examples:
+        >>> invert_dict({"a": 1, "b": 2})
+        {1: 'a', 2: 'b'}
+
+    """
     return {v: k for k, v in d.items()}
 
 
@@ -89,6 +127,30 @@ def multi_try[T, S](
     zipped: Iterable[tuple[Callable[..., T], type[Exception]]],
     default: S = None,
 ) -> T | S:
+    """
+    Tries each callable on a source until one does not raise.
+
+    Each entry pairs a callable with the exception type to swallow for it; the
+    first call that avoids its paired exception wins. When every attempt raises,
+    ``default`` is returned.
+
+    Args:
+        source: The value passed to each callable.
+        zipped: Pairs of ``(callable, exception_type)`` tried in order.
+        default: The value returned when every attempt raises.
+
+    Returns:
+        The first successful result, or ``default`` if none succeed.
+
+    Examples:
+        >>> from itertools import repeat
+        >>>
+        >>> multi_try("abc", zip([int, str.upper], repeat(ValueError)))
+        'ABC'
+        >>> multi_try("abc", zip([int], repeat(ValueError)), default=-1)
+        -1
+
+    """
     for func, error in zipped:
         try:
             value = func(source)
@@ -105,6 +167,23 @@ def multi_try[T, S](
 def _resolve_uncastable(
     value: Mapping | Sequence | PrimitiveValue, msg: str, default: SortableValue
 ) -> SortableValue | None:
+    """
+    Handles a value that cannot be cast for a sort key, degrading by type.
+
+    A scalar (``str``/``int``/``struct_time``) is returned uncast since it is
+    already orderable; a container is replaced with ``default``, which the caller
+    supplies as an orderable filler. Every branch logs a warning rather than
+    raising, so a heterogeneous feed still sorts.
+
+    Args:
+        value: The value that failed casting.
+        msg: The warning prefix describing the failed cast.
+        default: The orderable filler used for non-scalar values.
+
+    Returns:
+        The original value when it is already orderable, else ``default``.
+
+    """
     if isinstance(value, (str, int, struct_time)):
         msg += ". Returning value without casting."
         logger.warning(msg)
@@ -130,6 +209,24 @@ def _warn_and_default(type_name: str, default: SortableValue) -> SortableValue:
 def _resolve_default(
     type_: str | None, invalid_type: bool | None, default: PrimitiveValue | None
 ) -> SortableValue:
+    """
+    Resolves the sort-key default for a cast type, kept orderable.
+
+    A cast default marks "no value" and may be non-orderable (``NaN`` for
+    ``float``/``decimal``, ``None`` for dates). Those and all date-like types
+    collapse to ``SORT_FILLER`` (``-inf``), which compares against real keys. A
+    falsy-but-valid caller default (``0``/``False``) is preserved; only ``None``
+    and a mapping default fall back to the empty string.
+
+    Args:
+        type_: The cast type name, or ``None`` for no casting.
+        invalid_type: Whether ``type_`` has no usable typed default.
+        default: The caller-supplied default, if any.
+
+    Returns:
+        An orderable default suitable as a sort-key filler.
+
+    """
     resolved = ""
 
     if invalid_type and default is None:
@@ -228,6 +325,23 @@ def def_itemgetter(
 def group_by[T: Mapping | PrimitiveValue](
     content: Iterable[T], attr: str, default: PrimitiveValue | None = None
 ) -> ItemsView[str, list[T]]:
+    """
+    Groups items by the stringified value of a key.
+
+    Args:
+        content: The items to group.
+        attr: The key read from each item.
+        default: The value used when an item lacks ``attr``.
+
+    Returns:
+        A view of ``(key, items)`` pairs, one per distinct key.
+
+    Examples:
+        >>> items = [{"k": "a"}, {"k": "b"}, {"k": "a"}]
+        >>> sorted((k, len(v)) for k, v in group_by(items, "k"))
+        [('a', 2), ('b', 1)]
+
+    """
     keyfunc = def_itemgetter(attr, default)
     groups = defaultdict(list)
 
@@ -247,8 +361,26 @@ def unique_everseen[T](  # noqa: E704
 def unique_everseen[T](  # noqa: E302
     content: Iterable[T], keyfunc: Callable | None = None
 ) -> Iterator[str | T]:
-    # List unique elements, preserving order. Remember all elements ever seen
-    # unique_everseen('ABBcCaD', str.lower) --> a b c d
+    """
+    Deduplicates elements while preserving first-seen order.
+
+    With ``keyfunc``, uniqueness is by the stringified key and the key is yielded;
+    without it, elements are yielded.
+
+    Args:
+        content: The source iterable.
+        keyfunc: Optional function producing a uniqueness key per element.
+
+    Yields:
+        Each element (or its key) the first time it is seen.
+
+    Examples:
+        >>> list(unique_everseen("ABBcCaD", str.lower))
+        ['a', 'b', 'c', 'd']
+        >>> list(unique_everseen([1, 1, 2, 3, 2]))
+        [1, 2, 3]
+
+    """
     seen = set()
 
     for element in content:
@@ -349,7 +481,7 @@ def dispatch(  # noqa: E302
 
            /--> item1 --> double(item1) -----> \
           /                                     \
-    split ----> item2 --> oct(item2) ------->   _OUTPUT
+    split ----> item2 --> oct(item2) -------->  _OUTPUT
           \                                     /
            \--> item3 --> max(item3) --------> /
 
@@ -422,15 +554,47 @@ def broadcast(  # noqa: E302
 
 
 def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterable[T]:
-    """Combines multiple iterables into a single stream."""
+    """
+    Combines multiple iterables into a single stream.
+
+    Args:
+        sources: The iterables to chain together.
+
+    Returns:
+        A single iterator over every element, source by source.
+
+    Examples:
+        >>> list(multiplex([[1, 2], [3, 4]]))
+        [1, 2, 3, 4]
+
+    """
     return chain.from_iterable(sources)
 
 
 def select_by_id[T](
-    _result: Iterable[Mapping[str, T]], _id: T, id_field: str
+    content: Iterable[Mapping[str, T]], id_: T, id_field: str
 ) -> Mapping[str, T]:
+    """
+    Finds the first mapping whose id field equals a target id.
+
+    Args:
+        content: The mappings to search.
+        id_: The id value to match.
+        id_field: The field holding each mapping's id.
+
+    Returns:
+        The first matching mapping, or an empty dict when none match.
+
+    Examples:
+        >>> rows = [{"id": 1, "v": "a"}, {"id": 2, "v": "b"}]
+        >>> select_by_id(rows, 2, "id")
+        {'id': 2, 'v': 'b'}
+        >>> select_by_id(rows, 9, "id")
+        {}
+
+    """
     try:
-        result = next(r for r in _result if _id == r[id_field])
+        result = next(r for r in content if id_ == r[id_field])
     except StopIteration:
         result = {}
 
