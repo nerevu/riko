@@ -93,6 +93,13 @@ composer operators (e.g. `timeout`) consume it lazily via `async for` and can bo
 infinite `Feed`; the `AsyncPipe` collection path still buffers non-Feed-native parsers at
 the `_materialize_legacy_source` seam.
 
+Per-fetch source bodies are **eager-read, lazy-parse** on the async path: `async_url_open`
+buffers the full response (`response.content` / `Path.read_bytes`) into a `BytesIO` before
+parsing, so there is no read-time backpressure. Streaming parsers pair `await
+async_url_open(...)` with `_io.auto_close` (close-on-iteration), never `async with`.
+Incremental `httpx.stream()` body reads and `AsyncClient` reuse are **Partial** (not
+implemented). Sync `Fetch` differs — its non-memoized path streams `r.raw` incrementally.
+
 ## 3. Pipe behavior (shipped)
 
 > **Partial.** Remaining lazy-Feed-chaining gaps → [execution-semantics.md](gameplans/execution-semantics.md).

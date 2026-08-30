@@ -183,7 +183,10 @@ def auto_close[T](stream: Iterable[T], f: FileTypes) -> Iterator[T]:
 
     Pairs a fetched stream with the file backing it. Closing runs in a
     ``finally``, so ``f`` is released on exhaustion, an early ``break``, or an
-    exception.
+    exception. This is the tool for handles whose consumption is deferred. I.e., a
+    parser that returns a lazy iterator after opening a file keeps the file alive
+    until the caller drains it. Whereas a ``with``/``async with`` block would close
+    it before the first item is read.
 
     Args:
         stream: The items to yield.

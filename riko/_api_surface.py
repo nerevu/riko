@@ -9,6 +9,7 @@ BADO = frozenset(
         "async_read",
         "async_return",
         "async_sleep",
+        "async_url_open",
         "async_write",
         "backend",
         "get_async_temp_file",

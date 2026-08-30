@@ -27,7 +27,7 @@ runtime helpers:
 
     >>> import riko
     >>> sorted(riko.__all__)
-    ['AsyncCollection', 'AsyncPipe', 'Context', 'ExecutionMode', 'Modules', 'PipeState', 'PipelineStateError', 'RikoError', 'Sinks', 'Sources', 'SyncCollection', 'SyncPipe', 'Targets', 'Transforms', 'UnsupportedModuleError', 'UnsupportedPipelineError', 'as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_write', 'backend', 'build_pipeline', 'compile_pipe', 'convert_dag', 'describe_module', 'export', 'extract_dependencies', 'get_async_temp_file', 'get_module_metadata', 'get_path', 'get_temp_file', 'isasync', 'issync', 'list_modules', 'list_targets', 'parse_pipe_def', 'run']
+    ['AsyncCollection', 'AsyncPipe', 'Context', 'ExecutionMode', 'Modules', 'PipeState', 'PipelineStateError', 'RikoError', 'Sinks', 'Sources', 'SyncCollection', 'SyncPipe', 'Targets', 'Transforms', 'UnsupportedModuleError', 'UnsupportedPipelineError', 'as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_url_open', 'async_write', 'backend', 'build_pipeline', 'compile_pipe', 'convert_dag', 'describe_module', 'export', 'extract_dependencies', 'get_async_temp_file', 'get_module_metadata', 'get_path', 'get_temp_file', 'isasync', 'issync', 'list_modules', 'list_targets', 'parse_pipe_def', 'run']
 
 Breaking changes to this surface require the corresponding SemVer treatment.
 
@@ -54,7 +54,7 @@ also re-exported from the top-level ``riko``:
 
     >>> import riko.bado
     >>> sorted(riko.bado.__all__)
-    ['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_write', 'backend', 'get_async_temp_file', 'isasync', 'issync', 'run']
+    ['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_url_open', 'async_write', 'backend', 'get_async_temp_file', 'isasync', 'issync', 'run']
 
 Private implementation
 ~~~~~~~~~~~~~~~~~~~~~~

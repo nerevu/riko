@@ -11,23 +11,20 @@ Examples:
         >>> from riko import get_path, issync, run
         >>> from riko.bado.io import async_url_open
         >>>
-        >>> url = get_path("spreadsheet.csv")
-        >>>
         >>> async def main():
-        ...     f = await async_url_open(url)
-        ...     print(f.readline())
-        ...     f.close()
+        ...     async with async_url_open(get_path("spreadsheet.csv")) as f:
+        ...         print(f.readline())
         >>>
         >>> print("Member,Name,") if issync else run(main)
         Member,Name,...
 
 """
 
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Generator, Iterator
 from io import BytesIO, StringIO, TextIOWrapper
 from logging import Logger
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import pygogo as gogo
 from meza.fntools import chunk as _chunk
@@ -139,67 +136,109 @@ async def _read_bytes(url: str, timeout: float) -> tuple[bytes, str, str | None]
     return result
 
 
+class _AsyncURLStream[T]:
+    """
+    An awaitable, async-context-manager handle over a lazily opened buffer.
+
+    ``await``-ing it returns the opened buffer (the caller then owns closing
+    it), while ``async with`` yields the buffer and closes it on exit. Both
+    paths open a fresh buffer, so the handle is reusable.
+    """
+
+    def __init__(self, opener: Callable[[], Awaitable[T]]) -> None:
+        self._open = opener
+        self._stream: BytesIO | NamedTextIOWrapper | None = None
+
+    def __await__(self) -> Generator[Any, None, T]:
+        return self._open().__await__()
+
+    async def __aenter__(self) -> T:
+        opened = await self._open()
+        self._stream = cast("BytesIO | NamedTextIOWrapper", opened)
+        return opened
+
+    async def __aexit__(self, *_: object) -> bool:
+        if self._stream is not None:
+            self._stream.close()
+
+        return False
+
+
 @overload
-async def async_url_open(  # noqa: E704
+def async_url_open(  # noqa: E704
     url: str,
     timeout: float = ...,
     encoding: str = ...,
     *,
     binary: Literal[True],
-    **kwargs: object,
-) -> BytesIO: ...
+    **_: object,
+) -> _AsyncURLStream[BytesIO]: ...
 @overload  # noqa: E302
-async def async_url_open(  # noqa: E704
+def async_url_open(  # noqa: E704
     url: str,
     timeout: float = ...,
     encoding: str = ...,
     binary: Literal[False] = ...,
-    **kwargs: object,
-) -> NamedTextIOWrapper: ...
-async def async_url_open(  # noqa: E302
+    **_: object,
+) -> _AsyncURLStream[NamedTextIOWrapper]: ...
+def async_url_open(  # noqa: E302
     url: str,
     timeout: float = 0,
     encoding: str = ENCODING,
     binary: bool = False,
-    **kwargs: object,
-) -> BytesIO | NamedTextIOWrapper:
+    **_: object,
+) -> _AsyncURLStream[BytesIO | NamedTextIOWrapper]:
     """
-    Opens a URL or local file as an in-memory, file-like stream.
+    Opens a URL or local file as an in-memory, buffered file object.
+
+    The whole body is read into memory up front, in a single ``await``. The
+    returned handle wraps a *buffered* copy, not an incremental network read, so
+    there is no read-time backpressure. Only downstream parsing stays lazy.
+
+    The handle may be ``await``-ed for the buffer (the caller then closes it) or
+    used with ``async with`` to auto-close it on exit. Use ``async with`` only when
+    the buffer is consumed inside the block. When returning a lazy iterator that
+    outlives the block, keep the ``await`` form and release the handle on iteration
+    end with :func:`riko._io.auto_close` (an ``async with``would close it before the
+    caller ever reads it).
 
     Args:
         url: An ``http(s)`` URL or a local path.
         timeout: The HTTP request timeout in seconds; ``0`` means no timeout.
         encoding: The text decoding used when ``binary`` is False.
         binary: Whether to return raw bytes rather than decoded text.
-        **kwargs: Accepted for signature parity; ignored.
 
     Returns:
-        A ``BytesIO`` when ``binary`` is True, else a ``NamedTextIOWrapper``
-        carrying the source name and content type.
+        A handle whose buffer is a ``BytesIO`` when ``binary`` is True, else a
+        ``NamedTextIOWrapper`` carrying the source name and content type.
 
     Examples:
         >>> from riko import get_path, issync, run
         >>>
-        >>> async def main():
-        ...     url = get_path("spreadsheet.csv")
-        ...     f = await async_url_open(url, binary=True)
-        ...     print(type(f).__name__)
-        ...     f.close()
+        >>> url = get_path("spreadsheet.csv")
         >>>
-        >>> print("BytesIO") if issync else run(main)
-        BytesIO
+        >>> async def main():
+        ...     async with async_url_open(url) as f:
+        ...         print(f.readline())
+        >>>
+        >>> print("Member,Name,") if issync else run(main)
+        Member,Name,...
 
     """
-    data, name, content_type = await _read_bytes(url, timeout)
 
-    if binary:
-        f: BytesIO | NamedTextIOWrapper = BytesIO(data)
-    else:
-        f = NamedTextIOWrapper(BytesIO(data), encoding=encoding)
-        f.name = name
-        f.content_type = content_type
+    async def opener() -> BytesIO | NamedTextIOWrapper:
+        data, name, content_type = await _read_bytes(url, timeout)
 
-    return f
+        if binary:
+            f: BytesIO | NamedTextIOWrapper = BytesIO(data)
+        else:
+            f = NamedTextIOWrapper(BytesIO(data), encoding=encoding)
+            f.name = name
+            f.content_type = content_type
+
+        return f
+
+    return _AsyncURLStream(opener)
 
 
 async def async_url_read(

@@ -11,7 +11,7 @@ facade lives in :mod:`riko.bado._backend`.
 
 from riko.bado._backend import backend, isasync, issync, run
 from riko.bado._util import async_return
-from riko.bado.io import async_read, async_write, get_async_temp_file
+from riko.bado.io import async_read, async_url_open, async_write, get_async_temp_file
 from riko.bado.itertools import as_async, async_map, async_map_stream, async_sleep
 
 __all__ = [
@@ -21,6 +21,7 @@ __all__ = [
     "async_read",
     "async_return",
     "async_sleep",
+    "async_url_open",
     "async_write",
     "backend",
     "get_async_temp_file",

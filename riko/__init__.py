@@ -21,7 +21,7 @@ are promoted here.
 from riko._metadata import PACKAGE_INFO
 from riko.bado._backend import async_sleep, backend, isasync, issync, run
 from riko.bado._util import async_read, async_return
-from riko.bado.io import async_write, get_async_temp_file
+from riko.bado.io import async_url_open, async_write, get_async_temp_file
 from riko.bado.itertools import as_async, async_map, async_map_stream
 from riko.collections import (
     AsyncCollection,
@@ -85,6 +85,7 @@ __all__ = [
     "async_read",
     "async_return",
     "async_sleep",
+    "async_url_open",
     "async_write",
     "backend",
     "build_pipeline",

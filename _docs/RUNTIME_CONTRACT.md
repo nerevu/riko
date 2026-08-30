@@ -73,7 +73,10 @@ characteristics are documented in
 [execution-semantics.md §5](gameplans/execution-semantics.md#5-execution-characteristics).
 What ships is the behavioral bound in the §6 async primitives (bounded worker concurrency,
 no whole-source materialization). Each asynchronous execution resolves the source once and
-normalizes it to `AsyncIterator[Item]`.
+normalizes it to `AsyncIterator[Item]`. That bound governs the **item** stream, not the
+per-fetch **body**: on the async path a single source read buffers its whole response
+(`async_url_open` → `response.content` / `Path.read_bytes`) before parsing, which then
+yields items lazily. Incremental `httpx.stream()` body reads are not implemented.
 
 ## 3. Pipe behavior
 

@@ -36,7 +36,7 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 
 ```python
 >>> sorted(BADO)
-['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_write', 'backend', 'get_async_temp_file', 'isasync', 'issync', 'run']
+['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_url_open', 'async_write', 'backend', 'get_async_temp_file', 'isasync', 'issync', 'run']
 ```
 
 **Module discovery** — discovery enums and catalog helpers (`riko.modules`):
@@ -77,7 +77,7 @@ It owns riko's async helpers and provides a guarded import surface for selected 
 
 ```python
 >>> sorted(BADO)
-['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_write', 'backend', 'get_async_temp_file', 'isasync', 'issync', 'run']
+['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_url_open', 'async_write', 'backend', 'get_async_temp_file', 'isasync', 'issync', 'run']
 >>> BADO == set(riko.bado.__all__)
 True
 ```

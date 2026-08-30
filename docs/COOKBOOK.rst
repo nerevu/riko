@@ -471,6 +471,11 @@ a coroutine on the installed backend, and ``issync`` is ``True`` when no async
 backend is present (so these examples degrade gracefully when the extra is
 absent).
 
+Each async ``source`` fetch reads its body fully into memory before parsing (a
+single ``await``). So ``stream`` here means ``Iterator[item]``, not an incremental
+network read. Bounded parallelism (below) keeps the *item* ``stream`` from being
+materialized up front, but each individual body is still buffered whole.
+
 Lazy async iteration
 ^^^^^^^^^^^^^^^^^^^^
 
