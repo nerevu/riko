@@ -19,7 +19,7 @@ Examples:
 
 """
 
-from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterator, Mapping
 from functools import partial, wraps
 from inspect import isawaitable, iscoroutinefunction
 from itertools import chain
@@ -312,6 +312,40 @@ class Module[B: (Literal[True], Literal[False])]:
         )
 
 
+_PROCESSOR_FORBIDDEN_OPTS: frozenset[str] = frozenset({"embed"})
+_OPERATOR_FORBIDDEN_OPTS: frozenset[str] = frozenset({"skip_if"})
+_SPLITTER_FORBIDDEN_OPTS: frozenset[str] = frozenset(
+    {"pollable", "emit", "count", "skip_if", "embed"}
+)
+
+
+def _reject_foreign_opts(
+    module_type: str, forbidden: frozenset[str], kwargs: Mapping[str, object]
+) -> None:
+    """
+    Rejects decoration options that belong to a different decorator.
+
+    A decoration-time author mistake evaluated once at import: an option a given
+    pipe kind never reads (e.g. ``skip_if`` on an operator, ``embed`` on a
+    processor) is a contradiction, so it raises rather than being silently
+    ignored.
+
+    Args:
+        module_type: The decorator name used in the error message.
+        forbidden: Options this decorator does not support.
+        kwargs: The decoration keyword arguments to validate.
+
+    Raises:
+        TypeError: When any forbidden option is present.
+
+    """
+    invalid = sorted(forbidden.intersection(kwargs))
+
+    if invalid:
+        named = ", ".join(repr(opt) for opt in invalid)
+        raise TypeError(f"{module_type} pipes do not support the {named} option(s)")
+
+
 class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     """Creates a pipe that processes individual items."""
 
@@ -383,6 +417,10 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 skip processing, leaving the original item unchanged (default:
                 None).
 
+        Raises:
+            TypeError: When an operator-only option (``embed``) is passed, since
+                a processor never reads it.
+
         Examples:
             >>> from riko import async_return, issync, run
             >>>
@@ -411,6 +449,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             {'content': 'say "hello world" three times!'}
 
         """
+        _reject_foreign_opts("processor", _PROCESSOR_FORBIDDEN_OPTS, kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
     def parse(self, item: ItemOrValue, module_name: str) -> DotDict[RikoValue]:
@@ -858,6 +897,10 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             emit (bool): Return the stream as is instead of assigning it.
                 Overrides ``assign`` (default: derived from ``ftype``).
 
+        Raises:
+            TypeError: When a processor-only option (``skip_if``) is passed,
+                since an operator never reads it.
+
         Examples:
             >>> from riko import async_return, issync, run
             >>>
@@ -906,6 +949,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             {'content': 4}
 
         """
+        _reject_foreign_opts("operator", _OPERATOR_FORBIDDEN_OPTS, kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
     def parse(self, items: OperatorWrapperInput | None = None) -> Stream:
@@ -1353,6 +1397,11 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             assign (str): Field the streams are assigned to (default: the pipe
                 name).
 
+        Raises:
+            TypeError: When a processor/operator-only option (``pollable``,
+                ``emit``, ``count``, ``skip_if``, ``embed``) is passed, since a
+                splitter never reads any of them.
+
         Examples:
             >>> @splitter(objectify=False)
             ... def pipe(stream, objconf, tuples, **kwargs):
@@ -1364,6 +1413,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             {'x': 1}
 
         """
+        _reject_foreign_opts("splitter", _SPLITTER_FORBIDDEN_OPTS, kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
     def parse(self, items: SplitterWrapperInput | None = None) -> Stream:

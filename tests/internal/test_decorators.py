@@ -21,7 +21,7 @@ from collections.abc import AsyncIterator
 import pytest
 
 from riko.bado._backend import run
-from riko.ext import operator, processor
+from riko.ext import operator, processor, splitter
 from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.types._streams import Item
 from riko.types._wrappers import ProcessorWrapper
@@ -116,6 +116,27 @@ class TestInvalidCombinations:
     def test_error_reason_reflects_explicit_flag(self):
         with pytest.raises(TypeError, match="marked isasync=True"):
             _create_wrapper("pipe", iscoro=False, isasync=True)
+
+    @pytest.mark.parametrize(
+        ("decorator", "option"),
+        [
+            pytest.param(processor, "embed", id="processor+embed"),
+            pytest.param(operator, "skip_if", id="operator+skip_if"),
+            pytest.param(splitter, "pollable", id="splitter+pollable"),
+            pytest.param(splitter, "emit", id="splitter+emit"),
+            pytest.param(splitter, "count", id="splitter+count"),
+            pytest.param(splitter, "skip_if", id="splitter+skip_if"),
+            pytest.param(splitter, "embed", id="splitter+embed"),
+        ],
+    )
+    def test_foreign_option_raises(self, decorator, option):
+        kwargs: dict[str, object] = {option: True}
+        name = decorator.__name__
+
+        with pytest.raises(
+            TypeError, match=f"{name} pipes do not support the '{option}'"
+        ):
+            decorator(**kwargs)
 
 
 class TestAsyncGeneratorSource:
