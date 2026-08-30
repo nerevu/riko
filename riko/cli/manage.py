@@ -20,7 +20,10 @@ import click
 from click import Choice
 
 from riko._logging import exception_hook
+from riko.cli.gen_config import _CONFIGS as CONFIG_PATH
 from riko.cli.gen_config import main as gen_config_main
+from riko.cli.gen_names import _MODULE_IDS as MODULE_IDS_PATH
+from riko.cli.gen_names import _NAMES as NAMES_PATH
 from riko.cli.gen_names import main as gen_names_main
 from riko.paths import ROOT_DIR
 
@@ -90,9 +93,12 @@ def codegen(mode="config"):
     if gen_names and return_code:
         raise RuntimeError("Error regenerating module names!")
     elif gen_config:
-        print("Successfully updated configuration file.")
+        print(f"Successfully wrote configuration file to {CONFIG_PATH}.")
     elif gen_names:
-        print("Successfully regenerated module names.")
+        print(
+            f"Successfully regenerated module names to {NAMES_PATH} "
+            f"and {MODULE_IDS_PATH}."
+        )
 
 
 @manager.command()
