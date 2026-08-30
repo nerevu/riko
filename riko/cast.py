@@ -89,6 +89,7 @@ class BasicCastType(StrEnum):
     NONE = "none"
     PASS = "pass"  # noqa: S105
     TEXT = "text"
+    URL = "url"
 
 
 class SortableCastType(StrEnum):
