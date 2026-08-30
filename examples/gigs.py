@@ -1,3 +1,15 @@
+"""
+gigs example
+~~~~~~~~~~~~
+
+Fetch a freelance-jobs JSON feed, drop duplicate links, filter out PHP gigs, and
+reverse-sort the rest — a synchronous ``SyncPipe`` flow over a local fixture.
+
+Basic usage::
+
+    run-pipe gigs
+"""
+
 from pprint import pprint
 
 from riko import AsyncPipe, SyncPipe, get_path

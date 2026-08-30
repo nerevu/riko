@@ -1,5 +1,17 @@
 # vim: sw=4:ts=4:expandtab
 
+"""
+kazeeki example
+~~~~~~~~~~~~~~~
+
+Aggregate freelance jobs from several JSON feeds (odesk, guru, elance,
+freelancer), normalize their fields, and convert budgets to a common currency.
+
+Basic usage::
+
+    run-pipe kazeeki
+"""
+
 from functools import partial
 from pprint import pprint
 from typing import cast

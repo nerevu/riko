@@ -1,3 +1,15 @@
+"""
+simple2 example
+~~~~~~~~~~~~~~~
+
+Build an item, then replace a field's value with ``strreplace`` — the smallest
+``itembuilder`` + ``strreplace`` flow.
+
+Basic usage::
+
+    run-pipe simple2
+"""
+
 from pprint import pprint
 
 from riko.collections import AsyncPipe, SyncPipe

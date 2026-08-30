@@ -1,3 +1,15 @@
+"""
+simple1 example
+~~~~~~~~~~~~~~~
+
+Build an item holding a URL, then rewrite it with ``regex`` — the smallest
+``itembuilder`` + ``regex`` flow.
+
+Basic usage::
+
+    run-pipe simple1
+"""
+
 from collections.abc import Mapping
 from pprint import pprint
 

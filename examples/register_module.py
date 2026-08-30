@@ -21,11 +21,9 @@ Run it::
 
 from typing import Any, cast
 
-from riko import AsyncPipe, SyncPipe, run
+from riko import AsyncPipe, SyncPipe, issync, run
 from riko.ext import ModuleDefinition, operator, register
-from riko.types._dynamic_conf import DynamicConf
-from riko.types._streams import Item, Stream
-from riko.types._wrappers import PipeTuples
+from riko.types import DynamicConf, Item, PipeTuples, Stream
 
 
 def _shout(item: Item) -> Item:
@@ -56,14 +54,23 @@ def pipe(*args: Any, **kwargs: Any) -> Stream:
     return parser(*args, **kwargs)
 
 
-register(ModuleDefinition(name="example.shout", sync_pipe=pipe, async_pipe=async_pipe))
-
-
-async def main() -> None:
-    # resolves by name exactly like a built-in — sync and async
-    print(list(SyncPipe("example.shout", source=[{"content": "hi"}])))
-    print(list(await AsyncPipe("example.shout", source=[{"content": "yo"}])))
-
-
 if __name__ == "__main__":
-    run(main)
+    source = [{"content": "hi"}]
+    name = "example.shout"
+
+    if issync:
+
+        def main() -> None:
+            print(list(SyncPipe(name, source=source)))
+
+        register(ModuleDefinition(name=name, sync_pipe=pipe))
+        main()
+
+    else:
+
+        async def amain() -> None:
+            print(list(await AsyncPipe(name, source=source)))
+
+        kwargs = {"sync_pipe": pipe, "async_pipe": async_pipe}
+        register(ModuleDefinition(name=name, **kwargs))
+        run(amain)

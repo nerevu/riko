@@ -5,7 +5,7 @@
 import re
 import shutil
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from functools import partial
 from glob import glob
 from io import StringIO
@@ -25,6 +25,7 @@ from riko.cli.gen_config import main as gen_config_main
 from riko.cli.gen_names import _MODULE_IDS as MODULE_IDS_PATH
 from riko.cli.gen_names import _NAMES as NAMES_PATH
 from riko.cli.gen_names import main as gen_names_main
+from riko.cli.gen_pipelines import main as gen_pipelines_main
 from riko.paths import ROOT_DIR
 
 try:
@@ -74,31 +75,41 @@ def hello():
     print("Hello world")
 
 
+CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
+    "config": (
+        gen_config_main,
+        lambda: f"wrote configuration file to {CONFIG_PATH}",
+        "Error updating configuration file!",
+    ),
+    "names": (
+        gen_names_main,
+        lambda: f"regenerated module names to {NAMES_PATH} and {MODULE_IDS_PATH}",
+        "Error regenerating module names!",
+    ),
+    "pipes": (
+        gen_pipelines_main,
+        lambda: "regenerated compiled pipe modules from their JSON definitions",
+        "Error regenerating compiled pipe modules!",
+    ),
+}
+
+
 @manager.command()
 @click.option(
     "-m",
     "--mode",
     help="Which file to generate",
-    type=Choice(["config", "names"], case_sensitive=False),
+    type=Choice(list(CODEGEN), case_sensitive=False),
     default="config",
 )
 def codegen(mode="config"):
-    """Regenerate configuration or riko/modules/_names.py files"""
-    gen_config = mode == "config"
-    gen_names = mode == "names"
-    return_code = gen_config_main() if gen_config else gen_names_main()
+    """Regenerate config, module-name, or compiled-pipe files"""
+    runner, summary, error = CODEGEN[mode]
 
-    if gen_config and return_code:
-        raise RuntimeError("Error updating configuration file!")
-    if gen_names and return_code:
-        raise RuntimeError("Error regenerating module names!")
-    elif gen_config:
-        print(f"Successfully wrote configuration file to {CONFIG_PATH}.")
-    elif gen_names:
-        print(
-            f"Successfully regenerated module names to {NAMES_PATH} "
-            f"and {MODULE_IDS_PATH}."
-        )
+    if runner():
+        raise RuntimeError(error)
+
+    print(f"Successfully {summary()}.")
 
 
 @manager.command()

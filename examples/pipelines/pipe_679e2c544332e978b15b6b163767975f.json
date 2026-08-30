@@ -1,0 +1,95 @@
+{
+  "modules": [
+    {
+      "id": "sw-1",
+      "type": "itembuilder",
+      "conf": {
+        "attrs": [
+          {
+            "key": {
+              "type": "text",
+              "value": "link"
+            },
+            "value": {
+              "type": "text",
+              "value": "www.google.com"
+            }
+          },
+          {
+            "key": {
+              "type": "text",
+              "value": "title"
+            },
+            "value": {
+              "type": "text",
+              "value": "google"
+            }
+          },
+          {
+            "key": {
+              "type": "text",
+              "value": "author"
+            },
+            "value": {
+              "type": "text",
+              "value": "$"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "sw-2",
+      "type": "strreplace",
+      "conf": {
+        "rule": [
+          {
+            "find": {
+              "type": "text",
+              "value": "$"
+            },
+            "replace": {
+              "type": "text",
+              "value": "USD"
+            },
+            "param": {
+              "type": "text",
+              "value": "first"
+            }
+          }
+        ]
+      },
+      "field": "author",
+      "assign": "author"
+    },
+    {
+      "id": "_OUTPUT",
+      "type": "output",
+      "conf": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "_w1",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-1"
+      },
+      "tgt": {
+        "id": "_INPUT",
+        "moduleid": "sw-2"
+      }
+    },
+    {
+      "id": "_w2",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-2"
+      },
+      "tgt": {
+        "id": "_INPUT",
+        "moduleid": "_OUTPUT"
+      }
+    }
+  ]
+}

@@ -206,6 +206,7 @@ class CurrencyFormatRawConf(TypedDict, total=False):
 
 class DateFormatRawConf(TypedDict, total=False):
     format: Value
+    timezone: Value
 
 
 class ExchangeRateRawConf(TypedDict, total=False):

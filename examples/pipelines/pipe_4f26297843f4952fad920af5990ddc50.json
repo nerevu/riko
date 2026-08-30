@@ -1,0 +1,146 @@
+{
+  "modules": [
+    {
+      "id": "sw-1",
+      "type": "itembuilder",
+      "conf": {
+        "attrs": [
+          {
+            "key": {
+              "type": "text",
+              "value": "content"
+            },
+            "value": {
+              "type": "text",
+              "value": "12/3/2014"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "sw-2",
+      "type": "datebuilder",
+      "conf": {},
+      "assign": "date"
+    },
+    {
+      "id": "sw-fmt",
+      "type": "input",
+      "conf": {
+        "test": {
+          "type": "bool",
+          "value": "true"
+        },
+        "default": {
+          "type": "text",
+          "value": "%B %d, %Y"
+        },
+        "prompt": {
+          "type": "text",
+          "value": "enter date format"
+        },
+        "name": {
+          "type": "text",
+          "value": "format_input"
+        },
+        "type": {
+          "type": "text",
+          "value": "text"
+        }
+      }
+    },
+    {
+      "id": "sw-3",
+      "type": "dateformat",
+      "conf": {
+        "format": {
+          "terminal": "format",
+          "type": "text"
+        }
+      },
+      "field": "date",
+      "emit": true
+    },
+    {
+      "id": "sw-4",
+      "type": "itembuilder",
+      "conf": {
+        "attrs": [
+          {
+            "key": {
+              "type": "text",
+              "value": "date"
+            },
+            "value": {
+              "terminal": "attrs_1_value",
+              "type": "text"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "_OUTPUT",
+      "type": "output",
+      "conf": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "_w1",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-1"
+      },
+      "tgt": {
+        "id": "_INPUT",
+        "moduleid": "sw-2"
+      }
+    },
+    {
+      "id": "_w2",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-fmt"
+      },
+      "tgt": {
+        "id": "format",
+        "moduleid": "sw-3"
+      }
+    },
+    {
+      "id": "_w3",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-2"
+      },
+      "tgt": {
+        "id": "_INPUT",
+        "moduleid": "sw-3"
+      }
+    },
+    {
+      "id": "_w4",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-3"
+      },
+      "tgt": {
+        "id": "attrs_1_value",
+        "moduleid": "sw-4"
+      }
+    },
+    {
+      "id": "_w5",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-4"
+      },
+      "tgt": {
+        "id": "_INPUT",
+        "moduleid": "_OUTPUT"
+      }
+    }
+  ]
+}

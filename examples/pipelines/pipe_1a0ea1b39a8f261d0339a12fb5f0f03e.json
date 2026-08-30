@@ -1,0 +1,119 @@
+{
+  "modules": [
+    {
+      "id": "sw-1",
+      "type": "itembuilder",
+      "conf": {
+        "attrs": [
+          {
+            "key": {
+              "type": "text",
+              "value": "content"
+            },
+            "value": {
+              "type": "text",
+              "value": "12/2/2014"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "sw-2",
+      "type": "datebuilder",
+      "conf": {},
+      "assign": "date"
+    },
+    {
+      "id": "sw-3",
+      "type": "dateformat",
+      "conf": {
+        "format": {
+          "type": "text",
+          "value": "%B %d, %Y"
+        }
+      },
+      "field": "date",
+      "emit": true
+    },
+    {
+      "id": "sw-4",
+      "type": "itembuilder",
+      "conf": {
+        "attrs": [
+          {
+            "key": {
+              "type": "text",
+              "value": "date"
+            },
+            "value": {
+              "terminal": "attrs_1_value",
+              "type": "text"
+            }
+          },
+          {
+            "key": {
+              "type": "text",
+              "value": "year"
+            },
+            "value": {
+              "type": "text",
+              "value": "1201"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "_OUTPUT",
+      "type": "output",
+      "conf": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "_w1",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-1"
+      },
+      "tgt": {
+        "id": "_INPUT",
+        "moduleid": "sw-2"
+      }
+    },
+    {
+      "id": "_w2",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-2"
+      },
+      "tgt": {
+        "id": "_INPUT",
+        "moduleid": "sw-3"
+      }
+    },
+    {
+      "id": "_w3",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-3"
+      },
+      "tgt": {
+        "id": "attrs_1_value",
+        "moduleid": "sw-4"
+      }
+    },
+    {
+      "id": "_w4",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-4"
+      },
+      "tgt": {
+        "id": "_INPUT",
+        "moduleid": "_OUTPUT"
+      }
+    }
+  ]
+}

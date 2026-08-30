@@ -10,14 +10,15 @@ transform is non-blocking (does no I/O), so ``async_pipe`` reuses the sync
 ``parser`` (``isasync`` is inferred from the ``async_pipe`` name).
 
 Examples:
-    >>> from riko import run
+    >>> from riko import issync, run
     >>>
     >>> next(pipe(iter([{'content': 'hi'}])))
     {'content': 'HI'}
-    >>> async def main():
-    ...     print(next(await async_pipe(iter([{'content': 'hi'}]))))
     >>>
-    >>> run(main)
+    >>> async def main():
+    ...     print(next(await async_pipe(iter([{"content": "hi"}]))))
+    >>>
+    >>> print({"content": "HI"}) if issync else run(main)
     {'content': 'HI'}
 
 (For explicit interface callables, see ``register_module.py``. For the ``module=``

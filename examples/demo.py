@@ -1,43 +1,16 @@
 # vim: sw=4:ts=4:expandtab
 
-r"""
+"""
 riko demo
 ~~~~~~~~~
 
-Word Count
+A runnable demo ``pipeline``: fetch a feed, then count the words on a fetched
+page. The equivalent word-count and feed-fetching doctests live in
+``README.rst``.
 
-    >>> from riko import get_path
-    >>> from riko.collections import SyncPipe
-    >>>
-    >>> url = get_path('users.jyu.fi.html')
-    >>> fetch_conf = {
-    ...     'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
-    >>> replace_conf = {'rule': {'find': '\\n', 'replace': ' '}}
-    >>>
-    >>> counts = (SyncPipe('fetchpage', conf=fetch_conf)
-    ...     .strreplace(conf=replace_conf, assign='content')
-    ...     .tokenizer(conf={'delimiter': ' '}, emit=True)
-    ...     .count())
-    >>>
-    >>> next(counts)
-    {'count': 70}
+Basic usage::
 
-Fetching feeds
-
-    >>> from riko.modules.fetch import pipe as fetch
-    >>>
-    >>> url = get_path('gawker.xml')
-    >>> intersection = [
-    ...     'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',
-    ...     'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
-    >>> feed = fetch(conf={'url': url})
-    >>> item = next(feed)
-    >>> set(item).issuperset(intersection)
-    True
-    >>> item['title'][:24]
-    'This Is What A Celebrity'
-    >>> item['link'][:23]
-    'http://feeds.gawker.com'
+    run-pipe demo
 """
 
 from typing import cast

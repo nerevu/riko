@@ -107,4 +107,15 @@ EXTENSION = frozenset(
     }
 )
 
-TYPES = frozenset({"AsyncStream", "Conf", "Feed", "Item", "Items", "Stream"})
+TYPES = frozenset(
+    {
+        "AsyncStream",
+        "Conf",
+        "DynamicConf",
+        "Feed",
+        "Item",
+        "Items",
+        "PipeTuples",
+        "Stream",
+    }
+)

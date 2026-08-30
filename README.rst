@@ -586,6 +586,12 @@ then see the following output in your terminal:
     Deadline to clear up health law eligibility near
     682
 
+The ``examples`` directory bundles more runnable ``pipelines``. E.g., try ``run-pipe
+usage``, ``run-pipe simple1``, or ``run-pipe wired``. The `Cookbook`_ covers the
+``register_alias``/``register_module`` runtime-registration examples, and
+``examples/pipelines/*.json`` holds JSON pipe definitions that compile to
+``examples/pypipelines/*.py`` (see the `DAG format`_ doc).
+
 Contributing
 ------------
 
