@@ -157,7 +157,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 __all__ = [
     "AsyncCollection",
     "AsyncPipe",
-    "Executor",
+    "PipeState",
     "SyncCollection",
     "SyncPipe",
     "Targets",

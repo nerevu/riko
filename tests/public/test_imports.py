@@ -2,105 +2,94 @@
 """
 Public-contract tests for the API boundary.
 
-A developer must be able to tell stable / extension / private from the import
-path alone. These are black-box tests: they import, they never reach inside.
+``riko`` define the stable application API. ``riko.ext`` defines the extension-author
+API. ``riko.bado`` is a supported async-runtime namespace; the BADO subset below is
+promoted into the stable application surface.
+
+These tests exercise public imports rather than implementation details.
 """
 
 from importlib import import_module
-from operator import attrgetter
 from types import BuiltinFunctionType, FunctionType
 
 import pytest
 
 import riko
 import riko.bado
-import riko.context
+import riko.collections
+import riko.compile
+import riko.exceptions
 import riko.ext
 import riko.modules
+import riko.modules._names
+import riko.types
+from riko._api_surface import (
+    BADO,
+    COLLECTIONS,
+    COMPILE,
+    EXTENSION,
+    MODULES,
+    PRIVATE_RESOLUTION,
+    ROOT_EXCEPTIONS,
+    STABLE,
+    TYPES,
+)
 
-MODULES = (riko, riko.bado, riko.ext, riko.modules)
+SURFACE_MODULES = (
+    riko.bado,
+    riko.collections,
+    riko.compile,
+    riko.ext,
+    riko.modules,
+    riko.exceptions,
+    riko,
+    riko.types,
+)
+PARTIAL_SURFACES = (
+    (riko.modules.__all__ + riko.modules._names.__all__, MODULES),
+    (riko.exceptions.__all__, ROOT_EXCEPTIONS),
+)
+CONF_TYPES = riko.types.modules.__all__
 
 
-PRIVATE_RESOLUTION = {
-    "CompositeStore",
-    "DirectoryStore",
-    "MappingStore",
-    "ModuleStore",
-    "PackageStore",
-    "PipeResolver",
-    "PipelineResolver",
-    "pipe_resolver",
-    "pipeline_resolver",
-}
-
-STABLE = {
-    "AsyncCollection",
-    "AsyncPipe",
-    "Context",
-    "ExecutionMode",
-    "Modules",
-    "PipeState",
-    "PipelineStateError",
-    "Sinks",
-    "Sources",
-    "SyncCollection",
-    "SyncPipe",
-    "Targets",
-    "Transforms",
-    "UnsupportedModuleError",
-    "UnsupportedPipelineError",
-    "async_read",
-    "async_return",
-    "async_sleep",
-    "async_write",
-    "list_modules",
-    "backend",
-    "build_pipeline",
-    "compile_pipe",
-    "convert_dag",
-    "describe_module",
-    "export",
-    "extract_dependencies",
-    "get_module_metadata",
-    "get_path",
-    "get_async_temp_file",
-    "get_temp_file",
-    "isasync",
-    "issync",
-    "list_targets",
-    "parse_pipe_def",
-    "run",
-}
-
-EXTENSION = {
-    "AsyncOperatorWrapper",
-    "AsyncProcessorWrapper",
-    "AsyncSplitterWrapper",
-    "DynamicConf",
-    "ModuleDefinition",
-    "ModuleMetadata",
-    "ModuleName",
-    "ModuleNameLike",
-    "ModuleRegistry",
-    "ModuleSubtype",
-    "ModuleType",
-    "ModuleWrapper",
-    "SyncOperatorWrapper",
-    "SyncProcessorWrapper",
-    "SyncSplitterWrapper",
-    "derive_category",
-    "get_conf_type",
-    "normalize_module_name",
-    "operator",
-    "processor",
-    "register",
-    "splitter",
-}
+EQUAL_SURFACES = (
+    (riko.bado, BADO),
+    (riko.collections, COLLECTIONS),
+    (riko.compile, COMPILE),
+    (riko.ext, EXTENSION),
+    (riko, STABLE),
+    (riko.types, TYPES),
+)
 
 
 @pytest.mark.smoke
-def test_stable_all_is_expected_set():
-    assert set(riko.__all__) == STABLE
+@pytest.mark.parametrize(
+    ("module", "surface"), EQUAL_SURFACES, ids=lambda m: getattr(m, "__name__", m)
+)
+def test_equal_surface_matches_expected(module, surface):
+    assert set(module.__all__) == surface
+
+
+@pytest.mark.parametrize(
+    ("names", "surface"), PARTIAL_SURFACES, ids=lambda m: getattr(m, "__name__", m)
+)
+def test_partial_surface_matches_expected(names, surface):
+    assert surface.issubset(names)
+
+
+def test_normal_module_confs_are_public():
+    assert "FetchConf" in CONF_TYPES
+    assert "RegexConf" in CONF_TYPES
+    assert "ItemBuilderConf" in CONF_TYPES
+
+
+@pytest.mark.parametrize("name", CONF_TYPES)
+def test_raw_module_confs_are_private(name):
+    assert not name.endswith(("RawConf", "RawRule"))
+
+
+def test_module_metadas_are_same():
+    assert riko.ext.ModuleMetadata is riko.types.modules.ModuleMetadata
 
 
 @pytest.mark.parametrize("name", sorted(STABLE))
@@ -108,28 +97,30 @@ def test_stable_names_importable(name):
     assert hasattr(riko, name)
 
 
-@pytest.mark.smoke
-def test_extension_all_is_expected_set():
-    assert set(riko.ext.__all__) == EXTENSION
-
-
 @pytest.mark.parametrize("name", sorted(EXTENSION))
 def test_extension_names_importable(name):
     assert hasattr(riko.ext, name)
 
 
-def test_context_shim_is_same_object():
-    assert riko.Context is riko.context.Context
+@pytest.mark.parametrize("name", riko.bado.__all__)
+def test_bado_reexports_are_same_object(name):
+    assert getattr(riko, name) is getattr(riko.bado, name)
 
 
-def test_no_private_names_in_public_all():
-    assert not any(n.startswith("_") for module in MODULES for n in module.__all__)
+@pytest.mark.parametrize("name", sorted(ROOT_EXCEPTIONS))
+def test_exception_reexports_are_same_object(name):
+    assert getattr(riko, name) is getattr(riko.exceptions, name)
 
 
-def test_no_accidental_internal_exports():
+@pytest.mark.parametrize("module", SURFACE_MODULES)
+def test_no_private_names_in_public_all(module):
+    assert not any(n.startswith("_") for n in module.__all__)
+
+
+@pytest.mark.parametrize("module", SURFACE_MODULES)
+def test_no_accidental_internal_exports(module):
     """Private resolution internals stay out of public namespace exports."""
-    public = (n for module in MODULES for n in module.__all__)
-    assert PRIVATE_RESOLUTION.isdisjoint(public)
+    assert PRIVATE_RESOLUTION.isdisjoint(module.__all__)
 
 
 @pytest.mark.parametrize("path", ["riko.ext.resolver", "riko.ext.pipelines"])
@@ -139,28 +130,18 @@ def test_resolution_internals_have_no_public_path(path):
         import_module(path)
 
 
-def test_no_leaked_public_functions():
-    """
-    No non-``__all__`` function is publicly reachable on ``riko``. The former
-    demoted helpers now live in private modules (``riko.paths``/``_objectify``/
-    ``_iterutils``/``_strutils``), so the public surface is exactly ``__all__``.
-    """
-    allowed = set(riko.__all__)
-    leaked = sorted(
-        name
-        for name, val in vars(riko).items()
-        if not name.startswith("_")
-        and name not in allowed
-        and isinstance(val, (FunctionType, BuiltinFunctionType))
-    )
-    assert leaked == []
+@pytest.mark.parametrize(("name", "val"), vars(riko).items())
+def test_no_leaked_public_functions(name, val):
+    """The top-level function surface is exactly the functions in ``__all__``."""
+    if not (name.startswith("_") or name in STABLE):
+        assert not isinstance(val, (FunctionType, BuiltinFunctionType))
 
 
 def test_stable_and_extension_do_not_intersect():
     assert STABLE.isdisjoint(EXTENSION)
 
 
-@pytest.mark.parametrize("module", MODULES, ids=attrgetter("__name__"))
+@pytest.mark.parametrize("module", SURFACE_MODULES)
 def test_all_has_no_duplicates(module):
     names = module.__all__
     assert len(names) == len(set(names))

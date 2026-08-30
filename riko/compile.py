@@ -138,6 +138,14 @@ _RAW_CONFS = {
     "xpathfetchpage": "XpathFetchPageRawConf",
 }
 
+__all__ = [
+    "build_pipeline",
+    "compile_pipe",
+    "convert_dag",
+    "extract_dependencies",
+    "parse_pipe_def",
+]
+
 
 class MyPrettyPrinter(PrettyPrinter):
     def format(

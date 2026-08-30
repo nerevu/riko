@@ -4,6 +4,15 @@ Changelog
 v0.77.0 (Unreleased)
 --------------------
 
+New
+~~~
+
+- Riko's exceptions now share a ``RikoError`` base, grouped under ``ModuleError``,
+  ``PipelineError``, and ``PubSubError``.
+
+- Promoted ``RikoError`` and the async helpers ``as_async``, ``async_map``, and
+  ``async_map_stream`` onto the top-level ``riko`` surface.
+
 Dev
 ~~~
 

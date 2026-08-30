@@ -22,6 +22,7 @@ from riko._metadata import PACKAGE_INFO
 from riko.bado._backend import async_sleep, backend, isasync, issync, run
 from riko.bado._util import async_read, async_return
 from riko.bado.io import async_write, get_async_temp_file
+from riko.bado.itertools import as_async, async_map, async_map_stream
 from riko.collections import (
     AsyncCollection,
     AsyncPipe,
@@ -42,6 +43,7 @@ from riko.compile import (
 from riko.context import Context, ExecutionMode
 from riko.exceptions import (
     PipelineStateError,
+    RikoError,
     UnsupportedModuleError,
     UnsupportedPipelineError,
 )
@@ -68,6 +70,7 @@ __all__ = [
     "Modules",
     "PipeState",
     "PipelineStateError",
+    "RikoError",
     "Sinks",
     "Sources",
     "SyncCollection",
@@ -76,6 +79,9 @@ __all__ = [
     "Transforms",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
+    "as_async",
+    "async_map",
+    "async_map_stream",
     "async_read",
     "async_return",
     "async_sleep",
