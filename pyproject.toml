@@ -237,6 +237,18 @@ markers = [
     "slow: slow test (thread/process pools, parallelism); exclude with -m 'not slow'",
     "simulated_network: exercises HTTP against a loopback server (no real internet)",
 ]
+filterwarnings = [
+    # hard-fail on real bugs
+    "error::ResourceWarning",
+    "error::RuntimeWarning",
+    "error::DeprecationWarning:riko",
+    "error::PendingDeprecationWarning:riko",
+    "error::pytest.PytestUnraisableExceptionWarning",
+
+    # everything else stays visible but non-fatal
+    "default::DeprecationWarning",
+    "default::PendingDeprecationWarning",
+]
 
 [tool.pylint.format]
 max-line-length=88

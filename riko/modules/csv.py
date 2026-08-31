@@ -94,7 +94,7 @@ async def async_parser(
     source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     content = cast(Stream, read_csv(source, **rkwargs))
-    return auto_close(content, source)
+    return auto_close(content, source, r)
 
 
 def parser(
@@ -136,7 +136,7 @@ def parser(
     source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     content = cast(Stream, read_csv(source, **rkwargs))
-    return auto_close(content, source)
+    return auto_close(content, source, f)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

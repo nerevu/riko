@@ -65,6 +65,9 @@ class AsyncPubSubHub:
         if self._slots.get(name) is slot:
             del self._slots[name]
 
+        slot.send_stream.close()
+        slot.receive_stream.close()
+
     async def publish(
         self, targets: Iterable[str], item: Item, *, timeout: float | None = None
     ) -> None:
@@ -102,4 +105,8 @@ class AsyncPubSubHub:
             self._discard(name, slot)
 
     def reset(self) -> None:
+        for slot in self._slots.values():
+            slot.send_stream.close()
+            slot.receive_stream.close()
+
         self._slots.clear()

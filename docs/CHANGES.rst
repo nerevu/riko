@@ -22,6 +22,14 @@ New
 - Pipe decorators now reject decoration options owned by a different decorator (e.g.
   ``embed`` on a ``processor``, ``skip_if`` on an ``operator``) with a ``TypeError``.
 
+Fixed
+~~~~~
+
+- Async pubsub and spool example no longer leak memory
+
+- The ``csv`` and ``fetchtable`` pipes no longer leak the fetched file when
+  ``has_header`` is false and the source is buffered for a second read.
+
 Dev
 ~~~
 
@@ -36,6 +44,8 @@ Dev
   the async test helpers.
 
 - ``manage codegen`` now reports the generated files it writes.
+
+- Made pytest warnings fail so future memory leaks no longer slip through.
 
 v0.76.1 (2026-08-28)
 --------------------

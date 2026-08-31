@@ -177,20 +177,22 @@ def get_response_encoding(
 
 
 # https://docs.python.org/3.3/reference/expressions.html#examples
-def auto_close[T](stream: Iterable[T], f: FileTypes) -> Iterator[T]:
+def auto_close[T](stream: Iterable[T], *files: FileTypes) -> Iterator[T]:
     """
-    Passes ``stream`` through so it closes ``f`` when iteration ends.
+    Passes ``stream`` through so it closes ``files`` when iteration ends.
 
-    Pairs a fetched stream with the file backing it. Closing runs in a
-    ``finally``, so ``f`` is released on exhaustion, an early ``break``, or an
+    Pairs a fetched stream with the files backing it. Closing runs in a
+    ``finally``, so each file is released on exhaustion, an early ``break``, or an
     exception. This is the tool for handles whose consumption is deferred. I.e., a
     parser that returns a lazy iterator after opening a file keeps the file alive
     until the caller drains it. Whereas a ``with``/``async with`` block would close
-    it before the first item is read.
+    it before the first item is read. Pass more than one file when a ``seekable``
+    copy is read but the original fetch must still be released; closing an already
+    closed file is a harmless no-op.
 
     Args:
         stream: The items to yield.
-        f: The file closed once iteration finishes.
+        files: The files closed once iteration finishes.
 
     Yields:
         The elements of ``stream``.
@@ -208,7 +210,8 @@ def auto_close[T](stream: Iterable[T], f: FileTypes) -> Iterator[T]:
     try:
         yield from stream
     finally:
-        f.close()
+        for f in files:
+            f.close()
 
 
 @overload
@@ -251,6 +254,7 @@ def buffer(  # noqa: E302
         >>> spool = buffer(StringIO("abc"))
         >>> spool.read()
         'abc'
+        >>> spool.close()
 
     """
     chunks = iter(f)

@@ -95,7 +95,7 @@ async def async_parser(
     source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     ext = splitext(url)[1]
-    return auto_close(read(source, ext, **rkwargs), source)
+    return auto_close(read(source, ext, **rkwargs), source, r)
 
 
 def parser(
@@ -136,7 +136,7 @@ def parser(
     source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     ext = splitext(url)[1]
-    return auto_close(read(source, ext, **rkwargs), source)
+    return auto_close(read(source, ext, **rkwargs), source, f)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
