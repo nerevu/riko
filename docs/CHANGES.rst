@@ -10,8 +10,17 @@ New
 - Riko's exceptions now share a ``RikoError`` base, grouped under ``ModuleError``,
   ``PipelineError``, and ``PubSubError``.
 
-- Promoted ``RikoError`` and the async helpers ``as_async``, ``async_map``, and
-  ``async_map_stream`` onto the top-level ``riko`` surface.
+- Promoted ``RikoError``, ``as_async``, ``async_map``, and ``async_map_stream`` to the
+  top-level ``riko`` surface.
+
+- Promoted ``async_url_open`` onto the top-level ``riko`` surface; it works both as an
+  awaitable and as an async context manager (``async with``).
+
+- Added ``url`` as a supported cast target so a pipe's ``ftype``/``ptype`` can cast a
+  field to a URL.
+
+- Pipe decorators now reject decoration options owned by a different decorator (e.g.
+  ``embed`` on a ``processor``, ``skip_if`` on an ``operator``) with a ``TypeError``.
 
 Dev
 ~~~
@@ -19,6 +28,14 @@ Dev
 - Centralized the various ``skipif(issync)`` test marks into a single ``skipif_issync``.
 
 - Added pub/sub sync/async streaming coverage and strict-xfail tripwire.
+
+- Included the ``examples`` directory in the test suite (doctests and compiled example
+  pipes).
+
+- Added CI smoke tests, ``perf``/``finance``/``slow`` test markers, and standardized
+  the async test helpers.
+
+- ``manage codegen`` now reports the generated files it writes.
 
 v0.76.1 (2026-08-28)
 --------------------
