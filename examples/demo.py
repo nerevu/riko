@@ -1,16 +1,15 @@
 # vim: sw=4:ts=4:expandtab
 
 """
-riko demo
-~~~~~~~~~
+Fetches a feed and counts the words on the fetched page.
 
-A runnable demo ``pipeline``: fetch a feed, then count the words on a fetched
-page. The equivalent word-count and feed-fetching doctests live in
-``README.rst``.
+The equivalent word-count and feed-fetching doctests live in ``README.rst``.
 
-Basic usage::
+Examples:
+    Run it::
 
-    run-pipe demo
+        run-pipe demo
+
 """
 
 from typing import cast

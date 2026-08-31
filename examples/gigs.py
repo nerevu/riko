@@ -1,13 +1,12 @@
 """
-gigs example
-~~~~~~~~~~~~
+Fetches a freelance-jobs JSON feed, drops duplicate links, filters out PHP gigs,
+and reverse-sorts the rest.
 
-Fetch a freelance-jobs JSON feed, drop duplicate links, filter out PHP gigs, and
-reverse-sort the rest — a synchronous ``SyncPipe`` flow over a local fixture.
+Examples:
+    Run it::
 
-Basic usage::
+        run-pipe gigs
 
-    run-pipe gigs
 """
 
 from pprint import pprint

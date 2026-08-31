@@ -1,15 +1,15 @@
 # vim: sw=4:ts=4:expandtab
 
 """
-usage example
-~~~~~~~~~~~~~
+Builds two items with ``itembuilder`` and hashes each one.
 
-A minimal runnable ``pipeline``: build two items with ``itembuilder`` and hash
-each one. Broader, doctested walkthroughs of riko's APIs live in ``README.rst``.
+Broader, doctested walkthroughs of riko's APIs live in ``README.rst``.
 
-Basic usage::
+Examples:
+    Run it::
 
-    run-pipe usage
+        run-pipe usage
+
 """
 
 from riko.collections import SyncPipe

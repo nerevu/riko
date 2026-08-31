@@ -1,13 +1,11 @@
 """
-simple1 example
-~~~~~~~~~~~~~~~
+Builds an item holding a URL, then rewrites it with ``regex``.
 
-Build an item holding a URL, then rewrite it with ``regex`` — the smallest
-``itembuilder`` + ``regex`` flow.
+Examples:
+    Run it::
 
-Basic usage::
+        run-pipe simple1
 
-    run-pipe simple1
 """
 
 from collections.abc import Mapping

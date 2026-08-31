@@ -1,13 +1,11 @@
 """
-simple2 example
-~~~~~~~~~~~~~~~
+Builds an item, then replaces a field's value with ``strreplace``.
 
-Build an item, then replace a field's value with ``strreplace`` — the smallest
-``itembuilder`` + ``strreplace`` flow.
+Examples:
+    Run it::
 
-Basic usage::
+        run-pipe simple2
 
-    run-pipe simple2
 """
 
 from pprint import pprint

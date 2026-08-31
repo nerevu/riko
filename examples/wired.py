@@ -1,13 +1,14 @@
 """
-wired example
-~~~~~~~~~~~~~
+Wires one pipe's output into another's terminal.
 
-Wire one pipe's output into another's terminal: a format ``input`` feeds a
-``dateformat`` whose result is built into an item with ``itembuilder``.
+A format ``input`` feeds a ``dateformat`` whose result is built into an item with
+``itembuilder``.
 
-Basic usage::
+Examples:
+    Run it::
 
-    run-pipe wired
+        run-pipe wired
+
 """
 
 from pprint import pprint

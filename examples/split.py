@@ -1,13 +1,12 @@
 """
-split example
-~~~~~~~~~~~~~
-
-Split one date ``input`` into two streams and format each differently with
+Splits one date ``input`` into two streams and formats each differently with
 ``dateformat`` (long form and year).
 
-Basic usage::
+Examples:
+    Run it::
 
-    run-pipe split
+        run-pipe split
+
 """
 
 from pprint import pprint

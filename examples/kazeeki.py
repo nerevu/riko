@@ -1,15 +1,16 @@
 # vim: sw=4:ts=4:expandtab
 
 """
-kazeeki example
-~~~~~~~~~~~~~~~
+Aggregates freelance jobs from several JSON feeds, normalizes their fields, and
+converts budgets to a common currency.
 
-Aggregate freelance jobs from several JSON feeds (odesk, guru, elance,
-freelancer), normalize their fields, and convert budgets to a common currency.
+The feeds are odesk, guru, elance, and freelancer.
 
-Basic usage::
+Examples:
+    Run it::
 
-    run-pipe kazeeki
+        run-pipe kazeeki
+
 """
 
 from functools import partial
@@ -17,7 +18,7 @@ from pprint import pprint
 from typing import cast
 
 from riko import AsyncPipe, SyncPipe, get_path
-from riko.types._streams import Items
+from riko.types import Items
 from riko.types.modules import (
     CurrencyFormatConf,
     CurrencyFormatRawConf,
