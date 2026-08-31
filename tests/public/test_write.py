@@ -73,18 +73,14 @@ class TestWriteParity:
 class TestWriteSkips:
     """Unwritable configurations degrade: nothing is written, items pass through."""
 
-    @pytest.mark.parametrize(
-        "target", ["bogus", "list", "tuple"], ids=["invalid", "list", "tuple"]
-    )
+    @pytest.mark.parametrize("target", ["bogus", "list", "tuple"])
     def test_sync_bad_target_skips_but_passes_through(self, tmp_path, target):
         path = tmp_path / "out"
         conf = cast(WriteConf, {"url": path, "target": target})
         assert list(pipe(ITEMS, conf=conf)) == ITEMS
         assert not path.exists()
 
-    @pytest.mark.parametrize(
-        "target", ["bogus", "list", "tuple"], ids=["invalid", "list", "tuple"]
-    )
+    @pytest.mark.parametrize("target", ["bogus", "list", "tuple"])
     @skipif_issync
     def test_async_bad_target_skips_but_passes_through(self, tmp_path, target):
         path = tmp_path / "out"
