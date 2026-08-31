@@ -43,7 +43,7 @@ jobs:
           cp -r tests "$tmp/tests"
           cd "$tmp"
           uv run --isolated --no-project \
-            --with "$GITHUB_WORKSPACE"/dist/*.tar.gz
+            --with "$GITHUB_WORKSPACE"/dist/*.tar.gz \
             --with pytest \
             --with pytest-timeout \
             pytest -p no:cacheprovider -o addopts="" -m smoke \

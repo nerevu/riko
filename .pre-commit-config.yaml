@@ -1,10 +1,14 @@
 repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
-  rev: v0.15.22
+  rev: v0.16.5
   hooks:
     - id: ruff-check
       args: [ --select, I, --fix]
     - id: ruff-check
       args: [ --fix ]
     - id: ruff-format
+- repo: https://github.com/rhysd/actionlint
+  rev: v1.7.12
+  hooks:
+    - id: actionlint
