@@ -47,6 +47,8 @@ Dev
 
 - Made pytest warnings fail so future memory leaks no longer slip through.
 
+- Add command ``manage release-notes`` to generate a release-notes draft from the changelog.
+
 v0.76.1 (2026-08-28)
 --------------------
 

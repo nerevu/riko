@@ -37,6 +37,37 @@ except ImportError:
 
 sys.excepthook = partial(exception_hook, debug=False)
 
+TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
+LINE_ANCHOR_RE = re.compile(r"^L\d")
+CHANGELOG_PATH = ROOT_DIR / "docs" / "CHANGES.rst"
+RELEASE_SECTION_RE = re.compile(
+    r"^(?P<version>v\d+\.\d+\.\d+) \((?P<release_date>[^)]+)\)\n-+\n\n"
+    r"(?P<body>.*?)"
+    r"(?=^v\d+\.\d+\.\d+ \([^)]+\)\n-+\n|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+
+RST_SUBHEADING_RE = re.compile(r"^(?P<title>[^\n]+)\n~+$", re.MULTILINE)
+
+CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
+    "config": (
+        gen_config_main,
+        lambda: f"wrote configuration file to {CONFIG_PATH}",
+        "Error updating configuration file!",
+    ),
+    "names": (
+        gen_names_main,
+        lambda: f"regenerated module names to {NAMES_PATH} and {MODULE_IDS_PATH}",
+        "Error regenerating module names!",
+    ),
+    "pipes": (
+        gen_pipelines_main,
+        lambda: "regenerated compiled pipe modules from their JSON definitions",
+        "Error regenerating compiled pipe modules!",
+    ),
+}
+
+
 uv: str | None = shutil.which("uv")
 tox: str | None = shutil.which("tox")
 pytest: str | None = shutil.which("pytest")
@@ -75,43 +106,6 @@ def hello():
     print("Hello world")
 
 
-CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
-    "config": (
-        gen_config_main,
-        lambda: f"wrote configuration file to {CONFIG_PATH}",
-        "Error updating configuration file!",
-    ),
-    "names": (
-        gen_names_main,
-        lambda: f"regenerated module names to {NAMES_PATH} and {MODULE_IDS_PATH}",
-        "Error regenerating module names!",
-    ),
-    "pipes": (
-        gen_pipelines_main,
-        lambda: "regenerated compiled pipe modules from their JSON definitions",
-        "Error regenerating compiled pipe modules!",
-    ),
-}
-
-
-@manager.command()
-@click.option(
-    "-m",
-    "--mode",
-    help="Which file to generate",
-    type=Choice(list(CODEGEN), case_sensitive=False),
-    default="config",
-)
-def codegen(mode="config"):
-    """Regenerate config, module-name, or compiled-pipe files"""
-    runner, summary, error = CODEGEN[mode]
-
-    if runner():
-        raise RuntimeError(error)
-
-    print(f"Successfully {summary()}.")
-
-
 @manager.command()
 @click.pass_context
 def help(ctx):
@@ -122,6 +116,9 @@ def help(ctx):
     print(f"  {commands}")
 
 
+# ---------------------------------------------------------------------------
+# Build helpers
+# ---------------------------------------------------------------------------
 def _clean():
     """Remove Python file and build artifacts"""
     for name in ("dist", "build"):
@@ -176,6 +173,9 @@ def _twine_check() -> int:
     return call(cmd)
 
 
+# ---------------------------------------------------------------------------
+# Lint helpers
+# ---------------------------------------------------------------------------
 def _check_types() -> int:
     """Check type annotations with pyright"""
     if not pyright:
@@ -217,10 +217,6 @@ def _ruff_check(where: str | None = "", unsafe_fixes: bool = False) -> int:
         args.append("--unsafe-fixes")
 
     return call([*args, *paths]) or call([ruff, "format", "--check", *paths])
-
-
-TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
-LINE_ANCHOR_RE = re.compile(r"^L\d")
 
 
 def _github_slug(text: str) -> str:
@@ -356,6 +352,38 @@ def _check_staged() -> int:
     return return_code
 
 
+# ---------------------------------------------------------------------------
+# Release helpers
+# ---------------------------------------------------------------------------
+def _latest_changelog_entry(path: Path = CHANGELOG_PATH) -> tuple[str, str, str]:
+    """Return the latest changelog version, release date, and RST body."""
+    text = path.read_text(encoding="utf-8")
+    match = RELEASE_SECTION_RE.search(text)
+
+    if not match:
+        raise RuntimeError(f"No release section found in {path}")
+
+    return (match["version"], match["release_date"], match["body"].strip())
+
+
+def _release_notes(path: Path = CHANGELOG_PATH) -> tuple[str, str, str]:
+    """Return the latest version, release date, and GitHub release notes."""
+    version, release_date, notes = _latest_changelog_entry(path)
+    notes = RST_SUBHEADING_RE.sub(r"### \g<title>", notes)
+    return version, release_date, notes
+
+
+def _validate_release(version: str, expected: str | None = None) -> None:
+    """Validate the changelog version against an expected release tag."""
+    if expected and version != expected:
+        raise RuntimeError(
+            f"Release tag {expected!r} does not match changelog version {version!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
 @manager.command()
 def check():
     """Lint staged Python changes with ruff"""
@@ -530,6 +558,41 @@ def test(paths=(), where=(), stop=None, **kwargs):  # noqa: PT028
 
     except CalledProcessError as e:
         exit(e.returncode)
+
+
+@manager.command()
+@click.option(
+    "-m",
+    "--mode",
+    help="Which file to generate",
+    type=Choice(list(CODEGEN), case_sensitive=False),
+    default="config",
+)
+def codegen(mode="config"):
+    """Regenerate config, module-name, or compiled-pipe files"""
+    runner, summary, error = CODEGEN[mode]
+
+    if runner():
+        raise RuntimeError(error)
+
+    print(f"Successfully {summary()}.")
+
+
+@manager.command("release-notes")
+def release_notes():
+    """Print GitHub release notes from the latest changelog section."""
+    version, release_date, notes = _release_notes()
+    tag = environ.get("GITHUB_REF_NAME")
+
+    if tag:
+        _validate_release(version, tag)
+
+        if release_date == "Unreleased":
+            raise RuntimeError(
+                f"Changelog entry for {version} is still marked Unreleased"
+            )
+
+    click.echo(notes)
 
 
 @manager.command()
