@@ -1,13 +1,13 @@
 import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
 from os.path import basename, splitext
 from types import ModuleType
 
-from riko.bado import run as async_run
-from riko.types.general import AsyncPipeParser, Function
+from riko.bado._backend import run as async_run
+from riko.types._wrappers import AsyncPipeParser
 
 io_error = FileNotFoundError
 
@@ -55,9 +55,7 @@ def file2name(_path: str) -> str:
 
 
 async def runner(
-    async_pipe: AsyncPipeParser,
-    test: bool = False,
-    cb: Function | None = None,
+    async_pipe: AsyncPipeParser, test: bool = False, cb: Callable | None = None
 ) -> None:
     result = await async_pipe(test=test)
     cb(result) if callable(cb) else None

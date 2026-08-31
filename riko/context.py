@@ -21,7 +21,7 @@ Examples:
 from copy import copy
 from enum import StrEnum
 
-from riko.types.values import Inputs
+from riko.types._collections import Inputs
 
 
 class ExecutionMode(StrEnum):

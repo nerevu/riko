@@ -1,26 +1,21 @@
-from collections.abc import Mapping, Sequence
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from re import Pattern, RegexFlag
-from typing import (
-    TYPE_CHECKING,
-    Literal,
-    NewType,
-    NotRequired,
-    Required,
-    TypedDict,
-    Union,
-)
+from typing import TYPE_CHECKING, Literal, NewType, NotRequired, Required, TypedDict
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
     from riko.cast import CastType, LocationType, SortableCastType
-    from riko.types._module_ids import LoopableModuleId, ModuleId
-    from riko.types.compile import PipeModule
-    from riko.types.general import Function
-    from riko.types.values import BasicValue, TargetLike
+
+    from ._module_ids import LoopableModuleId, ModuleId
+    from ._names import TargetLike
+    from ._scalars import BasicValue
+    from .compile import PipeModule
 
 
 # Shared
@@ -211,6 +206,7 @@ class CurrencyFormatRawConf(TypedDict, total=False):
 
 class DateFormatRawConf(TypedDict, total=False):
     format: Value
+    timezone: Value
 
 
 class ExchangeRateRawConf(TypedDict, total=False):
@@ -492,12 +488,12 @@ type AnyModuleRawConf = (
 
 class EmbedRef(TypedDict):
     id: str
-    type: Union["ModuleId", "PipeId", Literal["output"]]
+    type: ModuleId | PipeId | Literal["output"]
 
 
 class LoopableEmbedRef(TypedDict):
     id: str
-    type: "LoopableModuleId | PipeId"
+    type: LoopableModuleId | PipeId
 
 
 class EmbeddedModule(EmbedRef, total=False):
@@ -533,7 +529,7 @@ class FilterConfRule:
         "atleast",
         "atmost",
     ]
-    value: "BasicValue"
+    value: BasicValue
 
 
 @dataclass
@@ -541,7 +537,7 @@ class SortConfRule:
     field: str = "content"
     dir: Literal["asc", "desc"] = "asc"
     cast: bool = False  # Not implemented
-    type: Union["SortableCastType", None] = None
+    type: SortableCastType | None = None
 
 
 @dataclass
@@ -593,7 +589,7 @@ class StrTransformConfRule:
         "count",
         "find",
     ]
-    args: "BasicValue | Sequence[BasicValue]" = ""
+    args: BasicValue | Sequence[BasicValue] = ""
 
 
 # Confs
@@ -602,7 +598,7 @@ class SortConf(TypedDict):
 
 
 class InputConf(TypedDict, total=False):
-    type: "CastType"
+    type: CastType
     prompt: str
     default: str
     test: bool
@@ -639,7 +635,7 @@ class RssItemBuilderConf(TypedDict, total=False):
 
 
 class AggregateConf(TypedDict):
-    func: "Function"
+    func: Callable
 
 
 class CountConf(TypedDict, total=False):
@@ -720,7 +716,7 @@ class FilterConf(TypedDict, total=False):
 
 
 class GeolocateConf(TypedDict):
-    type: NotRequired["LocationType"]
+    type: NotRequired[LocationType]
 
 
 class JoinConf(TypedDict, total=False):
@@ -822,11 +818,11 @@ class TruncateConf(TypedDict, total=False):
 
 
 class TypecastConf(TypedDict):
-    type: NotRequired["CastType"]
+    type: NotRequired[CastType]
 
 
 class UdfConf(TypedDict):
-    func: "Function"
+    func: Callable
 
 
 class UniqConf(TypedDict, total=False):
@@ -847,7 +843,7 @@ class UrlParseConf(TypedDict, total=False):
 
 class WriteConf(TypedDict, total=False):
     url: Required[str | Path]
-    target: "TargetLike | None" = None
+    target: TargetLike | None = None
     mode: str = "wb+"
 
 
@@ -859,13 +855,13 @@ class XpathFetchPageConf(TypedDict, total=False):
 
 
 # General
-type ConfDictValues = "PipeModule" | ParsedParam
+type ConfDictValues = PipeModule | ParsedParam
 
 type RawConfValues = dict[str, str | int | bool]
 
 
 type ConfValues = (
-    "BasicValue"
+    BasicValue
     | ConfDictValues
     | bool
     | DataclassInstance
@@ -934,3 +930,72 @@ type AnyModuleConf = (
     | WriteConf
     | XpathFetchPageConf
 )
+
+type Conf = AnyModuleConf | AnyModuleRawConf
+
+__all__ = [
+    "AggregateConf",
+    "AnyConfRule",
+    "AnyModuleConf",
+    "CountConf",
+    "CsvConf",
+    "CurrencyFormatConf",
+    "DateFormatConf",
+    "ExchangeRateConf",
+    "FeedAutoDiscoveryConf",
+    "FetchConf",
+    "FetchDataConf",
+    "FetchPageConf",
+    "FetchSiteFeedConf",
+    "FetchTableConf",
+    "FetchTextConf",
+    "FilterConf",
+    "FilterConfRule",
+    "FindConfRule",
+    "GeolocateConf",
+    "InputConf",
+    "ItemBuilderConf",
+    "JoinConf",
+    "ModuleCategory",
+    "ModuleClass",
+    "ModuleMetadata",
+    "ModuleSubtype",
+    "ModuleSubtypes",
+    "ModuleType",
+    "ParsedParam",
+    "ReceiveConf",
+    "RefindConf",
+    "RegexConf",
+    "RegexConfRule",
+    "RenameConf",
+    "RenameConfRule",
+    "RssItemBuilderConf",
+    "SendConf",
+    "SimpleMathConf",
+    "SlugifyConf",
+    "SortConf",
+    "SortConfRule",
+    "SplitConf",
+    "StrReplaceConf",
+    "StrReplaceConfRule",
+    "StrTransformConf",
+    "StrTransformConfRule",
+    "StrconcatConf",
+    "StrfindConf",
+    "SubelementConf",
+    "Subkey",
+    "SubstrConf",
+    "SumConf",
+    "TailConf",
+    "Terminal",
+    "TimeoutConf",
+    "TokenizerConf",
+    "TruncateConf",
+    "TypecastConf",
+    "UdfConf",
+    "UniqConf",
+    "UrlBuilderConf",
+    "UrlParseConf",
+    "WriteConf",
+    "XpathFetchPageConf",
+]

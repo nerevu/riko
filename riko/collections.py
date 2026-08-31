@@ -5,8 +5,7 @@ Provides functions for creating (a)synchronous riko flows and streams.
 Examples:
     sync usage::
 
-        >>> from riko.collections import SyncPipe
-        >>> from riko import get_path
+        >>> from riko import get_path, SyncPipe
         >>>
         >>> fconf = {"url": get_path("gigs.json"), "path": "value.items"}
         >>> str_conf = {"delimiter": "<br>"}
@@ -43,9 +42,7 @@ Examples:
 
     async usage::
 
-        >>> from riko import get_path
-        >>> from riko import run, issync
-        >>> from riko.collections import AsyncPipe, AsyncCollection
+        >>> from riko import AsyncPipe, AsyncCollection, get_path, run, issync
         >>>
         >>> fconf = {"url": get_path("gigs.json"), "path": "value.items"}
         >>> str_conf = {"delimiter": "<br>"}
@@ -109,7 +106,11 @@ from typing import Any, Literal, Protocol, Self, TextIO, TypeGuard, cast, overlo
 
 import pygogo as gogo
 
-from riko.types.modules import ReceiveConf
+from riko._pubsub._types import ReceiveFunc
+from riko.types._collections import Inputs
+from riko.types._options import SkipIf
+from riko.types._scalars import BasicValue
+from riko.types.modules import Conf, ReceiveConf
 
 try:
     from csv2ofx.ofx import OFX
@@ -123,10 +124,10 @@ else:
 from meza import convert as cv
 from meza import io
 
-from riko import DEF_CONNECTION_COUNT
+from riko._constants import DEF_CONNECTION_COUNT
 from riko._iterutils import listize
 from riko._pubsub import sync_hub
-from riko.bado import async_return
+from riko.bado._util import async_return
 from riko.bado.itertools import (
     async_iter,
     async_map,
@@ -138,24 +139,15 @@ from riko.context import Context, ExecutionMode, parse_context
 from riko.exceptions import PipelineStateError
 from riko.ext._resolver import pipe_resolver
 from riko.ext.names import normalize_module_name
-from riko.types.general import (
+from riko.types._names import ModuleNameLike, TargetLike, TargetName
+from riko.types._streams import AsyncSource, AsyncStream, Feed, Item, Items, Stream
+from riko.types._wrappers import (
     AsyncPipeParser,
-    AsyncSource,
-    AsyncStream,
-    Conf,
     ConversionFunc,
-    Feed,
-    Function,
-    Item,
-    Items,
     ParserOutput,
-    ReceiveFunc,
-    SkipIf,
     SplitterParserOutput,
-    Stream,
     SyncPipeParser,
 )
-from riko.types.values import BasicValue, Inputs, ModuleNameLike, TargetLike, TargetName
 
 type AnyPool = ThreadPoolType | CPUPoolType
 type PoolFactory = Callable[..., AnyPool]
@@ -165,7 +157,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 __all__ = [
     "AsyncCollection",
     "AsyncPipe",
-    "Executor",
+    "PipeState",
     "SyncCollection",
     "SyncPipe",
     "Targets",
@@ -452,8 +444,8 @@ CONVERSION_FUNCS: dict[TargetLike, ConversionFunc] = {
 }
 
 if OFX is not None:
-    CONVERSION_FUNCS[Targets.OFX] = cast(ConversionFunc, records2ofx)
-    CONVERSION_FUNCS[Targets.QIF] = cast(ConversionFunc, records2qif)
+    CONVERSION_FUNCS[Targets.OFX] = records2ofx
+    CONVERSION_FUNCS[Targets.QIF] = records2qif
 
 
 def list_targets() -> list[str]:
@@ -503,14 +495,28 @@ def export(  # noqa: E704
 ) -> StringIO: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
+    items: Items,
+    type_: Literal["ofx", "qif", Targets.OFX, Targets.QIF],
+    f: str,
+    **kwargs: Any,
+) -> int: ...
+@overload  # noqa: E302
+def export(  # noqa: E704
+    items: Items,
+    type_: Literal["ofx", "qif", Targets.OFX, Targets.QIF],
+    f: None = ...,
+    **kwargs: Any,
+) -> Iterable[str]: ...
+@overload  # noqa: E302
+def export(  # noqa: E704
     items: Items, type_: TargetLike = ..., **kwargs: Any
-) -> StringIO | Items | None: ...
+) -> StringIO | Items | Iterable[str] | None: ...
 def export(  # noqa: E302
     items: Items,
     type_: TargetLike = Targets.LIST,
     f: str | TextIO | None = None,
     **kwargs: Any,
-) -> int | StringIO | Items | None:
+) -> int | StringIO | Items | Iterable[str] | None:
     """
     Converts a stream to ``type_``, optionally writing it to ``f``.
 
@@ -588,7 +594,7 @@ class PyPipe(_Lifecycle):
         conf: Conf | None = None,
         context: Context | None = None,
         field: str | None = None,
-        func: Function | None = None,
+        func: Callable | None = None,
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
         others: Iterable[str] | Iterable[Stream] | None = None,
@@ -637,7 +643,7 @@ class PyPipe(_Lifecycle):
         *,
         assign: str | None = None,
         field: str | None = None,
-        func: Function | None = None,
+        func: Callable | None = None,
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
         others: Iterable[str] | Iterable[Stream] | None = None,
@@ -717,7 +723,7 @@ class SyncPipe(PyPipe):
         chunksize: int | None = None,
         context: Context | None = None,
         field: str | None = None,
-        func: Function | None = None,
+        func: Callable | None = None,
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
         ordered: bool | None = False,
@@ -1455,7 +1461,7 @@ class AsyncPipe(PyPipe):
         connections: int = DEF_CONNECTION_COUNT,
         context: Context | None = None,
         field: str | None = None,
-        func: Function | None = None,
+        func: Callable | None = None,
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
         ordered: bool = False,

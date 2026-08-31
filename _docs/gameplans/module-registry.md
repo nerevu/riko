@@ -30,19 +30,23 @@ modules resolve the same way.
 **Interface subtlety.** `PipeResolver.resolve(name, interface)` where
 `interface ∈ {"pipe", "async_pipe"}` returns the callable for that interface. `ModuleDefinition`
 holds both `sync_pipe`/`async_pipe` wrappers; the façade selects by `interface`. `SyncPipe.__init__`
-calls `resolve(self.name, "pipe")`, `AsyncPipe` calls `"async_pipe"`.
+calls `resolve(self.name, "pipe")`, `AsyncPipe` calls `"async_pipe"`. These class-specific calls
+are shipped/as-built behavior; the target `Pipeline` compiler/execution resolves the native
+implementation for the selected private execution mode and adapts only when that side is absent.
 
 ## Durable decisions
 
-1. **Registry lifetime — hybrid.** Split by mutability, tracking the pub/sub P11 trajectory:
+1. **Registry lifetime — hybrid.** Split by mutability while preserving the target Context/module
+   boundary:
    - **Built-ins + entry points → global singleton.** Module *definitions* are immutable,
      process-global static facts; two concurrent pipelines sharing them is correct and safe. They
      carry none of the pub/sub cross-pipeline-state hazard, so Context-injecting them everywhere is
      churn with no isolation benefit. Lazy-imported (per the invariant above).
-   - **Runtime `register()` shadows → global with `reset()`, Context-scopable later.** The one
-     mutable, per-application tier (top precedence). Shipped global with a `reset()` for test
-     isolation (the `reset_pubsub()` pattern) — the transitional stage, with a seam to move just this
-     tier onto `Context.resources` when a concurrency hazard actually justifies it.
+   - **Runtime `register()` shadows → shipped global with `reset()`; target Context-local shadows
+     use the module namespace.** The current mutable per-application tier remains global for
+     compatibility/test isolation. The target immutable `Context` provides scoped module overrides
+     through `with_module(...)`; child Contexts may shadow parent/default definitions. Module
+     definitions never move into `Context.resources`, which is reserved for `Resource` definitions.
 2. **Entry-point group name — `"riko.modules"`.** One narrow group; every entry is unconditionally a
    `ModuleDefinition` (no discriminator branch in `PipeResolver`). Other extension kinds get sibling
    groups later (`riko.stores`, `riko.events`, `riko.converters`) rather than overloading this one.

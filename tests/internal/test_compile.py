@@ -13,7 +13,7 @@ from json import loads
 
 import pytest
 
-from riko.bado import issync, run
+from riko.bado._backend import run
 from riko.compile import (
     build_pipeline,
     compile_pipe,
@@ -25,14 +25,10 @@ from riko.compile import (
 )
 from riko.context import Context
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.types._streams import Item
 from riko.types.compile import DagModule, LoopModule, PipeDag, PipeDef, PipeModule
-from riko.types.general import Item
-from riko.types.modules import (
-    ItemBuilderRawConf,
-    Param,
-    TruncateRawConf,
-)
-from tests import TESTS_DIR
+from riko.types.modules import ItemBuilderRawConf, Param, TruncateRawConf
+from tests import TESTS_DIR, skipif_issync
 
 PIPELINE_DIR = TESTS_DIR / "pipelines"
 PYPIPELINE_DIR = TESTS_DIR / "pypipelines"
@@ -300,8 +296,7 @@ def test_convert_dag_generates_ids_when_omitted():
     assert edges == [("sw-1", "sw-2"), ("sw-2", "_OUTPUT")]
 
 
-@pytest.mark.anyio
-@pytest.mark.skipif(issync, reason="async support not installed")
+@skipif_issync
 def test_async_codegen_matches_sync():
     """
     ``compile(is_async=True)`` emits a runnable anyio pipeline whose output

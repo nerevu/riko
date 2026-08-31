@@ -34,8 +34,8 @@ import pygogo as gogo
 from riko._iterutils import listize
 from riko.bado.itertools import coop_reduce
 from riko.cast import BasicCastType
-from riko.types.configs import StrTransformObjconf
-from riko.types.general import Defaults, Opts
+from riko.types._configs import StrTransformObjconf
+from riko.types._options import Defaults, Opts
 from riko.types.modules import StrTransformConfRule
 
 from . import processor

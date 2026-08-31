@@ -8,11 +8,11 @@ Provides module-name normalization and discovery categories.
 
 from typing import TYPE_CHECKING, overload
 
-from riko.types.values import ModuleName
+from riko.types._names import ModuleName
 
 if TYPE_CHECKING:
+    from riko.types._names import ModuleNameLike
     from riko.types.modules import ModuleCategory, ModuleMetadata
-    from riko.types.values import ModuleNameLike
 
 SINK_NAMES: frozenset[str] = frozenset({"output", "write"})
 

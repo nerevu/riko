@@ -35,14 +35,16 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko import ENCODING
+from riko._constants import ENCODING
 from riko._io import Fetch, auto_close
-from riko.bado import io
+from riko.bado.io import async_url_open
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import any2dict
-from riko.types.configs import XpathFetchPageObjconf
-from riko.types.general import Defaults, Extraction, FileTypes, Item, Stream
+from riko.types._configs import XpathFetchPageObjconf
+from riko.types._io import FileTypes
+from riko.types._options import Defaults
+from riko.types._streams import Item, Stream
 
 from . import processor
 
@@ -57,7 +59,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: XpathFetchPageObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: XpathFetchPageObjconf, **kwargs: object
 ) -> Stream:
     """
     Asynchronously reads the page and returns the nodes at ``xpath``.
@@ -110,13 +112,13 @@ async def async_parser(
         ext = "html"
 
     # TODO: centralize error handling and retry logic
-    f = await io.async_url_open(url, encoding=objconf.encoding)
+    f = await async_url_open(url, encoding=objconf.encoding)
     content = any2dict(f, ext, objconf.html5, path=objconf.xpath)
     return auto_close(content, f)
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: XpathFetchPageObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: XpathFetchPageObjconf, **kwargs: object
 ) -> Stream:
     """
     Reads the page and returns the nodes at ``xpath``.

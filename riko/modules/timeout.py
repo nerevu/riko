@@ -32,13 +32,7 @@ Attributes:
 
 """
 
-from collections.abc import (
-    AsyncIterable,
-    AsyncIterator,
-    Generator,
-    Iterable,
-    Iterator,
-)
+from collections.abc import AsyncIterable, AsyncIterator, Generator, Iterable, Iterator
 from datetime import timedelta
 from logging import Logger
 from time import monotonic_ns
@@ -48,8 +42,10 @@ import pygogo as gogo
 
 from riko.bado.itertools import async_iter
 from riko.cast import BasicCastType
-from riko.types.configs import TimeoutObjconf
-from riko.types.general import Defaults, Feed, Opts, PipeTuples, Stream
+from riko.types._configs import TimeoutObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Feed, Stream
+from riko.types._wrappers import PipeTuples
 
 from . import operator
 
@@ -66,9 +62,7 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
     timeout_ns: int
 
     def __init__(
-        self,
-        elements: AsyncIterable[T] | Iterable[T],
-        timeout_ms: int = 0,
+        self, elements: AsyncIterable[T] | Iterable[T], timeout_ms: int = 0
     ) -> None:
         if isinstance(elements, AsyncIterable):
             self.aiter = aiter(elements)

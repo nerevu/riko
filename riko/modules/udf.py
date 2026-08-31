@@ -20,16 +20,17 @@ Attributes:
 
 """
 
-from collections.abc import Callable
-from inspect import iscoroutinefunction
+from collections.abc import Awaitable, Callable
+from inspect import isawaitable
 from logging import Logger
 from typing import Any
 
 import pygogo as gogo
 
-from riko.modules._prepare import require_kwarg
-from riko.types.configs import UdfObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts
+from riko.modules._prepare import require_arg
+from riko.types._configs import UdfObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Item
 
 from . import processor
 
@@ -40,7 +41,12 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs: object
+    item: Item,
+    extraction: object,
+    objconf: UdfObjconf,
+    *,
+    func: Callable[[Item], Item | Awaitable[Item]] | None = None,
+    **kwargs: object,
 ) -> Item:
     """
     Asynchronously applies ``func`` to one item.
@@ -49,9 +55,7 @@ async def async_parser(
         item: The entry to process.
         extraction: The extracted ``field`` value. Unused.
         objconf: The pipe configuration. Unused.
-
-    Kwargs:
-        func (callable): The function to apply to the item. Awaited when it is an async
+        func: The function to apply to the item. Awaited when it is an async
             function. Required.
 
     Returns:
@@ -72,12 +76,18 @@ async def async_parser(
         {'y': 3}
 
     """
-    func: Callable[[Item], Item] = require_kwarg(kwargs, "func", "udf")
-    return await func(item) if iscoroutinefunction(func) else func(item)
+    func = require_arg(func, "func", "udf", strict=True)
+    result = func(item)
+    return await result if isawaitable(result) else result
 
 
 def parser(
-    item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs: object
+    item: Item,
+    extraction: object,
+    objconf: UdfObjconf,
+    *,
+    func: Callable[[Item], Item] | None = None,
+    **kwargs: object,
 ) -> Item:
     """
     Applies ``func`` to one item.
@@ -86,9 +96,7 @@ def parser(
         item: The entry to process.
         extraction: The extracted ``field`` value. Unused.
         objconf: The pipe configuration. Unused.
-
-    Kwargs:
-        func (callable): The function to apply to the item. Required.
+        func: The function to apply to the item. Required.
 
     Returns:
         Whatever ``func`` returns.
@@ -104,7 +112,7 @@ def parser(
         {'y': 3}
 
     """
-    func: Callable[[Item], Item] = require_kwarg(kwargs, "func", "udf")
+    func = require_arg(func, "func", "udf", strict=True)
     return func(item)
 
 

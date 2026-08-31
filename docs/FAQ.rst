@@ -71,8 +71,8 @@ Which imports are public?
 
 ``riko`` organizes its public interface into three import tiers:
 
-- **Stable**: the top-level ``riko`` package (mirrored by ``riko.api``) holds the
-  SemVer-guaranteed API: the ``SyncPipe``/``AsyncPipe``/``SyncCollection``/
+- **Stable**: the top-level ``riko`` package holds the SemVer-guaranteed API: the
+  ``SyncPipe``/``AsyncPipe``/``SyncCollection``/
   ``AsyncCollection`` classes, ``Context``, ``ExecutionMode``, ``PipeState``,
   ``backend``, ``build_pipeline``, ``compile_pipe``, ``convert_dag``, ``export``,
   ``extract_dependencies``, ``get_module_metadata``, ``get_path``, ``isasync``,
@@ -81,11 +81,11 @@ Which imports are public?
   ``Transforms``/``Sinks``/``Targets`` bucket enums), and the pipeline exceptions.
 - **Extension**: ``riko.ext`` holds the symbols for authoring custom ``pipes``:
   the ``processor``/``operator``/``splitter`` decorators and the module-metadata types.
-- **Private**: all import paths outside ``riko``, ``riko.api``, and ``riko.ext``,
+- **Private**: all import paths outside ``riko``, ``riko.bado``, and ``riko.ext``,
   including individual ``riko.modules.*`` implementations and other implementation
   modules.
 
-Application code should import from ``riko`` or ``riko.api``.
+Application code should import from ``riko``.
 
 .. code-block:: python
 
@@ -749,14 +749,24 @@ To make a module resolvable by name (so ``SyncPipe('your.module', ...)`` and the
 module so it exposes ``pipe`` and/or ``async_pipe`` functions, then either register
 it at runtime or declare an entry point.
 
-Entry point (discovered lazily; no edit to riko core, nothing imported until the
-name is resolved):
+For entry point discovery, point it straight at the module. riko reads ``pipe``/
+``async_pipe`` off it and uses its docstring summary as the discovery
+``description``:
+
+.. code-block:: toml
+
+    # pyproject.toml
+    [project.entry-points."riko.modules"]
+    "example.shout" = "your_ext.shout"  # a module exposing pipe/async_pipe
+
+For finer control (explicit callables, a custom description), name a
+``ModuleDefinition`` or a zero-arg factory returning one instead:
 
 .. code-block:: python
 
     # your_ext/modules.py
     from riko.ext import ModuleDefinition
-    from your_ext import shout  # a module exposing pipe/async_pipe
+    from your_ext import shout
 
     shout_definition = ModuleDefinition(module=shout, description="Uppercase 'content'.")
 
@@ -766,8 +776,7 @@ name is resolved):
     [project.entry-points."riko.modules"]
     "example.shout" = "your_ext.modules:shout_definition"
 
-Runtime registration (process-global; precedence is runtime → entry point →
-built-in):
+For runtime registration, call ``register`` instead:
 
 .. code-block:: python
 
@@ -775,12 +784,12 @@ built-in):
 
     register(ModuleDefinition(name="example.shout", module=shout))
 
-Point ``module`` at an object exposing ``pipe``/``async_pipe``, or pass
-``sync_pipe``/``async_pipe`` explicitly for a bare callable. Registered and
+``module`` takes an object exposing ``pipe``/``async_pipe``. You can alternatively pass
+``sync_pipe``/``async_pipe`` explicitly for bare callables. Registered and
 entry-point names surface in ``list_modules()`` alongside the packaged built-ins.
-See ``examples/riko-example-ext`` for a complete, installable example, the
-`Cookbook`_ for custom ``processor`` and ``operator`` examples, and the
-`contributing guide`_ for the additional work required for a built-in module.
+See ``examples/riko-example-ext`` for a complete example, the `Cookbook`_ for custom
+``processor`` and ``operator`` examples, and the `contributing guide`_ for the
+additional work required for a built-in module.
 
 How should errors and resource cleanup be handled?
 --------------------------------------------------

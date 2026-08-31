@@ -9,15 +9,12 @@ re-export point. ``Stream``/``AsyncStream`` (sync/async iterators of ``Item``) a
 async source adapter targets.
 """
 
-from riko.types.general import (
-    AsyncItems,
+from riko.types._streams import AsyncItems, AsyncStream, Feed, Stream
+from riko.types._wrappers import (
     AsyncOperatorWrapper,
     AsyncProcessorWrapper,
     AsyncSplitterWrapper,
-    AsyncStream,
-    Feed,
     ModuleWrapper,
-    Stream,
     SyncOperatorWrapper,
     SyncProcessorWrapper,
     SyncSplitterWrapper,

@@ -19,7 +19,7 @@ import pytest
 from riko._io import Fetch
 from riko._iterutils import listize
 from riko._rssutils import augment_entries, truncate_content
-from riko.bado import issync, run
+from riko.bado._backend import run
 from riko.compile import (
     abuild_pipeline,
     build_pipeline,
@@ -29,17 +29,16 @@ from riko.compile import (
 from riko.context import Context, ExecutionMode
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.ext._pipelines import pipeline_resolver
-from riko.parsers import IS_LXML
-from riko.types.general import (
-    AsyncPipelineDependencies,
+from riko.types._pipeline import AsyncPipelineDependencies, SyncPipelineDependencies
+from riko.types._rss import FeedParserRSSEntry
+from riko.types._streams import StatefulItem
+from riko.types._wrappers import (
     AsyncPipeParser,
     ParserMaterializedOutput,
     ParserOutput,
-    SyncPipelineDependencies,
     SyncPipeParser,
 )
-from riko.types.values import FeedParserRSSEntry, StatefulItem
-from tests import TESTS_DIR
+from tests import TESTS_DIR, skipif_issync
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
@@ -300,7 +299,7 @@ class TestBasics:
         assert item["k:content"].startswith("<p>Hello, I need to fix an application")
         assert item["k:content"].endswith("are welcome to this project.<br><br><b>")
 
-    @pytest.mark.skipif(issync, reason="async support not installed")
+    @skipif_issync
     def test_async_kazeeki1(self):
         """Loads the async kazeeki simple test fetchdata pipeline."""
         pipe_name = "pipe_async_kazeeki1"
@@ -336,7 +335,7 @@ class TestBasics:
         assert item["k:content"].startswith(" With this specification sheet we")
         assert item["k:content"].endswith("for implementing a website for a german...")
 
-    @pytest.mark.skipif(issync, reason="async support not installed")
+    @skipif_issync
     def test_async_kazeeki2(self):
         """Loads the async kazeeki simple test itembuilder pipeline."""
         pipe_name = "pipe_async_kazeeki2"
@@ -464,7 +463,7 @@ class TestBasics:
         item = cast(dict, items[0])
         assert item["title"].startswith("Running “Native” Data Wrangling Applicati")
 
-    @pytest.mark.skipif(not IS_LXML, reason="lxml not installed")
+    @pytest.mark.perf
     def test_feed(self):
         """
         Loads a simple test pipeline and compiles and executes it to check
@@ -503,7 +502,7 @@ class TestBasics:
         item = cast(dict, items[0])
         assert item["title"].startswith("Running “Native” Data Wrangling Applicat")
 
-    @pytest.mark.skipif(not IS_LXML, reason="lxml not installed")
+    @pytest.mark.perf
     def test_european_performance_cars(self):
         """Loads a pipeline containing a sort"""
         pipe_name = "pipe_8NMkiTW32xGvMbDKruymrA"
@@ -672,13 +671,7 @@ class TestBasics:
 
         expected = [
             ("", "dateinput1", "dateinput1", "datetime", "10/14/2010"),
-            (
-                "",
-                "locationinput1",
-                "locationinput1",
-                "location",
-                "isle of wight, uk",
-            ),
+            ("", "locationinput1", "locationinput1", "location", "isle of wight, uk"),
             ("", "numberinput1", "numberinput1", "float", "12121"),
             ("", "privateinput1", "privateinput1", "text", ""),
             (
@@ -854,7 +847,7 @@ class TestBasics:
             f'<img src="{chart_url}" alt="QRcode" /><br/>'
         )
 
-    @pytest.mark.skipif(not IS_LXML, reason="lxml not installed")
+    @pytest.mark.perf
     def test_createrss(self):
         """
         Loads a pipeline containing rssitembuilder

@@ -145,14 +145,10 @@ Replace persona-heavy agent libraries with reusable workflow profiles containing
 
 ```python
 class AiProvider(Protocol):
-    async def generate(
-        self,
-        request: InferenceRequest,
-    ) -> InferenceResult: ...
+    async def generate(self, request: InferenceRequest) -> InferenceResult: ...
 
     async def generate_structured[T](
-        self,
-        request: StructuredInferenceRequest[T],
+        self, request: StructuredInferenceRequest[T]
     ) -> StructuredInferenceResult[T]: ...
 ```
 
@@ -192,10 +188,7 @@ Generate or enrich content.
 
 ```python
 flow.infer(
-    conf={
-        "field": "body",
-        "instruction": "Write a two-sentence summary.",
-    },
+    conf={"field": "body", "instruction": "Write a two-sentence summary."},
     assign="summary",
 )
 ```
@@ -208,15 +201,9 @@ Consume a `CapabilityCatalog` and emit a `SelectionOutcome`.
 plan = catalog.capabilityselect(
     conf={
         "task": "Convert 100 USD to GBP.",
-        "input": {
-            "amount": 100,
-            "source_currency": "USD",
-            "target_currency": "GBP",
-        },
+        "input": {"amount": 100, "source_currency": "USD", "target_currency": "GBP"},
         "allow_discovery": True,
-        "discovery_providers": [
-            "apis_guru",
-        ],
+        "discovery_providers": ["apis_guru"],
         "minimum_confidence": 0.80,
     }
 )
@@ -566,10 +553,7 @@ request human review
 ```
 
 ```python
-VerificationPolicy(
-    maximum_attempts=2,
-    on_failure="reselect",
-)
+VerificationPolicy(maximum_attempts=2, on_failure="reselect")
 ```
 
 No unbounded “try again” behavior.

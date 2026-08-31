@@ -13,10 +13,8 @@ global-vs-per-parent ``count`` gap.
 
 from typing import cast
 
-import pytest
-
 import riko.modules.loop as loop_module
-from riko.bado import issync, run
+from riko.bado._backend import run
 from riko.context import Context
 from riko.modules._subpipe import mark_subpipe
 from riko.modules.loop import async_pipe as async_loop
@@ -25,13 +23,15 @@ from riko.modules.regex import pipe as regex
 from riko.modules.strconcat import pipe as strconcat
 from riko.modules.tokenizer import async_pipe as async_tok
 from riko.modules.tokenizer import pipe as tokenizer
-from riko.types.general import AsyncStream, Item, OperatorWrapperOutput, Stream
+from riko.types._streams import AsyncStream, Item, Stream
+from riko.types._wrappers import OperatorWrapperOutput
 from riko.types.modules import (
     RegexRawConf,
     RegexRawRule,
     StrconcatRawConf,
     TokenizerRawConf,
 )
+from tests import skipif_issync
 
 PARENTS = [{"title": "a b"}, {"title": "c d"}]
 TOKENIZER_CONF = TokenizerRawConf({"delimiter": {"type": "text", "value": " "}})
@@ -228,11 +228,7 @@ class TestImplicitLooping:
     def test_matches_explicit_loop(self):
         parents = [{"title": "a b"}, {"title": "c d"}]
         implicit = tokenizer(
-            iter(parents),
-            conf=TOKENIZER_CONF,
-            field="title",
-            count="first",
-            emit=True,
+            iter(parents), conf=TOKENIZER_CONF, field="title", count="first", emit=True
         )
         explicit = _tokenizer_loop(iter(parents), count="first", emit=True)
         assert list(implicit) == list(explicit)
@@ -300,7 +296,7 @@ class TestSubpipeLoop:
         assert closed == ["a", "b"]
 
 
-@pytest.mark.skipif(issync, reason="async support not installed")
+@skipif_issync
 class TestAsyncLoop:
     """
     The lazy-async loop (``async_pipe``) runs the embed once per parent
@@ -366,7 +362,7 @@ class TestAsyncLoop:
         assert seen == ["a b"]
 
 
-@pytest.mark.skipif(issync, reason="async support not installed")
+@skipif_issync
 class TestAsyncSubpipeLoop:
     """
     The lazy-async loop may embed an *async* sub-pipeline (``AsyncSubPipe``): it

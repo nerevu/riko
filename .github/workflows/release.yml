@@ -16,10 +16,22 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7.0.1
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --no-dev
+
+      - name: Generate Release Notes
+        run: uv run --no-sync manage release-notes > release-notes.md
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub
         run: |
           gh release create ${{ github.ref_name }} \
             --title "${{ github.ref_name }}" \
+            --notes-file release-notes.md \
             --generate-notes

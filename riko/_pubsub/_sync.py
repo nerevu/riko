@@ -13,8 +13,10 @@ from itertools import count
 
 import pygogo as gogo
 
-from riko.types.general import Item, Receiver
-from riko.types.values import MissingType, StatefulItem, StreamState
+from riko.types._sentinels import MissingType, StreamState
+from riko.types._streams import Item, StatefulItem
+
+from ._types import Receiver
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 

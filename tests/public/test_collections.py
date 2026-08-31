@@ -11,10 +11,10 @@ from typing import Any, cast
 
 import pytest
 
-from riko import get_path
 from riko._iterutils import noop
 from riko._pubsub import async_hub, sync_hub
-from riko.bado import gather_results, issync, run
+from riko.bado._backend import run
+from riko.bado._util import gather_results
 from riko.collections import (
     CONVERSION_FUNCS,
     AsyncPipe,
@@ -27,7 +27,10 @@ from riko.collections import (
 )
 from riko.exceptions import ReceiverUnavailableError
 from riko.ext.names import ModuleName, normalize_module_name
-from riko.types.general import Item, Items
+from riko.paths import get_path
+from riko.types._guards import is_stateful_item
+from riko.types._sentinels import StreamState
+from riko.types._streams import Item, Items
 from riko.types.modules import (
     ItemBuilderConf,
     ParsedParam,
@@ -35,15 +38,13 @@ from riko.types.modules import (
     StrReplaceConf,
     StrReplaceConfRule,
 )
-from riko.types.values import StreamState
-from tests import PipeBuilder
+from tests import PipeBuilder, skipif_issync
 
 value = "once is 1x,twice is 2x,thrice is 3x"
 attrs = ParsedParam({"key": "content", "value": value})
 builder_conf = ItemBuilderConf({"attrs": attrs})
 recv_conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
 strr_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
-marks = pytest.mark.skipif(issync, reason="async support not available")
 
 
 async def _gather_pubsub(sender: AsyncPipe, *receivers: AsyncPipe) -> list[Items]:
@@ -57,7 +58,7 @@ async def _drain_ghost(sender: AsyncPipe) -> Items:
 
 _ENGINES = [
     pytest.param(SyncPipe, id="sync"),
-    pytest.param(AsyncPipe, id="async", marks=marks),
+    pytest.param(AsyncPipe, id="async", marks=skipif_issync),
 ]
 
 SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
@@ -187,6 +188,31 @@ class TestSyncCollections(_CollectionTest):
         captured = capsys.readouterr()
         assert captured.out.split("\n")[0] == "{'content': 'once is 1x'}"
 
+    @pytest.mark.xfail(
+        reason="stripping lifecycle markers from the receiver stream is not yet "
+        "implemented",
+        strict=True,
+    )
+    def test_lifecycle_markers_do_not_leak_into_user_data(self):
+        """
+        A drained subscription must yield only user items, never ``StreamState``
+        bookkeeping. Today ``receive`` surfaces ``{"state": StreamState.PENDING}``
+        (and ``DONE`` on close) into the public stream, so the received values
+        are not exactly the sent items.
+        """
+        receiver = SyncPipe("receive", conf={"name": "leakcheck", **recv_conf})
+        drained = [next(receiver)]
+
+        sender = (
+            SyncPipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .send(others=["leakcheck"])
+        )
+
+        list(sender)
+        drained.extend(receiver)
+        assert not any(map(is_stateful_item, drained))
+
     def test_send_signals_done_on_early_close(self):
         """
         A sender abandoned before it exhausts still signals DONE to the
@@ -313,6 +339,7 @@ class TestSyncCollections(_CollectionTest):
         _ = list(SyncPipe.publish(items, "survivor"))
         assert list(SyncPipe.subscribe("survivor")) == items
 
+    @pytest.mark.smoke
     def test_stream(self):
         """Tests a basic stream pipeline."""
         stream = (
@@ -328,6 +355,7 @@ class TestSyncCollections(_CollectionTest):
         assert first_item == {"content": 396558121}
         assert self.runs == 1
 
+    @pytest.mark.slow
     @pytest.mark.timeout(30)
     def test_pstream(self):
         """Tests a parallel stream pipeline."""
@@ -354,6 +382,7 @@ class TestSyncCollections(_CollectionTest):
         assert self.runs == 3
 
 
+@pytest.mark.slow
 class TestSyncPipeExecutor:
     def test_process_executor_creates_pool(self):
         with SyncPipe("hash", source=SRC, parallel=True, threads=False) as pipe:
@@ -379,7 +408,7 @@ class TestSyncPipeExecutor:
         assert head.hash().executor is Executor.INLINE
 
 
-@pytest.mark.skipif(issync, reason="async support not available")
+@skipif_issync
 class TestAsyncCollections(_CollectionTest):
     def test_pipes_use_loopability_for_mapping(self):
         async_transformer = AsyncPipe("strtransform")
@@ -413,7 +442,6 @@ class TestAsyncCollections(_CollectionTest):
         assert self.runs == 9
         assert captured.out == "{'content': 396558121}\n"
 
-    @pytest.mark.anyio
     @pytest.mark.timeout(10)
     def test_pubsub(self):
         """
@@ -483,7 +511,6 @@ class TestAsyncCollections(_CollectionTest):
         captured = capsys.readouterr()
         assert captured.out.split("\n")[0] == "{'content': 'once is 1x'}"
 
-    @pytest.mark.anyio
     @pytest.mark.timeout(10)
     def test_pubsub_missing_receiver_times_out(self):
         """
@@ -701,7 +728,7 @@ class TestSyncPipeChaining:
             _ = SRC | SyncPipe("hash", source=SRC)
 
 
-@pytest.mark.skipif(issync, reason="async support not available")
+@skipif_issync
 class TestAsyncPipeChaining:
     """The ``|`` operators wire AsyncPipe pipes (construction is loop-free)."""
 

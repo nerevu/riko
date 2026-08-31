@@ -24,7 +24,7 @@ Attributes:
 
 """
 
-from riko.types.values import Region
+from riko.types._locations import Region
 
 LOCATIONS: dict[str, Region] = {
     "Asia": {"code_2": "AS", "continent": "Asia"},

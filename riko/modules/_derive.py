@@ -6,11 +6,9 @@ riko.modules._derive
 Provides functions for deriving module subtypes and loop behavior.
 """
 
-from typing import cast
-
 from riko.cast import BasicCastType
 from riko.modules._inference import gen_operator_return_kinds
-from riko.types.general import ModuleParser
+from riko.types._wrappers import ModuleParser
 from riko.types.modules import (
     ModuleSubtype,
     ModuleSubtypes,
@@ -59,10 +57,10 @@ def derive_subtypes(
 ) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
     if module_type == "processor":
         none_ftype = ftype == BasicCastType.NONE
-        subtype: ModuleSubtype | None = "source" if none_ftype else "transformer"
-        result = subtype, cast(ModuleSubtypes, {subtype})
+        subtype = "source" if none_ftype else "transformer"
+        result: tuple[ModuleSubtype | None, ModuleSubtypes] = subtype, {subtype}
     elif module_type == "splitter":
-        result = "splitter", cast(ModuleSubtypes, {"splitter"})
+        result = "splitter", {"splitter"}
     else:
         result = _derive_operator_subtypes(pipe)
 

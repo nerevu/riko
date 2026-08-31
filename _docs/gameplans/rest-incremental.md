@@ -14,7 +14,8 @@ This plan is informed particularly by dlt's `rest_api` source, Singer's tap/stat
 conventions, and Riko's connector and monitoring plans.
 
 Tabular conversion is intentionally **not** specified here. Pandas, Arrow, and Polars
-boundaries are owned by `tabular-interop.md`.
+boundaries are owned by `tabular-interop.md` and the single-Pipeline batch contract in
+`execution-semantics.md`.
 
 ## 2. Positioning
 
@@ -48,10 +49,11 @@ This gameplan extends `connectors.md`.
 
 This plan owns higher-level **REST collection semantics** built on top of that transport.
 
-`feed-monitoring.md` remains authoritative for `SourceCheckpoint`, checkpoint stores,
-commit ordering, dedupe, change detection, and monitoring state. This plan defines how REST
-requests and responses encode and advance source cursors; it must reuse the shared
-checkpoint lifecycle rather than invent a second state system.
+`execution-semantics.md` is authoritative for `FeedResult`, `FeedState`, `StateStore`,
+`StateKey`, checkpoint/CAS behavior, identity/generation, and execution-owned resource
+lifecycle. `feed-monitoring.md` owns monitoring-specific observation/change/dedupe policy.
+REST cursor state must use those shared state contracts rather than defining a second
+`SourceCheckpoint` system.
 
 `tabular-interop.md` remains authoritative for Pandas/Arrow/Polars conversion.
 
@@ -65,7 +67,8 @@ Do not add to core:
 * embedded plaintext secrets in serialized pipeline configuration;
 * a second HTTP client stack;
 * a monolithic `fetch` function that guesses every API convention;
-* DataFrame/Arrow conversion semantics in this plan.
+* DataFrame/Arrow conversion semantics in this plan;
+* a REST-specific persistence/checkpoint protocol.
 
 ## 5. R0 — REST source plan
 
@@ -87,39 +90,28 @@ class RestSourcePlan:
 ```
 
 The plan is serializable, inspectable, and fingerprintable. Credentials remain references
-resolved through connector/`ExecutionContext` mechanisms.
+resolved through declared `Context` resources and execution-owned connector sessions.
 
-## 6. R1 — explicit REST source
+## 6. R1 — first-class REST source
 
-Introduce a dedicated REST source rather than overloading RSS-oriented `fetch`.
-
-Possible API:
+REST is a first-class Riko module rather than an overload of RSS-oriented `fetch`:
 
 ```python
-flow = AsyncPipe(
-    "rest",
-    conf={
-        "base_url": "https://api.example.com/",
-        "path": "events",
-    },
-)
+flow = Pipeline("rest", conf={"base_url": "https://api.example.com/", "path": "events"})
 ```
 
-or resolver-backed source configuration when connector architecture is available:
+Serialized form:
 
-```python
-flow = AsyncPipe(
-    "source",
-    conf={
-        "type": "rest",
-        "client": {...},
-        "endpoint": {...},
-    },
-)
+```json
+{"type": "rest", "conf": {"base_url": "https://api.example.com/", "path": "events"}}
 ```
 
-Final naming follows `connectors.md` compatibility rules around `fetch`; existing RSS
-semantics must not change silently.
+A resolver-backed `source`/`fetchauto` entry point may still select the same REST service
+when connector architecture is available, but the canonical Python/serialized module is
+`rest`. Existing RSS `fetch` semantics must not change silently.
+
+The same definition runs under sync or async execution; do not create separate public
+`SyncPipe`/`AsyncPipe` REST APIs.
 
 ## 7. R2 — response record selection
 
@@ -142,7 +134,8 @@ Requirements:
 * explicit missing-path behavior;
 * object payloads may emit one record;
 * arrays emit records lazily where parser support permits;
-* response metadata stays namespaced rather than being merged into each user record.
+* response metadata stays in `FeedResult.metadata`/item observation rather than being
+  merged into each user record.
 
 ## 8. R3 — pagination vocabulary
 
@@ -197,8 +190,8 @@ Provider-facing lifecycle such as OAuth status/refresh/revoke belongs to
 `provider-integrations.md`; storage/resolution of credential material belongs to
 `connectors.md`.
 
-The REST source simply consumes the resolved credential/session and must not implement a
-parallel secret or token store.
+The REST source consumes a declared resolved credential/session resource and must not
+implement a parallel secret or token store.
 
 ## 10. R5 — incremental extraction
 
@@ -216,17 +209,22 @@ Example:
 }
 ```
 
-The value is encoded into the shared source checkpoint owned by `feed-monitoring.md`.
+The candidate cursor is represented as source state using the common `FeedState` /
+`StateStore` contract. It is not written through a REST-specific checkpoint API.
 
 Rules:
 
 * advance the candidate cursor while processing responses;
-* commit it only through the shared checkpoint commit lifecycle;
+* final finite-source state becomes committable only after `FeedResult.items` completes
+  successfully;
+* infinite/repeated polling uses explicit incremental checkpoint boundaries;
 * comparison semantics (`max`, ordered token, opaque cursor) are explicit;
 * equal-cursor records require a tie-break strategy when ordering is not strict;
 * initial/full-refresh behavior is explicit;
-* cursor state is serializable and inspectable;
-* a failed page/handoff cannot move committed state past unprocessed records.
+* cursor state is backend-serializable and inspectable;
+* a failed page/handoff cannot move committed state past unprocessed records;
+* state mutation uses the shared CAS contract and conflicts propagate rather than silently
+  reloading/rerunning.
 
 ## 11. R6 — cursor strategies
 
@@ -285,7 +283,8 @@ Requirements:
 
 * dependency edges appear in workflow introspection;
 * bounded async concurrency is reused;
-* parent identity/context can be projected into child metadata when configured;
+* parent identity/provenance can be projected into child metadata when configured;
+* child generation is deterministically derived from parent/source identity;
 * N+1 behavior is visible in plans/metrics;
 * rate/concurrency limits are explicit;
 * dependencies serialize in workflow definitions.
@@ -304,12 +303,14 @@ REST request concurrency is distinct from downstream CPU parallelism.
 
 Requirements:
 
-* reuse AnyIO bounded concurrency;
+* reuse bounded execution concurrency;
 * honor `Retry-After` where appropriate;
 * expose throttling metrics;
-* reuse sessions rather than opening one per item;
+* reuse execution-owned sessions rather than opening one per item;
 * cancellation stops queued requests;
-* retries are bounded and policy-driven.
+* retries are bounded and policy-driven;
+* retry reuses the same execution-derived idempotency/provenance identity where the HTTP
+  operation is side-effecting.
 
 Generic retry semantics remain aligned with execution/orchestration contracts; this section
 only specializes HTTP rate-limit behavior.
@@ -334,20 +335,29 @@ must not automatically mutate warehouse schemas.
 ```text
 REST source owns
     HTTP request
-    credential reference use
+    declared credential/session resource use
     pagination
     REST cursor extraction
     response record extraction
 
-shared checkpoint contract owns
+execution/state contract owns
+    FeedResult / FeedState
+    StateStore CAS
     persisted source position
+    checkpoint boundaries
+    identity / generation
     commit ordering
+
+monitoring owns
+    dedupe
+    change detection
+    observation policy
 
 Riko pipes own
     filtering
     mapping
     joins
-    fan-out
+    explicit fan-out
     enrichment
     aggregation
     validation hooks
@@ -375,7 +385,8 @@ Its broad Python/tabular input ergonomics are relevant, but implementation belon
 Borrow from dltHub conceptually:
 
 * deployment/scheduling belongs above the extraction library;
-* persisted source state should survive scheduled runs.
+* persisted source state should survive scheduled runs when a persistent `StateStore` is
+  configured.
 
 Do not copy destination/schema-loading as Riko's primary execution model.
 
@@ -395,10 +406,16 @@ ordinary in-process execution.
 ```text
 periodic finite poll
 → REST cursor extraction
-→ shared checkpoint lifecycle
+→ FeedState / StateStore lifecycle
 → optional dedupe / changed
 → anomaly / filter
-→ fan-out
+→ explicit fan-out
+```
+
+Repeated acquisition uses the shared poll vocabulary:
+
+```python
+Pipeline.poll(source, interval=60)
 ```
 
 If an API has a reliable cursor, dedupe may be unnecessary. If the cursor reports changed
@@ -418,23 +435,22 @@ external HTTP origins
 credential references
 parent REST resources
 dependent endpoint edges
-checkpoint namespaces
+stateful owner/checkpoint identities
 ```
 
 Compiled Python must retain equivalent source semantics.
 
 ## 20. Tabular interoperability
 
-A REST stream may be materialized or batched into Pandas/Arrow only through the explicit
-contracts in `tabular-interop.md`:
+REST remains record-oriented by default. Batch mode is enabled through the ordinary
+`Pipeline` contract rather than REST-specific frame conversion or a parallel `BatchPipe`:
 
-```text
-REST records
-→ ordinary Riko transforms
-→ to_pandas() / to_arrow() / to_arrow_batches()
+```python
+flow = Pipeline("rest", conf=conf, batch=True, batch_size=1000)
 ```
 
-No REST-specific frame conversion API is defined here.
+The negotiated representation/backend and Pandas/Arrow/Polars conversion details belong
+to `tabular-interop.md` / `execution-semantics.md`.
 
 ## 21. Observability
 
@@ -445,7 +461,7 @@ Emit metrics/events for:
 * records emitted;
 * retries and rate-limit delay;
 * candidate cursor before/after;
-* checkpoint commit outcome through the shared checkpoint layer;
+* state/checkpoint commit outcome through the shared `StateStore` layer;
 * dependent-resource request count;
 * response bytes;
 * schema fingerprint changes.
@@ -466,25 +482,26 @@ Required deterministic fixtures:
 6. offset/limit pagination;
 7. repeated-cursor loop detection;
 8. bearer/API-key credential resolution without serialized secret;
-9. monotonic timestamp cursor resume using the shared checkpoint contract;
+9. monotonic timestamp cursor resume using `FeedState` / `StateStore`;
 10. compound timestamp/id tie handling;
 11. failed handoff does not commit a candidate cursor;
-12. dependent parent/child endpoint execution;
-13. bounded child-request concurrency;
-14. `Retry-After` / rate-limit behavior;
-15. serialized workflow compiles and preserves REST semantics.
+12. CAS conflict leaves committed state unchanged and propagates;
+13. dependent parent/child endpoint execution;
+14. bounded child-request concurrency;
+15. `Retry-After` / rate-limit behavior;
+16. serialized workflow compiles and preserves REST semantics.
 
-Frame conversion tests live in `tabular-interop.md`.
+Frame/batch representation tests live in `tabular-interop.md`.
 
 ## 23. Phases
 
 ```text
 R0  RestSourcePlan
-R1  explicit REST source
+R1  first-class rest module
 R2  response data selection
 R3  pagination strategies
-R4  connector credential integration
-R5  incremental cursor extraction
+R4  connector credential/resource integration
+R5  FeedState incremental cursor extraction
 R6  compound/opaque cursor strategies
 R7  dependent endpoints
 R8  request concurrency/rate limits
@@ -494,12 +511,14 @@ R9  schema observations/drift integration
 ## 24. Definition of done
 
 1. Common REST APIs can be ingested without custom pagination loops.
-2. Credentials remain references resolved by connector infrastructure.
-3. REST cursor state uses the shared checkpoint lifecycle and commits only after successful
-   handoff.
-4. Compound cursors prevent timestamp-boundary data loss where configured.
-5. Dependent endpoints are represented as ordinary Riko topology.
-6. REST request concurrency and rate limits are bounded and observable.
-7. REST source configuration works in Python and serialized workflow definitions.
-8. Pandas/Arrow/Polars behavior is referenced, not duplicated, from `tabular-interop.md`.
-9. Riko remains a record-processing library rather than a destination-first loader.
+2. `Pipeline("rest", ...)` and `{"type":"rest", ...}` are the canonical module forms.
+3. Credentials remain references resolved through declared resources.
+4. REST cursor state uses `FeedState` / `StateStore` and commits only at valid lifecycle
+   boundaries.
+5. Compound cursors prevent timestamp-boundary data loss where configured.
+6. Dependent endpoints are represented as ordinary Riko topology with deterministic
+   provenance.
+7. REST request concurrency and rate limits are bounded and observable.
+8. REST source configuration works in Python and serialized workflow definitions.
+9. Pandas/Arrow/Polars behavior is referenced, not duplicated, from `tabular-interop.md`.
+10. Riko remains a record-processing library rather than a destination-first loader.

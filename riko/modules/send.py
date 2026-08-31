@@ -33,15 +33,17 @@ Attributes:
 """
 
 from logging import Logger
-from typing import Any, cast
+from typing import Any
 
 import pygogo as gogo
 
 from riko._pubsub import async_hub, sync_hub
 from riko.bado.itertools import as_async
-from riko.modules._prepare import require_kwarg
-from riko.types.configs import SendObjconf
-from riko.types.general import Defaults, Feed, Opts, PipeTuples, Stream
+from riko.modules._prepare import require_arg
+from riko.types._configs import SendObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Feed, Stream
+from riko.types._wrappers import PipeTuples
 
 from . import operator
 
@@ -51,7 +53,12 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    stream: Stream | Feed, objconf: SendObjconf, tuples: PipeTuples, **kwargs: str
+    stream: Stream | Feed,
+    objconf: SendObjconf,
+    tuples: PipeTuples,
+    *,
+    others: list[str] | None = None,
+    **kwargs: object,
 ) -> Stream:
     """
     Asynchronously publishes each item to every target, then returns them.
@@ -69,8 +76,7 @@ async def async_parser(
         tuples: Iterable of (item, objconf). Note: this shares the `stream`
             iterator, so consuming it will consume `stream` as well.
 
-    Kwargs:
-        others (list[str]): Receivers to push to. Required.
+        others: Receivers to push to. Required.
 
     Returns:
         A sync iterator over each source item, unchanged. Awaiting publishes the
@@ -82,7 +88,7 @@ async def async_parser(
         ReceiverUnavailableError: If a target never starts within ``max_wait``.
 
     """
-    others: list[str] = require_kwarg(kwargs, "others", "send", strict=True)
+    others = require_arg(others, "others", "send", strict=True)
     timeout = objconf.max_wait
     sent = []
 
@@ -97,7 +103,13 @@ async def async_parser(
 
 
 def parser(
-    stream: Stream, objconf: SendObjconf, tuples: PipeTuples, **kwargs: object
+    stream: Stream,
+    objconf: SendObjconf,
+    tuples: PipeTuples,
+    *,
+    others: list[str] | None = None,
+    ids: dict[str, int] | None = None,
+    **kwargs: object,
 ) -> Stream:
     """
     Publishes each item to every target, then yields it unchanged.
@@ -111,9 +123,9 @@ def parser(
         tuples: Iterable of (item, objconf). Note: this shares the `stream`
             iterator, so consuming it will consume `stream` as well.
 
-    Kwargs:
-        others (list[str]): Receivers to push to. Required.
-        ids (dict[str, int]): Mapping of receiver name to delivery id (default: None).
+        others: Receivers to push to. Required.
+
+        ids: Mapping of receiver name to delivery id (default: None).
 
     Yields:
         Each source item, unchanged.
@@ -139,8 +151,7 @@ def parser(
         {'x': 0}
 
     """
-    others: list[str] = require_kwarg(kwargs, "others", "send", strict=True)
-    ids = cast(dict[str, int] | None, kwargs.get("ids"))
+    others = require_arg(others, "others", "send", strict=True)
 
     for item in stream:
         for target in others:
@@ -153,7 +164,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: str) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously pushes items to named receivers.
 
@@ -187,7 +198,7 @@ async def async_pipe(*args: Any, **kwargs: str) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: str) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Pushes each items to named receivers.
 

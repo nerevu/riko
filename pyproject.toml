@@ -1,5 +1,5 @@
 [project]
-version = "0.76.1"
+version = "0.77.0"
 name = "riko"
 authors = [
     {name = "Reuben Cummings", email = "reubano@gmail.com"}
@@ -65,10 +65,10 @@ finance = [
 test = [
     "coverage>=4.3.4,<8.0.0",
     "pytest>=8.0.0",
-    "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.0.0,<8.0.0",
     "pytest-timeout>=2.4.0",
     "pytest-xdist>=3.8.0",
+    "sybil>=6,<10",
 ]
 
 lint = [
@@ -95,6 +95,7 @@ compile-pipe = "riko.cli.compile:run"
 convert-dag = "riko.cli.convert_dag:run"
 gen-config = "riko.cli.gen_config:main"
 gen-names = "riko.cli.gen_names:main"
+gen-pipelines = "riko.cli.gen_pipelines:main"
 
 [tool.uv]
 # Rebuild the local `riko` install when any source file changes, not just when
@@ -114,6 +115,9 @@ extend-exclude = [
     "build/*",
     "dist/*",
 ]
+
+[tool.ruff.format]
+skip-magic-trailing-comma = true
 
 [tool.ruff.lint]
 # E704 is default-ignored by ruff (formatter conflict) but suppressed for an
@@ -186,6 +190,7 @@ max-complexity = 11
 
 [tool.ruff.lint.isort]
 known-first-party = ["riko"]
+split-on-trailing-comma = false
 
 [tool.ruff.lint.extend-per-file-ignores]
 "tests/**/*" = [
@@ -194,6 +199,13 @@ known-first-party = ["riko"]
 ]
 
 "tests/pypipelines/*" = [
+    "N999",  # Invalid module name
+    "N802",  # Function name
+    "N806",  # Variable in function should be lowercase (generated _OUTPUT)
+    "UP009",  # UTF-8 encoding declaration (generated header)
+]
+
+"examples/pypipelines/*" = [
     "N999",  # Invalid module name
     "N802",  # Function name
     "N806",  # Variable in function should be lowercase (generated _OUTPUT)
@@ -214,13 +226,29 @@ exclude = [
 
 [tool.pytest.ini_options]
 addopts = ["--doctest-modules", "--doctest-glob=*.rst", "--cov=riko", "--tb=short"]
-testpaths = ["tests", "riko", "README.rst", "docs"]
+testpaths = ["tests", "riko", "examples", "README.rst", "docs", "_docs/API_SURFACE.md"]
 doctest_optionflags = ["ELLIPSIS"]
 timeout = 300
 markers = [
     "anyio: requires the async optional dependencies (anyio + httpx)",
+    "smoke: fast install-validation subset run against the built wheel/sdist",
+    "perf: requires the perf extra (lxml/ijson/fastfeedparser); auto-skips if missing",
+    "finance: requires the finance extra (csv2ofx); auto-skips if missing",
+    "slow: slow test (thread/process pools, parallelism); exclude with -m 'not slow'",
+    "simulated_network: exercises HTTP against a loopback server (no real internet)",
 ]
-asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    # hard-fail on real bugs
+    "error::ResourceWarning",
+    "error::RuntimeWarning",
+    "error::DeprecationWarning:riko",
+    "error::PendingDeprecationWarning:riko",
+    "error::pytest.PytestUnraisableExceptionWarning",
+
+    # everything else stays visible but non-fatal
+    "default::DeprecationWarning",
+    "default::PendingDeprecationWarning",
+]
 
 [tool.pylint.format]
 max-line-length=88

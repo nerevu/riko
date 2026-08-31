@@ -214,26 +214,41 @@ the call site.
 
 Determine a symbol's documentation tier in this order:
 
-1. Exported from `riko` / `riko.api` → **STABLE**
+1. Exported from `riko` → **STABLE**
 2. Exported from `riko.ext` → **EXTENSION**
 3. Otherwise → **PRIVATE** unless a documented sub-API says otherwise
 
 An underscore is a strong private signal, but `__all__` and the API-surface
-contract are authoritative — a symbol implemented in an ordinary module is STABLE
-if `riko.api.__all__` re-exports it.
+contract are authoritative.
 
 - **STABLE** — explain user-visible behavior and normal workflows; prefer
   executable examples; hide implementation machinery.
 - **EXTENSION** — explain the contract an extension author must satisfy
   (lifecycle, invariants, protocols, callbacks, configuration, runtime
   interactions); include an example when it clarifies how to implement.
-- **PRIVATE** — document only non-obvious implementation knowledge: why the
-  helper exists, invariants, assumptions, ownership, ordering, mutation,
-  consumption, concurrency, or coupling. An obvious helper needs no docstring;
-  `"""Get the field."""` is worse than none.
+- **PRIVATE** — document non-obvious implementation knowledge: why the helper
+  exists, invariants, assumptions, ownership, ordering, mutation, consumption,
+  concurrency, or coupling.
 
-Do not add `Args`/`Returns`/`Examples` mechanically to private helpers. A private
-docstring earns its place by documenting a **why, invariant, assumption, or trap**.
+Within a private module, split the rule by name:
+
+- A **non-underscore function** — the module's own internal API, e.g.
+  `gen_return_inferences` — carries **all** the sections its signature implies
+  (`Args:`, `Returns:`/`Yields:`, `Raises:`) **plus an `Examples:` doctest**,
+  **always**, even when it looks obvious, exactly like a STABLE or EXTENSION
+  object. The summary and any prose lead with the **why, invariant, assumption,
+  or trap**; the sections stack on top, never in place of it.
+- An **underscore-prefixed helper may omit the sections — or the docstring
+  entirely — when it is obvious**: `_matches_abc(candidate, abc) -> bool` needs
+  none, and `"""Get the field."""` is worse than nothing. But the moment a `_`
+  helper documents a why/invariant/trap, complete the sections its signature
+  implies rather than stopping at prose.
+
+The `Examples:` doctest is **required for the non-underscore case** and stays
+**optional for underscore helpers** (reserved for where a compact executable
+example clarifies non-obvious behavior). Either way it is real, meaningful
+executable doctest demonstrating the function's own behavior — never illustrative
+pseudocode padded in to satisfy the rule.
 
 ## House formatting (ruff-enforced)
 
@@ -332,7 +347,7 @@ and a stale mechanism summary misleads faster than no summary at all.
 ### Private modules
 
 An underscore-prefixed module gets a module-level example **only when it has a
-public API** — a name it defines that is re-exported from `riko`, `riko.api`,
+public API** — a name it defines that is re-exported from `riko`, `riko.bado`,
 `riko.ext`, or `riko.modules`. When it does, the example imports through that
 public path, never the private one:
 
@@ -355,13 +370,30 @@ compact executable example clarifies non-obvious behavior.
 - Triple-double-quoted; the summary is a concise descriptive line
   (placed per the house formatting above).
 - Summaries read as *this object does X* — use **third-person present**
-  (`Counts`, `Returns`, `Configures`), not the imperative (`Count`, `Return`,
+  (`Counts`, `Formats`, `Configures`), not the imperative (`Count`, `Format`,
   `Configure`). D401 is disabled precisely to allow this. A noun-phrase summary
   is fine for a class/type (`A pipeline execution context.`).
+- A summary **never begins with `Returns`/`Yields`** — describing the output is
+  the `Returns:`/`Yields:` section's job, and a `Returns`-led summary only
+  restates it (and usually the function name too). Lead with the *action*:
+  `default_user_agent` → not `"""Returns the default user agent string."""`
+  (echoes the name, duplicates `Returns:`) but
+  `"""Formats the default user agent as name/version."""`.
 - Blank line after the summary only when more detail follows.
 - Do not repeat the signature or annotated types; document semantics, not syntax.
-- Sections, only when needed: `Args:` `Returns:` `Yields:` `Raises:` `Examples:`
-  `Attributes:` `Notes:`. Never leave an empty section.
+- Sections, only when needed, and always in this order: `Args:` →
+  `Returns:`/`Yields:` → `Raises:` → `Examples:` → `Notes:`. `Examples:` is
+  never first among the sections — a docstring that jumps from the summary
+  straight to `Examples:`, skipping `Args:`/`Returns:`, is the single most
+  common miss. Never leave an empty section.
+- Give every non-underscore function the sections its signature implies: `Args:`
+  for its parameters, `Returns:`/`Yields:` for its output. Model it on the file's
+  *fullest* docstring, not its thinnest — in `riko/_io.py` that is
+  `ext_from_content_type`/`seekable`, not a bare summary. This holds across all
+  tiers: a private module's public-named function is documented as completely as a
+  STABLE one. An underscore-prefixed helper may still stay bare when obvious (see
+  the PRIVATE-tier rule above), but once documented it never stops at prose when
+  its signature implies `Args:`/`Returns:`/`Yields:`.
 - Do not document `self` or `cls`.
 - Do not restate defaults obvious from the signature unless the default has
   semantic importance.
@@ -369,6 +401,12 @@ compact executable example clarifies non-obvious behavior.
   for a single value. Describe what the caller observes, not how the function is
   implemented — a `pipe` that is `return parser(...)` still uses `Yields:`,
   because every `pipe` hands back an iterator (see "The two returns of a pipe").
+- The summary names what the helper is *for*; the output description belongs in
+  `Returns:`/`Yields:`, never in the summary. So do not lead with `Returns`/
+  `Yields` (see the rule above) and do not narrate the body:
+  `"""Yields from stream, then closes f."""` both restates the section and
+  describes the loop. Write `"""Passes stream through, closing f when iteration
+  ends."""` plus a `Yields:` section naming the element.
 - Classes document the abstraction + constructor semantics; do not duplicate the
   class docstring in `__init__`. Give `__init__` its own docstring only for
   initialization behavior not reasonably documented on the class.
@@ -509,8 +547,10 @@ source.
 error, not a runtime condition, and it is the one case where degrading is worse
 than stopping: `aggregate`/`udf` without `func` would emit *untransformed items
 that look correct*, so the mistake surfaces far from its cause as silent wrong
-data. Use `require_kwarg` (`riko/modules/_prepare.py`), which names both the
-pipe and the argument, and document it under `Raises:`.
+data. Use `require_arg` (`riko/modules/_prepare.py`), which names both the
+pipe and the argument, and document it under `Raises:`. The argument is an
+explicit keyword-only parser parameter typed `T | None = None` — optional to
+Python so Riko can raise its own error, required to Riko.
 
 ```text
 Bad:   KeyError: 'func'

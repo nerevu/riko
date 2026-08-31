@@ -35,10 +35,12 @@ from riko._iterutils import group_by
 from riko._strutils import get_regex_rule, multi_substitute, substitute
 from riko.bado.itertools import async_reduce, coop_reduce
 from riko.dotdict import DotDict
-from riko.types.configs import RegexObjconf
-from riko.types.general import Defaults, Item, Opts
+from riko.types._collections import RikoValue
+from riko.types._configs import RegexObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._sentinels import MISSING
+from riko.types._streams import Item
 from riko.types.modules import RegexConfRule, RegexRule
-from riko.types.values import MISSING, RikoValue
 
 from . import processor
 
@@ -48,10 +50,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    item: Item,
-    rules: Sequence[RegexConfRule],
-    objconf: RegexObjconf,
-    **kwargs: object,
+    item: Item, rules: Sequence[RegexConfRule], objconf: RegexObjconf, **kwargs: object
 ) -> Item:
     """
     Asynchronously applies each rule to the field it names.
@@ -114,10 +113,7 @@ async def async_parser(
 
 
 def parser(
-    item: Item,
-    rules: Sequence[RegexConfRule],
-    objconf: RegexObjconf,
-    **kwargs: object,
+    item: Item, rules: Sequence[RegexConfRule], objconf: RegexObjconf, **kwargs: object
 ) -> Item:
     """
     Applies each rule to the field it names.

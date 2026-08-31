@@ -115,7 +115,7 @@ offending config.
   `dateformat` raised `AttributeError: 'NoneType' object has no attribute 'strftime'`.
 * **Detect:** call every boundary that hands user config to a dependency with `None`
   and with a wrong type.
-* **Fix:** the house pattern is `require_conf`/`require_kwarg` for programming errors
+* **Fix:** the house pattern is `require_conf`/`require_arg` for programming errors
   (`TypeError: the 'x' pipe requires the 'y' conf key`) and `logger.warning` + degrade
   for data conditions. Never let the dependency's own message be the user's error.
 

@@ -1,15 +1,14 @@
-from collections.abc import Sequence
-from typing import NotRequired, Required, TypedDict
+from __future__ import annotations
 
-from riko.types._module_ids import ModuleId
-from riko.types.general import Conf, PyInput
-from riko.types.modules import (
-    AnyModuleRawConf,
-    CountValues,
-    EmbedRef,
-    LoopableEmbedRef,
-    PipeId,
-)
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, NotRequired, Required, TypedDict
+
+from .modules import EmbedRef
+
+if TYPE_CHECKING:
+    from ._module_ids import ModuleId
+    from ._pipeline import PyInput
+    from .modules import AnyModuleRawConf, Conf, CountValues, LoopableEmbedRef, PipeId
 
 
 class XY(TypedDict):
@@ -188,3 +187,15 @@ class PipeDag(TypedDict):
 
     modules: list[DagModule]
     wires: NotRequired[list[tuple[str, str]]]
+
+
+__all__ = [
+    "DagModule",
+    "LoopModule",
+    "ParsedPipeDef",
+    "PipeDag",
+    "PipeDef",
+    "PipeModule",
+    "PipelineDescription",
+    "Wire",
+]

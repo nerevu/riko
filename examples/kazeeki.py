@@ -1,12 +1,24 @@
 # vim: sw=4:ts=4:expandtab
 
+"""
+Aggregates freelance jobs from several JSON feeds, normalizes their fields, and
+converts budgets to a common currency.
+
+The feeds are odesk, guru, elance, and freelancer.
+
+Examples:
+    Run it::
+
+        run-pipe kazeeki
+
+"""
+
 from functools import partial
 from pprint import pprint
 from typing import cast
 
-from riko import get_path
-from riko.collections import AsyncPipe, SyncPipe
-from riko.types.general import Items
+from riko import AsyncPipe, SyncPipe, get_path
+from riko.types import Items
 from riko.types.modules import (
     CurrencyFormatConf,
     CurrencyFormatRawConf,
@@ -69,9 +81,7 @@ def add_id[T: SyncPipe | AsyncPipe](source: T, rule, field="link") -> T:
 
 
 def add_posted[T: SyncPipe | AsyncPipe](
-    source: T,
-    rule: FindConfRule | list[FindConfRule] | None = None,
-    field="summary",
+    source: T, rule: FindConfRule | list[FindConfRule] | None = None, field="summary"
 ) -> T:
     if rule:
         conf = StrfindConf({"rule": rule})
@@ -122,10 +132,7 @@ def add_tags[T: SyncPipe | AsyncPipe](
 
 
 def add_budget[T: SyncPipe | AsyncPipe](
-    source: T,
-    fixed_text="",
-    hourly_text="",
-    double: bool | str = True,
+    source: T, fixed_text="", hourly_text="", double: bool | str = True
 ) -> T:
     codes = "$£€₹"
     no_raw_budget = Skip({"field": "k:budget_raw"})
@@ -135,12 +142,7 @@ def add_budget[T: SyncPipe | AsyncPipe](
     isnt_fixed = Skip({"field": "summary", "text": fixed_text, "include": True})
     isnt_hourly = Skip({"field": "summary", "text": hourly_text, "include": True})
     no_symbol = Skip(
-        {
-            "field": "k:budget_raw",
-            "text": codes,
-            "op": "intersection",
-            "include": True,
-        }
+        {"field": "k:budget_raw", "text": codes, "op": "intersection", "include": True}
     )
     code_or_no_raw_budget = [has_code, no_raw_budget]
     def_cur_or_no_raw_budget = [is_def_cur, no_raw_budget]

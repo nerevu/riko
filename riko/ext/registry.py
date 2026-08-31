@@ -33,7 +33,7 @@ from typing import Literal, cast, overload
 
 from riko._importutils import import_or_else
 from riko.exceptions import UnsupportedModuleError
-from riko.types.general import (
+from riko.types._wrappers import (
     AsyncPipeCallable,
     AsyncPipeParser,
     Interface,
@@ -54,6 +54,10 @@ class ModuleDefinition:
     extension point at a module exposing ``pipe``/``async_pipe`` by the same convention
     as a built-in.
 
+    An entry point may skip this object entirely and name the module itself. The
+    registry then synthesizes a definition by reading the interface callables
+    off the module and its ``description`` from the module docstring summary.
+
     Attributes:
         name: Canonical identifier. Required by ``register``, but optional for an
             entry-point definition. The registry stamps it from the entry-point key
@@ -65,7 +69,8 @@ class ModuleDefinition:
 
         module: Object to read the interface callables off of.
 
-        description: Summary used by module discovery.
+        description: Summary used by module discovery. Defaults to ``module.__doc__``'s
+            first non-blank line if ``module`` is given.
 
     """
 
@@ -83,6 +88,23 @@ class ModuleDefinition:
             pipe = getattr(self.module, interface, None)
 
         return cast(Pipeline | None, pipe)
+
+
+def _module_summary(module: object) -> str | None:
+    lines = (getattr(module, "__doc__", "") or "").strip().splitlines()
+    return next((line.strip() for line in lines if line.strip()), None)
+
+
+def _coerce_definition(obj: object) -> ModuleDefinition | None:
+    """Passes a ``ModuleDefinition`` through, and wraps a bare pipe-exposing module."""
+    if isinstance(obj, ModuleDefinition):
+        definition = obj
+    elif hasattr(obj, "pipe") or hasattr(obj, "async_pipe"):
+        definition = ModuleDefinition(module=obj, description=_module_summary(obj))
+    else:
+        definition = None
+
+    return definition
 
 
 class ModuleRegistry:
@@ -117,10 +139,15 @@ class ModuleRegistry:
     def _entry_point_definition(self, name: str) -> ModuleDefinition | None:
         if name not in self._loaded and (ep := self._discover_entry_points().get(name)):
             loaded = ep.load()
-            _definition = loaded() if callable(loaded) else loaded
-            definition = cast(ModuleDefinition, _definition)
+            obj = loaded() if callable(loaded) else loaded
+            definition = _coerce_definition(obj)
 
-            if not definition.name:
+            if definition is None:
+                raise TypeError(
+                    f"entry point {ep.name!r} returned {type(obj).__name__}, expected a "
+                    "ModuleDefinition or a module exposing 'pipe'/'async_pipe'"
+                )
+            elif not definition.name:
                 definition = _replace(definition, name=ep.name)
             elif definition.name != ep.name:
                 raise ValueError(

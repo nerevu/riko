@@ -5,7 +5,7 @@
 import re
 import shutil
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from functools import partial
 from glob import glob
 from io import StringIO
@@ -20,8 +20,12 @@ import click
 from click import Choice
 
 from riko._logging import exception_hook
+from riko.cli.gen_config import _CONFIGS as CONFIG_PATH
 from riko.cli.gen_config import main as gen_config_main
+from riko.cli.gen_names import _MODULE_IDS as MODULE_IDS_PATH
+from riko.cli.gen_names import _NAMES as NAMES_PATH
 from riko.cli.gen_names import main as gen_names_main
+from riko.cli.gen_pipelines import main as gen_pipelines_main
 from riko.paths import ROOT_DIR
 
 try:
@@ -32,6 +36,37 @@ except ImportError:
     nodes = None
 
 sys.excepthook = partial(exception_hook, debug=False)
+
+TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
+LINE_ANCHOR_RE = re.compile(r"^L\d")
+CHANGELOG_PATH = ROOT_DIR / "docs" / "CHANGES.rst"
+RELEASE_SECTION_RE = re.compile(
+    r"^(?P<version>v\d+\.\d+\.\d+) \((?P<release_date>[^)]+)\)\n-+\n\n"
+    r"(?P<body>.*?)"
+    r"(?=^v\d+\.\d+\.\d+ \([^)]+\)\n-+\n|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+
+RST_SUBHEADING_RE = re.compile(r"^(?P<title>[^\n]+)\n~+$", re.MULTILINE)
+
+CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
+    "config": (
+        gen_config_main,
+        lambda: f"wrote configuration file to {CONFIG_PATH}",
+        "Error updating configuration file!",
+    ),
+    "names": (
+        gen_names_main,
+        lambda: f"regenerated module names to {NAMES_PATH} and {MODULE_IDS_PATH}",
+        "Error regenerating module names!",
+    ),
+    "pipes": (
+        gen_pipelines_main,
+        lambda: "regenerated compiled pipe modules from their JSON definitions",
+        "Error regenerating compiled pipe modules!",
+    ),
+}
+
 
 uv: str | None = shutil.which("uv")
 tox: str | None = shutil.which("tox")
@@ -72,30 +107,6 @@ def hello():
 
 
 @manager.command()
-@click.option(
-    "-m",
-    "--mode",
-    help="Which file to generate",
-    type=Choice(["config", "names"], case_sensitive=False),
-    default="config",
-)
-def codegen(mode="config"):
-    """Regenerate configuration or riko/modules/_names.py files"""
-    gen_config = mode == "config"
-    gen_names = mode == "names"
-    return_code = gen_config_main() if gen_config else gen_names_main()
-
-    if gen_config and return_code:
-        raise RuntimeError("Error updating configuration file!")
-    if gen_names and return_code:
-        raise RuntimeError("Error regenerating module names!")
-    elif gen_config:
-        print("Successfully updated configuration file.")
-    elif gen_names:
-        print("Successfully regenerated module names.")
-
-
-@manager.command()
 @click.pass_context
 def help(ctx):
     """Show available commands"""
@@ -105,6 +116,9 @@ def help(ctx):
     print(f"  {commands}")
 
 
+# ---------------------------------------------------------------------------
+# Build helpers
+# ---------------------------------------------------------------------------
 def _clean():
     """Remove Python file and build artifacts"""
     for name in ("dist", "build"):
@@ -159,6 +173,9 @@ def _twine_check() -> int:
     return call(cmd)
 
 
+# ---------------------------------------------------------------------------
+# Lint helpers
+# ---------------------------------------------------------------------------
 def _check_types() -> int:
     """Check type annotations with pyright"""
     if not pyright:
@@ -200,10 +217,6 @@ def _ruff_check(where: str | None = "", unsafe_fixes: bool = False) -> int:
         args.append("--unsafe-fixes")
 
     return call([*args, *paths]) or call([ruff, "format", "--check", *paths])
-
-
-TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
-LINE_ANCHOR_RE = re.compile(r"^L\d")
 
 
 def _github_slug(text: str) -> str:
@@ -339,6 +352,38 @@ def _check_staged() -> int:
     return return_code
 
 
+# ---------------------------------------------------------------------------
+# Release helpers
+# ---------------------------------------------------------------------------
+def _latest_changelog_entry(path: Path = CHANGELOG_PATH) -> tuple[str, str, str]:
+    """Return the latest changelog version, release date, and RST body."""
+    text = path.read_text(encoding="utf-8")
+    match = RELEASE_SECTION_RE.search(text)
+
+    if not match:
+        raise RuntimeError(f"No release section found in {path}")
+
+    return (match["version"], match["release_date"], match["body"].strip())
+
+
+def _release_notes(path: Path = CHANGELOG_PATH) -> tuple[str, str, str]:
+    """Return the latest version, release date, and GitHub release notes."""
+    version, release_date, notes = _latest_changelog_entry(path)
+    notes = RST_SUBHEADING_RE.sub(r"### \g<title>", notes)
+    return version, release_date, notes
+
+
+def _validate_release(version: str, expected: str | None = None) -> None:
+    """Validate the changelog version against an expected release tag."""
+    if expected and version != expected:
+        raise RuntimeError(
+            f"Release tag {expected!r} does not match changelog version {version!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
 @manager.command()
 def check():
     """Lint staged Python changes with ruff"""
@@ -467,10 +512,7 @@ def prettify(where=(), sort=True, gen_config=False, unsafe_fixes=False):
     "-q", "--quiet", help="Suppress per-test output (overridden by -v)", is_flag=True
 )
 @click.option(
-    "-p",
-    "--parallel",
-    help="Run tests in parallel in multiple processes",
-    is_flag=True,
+    "-p", "--parallel", help="Run tests in parallel in multiple processes", is_flag=True
 )
 def test(paths=(), where=(), stop=None, **kwargs):  # noqa: PT028
     """Run pytest, tox, and script tests"""
@@ -516,6 +558,41 @@ def test(paths=(), where=(), stop=None, **kwargs):  # noqa: PT028
 
     except CalledProcessError as e:
         exit(e.returncode)
+
+
+@manager.command()
+@click.option(
+    "-m",
+    "--mode",
+    help="Which file to generate",
+    type=Choice(list(CODEGEN), case_sensitive=False),
+    default="config",
+)
+def codegen(mode="config"):
+    """Regenerate config, module-name, or compiled-pipe files"""
+    runner, summary, error = CODEGEN[mode]
+
+    if runner():
+        raise RuntimeError(error)
+
+    print(f"Successfully {summary()}.")
+
+
+@manager.command("release-notes")
+def release_notes():
+    """Print GitHub release notes from the latest changelog section."""
+    version, release_date, notes = _release_notes()
+    tag = environ.get("GITHUB_REF_NAME")
+
+    if tag:
+        _validate_release(version, tag)
+
+        if release_date == "Unreleased":
+            raise RuntimeError(
+                f"Changelog entry for {version} is still marked Unreleased"
+            )
+
+    click.echo(notes)
 
 
 @manager.command()

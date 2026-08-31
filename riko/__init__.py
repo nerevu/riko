@@ -5,28 +5,51 @@ riko
 
 Public entry point for riko.
 
-Application code imports stable APIs from ``riko`` or ``riko.api``; extension
-authors import from ``riko.ext``. See ``README.rst`` and the cookbook for
-worked examples.
+Application code imports stable APIs from ``riko``. Extension
+authors import from ``riko.ext``. ``riko.bado`` provides the supported async
+runtime namespace, with selected helpers promoted into this stable surface.
+
+The stable, SemVer-guaranteed application-facing surface of riko. Import
+application code from here or from the top-level :mod:`riko` package, which
+re-exports this module.
+
+Extension-author symbols live in :mod:`riko.ext`. :mod:`riko.bado` is the
+supported async-runtime namespace; selected application-facing helpers from it
+are promoted here.
 """
 
-from importlib import metadata
-from importlib.metadata import PackageMetadata
-
-from riko.context import Context, ExecutionMode  # noqa: F401
-
-# https://github.com/astral-sh/uv/issues/7533#issuecomment-2472804995
-_meta: PackageMetadata = metadata.metadata("riko")
-
-PACKAGE_INFO = {
-    "__version__": metadata.version("riko"),
-    "__title__": _meta["Name"],
-    "__package_name__": _meta["Name"],
-    "__description__": _meta.get("Summary") or _meta.get("Description", ""),
-    "__license__": _meta.get("License-Expression") or _meta.get("License", ""),
-    "__author__": _meta.get("Author", ""),
-    "__email__": _meta.get("Author-email", ""),
-}
+from riko._metadata import PACKAGE_INFO
+from riko.bado._backend import async_sleep, backend, isasync, issync, run
+from riko.bado._util import async_read, async_return
+from riko.bado.io import async_url_open, async_write, get_async_temp_file
+from riko.bado.itertools import as_async, async_map, async_map_stream
+from riko.collections import (
+    AsyncCollection,
+    AsyncPipe,
+    PipeState,
+    SyncCollection,
+    SyncPipe,
+    Targets,
+    export,
+    list_targets,
+)
+from riko.compile import (
+    build_pipeline,
+    compile_pipe,
+    convert_dag,
+    extract_dependencies,
+    parse_pipe_def,
+)
+from riko.context import Context, ExecutionMode
+from riko.exceptions import (
+    PipelineStateError,
+    RikoError,
+    UnsupportedModuleError,
+    UnsupportedPipelineError,
+)
+from riko.modules import describe_module, get_module_metadata, list_modules
+from riko.modules._names import Modules, Sinks, Sources, Transforms
+from riko.paths import get_path, get_temp_file
 
 
 def __getattr__(name: str) -> str:
@@ -39,46 +62,6 @@ def __getattr__(name: str) -> str:
 
 __copyright__ = "Copyright 2015 Reuben Cummings"
 
-DEF_CONNECTION_COUNT = 16
-ENCODING = "utf-8"
-
-from riko.api import (  # noqa: E402
-    AsyncCollection,
-    AsyncPipe,
-    Modules,
-    PipelineStateError,
-    PipeState,
-    Sinks,
-    Sources,
-    SyncCollection,
-    SyncPipe,
-    Targets,
-    Transforms,
-    UnsupportedModuleError,
-    UnsupportedPipelineError,
-    async_read,
-    async_return,
-    async_sleep,
-    async_write,
-    backend,
-    build_pipeline,
-    compile_pipe,
-    convert_dag,
-    describe_module,
-    export,
-    extract_dependencies,
-    get_async_temp_file,
-    get_module_metadata,
-    get_path,
-    get_temp_file,
-    isasync,
-    issync,
-    list_modules,
-    list_targets,
-    parse_pipe_def,
-    run,
-)
-
 __all__ = [
     "AsyncCollection",
     "AsyncPipe",
@@ -87,6 +70,7 @@ __all__ = [
     "Modules",
     "PipeState",
     "PipelineStateError",
+    "RikoError",
     "Sinks",
     "Sources",
     "SyncCollection",
@@ -95,9 +79,13 @@ __all__ = [
     "Transforms",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
+    "as_async",
+    "async_map",
+    "async_map_stream",
     "async_read",
     "async_return",
     "async_sleep",
+    "async_url_open",
     "async_write",
     "backend",
     "build_pipeline",

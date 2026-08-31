@@ -27,9 +27,9 @@ from typing import Any
 import pygogo as gogo
 
 from riko.cast import BasicCastType, cast_datetime
-from riko.types.configs import DynamicConf
-from riko.types.general import Defaults, Extraction, Opts
-from riko.types.values import DateLikeType
+from riko.types._dynamic_conf import DynamicConf
+from riko.types._options import Defaults, Opts
+from riko.types._scalars import DateLikeType
 
 from . import processor
 
@@ -39,7 +39,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    text: str, extraction: Extraction, objconf: DynamicConf, **kwargs: object
+    text: str, extraction: object, objconf: DynamicConf, **kwargs: object
 ) -> struct_time:
     """
     Converts ``text`` into a date.

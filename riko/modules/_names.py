@@ -3,6 +3,8 @@
 
 from riko.ext.names import ModuleName
 
+__all__ = ["Modules", "Sinks", "Sources", "Transforms"]
+
 
 class Sources(ModuleName):
     CSV = "csv"

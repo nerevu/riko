@@ -34,7 +34,7 @@ from json import loads
 from logging import Logger
 from operator import add, sub
 from time import gmtime, struct_time
-from typing import Literal, TypeVar, cast, overload
+from typing import Literal, cast, overload
 from urllib.parse import quote, urlparse
 
 import pygogo as gogo
@@ -49,17 +49,11 @@ from riko._date_utils import (
 from riko.currencies import CURRENCY_CODES
 from riko.dates import get_date, tt_to_datedict
 from riko.locations import LOCATIONS
-from riko.types.general import Opts, PreCaster
-from riko.types.values import (
-    AnyLocation,
-    BasicArg,
-    BasicValue,
-    DateDict,
-    DateLike,
-    IPAddress,
-    Location,
-    PrimitiveValue,
-)
+from riko.types._collections import BasicArg
+from riko.types._locations import AnyLocation, IPAddress, Location
+from riko.types._options import Opts
+from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
+from riko.types._wrappers import PreCaster
 
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 MATH_WORDS = {"seconds", "minutes", "hours", "days", "weeks", "months", "years"}
@@ -70,8 +64,6 @@ GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
     "ip_address": lambda x: lookup_ip_address(x),  # noqa: PLW0108
     "currency": lambda x: CURRENCY_CODES.get(x, {}),
 }
-
-T = TypeVar("T")
 
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
@@ -97,6 +89,7 @@ class BasicCastType(StrEnum):
     NONE = "none"
     PASS = "pass"  # noqa: S105
     TEXT = "text"
+    URL = "url"
 
 
 class SortableCastType(StrEnum):
@@ -134,6 +127,29 @@ SourceOpts: Opts = {"ftype": BasicCastType.NONE}
 
 
 def literal_parse(content: BasicValue | bool) -> BasicArg:
+    """
+    Parses a string into the Python literal it denotes.
+
+    A non-string is returned unchanged; ``"true"``/``"false"`` (any case)
+    become booleans; anything else is parsed via ``ast.literal_eval``, falling
+    back to the original string when it is not a valid literal.
+
+    Args:
+        content: The value to parse.
+
+    Returns:
+        The parsed literal, or ``content`` unchanged when it is not a string or
+        not a valid literal.
+
+    Examples:
+        >>> literal_parse("true")
+        True
+        >>> literal_parse("[1, 2]")
+        [1, 2]
+        >>> literal_parse("foo")
+        'foo'
+
+    """
     if isinstance(content, (bool, int, float, Decimal)):
         parsed = content
     elif content.lower() in {"true", "false"}:
@@ -148,10 +164,41 @@ def literal_parse(content: BasicValue | bool) -> BasicArg:
 
 
 def url_quote(url: str | int) -> str:
+    """
+    Percent-encodes a URL while leaving URL-syntax characters intact.
+
+    Args:
+        url: The URL (or numeric host) to encode.
+
+    Returns:
+        The encoded URL, with the characters in ``URL_SAFE`` left unescaped.
+
+    Examples:
+        >>> url_quote("a b/c")
+        'a%20b/c'
+
+    """
     return quote(url, safe=URL_SAFE)  # type: ignore[arg-type]
 
 
 def cast_url(url: str | int) -> str:
+    """
+    Normalizes a value into a percent-encoded URL.
+
+    Prepends ``http://`` when no scheme is present, then encodes it and
+    round-trips it through ``urlparse``.
+
+    Args:
+        url: The URL (or numeric host) to normalize.
+
+    Returns:
+        The normalized, encoded URL string.
+
+    Examples:
+        >>> cast_url("example.com/a b")
+        'http://example.com/a%20b'
+
+    """
     url = f"http://{url}" if "://" not in str(url) else url
     quoted = url_quote(url)
     parsed = urlparse(quoted)
@@ -159,6 +206,22 @@ def cast_url(url: str | int) -> str:
 
 
 def lookup_street_address(_: str) -> Location:
+    """
+    Returns a placeholder street-address location.
+
+    A fixed stub standing in for a real geocoder; the input is ignored.
+
+    Args:
+        _: Ignored; accepted for interface parity with a real geocoder.
+
+    Returns:
+        A ``Location`` with placeholder address fields.
+
+    Examples:
+        >>> lookup_street_address("1600 Pennsylvania Ave")["postal"]
+        '61605'
+
+    """
     location = {
         "lat": 0.0,
         "lon": 0.0,
@@ -175,6 +238,22 @@ def lookup_street_address(_: str) -> Location:
 
 
 def lookup_ip_address(_: str) -> IPAddress:
+    """
+    Returns a placeholder IP-address location.
+
+    A fixed stub standing in for a real geolocator; the input is ignored.
+
+    Args:
+        _: Ignored; accepted for interface parity with a real geolocator.
+
+    Returns:
+        An ``IPAddress`` location with placeholder fields.
+
+    Examples:
+        >>> lookup_ip_address("8.8.8.8")["country"]
+        'United States'
+
+    """
     location = {
         "country": "United States",
         "admin1": "state",
@@ -189,6 +268,27 @@ def lookup_ip_address(_: str) -> IPAddress:
 def lookup_coordinates(
     latlon: str = "", lat: float | None = None, lon: float | None = None
 ) -> Location:
+    """
+    Builds a location from a coordinate pair.
+
+    Parses ``"lat,lon"`` when given, otherwise uses the ``lat``/``lon``
+    arguments; unparseable or missing coordinates default to ``0.0``.
+
+    Args:
+        latlon: A ``"lat,lon"`` string; used when it contains a comma.
+        lat: The latitude used when ``latlon`` has no comma.
+        lon: The longitude used when ``latlon`` has no comma.
+
+    Returns:
+        A ``Location`` with the resolved ``lat``/``lon`` and placeholder fields.
+
+    Examples:
+        >>> lookup_coordinates("1.5, 2.5")["lat"]
+        1.5
+        >>> lookup_coordinates(lat=1.0, lon=2.0)["lon"]
+        2.0
+
+    """
     if "," in latlon:
         try:
             lat_str, lon_str = latlon.split(",")
@@ -216,6 +316,26 @@ def lookup_coordinates(
 def cast_location(
     address: BasicValue, loc_type: LocationType = LocationType.STREET_ADDRESS
 ) -> AnyLocation:
+    """
+    Resolves an address or code into a location and enriches it from ``LOCATIONS``.
+
+    Dispatches to the geocoder for ``loc_type``; when the result names a ``location``,
+    its entry from ``LOCATIONS`` is merged in.
+
+    Args:
+        address: The address, coordinate, IP, or currency code to look up.
+        loc_type: Which kind of lookup to perform.
+
+    Returns:
+        The resolved location mapping.
+
+    Examples:
+        >>> cast_location("123 Main St")["city"]
+        'city'
+        >>> cast_location("USD", "currency")["name"]
+        'US Dollar'
+
+    """
     result = GEOLOCATERS[loc_type](str(address))
 
     if location := result.get("location"):
@@ -255,11 +375,7 @@ def cast_datetime(  # noqa: E704
     try_local_tz: bool = ...,
 ) -> DateDict | None: ...
 def cast_datetime(  # noqa: E302
-    value: DateLike,
-    as_date=False,
-    as_datedict=False,
-    *,
-    try_local_tz=False,
+    value: DateLike, as_date=False, as_datedict=False, *, try_local_tz=False
 ) -> date | dt | DateDict | None:
     """
     Normalizes a date-like value to a ``datetime`` (or ``date``/``DateDict``).
@@ -268,6 +384,15 @@ def cast_datetime(  # noqa: E302
     string shorthands. Named days (``"now"``/``"today"``/``"yesterday"``), counted
     offsets (``"3 days"``/``"-1 month"``), and ``next``/``last`` word forms resolve
     against the current time.
+
+    Args:
+        value: The date-like value or string shorthand to normalize.
+        as_date: Whether to return a ``date`` rather than a ``datetime``.
+        as_datedict: Whether to return a ``DateDict`` of date components.
+        try_local_tz: Whether to assume the local timezone for naive values.
+
+    Returns:
+        The normalized value, or ``None`` when it cannot be parsed.
 
     Examples:
         >>> type(cast_datetime('now')).__name__
@@ -336,9 +461,8 @@ def cast_datetime(  # noqa: E302
     return result
 
 
-cast_date: Callable[[DateLike], date | None] = cast(
-    Callable[[DateLike], date | None], partial(cast_datetime, as_date=True)
-)
+def cast_date(value: DateLike) -> date | None:
+    return cast_datetime(value, as_date=True)
 
 
 CAST_SWITCH: dict[str, PreCaster] = {
@@ -360,27 +484,19 @@ CAST_SWITCH: dict[str, PreCaster] = {
 def cast_value(content: object) -> str: ...  # noqa: E704
 @overload  # noqa: E302
 def cast_value[T](  # noqa: E704
-    content: T,
-    type_: Literal[CastType.PASS],
-    **kwargs: object,
+    content: T, type_: Literal[CastType.PASS], **kwargs: object
 ) -> T: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object,
-    type_: Literal[CastType.NONE],
-    **kwargs: object,
+    content: object, type_: Literal[CastType.NONE], **kwargs: object
 ) -> None: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object,
-    type_: Literal[CastType.TEXT],
-    **kwargs: object,
+    content: object, type_: Literal[CastType.TEXT], **kwargs: object
 ) -> str: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object,
-    type_: Literal[CastType.FLOAT],
-    **kwargs: object,
+    content: object, type_: Literal[CastType.FLOAT], **kwargs: object
 ) -> float: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
@@ -487,4 +603,25 @@ def cast_value[T](  # noqa: E302
 
 
 cast_none: Callable[..., None] = partial(cast_value, type_=CastType.NONE)
-cast_pass: Callable[[T], T] = partial(cast_value, type_=CastType.PASS)
+
+
+def cast_pass[T](content: T, **_: object) -> T:
+    """
+    Passes content through unchanged.
+
+    A thin wrapper over ``cast_value`` with ``type_=PASS`` for use as a caster.
+
+    Args:
+        content: The value to pass through.
+
+    Returns:
+        ``content`` unchanged.
+
+    Examples:
+        >>> cast_pass(5)
+        5
+        >>> cast_pass("x")
+        'x'
+
+    """
+    return cast_value(content, type_=CastType.PASS)

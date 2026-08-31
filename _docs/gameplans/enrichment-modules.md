@@ -30,11 +30,7 @@ has clear record semantics.
 flow.coalesce(
     conf={
         "target": "client_email",
-        "sources": [
-            "client_email",
-            "client_email_1_drop",
-            "client_email_2_drop",
-        ],
+        "sources": ["client_email", "client_email_1_drop", "client_email_2_drop"],
         "missing": ["null", "nan", "empty"],
     }
 )
@@ -206,11 +202,7 @@ Contact extraction is optional enrichment with structured output:
 
 ```python
 flow.contactextract(
-    conf={
-        "field": "content",
-        "assign": "contacts",
-        "types": ["email", "phone"],
-    }
+    conf={"field": "content", "assign": "contacts", "types": ["email", "phone"]}
 )
 ```
 

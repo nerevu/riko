@@ -26,7 +26,7 @@ from typing import Literal, overload
 
 from riko.ext._pipelines import pipeline_resolver
 from riko.ext.registry import registry
-from riko.types.general import (
+from riko.types._wrappers import (
     AsyncPipeParser,
     Interface,
     Pipeline,

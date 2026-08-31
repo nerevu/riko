@@ -2,21 +2,24 @@
 """
 riko._iterutils
 ~~~~~~~~~~~~~~~
+
 Functional/iterable helpers: fan-out (``dispatch``/``broadcast``), grouping,
 dedup, chainable retry binding, and sort-key construction.
+
+Attributes:
+    SORT_FILLER: Orderable stand-in (``-inf``) for a missing sort key.
+    DATELIKE_TYPES: Cast types reduced to epoch timestamps for sorting.
+    INVALID_DEF_TYPES: Cast types with no usable typed default.
+    INVALID_TYPES: Cast types that cannot be cast at all.
+    NON_SORTABLE: Types (mappings, sequences) that fall back to the default key.
+    noop: Identity function returning its argument unchanged.
+
 """
 
 import builtins
 import itertools
 from collections import defaultdict
-from collections.abc import (
-    Callable,
-    ItemsView,
-    Iterable,
-    Iterator,
-    Mapping,
-    Sequence,
-)
+from collections.abc import Callable, ItemsView, Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, date, tzinfo
 from datetime import datetime as dt
 from decimal import Decimal
@@ -33,8 +36,8 @@ from requests.structures import CaseInsensitiveDict
 
 from riko._date_utils import date_to_datetime, ensure_tzinfo
 from riko.cast import CAST_SWITCH, CastType, cast_value
-from riko.types.general import Function
-from riko.types.values import PrimitiveValue, PrimitiveValueType, SortableValue
+from riko.types._scalars import PrimitiveValue, PrimitiveValueType, SortableValue
+from riko.types._streams import Item
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 SORT_FILLER = float("-inf")
@@ -51,11 +54,25 @@ noop: Callable[[T], T] = lambda item: item
 
 
 class Chainable:
+    """
+    A fluent wrapper that resolves and applies methods across namespaces.
+
+    Attribute access looks the name up on the wrapped data, then ``builtins``,
+    then ``itertools``, and returns a new ``Chainable`` bound to the found method.
+    Calling it applies the method with the data as the first argument when the
+    method's signature accepts it there, else as the second.
+
+    Examples:
+        >>> Chainable([3, 1, 2]).sorted().data
+        [1, 2, 3]
+
+    """
+
     data: object
-    method: Function | None
+    method: Callable | None
     list: builtins.list[object]
 
-    def __init__(self, data: object, method: Function | None = None) -> None:
+    def __init__(self, data: object, method: Callable | None = None) -> None:
         self.data = data
         self.method = method
         self.list = listize(data)
@@ -89,6 +106,20 @@ class Chainable:
 
 
 def invert_dict[K, V](d: dict[K, V]) -> dict[V, K]:
+    """
+    Swaps a dict's keys and values.
+
+    Args:
+        d: The dict to invert; its values must be hashable and unique.
+
+    Returns:
+        A new dict mapping each value back to its key.
+
+    Examples:
+        >>> invert_dict({"a": 1, "b": 2})
+        {1: 'a', 2: 'b'}
+
+    """
     return {v: k for k, v in d.items()}
 
 
@@ -97,6 +128,30 @@ def multi_try[T, S](
     zipped: Iterable[tuple[Callable[..., T], type[Exception]]],
     default: S = None,
 ) -> T | S:
+    """
+    Tries each callable on a source until one does not raise.
+
+    Each entry pairs a callable with the exception type to swallow for it; the
+    first call that avoids its paired exception wins. When every attempt raises,
+    ``default`` is returned.
+
+    Args:
+        source: The value passed to each callable.
+        zipped: Pairs of ``(callable, exception_type)`` tried in order.
+        default: The value returned when every attempt raises.
+
+    Returns:
+        The first successful result, or ``default`` if none succeed.
+
+    Examples:
+        >>> from itertools import repeat
+        >>>
+        >>> multi_try("abc", zip([int, str.upper], repeat(ValueError)))
+        'ABC'
+        >>> multi_try("abc", zip([int], repeat(ValueError)), default=-1)
+        -1
+
+    """
     for func, error in zipped:
         try:
             value = func(source)
@@ -111,10 +166,25 @@ def multi_try[T, S](
 
 
 def _resolve_uncastable(
-    value: Mapping | Sequence | PrimitiveValue,
-    msg: str,
-    default: SortableValue,
+    value: Mapping | Sequence | PrimitiveValue, msg: str, default: SortableValue
 ) -> SortableValue | None:
+    """
+    Handles a value that cannot be cast for a sort key, degrading by type.
+
+    A scalar (``str``/``int``/``struct_time``) is returned uncast since it is
+    already orderable; a container is replaced with ``default``, which the caller
+    supplies as an orderable filler. Every branch logs a warning rather than
+    raising, so a heterogeneous feed still sorts.
+
+    Args:
+        value: The value that failed casting.
+        msg: The warning prefix describing the failed cast.
+        default: The orderable filler used for non-scalar values.
+
+    Returns:
+        The original value when it is already orderable, else ``default``.
+
+    """
     if isinstance(value, (str, int, struct_time)):
         msg += ". Returning value without casting."
         logger.warning(msg)
@@ -140,6 +210,24 @@ def _warn_and_default(type_name: str, default: SortableValue) -> SortableValue:
 def _resolve_default(
     type_: str | None, invalid_type: bool | None, default: PrimitiveValue | None
 ) -> SortableValue:
+    """
+    Resolves the sort-key default for a cast type, kept orderable.
+
+    A cast default marks "no value" and may be non-orderable (``NaN`` for
+    ``float``/``decimal``, ``None`` for dates). Those and all date-like types
+    collapse to ``SORT_FILLER`` (``-inf``), which compares against real keys. A
+    falsy-but-valid caller default (``0``/``False``) is preserved; only ``None``
+    and a mapping default fall back to the empty string.
+
+    Args:
+        type_: The cast type name, or ``None`` for no casting.
+        invalid_type: Whether ``type_`` has no usable typed default.
+        default: The caller-supplied default, if any.
+
+    Returns:
+        An orderable default suitable as a sort-key filler.
+
+    """
     resolved = ""
 
     if invalid_type and default is None:
@@ -169,15 +257,25 @@ def def_itemgetter(
     """
     Like operator.itemgetter but fills in missing keys with a typed default.
 
+    Args:
+        attr: The key read from each item.
+        default: The value used when the key is missing or uncastable.
+        type_: Optional cast type applied to the value.
+        fallback_tzinfo: Timezone assigned to naive datetimes before they are
+            reduced to sortable timestamps.
+
+    Returns:
+        A key function mapping an item to a sortable value.
+
     Examples:
-        >>> keyfunc = def_itemgetter('n', type_='int')
-        >>> keyfunc({'n': 5})
+        >>> keyfunc = def_itemgetter("n", type_="int")
+        >>> keyfunc({"n": 5})
         5
         >>> keyfunc({})
         0
         >>> # an invalid number sorts via -inf, not NaN
-        >>> keyfunc = def_itemgetter('n', type_='float')
-        >>> keyfunc({}), keyfunc({'n': 'abc'})
+        >>> keyfunc = def_itemgetter("n", type_="float")
+        >>> keyfunc({}), keyfunc({"n": "abc"})
         (-inf, -inf)
 
     """
@@ -228,6 +326,23 @@ def def_itemgetter(
 def group_by[T: Mapping | PrimitiveValue](
     content: Iterable[T], attr: str, default: PrimitiveValue | None = None
 ) -> ItemsView[str, list[T]]:
+    """
+    Groups items by the stringified value of a key.
+
+    Args:
+        content: The items to group.
+        attr: The key read from each item.
+        default: The value used when an item lacks ``attr``.
+
+    Returns:
+        A view of ``(key, items)`` pairs, one per distinct key.
+
+    Examples:
+        >>> items = [{"k": "a"}, {"k": "b"}, {"k": "a"}]
+        >>> sorted((k, len(v)) for k, v in group_by(items, "k"))
+        [('a', 2), ('b', 1)]
+
+    """
     keyfunc = def_itemgetter(attr, default)
     groups = defaultdict(list)
 
@@ -247,8 +362,26 @@ def unique_everseen[T](  # noqa: E704
 def unique_everseen[T](  # noqa: E302
     content: Iterable[T], keyfunc: Callable | None = None
 ) -> Iterator[str | T]:
-    # List unique elements, preserving order. Remember all elements ever seen
-    # unique_everseen('ABBcCaD', str.lower) --> a b c d
+    """
+    Deduplicates elements while preserving first-seen order.
+
+    With ``keyfunc``, uniqueness is by the stringified key and the key is yielded;
+    without it, elements are yielded.
+
+    Args:
+        content: The source iterable.
+        keyfunc: Optional function producing a uniqueness key per element.
+
+    Yields:
+        Each element (or its key) the first time it is seen.
+
+    Examples:
+        >>> list(unique_everseen("ABBcCaD", str.lower))
+        ['a', 'b', 'c', 'd']
+        >>> list(unique_everseen([1, 1, 2, 3, 2]))
+        [1, 2, 3]
+
+    """
     seen = set()
 
     for element in content:
@@ -266,18 +399,19 @@ def betwix[T](
     inc: bool = False,
 ) -> Iterator[T]:
     """
-    Extract selected elements from an iterable. But unlike `islice`,
-    extract based on the element's value instead of its position.
+    Extracts elements from an iterable by value rather than position.
+
+    Unlike ``islice``, the bounds match on an element's value.
 
     Args:
-        iterable (iter): The initial sequence
-        start (str): The fragment to begin with (inclusive)
-        stop (str): The fragment to finish at (exclusive)
-        inc (bool): Make stop operate inclusively (useful if reading a file and
-            the start and stop fragments are on the same line)
+        iterable: The initial sequence.
+        start: The fragment to begin with (inclusive).
+        stop: The fragment to finish at (exclusive).
+        inc: Whether stop operates inclusively (useful if reading a file and
+            the start and stop fragments are on the same line).
 
     Returns:
-        Iter: New dict with specified keys removed
+        The matching elements as an iterator.
 
     Examples:
         >>> from io import StringIO
@@ -319,43 +453,84 @@ def betwix[T](
     return last
 
 
-def dispatch[T, VT](split: Sequence[VT], *funcs: Callable[[VT], T]) -> tuple[T, ...]:
+@overload
+def dispatch[T, U, X, Y](  # noqa: E704
+    split: tuple[T, U],
+    f1: Callable[[T], X],
+    f2: Callable[[U], Y],
+    /,  # stops ruff from collapsing this line
+) -> tuple[X, Y]: ...
+@overload  # noqa: E302
+def dispatch[T, U, V, X, Y, Z](  # noqa: E704
+    split: tuple[T, U, V],
+    f1: Callable[[T], X],
+    f2: Callable[[U], Y],
+    f3: Callable[[V], Z],
+    /,
+) -> tuple[X, Y, Z]: ...
+@overload  # noqa: E302
+def dispatch[T](  # noqa: E704
+    split: Sequence[T], *funcs: Callable[[T], object]
+) -> tuple[object, ...]: ...
+def dispatch(  # noqa: E302
+    split: Sequence[object], *funcs: Callable[..., object]
+) -> tuple[object, ...]:
     r"""
-    Takes a tuple of items and delivers each one to a different function
+    Delivers each item of a sequence to a different function.
 
-    Differs from `map` which applies multiple items to the same function.
+    Differs from ``map``, which applies multiple items to the same function::
 
            /--> item1 --> double(item1) -----> \
           /                                     \
-    split ----> item2 --> oct(item2) ------->   _OUTPUT
+    split ----> item2 --> oct(item2) -------->  _OUTPUT
           \                                     /
            \--> item3 --> max(item3) --------> /
 
-    One way to construct such a flow in code would be::
+    Args:
+        split: The items to distribute.
+        funcs: One function per item, applied positionally.
 
-    Example:
-    >>> split = (3, 8365641317588141140, ['a', 'b', 'r'])
-    >>> double = lambda item: item * 2
-    >>> _OUTPUT = dispatch(split, double, oct, max)
-    >>> _OUTPUT
-    (6, '0o720305647221513002124', 'r')
+    Returns:
+        The result of each function, in order.
+
+    Examples:
+        >>> split = (3, 8365641317588141140, ["a", "b", "r"])
+        >>> double = lambda item: item * 2
+        >>> dispatch(split, double, oct, max)
+        (6, '0o720305647221513002124', 'r')
 
     """
-    # split = list(split)
-    # for item, func in zip(split, funcs):
-    #     v = func(item)
-    #     print(f"dispatch: {func}({item}) = {v}")
-
     return tuple(func(item) for item, func in zip(split, funcs, strict=False))
 
 
-def broadcast[T, VT](
-    item: VT, *funcs: Callable[[VT], T], **kwargs: object
-) -> tuple[T, ...]:
+@overload
+def broadcast[W, X](  # noqa: E704
+    item: object, f1: Callable[..., W], f2: Callable[..., X], **kwargs: object
+) -> tuple[W, X]: ...
+@overload  # noqa: E302
+def broadcast[W, X, Y](  # noqa: E704
+    item: object,
+    f1: Callable[..., W],
+    f2: Callable[..., X],
+    f3: Callable[..., Y],
+    **kwargs: object,
+) -> tuple[W, X, Y]: ...
+@overload  # noqa: E302
+def broadcast[W, X, Y, Z](  # noqa: E704
+    item: object,
+    f1: Callable[..., W],
+    f2: Callable[..., X],
+    f3: Callable[..., Y],
+    f4: Callable[..., Z],
+    **kwargs: object,
+) -> tuple[W, X, Y, Z]: ...
+def broadcast(  # noqa: E302
+    item: object, *funcs: Callable[..., object], **kwargs: object
+) -> tuple[object, ...]:
     r"""
     Delivers the same item to different functions.
 
-    Differs from `map` which applies multiple items to the same function.
+    Differs from ``map``, which applies multiple items to the same function::
 
            /--> item --> len(item) --------> \
           /                                   \
@@ -363,27 +538,64 @@ def broadcast[T, VT](
           \                                   /
            \--> item --> sorted(item) -----> /
 
-    One way to construct such a flow in code would be::
+    Args:
+        item: The value passed to every function.
+        funcs: The functions applied to ``item``.
+        kwargs: Extra keyword arguments forwarded to each function.
 
-    Example:
-    >>> split = broadcast('bar', len, hash, sorted)
-    >>> split
-    (3, -6516517828960271057, ['a', 'b', 'r'])
+    Returns:
+        The result of each function, in order.
+
+    Examples:
+        >>> broadcast("bar", len, hash, sorted)
+        (3, -6516517828960271057, ['a', 'b', 'r'])
 
     """
     return tuple(func(item, **kwargs) for func in funcs)
 
 
 def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterable[T]:
-    """Combine multiple generators into one"""
+    """
+    Combines multiple iterables into a single stream.
+
+    Args:
+        sources: The iterables to chain together.
+
+    Returns:
+        A single iterator over every element, source by source.
+
+    Examples:
+        >>> list(multiplex([[1, 2], [3, 4]]))
+        [1, 2, 3, 4]
+
+    """
     return chain.from_iterable(sources)
 
 
 def select_by_id[T](
-    _result: Iterable[Mapping[str, T]], _id: T, id_field: str
+    content: Iterable[Mapping[str, T]], id_: T, id_field: str
 ) -> Mapping[str, T]:
+    """
+    Finds the first mapping whose id field equals a target id.
+
+    Args:
+        content: The mappings to search.
+        id_: The id value to match.
+        id_field: The field holding each mapping's id.
+
+    Returns:
+        The first matching mapping, or an empty dict when none match.
+
+    Examples:
+        >>> rows = [{"id": 1, "v": "a"}, {"id": 2, "v": "b"}]
+        >>> select_by_id(rows, 2, "id")
+        {'id': 2, 'v': 'b'}
+        >>> select_by_id(rows, 9, "id")
+        {}
+
+    """
     try:
-        result = next(r for r in _result if _id == r[id_field])
+        result = next(r for r in content if id_ == r[id_field])
     except StopIteration:
         result = {}
 
@@ -397,28 +609,28 @@ def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
     A listlike value is any iterable that is not a mapping, primitive, or ``None``.
 
     Args:
-        value: The object to classify
+        value: The object to classify.
 
     Returns:
-        True when value maps over items, False when it is one item
+        True when ``value`` maps over items, False when it is one item.
 
     Examples:
-    >>> is_listlike([1, 2])
-    True
-    >>> is_listlike((1, 2))
-    True
-    >>> is_listlike(iter([1, 2]))
-    True
-    >>> is_listlike(range(3))
-    True
-    >>> is_listlike({"a": 1})
-    False
-    >>> is_listlike("ab")
-    False
-    >>> is_listlike(0)
-    False
-    >>> is_listlike(None)
-    False
+        >>> is_listlike([1, 2])
+        True
+        >>> is_listlike((1, 2))
+        True
+        >>> is_listlike(iter([1, 2]))
+        True
+        >>> is_listlike(range(3))
+        True
+        >>> is_listlike({"a": 1})
+        False
+        >>> is_listlike("ab")
+        False
+        >>> is_listlike(0)
+        False
+        >>> is_listlike(None)
+        False
 
     """
     if value is None or isinstance(
@@ -432,6 +644,10 @@ def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
 
 
 # TODO: move back to meza
+@overload
+def listize(  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    value: Item | Iterable[Item],
+) -> Iterable[Item]: ...
 @overload
 def listize[T](value: list[T]) -> list[T]: ...  # noqa: E704
 @overload  # noqa: E302
@@ -457,28 +673,28 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
     Creates a listlike object from any value.
 
     Args:
-        value: The object to convert
+        value: The object to convert.
 
     Returns:
-        value as a listlike object (wrapped in a list or the value itself)
+        ``value`` as a listlike object (wrapped in a list, or itself).
 
     Examples:
-    >>> listize(x for x in range(3))  # doctest: +ELLIPSIS
-    <generator object <genexpr> at 0x...>
-    >>> listize([x for x in range(3)])
-    [0, 1, 2]
-    >>> listize(iter(x for x in range(3)))  # doctest: +ELLIPSIS
-    <generator object <genexpr> at 0x...>
-    >>> listize(range(3))
-    range(0, 3)
-    >>> listize(0)
-    [0]
-    >>> listize(False)
-    [False]
-    >>> listize("")
-    ['']
-    >>> listize(None)
-    []
+        >>> listize(x for x in range(3))  # doctest: +ELLIPSIS
+        <generator object <genexpr> at 0x...>
+        >>> listize([x for x in range(3)])
+        [0, 1, 2]
+        >>> listize(iter(x for x in range(3)))  # doctest: +ELLIPSIS
+        <generator object <genexpr> at 0x...>
+        >>> listize(range(3))
+        range(0, 3)
+        >>> listize(0)
+        [0]
+        >>> listize(False)
+        [False]
+        >>> listize("")
+        ['']
+        >>> listize(None)
+        []
 
     """
     if value is None:

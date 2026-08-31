@@ -27,34 +27,27 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko import ENCODING
+from riko._constants import ENCODING
 from riko._rssutils import augment_entries
-from riko.bado import io
+from riko.bado.io import async_url_read
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import parse_rss
-from riko.types.configs import FetchObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts
-from riko.types.values import RSSEntry
+from riko.types._configs import FetchObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._rss import RSSEntry
+from riko.types._streams import Item
 
 from . import processor
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {"encoding": ENCODING}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
-keys: set[str] = {
-    "author",
-    "dc:creator",
-    "id",
-    "link",
-    "pubDate",
-    "summary",
-    "title",
-}
+keys: set[str] = {"author", "dc:creator", "id", "link", "pubDate", "summary", "title"}
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FetchObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: FetchObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Asynchronously fetches the feed and returns its entries.
@@ -86,12 +79,12 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetch")
-    content: str = await io.async_url_read(url, encoding=objconf.encoding)
+    content: str = await async_url_read(url, encoding=objconf.encoding)
     return augment_entries(parse_rss(content=content))
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FetchObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: FetchObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Fetches the feed and returns its entries.

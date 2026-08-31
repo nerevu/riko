@@ -31,8 +31,8 @@ from functools import partial
 from inspect import isawaitable
 from typing import cast, overload
 
-from riko import DEF_CONNECTION_COUNT
-from riko.bado import (
+from riko._constants import DEF_CONNECTION_COUNT
+from riko.bado._backend import (
     CapacityLimiter,
     MemoryObjectSendStream,
     Semaphore,
@@ -41,7 +41,7 @@ from riko.bado import (
     create_memory_object_stream,
     create_task_group,
 )
-from riko.types.values import MISSING
+from riko.types._sentinels import MISSING
 
 
 def _cap[T, S](

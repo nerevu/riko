@@ -1,16 +1,17 @@
 [project]
 name = "riko-example-ext"
 version = "0.1.0"
-description = "Example riko extension: adds modules via entry points, with no edit to riko core."
+description = "Example riko extension added via entry points"
 requires-python = ">=3.12"
 dependencies = ["riko"]
 
 # This is the whole integration contract: declare each module under the
-# ``riko.modules`` group, mapping its canonical name to a ModuleDefinition
-# (or a zero-arg factory returning one). riko's ModuleRegistry discovers these
-# lazily — the extension is imported only when one of its names is resolved.
+# ``riko.modules`` group by mappings its canonical name to the implementing module
+# (or a ModuleDefinition / zero-arg factory returning one, for finer control).
+# riko's ModuleRegistry discovers these lazily. The extension is only imported after
+# resolving its name.
 [project.entry-points."riko.modules"]
-"example.shout" = "riko_example_ext:shout_definition"
+"example.shout" = "riko_example_ext"
 
 [build-system]
 requires = ["hatchling"]

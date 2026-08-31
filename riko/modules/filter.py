@@ -44,8 +44,10 @@ from riko._objectify import Objectify
 from riko._serialize import repr_cache
 from riko.cast import cast_date
 from riko.dotdict import DotDict
-from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
-from riko.types.guards import is_mapping
+from riko.types._guards import is_mapping
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Item, Stream
+from riko.types._wrappers import PipeTuples
 from riko.types.modules import FilterConfRule
 
 from . import operator

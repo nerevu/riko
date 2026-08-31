@@ -9,16 +9,19 @@ from typing import Any
 import pytest
 
 from riko._pubsub import async_hub
-from riko.bado import create_task_group, issync, run
+from riko.bado._backend import create_task_group
 from riko.cast import SortableCastType
 from riko.exceptions import ReceiverUnavailableError
+from riko.modules.aggregate import pipe as aggregate_pipe
 from riko.modules.join import pipe as join_pipe
+from riko.modules.receive import pipe as receive_pipe
 from riko.modules.send import async_pipe as async_send
+from riko.modules.send import pipe as send_pipe
 from riko.modules.sort import pipe as sort_pipe
-from riko.types.general import Feed, Item, ItemOrValue, Stream
+from riko.modules.udf import pipe as udf_pipe
+from riko.types._streams import Feed, Item, ItemOrValue, Stream
 from riko.types.modules import JoinConf, SendConf, SortConf, SortConfRule
-
-marks = pytest.mark.skipif(issync, reason="async support not available")
+from tests import skipif_issync
 
 
 def _values(stream: Any, key: str) -> list[Any]:
@@ -95,6 +98,53 @@ def test_natural_join_does_not_materialize_its_primary():
     assert len(consumed) <= _LOOKAHEAD
 
 
+@pytest.mark.parametrize(
+    ("pipe", "operand"),
+    [
+        (udf_pipe, "func"),
+        (aggregate_pipe, "func"),
+        (join_pipe, "other"),
+        (send_pipe, "others"),
+    ],
+)
+def test_omitting_an_operand_raises(pipe: Any, operand: str):
+    """
+    An omitted operand is a call-site error, so ``require_arg`` names it.
+    """
+    with pytest.raises(TypeError, match=f"requires the {operand!r} keyword"):
+        list(pipe([{"x": 0}]))
+
+
+@pytest.mark.parametrize(
+    ("pipe", "operand", "value"),
+    [
+        (udf_pipe, "func", 0),
+        (aggregate_pipe, "func", 0),
+        (join_pipe, "other", []),
+        (send_pipe, "others", []),
+    ],
+)
+def test_passing_an_empty_operand_raises(pipe: Any, operand: str, value: object):
+    """
+    An empty operand is a call-site error, so ``require_arg`` names it.
+    """
+    kwargs = {operand: value}
+
+    with pytest.raises(TypeError, match=f"requires the {operand!r} keyword"):
+        list(pipe([{"x": 0}], **kwargs))
+
+
+def test_send_populates_ids_when_given():
+    """
+    The explicit ``ids`` parameter records each target's delivery id.
+    """
+    receiver = receive_pipe(conf={"name": "id-target", "wait": 0.01, "max_wait": 2})
+    next(receiver)
+    ids: dict[str, int] = {}
+    list(send_pipe([{"x": 0}], others=["id-target"], ids=ids))
+    assert isinstance(ids.get("id-target"), int)
+
+
 def _finite_source(consumed: list[int]) -> Stream:
     for i in range(_SOURCE_LEN):
         consumed.append(i)
@@ -158,24 +208,50 @@ async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrVa
     return out
 
 
-@marks
+async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
+    first: ItemOrValue = {}
+    seen = 0
+
+    async def _snapshot(receive_stream: Any) -> None:
+        nonlocal first, seen
+        idx = 0
+
+        async for item in receive_stream:
+            if idx == 0:
+                first, seen = item, len(consumed)
+
+            idx += 1
+
+    async with (
+        async_hub.subscribe("r-recv-lazy") as receive_stream,
+        create_task_group() as tg,
+    ):
+        tg.start_soon(_snapshot, receive_stream)
+        await async_send(_finite_source(consumed), others=["r-recv-lazy"])
+
+    return (first, seen)
+
+
+@pytest.mark.anyio
+@skipif_issync
 @pytest.mark.timeout(10)
 @pytest.mark.xfail(reason="lazy async fan-out is not yet implemented", strict=True)
-def test_async_send_does_not_buffer_its_source():
+async def test_async_send_does_not_buffer_its_source():
     """
     Async ``send`` collects sent items and only returns after complete. So an unbounded
     source never returns.
     """
     consumed: list[int] = []
-    first, seen = run(_send_first, consumed)
+    first, seen = await _send_first(consumed)
 
     assert first == {"x": "foo", "i": 0}
     assert seen <= _LOOKAHEAD
 
 
-@marks
+@pytest.mark.anyio
+@skipif_issync
 @pytest.mark.timeout(10)
-def test_async_send_completes_targets_when_publish_fails():
+async def test_async_send_completes_targets_when_publish_fails():
     """
     A failed publish must still close the targets that did subscribe.
 
@@ -183,13 +259,14 @@ def test_async_send_completes_targets_when_publish_fails():
     outlasts ``max_wait``.
     """
     received: list[Item] = []
-    run(_send_missing_target, received)
+    await _send_missing_target(received)
     assert received == [{"x": "foo", "i": 0}]
 
 
-@marks
+@pytest.mark.anyio
+@skipif_issync
 @pytest.mark.timeout(10)
-def test_async_send_accepts_a_feed_source():
+async def test_async_send_accepts_a_feed_source():
     """
     An async source reaches the parser as an ``AsyncIterator``, not a list.
 
@@ -199,7 +276,41 @@ def test_async_send_accepts_a_feed_source():
     consumed: list[int] = []
     received: list[Item] = []
     expected = [{"x": "foo", "i": i} for i in range(_SOURCE_LEN)]
-    out = run(_send_feed, consumed, received)
+    out = await _send_feed(consumed, received)
 
     assert out == expected
     assert received == expected
+
+
+@pytest.mark.anyio
+@skipif_issync
+@pytest.mark.timeout(10)
+async def test_async_receive_does_not_materialize():
+    """
+    The zero-buffer rendezvous channel hands each published item to the
+    subscriber before ``send`` pulls the next one. A subscriber observes its first
+    item while the source is barely read. It never waits for the whole source to
+    materialize. (The eager bound is on ``send``'s own passthrough return; see
+    ``test_async_send_does_not_buffer_its_source``.)
+    """
+    consumed: list[int] = []
+    first, seen = await _receive_first(consumed)
+
+    assert first == {"x": "foo", "i": 0}
+    assert seen <= _LOOKAHEAD
+
+
+@pytest.mark.anyio
+@skipif_issync
+@pytest.mark.timeout(10)
+async def test_async_subscriber_sees_item_before_publisher_completes():
+    """
+    The canonical incremental-delivery contract: a subscriber's first item
+    arrives before the publisher finishes reading its source (a weaker bound
+    than ``test_async_receive_does_not_materialize``).
+    """
+    consumed: list[int] = []
+    first, seen = await _receive_first(consumed)
+
+    assert first == {"x": "foo", "i": 0}
+    assert seen < _SOURCE_LEN

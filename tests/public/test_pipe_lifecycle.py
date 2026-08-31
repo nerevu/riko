@@ -13,8 +13,7 @@ mirror each other test-for-test.
 
 import pytest
 
-from riko import get_path
-from riko.bado import issync, run
+from riko.bado._backend import run
 from riko.bado.itertools import async_iter
 from riko.collections import (
     AsyncCollection,
@@ -24,8 +23,10 @@ from riko.collections import (
     SyncPipe,
 )
 from riko.exceptions import PipelineStateError
-from riko.types.general import Items
+from riko.paths import get_path
+from riko.types._streams import Items
 from riko.types.modules import ItemBuilderConf
+from tests import skipif_issync
 
 BUILDER_CONF = ItemBuilderConf({"attrs": [{"key": "content", "value": "a,b,c"}]})
 SRC = [{"content": "x"}, {"content": "y"}]
@@ -192,7 +193,7 @@ class TestSyncLifecycle:
         assert list(stream) == []
 
 
-@pytest.mark.skipif(issync, reason="async support not available")
+@skipif_issync
 class TestAsyncLifecycle:
     def test_new_state(self):
         assert AsyncPipe("itembuilder", conf=BUILDER_CONF).state is PipeState.NEW
@@ -453,7 +454,7 @@ class TestAsyncLifecycle:
         assert rest == total - 1
 
 
-@pytest.mark.skipif(issync, reason="async support not available")
+@skipif_issync
 class TestAsyncSourceAdapter:
     """
     ``AsyncPipe._resolve_source`` accepts a sync iterable (via ``async_iter``),

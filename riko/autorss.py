@@ -12,7 +12,8 @@ import pygogo as gogo
 from riko._io import Fetch, auto_close
 from riko.bado.io import async_url_open
 from riko.parsers import LinkParser
-from riko.types.general import Stream, StringFileTypes
+from riko.types._io import StringFileTypes
+from riko.types._streams import Stream
 
 if TYPE_CHECKING:
     from xml.dom.minidom import Node
@@ -23,10 +24,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 class RSSLinkParser(LinkParser):
     def __init__(
-        self,
-        *,
-        link_type: str | Iterable[str] | None = None,
-        **kwargs: bool,
+        self, *, link_type: str | Iterable[str] | None = None, **kwargs: bool
     ) -> None:
         super().__init__(rss_only=True, link_type=link_type, **kwargs)
 

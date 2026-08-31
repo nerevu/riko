@@ -3,10 +3,14 @@
 Provides example pipeline tests.
 """
 
+import subprocess
+import sys
 from decimal import Decimal
 from importlib import import_module
 
 import pytest
+
+from riko.paths import ROOT_DIR
 
 
 class TestExamples:
@@ -150,3 +154,64 @@ class TestExamples:
         length = len(pipeline)
         assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
         assert {"date": "May 04, 1982"} == pipeline[-1]
+
+    @pytest.mark.parametrize(
+        ("pipeid", "expected"),
+        [
+            ("usage", "'hash': 197222720"),
+            ("demo", "Deadline to clear up health law eligibility near"),
+        ],
+    )
+    def test_run_pipe(self, pipeid, expected):
+        """Tests the run-pipe CLI against the example pipelines."""
+        cmd = [sys.executable, "-m", "riko.cli.runpipe", pipeid]
+        proc = subprocess.run(
+            cmd, cwd=ROOT_DIR, capture_output=True, text=True, check=False
+        )
+        assert proc.returncode == 0, f"run-pipe {pipeid} failed: {proc.stderr}"
+        assert expected in proc.stdout, f"run-pipe {pipeid} output: {proc.stdout!r}"
+
+    @pytest.mark.parametrize(
+        ("pipe_name", "expected"),
+        [
+            (
+                "pipe_679e2c544332e978b15b6b163767975f",
+                [{"link": "www.google.com", "title": "google", "author": "USD"}],
+            ),
+            ("pipe_a3d1afa31f0a24cc51dcbe79f1590343", [{"url": "farechart"}]),
+            (
+                "pipe_1a0ea1b39a8f261d0339a12fb5f0f03e",
+                [{"date": "December 02, 2014", "year": "1201"}],
+            ),
+            ("pipe_4f26297843f4952fad920af5990ddc50", [{"date": "December 03, 2014"}]),
+        ],
+    )
+    def test_compiled_pipe(self, pipe_name, expected):
+        """Tests the JSON-compiled example pipes produce the expected stream."""
+        module = import_module(f"examples.pypipelines.{pipe_name}")
+        assert list(module.pipe(test=True)) == expected
+
+    @pytest.mark.parametrize(
+        ("script", "expected"),
+        [
+            ("register_alias", "[{'count': 3}]"),
+            ("register_module", "[{'content': 'HI'}]"),
+        ],
+    )
+    def test_register_example(self, script, expected):
+        """Tests the runtime-registration example scripts run and register."""
+        cmd = [sys.executable, f"examples/{script}.py"]
+        proc = subprocess.run(
+            cmd, cwd=ROOT_DIR, capture_output=True, text=True, check=False
+        )
+        assert proc.returncode == 0, f"{script} failed: {proc.stderr}"
+        assert expected in proc.stdout, f"{script} output: {proc.stdout!r}"
+
+    @pytest.mark.xfail(
+        reason="dateformat timezone setting is not yet implemented.", strict=True
+    )
+    def test_unsupported_timezone(self):
+        """The timezone example asks for EST but dateformat ignores it (UTC)."""
+        module = import_module("examples.pypipelines.pipe_timezone")
+        item = next(iter(module.pipe(test=True)))
+        assert "EST" in item["dateformat"]

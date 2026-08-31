@@ -13,7 +13,7 @@ from typing import Annotated, overload
 from dateutil.relativedelta import relativedelta
 
 from riko._date_utils import tzinfo_from_tt
-from riko.types.values import DateDict
+from riko.types._scalars import DateDict
 
 TIMEOUT = 60 * 60 * 1
 HALF_DAY = 60 * 60 * 12

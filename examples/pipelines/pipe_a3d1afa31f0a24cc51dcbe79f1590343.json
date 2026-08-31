@@ -1,0 +1,73 @@
+{
+  "modules": [
+    {
+      "id": "sw-1",
+      "type": "itembuilder",
+      "conf": {
+        "attrs": [
+          {
+            "key": {
+              "type": "text",
+              "value": "url"
+            },
+            "value": {
+              "type": "text",
+              "value": "http://www.caltrain.com/Fares/farechart.html"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "sw-2",
+      "type": "regex",
+      "conf": {
+        "rule": [
+          {
+            "field": {
+              "type": "text",
+              "value": "url"
+            },
+            "match": {
+              "type": "text",
+              "value": "http.*html"
+            },
+            "replace": {
+              "type": "text",
+              "value": "farechart"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "_OUTPUT",
+      "type": "output",
+      "conf": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "_w1",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-1"
+      },
+      "tgt": {
+        "id": "_INPUT",
+        "moduleid": "sw-2"
+      }
+    },
+    {
+      "id": "_w2",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-2"
+      },
+      "tgt": {
+        "id": "_INPUT",
+        "moduleid": "_OUTPUT"
+      }
+    }
+  ]
+}

@@ -32,15 +32,14 @@ import pygogo as gogo
 import riko.cast as cast_module
 from riko._objectify import Objectify
 from riko.dotdict import DotDict
-from riko.types.values import (
-    Hashable,
-    HashableType,
+from riko.types._collections import (
     RikoDict,
     RikoList,
     RikoValue,
     StringyDict,
     StringyList,
 )
+from riko.types._scalars import Hashable, HashableType
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance

@@ -27,13 +27,14 @@ from typing import Any, cast
 import pygogo as gogo
 from meza.io import read_csv
 
-from riko import ENCODING
+from riko._constants import ENCODING
 from riko._io import Fetch, auto_close, seekable
-from riko.bado import io
+from riko.bado.io import async_url_open
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
-from riko.types.configs import CsvObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts, Stream
+from riko.types._configs import CsvObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Item, Stream
 
 from . import processor
 
@@ -53,7 +54,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: CsvObjconf, **kwargs: object
 ) -> Stream:
     """
     Asynchronously reads the csv file into a stream of rows.
@@ -87,17 +88,17 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "csv")
-    r = await io.async_url_open(url, encoding=objconf.encoding)
+    r = await async_url_open(url, encoding=objconf.encoding)
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
     source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     content = cast(Stream, read_csv(source, **rkwargs))
-    return auto_close(content, source)
+    return auto_close(content, source, r)
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: CsvObjconf, **kwargs: object
 ) -> Stream:
     """
     Reads the csv file into a stream of rows.
@@ -135,7 +136,7 @@ def parser(
     source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     content = cast(Stream, read_csv(source, **rkwargs))
-    return auto_close(content, source)
+    return auto_close(content, source, f)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

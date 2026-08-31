@@ -15,137 +15,126 @@ fidelity** gate; it routes the parts owned elsewhere to their owners.
 > **Ownership boundary.** This is **internal API-shape + release readiness**. It is distinct from
 > [extensibility.md](extensibility.md) **E7 "1.0 readiness"**, which owns the *ecosystem* side
 > (conformance badges, stable-API publication, deprecation/migration windows, "ship 1.0 only after
-> ≥1 external plugin"). Owned-elsewhere clusters this plan only *sequences*:
+> >=1 external plugin"). Owned-elsewhere clusters this plan only *sequences*:
 > - **Pub/sub 1.0 contract** → [fanout-topology.md](fanout-topology.md) **F1/F4/F5** + P11;
 > - **Fluent discoverability** → [module-enums.md](module-enums.md) (P9);
 > - **Error hierarchy** → P12 ([MILESTONES.md](../MILESTONES.md));
-> - **Execution semantics** → [execution-semantics.md](execution-semantics.md);
+> - **Execution, Context/resources, state, identity, batching** →
+>   [execution-semantics.md](execution-semantics.md);
 > - **Unified CLI** → [cli.md](cli.md).
 
 ## 2. Pub/sub: the minimum 1.0-caliber contract (owned by fanout-topology.md)
 
-The pre-1.0 gate requires the full pub/sub contract — whose mechanics and rationale (eager
-subscriptions, the no-`PENDING`/blocking-is-a-`Subscription`-property model, lossless buffering,
-execution-scoped hubs, `func`-as-tap, subscription handles) are owned by
-[fanout-topology.md § 2 and phases F1/F4/F5](fanout-topology.md) — to land at release quality.
-Release-readiness does not restate that contract; it gates these outcomes and owns the vocabulary
-alignment (§ below):
+The pre-1.0 gate requires the full pub/sub contract — whose mechanics and rationale are owned by
+[fanout-topology.md](fanout-topology.md) and the shared protocols/runtime semantics in
+[execution-semantics.md](execution-semantics.md) — to land at release quality.
 
-- eager sync subscriptions, no `next(receiver)` priming (F5);
-- no `PENDING` records on the data stream — waiting is exposed via the subscription, not the `Item`
-  type (F1/F4/F5a);
-- no silent data loss — a missing receiver raises a typed error, buffers are lossless by default
-  with explicit opt-in drop policies (F4);
-- pub/sub scoped to an execution, not process globals (`Context.resources`; F5);
-- async `receive` streams incrementally, at parity with sync (F1);
-- `receive`'s `func` is a tap whose return value is discarded (F5c);
-- subscription handles replace the hidden `ids`/`DONE` bookkeeping (F5).
+Release-readiness gates these outcomes:
 
-**Vocabulary (P1 of the doc):** `others`→`targets`, `max_len`→`buffer_size`,
-`max_wait`→`timeout`/`idle_timeout`, `receive`'s `func`→`tap`/`on_item` (a misnomer once F5c
-discards the return), drop the sync-only `wait` interval. **Clean break, no
-deprecated aliases** — riko has no external consumers pre-1.0, so rename outright rather than
-carry a shim to 1.0. Export `ReceiverUnavailableError`/`DuplicateReceiverError`/the new
-backpressure error from `riko`/`riko.api`.
+- public object-first `publish` / `subscribe` vocabulary; low-level `send` / `receive` may remain as
+  compatibility modules;
+- eager local subscription declarations, with no `next(receiver)` priming;
+- no `PENDING` records on the data stream — waiting is a `Subscription` concern, not an `Item`
+  variant;
+- bounded buffers with `buffer_size=0` / rendezvous as the default;
+- lossless/blocking behavior by default, with explicit opt-in drop semantics only where the
+  subscription contract permits it;
+- pub/sub runtime state owned by each private execution, never by process globals or mutable public
+  `Context` state;
+- async receive/delivery is incremental and sync/async observable semantics match;
+- subscriber `tap=` discards its return value and passes the original item onward;
+- subscription objects replace hidden `ids`/`DONE` bookkeeping;
+- local `publish(subscription_pipeline)` attaches the complete side branch to the owning execution,
+  so cleanup does not depend on the user draining ignored branch output.
+
+**Vocabulary:** `others`→`targets`, `max_len`→`buffer_size`, `max_wait`→`timeout`/`idle_timeout`,
+`receive`'s transformation-shaped `func`→`tap`. Clean break for the final public Pipeline API;
+legacy low-level modules may retain compatibility names while they exist.
 
 ## 3. Configuration correctness
 
-- **Stop silently accepting invalid `Context`.** Remove the catch-all `**kwargs` (`Context(verbsoe=…)`
-  must not look successful; migration's `describe_input=True`→`RUN` silent coercion is release
-  poison). Unknown/renamed kwargs **raise** an actionable error — no translation shim (clean
-  break, pre-1.0, no external consumers).
+- **Stop silently accepting invalid `Context`.** Remove the catch-all `**kwargs`
+  (`Context(verbsoe=...)` must not look successful). Unknown/renamed kwargs raise an actionable
+  error.
+- **`Context` is immutable environment definition, not live execution state.** Context-local module
+  and `Resource` definitions are derived with `with_module()` / `with_resource()`; resolved handles,
+  portals, state-store adapters, and pub/sub hubs belong to the private execution.
 - **Validate module config early** — unknown keys, invalid enums/operators, conflicting options,
-  wrong types — at pipe **construction**, not mid-iteration.
+  wrong types — at Pipeline construction/preparation rather than after source consumption begins.
+- **Step config and execution config are separate.** Step configuration is fixed when a step is
+  declared; execution-wide settings are derived with `with_execution(...)` and never mutate a step.
 
 ## 4. API-shape compression (the highest-value remaining work)
 
-> **Make streaming, boundedness, ordering, and side-effect semantics properties of the *pipe*, not
-> consequences of whether the user picked `SyncPipe` or `AsyncPipe`.**
+> **Make streaming, boundedness, ordering, and side-effect semantics properties of the pipeline
+> definition and execution plan, not consequences of whether the user picked `SyncPipe` or
+> `AsyncPipe`.**
 
-> **Decisions locked (2026-08).** Clean break, **no deprecated aliases** (pre-1.0, no external
-> consumers). Go straight to the full `Pipeline`(definition)/`Execution`(one-shot) split — **no
-> interim immutable-`PyPipe`** stepping stone. `Pipeline(source=…)` is the only stream constructor
-> (**no `from_sources`**); execution options derive via `with_config(...)`. (Folds in the former
-> standalone `_docs/pipeline.md` handoff; its cross-cutting parts route to the owners linked below.)
+> **Decisions locked (2026-08).** Clean break for the target Pipeline surface. Go straight to the
+> full `Pipeline` definition/private-execution split — no interim immutable-`PyPipe` stepping stone.
+> `Pipeline(source=...)` is the stream constructor; execution settings derive through
+> `with_execution(...)`.
 
-- **`Pipeline` is the sole public pipeline concept.** A reusable, immutable *definition* lives in
-  `riko/pipeline.py`, exported from `riko` and `riko.api`. `Pipeline("fetch", source=…)` or
-  `Pipeline(source=…)` (an identity stream until a step is chained). Fluent composition —
-  `flow.filter(conf=…)`, `flow.pipe("filter", conf=…)`, value-taking `flow | "filter"` /
-  `flow | ("filter", conf)` — each returns a **new** definition and never mutates `flow`. No `.then()`.
-- **Definition vs execution — the full split, now.** `iter(flow)` builds a fresh `SyncExecution`
-  (an `Iterator`); `aiter(flow)` builds a fresh `AsyncExecution` (an `AsyncIterator`). The same
-  `flow` runs under `for` **or** `async for`; each iteration is an independent execution. The P5
-  one-shot lifecycle belongs to the *execution*, not the definition — chaining onto an `EXHAUSTED`
-  execution raises `PipelineStateError` (silent empty output is a brutal failure mode). Do not
-  memoize an execution on the definition. Target model:
-  ```text
-  Pipeline  (reusable definition) → SyncExecution (Iterator) / AsyncExecution (AsyncIterator)
-  ```
-- **`SyncPipe`/`AsyncPipe`/`SyncCollection`/`AsyncCollection` are removed from the public surface**
-  (no deprecated aliases). Their mature one-shot execution mechanics are refactored **private**
-  into `riko/_execution/` (`SyncExecution`/`AsyncExecution` + adapters), not preserved as parallel
-  compat classes. Compiled `pipe_*` pipelines and `run-pipe` keep working through the private
-  engines. Migration is a documented hard break (§ Migration below). `PyPipe` never becomes a named
-  third pipe concept — it collapses into the private `_execution` engines.
-- **`Collection` disappears entirely.** An outer iterable of records already *is* a stream, so
-  `Pipeline(source=[…])` covers every multi-source case — there is no `from_sources`. Source
-  classification is one boundary (owned by
-  [feed-native-streaming.md § 7.1](feed-native-streaming.md)): a `Mapping` is **one** record; a
-  `list`/`tuple`/iterator/generator is a stream; `str`/`bytes` are one item; async
-  iterables/awaitables resolve through the execution. A `Pipeline` **definition** over a list
-  replays across executions; a **generator instance** stays one-shot and is **never** secretly
-  buffered to fake replay.
-- **Prerequisite — rename the internal type alias.** `riko/types/general.py` has
-  `type Pipeline = SyncPipeParser | AsyncPipeParser`; rename it to `PipeCallable` (+ update
-  `Resolver` typing / internal imports) before the public `Pipeline` class can land. Do not expose
-  adaptation-layer protocol types merely to solve the rename.
-- **Explicit terminals** — `flow.collect()`/`first()`/`take(n)`/`write("out.json")` instead of
-  inferring `list(sync_pipe)` = collect vs `await async_pipe` = collect. Reserve `.pipe()` for
-  transforms; keep `split()`/`export()` out of the inferred-terminal muddle (`export()`'s
-  list|tuple|StringIO|int|iterable|None return is hard to type — separate collection from writing).
-- **One concurrency vocabulary — `executor=` only.** `flow.with_config(executor="thread"|"process"|
-  "inline", workers=…, concurrency=…, ordered=…, prefetch=…)` returns a **new** definition. **No
-  `parallel`/`threads`/`pool`/`pool_scope`/`chunksize` shim** — clean break, single vocabulary.
+- **`Pipeline` is the sole public pipeline concept.** A reusable, immutable definition lives in
+  `riko/pipeline.py`, exported from `riko`. `Pipeline("fetch", source=...)` or
+  `Pipeline(source=...)` creates a definition; fluent composition returns new definitions and never
+  mutates the original.
+- **Definition vs execution — the full split.** `iter(flow)` builds a fresh private
+  `SyncExecution`; `aiter(flow)` builds a fresh private `AsyncExecution`. The same definition runs
+  under `for` or `async for`; each iteration is an independent one-shot execution. No public
+  `Execution(...)` constructor is needed for normal use.
+- **`SyncPipe`/`AsyncPipe`/`SyncCollection`/`AsyncCollection` are not the target public surface.**
+  Their mature mechanics are refactored into private execution machinery rather than preserved as
+  parallel public concepts.
+- **Collection disappears as a separate concept.** `Pipeline(source=[...])` covers iterable
+  sources. Source classification is one boundary: mapping = one record; iterable = stream;
+  `str`/`bytes` = one item; async iterables/awaitables resolve through async execution. Replayability
+  follows the source itself: a list can replay, while a generator instance remains one-shot and is
+  never secretly buffered.
+- **Rename the internal `Pipeline` callable alias first.** `riko/types/general.py` currently uses
+  `Pipeline` for parser callables; rename that internal alias to `PipeCallable` before the public
+  class lands.
+- **Iteration is the execution API.** Do not add executing `collect()` or `first()` terminals.
+  `list(flow)`, `for`, and `async for` execute; `take(n)` remains a transform. Side-effecting
+  operations such as `write` remain explicit pipeline nodes/taps rather than a second execution
+  mechanism.
+- **One execution-configuration vocabulary.** Use
+  `flow.with_execution(executor=..., concurrency=..., ordered=..., ...)` for execution-wide
+  settings. Do not overload `with_config()` with execution knobs and do not carry forward
+  `parallel`/`threads`/`pool`/`pool_scope` as final Pipeline vocabulary.
 - **Execution-mode adaptation is owned by
-  [execution-semantics.md § Execution-mode adaptation](execution-semantics.md)** — native-wins
-  resolution, the worker-vs-portal policy, and the `execution=` `Opts` field are that plan's
-  contract, not restated here. Release-gate specifics only: AnyIO/Asyncer stay **private** (never in
-  `riko`/`riko.ext`); a sync-only install that needs an async-only module raises an actionable
-  `riko[async]` error (§ 6), never a deep `ImportError`.
-- **Decorator DX is owned by [callable-pipes.md § Bare decorators](callable-pipes.md).**
-  `@processor async def pipe` newly works for single-impl async; `isasync=`/`async_pipe` are
-  **retained** (load-bearing for non-introspectable/dual-impl cases, not shims). One-sided
-  `ModuleDefinition` registration → [extensibility.md § 24](extensibility.md).
-- **Shrink `Context`** — `verbose`→logging, `test`→remove, `submodule`→internal, `mode`→explicit
-  introspection (`flow.describe()`/`required_inputs()`/`dependencies()`; `ExecutionMode` stays
-  private/compiler-facing). Aim for `Context(inputs=…, resources=…)` — `resources` also carries the
-  execution-scoped pub/sub/registry ownership ([fanout-topology.md F5](fanout-topology.md)).
-- **Constructor stops being a union of every module's knobs** — move `assign`/`field`/`func`/`targets`/
-  `skip_if` to the step boundary (`flow.pipe("foo", conf=…, assign=…)`); typed `SourceSpec`/
-  `("fetch", {...})` tuples instead of `{"type": "fetch", …}` dict-encoded behavior.
-- **Collapse the runtime-utility surface** — de-emphasize `backend`/`isasync`/`issync`/`async_return`/
-  `async_sleep`/`run` from the stable API into an advanced/internal namespace; users write normal
-  Python iteration.
-- **Rename `collections.py`** once `Sync/AsyncCollection` go (→ `pipe.py`/`runtime.py`/`execution.py`);
-  users import only from `riko`.
+  [execution-semantics.md](execution-semantics.md).** Native implementations win; sync-only code is
+  adapted for async execution and async-only code is adapted through the sync execution portal.
+  AnyIO/portal implementation details remain private.
+- **Decorator DX is owned by [callable-pipes.md](callable-pipes.md).** `@processor async def pipe`
+  works for single-implementation async modules; `isasync=`/`async_pipe` remain for the cases where
+  they are structurally needed.
+- **`Context` becomes the immutable environment.** Runtime handles do not live on it. Resource
+  definitions, optional `state_store`, Context-local module definitions, and identity-encoder
+  selection are resolved during execution preparation.
+- **Constructor stops being a union of every module's knobs.** `assign`/`field`/`func`/`targets`/
+  `skip_if` belong to the declared node/step rather than global Pipeline execution config.
+- **Collapse the runtime-utility surface.** De-emphasize backend/bridge helpers from the stable API;
+  users write normal Python iteration.
 
-**Migration (hard break, pre-1.0 — no aliases).**
+**Migration shape:**
 
 ```text
-SyncPipe(mod, …)           → Pipeline(mod, source=…)
-AsyncPipe(mod, …)          → Pipeline(mod, source=…)
-SyncCollection(mod, srcs)  → Pipeline(mod, source=srcs)
-AsyncCollection(mod, srcs) → Pipeline(mod, source=srcs)
+SyncPipe(mod, ...)           → Pipeline(mod, source=...)
+AsyncPipe(mod, ...)          → Pipeline(mod, source=...)
+SyncCollection(mod, srcs)    → Pipeline(mod, source=srcs)
+AsyncCollection(mod, srcs)   → Pipeline(mod, source=srcs)
 ```
 
-## 5. Error UX (owned by P12)
+## 5. Error UX (owned by P12 / execution-semantics)
 
-Pull P12 forward before declaring the API stable — today the code mixes typed Riko exceptions with
-bare `ValueError`/`RuntimeError`/`ImportError`/logging/silence (the registry raises plain `ValueError`
-for duplicate registrations). Land the `RikoError` tree (`ConfigurationError`/`PipelineStateError`/
-`ModuleResolutionError`/`ModuleRegistrationError`/`MissingOptionalDependencyError`/`PublishError`/
-`SubscriptionError`); every message carries the offending value + likely correction.
+Pull stable errors forward before declaring the API stable. The release surface needs actionable,
+Riko-owned exceptions rather than bare `ValueError`/`RuntimeError`/deep dependency errors.
+
+At minimum this includes the module/config/lifecycle/pubsub hierarchy plus the finalized identity
+and state families (`IdentityError`/`StateKeyError`, `CheckpointConflictError`, and state codec
+errors). Error messages carry the offending value or key and enough context to correct the problem
+without exposing secret material.
 
 ## 6. Optional-dependency UX
 
@@ -157,86 +146,68 @@ Async support is not installed.
 Install it with: pip install "riko[async]"
 ```
 
-Same for `ijson`/`lxml` (`perf`) and OFX/QIF (`finance`).
+Same principle for optional parser/frame/finance/connector dependencies.
 
 ## 7. Release & package fidelity
 
 - **Built-wheel smoke gate** (not just editable-install testing). Before publish: `uv build` →
   `twine check dist/*` → install the **wheel** into a pristine venv → smoke-test `import riko`,
-  `py.typed`, bundled data, core CLI (`riko --help`), `riko[async]` (and preferably `[all]`), and one
-  sync + one async pipeline. **Publish only that exact tested artifact.**
-- **CI enforces formatting** — `ruff check` + `ruff format --check`, not `ruff … --fix` in an
-  ephemeral runner (which fixes locally then discards while still passing).
-- **Public dependency-graph lane** — `pyproject.toml` declares `meza>=0.42.5` but
-  `[tool.uv.sources]` resolves meza from a git commit; add a job that ignores workspace/source
-  overrides (installs the PyPI graph users actually get), plus one min-supported and one
-  latest-compatible dependency lane.
+  `py.typed`, bundled data, core CLI (`riko --help`), async support, and one sync + one async
+  Pipeline. Publish only that exact tested artifact.
+- **CI enforces formatting** — `ruff check` + `ruff format --check`, not an ephemeral `--fix` pass.
+- **Public dependency-graph lane** — add a job that ignores workspace/source overrides and tests the
+  dependency graph users actually install, plus min-supported and latest-compatible lanes.
 
 ## 8. Surface & doc hygiene
 
-- **Shrink `riko.modules.__all__`** — it still exposes implementation types/functions despite the
-  architecture saying module-author APIs live under `riko.ext`. (Largely addressed by the narrowed
-  10-name facade — verify nothing implementation-level remains before release.)
-- **Resolve doc/spec drift** — keep one authoritative "what ships" doc ([IMPLEMENTED.md](../IMPLEMENTED.md)),
-  one roadmap, generated API docs; banner/archive the rest. (This four-doc consolidation pass is part
-  of that effort.)
-- **Docs teach only public imports** — no `riko.modules.*` in user-facing pub/sub examples; give
-  pub/sub a first-class public entry point. Rewrite the first-five-minutes quickstart around an
-  in-memory three-step pipeline understood in 15 seconds; network/RSS follow.
+- **Shrink `riko.modules.__all__`** to module-author contracts only; keep implementation details
+  private.
+- **Resolve doc/spec drift** — one authoritative shipped-behavior document, one roadmap/router,
+  gameplan owners for planned contracts, and generated API documentation.
+- **Docs teach only public imports.** User-facing examples should teach `Pipeline`, `Context`,
+  `Resource`, `Publisher`/`Subscription`, and normal iteration rather than private runtime helpers.
 
 ## 9. Pre-public-release triage (the gate)
 
-**Must land:** P9 discoverability/stubs · strict configuration validation · `executor=` cleanup ·
-P12 errors · unified CLI ([cli.md](cli.md)) · wheel/PyPI-dependency smoke tests · the § 2 pub/sub
-fixes (F1/F4/F5).
+**Must land:** remaining P9 discoverability/stubs; strict configuration validation; the
+Pipeline/private-execution split and `with_execution(...)`; P12/stable state+identity errors;
+unified CLI; wheel/dependency smoke tests; and the pub/sub release contract.
 
-**Strongly preferred:** explicit terminals · remove mutable post-construction config
-([**R2** below is the concrete bug it removes](#91-merge-gate-features--main)) · shrink
-`riko.modules` · resolve doc drift.
+**Strongly preferred:** shrink `riko.modules`; finish doc drift cleanup; benchmark the private
+sync/async adapters and canonical identity encoder before freezing optimization choices.
 
-**Can wait:** new modules · branching/routing primitives · connector packages · richer orchestration ·
-most roadmap expansion.
+**Can wait:** new connector/provider modules, richer orchestration surfaces, additional batch
+backends, and performance-only sync-island grouping that does not change semantics.
 
-**Resolved (2026-08):** `SyncPipe`/`AsyncPipe` do **not** survive as a public definition+cursor.
-Separate `Pipeline` (definition) from `Execution` now (§ 4), clean break, no deprecated aliases —
-far cheaper before public adoption than after. File map · sequence · exit tests · DoD:
-[MILESTONES.md § Pipeline/Execution split](../MILESTONES.md).
+**Resolved (2026-08):** `SyncPipe`/`AsyncPipe` do not survive as the target definition+cursor model.
+Separate immutable `Pipeline` from private one-shot executions now. Forward dependency order and
+exit criteria live in [implementation-sequence.md](implementation-sequence.md); P-track history and
+file maps remain in [MILESTONES.md](../MILESTONES.md).
 
 ### 9.1 Merge gate (`features` → `main`)
 
-A gate *before* the release gate. The
-[correctness-audit register](correctness-audit.md#8-open-defect-register--features-branch-audit)
-(17 confirmed defects, verified against `d8d3c02`) is not a release blocker as a whole —
-but its **P0** rows are, because each one is silent: it changes laziness, drains an
-iterator, or drops a value without failing an import or a happy-path test.
+The correctness-audit P0 rows gate the merge because they silently alter data/laziness rather than
+failing loudly.
 
-**Merge-gate state (2026-08-24):** R1 and R3 are fixed (R3 in both the keyed *and* the keyless
-branch — see the register row). **R2 remains the one open P0** — deferred to the § 4
-Pipeline/Execution split (fold, don't patch), so it **stays live until that split lands** and the
-`features` → `main` gate is **not** clear. The other rows are P1–P3 and belong to the release
-gate, not the merge gate.
+R1 and R3 are fixed. **R2 remains open until the Pipeline/private-execution split actually lands.**
+Planning or documenting the replacement does not discharge the defect.
 
-| Row | Blocks the merge because |
+| Row | Merge status |
 |---|---|
-| ~~**R1** `_io.opener`~~ **fixed** | remote non-memoized **text** fetch raised `StopIteration` out of `Fetch` — the most-used source in the library |
-| **R2** `PyPipe.__call__` | **No longer blocks the merge — folded into the split (decided 2026-08-24).** A call that omits `conf` erases the constructor's, and `p.conf` disagrees with what executed; but § 4 deletes the class, so a sentinel patch would be discarded. Consequence, stated plainly: **the defect ships to `main` and stays live until the split lands** ([MILESTONES § Pipeline/Execution split](../MILESTONES.md) owns the two rules that discharge it). Workaround meanwhile: pass every setting at construction and treat calling an existing pipe as a full reconfiguration, not a partial one |
-| ~~**R3** `join`~~ **fixed** | join materialized the primary stream, so an unbounded primary emitted nothing. Both branches were affected — the keyless one via `meza.process.join`, which is itself `map(merge, product(…))` |
+| ~~**R1** `_io.opener`~~ | fixed |
+| **R2** `PyPipe.__call__` | **blocks until the replacement lands**; omitted configuration currently erases constructor state, so the new immutable Pipeline must distinguish omitted from explicit `None` and keep one source of truth between definition and execution |
+| ~~**R3** `join`~~ | fixed |
 
-Fix order (the audit's, and it is dependency-shaped — each later row is easier once the
-earlier one is settled), with R2 lifted out into the split:
-~~`_io.opener`~~ → ~~`PyPipe.__call__`~~ → ~~`join`~~ → **async `send`** → `repr_cache` →
-compiler identifiers → `gather_results` → `Reencoder` → `fetchtable`/`fetchdata` →
-date/parser edges.
-
-Each fix lands with the matching regression test from
-[testing.md § 2b](testing.md#2b-regression-batch-from-the-branch-audit), *verified failing
-first*, and a `docs/CHANGES.rst` entry — every P0 row is a behaviour change.
+After R2, continue the remaining audit in dependency order, including async send/fan-out,
+canonicalization/cache correctness, compiler identifiers, gather/reencoder/source edges, and the
+remaining parser/date cases. Each repair lands with its matching regression test.
 
 ## 10. Relationship to the P-track
 
-- **Sequences, not replaces, the P-track** — § 2 = P11 + fanout-topology F1/F4/F5; § 5 = P12; § 8's
-  `riko.modules` shrink = P3/P9 surface work; § 4 Pipeline/Execution split tightens P5 one-shot
-  lifecycle and sequences across P9/P11/P12/P13 — its file map + exit tests live in
-  [MILESTONES.md § Pipeline/Execution split](../MILESTONES.md).
-- **Live status** (done/next/suite count) lives only in the
-  [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) tracker — do not restate it here.
+- **Sequences, not replaces, the P-track.** Forward implementation dependency order lives in
+  [implementation-sequence.md](implementation-sequence.md); phase status remains in
+  [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md), and P-track history/file maps remain in
+  [MILESTONES.md](../MILESTONES.md).
+- P8 and P10 foundations are retained. P9 completion can proceed independently where it does not
+  encode removed runtime classes. P11/P12 are reshaped by the finalized execution/resource/state
+  contracts rather than implemented from their older phase sketches verbatim.

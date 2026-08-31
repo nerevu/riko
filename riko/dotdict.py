@@ -10,15 +10,7 @@ from datetime import date
 from decimal import Decimal
 from functools import reduce
 from logging import Logger
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Self,
-    TypeGuard,
-    TypeVar,
-    cast,
-    overload,
-)
+from typing import TYPE_CHECKING, Any, Self, TypeGuard, TypeVar, cast, overload
 
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
@@ -26,26 +18,20 @@ from requests.structures import CaseInsensitiveDict
 from riko._objectify import Objectify
 from riko._strutils import replacer
 from riko.cast import CAST_SWITCH, CastType, cast_value
-from riko.types.general import Item, Stream
-from riko.types.guards import (
+from riko.types._collections import Key, RikoList, RikoValue
+from riko.types._guards import (
     is_known_sequence,
     is_mapping,
     is_mapping_seq,
-    is_sentinal,
+    is_sentinel,
     is_type_value,
     is_value_seq,
 )
+from riko.types._rss import RSSEntry
+from riko.types._scalars import BasicValue, PrimitiveValue
+from riko.types._sentinels import Sentinel, SentinelValue
+from riko.types._streams import Item, Stream
 from riko.types.modules import ConfArg
-from riko.types.values import (
-    BasicValue,
-    Key,
-    PrimitiveValue,
-    RikoList,
-    RikoValue,
-    RSSEntry,
-    Sentinal,
-    SentinalValue,
-)
 
 if TYPE_CHECKING:
     from _typeshed import SupportsKeysAndGetItem
@@ -105,7 +91,7 @@ def parse_sentinel(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
 ) -> PrimitiveValue: ...
 @overload  # noqa: E302
 def parse_sentinel[D](  # noqa: E704
-    value: Sentinal, default: D | None = ..., **kwargs: object
+    value: Sentinel, default: D | None = ..., **kwargs: object
 ) -> Item | D | None: ...
 @overload  # noqa: E302
 def parse_sentinel[D, VT](  # noqa: E704
@@ -114,10 +100,10 @@ def parse_sentinel[D, VT](  # noqa: E704
     **kwargs: VT,
 ) -> dict[str, VT]: ...
 def parse_sentinel[D, VT](  # noqa: E302
-    value: Sentinal | Mapping[str, VT], default: D | None = None, **kwargs: VT
+    value: Sentinel | Mapping[str, VT], default: D | None = None, **kwargs: VT
 ) -> Item | D | dict[str, VT] | PrimitiveValue:
-    if is_sentinal(value, **kwargs):
-        key = replacer(value[SentinalValue], "")
+    if is_sentinel(value, **kwargs):
+        key = replacer(value[SentinelValue], "")
 
         if stream := kwargs.get(key):
             stream = cast(Stream, stream)
@@ -179,10 +165,7 @@ def gen_dict[VT](  # noqa: E704
 ) -> Iterator[tuple[str, VT | None]]: ...
 @overload  # noqa: E302
 def gen_dict[VT](  # noqa: E704
-    data: DotDict[VT] | Mapping[str, VT],
-    key: Key,
-    default_key: None,
-    **kwargs: VT,
+    data: DotDict[VT] | Mapping[str, VT], key: Key, default_key: None, **kwargs: VT
 ) -> Iterator[dict[str, VT | None]]: ...
 @overload  # noqa: E302
 def gen_dict[VT](  # noqa: E704
@@ -201,28 +184,18 @@ def gen_dict[VT](  # noqa: E704
 ) -> Iterator[list[VT | None]]: ...
 @overload  # noqa: E302
 def gen_dict[VT](  # noqa: E704
-    data: VT,
-    key: Key | None = ...,
-    default_key: str = ...,
+    data: VT, key: Key | None = ..., default_key: str = ...
 ) -> Iterator[tuple[str, VT | None]]: ...
 @overload  # noqa: E302
 def gen_dict[VT](  # noqa: E704
-    data: Sentinal | ConfArg,
-    key: Key | None = ...,
-    *,
-    default_key: None,
-    **kwargs: VT,
+    data: Sentinel | ConfArg, key: Key | None = ..., *, default_key: None, **kwargs: VT
 ) -> Iterator[VT | None]: ...
 @overload  # noqa: E302
 def gen_dict[VT](  # noqa: E704
-    data: VT,
-    key: Key | None = ...,
-    *,
-    default_key: None,
-    **kwargs: VT,
+    data: VT, key: Key | None = ..., *, default_key: None, **kwargs: VT
 ) -> Iterator[VT | None]: ...
 def gen_dict[VT](  # noqa: E302
-    data: Sentinal
+    data: Sentinel
     | ConfArg
     | DotDict[VT]
     | Mapping[str, VT]
@@ -443,7 +416,7 @@ class DotDict(CaseInsensitiveDict[VT]):
 
                 if key in dd_value:
                     parsed = dd_value[key]
-                elif is_sentinal(value, **kwargs):
+                elif is_sentinel(value, **kwargs):
                     parsed = parse_sentinel(value, default=default, **kwargs)
 
                     if is_mapping(parsed) and key in parsed:
@@ -575,10 +548,7 @@ class DotDict(CaseInsensitiveDict[VT]):
     @overload
     def get(self, **kwargs: VT) -> VT | None: ...  # noqa: E704
     def get(  # noqa: E301  # pyright: ignore[reportInconsistentOverload]
-        self,
-        key: Key | None = None,
-        default: D | None = None,
-        **kwargs: VT,
+        self, key: Key | None = None, default: D | None = None, **kwargs: VT
     ) -> Self | VT | D | Item | dict[str, VT] | PrimitiveValue:
         """
         >>> r = DotDict({'key': 'bar'})
@@ -634,7 +604,7 @@ class DotDict(CaseInsensitiveDict[VT]):
         else:
             item = parse_sentinel(item, default=item, **kwargs)
 
-        if is_mapping(item) and is_sentinal(item, **kwargs):
+        if is_mapping(item) and is_sentinel(item, **kwargs):
             item = parse_sentinel(item, default=default, **kwargs)
 
         return self.dictize(item)

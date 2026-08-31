@@ -7,56 +7,24 @@ socket, so a fixture file cannot exercise them: the streamed text branch reads
 ``r.raw``, which is empty unless the request was made with ``stream=True``.
 """
 
-import threading
-from contextlib import suppress
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast
 
 import pytest
 from requests import Response
 
 from riko._io import Fetch
+from tests._loopback import loopback_url
 
 BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
 PAYLOAD = BODY.encode()
-CHUNK = 8192
 
-
-class _Handler(BaseHTTPRequestHandler):
-    protocol_version = "HTTP/1.1"
-
-    def do_GET(self) -> None:  # noqa: N802
-        self.send_response(200)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.send_header("Content-Length", str(len(PAYLOAD)))
-        self.end_headers()
-
-        with suppress(BrokenPipeError, ConnectionResetError):
-            for index in range(0, len(PAYLOAD), CHUNK):
-                self.wfile.write(PAYLOAD[index : index + CHUNK])
-
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
-        pass
-
-
-class _Server(ThreadingHTTPServer):
-    daemon_threads = True
-
-    def handle_error(self, request: object, client_address: object) -> None:
-        pass
+pytestmark = pytest.mark.simulated_network
 
 
 @pytest.fixture(scope="module")
 def url():
-    server = _Server(("127.0.0.1", 0), _Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
-    yield f"http://127.0.0.1:{server.server_port}/feed.txt"
-
-    server.shutdown()
-    server.server_close()
-    thread.join(timeout=5)
+    with loopback_url(BODY) as served:
+        yield served
 
 
 def test_streamed_text_read_returns_full_body(url):

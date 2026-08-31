@@ -471,6 +471,11 @@ a coroutine on the installed backend, and ``issync`` is ``True`` when no async
 backend is present (so these examples degrade gracefully when the extra is
 absent).
 
+Each async ``source`` fetch reads its body fully into memory before parsing (a
+single ``await``). So ``stream`` here means ``Iterator[item]``, not an incremental
+network read. Bounded parallelism (below) keeps the *item* ``stream`` from being
+materialized up front, but each individual body is still buffered whole.
+
 Lazy async iteration
 ^^^^^^^^^^^^^^^^^^^^
 
@@ -635,8 +640,10 @@ and ``assign`` at the call site to control extraction and assignment.
 The async interface accepts a sync *or* async callable, so ``async_pipe`` may be a plain
 ``def`` that returns the sync parser (as built-in ``count``/``reverse``/``sort`` do)
 *or* an ``async def`` that awaits real I/O (as ``strreplace``/``timeout`` and
-`register_module.py`_ do). Pass ``isasync=True`` explicitly if you wrap a sync function
-(that isn't named ``async_pipe``) for the async interface.
+`register_module.py`_ do). Pass ``isasync=True`` when you wrap a sync function for the
+async interface. At runtime it is only required when the function isn't named
+``async_pipe``, but a type checker needs it whenever you assign the result to a typed
+``async_pipe`` slot (as `register_module.py`_ does).
 
 Creating a custom operator
 ^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -32,10 +32,10 @@ import pygogo as gogo
 
 from riko.cast import BasicCastType
 from riko.dotdict import DotDict
-from riko.types.configs import ItemBuilderObjconf
-from riko.types.general import Defaults, Opts
+from riko.types._collections import RikoDict
+from riko.types._configs import ItemBuilderObjconf
+from riko.types._options import Defaults, Opts
 from riko.types.modules import ParsedParam
-from riko.types.values import RikoDict
 
 from . import processor
 

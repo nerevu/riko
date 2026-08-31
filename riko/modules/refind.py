@@ -37,8 +37,8 @@ import pygogo as gogo
 from riko._strutils import reduce_find
 from riko.bado.itertools import coop_reduce
 from riko.cast import BasicCastType
-from riko.types.configs import RefindObjconf
-from riko.types.general import Defaults, Opts
+from riko.types._configs import RefindObjconf
+from riko.types._options import Defaults, Opts
 from riko.types.modules import FindConfRule
 
 from . import processor

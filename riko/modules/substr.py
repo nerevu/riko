@@ -32,8 +32,8 @@ from typing import Any
 import pygogo as gogo
 
 from riko.cast import BasicCastType
-from riko.types.configs import SubstrObjconf
-from riko.types.general import Defaults, Extraction, Opts
+from riko.types._configs import SubstrObjconf
+from riko.types._options import Defaults, Opts
 
 from . import processor
 
@@ -46,7 +46,7 @@ DEFAULTS: Defaults = {"start": 0, "length": 0}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(word: str, _: Extraction, objconf: SubstrObjconf, **kwargs: object) -> str:
+def parser(word: str, _: object, objconf: SubstrObjconf, **kwargs: object) -> str:
     """
     Returns the slice of ``word`` described by the configuration.
 

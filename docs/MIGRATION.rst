@@ -8,36 +8,60 @@ Migrating riko
 API Stability
 -------------
 
-riko follows semantic versioning for its public surface. What an import path is
-tells you what stability guarantee it carries.
+riko follows semantic versioning for its stable application and extension
+surfaces. ``riko.bado`` is additionally documented as the supported async-runtime
+namespace.
 
 Tiers
 ^^^^^
 
-Stable: ``riko`` / ``riko.api``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Stable: ``riko``
+~~~~~~~~~~~~~~~~
 
-Application-facing API: ``AsyncCollection``, ``AsyncPipe``, ``async_return``, ``async_sleep``,
-``Context``, ``SyncCollection``, ``SyncPipe``, ``backend``, ``build_pipeline``, ``compile_pipe``,
-``convert_dag``, ``ExecutionMode``, ``export``, ``extract_dependencies``, ``get_module_metadata``,
-``get_path``, ``isasync``, ``issync``, ``list_modules``, ``list_targets``, ``parse_pipe_def``,
-``PipeState``, ``run``, and the public exceptions.
-Breaking changes require a major version bump. ``riko.__all__`` equals
-``riko.api.__all__``.
+The stable application-facing API is everything listed in ``riko.__all__``. It
+includes the pipe/collection API, compiler API, module-discovery API, public
+exceptions and context types, path/temp-file helpers, and the promoted async
+runtime helpers:
+
+.. code-block:: python
+
+    >>> import riko
+    >>> sorted(riko.__all__)
+    ['AsyncCollection', 'AsyncPipe', 'Context', 'ExecutionMode', 'Modules', 'PipeState', 'PipelineStateError', 'RikoError', 'Sinks', 'Sources', 'SyncCollection', 'SyncPipe', 'Targets', 'Transforms', 'UnsupportedModuleError', 'UnsupportedPipelineError', 'as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_url_open', 'async_write', 'backend', 'build_pipeline', 'compile_pipe', 'convert_dag', 'describe_module', 'export', 'extract_dependencies', 'get_async_temp_file', 'get_module_metadata', 'get_path', 'get_temp_file', 'isasync', 'issync', 'list_modules', 'list_targets', 'parse_pipe_def', 'run']
+
+Breaking changes to this surface require the corresponding SemVer treatment.
 
 Extension: ``riko.ext``
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-For module authors and integration packages: ``processor``, ``operator``,
-``splitter``, ``ModuleMetadata``/``ModuleType``/``ModuleSubtype``, and the parser
-protocols. SemVer-guaranteed, but for a smaller audience than the stable API.
+``riko.ext`` is the supported API for module and integration authors. It
+contains decorators, module metadata and naming types, parsed configuration
+types, parser/wrapper protocols, and registry interfaces:
 
-Private: everything else
-~~~~~~~~~~~~~~~~~~~~~~~~
+.. code-block:: python
 
-Underscore-prefixed names and internal modules (AST inference, prepared-module
-internals, pool handles, pub/sub registries, compiler helpers). No stability
-guarantee; may change in any release. Do not import these from application code.
+    >>> import riko.ext
+    >>> sorted(riko.ext.__all__)
+    ['AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'DynamicConf', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'derive_category', 'get_conf_type', 'normalize_module_name', 'operator', 'processor', 'register', 'splitter']
+
+Async runtime: ``riko.bado``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``riko.bado`` is the supported async-runtime namespace. Every name it exports is
+also re-exported from the top-level ``riko``:
+
+.. code-block:: python
+
+    >>> import riko.bado
+    >>> sorted(riko.bado.__all__)
+    ['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_url_open', 'async_write', 'backend', 'get_async_temp_file', 'isasync', 'issync', 'run']
+
+Private implementation
+~~~~~~~~~~~~~~~~~~~~~~
+
+Underscore-prefixed names and modules are implementation details unless they are
+explicitly re-exported through a supported namespace. They carry no independent
+compatibility guarantee.
 
 Marker
 ^^^^^^
@@ -94,22 +118,14 @@ no setter) — that is not a new change:
 ``Objconf`` is removed
 ^^^^^^^^^^^^^^^^^^^^^^
 
-On the ``legacy`` branch ``Objconf`` survived as a deprecated factory that warned
-and returned a ``DynamicConf``. The current release removes it outright.
+``Objconf`` is no longer part of the top-level API. ``DynamicConf`` is the supported
+replacement for extension authors:
 
 .. code-block:: python
 
-    from riko import Objconf     # LEGACY:  OK — DeprecationWarning, returns DynamicConf
-                                 # CURRENT: ImportError
-
-**Action:** import ``DynamicConf`` from the extension surface. It moved from the
-top level (``riko``) to a private module (``riko._objectify``), with the stable
-re-export at ``riko.ext.config``:
-
-.. code-block:: python
-
-    from riko.ext.config import DynamicConf   # LEGACY & CURRENT: OK
-    from riko import DynamicConf              # LEGACY: OK   CURRENT: ImportError
+    >>> from riko.ext import DynamicConf
+    >>> DynamicConf.__name__
+    'DynamicConf'
 
 Legacy JSON pipeline forms are removed
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -135,13 +151,13 @@ of the above.
 ``get_path`` is now part of the stable surface
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``get_path`` is importable from ``riko`` on both branches, but only the current
-release lists it in ``riko.__all__`` (so ``from riko import *`` now includes it):
+``get_path`` is now an explicitly supported top-level API:
 
 .. code-block:: python
 
-    from riko import get_path            # LEGACY & CURRENT: OK
-    "get_path" in riko.__all__           # LEGACY: False   CURRENT: True
+    >>> from riko import get_path
+    >>> get_path("feed.xml").endswith("feed.xml")
+    True
 
 Milestone changes (release history)
 -----------------------------------
@@ -154,11 +170,16 @@ Twisted replaced by AnyIO (v0.72.0)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The async runtime is now AnyIO. There is **no Twisted backend** — Twisted is not
-imported and not importable anywhere in ``riko``. The ``riko.bado`` backend still
-exists and runs on AnyIO, but it is an internal module (private per the stability
-policy): applications should use the stable re-exports ``riko.run``,
-``riko.backend``, ``riko.isasync``, and ``riko.issync`` rather than importing from
-``riko.bado`` directly. Backend selection is purely "does ``anyio`` import?":
+imported and not importable anywhere in ``riko``. The ``riko.bado`` runtime still exists
+and runs on AnyIO. It is the supported async-runtime namespace and also exposes selected
+backend primitives used by riko internally.
+
+Application-facing async helpers are re-exported unchanged through ``riko``. Each
+resolves to the same object as its ``riko.bado`` counterpart, but application code
+should use the top-level ``riko`` form — e.g. ``riko.run``, ``riko.backend``,
+``riko.isasync``.
+
+Backend selection is purely "does ``anyio`` import?":
 
 .. code-block:: python
 
@@ -216,7 +237,7 @@ instance now represents **one execution**.
 
     flow = SyncPipe("fetchdata", conf=conf)
     first = list(flow)     # runs the pipeline
-    second = list(flow)    # yields []  (the run is spent — older releases re-ran it)
+    second = list(flow)    # yields []  (the run is spent, but older releases re-ran it)
 
 * Iterating an exhausted, closed, or failed pipe yields an empty stream — it
   never raises (ordinary spent-iterator semantics).
@@ -231,10 +252,8 @@ instance now represents **one execution**.
 
 .. code-block:: python
 
-    from riko import PipelineStateError
-
     flow.close()
-    flow.count()           # raises PipelineStateError
+    flow.count()           # raises riko.PipelineStateError
 
 ``ExecutionMode`` replaces the describe booleans (v0.70.0)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -256,9 +275,9 @@ current release removes it entirely (Part 1).
 ``return_value`` removed
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The ``return_value`` symbol was removed entirely — there is no shim. Remove any
-imports or references. (Note: the ``coroutine`` decorator is **not** an async
-marker — it marks pub/sub generator pipelines using ``send`` / ``receive``.)
+The ``return_value`` symbol was removed entirely; there is no compatibility
+shim. Remove any imports or references. (Note: the ``coroutine`` decorator is **not**
+an async marker. It marks pub/sub generator pipelines using ``send`` / ``receive``.)
 
 .. _CHANGES: CHANGES.rst
 

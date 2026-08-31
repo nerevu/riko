@@ -1,3 +1,14 @@
+"""
+Splits one date ``input`` into two streams and formats each differently with
+``dateformat`` (long form and year).
+
+Examples:
+    Run it::
+
+        run-pipe split
+
+"""
+
 from pprint import pprint
 from typing import cast
 

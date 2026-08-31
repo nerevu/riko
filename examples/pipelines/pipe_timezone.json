@@ -1,0 +1,66 @@
+{
+  "modules": [
+    {
+      "id": "sw-1",
+      "type": "itembuilder",
+      "conf": {
+        "attrs": [
+          {
+            "key": {
+              "type": "text",
+              "value": "date"
+            },
+            "value": {
+              "type": "text",
+              "value": "5/4/1982"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "sw-2",
+      "type": "dateformat",
+      "conf": {
+        "format": {
+          "type": "text",
+          "value": "%B %d, %Y %Z"
+        },
+        "timezone": {
+          "type": "text",
+          "value": "EST"
+        }
+      },
+      "field": "date"
+    },
+    {
+      "id": "_OUTPUT",
+      "type": "output",
+      "conf": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "_w1",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-1"
+      },
+      "tgt": {
+        "id": "_INPUT",
+        "moduleid": "sw-2"
+      }
+    },
+    {
+      "id": "_w2",
+      "src": {
+        "id": "_OUTPUT",
+        "moduleid": "sw-2"
+      },
+      "tgt": {
+        "id": "_INPUT",
+        "moduleid": "_OUTPUT"
+      }
+    }
+  ]
+}

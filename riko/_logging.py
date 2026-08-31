@@ -45,10 +45,7 @@ def_format: str = "[%(levelname)s %(asctime)s] in %(module)s:%(lineno)s: %(messa
 def_formatter: DefaultFormatter = DefaultFormatter(def_format, datefmt=DATEFMT)
 
 logger: Logger = gogo.Gogo(
-    __name__,
-    low_formatter=def_formatter,
-    high_formatter=def_formatter,
-    monolog=True,
+    __name__, low_formatter=def_formatter, high_formatter=def_formatter, monolog=True
 ).logger
 logger.propagate = False
 

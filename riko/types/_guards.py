@@ -3,27 +3,27 @@
 Provides type guard functions for riko types.
 """
 
+from __future__ import annotations
+
 from collections.abc import Mapping
-from typing import Any, TypeGuard
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs
 
 from riko._objectify import Objectify
 from riko._strutils import replacer
-from riko.types.general import Item
-from riko.types.modules import ConfArg
-from riko.types.values import (
-    MISSING,
-    BasicList,
-    BasicValue,
-    BasicValueType,
-    MissingType,
-    Sentinal,
-    SentinalValue,
-    StatefulItem,
-    StreamState,
-)
+
+from ._scalars import BasicValueType
+from ._sentinels import MISSING, SentinelValue, StreamState
+
+if TYPE_CHECKING:
+    from ._collections import BasicList
+    from ._scalars import BasicValue
+    from ._sentinels import MissingType, Sentinel
+    from ._streams import Item, StatefulItem
+    from .compile import LoopModule, PipeModule
+    from .modules import ConfArg
 
 
 def is_mapping[D, VT](val: Mapping[D, VT] | object) -> TypeIs[Mapping[D, VT]]:
@@ -60,10 +60,10 @@ def is_value_seq(
     return bool(val and isinstance(val[0], BasicValueType))
 
 
-def is_sentinal[VT](val: Mapping[str, VT], **kwargs: object) -> TypeGuard[Sentinal]:
-    if SentinalValue in val:
-        sentinal = str(val[SentinalValue])
-        key = replacer(sentinal, "")
+def is_sentinel[VT](val: Mapping[str, VT], **kwargs: object) -> TypeGuard[Sentinel]:
+    if SentinelValue in val:
+        sentinel = str(val[SentinelValue])
+        key = replacer(sentinel, "")
     else:
         key = None
 
@@ -72,3 +72,7 @@ def is_sentinal[VT](val: Mapping[str, VT], **kwargs: object) -> TypeGuard[Sentin
 
 def is_type_value(val: Mapping[Any, Any]) -> TypeGuard[ConfArg]:
     return len(val) == 2 and "type" in val and "value" in val
+
+
+def is_loop_module(module: PipeModule) -> TypeGuard[LoopModule]:
+    return module["type"] == "loop" and "embed" in module

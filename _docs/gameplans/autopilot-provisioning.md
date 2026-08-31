@@ -8,11 +8,11 @@ machine, starting from one or more existing hardware-hash CSV files. This is a *
 specializes the generic Microsoft contracts — it owns only Autopilot-specific input models, tag
 rules, state machine, and workflow sequencing.
 
-> **Dependencies:** P14 external distribution (`riko-microsoft`), gated behind P8
-> (entry points) + P11 (pub/sub) + P12 (errors/events); see
-> [MILESTONES.md](../MILESTONES.md) "External distributions". It is the downstream *consumer* that
-> the [module-enums.md](module-enums.md) plan references as the fake-then-real example extension
-> proving the P8 seam. **No Microsoft imports or dependencies land in `nerevu/riko`.**
+> **Dependencies:** this remains an external `riko-microsoft` proof built on the shipped P8 entry-
+> point seam and the reconciled Pipeline/resource/provider contracts. Forward dependency order is
+> owned by [implementation-sequence.md](implementation-sequence.md), especially the provider/external
+> integration work in R11/R12. Historical P11/P12/P14 phase labels remain status provenance, not the
+> target API contract. **No Microsoft imports or dependencies land in `nerevu/riko`.**
 >
 > **Provenance.** Folded in from the untracked `_docs/current_implementation.md` (Part 1 — the
 > Autopilot implementation plan). Part 2 of that doc (the generated module-enum taxonomy) is owned
@@ -26,8 +26,10 @@ Related authoritative plans (this scenario **consumes**, it does not redefine th
   `ChangePlan`, dry-run/WhatIf, apply-then-verify, approval, result states, audit evidence;
 * [provider-integrations.md](provider-integrations.md) — `OperationHandle` + interval/event/hybrid
   operation waiting;
-* [module-enums.md](module-enums.md) — P8 registration + the `microsoft.autopilot.*` module ids and
-  the generated `MicrosoftModule`/`Module.Microsoft.Autopilot.*` discovery enums;
+* [execution-semantics.md](execution-semantics.md) — Pipeline, Context/resources, retry,
+  idempotency, state/checkpoint semantics;
+* [module-enums.md](module-enums.md) — registration + the `microsoft.autopilot.*` module ids and
+  generated discovery names;
 * [connectors.md](connectors.md) — credential references (never serialized secrets).
 
 ## 2. Ownership boundary
@@ -37,8 +39,9 @@ rules, deployment-intent manifest, the Autopilot device state machine + operatio
 profile/60-minute-fallback specifics, the operator API + `riko-ms` CLI surface, and the scenario
 DoD/tests.
 
-**It does not own** (link out): `MicrosoftContext`/auth/Graph client, `ChangePlan`/preflight/verify
-semantics, `OperationHandle`/waiting, retry/throttling classification, or the module-enum codegen.
+**It does not own**: `MicrosoftContext`/auth/Graph client, `ChangePlan`/preflight/verify semantics,
+`OperationHandle`/waiting, retry/throttling classification, common StateStore/checkpoint semantics,
+or module-enum codegen.
 
 **The four-layer rule** — do not collapse these into one module:
 
@@ -50,15 +53,15 @@ Riko's registry = the exposure mechanism
 ```
 
 `client.py` is a thin translation between typed operations and Graph — **no business rules**. The
-existing PowerShell scripts (`inspiration/UploadDeviceHash.ps1`) stay reference/fallback only; extract their
-semantics into typed components — do **not** reproduce them in Python.
+existing PowerShell scripts (`inspiration/UploadDeviceHash.ps1`) stay reference/fallback only;
+extract their semantics into typed components rather than reproducing them in Python.
 
 ## 3. Scope
 
 **MVP:** one/many Microsoft-format hardware-hash CSVs (no physical merge); normalization + dedup;
 validation before writes; central app-only auth; explicit tenant context; existing-device
 discovery; import of missing devices; canonical group-tag assignment; Admin-device user assignment;
-idempotent reruns; import polling with timeout; Autopilot sync; deployment-profile monitoring;
+idempotent reruns; import waiting with timeout; Autopilot sync; deployment-profile monitoring;
 60-minute profile fallback; post-write verification; dry-run/plan mode; structured results/errors;
 tests with a fake Graph transport.
 
@@ -69,12 +72,13 @@ workflow.
 
 ## 4. Input model & canonical tags
 
-Normalize every CSV row into hardware, then combine with deployment intent (frozen slotted
-dataclasses):
+Normalize every CSV row into hardware, then combine with deployment intent:
 
 ```python
 class AutopilotHardware:
-    serial_number, hardware_hash, product_id = None
+    serial_number: str
+    hardware_hash: str
+    product_id: str | None = None
 
 
 class FormFactor(StrEnum):
@@ -90,134 +94,257 @@ class DeviceMode(StrEnum):
 class Ownership(StrEnum):
     CLIENT = "Client"
     MSP = "MSP"
-
-
-class AutopilotDeviceSpec:
-    hardware, form_factor, mode, ownership, assigned_user = None
 ```
 
+`AutopilotDeviceSpec` combines those values plus optional assigned user.
+
 `group_tag` is **derived, never primary input** — `f"{form_factor}-{mode}-{ownership}"`, so the
-allowed output is **exactly eight** canonical tags (`Desktop-Admin-Client` … `Laptop-Shared-MSP`).
+allowed output is exactly eight canonical tags (`Desktop-Admin-Client` … `Laptop-Shared-MSP`).
 Formalize the three dimensions the scripts already encode instead of retaining string manipulation.
 
 ## 5. CSV ingestion & deployment intent
 
-`load_autopilot_csv(path)` / `load_autopilot_csvs(paths)` — concatenate + dedup **in memory**, no
-temp combined CSV. Validate: required `Device Serial Number` + `Hardware Hash`; recognized Microsoft
-headers; nonempty normalized serial; valid hash; duplicate serials; conflicting hashes per serial.
-**Duplicate + identical hash → dedupe; duplicate serial + different hashes → fail preflight. Never
-partially import a batch that failed input validation.**
+`load_autopilot_csv(path)` / `load_autopilot_csvs(paths)` concatenate + dedup **in memory**; no temp
+combined CSV. Validate required `Device Serial Number` + `Hardware Hash`, recognized Microsoft
+headers, nonempty normalized serial, valid hash, duplicate serials, and conflicting hashes.
+
+**Duplicate + identical hash -> dedupe; duplicate serial + different hashes -> fail preflight.**
+Never partially import a batch that failed input validation.
 
 Deployment intent is a separate manifest (`serial_number,form_factor,mode,ownership,assigned_user`)
-joined by serial. Rules: **Admin ⇒ `assigned_user` required**; Shared ⇒ normally absent;
-form_factor/mode/ownership restricted to their enums. Do **not** infer MSP ownership from hostname/
+joined by serial. Rules: **Admin -> `assigned_user` required**; Shared -> normally absent;
+form_factor/mode/ownership restricted to their enums. Do not infer MSP ownership from hostname or
 username unless later made an explicit configurable policy.
 
-## 6. Authentication (consumes azure-automation §4/§7)
+## 6. Authentication
 
 Use the existing `MicrosoftContext(tenant_id, credential, cloud, operator_id, correlation_id)`.
-Credentials stay **references, not serialized secrets**; tenant/session state stays execution-scoped
-to prevent MSP cross-tenant leakage. Credential preference: managed/workload identity → certificate
-SP → client secret only when necessary. Never introduce `app_secret="..."` into `AutopilotDeviceSpec`,
-pipeline config, or serialized plans. Autopilot ops need Graph app permission
+Credentials stay **references, not serialized secrets**; live tenant/session handles remain
+execution-owned so concurrent MSP client work cannot leak state between tenants.
+
+Credential preference:
+
+```text
+managed/workload identity
+-> certificate service principal
+-> client secret only when necessary
+```
+
+Autopilot operations need the appropriate Graph application permission such as
 `DeviceManagementServiceConfig.ReadWrite.All`.
 
-## 7. Graph & Autopilot clients (consumes azure-automation §8)
+## 7. Graph & Autopilot clients
 
-`GraphClient.request(...)` owns transport only: token acquisition, auth header, base-URL/API-version,
-JSON, pagination, request IDs, normalized Graph exceptions, `Retry-After`, HTTP error classification.
-It does **not** own Autopilot rules, desired-state comparison, retry loops, waiting, or approval.
+`GraphClient.request(...)` owns transport only: token acquisition, auth header, base URL/API
+version, JSON, pagination, request IDs, normalized Graph exceptions, `Retry-After`, and HTTP error
+classification. It does **not** own Autopilot rules, desired-state comparison, retry loops, waiting,
+or approval.
 
-`AutopilotClient` above it exposes typed operations: `list_registered_devices`/`find_registered_device`,
-`list_imported_devices`/`get_imported_device`, `import_devices`, `update_device_properties`/
-`assign_user`, `sync`, `get_profile_state`/`assign_profile`. **Use v1.0 where stable** (imported-device
-list/import, `updateDeviceProperties`, `assignUserToDevice`); **isolate beta behind explicitly named
-adapter methods** (Autopilot `sync` + direct profile assignment are beta) — do not scatter "beta"
-strings through the reconciler.
+`AutopilotClient` exposes typed operations such as:
 
-## 8. Preflight, planning, apply-verify (consumes microsoft-administration §6/§8/§11)
+```text
+list/find registered device
+list/get imported device
+import devices
+update device properties
+assign user
+sync
+read profile state
+assign fallback profile
+```
 
-**Preflight** before any mutation: credential resolves; token acquirable; tenant matches customer;
-Graph reachable; permission available; all CSV/intent rows valid; all Admin users resolvable; every
-serial has intent; every desired tag valid + maps to a deployment profile; no conflicting duplicate
-serials → else `failed_preflight` **before any write**.
+Use stable Graph APIs where available and isolate beta operations behind explicitly named adapter
+methods rather than scattering beta URLs through the reconciler.
 
-**`plan_autopilot_devices(specs, *, context) -> ChangePlan`** — per serial classify one state:
-`MISSING`, `EXISTS_CONVERGED`, `EXISTS_TAG_DRIFT`, `EXISTS_USER_DRIFT`, `EXISTS_PROFILE_DRIFT`,
-`IMPORT_PENDING`, `IMPORT_FAILED`; emit operations: `ImportDevice`, `UpdateGroupTag`, `AssignUser`,
-`WaitForImport`, `SyncAutopilot`, `WaitForProfile`, `AssignProfileFallback`, `NoChange`. **No writes
-during planning.** A rerun against converged devices ⇒ all `NoChange` ⇒ `changed=False`
-(desired-state contract).
+## 8. Preflight, planning, apply-verify
 
-**`ensure_autopilot_devices(specs, *, context, dry_run=False) -> AdminResult`**:
-`preflight → discover → plan → (dry_run ⇒ return plan) → apply → wait → verify → AdminResult`. A Graph
-"write succeeded" is **not** sufficient — do an **authoritative read after mutation** and distinguish
-provider response from verified state.
+Preflight before mutation:
+
+```text
+credential resolves
+token acquirable
+tenant matches customer
+Graph reachable
+required permission available
+all CSV/intent rows valid
+all Admin users resolvable
+every serial has intent
+every desired tag valid and mapped to a profile
+no conflicting duplicate serials
+```
+
+Failure produces `failed_preflight` before any write.
+
+`plan_autopilot_devices(specs, *, context) -> ChangePlan` classifies each serial into a state such
+as:
+
+```text
+MISSING
+EXISTS_CONVERGED
+EXISTS_TAG_DRIFT
+EXISTS_USER_DRIFT
+EXISTS_PROFILE_DRIFT
+IMPORT_PENDING
+IMPORT_FAILED
+```
+
+and emits operations such as:
+
+```text
+ImportDevice
+UpdateGroupTag
+AssignUser
+WaitForImport
+SyncAutopilot
+WaitForProfile
+AssignProfileFallback
+NoChange
+```
+
+No writes occur during planning. A rerun against converged devices yields only `NoChange` and
+`changed=False`.
+
+`ensure_autopilot_devices(specs, *, context, dry_run=False) -> AdminResult` follows:
+
+```text
+preflight
+-> discover
+-> plan
+-> dry-run return OR approve/apply
+-> wait where necessary
+-> authoritative verify
+-> AdminResult
+```
+
+A provider "write succeeded" response is not sufficient; final state is verified through the
+authoritative service.
 
 ## 9. Import, waiting, sync, profile fallback
 
-**Import** — prefer the batch action `POST /v1.0/…/importedWindowsAutopilotDeviceIdentities/import`
-with each record carrying serial + hardware id + group tag + assigned user immediately. Do **not**
-issue one HTTP request per CSV row.
+Prefer the Graph batch import action with serial, hardware hash, group tag, and assigned user in the
+batch payload. Do not issue one HTTP request per CSV row.
 
-**Waiting** (consumes provider-integrations §18) — never `while True: sleep(15)` inside the client.
-Represent progress as `OperationHandle(provider="microsoft", operation_id=…,
-status_capability="microsoft.autopilot.import_status")` and use the shared waiter. Configurable
-bounds: import 15 s / 15 min; registration 15 s / 15 min; profile 15 min / 60 min.
+**Waiting** uses the `OperationHandle`/`wait_operation(...)` contract from
+`provider-integrations.md`, never a client-local `while True: sleep(...)` loop. Example conceptual
+bounds:
 
-**Sync + profile** — after registration trigger Autopilot sync (tolerate already-running/throttled;
-it returns initiation, not convergence), then query authoritative state. Maintain
-`PROFILE_BY_GROUP_TAG` loaded **by tenant/environment** — never hard-code real profile ids in source.
+```text
+import/registration: 15 s interval, 15 min timeout
+profile convergence: 15 min interval, 60 min timeout
+```
 
-**60-minute fallback** — poll actual vs. desired profile up to 60 min; if desired appears → verify;
-if still genuinely unassigned → `AssignProfileFallback` → verify again. **If a *different* profile is
-already assigned, return a conflict requiring explicit policy/approval — never silently overwrite.**
+These are operation-wait settings, not `Pipeline.poll()` source-observation semantics.
 
-## 10. Operator API, CLI, and P8 registration
+After registration, trigger Autopilot sync, then read authoritative profile state.
+`PROFILE_BY_GROUP_TAG` is tenant/environment configuration; real profile IDs are never hard-coded in
+core source.
 
-Primary API is the high-level `ensure_autopilot_devices(...)`; do **not** expose the low-level
-sequence as the primary surface. CLI: `riko-ms autopilot plan|apply|status` (globbed `hashes/*.csv`,
-`--manifest`, `--tenant`).
+**60-minute fallback:** wait for desired profile convergence. If still genuinely unassigned after
+the configured bound, execute `AssignProfileFallback` and verify again. If a *different* profile is
+already assigned, return a conflict requiring explicit policy/approval; never silently overwrite.
 
-Register through the P8 entry-point seam once independently testable —
-`[project.entry-points."riko.modules"] microsoft = "riko_microsoft.modules:definitions"` — exposing
-`microsoft.autopilot.ensure` / `microsoft.autopilot.status`. The generated discovery enum
-(`MicrosoftModule.AUTOPILOT_ENSURE`, aggregate `Module.Microsoft.Autopilot.ENSURE`) is
-[module-enums.md](module-enums.md)'s concern; strings stay canonical
-(`SyncPipe("microsoft.autopilot.ensure")`). **No `nerevu/riko` edit required.**
+If resumable workflow state is required across process/run boundaries, it uses the common
+`FeedState` / `StateStore` / CAS model rather than an Autopilot-specific checkpoint store.
 
-Proposed `riko-microsoft` layout: `auth/context/graph/errors/operations` + `autopilot/{models,csv,
-tags,profiles,client,planner,reconciler,status,capabilities}` + `modules/autopilot.py`.
+## 10. Side effects and idempotency
 
-## 11. Implementation order
+Autopilot mutations are ordinary Riko/provider side effects. Execution derives the common
+idempotency identity from the node/fingerprint/item/generation/iteration dimensions; the provider
+adapter must genuinely honor that key where Graph/provider semantics allow it.
 
-Stable path first, then layer sync/profile:
+Desired-state reads and post-write verification remain the primary protection against duplicate or
+ambiguous mutations. Do not add an independent Autopilot retry/idempotency framework.
 
-1. Autopilot models + canonical tag rules → 2. multi-CSV parser/normalizer → 3. `MicrosoftContext`
-+ credential-reference auth → 4. generic Graph client → 5. read/discovery client → 6. `ChangePlan`
-generation → 7. v1.0 import/update/user ops → 8. import/registration `OperationHandle` adapters →
-9. reconcile/apply + authoritative verify → 10. isolated beta sync adapter → 11. profile-state
-monitoring → 12. 60-minute fallback → 13. CLI → 14. P8 registration → 15. full contract/integration
-suite. **Do not** start with PowerShell, browser automation, or the profile fallback.
+## 11. Operator API, CLI, and registration
 
-## 12. Definition of done
+Primary API is the high-level `ensure_autopilot_devices(...)`; do not expose the low-level sequence
+as the primary surface.
 
-From the MSP machine, `riko-ms autopilot apply ./hashes/*.csv --manifest ./devices.csv --tenant
-client-a` — without opening Intune or touching the new device — validates all input, authenticates
-to the correct tenant, imports only missing devices, applies canonical tags, assigns Admin users,
-waits with bounded timeouts, syncs, verifies profile assignment, performs the configured 60-minute
-fallback, verifies final authoritative state, produces machine-readable per-device results, reruns
-safely with `changed=False`, and keeps secrets out of plans/logs.
+CLI:
 
-## 13. Required tests (fake Graph transport)
+```text
+riko-ms autopilot plan
+riko-ms autopilot apply
+riko-ms autopilot status
+```
 
-Cover: **CSV** (one/many parse; identical dup deduped; conflicting serial/hash fails; missing column
-fails); **domain** (all eight tags; invalid factor/mode/ownership rejected; Admin-without-user
-rejected); **auth/context** (credential reference not secret; tenant A/B cannot leak); **planning**
-(missing→Import; converged→NoChange; wrong tag→update; wrong/missing Admin user→assign; dry-run zero
-writes); **import** (batch payload; pending stays pending; complete succeeds; provider error →
-structured failure; timeout terminates); **idempotency** (second converged run → zero mutations);
-**profile** (correct verifies; pending waits; timeout→fallback; wrong existing profile → conflict,
-not silent replace); **failure** (permission fails in preflight; 429 honors retry hint; timeout →
-`timed_out`; verify failure → `failed_verify`); **security** (no tokens/secrets in logs; `ChangePlan`
-carries no secret material); **P8** (loads through entry point; no core edit).
+Register through the existing module entry-point seam once independently testable:
+
+```toml
+[project.entry-points."riko.modules"]
+microsoft = "riko_microsoft.modules:definitions"
+```
+
+with canonical module IDs such as:
+
+```text
+microsoft.autopilot.ensure
+microsoft.autopilot.status
+```
+
+Target Pipeline use is:
+
+```python
+Pipeline("microsoft.autopilot.ensure", conf=...)
+```
+
+Generated discovery names/enums remain owned by `module-enums.md`. No `nerevu/riko` code edit is
+required for the integration.
+
+Suggested `riko-microsoft` layout:
+
+```text
+auth/context/graph/errors/operations
+autopilot/{models,csv,tags,profiles,client,planner,reconciler,status,capabilities}
+modules/autopilot.py
+```
+
+## 12. Implementation order
+
+Stable path first, then sync/profile specialization:
+
+1. models + canonical tags;
+2. multi-CSV parser/normalizer;
+3. MicrosoftContext + credential references;
+4. generic Graph client;
+5. read/discovery client;
+6. ChangePlan generation;
+7. stable import/update/user operations;
+8. import/registration OperationHandle adapters;
+9. reconcile/apply + authoritative verify;
+10. isolated sync adapter;
+11. profile-state monitoring;
+12. 60-minute fallback;
+13. CLI adapter;
+14. module registration;
+15. full contract/integration suite.
+
+Forward cross-cutting runtime order remains owned by `implementation-sequence.md`; this list is the
+specialization order inside `riko-microsoft`.
+
+## 13. Definition of done
+
+From the MSP machine, an Autopilot apply command validates all input, authenticates to the correct
+tenant, imports only missing devices, applies canonical tags, assigns Admin users, waits with
+bounded timeouts, syncs, verifies profile assignment, performs the configured fallback when needed,
+verifies final authoritative state, produces machine-readable per-device results, reruns safely with
+`changed=False`, and keeps secrets out of plans/logs.
+
+## 14. Required tests
+
+Cover:
+
+- **CSV:** one/many parse; identical duplicate dedupe; conflicting serial/hash fail; missing column
+  fail;
+- **domain:** all eight tags; invalid factor/mode/ownership rejected; Admin-without-user rejected;
+- **auth/context:** credential reference not secret; tenant A/B cannot leak;
+- **planning:** missing -> Import; converged -> NoChange; wrong tag/user/profile -> planned change;
+  dry-run -> zero writes;
+- **import:** batch payload; pending/complete/failure/timeout states;
+- **idempotency:** second converged run -> zero mutations; retry identity stable where used;
+- **profile:** correct verifies; pending waits; timeout -> fallback; wrong existing profile -> conflict;
+- **failure:** permission fails in preflight; 429 honors shared retry hint; timeout -> `timed_out`;
+  verify failure -> `failed_verify`;
+- **state:** any persisted resumable state uses common StateStore/CAS behavior;
+- **security:** no tokens/secrets in logs or ChangePlan;
+- **registration:** external package loads through entry point with no core edit.

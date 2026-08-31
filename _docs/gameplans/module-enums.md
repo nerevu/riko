@@ -5,7 +5,7 @@
 > `riko.ext.codegen` generator + committed `riko/modules/_names.py` (the flat `Modules`
 > namespace + `Sources`/`Transforms`/`Sinks` buckets), value-taking `|`/`.pipe()` chaining,
 > `list_modules`/`describe_module` introspection, and the `gen-names` CLI + drift guard. The
-> discovery tree is re-exported from the **stable `riko`/`riko.api`** surface (not `riko.modules`,
+> discovery tree is re-exported from the **stable `riko`** surface (not `riko.modules`,
 > whose `Module` already names the decorator base — the wrapper was named **`Modules`** (plural)
 > to sidestep that collision). As-built detail: [IMPLEMENTED.md §24](../IMPLEMENTED.md#24-module-discovery-shipped);
 > status: [PHASE_CHECKLISTS.md § P9A](../PHASE_CHECKLISTS.md).

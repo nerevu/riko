@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.types.configs
+riko.types._configs
 ~~~~~~~~~~~~~~~~~~~
 Parse-time ``objconf`` config types, one per module. Each subclasses
 ``DynamicConf`` (case-insensitive attribute + mapping access; missing keys return
@@ -15,17 +15,16 @@ Edit those objects (not this file), then regenerate with ``gen-config``.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Literal
 
-from riko.types.base import DynamicConf
+from riko.types._dynamic_conf import DynamicConf
 
 if TYPE_CHECKING:
     from riko.cast import CastType, LocationType
     from riko.types.modules import (
         FilterConfRule,
         FindConfRule,
-        Function,
         ParsedParam,
         Path,
         RegexConfRule,
@@ -81,7 +80,7 @@ class RssItemBuilderObjconf(DynamicConf):
 
 
 class AggregateObjconf(DynamicConf):
-    func: Function
+    func: Callable
 
 
 class CountObjconf(DynamicConf):
@@ -268,7 +267,7 @@ class TypecastObjconf(DynamicConf):
 
 
 class UdfObjconf(DynamicConf):
-    func: Function
+    func: Callable
 
 
 class UniqObjconf(DynamicConf):

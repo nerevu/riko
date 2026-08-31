@@ -1,8 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 
-from riko import Context
-from riko.bado import run
+from riko.bado._backend import run
 from riko.collections import AsyncPipe
+from riko.context import Context
 from tests.pypipelines._pipe_kazeeki import fetchdata_conf, regex_conf, rename_conf
 
 

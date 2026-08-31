@@ -18,28 +18,32 @@ import pygogo as gogo
 
 from riko.context import Context
 from riko.dotdict import DotDict
-from riko.types.compile import EmbedKwargs
-from riko.types.general import (
-    AsyncProcessorWrapper,
-    AsyncSubPipe,
+from riko.types._collections import RikoValue
+from riko.types._scalars import PrimitiveValue
+from riko.types._streams import (
     Item,
     ItemOrValue,
     ItemsOrValues,
+    StatefulItem,
+    Stream,
+    StreamOrValueStream,
+    ValueStream,
+)
+from riko.types._wrappers import (
+    AsyncProcessorWrapper,
+    AsyncSubPipe,
     OperatorParserOutput,
     OperatorWrapperInput,
     ProcessorParserOutput,
     ProcessorWrapper,
     ProcessorWrapperInput,
     ProcessorWrapperOutput,
-    Stream,
-    StreamOrValueStream,
     SubPipe,
     SyncProcessorWrapper,
     SyncSubPipe,
-    ValueStream,
 )
+from riko.types.compile import EmbedKwargs
 from riko.types.modules import CountValues
-from riko.types.values import PrimitiveValue, RikoValue, StatefulItem
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 

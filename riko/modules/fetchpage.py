@@ -30,15 +30,16 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko import ENCODING
+from riko._constants import ENCODING
 from riko._io import Fetch
 from riko._iterutils import betwix
-from riko.bado import io
+from riko.bado.io import async_url_read
 from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import get_text
-from riko.types.configs import FetchPageObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts
+from riko.types._configs import FetchPageObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Item
 
 from . import processor
 
@@ -58,7 +59,7 @@ def get_string(content: str, start: str, end: str) -> str:
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FetchPageObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: FetchPageObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Asynchronously fetches the page and returns the requested slice.
@@ -93,7 +94,7 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchpage")
-    content = await io.async_url_read(url)
+    content = await async_url_read(url)
     parsed = get_string(content, objconf.start or "", objconf.end or "")
     detagged = get_text(parsed) if objconf.detag else parsed
     split = detagged.split(objconf.token) if objconf.token else [detagged]
@@ -101,7 +102,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FetchPageObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: FetchPageObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Fetches the page and returns the requested slice.

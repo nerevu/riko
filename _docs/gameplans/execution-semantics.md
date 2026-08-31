@@ -1,105 +1,622 @@
 # Execution semantics gameplan
 
-> **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level overview. This gameplan is the authoritative detail for the runtime execution-semantics contract — execution characteristics, async backpressure, timeout, union/merge, retry, errors/dispositions, filter semantics, and the batch model (ROADMAP §5–§8, §11–§13, §16). Section references like §N point back to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md) (the runtime contract); the numbered `## N.` headings are preserved so those references resolve.
+> **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level overview. This gameplan is the authoritative detail for the runtime execution-semantics contract. It reconciles the reusable `Pipeline` definition model, sync/async execution, resources, fan-out, metadata/state propagation, checkpointing, durable identity, batching, retry/error policy, timeout, merge, and memory limits. Numbered `## N.` headings are retained where other documents reference the corresponding runtime-contract sections.
+>
+> **Status vocabulary.** Existing/shipped behavior is identified explicitly. Everything described as the target contract is planned API/runtime behavior and must not be presented as already shipped until implementation lands.
+
+## Canonical definition and execution model
+
+`Pipeline[T]` is the sole reusable public pipeline definition. A pipeline is an immutable DAG; fluent chaining is shorthand for creating a new definition that shares prior structure.
+
+```python
+flow = Pipeline("fetchdata", conf={"url": url}).filter(conf=filter_conf).map(normalize)
+```
+
+Execution is deliberately separate from definition:
+
+```python
+list(flow)  # fresh private SyncExecution
+aiter(flow)  # fresh private AsyncExecution
+```
+
+`iter(flow)` creates a new one-shot private `SyncExecution`; `aiter(flow)` creates a new one-shot private `AsyncExecution`. Reusing the same pipeline definition creates independent executions with independent resource, portal, state-store-adapter, and fan-out lifetimes. There is no normal public `Execution(...)` construction API.
+
+The same `Pipeline` definition may run in either mode. Native implementations win and the runtime adapts only where the matching implementation is absent.
+
+| Module implements | Sync execution | Async execution |
+|---|---|---|
+| sync + async | native sync | native async |
+| sync only | native sync | sync on a worker unless explicitly inline-safe |
+| async only | async on the execution portal | native async |
+
+Legacy `SyncPipe` / `AsyncPipe` / collection classes remain migration surfaces only; they are not the target architecture.
+
+### Definition configuration vs execution configuration
+
+Step configuration is fixed when that step is declared. `with_config()` does not mutate the last/current step.
+
+Execution-wide settings use a separate immutable definition operation:
+
+```python
+flow = flow.with_execution(executor="thread", concurrency=8, ordered=False)
+```
+
+There are no executing `collect()` / `first()` terminals in the target API. Normal execution remains Python iteration (`list(flow)`, `for`, `async for`). `take()` remains a transform.
+
+Pipeline immutability does not imply source replayability. One-shot iterators, lazy generators, subscriptions, and other one-shot sources preserve their native semantics; a second execution may therefore observe an already-consumed external source unless the source itself is replayable.
+
+## Context and resources
+
+There is one public `Context`; there is no public `ExecutionContext`. `Context` is an immutable environment/configuration definition. Runtime handles belong to the private execution.
+
+```python
+ctx2 = ctx.with_module(...)
+ctx3 = ctx2.with_resource(...)
+```
+
+Child contexts may shadow parent modules/resources; names must be unique within one scope. Built-ins remain static/global defaults, while Context-local module definitions may shadow them.
+
+### Resource ownership
+
+```python
+Resource(spec)  # Riko owns lifecycle
+Resource(client, external=True)  # caller owns; Riko never closes
+Resource.from_factory(make_db)
+```
+
+A referenced owned resource is opened eagerly during execution preparation by default. An unreferenced resource is not opened. `lazy=True` validates eagerly but defers opening until first use. `external=True, lazy=True` is invalid because an external value is already supplied by the caller.
+
+Each `Resource` resolves at most once per execution. Re-executing the same `Pipeline` resolves a fresh owned handle.
+
+Opening rules:
+
+- independent eager resources open in deterministic declaration order;
+- resource factories may depend on other declared resources;
+- dependencies are resolved dynamically with cycle detection;
+- if eager opening fails, all successfully opened owned resources are rolled back in reverse successful-open order;
+- external resources are never closed by Riko.
+
+Cleanup prefers `aclose()`, then `close()`, unless an explicit `cleanup=` override is supplied. Resource specs may provide `open()` and/or `aopen()`; the native execution-mode implementation wins and the common sync/async bridge adapts the other mode. Cleanup always attempts all required closes. A single cleanup error is raised directly; multiple cleanup errors are grouped with `ExceptionGroup`.
+
+### Execution-bound resource view
+
+Parsers and factories receive resolved handles through an execution-bound view:
+
+```python
+resources.db
+resources["db"]
+```
+
+`Context.resources.db` continues to denote the immutable `Resource` definition, not the live handle.
+
+Nodes declare resources using the common metadata input:
+
+```python
+resources = "db"
+resources = ("db", "cache")
+resources = {"db": "primary_db", "cache": "redis"}
+```
+
+The accepted public form is:
+
+```python
+type ResourcesLike = str | Iterable[str] | Mapping[str, str]
+```
+
+and is normalized immediately to an immutable local-name -> Context-name binding. The local alias is identity-significant; the Context lookup name is not. The resolved effective resource definition and its transitive dependencies are identity-significant.
+
+Resource arguments are prepared by the existing module wrapper/preparation machinery in the same way that stream/objconf/tuples arguments are prepared today. This is not a separate signature-based dependency-injection system. Only declared direct resource bindings are visible to the parser/factory. Transitive dependencies participate in lifecycle and fingerprinting but are not automatically exposed.
+
+Missing resource bindings fail compilation/preparation before resources are opened or source consumption begins. Initially all declared resource bindings are required.
+
+## Feed results, metadata, and per-item provenance
+
+The existing async stream type remains:
+
+```python
+type Feed = AsyncIterable[Item]
+```
+
+Rich parser/source results use one immutable envelope:
+
+```python
+@dataclass(frozen=True)
+class FeedResult[ItemsT]:
+    items: ItemsT
+    metadata: Metadata
+    state: FeedState | None = None
+```
+
+`SyncFeedResult` and `AsyncFeedResult` are aliases over iterable and async-iterable item containers. `Metadata` is a typed Objectify-like mapping with both attribute and mapping access.
+
+Metadata is preserved through ordinary transforms when still truthful. Operators that invalidate or replace metadata must say so explicitly. A common result-level `metadata.generation` may seed item generations; if output items no longer share one truthful generation, result-level generation is invalidated and private per-item provenance remains authoritative.
+
+`assign=` / `emit=` remain the common wrapper behavior over Feed-native parser output; introducing `FeedResult` does not change those semantics.
+
+Per-item execution identity is carried privately rather than exposed as a second public result model. Conceptually:
+
+```python
+@dataclass
+class _FeedItem[T]:
+    value: T
+    item_key: Hashable | MissingType
+    generation: Hashable | MissingType
+    observation: Metadata | None
+```
+
+Normal parsers and users continue to see ordinary values.
+
+## Fan-out and pub/sub
+
+The public vocabulary is object-first:
+
+```python
+class Publisher[T](Protocol): ...
+
+
+class Subscription[T](Protocol): ...
+
+
+class Channel[T](Publisher[T], Subscription[T], Protocol): ...
+```
+
+Low-level compatibility modules may remain named `send` / `receive`; the final Pipeline API uses `publish` / `subscribe`.
+
+Local declaration:
+
+```python
+events = Pipeline.subscribe("events")
+flow = flow.publish(events)
+```
+
+An external subscription is an ordinary source:
+
+```python
+flow = Pipeline(source=subscription)
+```
+
+`publish()` accepts a local subscription pipeline or an external `Publisher`. A published local subscription branch is attached to the owning execution. The user does not drain that branch to make cleanup occur; branch terminal values are discarded unless the branch has an explicit sink/tap/routing effect.
+
+Calling `list(events)` independently creates a fresh execution; subscriptions are not replay buffers.
+
+Multiple subscriptions may share a display name. Python object identity distinguishes them. Serialized configuration may use the concise declaration:
+
+```json
+{"name": "events"}
+```
+
+and a target name resolves all same-name declarations unless an explicit serialized id selects one.
+
+### Subscriber scheduling and buffering
+
+Sync subscribers execute inline by default. Execution concurrency is an explicit opt-in. Async orchestration is execution-owned; the MVP may use `asyncio.create_task()` while the final execution layer owns cancellation and teardown.
+
+Async subscriptions default to rendezvous behavior:
+
+```python
+buffer_size = 0
+overflow = "block"
+```
+
+For bounded buffering:
+
+```python
+overflow: Literal["block", "drop"] = "block"
+```
+
+`drop` drops the oldest buffered item and keeps the newest, matching the current sync behavior. Per-subscription item order is guaranteed. Ordering between independent subscriptions is unspecified.
+
+Subscription errors use only:
+
+```python
+Literal["raise", "ignore"]
+```
+
+with `"raise"` the default. `"ignore"` is per-item continuation.
+
+A subscriber `tap=` may be sync or async; its return value is discarded and the original item continues. This tap contract must be changed for sync and async together rather than creating mode-specific semantics.
+
+When multiple publishers target one subscription, the subscription completes only after all attached publishers complete. Concurrent publishers preserve actual delivery order; no artificial global ordering is imposed.
+
+### `split()`
+
+`split()` is streaming fan-out, not whole-source `deepcopy`:
+
+- upstream is consumed once;
+- only reachable/used outputs become active branches;
+- active branches receive items incrementally;
+- unused outputs allocate no queue and exert no backpressure;
+- per-branch buffers are bounded and default to zero-buffer/rendezvous semantics;
+- split is never lossy and has no drop overflow mode.
+
+Branch isolation is observable, but the runtime chooses the cheapest safe copy/share strategy. There is no public copy-mode knob initially.
+
+`publish(..., isolate=True)` similarly isolates a branch by default, with `isolate=False` as the explicit escape hatch.
+
+Shared ancestry alone never implies fan-out. Fan-out must be represented by `split()` or `publish()`.
+
+## Identity, fingerprints, and idempotency
+
+Durable checkpoint identity, per-item generation, idempotency, and semantic fingerprints share one canonical freezing/encoding system. They must not each invent independent serialization or hashing rules.
+
+### Hashable identity values
+
+The existing Riko `Hashable` type is extended rather than duplicated:
+
+```python
+type NonNullHashable = ...
+type Hashable = NonNullHashable | None
+```
+
+`NonNullHashable` includes the supported scalar identity types plus recursive tuples. The canonical system distinguishes types that Python normally conflates (`bool`/`int`, `int`/`float`, `float`/`Decimal`) and handles `datetime`, `date`, `struct_time`, `PurePath`, `bytes`, UUID, enums, mappings, dataclasses, sets/frozensets, lists, and tuples according to the durable rules below.
+
+Key canonicalization rules:
+
+- `bool` is handled before `int`; `datetime` before `date`; enums before their scalar bases;
+- finite floats use a deterministic representation, infinities use explicit tags, all NaNs share a stable tag, and `-0.0` canonicalizes with `+0.0`;
+- Decimal equivalent representations normalize within the Decimal type;
+- naive datetimes use `ensure_tzinfo(..., try_local_tz=False)` and therefore UTC fallback; aware datetimes normalize to UTC;
+- mappings are order-independent and sort by canonical encoded key, including heterogeneous key types;
+- sets/frozensets are order-independent while preserving the set/frozenset distinction;
+- list and tuple remain distinct; only tuple participates in logical `Hashable` identity;
+- mapping wrappers such as Objectify/DotDict canonicalize by contents, not wrapper type;
+- dataclasses/enums include stable `module.qualname` type identity; local/non-import-stable definitions require explicit versioning when used durably;
+- paths are lexical and preserve path flavor; no filesystem resolution occurs;
+- bytes use lowercase hex; mutable bytearray/memoryview may be freezeable for fingerprints but are not logical hashable identity values;
+- UUID uses lowercase 32-digit hex;
+- strings preserve exact Unicode code points; no NFC/NFKC normalization is applied;
+- cyclic structures are rejected for durable identity.
+
+A shared internal `_freeze(obj) -> FrozenValue` generalizes the current `_to_hashable()` machinery. Durable consumers raise on unsupported values; process-local representation caching may instead treat a value as uncacheable.
+
+### Canonical bytes and digest
+
+Canonical frozen values encode to fixed UTF-8 JSON bytes. `Context(identity_encoder="auto")` may select the fastest installed Riko-supported/conformance-tested encoder, but every supported encoder must emit byte-for-byte identical canonical output. Explicitly requesting an unavailable backend fails preparation. Encoder acceleration belongs to the existing `perf` extra and the selected backend is not semantically fingerprinted.
+
+Durable digests are domain/version separated and use one fixed algorithm for the identity-format version:
+
+```python
+hashlib.blake2b(data, digest_size=16).hexdigest()
+```
+
+The result is a 32-character lowercase hex string. Domains are fixed Riko-owned values (for example fingerprint, generation, idempotency, state-key encoding); callers do not supply arbitrary digest-domain strings. The domain/version participate in the hashed bytes but are not embedded in the returned hex text.
+
+### Callable and resource fingerprints
+
+Inspectable Python callables are fingerprinted from normalized AST, excluding formatting, comments, source locations, docstrings, and annotations. Defaults, kwdefaults, closure nonlocals, durably freezeable referenced globals, decorators, and relevant captured configuration participate.
+
+`functools.partial` includes its wrapped callable and bound args/kwargs. Bound methods/callable instances include durable instance configuration. Stable builtins/stdlib callables use qualified identity; opaque third-party/native implementations may use owning distribution version when resolvable and otherwise require an explicit node version.
+
+Callable-accepting nodes support a common:
+
+```python
+version: NonNullHashable | MissingType = MISSING
+```
+
+`MISSING` means automatic inspection. `None` is invalid. An explicit version replaces automatic callable implementation inspection for callables owned by that node while stable callable/type namespace and non-callable node configuration still participate.
+
+Resource definitions, not live handles, are fingerprinted. `Resource.version` overrides automatic resource implementation identity only; ownership, lazy/eager lifecycle, cleanup, dependencies, and other semantic resource configuration still participate. Resolved resource dependency fingerprints propagate transitively. Opaque external resources that affect a resumable scope require an explicit resource version.
+
+Structural compilation may be cached process-locally with a bounded internal cache, but execution-sensitive semantic fingerprints are recomputed during execution preparation. Captured/global callable configuration is sampled then and is assumed semantically stable for that execution; Riko does not continuously mutation-watch it.
+
+### Provenance propagation
+
+Root identity is automatically namespaced by the source node identity. A generated source node id is sufficient within one compiled definition; use explicit `id=` where identity must remain stable across structural edits that would otherwise change the generated id.
+
+Generation propagation follows operator semantics:
+
+- 1 -> 1: preserve;
+- 1 -> N: derive deterministic child generation, preferring semantic child identity over position;
+- N -> 1: derive from contributors plus relevant operator/group identity;
+- N -> N: derive from the exact contributing input generations.
+
+Positional derivation is allowed only when stable ordering is guaranteed. N-to-1 contributor generation is accumulated incrementally rather than retaining all contributor values.
+
+Built-ins infer identity behavior from known semantics/module metadata. Ambiguous custom operators have only:
+
+```python
+identity: Literal["preserve", "derive", "combine"]
+```
+
+A custom derive operator may additionally need `stable_order=True` before positional fallback is safe. Combine semantics may declare whether contributor order is significant. Execution `ordered=True` and operator semantic `stable_order=True` are distinct concepts.
+
+`union()` preserves each input item's provenance; it does not combine identities.
+
+### Idempotency
+
+Every Riko side-effecting module supports idempotency where its destination permits it; pure transforms require none. Execution derives and injects a key centrally rather than asking modules to reconstruct provenance:
+
+```text
+(node_id, fingerprint, item_key, generation, iteration)
+```
+
+Generation remains stable across retries and comes from source/upstream semantics, never a random retry UUID.
+
+If a retryable/resumable workflow reaches a side effect whose backend cannot honor idempotency, validation fails unless that node explicitly opts out:
+
+```python
+.write(..., require_idempotency=False)
+```
+
+Riko does not add a generic distributed lease/lock abstraction to this contract.
+
+## Stateful execution and checkpoints
+
+State persistence uses one `StateStore` capability for recovery checkpoints and source/observation state. The existing `hash` module is not a checkpoint mechanism because Python hash values are not a durable identity contract.
+
+### Public state values
+
+```python
+@dataclass(frozen=True)
+class FeedState[T]:
+    checkpoint: T | MissingType = MISSING
+    observation: Metadata | None = None
+
+
+@dataclass(frozen=True)
+class StateRecord[T]:
+    state: FeedState[T]
+    version: StateVersion
+    boundary_id: str | None = None
+
+
+@dataclass(frozen=True)
+class StateKey[T]:
+    node_id: str
+    fingerprint: str
+    item_key: NonNullHashable | None = None
+    generation: Hashable = None
+```
+
+`StateKey[T]` is a phantom generic linking the key to the payload type for static checking. The generic parameter has no runtime, serialization, equality, or fingerprint significance. `StateStore` itself is not generic because one store naturally contains heterogeneous records.
+
+`item_key=None` denotes owner-level state and requires `generation=None`. Per-item recovery uses a non-null item key. Nested tuple identity components may still contain `None`.
+
+`StateVersion = NonNullHashable` is an opaque CAS token. Riko never increments or interprets it.
+
+### Store protocols and CAS
+
+Sync and async stores use the same operation names; awaitability differs:
+
+```python
+class StateStore(Protocol):
+    def load[T](self, key: StateKey[T]) -> StateRecord[T] | None: ...
+
+    def save[T](
+        self,
+        key: StateKey[T],
+        state: FeedState[T],
+        *,
+        boundary_id: str | None = None,
+        expected_version: StateVersion | MissingType = MISSING,
+    ) -> StateVersion: ...
+
+    def delete[T](
+        self,
+        key: StateKey[T],
+        *,
+        expected_version: StateVersion,
+    ) -> None: ...
+
+
+class AsyncStateStore(Protocol):
+    async def load[T](self, key: StateKey[T]) -> StateRecord[T] | None: ...
+    async def save[T](...) -> StateVersion: ...
+    async def delete[T](...) -> None: ...
+
+
+type StateStoreLike = StateStore | AsyncStateStore
+```
+
+Stores must be uniformly sync or uniformly async; mixed method modes fail preparation. Each execution resolves one private mode-specific state-store adapter and applies sync/async bridging once when the adapter is prepared.
+
+All mutations are CAS-protected:
+
+```python
+save(..., expected_version=MISSING)  # create only
+save(..., expected_version=version)  # update exact revision
+delete(..., expected_version=version)  # delete exact revision
+```
+
+There is no unconditional mutation escape hatch. A missing actual record conflicts with an expected existing version; an existing record conflicts with expected `MISSING`. `CheckpointConflictError` carries the key, expected version, and actual version (`MISSING` when absent). CAS conflicts propagate; Riko does not automatically reload and rerun the operation.
+
+Backends must prevent stale resurrection across delete/recreate races with their own monotonic revision/tombstone mechanism as needed. That mechanism is not exposed in the public checkpoint model.
+
+`save()` returns only the resulting `StateVersion`; `delete()` returns `None`.
+
+### Store capabilities and state serialization
+
+Physical serialization of `StateKey` and `FeedState[T]` is backend-owned. Riko does not impose one universal state codec. To help users choose stores without creating an exhaustive Python type registry, configured store instances expose coarse capabilities plus concrete preflight validation.
+
+```python
+StateSerializationId = NewType("StateSerializationId", str)
+
+
+class StateSerialization(StrEnum):
+    PYTHON = "python"
+    JSON = "json"
+    PICKLE = "pickle"
+    MSGPACK = "msgpack"
+    CBOR = "cbor"
+    PROTOBUF = "protobuf"
+    AVRO = "avro"
+
+
+type StateSerializationLike = str | StateSerialization | StateSerializationId
+
+
+class StateStoreCapabilitiesRaw(TypedDict):
+    serialization: StateSerializationLike
+    persistent: bool
+    portable: bool
+
+
+@dataclass(frozen=True, slots=True)
+class StateStoreCapabilities:
+    serialization: StateSerializationId
+    persistent: bool
+    portable: bool
+
+
+type StateStoreCapabilitiesLike = StateStoreCapabilities | StateStoreCapabilitiesRaw
+```
+
+Known formats use Riko's canonical identifiers. Third-party formats use `<provider>:<name>`, for example `acme:state-v2`. `"memory"` is not a serialization format; an in-memory Python-object store reports `serialization="python"`.
+
+Capabilities describe the configured store **instance**, not merely what its backend class could support. For example, SQLite `:memory:` may report `persistent=False` while a file-backed instance reports `persistent=True`; JSON and pickle instances of the same backend may differ in portability.
+
+`persistent=True` means the configured store is intended to make saved state available to a later independent Riko execution after the current process ends. It does not claim a particular fsync, replication, HA, or disaster-recovery guarantee. `portable=True` means the configured representation is intended to be independently interpretable rather than tied to this Python/backend implementation; a concrete state must still validate.
+
+Stores expose:
+
+```python
+store.capabilities
+store.validate_state(state)
+```
+
+with:
+
+```python
+def validate_state[T](self, state: FeedState[T]) -> None: ...
+```
+
+Validation returns `None` on success and raises `StateSerializationError` on failure. The exception should identify useful location/reason information when the backend can provide it. There is no exhaustive public `supported_types` list.
+
+Preflight is a convenience only. `save()` performs authoritative validation itself. Serialization must succeed before any mutation occurs; a `StateSerializationError` leaves the existing record unchanged. A CAS failure likewise leaves the record unchanged.
+
+### `checkpoint()`
+
+A generic checkpoint is a side-effecting identity/durability boundary that persists the current logical value and then passes that value through unchanged:
+
+```python
+flow = flow.checkpoint(id="normalized")
+```
+
+Conceptually the payload is:
+
+```python
+FeedState(checkpoint=current_value, observation=current_observation)
+```
+
+Checkpointing commits state; it does not independently decide how to restore. Restore belongs to an enclosing resumable/stateful owner such as `loop`, polling, or a stateful source.
+
+A reachable checkpoint requires a configured `state_store` before source consumption begins. `Context(state_store=Resource.from_factory(...))` is a first-class Context capability, not a magic ordinary resource binding.
+
+A checkpoint may exist in a reusable/unbound pipeline fragment, but compilation of a concrete graph requires every reachable checkpoint to resolve to exactly one enclosing resumable owner. Nested scopes bind to the nearest enclosing owner. The compiled graph records that owner explicitly.
+
+One `(stateful owner, item_key, generation)` has one active recovery frontier. Multiple independently advancing checkpointed branches are invalid unless they reconverge into one explicit logical recovery state. Plain `union()` is a stream merge and does not perform that collapse.
+
+`boundary_id` records the compiled checkpoint node id. An explicit `.checkpoint(id=...)` stabilizes this boundary identity across edits when required. `boundary_id` is not part of `StateKey`; advancing to a later boundary CAS-updates the same active recovery record.
+
+Restore resumes **after** the successfully crossed boundary with the stored logical value. Recovery records are not history. Each stateful scope owns and cleans up its active recovery checkpoint when that resumable scope completes successfully; nested owners clean up independently.
+
+A stateful semantic fingerprint covers the full resumable scope owned by the stateful node: embedded logic, checkpoint placement, termination policy, relevant callable versions, and the statically declared reachable resource dependency graph. Unrelated downstream graph structure is excluded. A fingerprint mismatch is treated as no compatible recovery checkpoint; execution starts fresh under the new fingerprint and old persisted data may remain available for inspection/migration.
+
+The configured state-store implementation itself is infrastructure and is excluded from the semantic fingerprint. The canonical identity format/version matters; the selected performance encoder implementation does not.
+
+### Item/generation key configuration
+
+Stateful owners use three-way key semantics:
+
+```python
+item_key = MISSING  # infer
+item_key = None  # explicit owner-level/no per-item identity
+item_key = "id"  # or callable
+
+generation_key = (
+    MISSING  # infer; fail when stable generation is required but unavailable
+)
+generation_key = None  # item_key itself uniquely identifies the logical occurrence
+generation_key = "version"  # or callable
+```
+
+Python APIs may accept callables directly. Serialized forms use symbolic Context references rather than serialized arbitrary Python callables.
+
+`StateKey` performs canonical identity validation once when constructed; state-store operations do not repeat the same logical validation. Invalid identity uses Riko-specific exceptions rooted at `IdentityError` (for example `InvalidIdentityError`, `StateKeyError`, `IdentityEncodingError`, `CyclicIdentityError`).
+
+`StateKey` equality compares cached canonical identity, not Python's raw numeric equality. Its `__hash__()` is only process-local and may use Python hashing over the canonical value; durable digests are a separate concern. `StateRecord` is immutable but is not required to be canonically hashable.
+
+## Loop/resumable iteration
+
+Agents reuse `Pipeline`; there is no separate `AgentGraph`. Agent runtime protocols reuse `Publisher`, `Subscription`, and `StateStore`.
+
+The existing `loop` construct gains iterative state semantics while the Pipeline DAG itself remains acyclic. In iterative mode:
+
+- each iteration's single embedded result becomes the next state;
+- zero or multiple embedded results raise `LoopStateError`;
+- existing non-iterative loop behavior may continue to permit zero/many results;
+- `until(state, iteration)` receives the latest state and a zero-based iteration index;
+- `until` is checked before the first iteration (while semantics) and remains sync-only initially;
+- `max_iterations: int | None = None`;
+- `max_iterations` without an explicit `until` means fixed-count iteration;
+- if an explicit `until` remains false when `max_iterations` is exhausted, raise `LoopIterationError`;
+- the default termination behavior preserves today's one-run loop semantics.
+
+Loop checkpointing is explicit rather than automatic. A checkpoint crossed after a successful iteration commits before the next iteration begins. Resume persists both application state and the iteration counter so `max_iterations` remains a total bound across restarts. `LoopState[T](value, iteration)` is the checkpoint payload shape used for this purpose.
+
+An explicit loop `id=` stabilizes the stateful owner's logical identity when structural edits would otherwise change its generated node id.
+
+---
 
 ## 5. Execution characteristics
 
-> **Current gap:** `Opts` does not contain `boundedness`/`ordering`/`side_effects`/`determinism`/`require_bounded`/`state_checkpoint`/`lineage_commit`; the bounded/ordered *behaviors* live in the §6 primitives, not as declared metadata.
+> **Current gap:** the present `Opts` surface does not yet contain the complete planned execution metadata below. These declarations describe semantic planning characteristics; they do not replace the concrete execution settings configured with `with_execution()`.
 
 ### 5.1 Boundedness
 
 ```python
-boundedness: Literal[
-    "preserve",
-    "finite",
-    "unbounded",
-    "unknown",
-]
+boundedness: Literal["preserve", "finite", "unbounded", "unknown"]
 ```
 
 Examples:
 
-| pipe                        | Opt         |
-| --------------------------- | ----------- |
-| `map`                       | `preserve`  |
-| `filter`                    | `preserve`  |
-| `truncate`                  | `finite`    |
-| total timeout               | `finite`    |
-| polling source              | `unbounded` |
-| arbitrary `flat_map`        | `unknown`   |
-| finite-expansion `flat_map` | `preserve`  |
+| pipe | characteristic |
+|---|---|
+| `map` | `preserve` |
+| `filter` | `preserve` |
+| `truncate` | `finite` |
+| total timeout | `finite` |
+| polling source | `unbounded` |
+| arbitrary `flat_map` | `unknown` |
+| finite-expansion `flat_map` | `preserve` |
 
-Blocking operators use:
-
-```python
-require_bounded = True
-```
-
-When enabled:
-
-| Input     | Result  |
-| --------- | ------- |
-| finite    | execute |
-| unbounded | reject  |
-| unknown   | reject  |
+Blocking operators may declare `require_bounded=True`; `unbounded` and `unknown` inputs are rejected when a finite input is required.
 
 ### 5.2 Ordering
 
 ```python
-ordering: Literal[
-    "preserve",
-    "destroy",
-    "establish",
-]
+ordering: Literal["preserve", "destroy", "establish"]
 ```
 
-Examples:
+| pipe | ordering |
+|---|---|
+| sequential map | preserve |
+| ordered concurrent map | preserve |
+| unordered concurrent map | destroy |
+| merge | destroy |
+| sort | establish |
 
-| pipe                     | Ordering  |
-| ------------------------ | --------- |
-| sequential map           | preserve  |
-| ordered concurrent map   | preserve  |
-| unordered concurrent map | destroy   |
-| merge                    | destroy   |
-| sort                     | establish |
+Sort details come from the existing normalized `SortConfRule` rather than a duplicate metadata model. For multiple rules, the first configured rule is primary, so stable sorts are applied in reverse configuration order.
 
-Sort ordering details are derived from the existing normalized `SortConfRule` configuration rather than duplicated in a second public metadata model. `SortConfRule` already contains `field`, `dir`, and type information.
-
-For multiple rules, the first configured rule is the primary key. Stable sorts must therefore be applied in reverse configuration order.
+Semantic `stable_order` metadata used for deterministic identity derivation is distinct from execution `ordered=True`.
 
 ### 5.3 Side effects
 
-```python
-side_effects: Literal[
-    "none",
-    "idempotent",
-    "non_idempotent",
-]
-```
+Side-effect metadata must be strong enough for execution to determine whether a node requires idempotency support and whether retries/resume are safe. Pure nodes require no idempotency contract; side-effecting nodes declare their capability and accept the execution-derived idempotency key.
 
 ### 5.4 Determinism
 
-```python
-determinism: Literal[
-    "deterministic",
-    "nondeterministic",
-]
-```
-
-These opts influence retry safety, replay warnings, caching, and planner behavior.
+Determinism metadata influences replay/retry safety, semantic identity, caching, and planner diagnostics. It must not be inferred from arbitrary source inspection heuristics.
 
 ---
 
 ## 6. Async execution and backpressure
 
-> **Shipped:** see [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-execution-and-backpressure-shipped)
-> (bounded concurrency, order-preserving streaming via `async_map_stream`/`async_map_ordered_stream`).
-> **Remaining:** true indexed reorder buffer, the `ordered=False` doc/behavior fix, and
-> cancellation/cleanup below.
+> **Shipped:** see [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-execution-and-backpressure-shipped) for current bounded-concurrency primitives. **Target:** the reusable `Pipeline` execution layer owns the sync/async adaptation and lifecycle described here.
 
 ### 6.1 Bounded concurrency
 
-Shipped as-built — see [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-execution-and-backpressure-shipped).
+Bound concurrency rather than spawning work proportional to source size. Backpressure is structural: bounded queues/reorder buffers pause producers instead of silently dropping or relaxing ordering.
 
 ### 6.2 Ordering
 
@@ -107,7 +624,7 @@ Shipped as-built — see [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-executio
 ordered = True
 ```
 
-preserves input order.
+preserves input order for operators whose semantics permit it.
 
 ```python
 ordered = False
@@ -115,150 +632,49 @@ ordered = False
 
 emits completion order.
 
-The current `async_map()` documentation says input order is preserved, but the bounded implementation appends callback results in completion order. This discrepancy must be corrected.
+The current `async_map()` documentation/implementation discrepancy must be corrected; public documentation and behavior must agree.
 
 ### 6.3 Reorder buffer
 
-Ordered concurrent execution uses a bounded reorder buffer.
-
-When the buffer fills:
-
-* producers or workers pause
-* the runtime waits for the missing earlier position
-* ordering is never silently relaxed
+Ordered concurrent execution uses a bounded reorder buffer. When the buffer fills, producers/workers pause until missing earlier positions permit progress. Ordering is never silently relaxed.
 
 ### 6.4 Cancellation
 
-> **Deferred / not yet implemented.** `on_cancel` does not exist. Async
-> mid-iteration early close currently marks the pipe `FAILED`, and full `anext`
-> cancellation is unspecified — P7 carryover (PHASE_CHECKLISTS § P7).
+The final execution owns cancellation and teardown. On cancellation it stops accepting new work, cancels queued work where supported, allows unavoidable running threads to finish, and deterministically tears down execution-owned resources/channels/portal state.
 
-```python
-on_cancel: Literal[
-    "drain",
-    "cancel_pending",
-] = "cancel_pending"
-```
-
-On cancellation:
-
-* stop accepting new work
-* cancel queued work where supported
-* running threads may finish
-* process workers may be terminated after a grace period
+A future explicit cancellation policy may distinguish draining from cancelling pending work, but cancellation correctness must not depend on users draining published subscription branches.
 
 ### 6.5 Cleanup
 
-When downstream execution stops early, Riko calls `aclose()` on active feeds when available.
+When downstream execution stops early, active feeds are closed with `aclose()` when available. This applies to truncation, timeout, failure, cancellation, and consumer abandonment.
 
-This applies to:
+Execution resource cleanup follows the resource rules above. If both execution and cleanup fail, cleanup is still attempted comprehensively; multiple independent failures use `ExceptionGroup`.
 
-* truncation
-* timeout
-* pipe failure
-* downstream cancellation
-* consumer abandonment
+### Execution-mode adaptation (`Pipeline` sync <-> async)
 
-When both execution and cleanup fail:
+A single `SyncExecution` owns one lazily-created AnyIO `BlockingPortal` if async-only components are encountered. It is reused for async steps, async sources, async resources, and async pub/sub for that execution. Never create one portal per item. The portal closes on exhaustion, explicit close, or exception. Independent executions get independent portals.
 
-* use `ExceptionGroup` where available
-* otherwise preserve the original exception and attach cleanup failure as context
+If the async extra is absent and sync execution requires an async-only component, raise a Riko-level installation/capability error rather than leaking a deep AnyIO/Asyncer import failure.
 
----
+Unknown synchronous extension code under async execution is treated as potentially blocking. Riko does not inspect names, bytecode, imports, or timing to guess whether a function blocks.
 
-## Execution-mode adaptation (`Pipeline` sync ↔ async)
-
-> **Scope:** Owns the sync↔async adaptation layer behind the public
-> [`Pipeline`](release-readiness.md) (definition) / `SyncExecution` / `AsyncExecution` (one-shot,
-> built fresh per `iter`/`aiter`). API shape → [release-readiness.md § 4](release-readiness.md);
-> decorator DX → [callable-pipes.md](callable-pipes.md); source ingest →
-> [feed-native-streaming.md § 7.1](feed-native-streaming.md). AnyIO/Asyncer are **private** — never
-> surfaced through `riko`/`riko.ext`.
-
-### Native-wins resolution matrix
-
-The resolver returns a module *definition* (its optional `sync_pipe`/`async_pipe` slots), then the
-execution selects an implementation for its mode. A native implementation always wins; adapt only
-when the matching side is absent.
-
-| Module implements | Sync execution | Async execution |
-|---|---|---|
-| sync + async | native sync | native async |
-| sync only | native sync | sync on a worker |
-| async only | async on the execution portal | native async |
-
-### Async-only under sync execution — one persistent portal
-
-A single `SyncExecution` owns **one** lazily-created AnyIO `BlockingPortal`, created only when an
-async component is first encountered and reused by every async step, the async source, and any
-async pub/sub for the life of that execution. **Never one portal per item.**
-
-- Long-lived async resources (HTTP clients, DB pools, task groups, channels, async generators) stay
-  on that portal's loop.
-- If an async step yields an async iterator, `anext()` bridges through the same portal; `aclose()`
-  runs through it during teardown.
-- The portal closes deterministically on normal exhaustion, explicit close, and exceptions;
-  original exceptions propagate.
-- Two independent executions of the same reusable `Pipeline` get **independent** portal lifetimes.
-
-If the `async` extra is absent and a pipeline needs an async-only module, raise a clear riko-level
-error (install `riko[async]`) — never a deep AnyIO/Asyncer `ImportError`.
-
-### Sync-only under async execution — worker policy
-
-Unknown synchronous extension code is potentially blocking and is **safe by default**: it runs on a
-worker thread, not the event-loop thread. riko does **not** inspect imports, bytecode, names,
-timing, or source to guess whether a `def` blocks. The policy is the single `execution` `Opts` field
-(declared on the decorator, overridable per call; the same field used by
-[callable-pipes.md](callable-pipes.md)):
-
-| `execution` | Behavior |
+| execution policy | behavior |
 |---|---|
-| `auto` (default) | native async awaited inline; unknown sync under async → worker |
-| `inline` | explicitly safe to run on the event-loop thread (riko's own pure transforms) |
+| `auto` | native async inline; unknown sync under async -> worker |
+| `inline` | explicitly safe on event-loop thread |
 | `thread` | worker thread |
-| `process` | existing process machinery; do not expand scope to support it |
+| `process` | existing process machinery; no new contract implied here |
 
-Built-in pure transforms are marked `inline` internally because riko owns and tests them.
-Third-party modules declare nothing for correctness — absence of metadata stays safe.
-
-### Do not auto-detect blocking
-
-There is no reliable general test for whether arbitrary Python blocks (it may return immediately,
-call `requests`, read a file, sleep, or run CPU-heavy Python depending on input). Optimize known
-cases via the `execution` policy; never make safety depend on a heuristic.
-
-### Sync islands (Deferred — first performance follow-up)
-
-To avoid one worker hop per tiny pure transform under async execution, the execution plan *may*
-group consecutive `inline`/`thread` sync-only processors into one worker segment
-(`[async fetch] → [filter → strreplace → rename] → [async write]`). Grouping is driven by resolved
-implementation kind + `execution` policy, **never** by inferring whether code blocks. Safe only
-across consecutive sync steps with no native-async step, operator/splitter/whole-stream boundary,
-ordering/concurrency boundary, or resource/side-effect boundary between them. **Not shipped** — the
-planner (`riko/_execution/plan.py`) must allow adding it without API changes; benchmark
-before/after.
-
-### Non-goals
-
-Do not turn the whole runtime into one async engine, force sync execution through AnyIO, spin up an
-async runtime per record, or expose AnyIO/Asyncer types. The cheap native sync path stays cheap.
+Built-in pure transforms may be marked inline because Riko owns/tests them. A future planner may combine consecutive compatible sync-only steps into a worker "sync island" as an internal optimization; this must not change the public API or cross operator/resource/side-effect boundaries unsafely.
 
 ---
 
 ## 7. Timeout
 
-> **Shipped:** see [IMPLEMENTED.md §7](../IMPLEMENTED.md#7-timeout-shipped)
-> (lifetime `total` timeout, sync + async `TimeoutIterator`). **Remaining:** the `idle`/`item`
-> modes, the `on_timeout` policy described below, and the unbounded async
-> `receive` wait (§7.1).
+> **Shipped:** see [IMPLEMENTED.md §7](../IMPLEMENTED.md#7-timeout-shipped) for the current total-timeout primitive. **Remaining:** complete idle/item semantics and ensure a blocked `anext()` itself is bounded.
 
 ```python
-timeout(
-    seconds,
-    mode="total" | "idle" | "item",
-    on_timeout="stop" | "error",
-)
+timeout(seconds, mode="total" | "idle" | "item", on_timeout="stop" | "error")
 ```
 
 Default:
@@ -269,90 +685,33 @@ on_timeout = "stop"
 
 Definitions:
 
-* `total`: maximum lifetime of the timeout pipe
-* `idle`: maximum interval between emitted items
-* `item`: maximum time waiting for the next upstream item
+- `total`: maximum lifetime of the timeout pipe;
+- `idle`: maximum interval between emitted items;
+- `item`: maximum wait for the next upstream item.
 
-`on_timeout="stop"` is normal completion.
+`on_timeout="stop"` is normal completion. `on_timeout="error"` enters the configured error policy.
 
-`on_timeout="error"` enters the configured error policy.
+### 7.1 Async receive timeout
 
-### 7.1 `receive` has no async timeout
+The current sync and async compatibility `receive` implementations do not have equivalent timeout behavior: sync polling honors `max_wait`, while the async path can block indefinitely. Feed-native async receive must bound the wait itself and map expiry to the common timeout policy rather than inventing separate receive-only semantics.
 
-The sync and async `receive` pipes wait on entirely different terms, and only
-the sync one can give up:
+### 7.2 A blocked `anext()` must not outlive the deadline
 
-| | Waits by | Honors `max_wait` |
-|---|---|---|
-| `parser` (sync) | polling the queue, yielding `StreamState.PENDING` | yes — closes and stops |
-| `async_parser` | blocking until the sender finishes | **no** |
-
-`async_parser` reads only `objconf.name`; `wait`, `max_wait` and `max_len` are
-sync-only (`max_len` is applied in `_register_receiver`, which the async path
-never calls). Measured:
-
-```text
-async_pipe(conf={"name": "nosender", "max_wait": 1})   ->  hangs indefinitely
-```
-
-So a mistyped receiver name, or a sender that errors before starting, wedges an
-async pipeline with no diagnostic — while the same mistake on the sync path
-times out and closes cleanly. This is the same hazard as `§7`'s `item` mode: a
-wait with no upper bound.
-
-Fixing it means wrapping the subscribe in `anyio.fail_after`/`move_on_after`
-using `max_wait`, and deciding which of `on_timeout="stop"` (return what
-arrived) or `"error"` applies — so it should land **with** the `on_timeout`
-policy above rather than as a separate patch. Until then the docstrings state
-that the async path has no timeout.
-
-### 7.2 A blocked `anext` outlives the deadline
-
-`AsyncTimeoutIterator.__anext__` bounds the *intervals between* items, not the wait
-itself:
-
-```python
-async def __anext__(self) -> T:
-    self._raise_if_expired()
-    item = await anext(self.aiter)  # unbounded
-    self._raise_if_expired()
-    return item
-```
-
-If the source stalls, the second check is never reached — so the deadline holds only
-while items keep arriving, which is the opposite of what a timeout is for and the same
-unbounded-wait hazard as § 7.1. The claim that `timeout` bounds an infinite `Feed`
-therefore holds only for a *productive* infinite feed.
-
-The fix is an AnyIO cancel scope around the `await` carrying the **remaining** deadline
-(`move_on_after(remaining)`), with expiry mapping onto the same
-`on_timeout="stop" | "error"` policy as § 7 — so it lands with that policy rather than
-before it. `move_on_after` is also what
-[feed-native-streaming § 2](feed-native-streaming.md#2-per-pipe-audit) assumes for the
-Feed-native `timeout` port; doing it twice is wasted work.
-
-Registered as [correctness-audit **R14**](correctness-audit.md#8-open-defect-register--features-branch-audit).
+Checking a deadline only before/after `await anext(...)` does not bound a stalled source. The async implementation must put the awaited next-item operation inside the cancellation/deadline scope using the remaining timeout and map expiration to the same `on_timeout` contract.
 
 ---
 
 ## 8. Union and merge
 
-> **Shipped:** see [IMPLEMENTED.md §8](../IMPLEMENTED.md#8-union-shipped)
-> (`union` sequential concatenation; the internal `async_merge` primitive). **Remaining:**
-> the user-facing concurrent async `merge` operator below.
+> **Shipped:** see [IMPLEMENTED.md §8](../IMPLEMENTED.md#8-union-shipped) for sequential `union` and the current internal async merge primitive. **Remaining:** user-facing concurrent merge policy.
 
 ### 8.1 Union
 
-Shipped as-built — see [IMPLEMENTED.md §8](../IMPLEMENTED.md#8-union-shipped).
+`union()` is a stream concatenation/merge operation that preserves each input item's provenance. It does not combine logical identities merely because streams reconverge. Consequently, plain `union()` is not sufficient to collapse independently advancing checkpoint frontiers into one recovery state.
 
 ### 8.2 Merge
 
-> **Partial / deferred.** The internal `async_merge` primitive ships (see
-> [IMPLEMENTED.md §8](../IMPLEMENTED.md#8-union-shipped)). The user-facing `merge` *operator*
-> below (`scheduling`/`on_source_error`/`buffer_budget`/`per_source_limit`) does not exist
-> yet.
-
-`merge` is a distinct async-native concurrent operator.
+A future async-native concurrent merge may expose bounded source queues and explicit scheduling/error policy, for example:
 
 ```python
 merge(
@@ -364,428 +723,172 @@ merge(
 )
 ```
 
-Defaults:
-
-```python
-scheduling = "fair"
-on_source_error = "fail"
-```
-
-Each input receives its own bounded channel.
-
-Configuration is rejected when:
-
-```text
-buffer_budget < active source count
-```
-
-#### Scheduling
-
-* `fair`: rotate among ready sources
-* `ready`: emit whichever source becomes ready first
-
-#### Source failures
-
-With `on_source_error="fail"` the merge fails and closes remaining sources.
-
-With `on_source_error="continue"` healthy sources continue and the final run status becomes `RunStatus.PARTIAL`.
-
-#### State groups
-
-Merged sources retain independent source-position domains.
-
-Sources in the same dependency group:
-
-* checkpoint together
-* fail together
-* stop together if one member fails
-
-Independent groups may continue.
-
-#### Inputs
-
-The top-level collection of merge inputs is fixed at plan time.
-
-A source may discover partitions internally, but new top-level feeds are not dynamically added to a running merge pipe.
+The top-level input collection is fixed at plan time. Per-source buffers remain bounded. `fair` rotates among ready sources; `ready` emits the next available source result. Failure-continuation semantics must preserve independent source provenance/state domains.
 
 ---
 
 ## 11. Retry policy
 
-> **Current gap:** no retry policy in code.
+> **Current gap:** no general retry policy in code.
 
 ```python
 @dataclass(frozen=True)
 class RetryPolicy:
     max_retries: int = 0
-    backoff: Literal[
-        "none",
-        "constant",
-        "exponential",
-    ] = "exponential"
+    backoff: Literal["none", "constant", "exponential"] = "exponential"
     retry_on: tuple[type[BaseException], ...] = ()
 ```
 
-Default `max_retries=0`. There are no hidden automatic retries.
-
-Retries occur before the final error policy:
+Default `max_retries=0`; there are no hidden automatic retries.
 
 ```text
 operation fails
-→ configured retries
-→ retries exhausted
-→ fail | skip | dead_letter
+-> configured retries
+-> retries exhausted
+-> final error/disposition policy
 ```
 
 Rules:
 
-* lineage does not advance during retry
-* ordered execution holds the affected position
-* stable batch IDs are reused across retries
-* only one layer should own retrying a given operation
-* non-idempotent pipes may not be retried unless explicitly authorized
-* state-store CAS conflicts may be retried internally
+- provenance/generation does not advance during retry;
+- ordered execution holds the affected position;
+- an execution-derived idempotency key is reused across retries;
+- only one layer owns retrying a given operation;
+- a side effect in a retryable/resumable scope must genuinely support idempotency unless the node explicitly opts out;
+- `CheckpointConflictError` is **not** automatically reloaded/rerun by the state-store adapter; CAS conflicts propagate to the caller/runtime policy.
 
-Retry policies may be configured separately for:
-
-* source operations
-* record callables
-* batch writes
-* state stores
-* error sinks
-* disposition sinks
+Codec/identity/configuration errors are not transient merely because retry exists. Backend transport errors may be eligible according to an explicit retry policy.
 
 ---
 
 ## 12. Errors and dispositions
 
-> **Current gap:** only `on_error`/`error_key` + basic exception classes; no error/disposition sinks or drop policy.
+> **Current gap:** current code has limited `on_error`/`error_key` behavior; the richer sink/disposition contract remains planned.
 
 ### 12.1 Error policies
 
 ```python
-error_policy: Literal[
-    "fail",
-    "skip",
-    "dead_letter",
-]
+error_policy: Literal["fail", "skip", "dead_letter"]
 ```
 
-Semantics:
-
-**Fail**
-
-* stop execution
-* do not advance the failed position
-
-**Skip**
-
-* requires `allow_data_loss=True`
-* report the failure
-* advance the position
-
-**Dead letter**
-
-* write to a durable error sink
-* advance only after positive acknowledgement
+`skip` requires explicit data-loss authorization. `dead_letter` advances only after the durable error sink acknowledges the failed item. A failure that is not successfully disposed must not advance resumable state past that item.
 
 ### 12.2 Error sink
 
-```python
-class ErrorSink(Protocol):
-    def write(
-        self,
-        failure: ItemFailure,
-    ) -> Ack | Awaitable[Ack]: ...
-```
+A future error sink writes a structured `ItemFailure` and returns/awaits acknowledgement. Sink implementation must participate in the same side-effect/idempotency rules as other durable writes.
 
 ### 12.3 Drop policy
 
-```python
-drop_policy: Literal[
-    "complete",
-    "external",
-    "error",
-] = "complete"
-```
-
-The value is inherited from the pipe and may be overridden per pipe.
-
-**Complete**
-
-* emit no public acknowledgement
-* internally mark the position successfully disposed
-* allow checkpoint advancement
-
-This preserves current filter behavior, where rejected records are silently omitted.
-
-**External**
-
-* send a structured disposition to a sink
-* wait for acknowledgement before advancing
-
-**Error**
-
-* attempted dropping becomes a pipe failure
+Intentional filtering is distinct from failure. The planned drop policy may distinguish silent completion, external disposition, and treating attempted drop as error. The default preserves current filter behavior: a deliberately filtered item is considered successfully disposed without public output.
 
 ### 12.4 Disposition sink
 
-```python
-class DispositionSink(Protocol):
-    def write(
-        self,
-        disposition: ItemDisposition,
-    ) -> Ack | Awaitable[Ack]: ...
-```
-
-Failure policy:
-
-```python
-on_disposition_failure: Literal[
-    "fail",
-    "warn",
-    "ignore",
-] = "fail"
-```
-
-Semantics:
-
-| Policy | Advance | Run status |
-| ------ | ------: | ---------- |
-| fail   |      no | failed     |
-| warn   |     yes | partial    |
-| ignore |     yes | completed  |
+External disposition must be acknowledged before the item is treated as advanced when configured as part of the durability contract.
 
 ### 12.5 Internal counters
 
-Every pipe tracks aggregate counts:
-
-```text
-emitted
-dropped
-dead_lettered
-failed
-retried
-```
-
-Per-item events are not required for the normal `complete` path.
+Execution may maintain aggregate emitted/dropped/dead-lettered/failed/retried counts without requiring a per-item public event stream for the normal path.
 
 ---
 
 ## 13. Filter semantics
 
-> **Shipped:** see [IMPLEMENTED.md §13](../IMPLEMENTED.md#13-filter-semantics-shipped)
-> (`permit`/`combine`/`stop`). **Remaining:** the drop-policy / disposition semantics below.
+> **Shipped:** see [IMPLEMENTED.md §13](../IMPLEMENTED.md#13-filter-semantics-shipped) for `permit` / `combine` / `stop`.
 
-A filtered-out item with `drop_policy="complete"` is immediately considered complete.
+A filtered-out item under the default completion-style drop policy is intentionally disposed and may allow recovery state to advance. With `filter(stop=True)`, the first rejected item is intentionally dropped, upstream consumption stops, and normal completion remains distinct from a processing failure.
 
-With `filter(stop=True)` the first rejected item:
+---
 
-* is considered intentionally dropped
-* is marked complete
-* permits checkpoint advancement through that item
-* stops upstream consumption
-* results in `RunStatus.COMPLETED`
+## 15. Stateful operators
+
+The old proposed `state_checkpoint="replay" | "persist"` switch is superseded by the generic `StateStore` / `FeedState` / `.checkpoint()` model above.
+
+Stateful operators declare their resumable scope and identity semantics. Checkpoint placement is explicit. Restore belongs to the stateful owner. Persisted source observations/final state and recovery checkpoints share the same store abstraction but retain their own owner semantics; a successful recovery scope removes its active recovery frontier rather than publishing a synthetic "completed" checkpoint record.
+
+For finite `FeedResult.items`, final `FeedResult.state` becomes committable only after item consumption completes successfully. A downstream failure before successful completion must not commit a final source state. Infinite feeds require explicit incremental checkpoint boundaries rather than waiting for final completion.
 
 ---
 
 ## 16. Batch model
 
-> **Current gap:** no `Batch`/`BatchPipe`/`BatchPolicy`.
->
-> **Consumer:** the runtime `batch_feed`/`batch_stream` primitives and their use in streaming
-> `write`/`split`/reducers are planned in [feed-native-streaming.md](feed-native-streaming.md), which
-> delegates to this `BatchPolicy` rather than exposing a separate per-pipe chunk concept.
+The earlier public `Batch` / `BatchPipe` / `BatchPolicy` proposal is superseded. Riko keeps one `Pipeline[T]`; batch mode changes the values flowing through it rather than introducing a parallel pipeline hierarchy.
 
 ```python
-@dataclass(frozen=True)
-class Batch:
-    batch_id: str
-    stream_id: str
-    schema_id: str
-    records: Sequence[Item]
-    lineage: Lineage
-    metadata: Mapping[str, object]
+Pipeline(source=source, batch=False)
+
+Pipeline(source=source, batch=True, batch_size=3)
 ```
 
-Batch pipes use:
+`batch_size` is invalid unless `batch=True`.
+
+Batches are ordinary pipeline values. Therefore:
 
 ```python
-BatchPipe.map(
-    fn: Callable[
-        [Batch],
-        Batch | Awaitable[Batch],
-    ],
-) -> BatchPipe
+flow.map(func)
 ```
 
-Record pipes and batch pipes both use `.map()`. The pipe type determines the callable input.
+always passes the current logical value to `func`: an individual item in item mode or the current batch in batch mode. There is no separate `BatchPipe.map()` contract.
 
-### 16.1 Batch policy
+### 16.1 Backend negotiation
 
-```python
-@dataclass(frozen=True)
-class BatchPolicy:
-    max_records: int = 10_000
-    max_bytes: int | None = None
-    max_delay: float | None = None
-```
+Batch representation/backend is negotiated graph- and capability-aware. Preference order is:
 
-Default `BatchPolicy(max_records=10_000)`. The first configured threshold reached flushes the batch.
+1. native safe/zero-copy representation when available;
+2. Arrow;
+3. Polars;
+4. Pandas;
+5. Python list fallback.
 
-Always flush before:
+An explicit `batch_backend=` forces a supported backend; requesting an unavailable backend raises rather than silently falling back to another representation.
 
-* state barriers
-* schema changes
-* source completion
-* explicit checkpoint requests
-* normal configured termination
-
-On failure or external cancellation:
-
-* stop accepting records
-* do not flush an incomplete in-memory batch by default
-* preserve already durable batches
-
-Record-level fallback inside a failed batch remains configurable:
-
-```text
-allow
-warn
-error
-```
-
----
-
----
-
-> **Extracted from ROADMAP Appendix A.** Async/sync primitive reference for the runtime-semantics contract. `§N` references point back to [ROADMAP.md](../ROADMAP.md).
->
-> **Alignment audit (separate concern).** Which of these `bado` helpers to remove/replace/keep as
-> AnyIO adds equivalents (4.14 task handles, `functools.reduce`, async `itertools`) — plus the async
-> benchmarking/profiling methodology — lives in
-> [bado-anyio-alignment.md](bado-anyio-alignment.md). This appendix owns their *semantics*; that
-> gameplan owns the *cleanup*.
-
-## A. Async primitive reference
-
-Reference for every sync and async primitive relevant to riko's pipeline and pubsub
-layers. Environments: **S** = sync (no async backend) · **T** = Twisted · **A** = asyncio ·
-**Y** = anyio. Async iteration is pull-based; a `Feed` is defined by its iteration
-mechanism, not by whether its source is finite or live.
-
-### Sync iteration
-
-| Primitive | riko mapping | Environments | Best suited for |
-|---|---|---|---|
-| `Iterator` / `Generator` | `Stream = Iterator[Item]` — primary pipeline I/O type | S · T · A · Y | Static sources: in-memory data, files read once, single URL fetch |
-| `for item in stream` | Operator inner loop over `Stream` | S · T · A · Y | All sync operator parsers (`filter`, `count`, `sort`, …) |
-
-### Async iteration
-
-| Primitive | riko mapping | Environments | Best suited for |
-|---|---|---|---|
-| `AsyncIterator` / `AsyncGenerator` | `Feed = AsyncIterable[Item]` — async pipeline I/O type | A · Y | Any source consumed asynchronously — paginated APIs, WebSocket, SSE, live RSS, and bounded in-memory collections wrapped for concurrent I/O |
-| `async for item in feed` | Operator inner loop over `Feed` | A · Y | Composer operators (`filter`, `timeout`, `truncate`, `uniq`, `union`) processing a `Feed` |
-
-### Sync pubsub
-
-| Primitive | riko mapping | Environments | Best suited for |
-|---|---|---|---|
-| Generator coroutine (`.send()`) | `sync_hub.receivers` in `riko/_pubsub` — named coroutines that receive items pushed by `send` module | S | Fan-out in sync pipelines; the only option without an async runtime |
-| `collections.deque` | `sync_hub.queues` in `riko/_pubsub` — buffer between sender coroutine and polling consumer | S | Sync bridge between push (`.send()`) and pull (`next(receiver)`) sides |
-| `time.sleep` polling (`wait` / `max_wait`) | Receiver loop in `riko/modules/receive.py` | S | Sync waiting for items from a named channel; unavoidable in sync context |
-| `StreamState.PENDING` sentinel | Yielded by `receive` while no items are available | S | Signals caller that the receiver is alive but waiting; enables cooperative interleaving |
-
-### Async pubsub
-
-Async pubsub is an *addition*, not a replacement. Sync pipelines continue to use generator
-coroutines + deque + polling unchanged.
-
-| Primitive | riko mapping | Environments | Best suited for |
-|---|---|---|---|
-| `asyncio.Queue` | Async alternative to `sync_hub.queues` + polling | A · Y | Fan-out between async tasks; bounded queue gives natural backpressure |
-| `anyio.create_memory_object_stream()` | Backend-agnostic named send/receive stream pair | Y | Fan-out on both asyncio and trio; naming mirrors `send`/`receive` semantics |
-| `anyio.TaskGroup` / `asyncio.TaskGroup` | Structured concurrency; each consumer runs as a concurrent task | A · Y | Multiple async consumers; lifetime tied to the group |
-
-### Structured concurrency and producers
-
-| Primitive | riko mapping | Environments | Best suited for |
-|---|---|---|---|
-| `twisted.internet.defer.Deferred` | `async_pipe` return type; `bado.async_get`; `FileReader.deferred` | T | Single async result in Twisted; chained with `.addCallback` / `.addErrback` |
-| `Cooperator` | `bado/itertools.py` `async_map` — rate-limited parallel async work | T | Cooperative multitasking in Twisted; controls concurrency without threads |
-| `asyncio.Future` / `asyncio.Task` | Not currently used; anyio backend planned | A · Y | Single async result or background task in asyncio |
-| `anyio.TaskGroup` / `asyncio.TaskGroup` | Replacement for `Cooperator` in `async_map` under anyio; also async pubsub fan-out | A · Y | Structured concurrency — all tasks complete before the group exits; preferred over `gather` for complex fan-out |
-| `anyio.open_file` async read | anyio backend `async_read_file` replacement for `FileReader` | A · Y | File I/O under anyio; `async for chunk in f` needs no producer/consumer protocol |
-
-### Fan-out
-
-A `Feed` is consumed by a single consumer, like `Iterator`. For fan-out — delivering each
-item to multiple independent consumers — use a `TaskGroup` with one bounded queue per
-consumer. This is the async alternative to riko's sync `send`/`receive` pubsub, not a
-replacement; natural backpressure comes from bounded queues rather than a polling interval.
-
----
-
-> **Extracted from the runtime contract (§15, §22)** — stateful-operator and memory-limit
-> execution semantics (borderline features, not part of the bare-bones contract).
-
-## 15. Stateful operators
-
-> **Current gap:** `StatefulItem` type exists but no checkpoint/persist machinery.
-
-Stateful streaming pipes declare:
-
-```python
-state_checkpoint: Literal[
-    "replay",
-    "persist",
-] = "replay"
-```
-
-**Replay** — persist source checkpoints only. Rebuild operator state by replay after restart.
-
-**Persist** — store versioned pipe state with the checkpoint. A pipe may use `persist` only when it provides a durable state codec.
+Batching must remain streaming/bounded. It may not require materializing an unbounded source. Stateful boundaries, source completion, and operator semantics determine when buffered values must be made visible/committed; implementation details may use internal batching helpers without exposing a second public pipeline type.
 
 ---
 
 ## 22. Memory limits
 
-> **Current gap:** no enforced memory/record limits.
+Initial execution limits are item-count based and enforced rather than advisory. Relevant bounded structures include merge queues, ordered-concurrency reorder buffers, subscription/split buffers, and batch builders.
 
-Initial limits are item-count based:
-
-```python
-merge(
-    buffer_budget=128,
-    per_source_limit=32,
-)
-```
-
-```python
-map(
-    concurrency=16,
-    reorder_buffer=32,
-)
-```
-
-```python
-BatchPolicy(
-    max_records=10_000,
-)
-```
-
-These limits are enforced, not advisory.
-
-Byte-aware accounting is deferred for:
-
-* merge queues
-* reorder buffers
-* pending lineage
-* error channels
-* disposition channels
-* batch builders
-
-Universal deep Python-object size estimation is not required initially.
+Byte-aware accounting may be added for merge/reorder buffers, pending provenance, error/disposition channels, and batches without requiring a universal deep-Python-object size estimator in the initial implementation.
 
 ---
+
+## Appendix A. Async primitive reference
+
+This appendix describes implementation building blocks, not additional public API. AnyIO/Asyncer remain private implementation dependencies and are never surfaced through `riko` / `riko.ext` contracts.
+
+### Sync and async iteration
+
+| primitive | Riko role |
+|---|---|
+| `Iterator` / generator | sync execution stream |
+| `AsyncIterable` / async generator | `Feed`, async execution stream |
+| `for` / `async for` | pull-based operator consumption |
+
+A Feed/stream's finiteness is independent of its iteration mechanism.
+
+### Pub/sub implementation
+
+The compatibility sync backend may continue to use generator coroutines + bounded/deque buffering internally. The current async backend may continue to use AnyIO memory object streams, including zero-buffer rendezvous behavior. Those mechanisms are implementation details behind the public `Publisher` / `Subscription` / `Channel` protocols.
+
+Final lifecycle is execution-owned:
+
+- one execution owns its active channels/subscriber tasks;
+- bounded channels provide backpressure;
+- subscriber branches do not require user drains for cleanup;
+- cancellation/normal completion close all execution-owned channel ends;
+- multiple independent pipeline executions never share implicit pub/sub lifecycle state.
+
+Structured concurrency (`TaskGroup` or equivalent execution-owned task management) is appropriate where branch lifetime must be tied to execution. An MVP may use `asyncio.create_task()` for subscriber concurrency, provided the owning execution still tracks, joins/cancels, and cleans up those tasks deterministically.
+
+### Producer/consumer bridges
+
+Sync execution uses one persistent portal when bridging async-only components. Async execution runs unknown sync extension work on workers unless explicitly inline-safe. The runtime must never spin up an async runtime per item.
+
+### Non-goals
+
+- Do not expose AnyIO/Asyncer types publicly.
+- Do not force the cheap native sync path through an async engine.
+- Do not infer blocking behavior from arbitrary source inspection.
+- Do not use unbounded queues to mask backpressure.
+- Do not treat shared DAG ancestry as implicit fan-out.

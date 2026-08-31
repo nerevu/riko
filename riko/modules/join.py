@@ -34,10 +34,12 @@ import pygogo as gogo
 from meza.process import merge
 
 from riko.dotdict import is_mapping
-from riko.modules._prepare import require_kwarg
-from riko.types.configs import JoinObjconf
-from riko.types.general import Defaults, Item, Items, Opts, PipeTuples, Stream
-from riko.types.values import MISSING
+from riko.modules._prepare import require_arg
+from riko.types._configs import JoinObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._sentinels import MISSING
+from riko.types._streams import Item, Items, Stream
+from riko.types._wrappers import PipeTuples
 
 from . import operator
 
@@ -47,7 +49,12 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: JoinObjconf, tuples: PipeTuples, **kwargs: object
+    stream: Stream,
+    objconf: JoinObjconf,
+    tuples: PipeTuples,
+    *,
+    other: Items | None = None,
+    **kwargs: object,
 ) -> Stream:
     """
     Joins the source against ``other`` by merging each matching pair.
@@ -65,8 +72,7 @@ def parser(
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
 
-    Kwargs:
-        other (Items): The stream to join against.
+        other: The stream to join against. Required.
 
     Returns:
         Merged item matches.
@@ -98,7 +104,7 @@ def parser(
         4
 
     """
-    other: Items = require_kwarg(kwargs, "other", "join")
+    other = require_arg(other, "other", "join", strict=True)
 
     def compare(x: Item, y: Item, x_key: str, y_key: str) -> bool:
         if isinstance(x, Mapping) and isinstance(y, Mapping):

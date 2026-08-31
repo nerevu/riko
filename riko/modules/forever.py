@@ -31,8 +31,9 @@ from typing import Any
 import pygogo as gogo
 
 from riko.cast import SourceOpts
-from riko.types.configs import DynamicConf
-from riko.types.general import Defaults, Extraction, Item, Opts
+from riko.types._dynamic_conf import DynamicConf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Item
 
 from . import processor
 
@@ -42,7 +43,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: DynamicConf, **kwargs: object
+    _: Item, extraction: object, objconf: DynamicConf, **kwargs: object
 ) -> Iterator[dict[str, bool]]:
     """
     Returns an endless iterator of ``{"forever": True}``.

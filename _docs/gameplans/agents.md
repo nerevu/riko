@@ -1,712 +1,149 @@
 # Agent workflows gameplan
 
-The main opportunity is to share the graph definition and planning layer, not the execution layer.
+## 1. Mission
 
-A pipeline DAG and an agent DAG have the same structural operations:
+Support agent-style iterative/event-driven workflows by reusing Riko's immutable
+`Pipeline` definition, graph tooling, pub/sub protocols, execution bridge, resources, and
+state model.
 
-nodes
-directed edges
-roots
-sinks
-predecessors
-successors
-fan-in
-fan-out
-cycle detection
+The target architecture deliberately does **not** introduce `AgentGraph`, `AgentNetwork`, a
+second DAG format, a universal DAG executor, or an agent-specific checkpoint store.
+
+Agent workflows differ from ordinary finite transforms primarily in:
+
+* event ingress/egress;
+* explicit pub/sub branches;
+* iterative state/termination;
+* long-lived application orchestration;
+* side effects and approvals.
+
+Those differences are expressed using existing/common Riko abstractions rather than a
+parallel execution stack.
+
+Authoritative supporting plans:
+
+* `execution-semantics.md` — `Pipeline`, `Context`, private sync/async executions,
+  `Publisher`/`Subscription`, `FeedState`, `StateStore`, identity/idempotency, and `loop`;
+* `fanout-topology.md` — explicit `publish` / `subscribe` / `split` topology;
+* `connectors.md` — external event transports and credential/session resources;
+* `provider-integrations.md` — side-effect/provider operation contracts;
+* `orchestration.md` — schedules, workers, and durable run boundaries.
+
+## 2. Core rule: agents reuse Pipeline
+
+A `Pipeline` is an immutable DAG definition. Agent-oriented workflows compose ordinary
+Pipeline nodes and branches:
+
+```python
+incoming = Pipeline.subscribe("incoming")
+alerts = Pipeline.subscribe("alerts")
+
+flow = Pipeline(source=incoming).map(normalize).map(classify).publish(alerts)
+```
+
+No separate graph definition is required. Shared graph construction, validation,
+serialization, visualization, subgraph queries, and planning naturally apply because the
+agent workflow **is** a Pipeline definition.
+
+The underlying Pipeline graph remains acyclic. Iteration is represented by the existing
+`loop` construct, not a graph cycle.
+
+## 3. Graph infrastructure
+
+The useful generic graph refactor from earlier exploration remains valid, but it serves one
+Pipeline architecture rather than two public graph systems.
+
+A small internal DAG utility may own:
+
+```text
+nodes / edges
+roots / sinks
+predecessors / successors
+ancestors / descendants
 topological ordering
-subgraphs
-ancestors/descendants
+cycle/self-loop validation
+subgraph/pruning
+visualization
+```
 
-But they have different execution semantics:
+Existing helpers such as `utils.gen_graph()`, `topological_sort()`, serialized pipe parsing,
+and visualization can progressively converge on that utility.
 
-Pipeline DAG    Agent DAG
-Node is a Riko module invocation    Node is a long-lived agent
-Edge carries a lazy stream  Edge pushes discrete events
-One pipeline run    Many independent agent runs
-Usually finite  Long-lived
-Runs in topological dependency order    Agents run concurrently
-Fan-in combines streams during one run  Fan-in means several publishers share a receiver
-Failure normally stops the pipeline Failure should affect one delivery or agent
+Do not put execution behavior into the generic DAG helper. Module configuration, embedded
+loops, ports, stream iteration, resources, fan-out, stateful-owner resolution, and
+sync/async adaptation remain Pipeline/compiler/execution concerns.
 
-So the correct rule is:
+## 4. Public event protocols
 
-Reuse graph construction, validation, querying, serialization, and visualization. Keep pipeline and agent executors separate.
+Agent/event integrations reuse the common protocols:
 
-Existing Riko code that can be reused
+```python
+class Publisher[T](Protocol): ...
 
-Riko already has:
 
-utils.gen_graph() to convert wires into source-target pairs;
-utils.gen_parented_graph() to remove orphan nodes;
-topological_sort() for DAG ordering;
-NetworkX-based strongly connected component detection;
-parse_pipe_def() to normalize a serialized definition into modules, wires, and a graph;
-_gen_steps() to bind graph nodes to executable module functions.
+class Subscription[T](Protocol): ...
 
-The first four should become generic DAG infrastructure. The last two remain pipeline-specific.
 
-Recommended extraction
+class Channel[T](Publisher[T], Subscription[T], Protocol): ...
+```
 
-Create:
+An external event source implementing `Subscription[T]` is an ordinary Pipeline source:
 
-riko/
-  graph.py
+```python
+flow = Pipeline(source=subscription)
+```
+
+An external event destination implementing `Publisher[T]` can be a publish target:
+
+```python
+flow = flow.publish(publisher)
+```
+
+Local branches use object-first subscription declarations:
+
+```python
+audit = Pipeline.subscribe("audit")
+flow = flow.publish(audit)
+```
+
+Low-level compatibility modules may remain named `send` / `receive`, but new agent-facing
+Python documentation uses `publish`, `subscribe`, `publisher`, and `subscription`.
+
+## 5. Fan-out and branch lifecycle
+
+Agent routing does not imply that every shared Pipeline ancestor broadcasts automatically.
+Fan-out is explicit:
+
+```python
+left, right = flow.split(2)
+```
 
 or:
 
-riko/
-  graph/
-    __init__.py
-    dag.py
-
-The shared abstraction should be small.
-
-from __future__ import annotations
-
-from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
-from typing import Generic, TypeVar
-
-import networkx as nx
-
-
-NodeT = TypeVar("NodeT", bound=str)
-
-
-@dataclass(slots=True)
-class Dag(Generic[NodeT]):
-    graph: nx.DiGraph
-
-    @classmethod
-    def from_edges(
-        cls,
-        nodes: Iterable[NodeT],
-        edges: Iterable[tuple[NodeT, NodeT]],
-    ) -> Dag[NodeT]:
-        graph = nx.DiGraph()
-        graph.add_nodes_from(nodes)
-        graph.add_edges_from(edges)
-
-        dag = cls(graph)
-        dag.validate()
-        return dag
-
-    def validate(self) -> None:
-        if self_loops := tuple(nx.selfloop_edges(self.graph)):
-            raise ValueError(f"Self-referencing edges: {self_loops}")
-
-        if not nx.is_directed_acyclic_graph(self.graph):
-            cycle = nx.find_cycle(self.graph)
-            raise ValueError(f"Graph contains a cycle: {cycle}")
-
-    @property
-    def nodes(self) -> tuple[NodeT, ...]:
-        return tuple(self.graph.nodes)
-
-    @property
-    def edges(self) -> tuple[tuple[NodeT, NodeT], ...]:
-        return tuple(self.graph.edges)
-
-    @property
-    def roots(self) -> tuple[NodeT, ...]:
-        return tuple(
-            node
-            for node, degree in self.graph.in_degree()
-            if degree == 0
-        )
-
-    @property
-    def sinks(self) -> tuple[NodeT, ...]:
-        return tuple(
-            node
-            for node, degree in self.graph.out_degree()
-            if degree == 0
-        )
-
-    @property
-    def order(self) -> tuple[NodeT, ...]:
-        return tuple(nx.topological_sort(self.graph))
-
-    def predecessors(self, node: NodeT) -> tuple[NodeT, ...]:
-        return tuple(self.graph.predecessors(node))
-
-    def successors(self, node: NodeT) -> tuple[NodeT, ...]:
-        return tuple(self.graph.successors(node))
-
-    def ancestors(self, node: NodeT) -> frozenset[NodeT]:
-        return frozenset(nx.ancestors(self.graph, node))
-
-    def descendants(self, node: NodeT) -> frozenset[NodeT]:
-        return frozenset(nx.descendants(self.graph, node))
-
-    def subgraph(self, nodes: Iterable[NodeT]) -> Dag[NodeT]:
-        graph = self.graph.subgraph(nodes).copy()
-        return type(self)(graph)
-
-This becomes the common object used by both systems.
-
-Pipeline reuse
-
-Currently, parse_pipe_def() stores a plain dictionary graph generated from wires, and build_pipeline() calls topological_sort() before generating executable steps.
-
-Change the parsed representation from:
-
-class ParsedPipeDef(TypedDict):
-    name: str
-    modules: dict[str, PipeModule]
-    embed: dict[str, PipeModule]
-    graph: dict[str, str | list[str]]
-    wires: dict[str, Wire]
-
-to conceptually:
-
-@dataclass(slots=True)
-class ParsedPipeline:
-    name: str
-    modules: dict[str, PipeModule]
-    embedded: dict[str, PipeModule]
-    dag: Dag[str]
-    wires: dict[str, Wire]
-
-The pipeline parser creates the shared DAG:
-
-def parse_pipe_def(
-    pipe_def: PipeDef,
-    pipe_name: str = "anonymous",
-) -> ParsedPipeline:
-    modules = dict(utils.gen_modules(pipe_def))
-    embedded = dict(utils.gen_modules(pipe_def, embedded=True))
-    modules.update(embedded)
-
-    edges = tuple(utils.gen_graph(pipe_def))
-
-    dag = Dag.from_edges(
-        nodes=modules,
-        edges=edges,
-    )
-
-    return ParsedPipeline(
-        name=utils.pythonise(pipe_name),
-        modules=modules,
-        embedded=embedded,
-        dag=dag,
-        wires=dict(utils.gen_wires(pipe_def)),
-    )
-
-Then:
-
-module_ids = parsed_pipe_def.dag.order
-
-instead of:
-
-module_ids = topological_sort(parsed_pipe_def["graph"])
-What remains pipeline-specific
-
-These should not move into Dag:
-
-_get_pyarg()
-_gen_pykwargs()
-_gen_steps()
-build_pipeline()
-stringify_pipe()
-
-They know about:
-
-Riko module imports;
-conf;
-embedded loop modules;
-_INPUT and _OUTPUT;
-forever;
-stream iterators;
-generated Python source.
-
-That is execution and compilation behavior, not graph behavior.
-
-Agent reuse
-
-The agent network stores its agents as NetworkX node attributes:
-
-network.graph.add_node(
-    name,
-    agent=agent,
-)
-
-and connections as edges:
-
-network.graph.add_edge(source, receiver)
-
-It can instead wrap the same Dag:
-
-@dataclass(slots=True)
-class AgentNetwork:
-    dag: Dag[str]
-    agents: dict[str, Agent]
-
-Construction:
-
-network = AgentNetwork.from_definitions(
-    agents={
-        "normalize": normalize_agent,
-        "enrich": enrich_agent,
-        "collect": collect_agent,
-    },
-    links=[
-        ("normalize", "enrich"),
-        ("enrich", "collect"),
-    ],
-)
-
-Implementation:
-
-@classmethod
-def from_definitions(
-    cls,
-    agents: dict[str, Agent],
-    links: Iterable[tuple[str, str]],
-) -> AgentNetwork:
-    return cls(
-        agents=agents,
-        dag=Dag.from_edges(agents, links),
-    )
-
-Publishing becomes:
-
-def publish(self, source: str, item: Item) -> None:
-    for receiver in self.dag.successors(source):
-        send(receiver, dict(item))
-
-Startup becomes:
-
-def start(self) -> None:
-    for name in reversed(self.dag.order):
-        self.agents[name].start()
-
-Shutdown becomes:
-
-def stop(self) -> None:
-    for name in self.dag.order:
-        self.agents[name].stop()
-
-Sources and receivers use the same graph API:
-
-network.dag.predecessors("collect")
-network.dag.successors("normalize")
-network.dag.roots
-network.dag.sinks
-Shared graph definition format
-
-The pipeline format already represents nodes and wires separately:
-
-{
-  "modules": [
-    {"id": "normalize", "type": "regex", "conf": {}},
-    {"id": "collect", "type": "sort", "conf": {}}
-  ],
-  "wires": [
-    {
-      "id": "wire-1",
-      "src": {"moduleid": "normalize", "id": "_OUTPUT"},
-      "tgt": {"moduleid": "collect", "id": "_INPUT"}
-    }
-  ]
-}
-
-Agent definitions can reuse the same broad shape:
-
-{
-  "agents": [
-    {
-      "id": "incoming",
-      "pipeline": "incoming_pipeline"
-    },
-    {
-      "id": "normalize",
-      "pipeline": "normalize_pipeline"
-    }
-  ],
-  "links": [
-    {
-      "id": "link-1",
-      "src": {"agentid": "incoming"},
-      "tgt": {"agentid": "normalize"}
-    }
-  ]
-}
-
-A more reusable generic shape would be:
-
-{
-  "nodes": [
-    {
-      "id": "incoming",
-      "kind": "agent",
-      "config": {}
-    },
-    {
-      "id": "normalize",
-      "kind": "agent",
-      "config": {}
-    }
-  ],
-  "edges": [
-    {
-      "id": "edge-1",
-      "source": "incoming",
-      "target": "normalize"
-    }
-  ]
-}
-
-Then pipeline and agent loaders interpret node config differently.
-
-However, changing the existing Yahoo Pipes-compatible format solely for symmetry is probably not worthwhile. Share the internal Dag, not necessarily the external JSON schema.
-
-Shared validation
-
-Both DAG types can use the same checks.
-
-Structural validation
-dag.validate()
-
-Checks:
-
-duplicate node IDs;
-edges referencing missing nodes;
-self-loops;
-cycles;
-isolated nodes;
-no roots;
-no sinks.
-
-Some checks should be configurable:
-
-@dataclass(frozen=True, slots=True)
-class DagPolicy:
-    allow_isolated: bool = False
-    require_root: bool = True
-    require_sink: bool = True
-    allow_cycles: bool = False
-
-Pipeline policy:
-
-PIPELINE_POLICY = DagPolicy(
-    allow_isolated=False,
-    require_root=True,
-    require_sink=True,
-    allow_cycles=False,
-)
-
-POC agent policy:
-
-AGENT_POLICY = DagPolicy(
-    allow_isolated=True,
-    require_root=False,
-    require_sink=False,
-    allow_cycles=False,
-)
-
-An isolated agent may be valid because it can receive an external push and have a side effect without emitting anything.
-
-Domain validation remains separate
-
-Pipeline-specific:
-
-validate_pipeline_nodes(parsed)
-validate_pipeline_ports(parsed)
-validate_embedded_modules(parsed)
-
-Agent-specific:
-
-validate_agent_definitions(network)
-validate_registered_receivers(network)
-validate_agent_modes(network)
-Shared graph queries
-
-These become useful to both systems:
-
-dag.roots
-dag.sinks
-dag.predecessors(node)
-dag.successors(node)
-dag.ancestors(node)
-dag.descendants(node)
-dag.order
-
-Examples:
-
-# Pipeline: which earlier modules affect this output?
-pipeline.dag.ancestors("output")
-
-# Agent network: which agents may eventually receive this event?
-network.dag.descendants("webhook")
-
-# Pipeline: which modules have no inputs?
-pipeline.dag.roots
-
-# Agent network: which agents have no downstream receivers?
-network.dag.sinks
-Shared visualization
-
-This is one of the best reuse opportunities.
-
-A single graph renderer can display either:
-
-def to_mermaid(
-    dag: Dag[str],
-    labels: Mapping[str, str] | None = None,
-) -> str:
-    lines = ["flowchart LR"]
-
-    for source, target in dag.edges:
-        source_label = labels.get(source, source) if labels else source
-        target_label = labels.get(target, target) if labels else target
-
-        lines.append(
-            f'    {source}["{source_label}"] --> '
-            f'{target}["{target_label}"]'
-        )
-
-    return "\n".join(lines)
-
-Pipeline:
-
-fetch --> regex --> filter --> sort
-
-Agent network:
-
-webhook --> normalize --> notify
-                      --> audit
-
-The same renderer can support:
-
-Mermaid;
-DOT/Graphviz;
-NetworkX node-link JSON;
-adjacency lists;
-terminal summaries.
-Shared graph transformations
-
-Both can benefit from common graph transformations.
-
-Select a branch
-dag.subgraph(
-    dag.ancestors("target") | {"target"}
-)
-
-Pipeline use: execute only the nodes needed for one output.
-
-Agent use: inspect or start only the agents upstream of a target.
-
-Impact analysis
-affected = dag.descendants(changed_node)
-
-Pipeline use: determine which steps are affected by a module configuration change.
-
-Agent use: determine which downstream agents may be affected by changing an agent.
-
-Pruning
-def prune_to_sinks(
-    dag: Dag[str],
-    sinks: Iterable[str],
-) -> Dag[str]:
-    selected = set(sinks)
-
-    for sink in sinks:
-        selected.update(dag.ancestors(sink))
-
-    return dag.subgraph(selected)
-Composition
-
-A pipeline or agent network could be inserted into a larger graph:
-
-def compose(*dags: Dag[str]) -> Dag[str]:
-    graph = nx.compose_all([dag.graph for dag in dags])
-    result = Dag(graph)
-    result.validate()
-    return result
-
-This could support subpipelines and agent scenario groups.
-
-Shared testing
-
-A generic DAG test suite could run against both pipeline and agent graph builders:
-
-@pytest.mark.parametrize(
-    "builder",
-    [
-        build_pipeline_dag,
-        build_agent_dag,
-    ],
-)
-def test_rejects_missing_node(builder):
-    ...
-
-
-@pytest.mark.parametrize(
-    "builder",
-    [
-        build_pipeline_dag,
-        build_agent_dag,
-    ],
-)
-def test_detects_cycles(builder):
-    ...
-
-
-@pytest.mark.parametrize(
-    "builder",
-    [
-        build_pipeline_dag,
-        build_agent_dag,
-    ],
-)
-def test_finds_roots_and_sinks(builder):
-    ...
-
-Property-based tests could also establish:
-
-set(dag.order) == set(dag.nodes)
-
-and:
-
-position = {
-    node: index
-    for index, node in enumerate(dag.order)
-}
-
-assert all(
-    position[source] < position[target]
-    for source, target in dag.edges
-)
-What should not be shared
-
-Avoid creating one generic “DAG executor.”
-
-It would likely acquire flags such as:
-
-execute(
-    mode="pipeline" | "agent",
-    streaming=True,
-    concurrent=False,
-    persistent=False,
-    push=False,
-    ...
-)
-
-That abstraction would obscure important differences.
-
-Keep:
-
-Dag
-├── PipelineCompiler / PipelineRunner
-└── AgentNetwork / AgentWorker
-
-Not:
-
-UniversalDagExecutor
-
-The shared boundary should look like:
-
-class Pipeline:
-    dag: Dag[str]
-
-    def run(self, source: Stream) -> Stream:
-        ...
-
-
-class AgentNetwork:
-    dag: Dag[str]
-
-    def start(self) -> None:
-        ...
-
-    def push(self, agent: str, item: Item) -> None:
-        ...
-Best concrete refactor
-
-I would make these changes:
-
-riko/topsort.py
-    ↓ replace or reduce
-
-riko/graph.py
-    Dag
-    DagPolicy
-    GraphValidationError
-    CycleError
-    to_mermaid()
-
-Then:
-
-riko/compile.py
-    parse_pipe_def() creates Dag
-    build_pipeline() reads dag.order
-
-riko/agents/network.py
-    AgentNetwork stores Dag
-    publish() reads dag.successors()
-    start()/stop() read dag.order
-
-Existing helpers can be progressively moved:
-
-Existing code   Destination
-utils.gen_graph()   Pipeline-specific adapter into Dag.from_edges()
-utils.gen_parented_graph()  Probably remove; use explicit isolated-node policy
-topsort.scc_sort()  graph.py, only if cycles remain supported
-topsort.native_topological_sort()   Replace with nx.topological_sort()
-topsort.topological_sort()  Replace with Dag.order
-_gen_steps()    Keep in compile.py
-Agent connect() Delegate to Dag.add_edge()
-Agent routing   Delegate lookup to Dag.successors()
-Bottom line
-
-The most valuable shared pieces are:
-
-one internal directed-graph representation;
-one validation framework;
-one set of root/sink/predecessor/successor queries;
-one topological planner;
-one serialization and visualization layer;
-one graph test suite;
-common subgraph, impact-analysis, and composition utilities.
-
-The executors should remain separate because a pipeline DAG describes data dependencies within one computation, while an agent DAG describes event routing between independent computations.
-
----
-
-# Shelf integration addendum: external event adapters
-
-Webhook receivers, feed monitors, ZeroMQ, RabbitMQ, Service Bus, Event Grid, and mail
-inboxes are valid agent ingress or egress mechanisms. They do not belong in `Dag` and do
-not justify a universal graph executor.
-
-## Adapter contracts
-
 ```python
-class EventSource(Protocol):
-    async def receive(self, context: ExecutionContext) -> Event: ...
-    async def aclose(self) -> None: ...
-
-
-class EventSink(Protocol):
-    async def publish(
-        self,
-        event: Event,
-        context: ExecutionContext,
-    ) -> PublishResult: ...
-
-
-class CheckpointStore(Protocol):
-    async def load(self, key: str) -> JsonValue | None: ...
-    async def save(self, key: str, value: JsonValue) -> None: ...
+flow = flow.publish(events)
 ```
 
-`AgentNetwork` owns routing between registered agents. Connector packages own protocol
-sessions, acknowledgements, redelivery, authentication, and serialization.
+Local published branches are attached to and owned by the execution. The caller does not
+need to drain a subscriber merely to make cleanup occur. Terminal values on an attached
+branch are discarded unless the branch contains an explicit sink/tap/routing effect.
 
-## Delivery semantics
+`split()` is lossless streaming fan-out with bounded per-branch buffering; unused outputs
+remain inactive. `publish()` isolates branches by default (`isolate=True`) with an explicit
+`isolate=False` escape hatch.
 
-Every adapter declares:
+Per-subscription item order is preserved; cross-subscription execution/completion order is
+unspecified. Multiple publishers may target one subscription; that subscription completes
+after all attached publishers complete.
+
+## 6. External event adapters
+
+Webhook receivers, feed monitors, ZeroMQ, RabbitMQ, Service Bus, Event Grid, mail inboxes,
+and similar transports are connector/provider concerns. They adapt external protocols to
+`Publisher` / `Subscription`; they do not live in graph-node attributes or create their own
+agent executor.
+
+Every adapter declares its delivery semantics, for example:
 
 ```text
 best_effort
@@ -714,29 +151,285 @@ at_most_once
 at_least_once
 ```
 
-Exactly-once must not be claimed. Agent handlers use event IDs and idempotency keys when
-duplicate delivery is possible.
+Exactly-once must not be claimed generically. When duplicate delivery is possible,
+side-effecting nodes rely on the common execution-derived idempotency identity and the
+transport's genuine acknowledgement/idempotency capabilities.
 
-## Webhooks
+Protocol sessions are declared `Context` resources and live as execution-owned handles.
+They are not opened per item unless the protocol genuinely requires it.
 
-A webhook server validates the request, assigns an event ID, persists or acknowledges it
-according to local policy, and pushes the normalized event into an agent root. The HTTP
-request thread must not execute an unbounded agent workflow.
+## 7. Iteration uses `loop`
 
-## Feed monitoring
+Agent-style reasoning/tool iteration extends the existing Riko `loop` rather than adding
+cycles to the Pipeline DAG.
 
-A feed monitor is a long-lived `EventSource`, not a restartable one-shot pipeline. Its
-last-seen IDs or timestamps live in `CheckpointStore`; an in-memory dictionary is only a
-test implementation. Polling uses cancellation-aware waits and bounded backoff.
+Conceptual example:
 
-## Broker adapters
+```python
+flow = Pipeline(...).loop(embed=step, until=done, max_iterations=20, id="research-loop")
+```
 
-ZeroMQ may be offered as best-effort transport. RabbitMQ, Service Bus, and similar
-brokers expose acknowledgements and redelivery. Connections are execution resources and
-must not be opened once per item or hidden in graph node attributes.
+Iterative semantics:
 
-## Lifecycle
+1. the current state enters one iteration;
+2. the embedded pipeline executes;
+3. exactly one embedded result becomes the next state;
+4. zero or multiple results raise `LoopStateError`;
+5. `until(state, iteration)` is evaluated against the latest state;
+6. if false, the next iteration begins.
 
-Startup order remains downstream-first when receivers must be ready before publishers.
-Shutdown is upstream-first for intake, then drains in-flight deliveries, then closes
-sinks. This preserves the graph/executor separation already established in this plan.
+The existing non-iterative loop mode may retain its current zero/many behavior. The
+single-result requirement applies to the new iterative-state mode.
+
+## 8. Termination
+
+```python
+max_iterations: int | None = None
+```
+
+`until` is checked before the first iteration (while-loop semantics). Initially `until` is
+sync-only:
+
+```python
+def until(state: StateT, iteration: int) -> bool: ...
+```
+
+`iteration` is zero-based.
+
+Rules:
+
+* default termination preserves the current one-run loop behavior;
+* `max_iterations` without an explicit `until` means fixed-count iteration;
+* an explicit `until` that remains false at the limit raises `LoopIterationError`;
+* `None` means no numeric bound, subject to the owning application's cancellation/deadline
+  policy.
+
+Long-lived agent applications should still configure practical budgets/deadlines. This
+contract does not authorize unbounded model/provider retries.
+
+## 9. Loop state and checkpointing
+
+Agent iteration reuses:
+
+```python
+@dataclass(frozen=True)
+class LoopState[T]:
+    value: T
+    iteration: int
+```
+
+as a checkpoint payload inside the common:
+
+```python
+FeedState[LoopState[T]]
+```
+
+There is no automatic loop checkpointing. Users place an explicit boundary where recovery
+is meaningful:
+
+```python
+step = step.checkpoint(id="after-tool-result")
+```
+
+A checkpoint crossed after a successful iteration commits before the next iteration begins.
+Resume restores the application state and iteration counter and continues **after** the
+successfully crossed boundary. `max_iterations` remains a total bound across resumed
+execution rather than resetting after a restart.
+
+## 10. StateStore reuse
+
+Agents use the same public store protocols as all other resumable Riko constructs:
+
+```python
+StateStore
+AsyncStateStore
+StateStoreLike
+StateKey[T]
+StateRecord[T]
+FeedState[T]
+```
+
+Do not define `AgentStateStore` or `CheckpointStore`.
+
+The enclosing iterative `loop` is the stateful owner for loop checkpoints. A checkpoint in
+a reusable fragment resolves to the nearest enclosing stateful owner when the concrete graph
+is compiled. Ambiguous multi-frontier recovery topologies are rejected.
+
+CAS conflicts raise `CheckpointConflictError`; the execution does not silently reload and
+rerun an agent iteration.
+
+## 11. Stable identity
+
+An explicit loop `id=` is required only where durable logical identity must survive a
+structural graph revision that would otherwise change the generated node id.
+
+The stateful fingerprint covers the full resumable loop scope:
+
+```text
+embedded Pipeline semantics
+checkpoint placement
+termination policy
+relevant callable versions
+statically declared reachable resource definitions
+```
+
+Unrelated downstream graph structure and the particular configured StateStore
+implementation are excluded.
+
+Per-item/iteration idempotency uses the common identity dimensions:
+
+```text
+(node_id, fingerprint, item_key, generation, iteration)
+```
+
+Generation remains deterministic/stable across retries; it is never replaced by a random
+retry UUID.
+
+## 12. Tool/provider calls
+
+Agent tool calls are ordinary Pipeline side effects or provider capability executions.
+They therefore use the common rules:
+
+* side-effecting modules declare idempotency support;
+* execution derives/injects the idempotency key centrally;
+* a retryable/resumable workflow fails validation when a destination cannot honor
+  idempotency unless the node explicitly opts out with `require_idempotency=False`;
+* provider `OperationHandle` waiting remains owned by `provider-integrations.md`;
+* approval/policy remains provider/MCP/application policy rather than a loop feature.
+
+## 13. Observation and metadata
+
+Agent/tool results may return `FeedResult` metadata/state like other Riko sources. Per-item
+provenance remains private in `_FeedItem`; parsers/agent callables receive ordinary values.
+
+Ordinary 1-to-1 transforms preserve truthful item identity/generation. Fan-out and combine
+operations derive/combine identity according to the common execution semantics. An agent
+workflow does not define a second event-identity system.
+
+## 14. Concurrency and lifecycle
+
+The same immutable Pipeline can run under sync or async execution. Async event sources,
+subscriptions, provider calls, and resources use the common execution bridge and
+execution-owned structured lifecycle.
+
+Do not start a private event loop per agent or event. Sync execution may own one lazily
+created portal when async-only components are encountered; async execution adapts unknown
+sync extension work to workers unless explicitly inline-safe.
+
+Cancellation/deadline propagates through active subscriptions, provider calls, loop
+iterations, and execution-owned resources.
+
+## 15. Serialization
+
+Agent-oriented workflows serialize as ordinary Pipeline definitions plus explicit loop,
+pub/sub, Context-reference, and provider configuration. Do not create a second `agents` /
+`links` graph schema solely for symmetry.
+
+Serialized subscriptions may use concise names; same-name target resolution follows the
+fan-out contract. Serialized callable/key references use symbolic Context references rather
+than attempting to serialize arbitrary Python callables.
+
+## 16. Visualization and inspection
+
+Because agents reuse Pipeline, the same graph renderer and graph queries apply:
+
+```python
+flow.dag.ancestors(node)
+flow.dag.descendants(node)
+flow.dag.roots
+flow.dag.sinks
+```
+
+(if/when those public inspection conveniences are exposed).
+
+Visualization should distinguish:
+
+* normal data edges;
+* explicit publish/subscription branches;
+* embedded loop scope;
+* checkpoint boundaries;
+* side-effect/provider nodes;
+* external sources/sinks.
+
+It must not draw loop iteration as a cyclic DAG edge when the compiled Pipeline graph is
+acyclic.
+
+## 17. Deployment boundary
+
+A long-lived service may keep consuming an external subscription or polling source.
+Alternatively an orchestrator may invoke finite agent/loop work as separate runs at durable
+boundaries. `orchestration.md` owns scheduling and worker restart policy.
+
+A webhook request handler should validate/persist/queue the incoming event according to its
+transport policy and trigger bounded work; it should not synchronously execute an unbounded
+agent workflow in the request thread.
+
+## 18. Graph refactor work
+
+Generic graph infrastructure remains useful and should be extracted incrementally from the
+existing topsort/compile utilities. Candidate internal API:
+
+```python
+@dataclass(frozen=True, slots=True)
+class Dag[T]:
+    nodes: tuple[T, ...]
+    edges: tuple[tuple[T, T], ...]
+
+    @property
+    def order(self) -> tuple[T, ...]: ...
+    def predecessors(self, node: T) -> tuple[T, ...]: ...
+    def successors(self, node: T) -> tuple[T, ...]: ...
+    def ancestors(self, node: T) -> frozenset[T]: ...
+    def descendants(self, node: T) -> frozenset[T]: ...
+```
+
+This is an internal/shared structural utility, not `AgentGraph` and not an executor.
+Pipeline compilation remains responsible for module/resource/state semantics.
+
+## 19. Testing strategy
+
+Required tests include:
+
+1. Pipeline DAG stays acyclic when iterative loop semantics are used;
+2. iterative loop accepts exactly one embedded result and rejects zero/multiple;
+3. `until` is checked before the first iteration and receives zero-based iteration;
+4. fixed-count `max_iterations` behavior;
+5. explicit-until exhaustion raises `LoopIterationError`;
+6. checkpoint commit occurs only after successful boundary/iteration;
+7. resumed loop restores both value and iteration count;
+8. `CheckpointConflictError` propagates without automatic rerun;
+9. local published branches are execution-owned and need no manual drain;
+10. external `Subscription` works as an ordinary source;
+11. multiple publishers complete one subscription only after all publishers finish;
+12. side-effecting agent/tool nodes reuse stable idempotency identity across retry;
+13. sync/async execution of the same definition has equivalent logical semantics;
+14. cancellation closes subscriptions/resources/provider operations deterministically;
+15. serialization/visualization preserves loop and pub/sub structure without a second graph
+    schema.
+
+## 20. Phases
+
+```text
+A0  generic internal DAG utility/refactor
+A1  Pipeline pub/sub protocols and execution-owned branch lifecycle
+A2  external Publisher/Subscription connector adapters
+A3  iterative loop state/termination semantics
+A4  loop + FeedState/StateStore checkpoint/resume
+A5  provider/tool idempotency and approval integration
+A6  visualization/inspection of loop + pub/sub topology
+A7  orchestrated and long-lived deployment examples
+```
+
+## 21. Definition of done
+
+1. Agent workflows are ordinary immutable Pipeline definitions; there is no `AgentGraph`.
+2. Pipeline DAGs remain acyclic; `loop` owns iteration.
+3. Event ingress/egress reuse `Publisher` / `Subscription` / `Channel`.
+4. Agent state/checkpoints reuse `FeedState` / `StateStore`; there is no agent checkpoint
+   store.
+5. Loop checkpointing is explicit and resumable with stable iteration count.
+6. Side effects reuse common idempotency/provenance semantics.
+7. Local fan-out branches are explicit and execution-owned.
+8. Sync and async modes share one definition and logical behavior.
+9. External transports remain connector/provider adapters, not graph runtime machinery.
+10. Scheduling/restart policy remains outside the agent core.

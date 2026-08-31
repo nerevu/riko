@@ -7,32 +7,32 @@ Tests the AnyIO streaming primitives in riko.bado.itertools: ``async_map_stream`
 
 import pytest
 
-from riko.bado import Semaphore, async_sleep, isasync, lowlevel, run
+from riko.bado._backend import Semaphore, async_sleep, lowlevel, run
 from riko.bado.itertools import (
     async_map,
     async_map_ordered_stream,
     async_map_stream,
     async_merge,
 )
-from tests import aresolve
+from tests import aresolve, skipif_issync
 
 
 async def _double(x: int) -> int:
     return x * 2
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_maps_all_items_order_independent():
     results = aresolve(async_map_stream(_double, range(10), limit=4))
     assert sorted(results) == [x * 2 for x in range(10)]
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_empty_source_yields_nothing():
     assert aresolve(async_map_stream(_double, [], limit=4)) == []
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_accepts_async_source():
     async def gen():
         for i in range(5):
@@ -42,7 +42,7 @@ def test_accepts_async_source():
     assert sorted(results) == [0, 2, 4, 6, 8]
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_backpressure_bounds_inflight():
     """An unbounded-ish source with a slow consumer must not run far ahead."""
     limit, buffer, total = 3, 2, 200
@@ -70,7 +70,7 @@ def test_backpressure_bounds_inflight():
     assert seen == total
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_ordered_preserves_source_order_under_skew():
     """The slowest item is first, so an unordered map would reorder it."""
 
@@ -82,12 +82,12 @@ def test_ordered_preserves_source_order_under_skew():
     assert result == list(range(6))
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_ordered_empty_source_yields_nothing():
     assert aresolve(async_map_ordered_stream(_double, [], limit=4)) == []
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_ordered_backpressure_bounds_inflight():
     limit, buffer, total = 3, 2, 200
 
@@ -115,7 +115,7 @@ def test_ordered_backpressure_bounds_inflight():
     assert produced == total == seen
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_shared_budget_caps_nested_fanout():
     """
     A budget shared across the *leaf* maps caps their combined concurrency: an
@@ -146,27 +146,27 @@ def test_shared_budget_caps_nested_fanout():
     assert state["peak"] <= 3
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 @pytest.mark.parametrize("stream", [async_map_stream, async_map_ordered_stream])
 def test_stream_rejects_bad_limit(stream):
     with pytest.raises(ValueError, match="limit must be at least 1"):
         aresolve(stream(_double, range(3), limit=0))
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 @pytest.mark.parametrize("stream", [async_map_stream, async_map_ordered_stream])
 def test_stream_rejects_negative_buffer(stream):
     with pytest.raises(ValueError, match="buffer cannot be negative"):
         aresolve(stream(_double, range(3), buffer=-1))
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_async_map_rejects_negative_connections():
     with pytest.raises(ValueError, match="connections cannot be negative"):
         run(lambda: async_map(_double, range(3), -1))
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_async_map_allows_unlimited_connections():
     assert run(lambda: async_map(_double, range(3), 0)) == [0, 2, 4]
 
@@ -179,13 +179,13 @@ async def _afeed(items, delay=0.0):
         yield item
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_async_merge_yields_all_records():
     feeds = [_afeed([1, 2]), _afeed([3, 4]), _afeed([5])]
     assert sorted(aresolve(async_merge(feeds, limit=2))) == [1, 2, 3, 4, 5]
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_async_merge_interleaves_across_feeds():
     """A fast feed's records surface before a slow feed finishes (incremental)."""
 
@@ -199,13 +199,13 @@ def test_async_merge_interleaves_across_feeds():
     assert out.index("fast2") < out.index("slow2")
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_async_merge_rejects_bad_limit():
     with pytest.raises(ValueError, match="limit must be at least 1"):
         aresolve(async_merge([_afeed([1])], limit=0))
 
 
-@pytest.mark.skipif(not isasync, reason="anyio not installed")
+@skipif_issync
 def test_async_merge_rejects_negative_buffer():
     with pytest.raises(ValueError, match="buffer cannot be negative"):
         aresolve(async_merge([_afeed([1])], buffer=-1))

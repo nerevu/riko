@@ -8,8 +8,8 @@ for build-completeness:** each section is tagged **Implemented** (fully ships) o
 Planned** (nothing ships yet). Find any `§N` via the [ROADMAP §-index](ROADMAP.md#index).
 
 > **Provenance.** These are shipped facts, not aspirations. If code and this document
-> disagree, the code is authoritative and this document is the bug. Planned behavior lives
-> in ROADMAP.md, never here.
+> disagree, the code is authoritative and this document is the bug. Planned semantics live in
+> their owning gameplans; [ROADMAP.md](ROADMAP.md) routes to those owners.
 
 ## Index
 
@@ -92,6 +92,13 @@ as an `AsyncIterator[Item]` (via `operator.aparse` + async-aware `operator.setup
 composer operators (e.g. `timeout`) consume it lazily via `async for` and can bound an
 infinite `Feed`; the `AsyncPipe` collection path still buffers non-Feed-native parsers at
 the `_materialize_legacy_source` seam.
+
+Per-fetch source bodies are **eager-read, lazy-parse** on the async path: `async_url_open`
+buffers the full response (`response.content` / `Path.read_bytes`) into a `BytesIO` before
+parsing, so there is no read-time backpressure. Streaming parsers pair `await
+async_url_open(...)` with `_io.auto_close` (close-on-iteration), never `async with`.
+Incremental `httpx.stream()` body reads and `AsyncClient` reuse are **Partial** (not
+implemented). Sync `Fetch` differs — its non-memoized path streams `r.raw` incrementally.
 
 ## 3. Pipe behavior (shipped)
 
@@ -218,7 +225,7 @@ discoverable too. Unqualified names are reserved for built-ins; dotted namespace
 
 **Typed discovery (P9A, shipped).** `list_modules(*, type, subtype, category)` and
 `describe_module(name) -> ModuleDefinition | None` (`riko/modules/_metadata.py`, on the stable
-`riko`/`riko.api` surface) give filtered runtime truth. **The three filter axes are all lowercase
+`riko` surface) give filtered runtime truth. **The three filter axes are all lowercase
 `Literal` strings, not enums** — `ModuleType = Literal["operator","processor","splitter"]`,
 `ModuleSubtype`, and `ModuleCategory = Literal["source","transform","sink"]` (the `derive_category`
 return value) — so `list_modules(category="sink")` → `["write"]`. These are a **separate axis** from
@@ -239,7 +246,7 @@ in-pipeline counterpart of the one-shot `Targets`/`export` surface (see §25). `
 `riko/modules/_names.py`: the flat `Modules` namespace (every pipe, aliasing bucket members so
 `Modules.FILTER is Transforms.FILTER`) + `Sources`/`Transforms`/`Sinks` bucket enums (member
 `.value` = canonical id; collisions raise). Regenerate with `gen-names`/`manage codegen` (drift guard
-`test_generated_names_match`). Re-exported from `riko`/`riko.api`, **not** `riko.modules`.
+`test_generated_names_match`). Re-exported from `riko`, **not** `riko.modules`.
 
 ## Module registry & pipe resolution (P8, shipped)
 
@@ -274,8 +281,9 @@ generated `Modules` tree (P9A) shipped — `pipe | Transforms.FILTER` resolves i
 
 ## Subscription lifecycle — `subscribe` / `publish` (F5a, partial)
 
-> **Partial.** `func` becomes a tap → [fanout-topology.md § 9.3 (F5c)](gameplans/fanout-topology.md), next.
-> Subscription handles + teardown ownership → [§ 9.2 (F5b)](gameplans/fanout-topology.md), landing with P11.
+> **Partial.** The shipped compatibility behavior and the revised MVP/F5 staging boundary are
+> documented in [fanout-topology.md §14](gameplans/fanout-topology.md#14-relationship-to-current-send--receive),
+> especially [§14.1](gameplans/fanout-topology.md#141-revised-compatibility-mvp-boundary).
 
 `SyncPipe` ships a subscribe/publish pair that hides the pub/sub hub from callers:
 `SyncPipe.subscribe(name, func=…, wait=…, maxlen=…)` registers eagerly via
@@ -292,26 +300,29 @@ filters the stream. This is sound because the sync backend has no producer/consu
 concurrency: `send` pushes only when the sender pipe is advanced, on the same thread, so a
 blocking idle wait could never be satisfied anyway. Per
 [release-readiness.md § 2](gameplans/release-readiness.md), blocking is a property of the
-`Subscription` rather than of `receive`, so this is the permanent in-process default and not
-a stopgap.
+`Subscription` rather than of `receive`, so this is the permanent in-process compatibility
+default.
 
 The raw `SyncPipe("receive", conf=…)` path is unchanged and still emits PENDING for
-interleaved manual stepping. The two behaviors coexist **transitionally**, until F1/F4 remove
-`PENDING` from the data stream entirely.
+interleaved manual stepping. The two behaviors coexist transitionally on the compatibility
+surface.
 
 **`func` queues its return value, not the received item.** So `func=archived.append` yields
 `None` per item and `func=len` yields an `int` — neither an `Item`, which is why
 `receive.pipe`'s declared return does not satisfy `SyncOperatorParser`, and why chaining
-(`subscribe("x", func=…).sort()`) yields `{'content': None}`. F5c makes `func` a tap and
-resolves both; the pyright error is a symptom, so **do not silence it by widening
-`OperatorParserOutput`** — see [§ 9.3](gameplans/fanout-topology.md).
+(`subscribe("x", func=…).sort()`) yields `{'content': None}`. This transformation behavior is
+preserved during the revised compatibility MVP so sync and async do not diverge. Final F5
+changes **both** modes together to `tap=` semantics, where the callback return is discarded
+and the received item continues. Do not silence the current typing symptom by widening
+`OperatorParserOutput`.
 
-**Known gap (F5b):** `receive.parser` calls `close(name)` on idle expiry as well as on DONE,
+**Known lifecycle gap:** `receive.parser` calls `close(name)` on idle expiry as well as on DONE,
 and `SyncPubSubHub.close` pops receiver, queue, and id together — so an empty drain destroys
-the subscription rather than ending one pass, and the sender's bound id goes stale. Deferred
-deliberately: every mechanism a local fix would build on (the `DONE` sentinel, `send`'s `ids`
-dict) is slated for deletion by the `Publisher`/`Subscription` rewrite, so it lands with P11.
-A `strict` xfail in `tests/public/test_collections.py` marks it.
+the subscription rather than ending one pass, and the sender's bound id goes stale. This is
+intentionally **not** repaired by extending the old DONE/`ids` mechanism. The compatibility
+MVP fixes Feed-native incremental async `send`/`receive`; final F5 replaces lifecycle ownership
+with execution-owned `Publisher`/`Subscription` handles so cleanup no longer depends on a user
+drain. A `strict` xfail in `tests/public/test_collections.py` marks the shipped gap.
 
 ## 25. Conversion — export converters (shipped)
 
@@ -319,7 +330,7 @@ A `strict` xfail in `tests/public/test_collections.py` marks it.
 
 Meza-backed export converters ship: `csv` / `json` / `geojson` / `ofx` / `qif` / `list` /
 `tuple` (`riko/collections.py`; `list_targets()` lists registered export converters). The typed
-`Targets` `StrEnum` (stable `riko`/`riko.api` surface) is the export-format layer over that
+`Targets` `StrEnum` (stable `riko` surface) is the export-format layer over that
 registry — `export(items, Targets.JSON)` or the plain string; `CONVERSION_FUNCS` is keyed by
 `Targets` members, drift-guarded by `TestExportTargets`. This is riko's terminal-output surface,
 distinct from the discovery tree's `Sinks` bucket (sink *pipes*, empty for built-ins — see §24).

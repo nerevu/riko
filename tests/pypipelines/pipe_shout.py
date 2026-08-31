@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 # A small hand-written sub-pipeline used to demonstrate a pipe:-loop.
 
-from riko import Context
+from riko.context import Context
 from riko.modules._subpipe import mark_subpipe
 from riko.modules.strconcat import pipe as strconcat
 from riko.types.modules import StrconcatRawConf

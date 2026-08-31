@@ -21,13 +21,15 @@ Attributes:
 
 """
 
+from collections.abc import Sequence
 from logging import Logger
 from typing import Any
 
 import pygogo as gogo
 
-from riko.types.configs import StrconcatObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts
+from riko.types._configs import StrconcatObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Item
 
 from . import processor
 
@@ -37,7 +39,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: StrconcatObjconf, **kwargs: object
+    _: Item, extraction: Sequence[object], objconf: StrconcatObjconf, **kwargs: object
 ) -> str:
     """
     Joins the resolved parts into one string.

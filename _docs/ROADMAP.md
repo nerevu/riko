@@ -1,155 +1,157 @@
 # Riko Roadmap
 
-This is riko's **map**: the index of gameplans that hold every detailed plan, plus pointers
-to the authoritative specs. The **runtime contract** — only the sections that describe
-guaranteed, shipped behavior — lives in [RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md) (the full
-`§0–27` map is the [Index](#index) below; feature/end-state sections live in gameplans); what
-already ships is in
-[IMPLEMENTED.md](IMPLEMENTED.md) (its as-built companion); implementation status and sequence
-are the P-track ([PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md)
-+ [MILESTONES.md](MILESTONES.md)). This document just routes you to them.
+This is riko's **map**: the index of gameplans that hold detailed plans plus pointers to the
+authoritative specs. The shipped runtime contract lives in
+[RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md); as-built detail lives in
+[IMPLEMENTED.md](IMPLEMENTED.md); live P-track status lives in
+[PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md). Historical/pending P-track file maps and exit tests live
+in [MILESTONES.md](MILESTONES.md), while forward implementation dependency order lives in
+[implementation-sequence.md](gameplans/implementation-sequence.md).
+
+Planned/end-state architecture is owned by the matching gameplan, not by the shipped runtime
+contract. In particular, the reconciled Pipeline/Context/resource/pubsub/state/identity/batch
+architecture is authoritative in
+[execution-semantics.md](gameplans/execution-semantics.md).
 
 ## Which doc for which info
 
-One doc owns each kind of information — go straight there:
-
 | I need… | Doc |
 |---|---|
-| What the engine **guarantees** — item/stream model, pipe behavior, execution semantics, delivery, RDP end-state (the `§N` spec) | [RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md) |
-| What **actually ships today** / where a shipped piece lives | [IMPLEMENTED.md](IMPLEMENTED.md) |
-| **Live phase status** — what's done / next / suite count, and the decisions that survived | [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md) (the tracker) |
-| **How to build a pending phase** — files to create/edit, exit tests, dependency order (`PN`) | [MILESTONES.md](MILESTONES.md) |
-| The **detailed plan for a topic** — HigherGov/Feed, extensibility E0–E8, connectors, CLI, MCP, RDP/Connect, callable pipes, execution semantics, … | the matching [gameplan](#gameplans) below |
-| The public / EXT / private **import surface** | [API_SURFACE.md](API_SURFACE.md) |
-| **Why** a design choice was made (prior-art comparison) | [extensibility.md § E8 / Prior-art sources](gameplans/extensibility.md#e8-prior-art-research-conclusions) |
-| User **migration** (legacy → current) · **changelog** | [MIGRATION.rst](MIGRATION.rst) · [CHANGES.rst](CHANGES.rst) |
+| What the engine **guarantees today** | [RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md) |
+| What **actually ships / where it lives** | [IMPLEMENTED.md](IMPLEMENTED.md) |
+| **Live phase status** | [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md) |
+| **P-track file maps / exit tests / phase history** | [MILESTONES.md](MILESTONES.md) |
+| **Forward implementation dependency order** | [implementation-sequence.md](gameplans/implementation-sequence.md) |
+| **Detailed target design** | matching [gameplan](#gameplans) |
+| Public / EXT / private import surface | [API_SURFACE.md](API_SURFACE.md) |
+| User migration / changelog | [MIGRATION.rst](MIGRATION.rst) · [CHANGES.rst](CHANGES.rst) |
 
-**Tie-breakers** where a single `§`/phase spans docs:
-- **Behavior vs. as-built vs. status** are three questions about the same section → RUNTIME_CONTRACT (`§N` spec) · IMPLEMENTED (ships) · PHASE_CHECKLISTS tracker (status). Live status lives **only** in the tracker.
-- **`§N` (contract behavior) ≠ `PN` (work phase).** A phase *implements* a contract concern; they are separate axes.
-- **Done-phase detail → PHASE_CHECKLISTS; pending-phase design → MILESTONES.** When a phase lands, its substance graduates from a MILESTONES plan to a PHASE_CHECKLISTS summary.
+Tie-breakers:
+
+- shipped behavior -> RUNTIME_CONTRACT;
+- as-built location -> IMPLEMENTED;
+- live status -> PHASE_CHECKLISTS;
+- P-track mechanics/history/file maps -> MILESTONES;
+- forward implementation dependency order -> implementation-sequence;
+- target/end-state API semantics -> owning gameplan.
+
+`§N` contract topics and `PN` implementation phases are separate axes.
 
 ## Index
 
-The complete `§0–27` map — every section number to its home (no gaps). Bare-bones core
-guarantees live in the contract; feature/end-state topics live in gameplans. What *ships* for
-any of them is in [IMPLEMENTED.md](IMPLEMENTED.md).
+The complete `§0–27` routing map:
 
 | § | Topic | Where it lives |
 |---|---|---|
-| 0 | Architectural direction | [contract](RUNTIME_CONTRACT.md#0-architectural-direction) |
-| 1 | Product layers | [contract](RUNTIME_CONTRACT.md#1-product-layers) (Core) · [rdp-connect](gameplans/rdp-connect.md) (Connect) |
+| 0 | Architectural direction | [contract](RUNTIME_CONTRACT.md#0-architectural-direction) · [execution-semantics](gameplans/execution-semantics.md) (target) |
+| 1 | Product layers | [contract](RUNTIME_CONTRACT.md#1-product-layers) · [rdp-connect](gameplans/rdp-connect.md) |
 | 2 | Core item & stream types | [contract](RUNTIME_CONTRACT.md#2-core-item-and-stream-types) |
-| 3 | Pipe behavior | [contract](RUNTIME_CONTRACT.md#3-pipe-behavior) |
+| 3 | Pipe behavior | [contract](RUNTIME_CONTRACT.md#3-pipe-behavior) · [execution-semantics](gameplans/execution-semantics.md) (target Pipeline/execution split) |
 | 4 | Callable pipes | [callable-pipes](gameplans/callable-pipes.md#4-callable-pipes) |
 | 5 | Execution characteristics | [execution-semantics](gameplans/execution-semantics.md#5-execution-characteristics) |
 | 6 | Async execution & backpressure | [contract](RUNTIME_CONTRACT.md#6-async-execution-and-backpressure) · [execution-semantics](gameplans/execution-semantics.md#6-async-execution-and-backpressure) |
 | 7 | Timeout | [contract](RUNTIME_CONTRACT.md#7-timeout) · [execution-semantics](gameplans/execution-semantics.md#7-timeout) |
-| 8 | Union & merge | [contract](RUNTIME_CONTRACT.md#8-union-and-merge) (union) · [execution-semantics](gameplans/execution-semantics.md#8-union-and-merge) (merge) |
-| 9 | Run status & exit codes | [contract](RUNTIME_CONTRACT.md#9-run-status-and-exit-codes) |
-| 10 | Delivery guarantee | [contract](RUNTIME_CONTRACT.md#10-delivery-guarantee) |
+| 8 | Union & merge | [contract](RUNTIME_CONTRACT.md#8-union-and-merge) · [execution-semantics](gameplans/execution-semantics.md#8-union-and-merge) |
+| 9 | Run status & exit codes | [contract](RUNTIME_CONTRACT.md#9-run-status-and-exit-codes) · [cli](gameplans/cli.md) (target CLI) |
+| 10 | Delivery guarantee | [contract](RUNTIME_CONTRACT.md#10-delivery-guarantee) · [execution-semantics](gameplans/execution-semantics.md) (state/idempotency foundation) |
 | 11 | Retry policy | [execution-semantics](gameplans/execution-semantics.md#11-retry-policy) |
 | 12 | Errors & dispositions | [contract](RUNTIME_CONTRACT.md#12-errors-and-dispositions) · [execution-semantics](gameplans/execution-semantics.md#12-errors-and-dispositions) |
 | 13 | Filter semantics | [contract](RUNTIME_CONTRACT.md#13-filter-semantics) · [execution-semantics](gameplans/execution-semantics.md#13-filter-semantics) |
-| 14 | Lineage & acknowledgements | [rdp-connect](gameplans/rdp-connect.md#14-lineage-and-acknowledgements) |
+| 14 | Lineage & acknowledgements | [rdp-connect](gameplans/rdp-connect.md#14-lineage-and-acknowledgements) · [execution-semantics](gameplans/execution-semantics.md) (item provenance/idempotency) |
 | 15 | Stateful operators | [execution-semantics](gameplans/execution-semantics.md#15-stateful-operators) |
-| 16 | Batch model | [execution-semantics](gameplans/execution-semantics.md#16-batch-model) |
+| 16 | Batch model | [execution-semantics](gameplans/execution-semantics.md#16-batch-model) · [tabular-interop](gameplans/tabular-interop.md) |
 | 17 | Riko Data Protocol | [rdp-connect](gameplans/rdp-connect.md#17-riko-data-protocol) |
-| 18 | State | [rdp-connect](gameplans/rdp-connect.md#18-state) |
+| 18 | State | [execution-semantics](gameplans/execution-semantics.md#stateful-execution-and-checkpoints) (core state/checkpoints) · [rdp-connect](gameplans/rdp-connect.md#18-state) (RDP projection) |
 | 19 | Schema | [rdp-connect](gameplans/rdp-connect.md#19-schema) |
-| 20 | Batch transports | [rdp-connect](gameplans/rdp-connect.md#20-batch-transports) |
+| 20 | Batch transports | [rdp-connect](gameplans/rdp-connect.md#20-batch-transports) · [tabular-interop](gameplans/tabular-interop.md) (in-memory representation) |
 | 21 | Manifest durability | [rdp-connect](gameplans/rdp-connect.md#21-manifest-durability) |
 | 22 | Memory limits | [execution-semantics](gameplans/execution-semantics.md#22-memory-limits) |
 | 23 | AnyIO & Twisted | [contract](RUNTIME_CONTRACT.md#23-anyio-and-twisted) · [twisted-protocol-servers](gameplans/twisted-protocol-servers.md#23-anyio-and-twisted) |
 | 24 | Module registry & plugins | [extensibility](gameplans/extensibility.md#24-module-registry-and-plugins) |
-| 25 | Conversion & dataframe | [database-transforms](gameplans/database-transforms.md#25-conversion-and-dataframe-integration) |
-| 26 | Implementation roadmap | [rdp-connect](gameplans/rdp-connect.md#26-implementation-roadmap) |
+| 25 | Conversion & dataframe | [database-transforms](gameplans/database-transforms.md#25-conversion-and-dataframe-integration) · [tabular-interop](gameplans/tabular-interop.md) |
+| 26 | Implementation roadmap | [implementation-sequence](gameplans/implementation-sequence.md) (forward dependency order) · [rdp-connect](gameplans/rdp-connect.md#26-implementation-roadmap) (RDP projection) · P-track docs (history/status) |
 | 27 | Explicit non-goals | [rdp-connect](gameplans/rdp-connect.md#27-explicit-non-goals-for-the-initial-implementation) |
 
 ## Gameplans
-
-Every detailed plan lives under [gameplans/](gameplans/). The per-`§N` map is the
-[Index](#index) above; the grouped tables below list each gameplan and what it owns. The feature/end-state
-`§N` (dropped from the bare-bones contract) are **owned** by the gameplan that covers them.
 
 ### Core runtime & execution
 
 | Gameplan | Covers |
 |---|---|
-| [execution-semantics.md](gameplans/execution-semantics.md) | **§5, §11, §12, §15, §16, §22** and the *planned* parts of **§6–§8, §13** — execution characteristics, retry, dispositions, stateful operators, batch model, memory limits, backpressure/timeout/merge/filter internals (incl. `receive`'s unbounded async wait, §7.1); + the async primitive reference (§ Appendix A). |
-| [callable-pipes.md](gameplans/callable-pipes.md) | **§4 callable pipes** — `map`/`flat_map`, `Opts` fields, decorator model, strict mode, thread/process execution (+ impl plan). |
-| [fanout-topology.md](gameplans/fanout-topology.md) | **Fan-out, routing & fan-in (F0–F7)** — branching topology as a first-class, inspectable concern: `split`, `send`/`receive`, `union`/`join`, conditional/named routing, buffering & slow-subscriber policy, subscriber lifecycle; owns the pub/sub phase mechanics **F1/F4/F5**. |
-| [feed-native-streaming.md](gameplans/feed-native-streaming.md) | **Feed-native pipe migration & streaming memory model** — per-pipe audit, `batch_feed`/`BatchPolicy` batching, streaming `write` (`StreamEncoder`), bounded `split`, sync/async parity, unified stream-boundary source normalization (§7.1); discharges the P7 streaming-export carryover. |
-| [feed-monitoring.md](gameplans/feed-monitoring.md) | Persistent feed monitoring & change detection — repeatedly observing finite sources and emitting new/changed/threshold/anomaly events without becoming a scheduler, daemon, or orchestrator. |
-| [bado-anyio-alignment.md](gameplans/bado-anyio-alignment.md) | **`bado` ↔ AnyIO 4.14 alignment** — remove/replace/keep audit of the async helpers, **missing async helpers** (`async_memoize`, `throttle`) + async benchmarking/profiling methodology (execution-semantics owns the primitive *semantics*). |
-| [twisted-protocol-servers.md](gameplans/twisted-protocol-servers.md) | Server-side Twisted protocols via `asyncioreactor` + the **§23** protocol-adapter design (the §23 *current runtime* is in the contract). |
-
-| [dotdict-parsing.md](gameplans/dotdict-parsing.md) | DotDict parsing — business-data key handling. |
-| [release-readiness.md](gameplans/release-readiness.md) | **Pre-1.0 DX polish & release gate** — pub/sub 1.0 contract, config-validation strictness, API-shape compression (Pipeline/Execution split, `Pipeline(source=…)`, `with_config`/`executor=`), optional-dep UX, wheel/PyPI release fidelity, the Must-land/Preferred/Can-wait triage. |
-| [correctness-audit.md](gameplans/correctness-audit.md) | **Correctness audit of the non-module repo** — the defect taxonomy **C1–C12** (import-time state, unreachable guards, unread config, silent fabrication, leaked dependency errors, weaker duplicates, doc drift, non-determinism, dataclass-vs-TypedDict removal, omitted-vs-`None`, eagerly consumed streams, sync/async divergence), the phased plan (A0–A5) to apply it to `cast`/`types`/parsing/core/async/CLI, and the **open defect register R1–R19** — the verified branch-audit work list, whose P0 rows gate the `features` → `main` merge. |
+| [execution-semantics.md](gameplans/execution-semantics.md) | Canonical target runtime: one immutable `Pipeline[T]`; private sync/async executions; immutable `Context`/resources; `FeedResult`/metadata/provenance; pub/sub/split lifecycle; canonical identity/fingerprints/idempotency; `FeedState`/`StateStore`/checkpoint/CAS; loop iteration; batch mode/backend negotiation; retry/backpressure/timeout/merge/memory semantics. |
+| [callable-pipes.md](gameplans/callable-pipes.md) | §4 callable Pipeline nodes: `map`/`flat_map`, existing decorator/preparation model, Feed-native inference, declared resources, callable fingerprints/`version=`, identity modes, strictness, sync/async/process adaptation. |
+| [fanout-topology.md](gameplans/fanout-topology.md) | Explicit fan-out/routing/fan-in: public `publish`/`subscribe`, `Publisher`/`Subscription`/`Channel`, `split`, buffering/isolation, branch lifecycle, union/join interaction. Low-level `send`/`receive` remain compatibility implementation vocabulary. |
+| [feed-native-streaming.md](gameplans/feed-native-streaming.md) | Per-module Feed-native parser migration, streaming memory/encoder work, bounded source normalization. Batch details defer to the single-Pipeline batch contract rather than a public `BatchPipe`. |
+| [feed-monitoring.md](gameplans/feed-monitoring.md) | Repeated finite observation, bootstrap/backfill, dedupe/change/anomaly/alert policy using common `Pipeline.poll`, `FeedState`, `StateStore`, and publish/subscription contracts. |
+| [bado-anyio-alignment.md](gameplans/bado-anyio-alignment.md) | `bado` <-> AnyIO helper audit, missing helpers, benchmarking/profiling; execution semantics remain owned by `execution-semantics.md`. |
+| [twisted-protocol-servers.md](gameplans/twisted-protocol-servers.md) | Server-side protocol adapters; current §23 runtime remains in the contract. |
+| [dotdict-parsing.md](gameplans/dotdict-parsing.md) | DotDict/business-data key handling. |
+| [release-readiness.md](gameplans/release-readiness.md) | Pre-1.0 API/DX/release gate; Pipeline/execution split and pub/sub target must agree with the owning gameplans. |
+| [correctness-audit.md](gameplans/correctness-audit.md) | Cross-repo correctness taxonomy/open defect register and merge-gate work. |
 
 ### Data, sources & connectors
 
 | Gameplan | Covers |
 |---|---|
-| [connectors.md](gameplans/connectors.md) | Source/sink connectors (HTTP, files, mail, brokers, CKAN/Prometheus/tabular, Singer). |
-| [rest-incremental.md](gameplans/rest-incremental.md) | Declarative REST-source layer — first-class pagination, auth references, dependent endpoints, incremental cursors, explicit source state (informed by dlt's `rest_api` and Singer tap/state conventions). |
-| [highergov-feed.md](gameplans/highergov-feed.md) | **HigherGov-first critical path** (HG-0…HG-9) + **async `Feed` integration** — riko's first production use: schema contracts, `SyncPipe`/`AsyncPipe` callable pipes, bounded async I/O. |
-| [rdp-connect.md](gameplans/rdp-connect.md) | **§14, §17–§21, §26, §27** + **Riko Connect** (§1) — RDP/Connect end-state: lineage, Riko Data Protocol, state, schema, batch transports, manifests, implementation milestones, non-goals. |
-| [database-transforms.md](gameplans/database-transforms.md) | `riko-sql` / `riko-dbt` (Ibis-backed reads, dbt coordination); owns **§25** (conversion & dataframe). |
-| [tabular-interop.md](gameplans/tabular-interop.md) | **The authoritative in-memory tabular boundary** — moving finite record streams to/from Pandas, Arrow, and optionally Polars (serialized codecs and rendering → `artifact-conversion.md`). |
-| [artifact-conversion.md](gameplans/artifact-conversion.md) | Serialized codecs, contact/card serialization, template-driven reports & rendered artifacts — the boundary that keeps the record-stream core out of document rendering (in-memory frames → `tabular-interop.md`). |
-| [enrichment-modules.md](gameplans/enrichment-modules.md) | Record/enrichment modules (coalesce, transforms, near-duplicate, contact extraction); **retiring `geolocate`'s stub lookups** (§6b). |
-| [reference-data.md](gameplans/reference-data.md) | **Currency/location reference-data consolidation** — one internal source of truth (`riko/_reference.py`) behind the `riko.currencies`/`riko.locations` facades; deletes the three dead `riko/data/` files; a behavior-preserving refactor (not an R-register defect). |
+| [connectors.md](gameplans/connectors.md) | Source/sink connector transports, credentials, sessions/resources, acknowledgements. |
+| [rest-incremental.md](gameplans/rest-incremental.md) | First-class `rest` module, pagination, auth/resource references, dependent endpoints, cursor extraction using common `FeedState`/`StateStore`. |
+| [highergov-feed.md](gameplans/highergov-feed.md) | HigherGov production path and current/transition integration examples. |
+| [rdp-connect.md](gameplans/rdp-connect.md) | RDP/Connect projection: lineage/protocol/schema/transports/manifests/implementation milestones/non-goals; it no longer owns the generic core StateStore/checkpoint model. |
+| [database-transforms.md](gameplans/database-transforms.md) | `riko-sql` / `riko-dbt`, declared database resources, streaming Pipeline batch mode, push-down/export/idempotency. |
+| [tabular-interop.md](gameplans/tabular-interop.md) | Authoritative in-memory Pandas/Arrow/Polars boundary and batch representation negotiation for the single Pipeline. |
+| [artifact-conversion.md](gameplans/artifact-conversion.md) | Serialized codecs/reports/rendered artifacts. |
+| [enrichment-modules.md](gameplans/enrichment-modules.md) | Record/enrichment modules. |
+| [reference-data.md](gameplans/reference-data.md) | Currency/location reference-data consolidation. |
 
 ### Extensibility & tooling
 
 | Gameplan | Covers |
 |---|---|
-| [extensibility.md](gameplans/extensibility.md) | **Extensibility & ecosystem (E0–E8)** — module contract, plugins, workflow spec, observability, adapters, drivers, GUI + 1.0 readiness; owns **§24** (module registry). Prior-art sources. |
-| [module-registry.md](gameplans/module-registry.md) | **P8 module registry + resolution seam** — splitting `resolve_module`'s four conflated concerns so an external package can add modules without editing core and runtime pipe resolution stops importing the compiler. |
-| [module-enums.md](gameplans/module-enums.md) | **Module registry + enum discoverability** — the generated `Modules` tree, `derive_category` taxonomy, and `codegen`/`gen-names` surface. |
-| [cli.md](gameplans/cli.md) | CLI architecture, command-plugin system, config precedence. |
-| [ownership.md](gameplans/ownership.md) | **The gameplan ownership map** — the one-owner-per-contract rule, the authoritative-contract table, and the boundary calls between overlapping plans. Read it before adding or reviewing a gameplan. |
+| [extensibility.md](gameplans/extensibility.md) | Module/plugin/workflow/observability/adapters/drivers ecosystem; §24 module registry. |
+| [module-registry.md](gameplans/module-registry.md) | P8 registry/resolution seam. |
+| [module-enums.md](gameplans/module-enums.md) | Generated module enum/tree/discovery naming. |
+| [cli.md](gameplans/cli.md) | Click-native CLI/plugin API, configuration, immutable Context assembly, output/events/approval/exit codes, PipelineRef run adapters. |
+| [ownership.md](gameplans/ownership.md) | One-owner-per-contract map and boundary calls. |
+| [implementation-sequence.md](gameplans/implementation-sequence.md) | Forward implementation dependency graph; classifies existing work as keep/refactor/supersede without redefining semantic contracts. |
 
 ### AI & agents
 
 | Gameplan | Covers |
 |---|---|
-| [ai-inference.md](gameplans/ai-inference.md) | AI inference — provider `infer` modules, embedding/retrieval adapters. |
-| [ai-inference-research.md](gameplans/ai-inference-research.md) | Prior-art research/ADR notes behind `ai-inference.md` (Langly/LangChain extraction + native-reimplementation sketches) — rationale, not an actionable plan. |
-| [agents.md](gameplans/agents.md) | Agent workflows — agent loop, tools. |
-| [agent-scenarios.md](gameplans/agent-scenarios.md) | Agent scenarios, tools, retrieval & evaluation — a deterministic, policy-aware scenario layer over the capability catalog; extends `agents.md` (topology), `ai-inference.md` (model calls), `mcp.md` (tool policy). |
-| [mcp.md](gameplans/mcp.md) | MCP server implementation. |
+| [ai-inference.md](gameplans/ai-inference.md) | Provider-neutral inference and embedding/retrieval adapters. |
+| [ai-inference-research.md](gameplans/ai-inference-research.md) | Research/ADR rationale for AI inference. |
+| [agents.md](gameplans/agents.md) | Agent-oriented workflows built from ordinary `Pipeline`, public pub/sub protocols, existing `loop` iterative state, common `StateStore`, and provider/tool side effects; no `AgentGraph`. |
+| [agent-scenarios.md](gameplans/agent-scenarios.md) | Deterministic/policy-aware scenario/evaluation layer over the capability catalog. |
+| [mcp.md](gameplans/mcp.md) | MCP **client-first** capability discovery/catalog/execution, OpenAPI/APIs.guru, execution-owned session resources, policy/artifacts/telemetry; MCP server comes only after client contracts stabilize. |
 
 ### Providers, Microsoft & orchestration
 
 | Gameplan | Covers |
 |---|---|
-| [provider-integrations.md](gameplans/provider-integrations.md) | Provider semantics for authenticated SaaS APIs — resource CRUD/search, webhooks, caching, idempotent writes, identity mapping, browser fallback, async provider operations (**not** transport, secrets, REST pagination, retry, or monitoring checkpoints). |
-| [azure-automation.md](gameplans/azure-automation.md) | Azure automation — ARM/PowerShell, Service Bus / Event Grid, desired-state. |
-| [microsoft-administration.md](gameplans/microsoft-administration.md) | Microsoft 365 / Entra / Azure administrative workflow semantics — desired state, preflight, dry-run, approval, verification, audit evidence, certificate lifecycle, manual handoffs; consumes the `azure-automation.md` adapters. |
-| [autopilot-provisioning.md](gameplans/autopilot-provisioning.md) | **Windows Autopilot new-device provisioning** — the first `riko-microsoft` (P14) scenario: CSV→auth→discover→plan→import→sync→profile-fallback→verify; specializes the Microsoft adapter/admin/operation-wait plans. |
-| [orchestration.md](gameplans/orchestration.md) | Orchestrator adapters (cron, webhook, Airflow/Prefect/Dagster, dbt). |
+| [provider-integrations.md](gameplans/provider-integrations.md) | SaaS provider CRUD/search/webhooks/cache/batch/idempotent writes/identity mapping/browser fallback/async operations using common Context/resources/state/idempotency. |
+| [azure-automation.md](gameplans/azure-automation.md) | Azure ARM/PowerShell, Service Bus/Event Grid, desired-state adapters. |
+| [microsoft-administration.md](gameplans/microsoft-administration.md) | Microsoft administrative workflow semantics. |
+| [autopilot-provisioning.md](gameplans/autopilot-provisioning.md) | Windows Autopilot provisioning scenario. |
+| [orchestration.md](gameplans/orchestration.md) | Cron/webhook/Airflow/Prefect/Dagster/dbt run adapters; canonical Python run requests use `PipelineRef`. |
 
 ### Documentation & testing
 
 | Gameplan | Covers |
 |---|---|
 | [module-documentation.md](gameplans/module-documentation.md) | Yahoo! Pipes module reference documentation. |
-| [inspiration-coverage.md](gameplans/inspiration-coverage.md) | Coverage index for `_docs/inspiration/` — which preserved Nerevu/external ideas carry forward into which gameplan, and which patterns are intentionally **not** revived (traceability, not a reimplementation commitment). |
-| [riko-site.md](gameplans/riko-site.md) | riko site pipeline. |
-| [testing.md](gameplans/testing.md) | **P13 test-suite layering** — doctest/public/internal/functional ownership rule, the high-priority test-bug fixes, and the file-by-file fix/remove/consolidate plan. |
+| [inspiration-coverage.md](gameplans/inspiration-coverage.md) | Traceability from preserved prior-art ideas to active gameplans. |
+| [riko-site.md](gameplans/riko-site.md) | Site pipeline. |
+| [testing.md](gameplans/testing.md) | Test-suite layering and file-by-file cleanup plan. |
 
 ### Retired redirects
 
 | Gameplan | Covers |
 |---|---|
-| [productionizing.md](gameplans/productionizing.md) | *Retired → redirect.* Superseded by the P-track (its content maps onto P7–P12); RDP-spec draft → `rdp-connect.md`, schema-drift impl → `highergov-feed.md`. |
-| [repo-refinement.md](gameplans/repo-refinement.md) | *Retired → redirect.* Its 18-item order maps 1:1 to P1–P14; extension families 15–18 → `connectors.md`, `database-transforms.md`, `orchestration.md`, `enrichment-modules.md`. |
+| [productionizing.md](gameplans/productionizing.md) | Retired redirect into P-track/RDP/schema owners. |
+| [repo-refinement.md](gameplans/repo-refinement.md) | Retired redirect into P-track and current extension gameplans. |
 
-**Implementation status & sequence** for the runtime contract live in the authoritative
-**P-track**: [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md) (P1–P14 tracker + per-phase detail) +
-[MILESTONES.md](MILESTONES.md) (file maps / exit tests). *(The former `productionizing.md`
-and `repo-refinement.md` narrative plans were retired into that P-track; their stubs remain
-as redirects.)*
+Implementation status remains authoritative only in
+[PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md). P-track phase history/file maps/exit tests remain in
+[MILESTONES.md](MILESTONES.md). Forward implementation dependency order is authoritative in
+[implementation-sequence.md](gameplans/implementation-sequence.md). Historical phase language in
+P-track documents must not override newer target API decisions in the owning gameplans.

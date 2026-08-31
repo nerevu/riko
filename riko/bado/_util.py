@@ -1,12 +1,12 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.bado.util
-~~~~~~~~~~~~~~
+riko.bado._util
+~~~~~~~~~~~~~~~
 
-AnyIO + httpx implementations of the bado async primitives, plus async
-utilities. Requires the ``async`` extra; :mod:`riko.bado` guards the import and
-falls back to sync-only stubs when it is absent. ``run`` is the entry point
-(``run(main)`` where ``main`` is a no-argument async function).
+AnyIO + httpx implementations used by :mod:`riko.bado._backend`.
+
+This module is private. Optional dependency handling and the sync-only fallback
+are provided by :mod:`riko.bado._backend`.
 """
 
 from collections.abc import Awaitable, Callable, Iterable

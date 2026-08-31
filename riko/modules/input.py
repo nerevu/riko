@@ -55,9 +55,11 @@ from typing import Any, cast
 import pygogo as gogo
 
 from riko.cast import CastType, SourceOpts, cast_value
-from riko.types.configs import InputObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts
-from riko.types.values import Inputs, PrimitiveValue
+from riko.types._collections import Inputs
+from riko.types._configs import InputObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._scalars import PrimitiveValue
+from riko.types._streams import Item
 
 from . import processor
 
@@ -74,7 +76,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 def parser(
     _: Item,
-    extraction: Extraction,
+    extraction: object,
     objconf: InputObjconf,
     skip: bool = False,
     **kwargs: object,

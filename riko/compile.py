@@ -48,9 +48,30 @@ from riko.ext._resolver import pipe_resolver
 from riko.ext.codegen import ruff_format
 from riko.pprint2 import Id, repr_arg, repr_args
 from riko.topsort import topological_sort
+from riko.types._collections import Inputs
+from riko.types._guards import is_loop_module
+from riko.types._pipeline import (
+    AsyncPipelineDependencies,
+    AsyncPyInput,
+    PipelineDependencies,
+    PyInput,
+    Step,
+    Steps,
+    StepValue,
+    SyncPipelineDependencies,
+    SyncPyInput,
+)
+from riko.types._streams import AsyncStream, Stream
+from riko.types._wrappers import (
+    AsyncPipeItems,
+    AsyncPipeParser,
+    Interface,
+    ParserOutput,
+    Pipeline,
+    SyncPipeParser,
+)
 from riko.types.compile import (
     AbbrevStringModule,
-    LoopModule,
     ParsedPipeDef,
     PipeDag,
     PipeDef,
@@ -59,25 +80,6 @@ from riko.types.compile import (
     StringModule,
     TemplateData,
     Wire,
-)
-from riko.types.general import (
-    AsyncPipeItems,
-    AsyncPipelineDependencies,
-    AsyncPipeParser,
-    AsyncPyInput,
-    AsyncStream,
-    Interface,
-    ParserOutput,
-    Pipeline,
-    PipelineDependencies,
-    PyInput,
-    Step,
-    Steps,
-    StepValue,
-    Stream,
-    SyncPipelineDependencies,
-    SyncPipeParser,
-    SyncPyInput,
 )
 from riko.types.modules import (
     AnyModuleRawConf,
@@ -89,7 +91,6 @@ from riko.types.modules import (
     Nodes,
     Value,
 )
-from riko.types.values import Inputs
 
 _RAW_CONFS = {
     "count": "CountRawConf",
@@ -136,6 +137,14 @@ _RAW_CONFS = {
     "urlparse": "UrlParseRawConf",
     "xpathfetchpage": "XpathFetchPageRawConf",
 }
+
+__all__ = [
+    "build_pipeline",
+    "compile_pipe",
+    "convert_dag",
+    "extract_dependencies",
+    "parse_pipe_def",
+]
 
 
 class MyPrettyPrinter(PrettyPrinter):
@@ -373,8 +382,8 @@ def gen_modules(  # noqa: E302
     pipe_def: PipeDef, embedded=False
 ) -> Iterator[tuple[str, PipeModule] | tuple[str, EmbeddedModule]]:
     for module in listize(pipe_def["modules"]):
-        if embedded and module["type"] == "loop":
-            embed = cast(LoopModule, module)["embed"]
+        if embedded and is_loop_module(module):
+            embed = module["embed"]
             embedded_module = EmbeddedModule(
                 {"id": embed["id"], "type": embed["type"], "conf": module["conf"]}
             )
@@ -401,9 +410,8 @@ def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list[str]]]:
         yield (module_id, [])
 
         # make the loop dependent on its embedded module
-        if module["type"] == "loop":
-            embed = cast(LoopModule, module)["embed"]
-            yield (pythonise(embed["id"]), [module_id])
+        if is_loop_module(module):
+            yield (pythonise(module["embed"]["id"]), [module_id])
 
 
 def gen_parented_graph[T: str | int](graph: Graph[T]) -> Iterator[tuple[T, Nodes[T]]]:
@@ -472,8 +480,8 @@ def _render_conf(module_name: str, conf: AnyModuleRawConf | Id | Context) -> str
 
 def _gen_embed_module_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
     for module in parsed_pipe_def["modules"].values():
-        if module["type"] == "loop":
-            embed = cast(LoopModule, module)["embed"]
+        if is_loop_module(module):
+            embed = module["embed"]
 
             if not embed["type"].startswith("pipe"):
                 yield embed["type"]
@@ -481,16 +489,14 @@ def _gen_embed_module_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
 
 def _gen_embed_subpipe_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
     for module in parsed_pipe_def["modules"].values():
-        if module["type"] == "loop":
-            embed = cast(LoopModule, module)["embed"]
+        if is_loop_module(module):
+            embed = module["embed"]
 
             if embed["type"].startswith("pipe"):
                 yield pythonise(embed["type"])
 
 
-def _get_sources(
-    conf: AnyModuleRawConf | None,
-) -> list[dict[str, str]] | None:
+def _get_sources(conf: AnyModuleRawConf | None) -> list[dict[str, str]] | None:
     if conf and (url := conf.get("url")) and isinstance(url, list):
         urls = cast(list[Value], url)
         return [{"url": cast(str, url["value"])} for url in urls]
@@ -505,10 +511,8 @@ def _used_raw_confs(parsed_pipe_def: ParsedPipeDef) -> set[str]:
         if _get_sources(conf) is not None:
             continue
 
-        if module["type"] == "loop":
-            embed = cast(LoopModule, module)["embed"]
-
-            if embed_raw := _RAW_CONFS.get(embed["type"]):
+        if is_loop_module(module):
+            if embed_raw := _RAW_CONFS.get(module["embed"]["type"]):
                 used.add(embed_raw)
         elif raw := _RAW_CONFS.get(module["type"]):
             used.add(raw)
@@ -590,9 +594,8 @@ def _gen_string_modules(
 
             module = parsed_pipe_def["modules"][module_id]
 
-            if module["type"] == "loop" and "embed" in module:
-                embed = cast(LoopModule, module)["embed"]
-                embed_module_name = embed["type"]
+            if is_loop_module(module):
+                embed_module_name = module["embed"]["type"]
             else:
                 embed_module_name = module_name
 
@@ -707,8 +710,8 @@ def _gen_pykwargs(  # noqa: E302
     if others:
         yield ("others", others)
 
-    if module["type"] == "loop":
-        embed = cast(LoopModule, module)["embed"]
+    if is_loop_module(module):
+        embed = module["embed"]
         embed_type = embed["type"]
         pipe_id = pythonise(embed["id"])
 
@@ -903,15 +906,11 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPip
 
 @overload
 def _build_pipeline(  # noqa: E704
-    *args: Any,
-    is_async: Literal[True],
-    **kwargs: Any,
+    *args: Any, is_async: Literal[True], **kwargs: Any
 ) -> AsyncPipeParser | AsyncPipeItems: ...
 @overload  # noqa: E302
 def _build_pipeline(  # noqa: E704
-    *args: Any,
-    is_async: Literal[False] = ...,
-    **kwargs: Any,
+    *args: Any, is_async: Literal[False] = ..., **kwargs: Any
 ) -> SyncPipeParser | ParserOutput: ...
 def _build_pipeline(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,

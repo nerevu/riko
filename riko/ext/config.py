@@ -11,7 +11,7 @@ parameter with it; ``get_conf_type`` derives that type from the annotation.
 
 from typing import get_type_hints
 
-from riko.types.configs import DynamicConf
+from riko.types._dynamic_conf import DynamicConf
 
 
 def get_conf_type(parser: object) -> type[DynamicConf]:

@@ -28,13 +28,14 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko import ENCODING
+from riko._constants import ENCODING
 from riko._io import Fetch, auto_close
-from riko.bado import io
+from riko.bado.io import async_url_open
 from riko.cast import BasicCastType
 from riko.modules._prepare import require_conf
-from riko.types.configs import FetchTextObjconf
-from riko.types.general import Defaults, Extraction, Item, Opts
+from riko.types._configs import FetchTextObjconf
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Item
 
 from . import processor
 
@@ -44,7 +45,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FetchTextObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: FetchTextObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Asynchronously reads the file into a stream of stripped lines.
@@ -75,12 +76,12 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchtext")
-    f = await io.async_url_open(url, encoding=objconf.encoding)
+    f = await async_url_open(url, encoding=objconf.encoding)
     return auto_close(map(str.strip, f), f)
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FetchTextObjconf, **kwargs: object
+    _: Item, extraction: object, objconf: FetchTextObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Reads the file into a stream of stripped lines.

@@ -140,12 +140,7 @@ declare how their serialized representation can be read/written incrementally.
 Useful pyconvert behavior becomes explicit transforms rather than format-specific magic:
 
 ```python
-flow.normalize_fields(
-    conf={
-        "case": "snake",
-        "dedupe": True,
-    }
-)
+flow.normalize_fields(conf={"case": "snake", "dedupe": True})
 ```
 
 Codec readers may report duplicate/invalid headers, but canonical renaming belongs to a

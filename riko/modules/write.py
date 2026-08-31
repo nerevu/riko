@@ -36,18 +36,20 @@ Attributes:
 
 """
 
-from io import StringIO
+from io import BytesIO, StringIO
 from logging import Logger
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pygogo as gogo
 from meza import io
 
 from riko.bado.io import async_write
-from riko.types.configs import WriteObjconf
-from riko.types.general import Defaults, Opts, PipeTuples, Stream
-from riko.types.values import TargetLike
+from riko.types._configs import WriteObjconf
+from riko.types._names import TargetLike
+from riko.types._options import Defaults, Opts
+from riko.types._streams import Stream
+from riko.types._wrappers import PipeTuples
 
 from . import operator
 
@@ -139,8 +141,10 @@ async def async_parser(
         logger.warning(f"The target {target} is not a known converter")
     elif (content := convert([dict(item) for item in items])) is None:
         logger.warning(f"The {target} converter produced no content")
+    elif not isinstance(content, str | bytes | BytesIO | StringIO):
+        logger.warning(f"The {target} converter produced unwritable content")
     else:
-        await async_write(objconf.url, cast(StringIO, content), mode=objconf.mode)
+        await async_write(objconf.url, content, mode=objconf.mode)
 
     return iter(items)
 
@@ -193,6 +197,8 @@ def parser(
         logger.warning(f"The target {target} is not a known converter")
     elif (content := convert([dict(item) for item in items])) is None:
         logger.warning(f"The {target} converter produced no content")
+    elif not isinstance(content, str | bytes | BytesIO | StringIO):
+        logger.warning(f"The {target} converter produced unwritable content")
     else:
         io.write(objconf.url, content, mode=objconf.mode)
 

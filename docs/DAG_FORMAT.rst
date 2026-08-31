@@ -90,19 +90,25 @@ Both are registered in ``[project.scripts]``:
     convert-dag tests/dags/pipe_forever.json -o pipe_forever.json
 
     # JSON pipeline -> generated Python module (stdout, or -o path)
-    compile pipe_forever.json -o pipe_forever.py
+    compile-pipe pipe_forever.json -o pipe_forever.py
 
 Chaining them turns a DAG straight into runnable Python:
 
 .. code-block:: bash
 
     convert-dag tests/dags/pipe_forever.json -o pipe_forever.json
-    compile pipe_forever.json
+    compile-pipe pipe_forever.json
 
 
 See `pipe_forever`_ for a runnable example and `test_compile`_
 (``test_convert_dag_*``) for the round-trip guarantees.
 
+For fuller worked pipe definitions, see the `example pipelines`_
+(``examples/pipelines/*.json``) and the compiled modules they produce
+(``examples/pypipelines/*.py``), regenerated with
+``compile-pipe examples/pipelines/pipe_<name>.json -o examples/pypipelines/pipe_<name>.py``.
+
 .. _pipe_forever: ../tests/dags/pipe_forever.json
 .. _pipe_reordered: ../tests/dags/pipe_reordered.json
 .. _test_compile: ../tests/internal/test_compile.py
+.. _example pipelines: ../examples/pipelines

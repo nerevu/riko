@@ -50,7 +50,7 @@ When translating inspiration into Riko:
 | `entra-id-sso.md` | idempotent SAML setup, assignments, certificate renewal threshold, dry-run, gov cloud, artifacts, manual handoff | `microsoft-administration.md`, `azure-automation.md` | Adopt desired-state/lifecycle/handoff contracts |
 | `euler.md` | artifact versioning, reproducibility, publishing, notification on versions, library/framework/application layering | `artifact-conversion.md`, `orchestration.md` | Adopt fingerprints/lineage/layering; offline sync/collaboration remains outside core |
 | `extractor.md` | async multi-provider enrichment, allow/deny providers, HTTP cache, browser fallback, clean/upsert | `provider-integrations.md`, `enrichment-modules.md`, `highergov-feed.md` | Adopt registry/provenance/cache/upsert patterns |
-| `flogger.rst` | structured event persistence, automatic request metadata, batch/NDJSON logging, retention pruning | `productionizing.md`, `orchestration.md`, `provider-integrations.md` | Adopt structured events/retention concepts; reject bespoke logging server requirement |
+| `flogger.rst` | structured event persistence, automatic request metadata, batch/NDJSON logging, retention pruning | `extensibility.md`, `orchestration.md`, `provider-integrations.md` | Adopt structured events/retention concepts; reject bespoke logging server requirement |
 | `gcontact.md` | resource lookup by name/key/URL, OAuth, range/batch updates | `provider-integrations.md`, `artifact-conversion.md` | Adopt identity resolution and batch mutations; historical library specifics not retained |
 | `hdx-age-api.md` | async worker jobs, job/result status, timeout/result TTL/error limits | `provider-integrations.md`, `orchestration.md` | Adopt bounded operation-handle contract; RQ implementation optional |
 | `hdx-file-proxy.md` | remote CSV/Excel acquisition, normalized JSON records, chunk limits | `connectors.md`, `artifact-conversion.md` | Adopt connector + codec/chunk boundary; reject permanent proxy service requirement |
@@ -59,10 +59,10 @@ When translating inspiration into Riko:
 | `lego.rst` | multi-source keyed enrichment, threshold comparison, cached lookups, matched/unparsed/unfound outputs | `provider-integrations.md`, `fanout-topology.md`, `enrichment-modules.md` | Adopt join/enrichment/cache/side-output patterns; domain app remains example-level |
 | `meetup.rst` | new/changed entity comparison, dedupe, dry-run, vCard output | `feed-monitoring.md`, `artifact-conversion.md` | Adopt change/dry-run semantics and contact codec boundary |
 | `nerevu-api.md` | modular provider folders inside a monolith, OAuth, mappings/cache, headless fallback, RQ, sync/store/prune/notify | `provider-integrations.md`, `connectors.md`, `orchestration.md` | Extract reusable contracts; explicitly reject rebuilding the monolith |
-| `prometheus-legacy.md` | separation of application/API/data layers; historical domain model | `productionizing.md`, `riko-site.md` | No new core feature; reinforces service/UI separation |
+| `prometheus-legacy.md` | separation of application/API/data layers; historical domain model | `riko-site.md`, `orchestration.md` | No new core feature; reinforces service/UI separation |
 | `proposer.md` | structured YAML context + template → HTML/PDF/Markdown/PNG | `artifact-conversion.md` | Adopt generic RenderPlan/multi-format artifact model |
 | `pyconvert.md` | codec inference/override, tabular readers/writers, stdin/stdout, Unicode, chunks, header normalization | `artifact-conversion.md`, `connectors.md` | Adopt codec registry/stream boundaries; optional formats stay extras |
-| `sense-hat-b-exporter.md` | long-running metrics exporter consumed by Prometheus | `productionizing.md`, `connectors.md`, `orchestration.md` | Prometheus scrape remains finite connector; exporter/service lifecycle stays deployment-level |
+| `sense-hat-b-exporter.md` | long-running metrics exporter consumed by Prometheus | `connectors.md`, `feed-monitoring.md`, `orchestration.md` | Prometheus scrape remains finite connector/observation; exporter/service lifecycle stays deployment-level |
 | `webhooks.md` | provider signature verification, payload normalization, dispatch, cache/admin endpoints | `provider-integrations.md`, `orchestration.md` | Adopt verified EventEnvelope; reject arbitrary URL-to-function dispatch |
 
 ## 4. Consolidated architecture themes

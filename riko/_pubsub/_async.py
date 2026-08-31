@@ -21,14 +21,14 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from riko.bado import (
+from riko.bado._backend import (
     MemoryObjectReceiveStream,
     MemoryObjectSendStream,
     create_memory_object_stream,
     fail_after,
 )
 from riko.exceptions import DuplicateReceiverError, ReceiverUnavailableError
-from riko.types.general import Item
+from riko.types._streams import Item
 
 
 class SubscriptionState(StrEnum):
@@ -64,6 +64,9 @@ class AsyncPubSubHub:
     def _discard(self, name: str, slot: _Slot) -> None:
         if self._slots.get(name) is slot:
             del self._slots[name]
+
+        slot.send_stream.close()
+        slot.receive_stream.close()
 
     async def publish(
         self, targets: Iterable[str], item: Item, *, timeout: float | None = None
@@ -102,4 +105,8 @@ class AsyncPubSubHub:
             self._discard(name, slot)
 
     def reset(self) -> None:
+        for slot in self._slots.values():
+            slot.send_stream.close()
+            slot.receive_stream.close()
+
         self._slots.clear()
