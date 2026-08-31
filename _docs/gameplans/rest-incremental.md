@@ -3,8 +3,8 @@
 ## 1. Mission
 
 Add a richer declarative REST-source layer to Riko with first-class pagination,
-authentication references, dependent endpoints, incremental cursors, and explicit source
-state.
+authentication references, dependent endpoints, incremental cursors, source-side filter
+pushdown, and explicit source state.
 
 The objective is not to turn Riko into a warehouse-loading framework. The objective is to
 make REST acquisition as composable and configuration-driven as Riko's transformation
@@ -51,9 +51,11 @@ This plan owns higher-level **REST collection semantics** built on top of that t
 
 `execution-semantics.md` is authoritative for `FeedResult`, `FeedState`, `StateStore`,
 `StateKey`, checkpoint/CAS behavior, identity/generation, and execution-owned resource
-lifecycle. `feed-monitoring.md` owns monitoring-specific observation/change/dedupe policy.
-REST cursor state must use those shared state contracts rather than defining a second
-`SourceCheckpoint` system.
+lifecycle. `feed-monitoring.md` owns monitoring-specific observation/change/dedupe policy and
+the generic `Change` / `ChangeFeedSemantics` change-feed envelope. This plan defines how REST
+requests and responses encode/decode source cursors and push source-supported filters; REST
+cursor and change state must use those shared contracts rather than defining a second
+`SourceCheckpoint` system or a second change model.
 
 `tabular-interop.md` remains authoritative for Pandas/Arrow/Polars conversion.
 
@@ -67,6 +69,7 @@ Do not add to core:
 * embedded plaintext secrets in serialized pipeline configuration;
 * a second HTTP client stack;
 * a monolithic `fetch` function that guesses every API convention;
+* provider-specific change-feed semantics in this plan;
 * DataFrame/Arrow conversion semantics in this plan;
 * a REST-specific persistence/checkpoint protocol.
 
@@ -86,6 +89,7 @@ class RestSourcePlan:
     data_path: str | None
     paginator: PaginatorPlan | None
     incremental: IncrementalPlan | None
+    source_filter: SourceFilterPlan | None
     dependencies: tuple[EndpointDependency, ...]
 ```
 
@@ -173,10 +177,14 @@ Requirements:
 
 * next URLs obey configured origin policy;
 * page/record maxima are configurable;
-* repeated-cursor detection prevents loops;
+* repeated-cursor detection prevents loops where the pagination strategy defines comparable
+  cursor identity;
 * cancellation closes active response/session resources;
 * pagination state is observable;
 * a paginator cannot silently override auth or other security-sensitive configuration.
+
+An opaque incremental resume token is **not** automatically a pagination cursor and must not
+be compared merely to detect a loop. Pagination and source-resume state may be distinct.
 
 ## 9. R4 — authentication references
 
@@ -214,7 +222,7 @@ The candidate cursor is represented as source state using the common `FeedState`
 
 Rules:
 
-* advance the candidate cursor while processing responses;
+* derive a candidate cursor while processing responses;
 * final finite-source state becomes committable only after `FeedResult.items` completes
   successfully;
 * infinite/repeated polling uses explicit incremental checkpoint boundaries;
@@ -224,7 +232,36 @@ Rules:
 * cursor state is backend-serializable and inspectable;
 * a failed page/handoff cannot move committed state past unprocessed records;
 * state mutation uses the shared CAS contract and conflicts propagate rather than silently
-  reloading/rerunning.
+  reloading/rerunning;
+* when the source returns a terminal/batch resume cursor, that cursor remains a candidate
+  until every required record through that response boundary has completed durable handoff.
+
+### 10.1 Opaque cursor rule
+
+For `opaque_token`, REST machinery may only:
+
+```text
+extract token from configured response location
+→ store token as JsonValue in FeedState
+→ inject the same logical token into the configured next/resume request location
+```
+
+Generic code must not:
+
+```text
+increment the token
+parse an embedded timestamp/offset
+numerically compare it
+lexicographically compare it
+infer ordering from its string/JSON representation
+canonicalize it into a different semantic value
+```
+
+If request serialization necessarily turns structured JSON into a transport representation
+such as a query string, the source adapter owns that reversible encoding. The `FeedState`
+checkpoint still stores the source-level JSON value.
+
+This directly follows the opaque cursor lifecycle owned by `feed-monitoring.md`.
 
 ## 11. R6 — cursor strategies
 
@@ -235,7 +272,7 @@ monotonic_value
     numeric or timestamp max cursor
 
 opaque_token
-    server-issued continuation token
+    server-issued resume token; round-trip only, never generically ordered
 
 compound
     timestamp + stable-id tie breaker
@@ -255,7 +292,68 @@ Compound example:
 
 This avoids loss when several records share the same boundary timestamp.
 
-## 12. R7 — dependent endpoints
+`opaque_token` deliberately has fewer generic operations than `monotonic_value` or
+`compound`. A source can expose replay/order guarantees through `ChangeFeedSemantics`; they
+must not be guessed from the token.
+
+## 12. R6a — source-side filter pushdown
+
+A REST source may support server-side filtering that reduces records before transfer. Treat
+this as an acquisition optimization/selection contract, not as a replacement for Riko's
+ordinary `filter` pipe.
+
+Possible configuration:
+
+```python
+"source_filter": {
+    "strategy": "query",
+    "params": {
+        "status": "open",
+        "updated_since": {"cursor": True},
+    },
+}
+```
+
+or when the API requires a structured POST body:
+
+```python
+"source_filter": {
+    "strategy": "json_body",
+    "body": {
+        "selector": {...},
+    },
+}
+```
+
+Rules:
+
+* filtering is used only when the upstream API explicitly supports equivalent semantics;
+* the source filter is serializable/inspectable in the plan;
+* GET query, POST body, header, or provider-specific named strategies may be supported by
+  adapters;
+* the source adapter owns the syntax and validates which fields/operators are supported;
+* filter pushdown may reduce acquisition cost but must not silently change the logical
+  workflow result compared with the declared source-selection semantics;
+* security-sensitive request fields cannot be introduced through an unvalidated filter;
+* a provider-specific executable filter language is not promoted into generic Riko core;
+* downstream `flow.filter(...)` remains available for transformations that cannot or should
+  not be pushed to the source.
+
+The plan/introspection layer should distinguish:
+
+```text
+source filter
+    executed by the upstream API before records reach Riko
+
+pipeline filter
+    executed by Riko after acquisition
+```
+
+For change feeds, a source-side filter narrows which source changes are observed. The
+adapter must document whether changing that filter invalidates/requires resetting the
+existing `FeedState` checkpoint.
+
+## 13. R7 — dependent endpoints
 
 One REST resource may parameterize another:
 
@@ -289,7 +387,7 @@ Requirements:
 * rate/concurrency limits are explicit;
 * dependencies serialize in workflow definitions.
 
-## 13. R8 — request rate limits and backpressure
+## 14. R8 — request rate limits and backpressure
 
 REST request concurrency is distinct from downstream CPU parallelism.
 
@@ -315,7 +413,7 @@ Requirements:
 Generic retry semantics remain aligned with execution/orchestration contracts; this section
 only specializes HTTP rate-limit behavior.
 
-## 14. R9 — schema observations
+## 15. R9 — schema observations
 
 REST acquisition may report observed record shape for diagnostics:
 
@@ -330,31 +428,34 @@ optional JSON Schema validation hook
 Strict schema validation/drift policy remains with the schema/HigherGov plans. REST sources
 must not automatically mutate warehouse schemas.
 
-## 15. Source versus transformation responsibilities
+## 16. Source versus transformation responsibilities
 
 ```text
 REST source owns
     HTTP request
     declared credential/session resource use
     pagination
-    REST cursor extraction
+    REST cursor extraction/transport encoding
     response record extraction
+    supported source-filter pushdown
 
 execution/state contract owns
     FeedResult / FeedState
     StateStore CAS
     persisted source position
+    opaque cursor semantic rules
     checkpoint boundaries
     identity / generation
     commit ordering
 
 monitoring owns
+    Change / ChangeFeedSemantics
     dedupe
     change detection
     observation policy
 
 Riko pipes own
-    filtering
+    filtering after acquisition
     mapping
     joins
     explicit fan-out
@@ -370,7 +471,7 @@ sink/connectors own
     destination protocol and delivery semantics
 ```
 
-## 16. dlt/dltHub lessons
+## 17. dlt/dltHub lessons
 
 Borrow from dlt:
 
@@ -390,7 +491,7 @@ Borrow from dltHub conceptually:
 
 Do not copy destination/schema-loading as Riko's primary execution model.
 
-## 17. Singer lessons
+## 18. Singer lessons
 
 Borrow:
 
@@ -401,7 +502,9 @@ Borrow:
 Do not require newline-delimited Singer messages or tap/target subprocess boundaries for
 ordinary in-process execution.
 
-## 18. Interaction with monitored feeds
+## 19. Interaction with monitored and change feeds
+
+Periodic incremental REST source:
 
 ```text
 periodic finite poll
@@ -418,15 +521,29 @@ Repeated acquisition uses the shared poll vocabulary:
 Pipeline.poll(source, interval=60)
 ```
 
-If an API has a reliable cursor, dedupe may be unnecessary. If the cursor reports changed
-entities, `changed` may still be useful for selected business fields.
+REST-backed change feed:
 
-Incremental extraction and change detection are not synonyms.
+```text
+resume from shared FeedState checkpoint
+→ REST request/response cursor encoding
+→ normalize source changes into Change
+→ apply declared ChangeFeedSemantics
+→ dedupe/routing/changed
+→ durable handoff
+→ CAS-commit source state
+```
 
-## 19. Interaction with workflow definitions
+If an API has a reliable cursor, dedupe may still be required when the source declares
+`replay="possible"`. If the source version changes, `changed()` may still suppress a
+business-level event when selected business fields did not change.
 
-REST plans, paginator configuration, endpoint dependencies, and cursor configuration are
-serializable in full workflow definitions.
+Incremental extraction, source-emitted change identity, and business change detection are
+not synonyms.
+
+## 20. Interaction with workflow definitions
+
+REST plans, paginator configuration, endpoint dependencies, cursor configuration, and
+source-filter pushdown are serializable in full workflow definitions.
 
 Dependency extraction should report:
 
@@ -436,11 +553,12 @@ credential references
 parent REST resources
 dependent endpoint edges
 stateful owner/checkpoint identities
+source-filter strategy
 ```
 
 Compiled Python must retain equivalent source semantics.
 
-## 20. Tabular interoperability
+## 21. Tabular interoperability
 
 REST remains record-oriented by default. Batch mode is enabled through the ordinary
 `Pipeline` contract rather than REST-specific frame conversion or a parallel `BatchPipe`:
@@ -452,13 +570,14 @@ flow = Pipeline("rest", conf=conf, batch=True, batch_size=1000)
 The negotiated representation/backend and Pandas/Arrow/Polars conversion details belong
 to `tabular-interop.md` / `execution-semantics.md`.
 
-## 21. Observability
+## 22. Observability
 
 Emit metrics/events for:
 
 * requests attempted/succeeded/failed;
 * pages fetched;
 * records emitted;
+* source-filter strategy and whether pushdown was applied;
 * retries and rate-limit delay;
 * candidate cursor before/after;
 * state/checkpoint commit outcome through the shared `StateStore` layer;
@@ -466,11 +585,14 @@ Emit metrics/events for:
 * response bytes;
 * schema fingerprint changes.
 
+Opaque cursor values may be sensitive/provider-specific; events should prefer fingerprints
+or redacted summaries when logging full cursor values is not safe or useful.
+
 Tabular materialization metrics belong to `tabular-interop.md`.
 
 Never expose authorization headers or credential values.
 
-## 22. Testing strategy
+## 23. Testing strategy
 
 Required deterministic fixtures:
 
@@ -480,45 +602,56 @@ Required deterministic fixtures:
 4. next-URL pagination;
 5. page-number pagination;
 6. offset/limit pagination;
-7. repeated-cursor loop detection;
+7. repeated pagination-cursor loop detection;
 8. bearer/API-key credential resolution without serialized secret;
 9. monotonic timestamp cursor resume using `FeedState` / `StateStore`;
 10. compound timestamp/id tie handling;
-11. failed handoff does not commit a candidate cursor;
-12. CAS conflict leaves committed state unchanged and propagates;
-13. dependent parent/child endpoint execution;
-14. bounded child-request concurrency;
-15. `Retry-After` / rate-limit behavior;
-16. serialized workflow compiles and preserves REST semantics.
+11. opaque JSON/string cursor round-trips without generic comparison/coercion;
+12. source-issued terminal cursor remains uncommitted after failed handoff;
+13. query-parameter filter pushdown;
+14. structured POST-body filter pushdown;
+15. pushdown plan remains distinct from downstream `filter`;
+16. changed source filter detects/documented checkpoint-reset requirement where applicable;
+17. CAS conflict leaves committed state unchanged and propagates;
+18. dependent parent/child endpoint execution;
+19. bounded child-request concurrency;
+20. `Retry-After` / rate-limit behavior;
+21. serialized workflow compiles and preserves REST semantics.
 
 Frame/batch representation tests live in `tabular-interop.md`.
 
-## 23. Phases
+## 24. Phases
 
 ```text
-R0  RestSourcePlan
-R1  first-class rest module
-R2  response data selection
-R3  pagination strategies
-R4  connector credential/resource integration
-R5  FeedState incremental cursor extraction
-R6  compound/opaque cursor strategies
-R7  dependent endpoints
-R8  request concurrency/rate limits
-R9  schema observations/drift integration
+R0   RestSourcePlan
+R1   first-class rest module
+R2   response data selection
+R3   pagination strategies
+R4   connector credential/resource integration
+R5   FeedState incremental cursor extraction
+R6   compound/opaque cursor strategies
+R6a  source-filter pushdown
+R7   dependent endpoints
+R8   request concurrency/rate limits
+R9   schema observations/drift integration
 ```
 
-## 24. Definition of done
+## 25. Definition of done
 
 1. Common REST APIs can be ingested without custom pagination loops.
 2. `Pipeline("rest", ...)` and `{"type":"rest", ...}` are the canonical module forms.
 3. Credentials remain references resolved through declared resources.
 4. REST cursor state uses `FeedState` / `StateStore` and commits only at valid lifecycle
    boundaries.
-5. Compound cursors prevent timestamp-boundary data loss where configured.
-6. Dependent endpoints are represented as ordinary Riko topology with deterministic
+5. Opaque source cursors round-trip without generic interpretation/comparison.
+6. Compound cursors prevent timestamp-boundary data loss where configured.
+7. Source-supported filters can be pushed into REST acquisition without replacing Riko's
+   downstream filter semantics.
+8. REST-backed change feeds normalize into `Change` / `ChangeFeedSemantics` owned by
+   `feed-monitoring.md` rather than defining another event model.
+9. Dependent endpoints are represented as ordinary Riko topology with deterministic
    provenance.
-7. REST request concurrency and rate limits are bounded and observable.
-8. REST source configuration works in Python and serialized workflow definitions.
-9. Pandas/Arrow/Polars behavior is referenced, not duplicated, from `tabular-interop.md`.
-10. Riko remains a record-processing library rather than a destination-first loader.
+10. REST request concurrency and rate limits are bounded and observable.
+11. REST source configuration works in Python and serialized workflow definitions.
+12. Pandas/Arrow/Polars behavior is referenced, not duplicated, from `tabular-interop.md`.
+13. Riko remains a record-processing library rather than a destination-first loader.

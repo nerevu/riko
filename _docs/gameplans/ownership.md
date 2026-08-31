@@ -36,8 +36,9 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 | `FeedState`, `StateKey`, `StateRecord`, `StateStore`, CAS, `.checkpoint()` | `execution-semantics.md` | typed payload meaning for a particular source/operator |
 | configured `StateStoreCapabilities`, standardized serialization IDs, and `validate_state()` preflight | `execution-semantics.md` | backend-specific codec support/documentation; no exhaustive generic `supported_types` registry |
 | connector sessions, transport lifecycle, credential references/resolution | `connectors.md` | provider/protocol credential implementations |
-| REST pagination, endpoint dependencies, REST cursor extraction | `rest-incremental.md` | provider-specific REST vocabulary |
+| REST pagination, endpoint dependencies, REST cursor extraction/encoding, source-filter pushdown | `rest-incremental.md` | provider-specific REST vocabulary |
 | recurring source observation/bootstrap/dedupe/change/anomaly policy | `feed-monitoring.md` | source-specific observation/cursor payload meaning |
+| generic `Change`, `ChangeFeedSemantics`, tombstones, replay/history/order guarantees | `feed-monitoring.md` | source-specific mapping into the shared change envelope |
 | Pipeline batch semantics/backend negotiation | `execution-semantics.md` | representation-specific conversion details |
 | Pandas, Arrow, Polars/frame boundaries | `tabular-interop.md` | where a frame boundary is used |
 | file/artifact codecs, report contexts, rendering, artifact lineage | `artifact-conversion.md` | domain-specific artifact consumers |
@@ -78,8 +79,14 @@ checkpoint owner/boundary/restore rules
 ```
 
 `feed-monitoring.md` owns monitoring semantics such as bootstrap, dedupe, changed/anomaly,
-and alert-history payload meaning. `rest-incremental.md` owns REST cursor extraction/encoding.
-Neither defines a parallel `SourceCheckpoint`, `CheckpointStore`, or generic state store.
+alert-history payload meaning, and the generic `Change` / `ChangeFeedSemantics` change-feed
+envelope. `rest-incremental.md` owns REST cursor extraction/encoding and source-filter
+pushdown. Neither defines a parallel `SourceCheckpoint`, `CheckpointStore`, or generic state
+store.
+
+For an opaque cursor, generic code must persist and round-trip the source-level JSON value
+through `FeedState` / `StateStore` without incrementing, parsing, comparing, or inferring
+order from its representation.
 
 State-store codec visibility is deliberately **coarse plus concrete** rather than exhaustive:
 
@@ -98,7 +105,50 @@ and there is no generic `supported_types` registry.
 
 `connectors.md` owns sessions, credentials, response envelopes, acknowledgements, and
 transport lifecycle. `rest-incremental.md` owns how a REST collection is traversed: record
-selection, pagination, dependent endpoints, and cursor extraction.
+selection, pagination, dependent endpoints, cursor extraction, and source-supported filter
+pushdown.
+
+### Change feed versus business change detection
+
+These are intentionally separate:
+
+```text
+Change / ChangeFeedSemantics
+    what the upstream source says happened
+    entity identity, source version/change identity, cursor, deletion, replay/order/history
+
+changed(...)
+    whether selected business fields differ from previously observed state
+```
+
+A source may emit a new version that `changed(...)` suppresses because selected business
+fields are identical. A snapshot source may derive a business change without any
+source-native change event. `feed-monitoring.md` owns both contracts and the distinction
+between them.
+
+### Entity identity versus change identity
+
+Change-feed dedupe should normally use a stable change identity such as:
+
+```text
+(entity_id, version)
+source-native event/change ID
+```
+
+rather than entity identity alone. `entity_id` identifies the logical thing over time;
+change identity identifies one source-observed version/event of that thing.
+
+Deletion tombstones retain entity/change identity and remain routable events rather than
+being silently converted into absence.
+
+### Source-filter pushdown versus pipeline filtering
+
+`rest-incremental.md` owns declarative source-filter pushdown for APIs that support it.
+Source filters execute upstream before transfer and may affect checkpoint validity.
+
+Ordinary Riko `filter` pipes execute after acquisition and remain runtime transformation
+semantics. A gameplan must not silently treat an arbitrary pipeline predicate as safe or
+equivalent to an upstream filter.
 
 ### Source polling versus operation waiting
 
@@ -106,7 +156,7 @@ These are intentionally different contracts:
 
 ```text
 Pipeline.poll / feed-monitoring.md
-    repeat independent finite source observations
+    repeat independent finite source observations or resume a data change feed
 
 provider-integrations.md wait_operation
     track one already-started provider operation to terminal state
@@ -207,8 +257,13 @@ Before merging a new gameplan or substantial update:
   competing generic runtime abstraction?
 - Does it introduce an exhaustive state-store type registry instead of the agreed coarse
   capabilities + concrete preflight contract?
-- Does it repeat lifecycle, retry, credential, state, identity, capability, or boundedness
-  rules?
+- Does it repeat lifecycle, retry, credential, state, identity, capability, change-feed, or
+  boundedness rules?
+- Does a new source invent another change/event envelope instead of mapping into `Change`?
+- Is an opaque source cursor being parsed, incremented, or compared by generic code?
+- Is entity identity being incorrectly used as change identity for dedupe?
+- Is a deletion being turned into absence even though the source provided a tombstone?
+- Is a source filter being confused with a downstream Riko `filter` pipe?
 - Is `poll` being used for source recurrence or provider operation waiting?
 - Could the repeated section become one paragraph linking to its owner?
 - Are tests for the shared contract located only in the owner?

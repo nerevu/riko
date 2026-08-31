@@ -22,7 +22,9 @@ jobs:
           enable-cache: true
 
       - name: Install
-        run: uv sync --no-dev
+        run: |
+          uv sync --group dev --all-extras
+          uv pip install --reinstall --no-deps --editable .
 
       - name: Generate Release Notes
         run: uv run --no-sync manage release-notes > release-notes.md
