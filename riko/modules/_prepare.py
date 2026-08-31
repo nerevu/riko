@@ -2,6 +2,7 @@
 """
 riko.modules._prepare
 ~~~~~~~~~~~~~~~~~~~~~~
+
 Module preparation and per-item dispatch: the frozen ``PreparedModule`` record,
 conf merging/extraction, and the parser/caster construction that turns opts and
 conf into the callables a wrapper applies to each item.
@@ -28,6 +29,7 @@ from riko.dotdict import DotDict, is_mapping
 from riko.parsers import conf_is_dynamic, get_field, parse_conf
 from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
 from riko.types._dynamic_conf import DynamicConf
+from riko.types._locations import AnyLocation
 from riko.types._options import (
     Casted,
     Defaults,
@@ -48,8 +50,6 @@ from riko.types._wrappers import (
 from riko.types.modules import AnyModuleConf, Conf
 
 logger = gogo.Gogo(__name__, monolog=True).logger
-
-SyncArgFunc = ArgCaster
 
 
 def require_kwarg[T](  # noqa: E704
@@ -166,8 +166,32 @@ def require_conf[T](  # noqa: E704
 
 
 def get_pieces_or_conf(
-    parsed_conf: AnyModuleConf | None, defaults: Defaults, opts: Opts, pipe: str = ""
+    parsed_conf: AnyModuleConf | Conf | None,
+    defaults: Defaults,
+    opts: Opts,
+    pipe: str = "",
 ) -> tuple[BasicReturn | AnyModuleConf | list[BasicReturn] | None, AnyModuleConf]:
+    """
+    Merges conf over defaults and optionally extracts a single conf value.
+
+    When ``opts`` names an ``extract`` key, that key's value is pulled out (and
+    list-wrapped if ``listize`` is set); otherwise the whole merged conf is
+    returned. Both the extracted-or-merged value and the merged conf are handed
+    back so the caller keeps access to the full conf.
+
+    Args:
+        parsed_conf: The per-item parsed conf, or ``None``.
+        defaults: The module's default conf.
+        opts: The decoration options (``extract``/``listize``).
+        pipe: The pipe name, used in the error message.
+
+    Returns:
+        The extracted value or merged conf, paired with the merged conf.
+
+    Raises:
+        TypeError: When ``extract`` names a key absent from the merged conf.
+
+    """
     if is_mapping(parsed_conf):
         merged_conf = cast(AnyModuleConf, {**defaults, **parsed_conf})
     else:
@@ -194,6 +218,28 @@ def get_pieces_or_conf(
 
 @dataclass(frozen=True)
 class PreparedModule[T, E]:
+    """
+    Immutable per-call invocation state for a module.
+
+    Built once per pipe call by ``Module.prepare`` and shared across the
+    ``setup``/``process`` steps. Frozen so concurrent invocations and differing
+    call-site options never overwrite one another.
+
+    Attributes:
+        name: The module name.
+        conf: The merged pipe configuration.
+        opts: The resolved decoration/call options.
+        parsers: The field and conf parsers.
+        casters: The field, extract, and conf casters.
+        assign: The field results are assigned to.
+        emit: Whether — or a predicate deciding whether — to emit rather than
+            assign.
+        is_source: Whether the pipe is a source (``ftype`` is ``"none"``).
+        static_casted: Precomputed cast for conf that does not vary per item, or
+            ``None`` when the conf is dynamic.
+
+    """
+
     name: str
     conf: Conf
     opts: Opts
@@ -243,29 +289,64 @@ def parse_and_cast[T, E](  # noqa: E302
     pipe: str = "",
     **kwargs: object,
 ) -> ItemOrValueDispatch[T, E]:
+    """
+    Parses and casts one item's field and conf into a dispatch record.
+
+    Runs the field/conf parsers over the item, resolves the extract-or-conf via
+    ``get_pieces_or_conf``, applies the casters, and wraps the result as an item
+    or value dispatch depending on whether the input is a mapping.
+
+    Args:
+        item: The input item or value.
+        opts: The resolved options.
+        conf: The merged pipe configuration.
+        parsers: The field and conf parsers.
+        casters: The field, extract, and conf casters.
+        defaults: The module's default conf.
+        field: Optional field whose value replaces the item.
+        pipe: The pipe name, used in error messages.
+        **kwargs: Extra options forwarded to the parsers.
+
+    Returns:
+        An item or value dispatch pairing the original item with its cast pieces.
+
+    """
     defaults = defaults or Defaults({})
     field = field or opts.get("field")
 
     if parsers:
-        parsed_field, _parsed_conf = broadcast(item, *parsers, field=field, **kwargs)
+        parsed_field, parsed_conf = broadcast(item, *parsers, field=field, **kwargs)
     else:
-        parsed_field, _parsed_conf = item, conf
+        parsed_field, parsed_conf = item, conf
 
-    parsed_conf = cast(AnyModuleConf, _parsed_conf)
     pieces_or_conf, merged_conf = get_pieces_or_conf(parsed_conf, defaults, opts, pipe)
     parsed = (parsed_field, pieces_or_conf, merged_conf)
     casted = dispatch(parsed, *casters) if casters else parsed
-    _conf = cast(DynamicConf, casted[2])
 
     if is_mapping(item):
-        dispatched = ItemDispatch(item, Casted(casted[0], casted[1], _conf))
+        dispatched = ItemDispatch(item, Casted(*casted))
     else:
-        dispatched = ValueDispatch(item, Casted(casted[0], casted[1], _conf))
+        dispatched = ValueDispatch(item, Casted(*casted))
 
     return dispatched
 
 
 def get_parsers(opts: Opts, conf: Conf, **kwargs: object) -> tuple[ParseFuncs, bool]:
+    """
+    Builds the field and conf parsers for a module, detecting dynamic conf.
+
+    A ``none`` ftype/ptype yields a null parser. A conf that varies per item is
+    parsed lazily per call (dynamic); otherwise it is parsed once and memoized.
+
+    Args:
+        opts: The decoration options (``ftype``/``ptype``).
+        conf: The merged pipe configuration.
+        **kwargs: Extra options forwarded to dynamic-conf detection.
+
+    Returns:
+        The field/conf parsers, and whether the conf is dynamic (per-item).
+
+    """
     is_dynamic = False
 
     if opts.get("ftype") == BasicCastType.NONE:
@@ -285,43 +366,81 @@ def get_parsers(opts: Opts, conf: Conf, **kwargs: object) -> tuple[ParseFuncs, b
     return ParseFuncs(field_parser, conf_parser), is_dynamic
 
 
-def get_casters(opts: Opts) -> CastFuncs:
+@overload
+def _get_caster[T](type_: None) -> ArgCaster[T]: ...  # noqa: E704
+@overload
+def _get_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
+@overload  # noqa: E302
+def _get_caster(  # noqa: E704
+    type_: CastType,
+) -> ArgCaster[ItemOrValue | AnyLocation]: ...
+def _get_caster[T](  # noqa: E302
+    type_: BasicCastType | CastType | None,
+) -> ArgCaster[T | PrimitiveValue | AnyLocation]:
+    """
+    Builds a caster for a destination type, degrading on an unknown one.
+
+    An unrecognized ``type_`` logs a warning and falls back to ``cast_pass``
+    (pass-through) rather than raising.
+
+    Args:
+        type_: The destination cast type, or ``None`` for pass-through.
+
+    Returns:
+        A caster callable taking content and optional kwargs.
+
+    """
+    if type_ in CAST_SWITCH:
+        cast_type = CastType(type_)
+
+        def caster(content: T, **kwargs: object) -> T | PrimitiveValue | AnyLocation:
+            return cast_value(content, cast_type, **kwargs)
+    else:
+        if type_:
+            logger.warning(f"Invalid cast {type_=}. Ignoring.")
+
+        caster = cast_pass
+
+    return caster
+
+
+def get_casters(opts: Opts) -> CastFuncs[ItemOrValue, object]:
+    """
+    Builds the field, extract, and conf casters from a module's options.
+
+    Honors ``ftype``/``ptype`` for the field and extract casters and combines
+    ``objectify``/``listize`` to decide how extract and conf are cast; a ``none``
+    ptype disables casting for both.
+
+    Args:
+        opts: The decoration options (``ftype``/``ptype``/``extract``/
+            ``listize``/``objectify``).
+
+    Returns:
+        The field, extract, and conf casters.
+
+    """
     ftype = opts.get("ftype")
     ptype = opts.get("ptype")
     extract = opts.get("extract")
 
-    if ftype in CAST_SWITCH:
-        _field_func = partial(cast_value, type_=CastType(ftype))
-    else:
-        if ftype:
-            logger.warning(f"Invalid cast {ftype=}. Ignoring.")
-
-        _field_func = cast_pass
-
-    field_func = cast(SyncArgFunc, _field_func)
-
-    if ptype in CAST_SWITCH:
-        _caster = partial(cast_value, type_=CastType(ptype))
-    else:
-        if ptype:
-            logger.warning(f"Invalid cast {ptype=}. Ignoring.")
-
-        _caster = cast_pass
-
-    caster = cast(SyncArgFunc, _caster)
+    field_caster = _get_caster(ftype)
+    value_caster = _get_caster(ptype)
 
     if ptype == BasicCastType.NONE:
-        extract_caster = cast_none
+        extract_caster: ArgCaster[object] = cast_none
         _conf_caster = cast_pass
     elif opts.get("listize") and opts.get("objectify"):
-        extract_caster = lambda pieces: [objectify(piece, caster) for piece in pieces]
+        extract_caster = lambda pieces: [
+            objectify(piece, value_caster) for piece in pieces
+        ]
         _conf_caster = objectify
     elif opts.get("objectify"):
-        extract_caster = partial(objectify, func=caster)
-        _conf_caster = objectify if extract else partial(objectify, func=caster)
+        extract_caster = partial(objectify, func=value_caster)
+        _conf_caster = objectify if extract else partial(objectify, func=value_caster)
     else:
-        extract_caster = caster
+        extract_caster = value_caster
         _conf_caster = cast_pass
 
     conf_caster = cast(SyncConfCastFunc, _conf_caster)
-    return CastFuncs(field_func, extract_caster, conf_caster)
+    return CastFuncs(field_caster, extract_caster, conf_caster)

@@ -79,7 +79,6 @@ class Opts(TypedDict, total=False):
     objectify: bool
     parse: bool
     pollable: bool
-    debug: bool
     skip_if: SkipIf
 
 

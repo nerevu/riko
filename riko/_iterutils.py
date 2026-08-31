@@ -320,7 +320,28 @@ def betwix[T](
     return last
 
 
-def dispatch[T, VT](split: Sequence[VT], *funcs: Callable[[VT], T]) -> tuple[T, ...]:
+@overload
+def dispatch[T, U, X, Y](  # noqa: E704
+    split: tuple[T, U],
+    f1: Callable[[T], X],
+    f2: Callable[[U], Y],
+    /,  # stops ruff from collapsing this line
+) -> tuple[X, Y]: ...
+@overload  # noqa: E302
+def dispatch[T, U, V, X, Y, Z](  # noqa: E704
+    split: tuple[T, U, V],
+    f1: Callable[[T], X],
+    f2: Callable[[U], Y],
+    f3: Callable[[V], Z],
+    /,
+) -> tuple[X, Y, Z]: ...
+@overload  # noqa: E302
+def dispatch[T](  # noqa: E704
+    split: Sequence[T], *funcs: Callable[[T], object]
+) -> tuple[object, ...]: ...
+def dispatch(  # noqa: E302
+    split: Sequence[object], *funcs: Callable[..., object]
+) -> tuple[object, ...]:
     r"""
     Delivers each item of a sequence to a different function.
 
@@ -349,9 +370,30 @@ def dispatch[T, VT](split: Sequence[VT], *funcs: Callable[[VT], T]) -> tuple[T, 
     return tuple(func(item) for item, func in zip(split, funcs, strict=False))
 
 
-def broadcast[T, VT](
-    item: VT, *funcs: Callable[[VT], T], **kwargs: object
-) -> tuple[T, ...]:
+@overload
+def broadcast[W, X](  # noqa: E704
+    item: object, f1: Callable[..., W], f2: Callable[..., X], **kwargs: object
+) -> tuple[W, X]: ...
+@overload  # noqa: E302
+def broadcast[W, X, Y](  # noqa: E704
+    item: object,
+    f1: Callable[..., W],
+    f2: Callable[..., X],
+    f3: Callable[..., Y],
+    **kwargs: object,
+) -> tuple[W, X, Y]: ...
+@overload  # noqa: E302
+def broadcast[W, X, Y, Z](  # noqa: E704
+    item: object,
+    f1: Callable[..., W],
+    f2: Callable[..., X],
+    f3: Callable[..., Y],
+    f4: Callable[..., Z],
+    **kwargs: object,
+) -> tuple[W, X, Y, Z]: ...
+def broadcast(  # noqa: E302
+    item: object, *funcs: Callable[..., object], **kwargs: object
+) -> tuple[object, ...]:
     r"""
     Delivers the same item to different functions.
 

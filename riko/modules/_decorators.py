@@ -13,6 +13,7 @@ Examples:
         >>> @processor(isasync=False)
         ... def pipe(content, objconf, skip=False, **kwargs):
         ...     return content * objconf.times
+        >>>
         >>> list(pipe({"x": 3}, conf={"times": 2}, field="x", assign="doubled"))
         [{'x': 3, 'doubled': 6}]
 
@@ -101,6 +102,16 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class Module[B: (Literal[True], Literal[False])]:
+    """
+    Base for the ``processor``/``operator``/``splitter`` pipe decorators.
+
+    Instantiated once per pipe at import time with the author's decoration
+    options (``ftype``/``ptype``/``defaults``/…), then called to wrap the parser.
+    Subclasses supply the ``parse``/``setup``/``process``/``__call__`` steps that
+    turn a parser into a configured pipe; ``prepare`` builds the immutable
+    per-call state those steps share.
+    """
+
     isasync: B
 
     @overload
@@ -110,7 +121,6 @@ class Module[B: (Literal[True], Literal[False])]:
         *,
         isasync: Literal[True],
         pollable: bool = ...,
-        debug: bool = ...,
         ftype: BasicCastType = ...,
         ptype: BasicCastType = ...,
         **opts: object,
@@ -122,7 +132,6 @@ class Module[B: (Literal[True], Literal[False])]:
         *,
         isasync: Literal[False] = ...,
         pollable: bool = ...,
-        debug: bool = ...,
         ftype: BasicCastType = ...,
         ptype: BasicCastType = ...,
         **opts: object,
@@ -133,7 +142,6 @@ class Module[B: (Literal[True], Literal[False])]:
         *,
         isasync: bool = False,
         pollable: bool = False,
-        debug: bool = False,
         ftype: BasicCastType = BasicCastType.PASS,
         ptype: BasicCastType = BasicCastType.PASS,
         **opts: object,
@@ -142,17 +150,28 @@ class Module[B: (Literal[True], Literal[False])]:
         self.defaults: Defaults = defaults or Defaults()
         self._opts: Opts = Opts(ftype=ftype, ptype=ptype)
         self._opts.update(cast(Opts, opts))
-        self.debug: bool = debug
         self.isasync = isasync  # pyright: ignore[reportAttributeAccessIssue]
         self.pollable: bool = pollable
         self.types: set[str] = set()
 
     def _resolve_isasync(self, pipe: ModuleParser) -> bool:
-        # ``isasync`` marks which interface this is (``pipe`` vs ``async_pipe``),
-        # not whether the function is a coroutine — a sync ``def async_pipe`` is
-        # valid. Infer it from the two conventions (awaitable func, or the
-        # ``async_pipe`` name the registry resolves) so authors rarely pass it;
-        # an explicit ``isasync=True`` still forces the async interface.
+        """
+        Decides whether to build the async wrapper for a parser.
+
+        ``isasync`` marks which interface this is (``pipe`` vs ``async_pipe``),
+        not whether the function is async. I.e., a sync ``def async_pipe`` is
+        valid. An async parser named ``pipe`` is a contradiction and raises.
+
+        Args:
+            pipe: The undecorated parser being wrapped.
+
+        Returns:
+            True when the async wrapper should be built.
+
+        Raises:
+            TypeError: When a parser named ``pipe`` is async or ``isasync=True``.
+
+        """
         awaitable = iscoroutinefunction(pipe)
         name = getattr(pipe, "__name__", "")
         isasync = self.isasync or awaitable or name == "async_pipe"
@@ -170,6 +189,21 @@ class Module[B: (Literal[True], Literal[False])]:
     def _set_wrapper_metadata(
         self, wrapper: wraps, pipe: ModuleParser, isasync: bool
     ) -> None:
+        """
+        Stamps discovery metadata onto a finished wrapper.
+
+        Derives and sets the module's name, subtype(s), and loopability from the parser
+        and decoration options.
+
+        Args:
+            wrapper: The wrapper function to annotate.
+            pipe: The undecorated parser it wraps.
+            isasync: Whether the wrapper is the async interface.
+
+        Raises:
+            TypeError: When the class name is not a known module type.
+
+        """
         module_type = cast(ModuleType, type(self).__name__)
 
         if module_type not in {"operator", "processor", "splitter"}:
@@ -197,20 +231,26 @@ class Module[B: (Literal[True], Literal[False])]:
         **kwargs: object,
     ) -> PreparedModule[ItemOrValue, object]:
         """
-        Resolve invocation state into an immutable ``PreparedModule``. Each call
-        returns fresh state so concurrent invocations and differing call-site
-        options never overwrite one another.
+        Builds immutable invocation state for a module call.
 
-        Examples:
-            >>> @processor()
-            ... def pipe(item, extraction, objconf, **kwargs):
-            ...     return f"{item['content']}-{objconf.times}"
-            ...
-            >>> item = {'content': 'hi'}
-            >>> a = next(pipe(item, conf={'times': '1'}, assign='x'))
-            >>> b = next(pipe(item, conf={'times': '2'}, assign='y'))
-            >>> (a, b)
-            ({'content': 'hi', 'x': 'hi-1'}, {'content': 'hi', 'y': 'hi-2'})
+        Each call produces fresh state, so concurrent invocations and differing
+        call-site options never overwrite one another.
+
+        Args:
+            module_name: The pipe's module name.
+
+            conf: The call-time configuration, merged over the module defaults.
+
+            assign: The field results are assigned to; defaults to the pipe name
+                (or ``"content"`` for a source). Ignored when ``emit`` is true.
+
+            emit: Whether to emit results rather than assign them; defaults from
+                the parser's contract.
+
+            **kwargs: Extra call-time options folded into the resolved opts.
+
+        Returns:
+            The immutable ``PreparedModule`` for this call.
 
         """
         def_emit = self._opts.get("emit") if emit is None else emit
@@ -273,6 +313,8 @@ class Module[B: (Literal[True], Literal[False])]:
 
 
 class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
+    """Creates a pipe that processes individual items."""
+
     isasync: B
 
     @overload
@@ -293,92 +335,77 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     ) -> None: ...
     def __init__(self, *args: object, **kwargs: object):  # noqa: E301
         """
-        Creates a sync/async pipe that processes individual items. These
-        pipes are classified as `type: processor` and as either
-        `sub_type: transformer` or `subtype: source`. To be recognized as
-        `subtype: source`, the pipes `ftype` must be set to 'none'.
+        Configures a sync/async pipe that processes individual items.
+
+        These pipes are ``type: processor`` and either ``subtype: transformer``
+        or ``subtype: source`` (a source sets ``ftype`` to ``"none"``).
 
         Args:
-            defaults (dict): Default `conf` values.
-            isasync (bool): Wraps an async pipe (default: False)
-            pollable (bool): Pipe returns a callable stream (default: False)
-            debug (bool): Print pipe content to stdout (default: False)
-            opts (dict): The keyword arguments passed to the wrapper
+            defaults (dict): Default ``conf`` values (default: None).
 
         Kwargs:
-            conf (dict): The pipe configuration
-            extract (str): The key with which to get a value from `conf`. If
-                set, the wrapped pipe will receive this value instead of `conf`
-                (default: None).
+            isasync (bool): Wraps an async pipe (default: False).
+            pollable (bool): Marks the pipe as pollable for discovery (default: False).
+            conf (dict): The pipe configuration (default: None).
 
-            listize (bool): Ensure that the value returned from an `extract` is
-                list-like (default: False)
+            extract (str): Key whose ``conf`` value is passed to the pipe in
+                place of ``conf`` (default: None).
 
-            objectify (bool): Convert `conf` to a meza.fntools.Objectify
-                instance (default: True unless  `ptype` is 'none').
+            listize (bool): Ensure an ``extract`` value is list-like (default:
+                False).
 
-            ptype (str): Used to convert `conf` items to a specific type.
-                Performs conversion after obtaining the `objectify` value above.
-                If set, objectified `conf` items will be converted upon
-                attribute retrieval, and normal `conf` items will be converted
-                immediately. Must be one of 'pass', 'none', 'text', 'int', 'float',
-                or 'decimal'. Default: 'pass', i.e., return `conf` as is. Note:
-                setting to 'none' automatically disables `objectify`.
+            objectify (bool): Convert ``conf`` to a ``meza.fntools.Objectify``
+                instance (default: True unless ``ptype`` is ``"none"``).
 
-            field (str): The key with which to get a value from the input
-                `item`. If set, the wrapped pipe will receive this value
-                instead of `item` (default: None).
+            ptype (str): Converts ``conf`` items to a type after objectifying.
+                One of ``"pass"``, ``"none"``, ``"text"``, ``"int"``,
+                ``"float"``, or ``"decimal"``; ``"none"`` disables ``objectify``
+                (default: "pass").
 
-            ftype (str): Used to convert the input `item` to a specific type.
-                Performs conversion after obtaining the `field` value above.
-                If set, the wrapped pipe will receive this value instead of
-                `item`. Must be one of 'pass', 'none', 'text', 'int', 'float',
-                or 'decimal'. Default: 'pass', i.e., return the item as is.
-                Note: setting to 'none' automatically enables `emit`.
+            field (str): Key whose ``item`` value is passed to the pipe in place
+                of ``item`` (default: None).
 
-            count (str): Stream count. Must be either 'first' (yields only the
-                first result) or 'all' (yields all results in a list). Default:
-                None (yield all results, but only return a list if there is
-                more than one result).
+            ftype (str): Converts the input ``item`` to a type after reading
+                ``field``. Same choices as ``ptype``; ``"none"`` enables
+                ``emit`` and marks the pipe a source (default: "pass").
 
-            assign (str): Attribute to assign stream (default: 'content' if
-                `ftype` is 'none', pipe name otherwise). Ignored if `emit` is true.
+            count (str): Stream count, ``"first"`` (first result only) or
+                ``"all"`` (all results in a list) (default: None).
 
-            emit (bool): Return the stream as is and don't assign it to an item
-                attribute (default: True if item is a source [`ftype`
-                is set to 'none'] or mapping, False otherwise). Overrides `assign`.
+            assign (str): Field the stream is assigned to (default: ``"content"``
+                for a source, pipe name otherwise). Ignored when ``emit`` is
+                true.
 
-            skip_if (func): A function that takes the `item` and should return
-                True if processing should be skipped, or False otherwise. If
-                processing is skipped, the resulting stream will be the original
-                input `item`.
+            emit (bool): Return the stream as is instead of assigning it.
+                Overrides ``assign`` (default: derived from ``ftype``).
+
+            skip_if (callable): Callable taking the ``item`` that returns True to
+                skip processing, leaving the original item unchanged (default:
+                None).
 
         Examples:
             >>> from riko import async_return, issync, run
             >>>
             >>> @processor()
             ... def pipe(item, extraction, objconf, **kwargs):
-            ...     content = item['content']
+            ...     content = item["content"]
             ...     return f'say "{content}" {objconf.times} times!'
-            ...
-            >>> # this is an admittedly contrived example to show how you would
-            >>> # call an async function
-            >>> @processor(isasync=True)
+            >>>
+            >>> @processor()
             ... async def async_pipe(item, extraction, objconf, **kwargs):
-            ...     content = await async_return(item['content'])
+            ...     content = await async_return(item["content"])
             ...     return f'say "{content}" {objconf.times} times!'
-            ...
-            >>> item = {'content': 'hello world'}
-            >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
+            >>>
+            >>> item = {"content": "hello world"}
+            >>> kwargs = {"conf": {"times": "three"}, "assign": "content"}
             >>> next(pipe(item, **kwargs))
             {'content': 'say "hello world" three times!'}
-            >>>
             >>> async def main():
             ...     result = await async_pipe(item, **kwargs)
             ...     print(next(result))
-            ...
+            >>>
             >>> if issync:
-            ...     {'content': 'say "hello world" three times!'}
+            ...     {"content": 'say "hello world" three times!'}
             ... else:
             ...     run(main)
             {'content': 'say "hello world" three times!'}
@@ -387,6 +414,20 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
     def parse(self, item: ItemOrValue, module_name: str) -> DotDict[RikoValue]:
+        """
+        Normalizes a single input item into a ``DotDict``.
+
+        ``None`` becomes an empty item (so source pipes still fire), a mapping is
+        wrapped directly, and any other value is placed under ``"content"``.
+
+        Args:
+            item: The raw input item or value.
+            module_name: The pipe's module name (currently unused).
+
+        Returns:
+            The item as a ``DotDict``.
+
+        """
         if item is None:
             parsed: DotDict[RikoValue] = DotDict()
         elif is_mapping(item):
@@ -399,21 +440,37 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     def setup[T, E](
         self,
         prepared: PreparedModule[T, E],
-        _input: DotDict[RikoValue],
+        input_: DotDict[RikoValue],
         field: str | None = None,
         **kwargs: ItemOrValue,
     ) -> tuple[ItemOrValue, Casted[T, E] | Casted[ItemOrValue, E], bool]:
-        skip = get_skip(_input, skip_if=prepared.opts.get("skip_if"))
+        """
+        Extracts and casts the input for a processor call.
+
+        Uses the module's precomputed static cast when the conf does not vary per
+        item, else parses and casts per call. Also resolves the per-item ``skip``.
+
+        Args:
+            prepared: The immutable per-call state from ``prepare``.
+            input_: The parsed input item.
+            field: Optional field whose value replaces the whole item.
+            **kwargs: Extra call-time options forwarded to parsing.
+
+        Returns:
+            The original item, the cast field/extraction/conf, and the skip flag.
+
+        """
+        skip = get_skip(input_, skip_if=prepared.opts.get("skip_if"))
 
         if prepared.static_casted:
             field_func, pre_casted_extract, pre_casted_conf = prepared.static_casted
             field = field or prepared.opts.get("field", "")
-            parsed_field = get_field(_input, field=field, **kwargs)
+            parsed_field = get_field(input_, field=field, **kwargs)
             casted_field = field_func(parsed_field)
-            orig_item = _input
+            orig_item = input_
             casted = Casted(casted_field, pre_casted_extract, pre_casted_conf)
         else:
-            args = (_input, prepared.opts, prepared.conf)
+            args = (input_, prepared.opts, prepared.conf)
             orig_item, casted = parse_and_cast(
                 *args,
                 parsers=prepared.parsers,
@@ -429,7 +486,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     @overload
     def process(  # noqa: E704
         self,
-        _input: DotDict[RikoValue],
+        input_: DotDict[RikoValue],
         stream: Stream | DotDict[RikoValue],
         assign: str,
         emit: bool = ...,
@@ -438,7 +495,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     @overload  # noqa: E301
     def process(  # noqa: E704
         self,
-        _input: DotDict[RikoValue],
+        input_: DotDict[RikoValue],
         stream: ProcessorParserOutput,
         assign: str,
         emit: Literal[False] = ...,
@@ -447,7 +504,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     @overload  # noqa: E301
     def process(  # noqa: E704
         self,
-        _input: DotDict[RikoValue],
+        input_: DotDict[RikoValue],
         stream: PrimitiveValue,
         assign: str,
         emit: Literal[True],
@@ -456,7 +513,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     @overload  # noqa: E301
     def process(  # noqa: E704
         self,
-        _input: DotDict[RikoValue],
+        input_: DotDict[RikoValue],
         stream: PrimitiveValue,
         assign: str,
         emit: Literal[False] = ...,
@@ -466,7 +523,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     @overload  # noqa: E301
     def process(  # noqa: E704
         self,
-        _input: DotDict[RikoValue],
+        input_: DotDict[RikoValue],
         stream: PrimitiveValue,
         assign: str,
         emit: Literal[True],
@@ -476,7 +533,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     @overload  # noqa: E301
     def process(  # noqa: E704
         self,
-        _input: DotDict[RikoValue],
+        input_: DotDict[RikoValue],
         stream: ProcessorParserOutput,
         assign: str,
         emit: bool = ...,
@@ -485,18 +542,36 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     ) -> ProcessorWrapperOutput: ...
     def process(  # noqa: E301
         self,
-        _input: DotDict[RikoValue],
+        input_: DotDict[RikoValue],
         stream: ProcessorParserOutput,
         assign: str,
         emit: bool = False,
         skip: bool = False,
         count: CountValues | None = None,
     ) -> ProcessorWrapperOutput:
+        """
+        Assigns a parser's result back into the stream.
+
+        On ``emit`` or ``skip`` the value passes straight through; otherwise the
+        result is merged into the item under ``assign``.
+
+        Args:
+            input_: The original input item to merge into.
+            stream: The parser's output.
+            assign: The field the result is assigned to.
+            emit: Whether to emit the result rather than assign it.
+            skip: Whether the item was skipped (passed through unchanged).
+            count: Optional stream-count reduction.
+
+        Returns:
+            The resulting stream.
+
+        """
         if skip or emit:
             _, result = get_assignment(stream, skip=skip, count=count)
         else:
             one, assignment = get_assignment(stream, skip=False, count=count)
-            result = gen_assignments(_input, assignment, assign=assign, one=one)
+            result = gen_assignments(input_, assignment, assign=assign, one=one)
 
         return result
 
@@ -514,41 +589,42 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     ) -> SyncProcessorWrapper: ...
     def __call__[T, E](self, pipe: ProcessorParser[T, E]) -> ProcessorWrapper:  # noqa: E301
         """
-        Creates a sync/async pipe that processes individual items
+        Creates a sync or async pipe that processes individual items.
 
         Args:
-            pipe (func): A function of 2 args (content, objconf)
-                and a `**kwargs`. TODO: document args & kwargs.
+            pipe: Parser called with the extracted content and parsed config.
 
         Returns:
-            func: A function of 1 arg (items) and a `**kwargs`.
+            A pipe callable that takes an item and pipe options.
 
         Examples:
             >>> from riko import run, issync
             >>>
-            >>> kwargs = {
-            ...     'ftype': 'text', 'extract': 'times', 'listize': True,
-            ...     'emit': True, 'field': 'content', 'objectify': False}
-            ...
-            >>> @processor(**kwargs)
-            ... def pipe(content, times, objconf, **kwargs):
+            >>> opts = {
+            ...     "ftype": "text", "extract": "times", "listize": True,
+            ...     "emit": True, "field": "content", "objectify": False
+            ... }
+            >>> wrapper = processor(**opts)
+            >>> item = {"content": "hello world"}
+            >>> kwargs = {"conf": {"times": "three"}, "assign": "content"}
+            >>>
+            >>> def pipe(content, times, objconf, **kwargs):
             ...     return f'say "{content}" {times[0]} times!'
-            ...
-            >>> # async pipes don't have to return a deferred,
-            >>> # they work fine either way
-            >>> @processor(isasync=True, **kwargs)
-            ... def async_pipe(content, times, objconf, **kwargs):
-            ...     return f'say "{content}" {times[0]} times!'
-            ...
-            >>> item = {'content': 'hello world'}
-            >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> next(pipe(item, **kwargs))
+            >>>
+            >>> wrapped_pipe = wrapper(pipe)
+            >>> next(wrapped_pipe(item, **kwargs))
             'say "hello world" three times!'
+            >>> async_wrapper = processor(isasync=True, **opts)
+            >>>
+            >>> def async_pipe(content, times, objconf, **kwargs):
+            ...     return f'say "{content}" {times[0]} times!'
+            >>>
+            >>> wrapped_async_pipe = async_wrapper(async_pipe)
             >>>
             >>> async def main():
-            ...     result = await async_pipe(item, **kwargs)
+            ...     result = await wrapped_async_pipe(item, **kwargs)
             ...     print(next(result))
-            ...
+            >>>
             >>> if issync:
             ...     print('say "hello world" three times!')
             ... else:
@@ -586,17 +662,17 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 mapped = await async_map(_wrapper, item)
                 processed = chain.from_iterable(mapped)
             else:
-                _input = self.parse(cast(ItemOrValue, item), module_name)
+                input_ = self.parse(cast(ItemOrValue, item), module_name)
                 prepared = self.prepare(
                     module_name, conf=conf, assign=assign, count=count, **kwargs
                 )
                 assign = prepared.assign
                 orig_item, casted, skip = self.setup(
-                    prepared, _input, field=field, count=count, **kwargs
+                    prepared, input_, field=field, count=count, **kwargs
                 )
 
                 if skip:
-                    args = (_input, orig_item, assign)
+                    args = (input_, orig_item, assign)
                     processed = self.process(*args, emit=True, skip=True)
                 else:
                     aync_pipe = cast(AsyncProcessorParser[T, object], pipe)
@@ -616,7 +692,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                         **pkwargs,
                     )
                     stream = (await result) if isawaitable(result) else result
-                    args = (_input, stream, assign)
+                    args = (input_, stream, assign)
 
                     if callable(prepared.emit) and not isinstance(stream, Iterator):
                         emit = prepared.emit(stream)
@@ -661,17 +737,17 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
                 processed = chain.from_iterable(map(_wrapper, item))
             else:
-                _input = self.parse(cast(ItemOrValue, item), module_name)
+                input_ = self.parse(cast(ItemOrValue, item), module_name)
                 prepared = self.prepare(
                     module_name, conf=conf, assign=assign, count=count, **kwargs
                 )
                 assign = prepared.assign
                 orig_item, casted, skip = self.setup(
-                    prepared, _input, field=field, **kwargs
+                    prepared, input_, field=field, **kwargs
                 )
 
                 if skip:
-                    args = (_input, orig_item, assign)
+                    args = (input_, orig_item, assign)
                     processed = self.process(*args, emit=True, skip=True)
                 else:
                     sync_pipe = cast(SyncProcessorParser[T, E], pipe)
@@ -690,7 +766,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                         typed_casted.conf,
                         **pkwargs,
                     )
-                    args = (_input, stream, assign)
+                    args = (input_, stream, assign)
 
                     if callable(prepared.emit) and not isinstance(stream, Iterator):
                         emit = prepared.emit(stream)
@@ -715,6 +791,8 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
 
 class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
+    """Creates a pipe that processes an entire stream."""
+
     isasync: B
 
     @overload
@@ -735,94 +813,79 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     ) -> None: ...
     def __init__(self, *args: object, **kwargs: object):  # noqa: E301
         """
-        Creates a sync/async pipe that processes an entire stream of items
+        Configures a sync/async pipe that processes an entire stream.
 
         Args:
-            defaults (dict): Default `conf` values.
-            isasync (bool): Wraps an async pipe (default: False)
-            opts (dict): The keyword arguments passed to the wrapper
+            defaults (dict): Default ``conf`` values (default: None).
 
         Kwargs:
-            conf (dict): The pipe configuration. May contain key embed.
-                embed (dict): Must have key "type". May have key "conf",
+            isasync (bool): Wraps an async pipe (default: False).
 
-            extract (str): The key with which to get values from `conf`. If set,
-                the wrapped pipe will receive these value instead of `conf`
-                (default: None).
+            pollable (bool): Marks the pipe as pollable for discovery (default: False).
 
-            listize (bool): Ensure that the value returned from an `extract` is
-                list-like (default: False)
+            conf (dict): The pipe configuration; may contain an ``embed``
+                sub-pipe (default: None).
 
-            objectify (bool): Convert `conf` to a meza.fntools.Objectify
-                instance (default: True unless  `ptype` is 'none').
+            extract (str): Key whose ``conf`` values are passed to the pipe in
+                place of ``conf`` (default: None).
 
-            ptype (str): Used to convert `conf` items to a specific type.
-                Performs conversion after obtaining the `objectify` value above.
-                If set, objectified `conf` items will be converted upon
-                attribute retrieval, and normal `conf` items will be converted
-                immediately. Must be one of 'pass', 'none', 'text', 'int', 'float',
-                or 'decimal'. Default: 'pass', i.e., return `conf` as is. Note:
-                setting to 'none' automatically disables `objectify`.
+            listize (bool): Ensure an ``extract`` value is list-like (default:
+                False).
 
-            field (str): The key with which to get values from the input
-                `items`. If set, the wrapped pipe will receive these values
-                instead of `items` (default: None).
+            objectify (bool): Convert ``conf`` to a ``meza.fntools.Objectify``
+                instance (default: True unless ``ptype`` is ``"none"``).
 
-            ftype (str): Used to convert the input `items` to a specific type.
-                Performs conversion after obtaining the `field` values above.
-                If set, the wrapped pipe will receive these values instead of
-                `items`. Must be one of 'pass', 'none', 'text', 'int', 'float',
-                or 'decimal' (default: 'pass', i.e., return the item as is)
+            ptype (str): Converts ``conf`` items to a type after objectifying.
+                One of ``"pass"``, ``"none"``, ``"text"``, ``"int"``,
+                ``"float"``, or ``"decimal"``; ``"none"`` disables ``objectify``
+                (default: "pass").
 
-            count (str): Stream count. Must be either 'first' (yields only the
-                first result) or 'all' (yields all results in a list). Default:
-                None (yield all results, but only return a list if there is
-                more than one result).
+            field (str): Key whose ``items`` values are passed to the pipe in
+                place of ``items`` (default: None).
 
-            assign (str): Attribute to assign stream (default: the pipe name). Ignored
-                if `emit` is true.
+            ftype (str): Converts the input ``items`` to a type after reading
+                ``field``. Same choices as ``ptype`` (default: "pass").
 
-            embed (dict): Must have key "type". May have key "conf",
-            emit (bool): return the stream as is and don't assign it to an item
-                attribute (default: True if item is a mapping, False otherwise).
-                Overrides `assign`.
+            count (str): Stream count, ``"first"`` (first result only) or
+                ``"all"`` (all results in a list) (default: None).
 
-        Returns:
-            func: A function of 1 arg (items) and a `**kwargs`.
+            assign (str): Field the stream is assigned to (default: the pipe
+                name). Ignored when ``emit`` is true.
+
+            embed (dict): Sub-pipe descriptor; must have ``"type"`` and may have
+                ``"conf"`` (default: None).
+
+            emit (bool): Return the stream as is instead of assigning it.
+                Overrides ``assign`` (default: derived from ``ftype``).
 
         Examples:
             >>> from riko import async_return, issync, run
             >>>
-            >>> # emit is True by default
-            >>> # and operators can't skip items, so the pipe is passed an
-            >>> # item dependent version of objconf as the 3rd arg
             >>> @operator(emit=False)
             ... def pipe1(stream, objconf, tuples, **kwargs):
             ...     for item, objconf in tuples:
             ...         s = 'say "{content}" {0} times!'
             ...         yield s.format(objconf.times, **item)
-            ...
+            >>>
             >>> @operator(emit=False)
             ... def pipe2(stream, objconf, tuples, **kwargs):
-            ...     return sum(len(item['content'].split()) for item in stream)
-            ...
-            >>> # this is an admittedly contrived example to show how you would
-            >>> # call an async function
-            >>> @operator(isasync=True, emit=False)
+            ...     return sum(len(item["content"].split()) for item in stream)
+            >>>
+            >>> @operator(emit=False)
             ... async def async_pipe1(stream, objconf, tuples, **kwargs):
             ...     item, objconf = next(tuples)
-            ...     content = await async_return(item['content'])
+            ...     content = await async_return(item["content"])
             ...     return f'say "{content}" {objconf.times} times!'
-            ...
-            >>> # async pipes don't have to return a deferred,
-            >>> # they work fine either way
+            >>>
+            >>> # Explicit isasync=True needed since async_pipe2 is not named async_pipe
+            >>> # and it is not an async function
             >>> @operator(isasync=True, emit=False)
             ... def async_pipe2(stream, objconf, tuples, **kwargs):
-            ...     return sum(len(item['content'].split()) for item in stream)
-            ...
-            >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
-            >>> conf = {'times': 'three'}
-            >>> kwargs = {'conf': conf, 'assign': 'content', 'emit': False}
+            ...     return sum(len(item["content"].split()) for item in stream)
+            >>>
+            >>> items = [{"content": "hello world"}, {"content": "bye world"}]
+            >>> conf = {"times": "three"}
+            >>> kwargs = {"conf": conf, "assign": "content", "emit": False}
             >>> next(pipe1(items, **kwargs))
             {'content': 'say "hello world" three times!'}
             >>> next(pipe2(items, **kwargs))
@@ -833,10 +896,10 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             ...     print(next(r1))
             ...     r2 = await async_pipe2(items, **kwargs)
             ...     print(next(r2))
-            ...
+            >>>
             >>> if issync:
-            ...     {'content': 'say "hello world" three times!'}
-            ...     {'content': 4}
+            ...     {"content": 'say "hello world" three times!'}
+            ...     {"content": 4}
             ... else:
             ...     run(main)
             {'content': 'say "hello world" three times!'}
@@ -846,6 +909,19 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
     def parse(self, items: OperatorWrapperInput | None = None) -> Stream:
+        """
+        Normalizes a sync input stream into ``DotDict`` items.
+
+        Non-mapping elements are placed under ``"content"``; an empty or ``None``
+        input yields nothing.
+
+        Args:
+            items: The source items, if any.
+
+        Yields:
+            Each input element as a ``DotDict``.
+
+        """
         if items:
             for item in items:
                 if is_mapping(item):
@@ -854,6 +930,19 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                     yield DotDict({"content": item})
 
     async def aparse(self, items: AsyncItemsOrValues) -> AsyncStream:
+        """
+        Normalizes an async input stream into ``DotDict`` items.
+
+        The async counterpart of ``parse``; a lazy pass-through that never drains
+        the source, so composer operators can bound an infinite ``Feed``.
+
+        Args:
+            items: The async source items.
+
+        Yields:
+            Each input element as a ``DotDict``.
+
+        """
         async for item in items:
             if is_mapping(item):
                 yield DotDict(item)
@@ -863,22 +952,42 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     def setup[T, E](
         self,
         prepared: PreparedModule[T, E],
-        _input: Stream | AsyncStream,
+        input_: Stream | AsyncStream,
         field: str | None = None,
         **kwargs: object,
     ) -> tuple[PipeTuples, Stream, Casted[Item, E] | Casted[T, E]]:
+        """
+        Builds the per-item tuples and original stream for an operator call.
+
+        The two returned iterators are lazy views over one shared input: a parser reads
+        whichever it needs, never both. ``tuples`` pairs each item with its own config
+        (``(item, objconf)``) and serves a parser that reads config per item;
+        ``orig_stream`` is just the items and serves a parser that applies one config
+        to the whole stream (it may also carry terminal input). The precomputed static
+        cast is reused when the config does not vary per item.
+
+        Args:
+            prepared: The immutable per-call state from ``prepare``.
+            input_: The parsed sync or async input stream.
+            field: Optional field whose value replaces each item.
+            **kwargs: Extra call-time options forwarded to parsing.
+
+        Returns:
+            The per-item tuples, the original stream, and the cast extraction/conf.
+
+        """
         if prepared.static_casted:
             _, pre_casted_extract, pre_casted_conf = prepared.static_casted
             objconf = pre_casted_conf
             item = cast(Item, DotDict())
             casted = Casted(item, pre_casted_extract, pre_casted_conf)
 
-            if isinstance(_input, AsyncIterator):
-                orig_stream = cast(Stream, _input)
-                tuples = cast(PipeTuples, ((item, objconf) async for item in _input))
+            if isinstance(input_, AsyncIterator):
+                orig_stream = cast(Stream, input_)
+                tuples = cast(PipeTuples, ((item, objconf) async for item in input_))
             else:
-                orig_stream = _input
-                tuples = ((item, objconf) for item in _input)
+                orig_stream = input_
+                tuples = ((item, objconf) for item in input_)
         else:
             _dispatcher: Callable[..., ItemDispatch] = partial(
                 parse_and_cast,
@@ -897,14 +1006,14 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             #   iterable since only one is intended to be used at any given time
             # - `tuples` is an iterator of tuples of the item and full objconf
             # - orig_stream parses conf that doesn't vary per item; may hold input
-            if isinstance(_input, AsyncIterator):
-                adispatches = (dispatcher(item, prepared.opts) async for item in _input)
+            if isinstance(input_, AsyncIterator):
+                adispatches = (dispatcher(item, prepared.opts) async for item in input_)
                 tuples = cast(
                     PipeTuples, ((d.item, d.casted.conf) async for d in adispatches)
                 )
                 orig_stream = cast(Stream, (d.item async for d in adispatches))
             else:
-                dispatches = (dispatcher(item, prepared.opts) for item in _input)
+                dispatches = (dispatcher(item, prepared.opts) for item in input_)
                 tuples = ((d.item, d.casted.conf) for d in dispatches)
                 orig_stream = (d.item for d in dispatches)
 
@@ -941,6 +1050,21 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         assign: str,
         emit: bool = False,
     ) -> OperatorWrapperOutput:
+        """
+        Assigns an operator parser's result into a single-item stream.
+
+        Operators nest: on ``emit`` the value passes through, otherwise it is
+        assigned under ``assign`` into a fresh empty item (never merged).
+
+        Args:
+            stream: The parser's output.
+            assign: The field the result is assigned to.
+            emit: Whether to emit the result rather than assign it.
+
+        Returns:
+            The resulting stream.
+
+        """
         items = stream
         one, assignment = get_assignment(items, skip=False)
 
@@ -965,59 +1089,49 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     ) -> SyncOperatorWrapper: ...
     def __call__[E](self, pipe: OperatorParser[E]) -> OperatorWrapper:  # noqa: E301
         """
-        Creates a wrapper that allows a sync/async pipe to processes a
-        stream of items
+        Creates a sync or async pipe that processes an entire stream.
 
         Args:
-            pipe (func): A function of 3 args (stream, objconf, tuples)
-                and a `**kwargs`. TODO: document args & kwargs.
+            pipe: Parser called with the stream, parsed config, and tuples.
 
         Returns:
-            func: A function of 1 arg (items) and a `**kwargs`.
+            A pipe callable that takes a stream and pipe options.
 
         Examples:
-            >>> from riko import bado
             >>> from riko import run, issync
             >>>
             >>> opts = {
-            ...     'ftype': 'text', 'extract': 'times', 'listize': True,
-            ...     'field': 'content', 'objectify': False
+            ...     "ftype": "text", "extract": "times", "listize": True,
+            ...     "field": "content", "objectify": False
             ... }
             >>> wrapper = operator(**opts)
-            >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
-            >>> conf = {'times': 'three'}
-            >>> kwargs = {'conf': conf, 'assign': 'content', 'emit': False}
+            >>> items = [{"content": "hello world"}, {"content": "bye world"}]
+            >>> conf = {"times": "three"}
+            >>> kwargs = {"conf": conf, "assign": "content", "emit": False}
             >>>
             >>> def pipe1(stream, times, tuples, **kwargs):
             ...     for content, objconf in tuples:
             ...         yield 'say "{content}" {0} times!'.format(*times, **content)
-            ...
+            >>>
             >>> wrapped_pipe1 = wrapper(pipe1)
             >>> next(wrapped_pipe1(items, **kwargs))
             {'content': 'say "hello world" three times!'}
             >>>
             >>> def pipe2(stream, objconf, tuples, **kwargs):
-            ...     return sum(len(item['content'].split()) for item in stream)
-            ...
-            >>> wrapped_pipe2 = wrapper(pipe2)
+            ...     return sum(len(item["content"].split()) for item in stream)
             >>>
+            >>> wrapped_pipe2 = wrapper(pipe2)
             >>> next(wrapped_pipe2(items, **kwargs))
             {'content': 4}
             >>> async_wrapper = operator(isasync=True, **opts)
             >>>
-            >>> # async pipes don't have to return a deferred,
-            >>> # they work fine either way
             >>> def async_pipe1(stream, times, tuples, **kwargs):
             ...     for content, objconf in tuples:
             ...         yield 'say "{content}" {0} times!'.format(*times, **content)
-            ...
-            >>> # this is an admittedly contrived example to show how you would
-            >>> # call an async function
+            >>>
             >>> async def async_pipe2(stream, objconf, tuples, **kwargs):
-            ...     words = (len(item['content'].split()) for item in stream)
-            ...     word_cnt = await bado._util.maybe_deferred(sum, words)
-            ...     return word_cnt
-            ...
+            ...     return sum(len(item["content"].split()) for item in stream)
+            >>>
             >>> wrapped_async_pipe1 = async_wrapper(async_pipe1)
             >>> wrapped_async_pipe2 = async_wrapper(async_pipe2)
             >>>
@@ -1026,10 +1140,10 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             ...     print(next(r1))
             ...     r2 = await wrapped_async_pipe2(items, **kwargs)
             ...     print(next(r2))
-            ...
+            >>>
             >>> if issync:
-            ...     {'content': 'say "hello world" three times!'}
-            ...     {'content': 4}
+            ...     {"content": 'say "hello world" three times!'}
+            ...     {"content": 4}
             ... else:
             ...     run(main)
             {'content': 'say "hello world" three times!'}
@@ -1053,9 +1167,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             **kwargs: bool,
         ) -> OperatorWrapperOutput:
             if isinstance(items, AsyncIterable):
-                _input = self.aparse(items)
+                input_ = self.aparse(items)
             else:
-                _input = self.parse(items)
+                input_ = self.parse(items)
 
             prepared = self.prepare(
                 module_name, conf=conf, assign=assign, count=count, **kwargs
@@ -1070,13 +1184,13 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
             inputs = context.inputs
             tuples, orig_stream, casted = self.setup(
-                prepared, _input, inputs=inputs, field=field, count=count, **kwargs
+                prepared, input_, inputs=inputs, field=field, count=count, **kwargs
             )
             handled, looped, embed_stream = loop_embed_async(
                 embed,
                 embedded_kwargs,
                 context,
-                cast(Stream, _input),
+                cast(Stream, input_),
                 module_name,
                 field=field,
                 assign=assign,
@@ -1123,7 +1237,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             embed: SyncProcessorWrapper | SyncSubPipe | None = None,
             **kwargs: bool,
         ) -> OperatorWrapperOutput:
-            _input = self.parse(items)
+            input_ = self.parse(items)
             prepared = self.prepare(
                 module_name, conf=conf, assign=assign, count=count, **kwargs
             )
@@ -1136,15 +1250,14 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
             context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
             inputs = context.inputs
-            stream = _input
             tuples, orig_stream, casted = self.setup(
-                prepared, stream, inputs=inputs, field=field, count=count, **kwargs
+                prepared, input_, inputs=inputs, field=field, count=count, **kwargs
             )
             handled, looped, embed_stream = loop_embed_sync(
                 embed,
                 embedded_kwargs,
                 context,
-                _input,
+                input_,
                 module_name,
                 field=field,
                 assign=assign,
@@ -1187,6 +1300,8 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
 
 class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
+    """Creates a pipe that splits a stream into multiple streams."""
+
     isasync: B
 
     @overload
@@ -1207,11 +1322,64 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     ) -> None: ...
     def __init__(self, *args: object, **kwargs: object):  # noqa: E301
         """
-        Creates a sync/async pipe that splits an entire stream of items
+        Configures a sync/async pipe that splits a stream into copies.
+
+        Args:
+            defaults (dict): Default ``conf`` values (default: None).
+
+        Kwargs:
+            isasync (bool): Wraps an async pipe (default: False).
+
+            conf (dict): The pipe configuration (default: None).
+
+            extract (str): Key whose ``conf`` value is passed to the pipe in
+                place of ``conf`` (default: None).
+
+            listize (bool): Ensure an ``extract`` value is list-like (default:
+                False).
+
+            objectify (bool): Convert ``conf`` to a ``meza.fntools.Objectify``
+                instance (default: True unless ``ptype`` is ``"none"``).
+
+            ptype (str): Converts ``conf`` items to a type after objectifying
+                (default: "pass").
+
+            field (str): Key whose ``items`` value is passed to the pipe in
+                place of ``items`` (default: None).
+
+            ftype (str): Converts the input ``items`` to a type after reading
+                ``field`` (default: "pass").
+
+            assign (str): Field the streams are assigned to (default: the pipe
+                name).
+
+        Examples:
+            >>> @splitter(objectify=False)
+            ... def pipe(stream, objconf, tuples, **kwargs):
+            ...     items = list(stream)
+            ...     return iter([iter(items), iter(items)])
+            >>>
+            >>> s1, s2 = pipe([{"x": 1}, {"x": 2}])
+            >>> next(s1)
+            {'x': 1}
+
         """
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
     def parse(self, items: SplitterWrapperInput | None = None) -> Stream:
+        """
+        Normalizes an input stream into ``DotDict`` items.
+
+        Non-mapping elements are placed under ``"content"``; an empty or ``None``
+        input yields nothing.
+
+        Args:
+            items: The source items, if any.
+
+        Yields:
+            Each input element as a ``DotDict``.
+
+        """
         if items:
             for item in items:
                 data = item if is_mapping(item) else {"content": item}
@@ -1220,11 +1388,29 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     def setup[T, E](
         self,
         prepared: PreparedModule[T, E],
-        _input: Stream | SplitterWrapperInput,
+        input_: Stream | SplitterWrapperInput,
         field: str | None = None,
         **kwargs: object,
     ) -> tuple[PipeTuples, Stream, Casted[T, E]]:
-        _stream = _input
+        """
+        Builds the per-item tuples and original stream for a splitter call.
+
+        The two returned iterators are lazy views over one shared input: a parser reads
+        whichever it needs, never both. ``tuples`` pairs each item with its own config
+        (``(item, objconf)``) and serves a parser that reads config per item;
+        ``orig_stream`` is just the items and serves a parser that applies one config
+        to the whole stream.
+
+        Args:
+            prepared: The immutable per-call state from ``prepare``.
+            input_: The input stream.
+            field: Optional field whose value replaces each item.
+            **kwargs: Extra call-time options forwarded to parsing.
+
+        Returns:
+            The per-item tuples, the original stream, and the cast extraction/conf.
+
+        """
         _dispatcher = partial(
             parse_and_cast,
             conf=prepared.conf,
@@ -1234,7 +1420,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             field=field,
         )
         dispatcher = cast(Callable[[ItemOrValue, Opts], ItemDispatch], _dispatcher)
-        dispatches = (dispatcher(item, prepared.opts) for item in _stream)
+        dispatches = (dispatcher(item, prepared.opts) for item in input_)
         tuples = ((d.item, d.casted.conf) for d in dispatches)
         orig_stream = (d.item for d in dispatches)
         casted = dispatcher(DotDict(), prepared.opts, **kwargs).casted
@@ -1253,6 +1439,29 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         self: "splitter[Literal[False]]", pipe: SyncSplitterParser[E]
     ) -> SyncSplitterWrapper: ...
     def __call__[E](self, pipe: SplitterParser[E]) -> SplitterWrapper:  # noqa: E301
+        """
+        Creates a sync or async pipe that splits a stream into copies.
+
+        Args:
+            pipe: Parser called with the stream, parsed config, and tuples;
+                returns an iterable of streams.
+
+        Returns:
+            A pipe callable that takes a stream and returns multiple streams.
+
+        Examples:
+            >>> wrapper = splitter(objectify=False)
+            >>>
+            >>> def pipe(stream, objconf, tuples, **kwargs):
+            ...     items = list(stream)
+            ...     return iter([iter(items), iter(items)])
+            >>>
+            >>> wrapped_pipe = wrapper(pipe)
+            >>> s1, s2 = wrapped_pipe([{"x": 1}, {"x": 2}])
+            >>> next(s1)
+            {'x': 1}
+
+        """
         op_module_name = pipe.__module__.split(".")[-1]
 
         async def async_wrapper(
@@ -1263,11 +1472,10 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             field: str | None = None,
             **kwargs: bool,
         ) -> Streams:
-            _input = self.parse(items)
+            input_ = self.parse(items)
             prepared = self.prepare(op_module_name, conf=conf, assign=assign, **kwargs)
-            stream = _input
             tuples, orig_stream, casted = self.setup(
-                prepared, stream, field=field, **kwargs
+                prepared, input_, field=field, **kwargs
             )
             async_pipe = cast(AsyncSplitterParser[E], pipe)
             extraction = cast(E, casted.extraction)
@@ -1282,11 +1490,10 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             field: str | None = None,
             **kwargs: bool,
         ) -> Streams:
-            _input = self.parse(items)
+            input_ = self.parse(items)
             prepared = self.prepare(op_module_name, conf=conf, assign=assign, **kwargs)
-            stream = _input
             tuples, orig_stream, casted = self.setup(
-                prepared, stream, field=field, **kwargs
+                prepared, input_, field=field, **kwargs
             )
             sync_pipe = cast(SyncSplitterParser[E], pipe)
             extraction = cast(E, casted.extraction)
