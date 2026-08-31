@@ -82,7 +82,7 @@ The complete `§0–27` routing map:
 | [callable-pipes.md](gameplans/callable-pipes.md) | §4 callable Pipeline nodes: `map`/`flat_map`, existing decorator/preparation model, Feed-native inference, declared resources, callable fingerprints/`version=`, identity modes, strictness, sync/async/process adaptation. |
 | [fanout-topology.md](gameplans/fanout-topology.md) | Explicit fan-out/routing/fan-in: public `publish`/`subscribe`, `Publisher`/`Subscription`/`Channel`, `split`, buffering/isolation, branch lifecycle, union/join interaction. Low-level `send`/`receive` remain compatibility implementation vocabulary. |
 | [feed-native-streaming.md](gameplans/feed-native-streaming.md) | Per-module Feed-native parser migration, streaming memory/encoder work, bounded source normalization. Batch details defer to the single-Pipeline batch contract rather than a public `BatchPipe`. |
-| [feed-monitoring.md](gameplans/feed-monitoring.md) | Repeated finite observation, bootstrap/backfill, dedupe/change/anomaly/alert policy using common `Pipeline.poll`, `FeedState`, `StateStore`, and publish/subscription contracts. |
+| [feed-monitoring.md](gameplans/feed-monitoring.md) | Repeated finite observation, resumable change-feed semantics (`Change`/`ChangeFeedSemantics`, opaque cursors, entity-vs-change identity, tombstones, replay), bootstrap/backfill, dedupe/change/anomaly/alert policy using common `Pipeline.poll`, `FeedState`, `StateStore`, and publish/subscription contracts. |
 | [bado-anyio-alignment.md](gameplans/bado-anyio-alignment.md) | `bado` <-> AnyIO helper audit, missing helpers, benchmarking/profiling; execution semantics remain owned by `execution-semantics.md`. |
 | [twisted-protocol-servers.md](gameplans/twisted-protocol-servers.md) | Server-side protocol adapters; current §23 runtime remains in the contract. |
 | [dotdict-parsing.md](gameplans/dotdict-parsing.md) | DotDict/business-data key handling. |
@@ -94,7 +94,7 @@ The complete `§0–27` routing map:
 | Gameplan | Covers |
 |---|---|
 | [connectors.md](gameplans/connectors.md) | Source/sink connector transports, credentials, sessions/resources, acknowledgements. |
-| [rest-incremental.md](gameplans/rest-incremental.md) | First-class `rest` module, pagination, auth/resource references, dependent endpoints, cursor extraction using common `FeedState`/`StateStore`. |
+| [rest-incremental.md](gameplans/rest-incremental.md) | First-class `rest` module, pagination, auth/resource references, dependent endpoints, cursor extraction (incl. opaque-cursor round-trip rule), source-side filter pushdown, and REST-backed change feeds using common `FeedState`/`StateStore`. |
 | [highergov-feed.md](gameplans/highergov-feed.md) | HigherGov production path and current/transition integration examples. |
 | [rdp-connect.md](gameplans/rdp-connect.md) | RDP/Connect projection: lineage/protocol/schema/transports/manifests/implementation milestones/non-goals; it no longer owns the generic core StateStore/checkpoint model. |
 | [database-transforms.md](gameplans/database-transforms.md) | `riko-sql` / `riko-dbt`, declared database resources, streaming Pipeline batch mode, push-down/export/idempotency. |
