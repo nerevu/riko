@@ -5,6 +5,9 @@ on:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
+env:
+  PYTHONHASHSEED: "94967295"
+
 jobs:
   build:
     name: Build distribution
@@ -28,7 +31,10 @@ jobs:
           tmp="$(mktemp -d)"
           cp -r tests "$tmp/tests"
           cd "$tmp"
-          uv run --isolated --no-project --with "$GITHUB_WORKSPACE"/dist/*.whl --with pytest \
+          uv run --isolated --no-project \
+            --with "$GITHUB_WORKSPACE"/dist/*.whl \
+            --with pytest \
+            --with pytest-timeout \
             pytest -p no:cacheprovider -o addopts="" -m smoke \
             tests/public/test_imports.py tests/public/test_collections.py
       - name: Smoke test (source distribution)
@@ -36,7 +42,10 @@ jobs:
           tmp="$(mktemp -d)"
           cp -r tests "$tmp/tests"
           cd "$tmp"
-          uv run --isolated --no-project --with "$GITHUB_WORKSPACE"/dist/*.tar.gz --with pytest \
+          uv run --isolated --no-project \
+            --with "$GITHUB_WORKSPACE"/dist/*.tar.gz
+            --with pytest \
+            --with pytest-timeout \
             pytest -p no:cacheprovider -o addopts="" -m smoke \
             tests/public/test_imports.py tests/public/test_collections.py
       - name: Store the distribution packages

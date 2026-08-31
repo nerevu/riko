@@ -1,6 +1,14 @@
 Changelog
 =========
 
+v0.77.2 (2026-08-31)
+--------------------
+
+Dev
+~~~
+
+- Set CI ``PYTHONHASHSEED`` and ``pytest-timeout`` to match the tox environment.
+
 v0.77.1 (2026-08-31)
 --------------------
 
