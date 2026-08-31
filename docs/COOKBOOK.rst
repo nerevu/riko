@@ -640,8 +640,10 @@ and ``assign`` at the call site to control extraction and assignment.
 The async interface accepts a sync *or* async callable, so ``async_pipe`` may be a plain
 ``def`` that returns the sync parser (as built-in ``count``/``reverse``/``sort`` do)
 *or* an ``async def`` that awaits real I/O (as ``strreplace``/``timeout`` and
-`register_module.py`_ do). Pass ``isasync=True`` explicitly if you wrap a sync function
-(that isn't named ``async_pipe``) for the async interface.
+`register_module.py`_ do). Pass ``isasync=True`` when you wrap a sync function for the
+async interface. At runtime it is only required when the function isn't named
+``async_pipe``, but a type checker needs it whenever you assign the result to a typed
+``async_pipe`` slot (as `register_module.py`_ does).
 
 Creating a custom operator
 ^^^^^^^^^^^^^^^^^^^^^^^^^^

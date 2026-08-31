@@ -1,15 +1,14 @@
 # riko-example-ext
 
-A minimal example of extending **riko** from an external distribution — adding a
-new module (`example.shout`) discovered via an entry point, **without editing
-riko core**.
+A minimal example of extending **riko** from an external distribution by adding a
+new module (`example.shout`) via an entry point.
 
 ## Layout
 
 ```
 riko-example-ext/
 ├── pyproject.toml       # declares the entry point
-└── riko_example_ext.py  # the pipe + its ModuleDefinition
+└── riko_example_ext.py  # the pipe (authored like a built-in module)
 ```
 
 ## Ext contract
@@ -18,39 +17,39 @@ riko-example-ext/
    built-in. Give it an explicit `-> Stream` (or `-> Iterator[...]`) return
    annotation so riko can infer its metadata. For an async pipe, only use `async def`
    when the parser itself awaits I/O).
-2. **Expose a `ModuleDefinition`** (`shout_definition`). Point `module` at
-   something exposing `pipe`/`async_pipe` (here, the module itself), or pass the
-   callables explicitly as `sync_pipe`/`async_pipe`.
-3. **Declare an entry point** under the `riko.modules` group in `pyproject.toml`:
+2. **Declare an entry point** under the `riko.modules` group in `pyproject.toml`,
+   pointing it at the module itself:
 
    ```toml
    [project.entry-points."riko.modules"]
-   "example.shout" = "riko_example_ext:shout_definition"
+   "example.shout" = "riko_example_ext"
    ```
 
-That's it. riko's `ModuleRegistry` discovers the entry point by name and imports
-this package only when `example.shout` is first resolved.
+That's it. riko's `ModuleRegistry` reads `pipe`/`async_pipe` off the module and
+takes its docstring summary as the discovery `description`
+(`describe_module("example.shout")`). The package is imported only when `example.shout`
+is first resolved.
+
+For finer control, an entry point may instead name a `ModuleDefinition` (or a
+zero-arg factory returning one). See [`../register_module.py`](../register_module.py).
 
 ## Use it
 
 ```bash
-uv pip install -e .           # alongside riko
+uv pip install -e .  # alongside riko
 ```
 
 ```python
 from riko.collections import SyncPipe
 
-SyncPipe("example.shout", source=[{"content": "hi"}])
-# → [{"content": "HI"}]
+next(SyncPipe("example.shout", source=[{"content": "hi"}]))
+# {"content": "HI"}
 ```
-
-The name is a plain string, so it also works in JSON pipelines and everywhere
-else riko accepts a module name — no dependency on this package's Python objects.
 
 ## No packaging? Register at runtime instead
 
 When you don't need a discoverable, installable plugin, skip the entry point and
 call `riko.ext.register` directly:
 
-- [`../register_module.py`](../register_module.py) — explicit `sync_pipe=`/`async_pipe=` callables.
-- [`../register_alias.py`](../register_alias.py) — the `module=` convention, aliasing a built-in.
+- [`../register_module.py`](../register_module.py): explicit `sync_pipe=`/`async_pipe=` callables.
+- [`../register_alias.py`](../register_alias.py): the `module=` convention.

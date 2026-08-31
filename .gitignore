@@ -19,6 +19,7 @@ examples/.ipynb_checkpoints/*
 .installed.cfg
 .installed.cfg
 *-0.*/*
+examples/**/uv.lock
 dist
 build
 eggs

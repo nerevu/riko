@@ -22,6 +22,11 @@ New
 - Pipe decorators now reject decoration options owned by a different decorator (e.g.
   ``embed`` on a ``processor``, ``skip_if`` on an ``operator``) with a ``TypeError``.
 
+- A ``riko.modules`` entry point may now name a module directly. The registry reads its
+  ``pipe``/``async_pipe`` and uses the module docstring summary as the description.
+
+- Entry point extensions can now directly name a module in place of a ModuleDefinition
+
 Fixed
 ~~~~~
 
