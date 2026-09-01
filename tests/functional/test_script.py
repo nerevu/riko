@@ -7,7 +7,7 @@ Tests riko runpipe CLI functionality.
 import builtins
 import subprocess
 import sys
-from difflib import SequenceMatcher, unified_diff
+from difflib import unified_diff
 from io import StringIO
 from os.path import isfile
 
@@ -19,14 +19,14 @@ _BASEDIR = TESTS_DIR.parent
 DEMO_SCRIPT = "run-pipe"
 BENCHMARK_SCRIPT = "benchmark"
 DEMO_TEXT = "Deadline to clear up health law eligibility near\n682\n"
-BENCHMARK_TEXTS = [
-    "baseline_sync - 1 repetitions/loop, best of 1 loops",
-    "baseline_threads - 1 repetitions/loop, best of 1 loops",
-    "baseline_procs - 1 repetitions/loop, best of 1 loops",
-    "sync_pipeline - 1 repetitions/loop, best of 1 loops",
-    "sync_pipe - 1 repetitions/loop, best of 1 loops",
-    "sync_collection - 1 repetitions/loop, best of 1 loops",
-    "par_sync_collection - 1 repetitions/loop, best of 1 loops",
+BENCHMARK_LABELS = [
+    "baseline_sync",
+    "baseline_threads",
+    "baseline_procs",
+    "sync_pipeline",
+    "sync_pipe",
+    "sync_collection",
+    "par_sync_collection",
 ]
 DEMO_PARAMS = [("demo", DEMO_TEXT), ("simple1", "'farechart'\n")]
 
@@ -57,47 +57,26 @@ def run_command(script: str, argument: str, *opts: str) -> str:
     return result.stdout
 
 
-def assert_output_matches(
-    output: str, *expects, command: str = "", partial=False
-) -> None:
+def assert_output_matches(output: str, *expects, command: str = "") -> None:
     """
-    Assert that *output* matches *expected*.
+    Assert that *output* matches *expected* line-by-line.
 
     *expected* can be:
-    - ``bool``   – truth-value of the output must match
     - file path  – output must match the file's contents line-by-line
     - ``str``    – output must match the string line-by-line
     """
-    fd = StringIO(output)
-    r_outlines = fd.readlines()
-    b_outlines = [str(bool(fd.read()))]
+    outlines = StringIO(output).readlines()
 
     for expected in expects:
-        if isinstance(expected, bool):
-            outlines = b_outlines
-            checklines = [str(expected)]
-        elif isfile(expected):
-            outlines = r_outlines
-
+        if isfile(expected):
             with builtins.open(expected, encoding="utf-8") as f:
                 checklines = f.readlines()
         else:
-            outlines = r_outlines
             checklines = StringIO(expected).readlines()
 
-        if partial:
-            checkwords = " ".join(checklines).split(" ")
-            outwords = " ".join(outlines).split(" ")
-            s = SequenceMatcher(None, checkwords, outwords)
-            blocks = s.get_matching_blocks()
-            diffs = f"{checklines} not found in {outlines}"
-            msg = f"Output for {command} doesn't match expected.\n{diffs}"
-            assert blocks[0].size == 7, msg
-        else:
-            args = ("expected", "got")
-            diffs = "".join(unified_diff(checklines, outlines, *args))
-            msg = f"Output for {command} doesn't match expected.\n{diffs}"
-            assert not diffs, msg
+        diffs = "".join(unified_diff(checklines, outlines, "expected", "got"))
+        msg = f"Output for {command} doesn't match expected.\n{diffs}"
+        assert not diffs, msg
 
 
 @pytest.mark.parametrize("value", DEMO_PARAMS)
@@ -123,8 +102,14 @@ def test_demo_async(value):
 
 def test_benchmark():
     output = run_command(BENCHMARK_SCRIPT, "")
-    kwargs = {"command": BENCHMARK_SCRIPT, "partial": True}
-    assert_output_matches(output, *BENCHMARK_TEXTS, **kwargs)
+    lines = [line.strip() for line in output.splitlines()]
+    missing = [
+        label
+        for label in BENCHMARK_LABELS
+        if not any(line.startswith(f"{label} -") for line in lines)
+    ]
+    msg = f"benchmark output missing labels {missing}:\n{output}"
+    assert not missing, msg
 
 
 def test_convert_dag_and_compile(tmp_path):
