@@ -395,7 +395,7 @@ def _format_yaml(where: Iterable[str] = ()) -> int:
     if not yamlfmt:
         raise RuntimeError("yamlfmt not found")
 
-    paths = list(where) or [str(ROOT_DIR)]
+    paths = where or _gen_yaml_files()
     return call([yamlfmt, *paths])
 
 
