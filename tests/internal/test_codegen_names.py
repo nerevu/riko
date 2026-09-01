@@ -128,13 +128,21 @@ def test_member_collision_fails_with_diagnostic():
     assert "'my-mod'" in str(excinfo.value)
 
 
+def _exec_generated_names(*entries: NameEntry) -> dict:
+    namespace: dict = {}
+    exec(generate_module_names(*entries), namespace)  # noqa: S102
+    return namespace
+
+
 def test_enum_name_override_resolves_collision():
     entries = [
         NameEntry(name="my.mod", category="transform"),
         NameEntry(name="my-mod", category="transform", enum_name="my_mod_alt"),
     ]
-    src = generate_module_names(*entries)
-    assert "MY_MOD_ALT" in src
+    transforms = _exec_generated_names(*entries)["Transforms"]
+
+    assert transforms.MY_MOD_ALT.value == "my-mod"
+    assert transforms.MY_MOD.value == "my.mod"
 
 
 def test_provider_namespace_flattens():
@@ -142,9 +150,9 @@ def test_provider_namespace_flattens():
         NameEntry(name="fetch", category="source"),
         NameEntry(name="microsoft.autopilot.ensure", category="microsoft"),
     ]
-    src = generate_module_names(*entries)
-    assert "class Microsoft(ModuleName):" in src
-    assert 'MICROSOFT_AUTOPILOT_ENSURE = "microsoft.autopilot.ensure"' in src
-    assert (
-        "    MICROSOFT_AUTOPILOT_ENSURE = Microsoft.MICROSOFT_AUTOPILOT_ENSURE" in src
-    )
+    namespace = _exec_generated_names(*entries)
+    provider = namespace["Microsoft"]
+    modules = namespace["Modules"]
+
+    assert provider.MICROSOFT_AUTOPILOT_ENSURE.value == "microsoft.autopilot.ensure"
+    assert modules.MICROSOFT_AUTOPILOT_ENSURE is provider.MICROSOFT_AUTOPILOT_ENSURE
