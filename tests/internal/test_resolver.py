@@ -21,7 +21,7 @@ from riko.ext._pipelines import (
 )
 from riko.ext._resolver import PipeResolver, pipe_resolver
 from riko.ext.registry import ModuleDefinition, registry, reset_registry
-from riko.modules import list_modules, tokenizer
+from riko.modules import list_modules, regex, tokenizer
 from riko.paths import ROOT_DIR
 
 _META = {
@@ -242,9 +242,13 @@ class TestEntryPointModules:
     def test_runtime_registration_shadows_entry_point(
         self, monkeypatch, fixed_registry
     ):
-        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, MOD_DEFN))
+        ep_marker = lambda source, **_: source
+        ep_defn = ModuleDefinition(name=_NAME, sync_pipe=ep_marker)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
         fixed_registry.register(MOD_DEFN)
-        assert fixed_registry.resolve(_NAME, "pipe") is marker
+        resolved = fixed_registry.resolve(_NAME, "pipe")
+        assert resolved is marker
+        assert resolved is not ep_marker
 
     def test_entry_points_discovered_lazily_once(self, monkeypatch, fixed_registry):
         calls = {"n": 0}
@@ -292,11 +296,12 @@ class TestPipelineResolver:
 
     def test_composite_store_first_hit_wins(self):
         store = CompositeStore(
-            MappingStore({}),
             MappingStore({"pipe_x": tokenizer}),
+            MappingStore({"pipe_x": regex}),
             PackageStore("tests.pypipelines"),
         )
         assert store.load("pipe_x") is tokenizer
+        assert store.load("pipe_x") is not regex
         assert store.load("absent") is None
 
     def test_mapping_store_serves_in_memory_module(self):
