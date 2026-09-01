@@ -124,7 +124,14 @@ def test_resolution_internals_have_no_public_path(path):
 
 @pytest.mark.parametrize(("name", "val"), vars(riko).items())
 def test_no_leaked_public_functions(name, val):
-    """The top-level function surface is exactly the functions in ``__all__``."""
+    """
+    No bare function leaks into the top-level namespace outside ``__all__``.
+
+    Scoped to *functions* on purpose: classes and constants (e.g. ``Context``,
+    ``ENCODING``, ``objectify``) are intentionally importable while absent from
+    ``__all__``, so this guards callables rather than the whole attribute surface
+    (that surface is pinned by ``test_equal_surface_matches_expected``).
+    """
     if not (name.startswith("_") or name in STABLE):
         assert not isinstance(val, (FunctionType, BuiltinFunctionType))
 
