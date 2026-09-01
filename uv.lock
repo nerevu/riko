@@ -1415,7 +1415,7 @@ wheels = [
 
 [[package]]
 name = "riko"
-version = "0.77.2"
+version = "0.77.3"
 source = { editable = "." }
 dependencies = [
     { name = "babel" },
