@@ -750,17 +750,15 @@ class TestBasics:
         for item in contains:
             assert item in items
 
-    def test_fetchpage(self):
-        """Loads a pipeline containing a fetchpage module"""
-        pipe_name = "pipe_9420a757a49ddf11d8b98349abb5bcf4"
-        items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 8, 0)
-        item = cast(dict, items[2])
-        assert item["content"] == "$3.00</td>"
-
-    def test_fetchpage_loop(self):
-        """Loads a pipeline containing a fetchpage module within a loop"""
-        pipe_name = "pipe_188eca77fd28c96c559f71f5729d91ec"
+    @pytest.mark.parametrize(
+        "pipe_name",
+        [
+            pytest.param("pipe_9420a757a49ddf11d8b98349abb5bcf4", id="plain"),
+            pytest.param("pipe_188eca77fd28c96c559f71f5729d91ec", id="within-loop"),
+        ],
+    )
+    def test_fetchpage(self, pipe_name):
+        """Loads a pipeline containing a fetchpage module (plain and within a loop)."""
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 8, 0)
         item = cast(dict, items[2])

@@ -75,6 +75,7 @@ def test_equal_surface_matches_expected(module, surface):
 )
 def test_partial_surface_matches_expected(names, surface):
     assert surface.issubset(names)
+    assert not any(name.startswith("_") for name in names)
 
 
 def test_normal_module_confs_are_public():
@@ -92,14 +93,10 @@ def test_module_metadas_are_same():
     assert riko.ext.ModuleMetadata is riko.types.modules.ModuleMetadata
 
 
-@pytest.mark.parametrize("name", sorted(STABLE))
-def test_stable_names_importable(name):
-    assert hasattr(riko, name)
-
-
-@pytest.mark.parametrize("name", sorted(EXTENSION))
-def test_extension_names_importable(name):
-    assert hasattr(riko.ext, name)
+@pytest.mark.parametrize(("module", "surface"), [(riko, STABLE), (riko.ext, EXTENSION)])
+def test_stable_names_importable(module, surface):
+    """Every declared stable names actually resolves on ``riko``."""
+    assert all(hasattr(module, name) for name in surface)
 
 
 @pytest.mark.parametrize("name", riko.bado.__all__)
@@ -110,11 +107,6 @@ def test_bado_reexports_are_same_object(name):
 @pytest.mark.parametrize("name", sorted(ROOT_EXCEPTIONS))
 def test_exception_reexports_are_same_object(name):
     assert getattr(riko, name) is getattr(riko.exceptions, name)
-
-
-@pytest.mark.parametrize("module", SURFACE_MODULES)
-def test_no_private_names_in_public_all(module):
-    assert not any(n.startswith("_") for n in module.__all__)
 
 
 @pytest.mark.parametrize("module", SURFACE_MODULES)

@@ -120,40 +120,21 @@ class TestExamples:
         assert length == 49, f"Pipeline {pipe_name} has length {length}, not 49"
         assert example == pipeline[-1]
 
-    def test_simple1(self):
-        """Tests the simple1 pipeline."""
-        pipe_name = "simple1"
+    @pytest.mark.parametrize(
+        ("pipe_name", "expected"),
+        [
+            ("simple1", {"url": "farechart"}),
+            ("simple2", {"author": "ABC", "link": "www.google.com", "title": "google"}),
+            ("split", {"date": "December 02, 2014", "year": 2014}),
+            ("wired", {"date": "May 04, 1982"}),
+        ],
+    )
+    def test_simple_pipeline(self, pipe_name, expected):
+        """Each single-item example pipeline yields exactly its expected record."""
         pipeline = self._get_pipeline(pipe_name)
         length = len(pipeline)
         assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
-        assert {"url": "farechart"} == pipeline[-1]
-
-    def test_simple2(self):
-        """Tests the simple2 pipeline."""
-        pipe_name = "simple2"
-        pipeline = self._get_pipeline(pipe_name)
-        example = {"author": "ABC", "link": "www.google.com", "title": "google"}
-
-        length = len(pipeline)
-        assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
-        assert example == pipeline[-1]
-
-    def test_split(self):
-        """Tests the split pipeline."""
-        pipe_name = "split"
-        pipeline = self._get_pipeline(pipe_name)
-        example = {"date": "December 02, 2014", "year": 2014}
-        length = len(pipeline)
-        assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
-        assert example == pipeline[-1]
-
-    def test_wired(self):
-        """Tests the wired pipeline."""
-        pipe_name = "wired"
-        pipeline = self._get_pipeline(pipe_name)
-        length = len(pipeline)
-        assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
-        assert {"date": "May 04, 1982"} == pipeline[-1]
+        assert pipeline[-1] == expected
 
     @pytest.mark.parametrize(
         ("pipeid", "expected"),
