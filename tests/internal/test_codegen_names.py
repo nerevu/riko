@@ -78,21 +78,18 @@ def test_sink_name_is_classified_as_sink():
 
 
 @pytest.mark.parametrize(
-    ("name", "expected"),
+    ("name", "override", "expected"),
     [
-        ("fetch", "FETCH"),
-        ("fetch-page", "FETCH_PAGE"),
-        ("microsoft.autopilot.ensure", "MICROSOFT_AUTOPILOT_ENSURE"),
-        ("a--b..c", "A_B_C"),
-        ("3m", "_3M"),
+        ("fetch", None, "FETCH"),
+        ("fetch-page", None, "FETCH_PAGE"),
+        ("microsoft.autopilot.ensure", None, "MICROSOFT_AUTOPILOT_ENSURE"),
+        ("a--b..c", None, "A_B_C"),
+        ("3m", None, "_3M"),
+        ("fetch", "grab", "GRAB"),
     ],
 )
-def test_enum_member_name(name, expected):
-    assert enum_member_name(name, override=None) == expected
-
-
-def test_enum_member_name_override():
-    assert enum_member_name("fetch", override="grab") == "GRAB"
+def test_enum_member_name(name, override, expected):
+    assert enum_member_name(name, override=override) == expected
 
 
 def test_generated_names_match():
