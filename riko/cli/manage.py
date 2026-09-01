@@ -148,13 +148,10 @@ def _build():
 
 def _publish(dry_run=False):
     """Publish riko to PyPI"""
-    if dry_run:
-        cmd = 'run --with riko --no-project -- python -c "import riko"'
-    else:
-        cmd = "publish"
+    cmd = ["publish", "--dry-run"] if dry_run else ["publish"]
 
     if uv:
-        check_call([uv] + cmd.split(" "))
+        check_call([uv, *cmd])
     else:
         raise RuntimeError("uv not found")
 
@@ -678,7 +675,12 @@ def build():
 
 
 @manager.command()
-@click.option("-d", "--dry-run", help="Publish riko to PyPI", is_flag=True)
+@click.option(
+    "-d",
+    "--dry-run",
+    help="Rehearse the upload without publishing to PyPI",
+    is_flag=True,
+)
 def publish(dry_run=False):
     """Publish riko to PyPI"""
     try:
@@ -688,7 +690,12 @@ def publish(dry_run=False):
 
 
 @manager.command()
-@click.option("-d", "--dry-run", help="Build and publish riko to PyPI", is_flag=True)
+@click.option(
+    "-d",
+    "--dry-run",
+    help="Build, check, and rehearse the upload without publishing",
+    is_flag=True,
+)
 def release(dry_run=False):
     """Build and publish new riko version"""
     try:
