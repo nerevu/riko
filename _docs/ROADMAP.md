@@ -132,6 +132,7 @@ The complete `§0–27` routing map:
 | [azure-automation.md](gameplans/azure-automation.md) | Azure ARM/PowerShell, Service Bus/Event Grid, desired-state adapters. |
 | [microsoft-administration.md](gameplans/microsoft-administration.md) | Microsoft administrative workflow semantics. |
 | [autopilot-provisioning.md](gameplans/autopilot-provisioning.md) | Windows Autopilot provisioning scenario. |
+| [monthly-dashboard.md](gameplans/monthly-dashboard.md) | MSP monthly reconciliation/dashboard scenario: SuperOps/Graph/Action1/Huntress/Axcient providers → canonical device reconciler + license calc + QA invariants → Airtable sink; consumes the Microsoft/provider/sink/plan-apply contracts. |
 | [orchestration.md](gameplans/orchestration.md) | Cron/webhook/Airflow/Prefect/Dagster/dbt run adapters; canonical Python run requests use `PipelineRef`. |
 
 ### Documentation & testing

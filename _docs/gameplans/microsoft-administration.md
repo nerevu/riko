@@ -20,7 +20,10 @@ Related authoritative plans:
 * `provider-integrations.md` — `OperationHandle` and shared operation waiting;
 * `orchestration.md` — deployment schedules and durable run boundaries;
 * `autopilot-provisioning.md` — a concrete downstream *scenario* (Windows Autopilot new-device
-  provisioning) that specializes this plan's preflight/ChangePlan/verify contract.
+  provisioning) that specializes this plan's preflight/ChangePlan/verify contract;
+* `monthly-dashboard.md` — a downstream *scenario* (MSP monthly reconciliation/dashboard) that routes
+  its destructive removals and shared-mailbox/proxy-address fixes through this plan's
+  ChangePlan/approval/apply/verify contract.
 
 ## 2. Inspiration integrated by this plan
 

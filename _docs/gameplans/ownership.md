@@ -59,6 +59,7 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 | `bado` <-> AnyIO helper/version audit + benchmarking | `bado-anyio-alignment.md` | async primitive runtime semantics from `execution-semantics.md` |
 | Feed-native parser migration/streaming-memory/streaming `write` | `feed-native-streaming.md` | `parser_mode` mechanism from `callable-pipes.md`; batch contract from `execution-semantics.md` |
 | Windows Autopilot provisioning scenario | `autopilot-provisioning.md` | generic Microsoft adapters/admin/wait/module-enum contracts |
+| MSP monthly dashboard reconciliation scenario | `monthly-dashboard.md` | generic registry/resource/sink/Microsoft/provider/plan-apply contracts |
 | Pre-1.0 DX/release/package fidelity gate | `release-readiness.md` | target API semantics remain owned by execution/fanout/callable/CLI gameplans |
 | implementation dependency graph / keep-refactor-supersede classification | `implementation-sequence.md` | semantic contracts remain in their owning gameplans |
 | runtime defect taxonomy/open defect register | `correctness-audit.md` | row reference plus owning design/fix |
