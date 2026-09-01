@@ -55,21 +55,14 @@ def categories() -> dict[str, ModuleCategory]:
     return {md.name: derive_category(md) for md in gen_module_catalog()}
 
 
-def test_sources_bucket_matches_golden(categories):
-    sources = {name for name, category in categories.items() if category == "source"}
-    assert sources == _SOURCES
+def test_taxonomy_partition_matches_golden(categories):
+    buckets: dict[str, set[str]] = {"source": set(), "sink": set(), "transform": set()}
+    for name, category in categories.items():
+        buckets[category].add(name)
 
-
-def test_sinks_bucket_matches_golden(categories):
-    sinks = {name for name, category in categories.items() if category == "sink"}
-    assert sinks == _SINKS
-
-
-def test_remaining_builtins_are_transforms(categories):
-    transforms = {
-        name for name, category in categories.items() if category == "transform"
-    }
-    assert transforms == set(categories) - _SOURCES - _SINKS
+    assert buckets["source"] == _SOURCES
+    assert buckets["sink"] == _SINKS
+    assert buckets["transform"] == set(categories) - _SOURCES - _SINKS
 
 
 def test_provider_override_wins():
