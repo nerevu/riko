@@ -3,8 +3,16 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to backfill
+        required: true
+        type: string
 env:
   PYTHONHASHSEED: "94967295"
+  RELEASE_TAG: >-
+    ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 jobs:
   build:
     name: Build distribution
@@ -15,11 +23,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: >-
+            ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
           persist-credentials: false
       - name: Install uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
+      - name: Validate Release
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG"
+            exit 1
+          fi
+
+          actual_tag="$(git describe --tags --exact-match HEAD)"
+
+          if [ "$actual_tag" != "$RELEASE_TAG" ]; then
+            echo "Expected tag: $RELEASE_TAG"
+            echo "Actual tag:   $actual_tag"
+            exit 1
+          fi
+
+          package_version="$(
+            python3 -c \
+              'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])'
+          )"
+
+          if [ "v$package_version" != "$RELEASE_TAG" ]; then
+            echo "Tag version:     $RELEASE_TAG"
+            echo "Package version: v$package_version"
+            exit 1
+          fi
       - name: Build
         run: uv build
       - name: Smoke test (wheel)

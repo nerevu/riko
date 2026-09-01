@@ -3,30 +3,87 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to backfill
+        required: true
+        type: string
+      notes_only:
+        description: Replace notes on an existing release
+        required: false
+        default: false
+        type: boolean
 jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
     permissions:
       contents: write # Crucial permission required to create tags and releases
+    env:
+      RELEASE_TAG: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      NOTES_ONLY: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.notes_only || false }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: >-
+            ${{ github.event_name == 'workflow_dispatch' && github.event.repository.default_branch || github.ref }}
       - name: Install uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
       - name: Install
         run: |
-          uv sync --group dev --all-extras
+          uv sync --no-dev
           uv pip install --reinstall --no-deps --editable .
+      - name: Validate Release Tag
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG"
+            exit 1
+          fi
+
+          git ls-remote --exit-code \
+            --tags origin "refs/tags/$RELEASE_TAG" >/dev/null
       - name: Generate Release Notes
-        run: uv run --no-sync manage release-notes > release-notes.md
-      - name: Create GitHub Release
+        run: |
+          uv run --no-sync manage release-notes \
+            "$RELEASE_TAG" > release-notes.md
+      - name: Create or Update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub
         run: |
-          gh release create ${{ github.ref_name }} \
-            --title "${{ github.ref_name }}" \
-            --notes-file release-notes.md \
-            --generate-notes
+          if [ "$NOTES_ONLY" = "true" ]; then
+            if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+              echo "GitHub release $RELEASE_TAG does not exist"
+              exit 1
+            fi
+
+            gh release view "$RELEASE_TAG" --json body --jq '.body' \
+              | awk 'f || /^## / || /^\*\*Full Changelog\*\*/ {f=1; print}' \
+              > github-notes.md
+
+            cat release-notes.md > combined-notes.md
+
+            if [ -s github-notes.md ]; then
+              printf '\n\n' >> combined-notes.md
+              cat github-notes.md >> combined-notes.md
+            fi
+
+            gh release edit "$RELEASE_TAG" \
+              --notes-file combined-notes.md
+          else
+            if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+              echo "GitHub release $RELEASE_TAG already exists"
+              exit 1
+            fi
+
+            gh release create "$RELEASE_TAG" \
+              --verify-tag \
+              --title "$RELEASE_TAG" \
+              --notes-file release-notes.md \
+              --generate-notes
+          fi

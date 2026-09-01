@@ -15,9 +15,10 @@ from os.path import basename, dirname, exists, getmtime, isdir, join
 from pathlib import Path
 from subprocess import CalledProcessError, call, check_call, check_output
 from sys import exit
-from typing import Any
+from typing import Any, NamedTuple
 
 import click
+import requests
 from click import Choice
 
 from riko._logging import exception_hook
@@ -43,6 +44,11 @@ LINE_ANCHOR_RE = re.compile(r"^L\d")
 DOCS_DIR = ROOT_DIR / "docs"
 WORKFLOW_DIR = ROOT_DIR / ".github" / "workflows"
 CHANGELOG_PATH = DOCS_DIR / "CHANGES.rst"
+GITHUB_REPO = "nerevu/riko"
+PYPI_PROJECT = "riko"
+
+RELEASE_TAG_RE = re.compile(r"^v\d+\.\d+\.\d+$")
+RELEASE_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 RST_SUBHEADING_RE = re.compile(r"^(?P<title>[^\n]+)\n~+$", re.MULTILINE)
 RELEASE_SECTION_RE = re.compile(
     r"^(?P<version>v\d+\.\d+\.\d+) \((?P<release_date>[^)]+)\)\n-+\n\n"
@@ -50,6 +56,13 @@ RELEASE_SECTION_RE = re.compile(
     r"(?=^v\d+\.\d+\.\d+ \([^)]+\)\n-+\n|\Z)",
     re.MULTILINE | re.DOTALL,
 )
+
+
+class Entry(NamedTuple):
+    version: str
+    release_date: str
+    body: str
+
 
 CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
     "config": (
@@ -80,6 +93,7 @@ twine: str | None = shutil.which("twine")
 actionlint: str | None = shutil.which("actionlint")
 shellcheck: str | None = shutil.which("shellcheck")
 yamlfmt: str | None = shutil.which("yamlfmt")
+gh: str | None = shutil.which("gh")
 
 
 def parse_verbosity(verbose: int = 0, quiet: bool | None = None) -> str:
@@ -399,30 +413,124 @@ def _format_yaml(where: Iterable[str] = ()) -> int:
 # ---------------------------------------------------------------------------
 # Release helpers
 # ---------------------------------------------------------------------------
-def _latest_changelog_entry(path: Path = CHANGELOG_PATH) -> tuple[str, str, str]:
-    """Return the latest changelog version, release date, and RST body."""
+def _gen_changelog_entries(path: Path = CHANGELOG_PATH) -> Iterator[Entry]:
+    """Return changelog entries in document order."""
     text = path.read_text(encoding="utf-8")
-    match = RELEASE_SECTION_RE.search(text)
 
-    if not match:
-        raise RuntimeError(f"No release section found in {path}")
-
-    return (match["version"], match["release_date"], match["body"].strip())
+    for match in RELEASE_SECTION_RE.finditer(text):
+        yield Entry(match["version"], match["release_date"], match["body"].strip())
 
 
-def _release_notes(path: Path = CHANGELOG_PATH) -> tuple[str, str, str]:
-    """Return the latest version, release date, and GitHub release notes."""
-    version, release_date, notes = _latest_changelog_entry(path)
-    notes = RST_SUBHEADING_RE.sub(r"### \g<title>", notes)
-    return version, release_date, notes
+def _get_changelog_entry(
+    version: str | None = None, path: Path = CHANGELOG_PATH
+) -> Entry:
+    """Return a changelog version, release date, and RST body."""
+    for entry in _gen_changelog_entries(path):
+        if (version is None) or entry.version == version:
+            return entry
+
+    if version:
+        msg = f"No changelog entry found for {version} in {path}"
+    else:
+        msg = f"No release section found in {path}"
+
+    raise RuntimeError(msg)
 
 
-def _validate_release(version: str, expected: str | None = None) -> None:
-    """Validate the changelog version against an expected release tag."""
-    if expected and version != expected:
-        raise RuntimeError(
-            f"Release tag {expected!r} does not match changelog version {version!r}"
-        )
+def _validate_tag(version: str, *expected: str) -> None:
+    """Validate a release version and optional expected tag."""
+    if not RELEASE_TAG_RE.fullmatch(version):
+        raise RuntimeError(f"Invalid release tag {version!r}")
+
+    if expected and version not in expected:
+        raise RuntimeError(f"{version=} does not exist in {expected=}")
+
+
+def _gen_gh_tags(releases=False) -> Iterator[str]:
+    """Return remote tags."""
+    if not gh:
+        raise RuntimeError("gh not found")
+
+    param, field = ("releases", "tag_name") if releases else ("tags", "name")
+    url = f"repos/{GITHUB_REPO}/{param}?per_page=100"
+    args = [gh, "api", "--paginate", "--jq", f".[].{field}", url]
+    output = check_output(args, text=True)
+
+    for tag in output.splitlines():
+        if RELEASE_TAG_RE.fullmatch(tag):
+            yield tag
+
+
+def _gen_pypi_tags() -> Iterator[str]:
+    """Yield versions already published to PyPI as release tags."""
+    url = f"https://pypi.org/pypi/{PYPI_PROJECT}/json"
+    r = requests.get(url, timeout=15)
+
+    if r.ok:
+        for tag in r.json()["releases"]:
+            if RELEASE_VERSION_RE.fullmatch(tag):
+                yield f"v{tag}"
+
+
+def _gen_missing_versions(published: Iterable[str]) -> Iterator[str]:
+    """Return remote release tags absent from published."""
+    missing = set(_gen_gh_tags()).difference(published)
+    _release_key = lambda version: tuple(map(int, version.removeprefix("v").split(".")))
+    yield from sorted(missing, key=_release_key)
+
+
+def _dispatch_workflow(
+    workflow: str, dry_run: bool = False, **fields: str | bool
+) -> None:
+    """Dispatch a workflow from the current main branch."""
+    if not gh:
+        raise RuntimeError("gh not found")
+
+    args = [gh, "workflow", "run", workflow, "--repo", GITHUB_REPO, "--ref", "main"]
+
+    for key, value in fields.items():
+        rendered = str(value).lower() if isinstance(value, bool) else value
+        args.extend(["-f", f"{key}={rendered}"])
+
+    if dry_run:
+        click.echo(f"[dry-run] would dispatch: {' '.join(args)}")
+    else:
+        check_call(args)
+
+
+def _backfill_github(
+    version: str, notes_only: bool = False, dry_run: bool = False
+) -> None:
+    """Dispatch GitHub release creation or release-note repair."""
+    _validate_tag(version, *_gen_gh_tags())
+    entry = _get_changelog_entry(version)
+
+    if entry.release_date == "Unreleased":
+        raise RuntimeError(f"Changelog entry for {version} is unreleased")
+
+    exists = version in set(_gen_gh_tags(releases=True))
+    msg = f"GitHub release {version}"
+
+    if notes_only and not exists:
+        msg += " does not exist. Run without --notes-only to create it"
+        raise RuntimeError(msg)
+    elif not notes_only and exists:
+        msg += " already exists. Use --notes-only to replace its notes"
+        raise RuntimeError(msg)
+
+    _dispatch_workflow(
+        "release.yml", dry_run=dry_run, tag=version, notes_only=notes_only
+    )
+
+
+def _backfill_pypi(version: str, dry_run: bool = False) -> None:
+    """Dispatch publication of an existing tag to PyPI."""
+    _validate_tag(version, *_gen_gh_tags())
+
+    if version in set(_gen_pypi_tags()):
+        raise RuntimeError(f"{PYPI_PROJECT} {version} already exists on PyPI")
+
+    _dispatch_workflow("publish.yml", dry_run=dry_run, tag=version)
 
 
 # ---------------------------------------------------------------------------
@@ -577,7 +685,12 @@ def prettify(
 @click.option(
     "-p", "--parallel", help="Run tests in parallel in multiple processes", is_flag=True
 )
-def test(paths: tuple[str, ...] = (), where: tuple[str, ...] = (), stop=None, **kwargs):  # noqa: PT028
+def test(
+    paths: tuple[str, ...] = (),  # noqa: PT028
+    where: tuple[str, ...] = (),  # noqa: PT028
+    stop=None,  # noqa: PT028
+    **kwargs,
+):
     """Run pytest, tox, and script tests"""
     _where = [*where, *paths]
 
@@ -642,20 +755,69 @@ def codegen(mode="config"):
 
 
 @manager.command("release-notes")
-def release_notes():
-    """Print GitHub release notes from the latest changelog section."""
-    version, release_date, notes = _release_notes()
-    tag = environ.get("GITHUB_REF_NAME")
+@click.argument("version", required=False)
+def release_notes(version: str | None = None):
+    """Convert a changelog section to Markdown release notes."""
+    entry = _get_changelog_entry(version)
 
-    if tag:
-        _validate_release(version, tag)
+    if environ.get("GITHUB_REF_TYPE") == "tag":
+        _validate_tag(entry.version, environ.get("GITHUB_REF_NAME", ""))
 
-        if release_date == "Unreleased":
-            raise RuntimeError(
-                f"Changelog entry for {version} is still marked Unreleased"
-            )
+    if environ.get("GITHUB_ACTIONS") and entry.release_date == "Unreleased":
+        raise RuntimeError(f"Changelog entry for {entry.version} is unreleased")
 
-    click.echo(notes)
+    click.echo(RST_SUBHEADING_RE.sub(r"### \g<title>", entry.body))
+
+
+@manager.command()
+@click.argument(
+    "targets", nargs=-1, type=Choice(["github", "pypi"], case_sensitive=False)
+)
+def missing(targets: tuple[str, ...] = ()):
+    """List release versions missing from publication targets."""
+    targets = targets or ("github", "pypi")
+    missing_by_target = {"github": partial(_gen_gh_tags, True), "pypi": _gen_pypi_tags}
+    multiple = len(targets) > 1
+
+    for target in targets:
+        tags = missing_by_target[target]()
+        versions = _gen_missing_versions(tags)
+
+        if multiple:
+            click.echo(f"{target}:")
+
+        for version in versions:
+            click.echo(version)
+
+
+@manager.command()
+@click.argument("target", type=Choice(["github", "pypi"], case_sensitive=False))
+@click.argument("version")
+@click.option(
+    "--notes-only", help="Replace notes on an existing GitHub release", is_flag=True
+)
+@click.option(
+    "-d",
+    "--dry-run",
+    help="Show the workflow dispatch without triggering it",
+    is_flag=True,
+)
+def backfill(
+    target: str, version: str, notes_only: bool = False, dry_run: bool = False
+):
+    """Backfill an incomplete historical release."""
+    is_github = target == "github"
+
+    if notes_only and not is_github:
+        raise click.UsageError("--notes-only is only valid for GitHub releases")
+
+    try:
+        if is_github:
+            _backfill_github(version, notes_only, dry_run)
+        else:
+            _backfill_pypi(version, dry_run)
+    except CalledProcessError as e:
+        exit(e.returncode)
 
 
 @manager.command()

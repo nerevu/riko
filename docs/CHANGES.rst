@@ -1,6 +1,19 @@
 Changelog
 =========
 
+v0.77.4 (Unreleased)
+--------------------
+
+Dev
+~~~
+
+- Added ``manage backfill`` to dispatch the release or publish workflow for an
+  existing tag, with ``--dry-run`` and a ``--notes-only`` mode that replaces a
+  release's changelog section while keeping its GitHub-generated notes.
+
+- Added ``manage missing`` to list release tags absent from GitHub or PyPI.
+
+
 v0.77.3 (2026-08-31)
 --------------------
 
