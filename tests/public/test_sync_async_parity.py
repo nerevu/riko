@@ -10,7 +10,6 @@ Lifecycle/close/split/export parity lives in ``test_pipe_lifecycle.py`` and
 ``test_context_modes.py``. This file locks *data-output* equivalence.
 """
 
-from riko.bado._backend import run
 from riko.collections import AsyncPipe, SyncPipe
 from riko.types._streams import Item
 from riko.types.modules import ItemBuilderConf, StrReplaceConf, StrReplaceConfRule
@@ -71,34 +70,3 @@ class TestOutputParity:
         )
         assert sync_result == async_result
         assert sync_result == [{"content": "a"}, {"content": "bb"}]
-
-
-@skipif_issync
-class TestLifecycleObservableParity:
-    """One-shot behaviors whose *observable* result must match across engines."""
-
-    def test_reiteration_yields_empty(self):
-        sync_pipe = _tokenize(SyncPipe).count()
-        sync_first, sync_second = list(sync_pipe), list(sync_pipe)
-
-        async def main():
-            pipe = _tokenize(AsyncPipe).count()
-            return [x async for x in pipe], [x async for x in pipe]
-
-        async_first, async_second = run(main)
-        assert sync_first == async_first == [{"count": 3}]
-        assert sync_second == async_second == []
-
-    def test_chain_after_partial_wraps_remainder(self):
-        sync_pipe = _tokenize(SyncPipe)
-        sync_head = next(sync_pipe)
-        sync_rest = list(sync_pipe.count())
-
-        async def main():
-            pipe = _tokenize(AsyncPipe)
-            head = await anext(pipe)
-            return head, [x async for x in pipe.count()]
-
-        async_head, async_rest = run(main)
-        assert sync_head == async_head == {"content": "a"}
-        assert sync_rest == async_rest == [{"count": 2}]

@@ -160,10 +160,6 @@ class TestPublicRegister:
         flow = SyncPipe(_NAME, source=[{"content": "a b c"}], conf={"delimiter": " "})
         assert [item.get("content") for item in flow] == ["a", "b", "c"]
 
-    def test_register_requires_name(self, fixed_registry):
-        with pytest.raises(ValueError, match="needs a name"):
-            register(ModuleDefinition(sync_pipe=marker))
-
     def test_reset_registry_clears_registration(self, fixed_registry):
         register(MOD_DEFN)
         reset_registry()

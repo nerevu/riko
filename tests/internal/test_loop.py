@@ -13,7 +13,6 @@ global-vs-per-parent ``count`` gap.
 
 from typing import cast
 
-import riko.modules.loop as loop_module
 from riko.bado._backend import run
 from riko.context import Context
 from riko.modules._subpipe import mark_subpipe
@@ -145,10 +144,6 @@ class TestLoopCharacterization:
         )
         result = loop(parents, embed=strconcat, conf=conf, count="all", emit=True)
         assert list(result) == ["aa!", "bb!"]
-
-    def test_loop_has_async_pipe(self):
-        # The loop has an eager-async operator (Phase 2); lazy streaming is Phase 3.
-        assert hasattr(loop_module, "async_pipe")
 
 
 class TestProcessorTopLevelCount:

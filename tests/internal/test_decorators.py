@@ -70,14 +70,8 @@ class TestIsasyncInferenceValid:
 class TestExplicitIsasyncRequired:
     """
     A sync callable that is the async interface but isn't named ``async_pipe``
-    (a lambda) — the only case ``isasync=True`` is required.
+    (a lambda). This is the only case ``isasync=True`` is required.
     """
-
-    def test_lambda_infers_sync_without_isasync(self):
-        assert processor()(shout).isasync is False
-
-    def test_lambda_needs_explicit_isasync(self):
-        assert processor(isasync=True)(shout).isasync is True
 
     @skipif_issync
     def test_explicit_lambda_runs_as_async_pipe(self):

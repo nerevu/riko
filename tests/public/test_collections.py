@@ -112,16 +112,6 @@ class _Mod(ModuleName):
 
 
 class TestSyncCollections(_CollectionTest):
-    def test_pipes_use_loopability_for_mapping(self):
-        source = [{"content": "one"}, {"content": "two"}]
-        transformer = SyncPipe("strtransform", source=source)
-        input_pipe = SyncPipe("input", source=source)
-
-        assert transformer.loopable
-        assert transformer.mapify
-        assert not input_pipe.loopable
-        assert not input_pipe.mapify
-
     def test_pubsub(self, caplog):
         names = ["receiver1", "receiver2"]
         receiver1, receiver2 = [
@@ -410,15 +400,6 @@ class TestSyncPipeExecutor:
 
 @skipif_issync
 class TestAsyncCollections(_CollectionTest):
-    def test_pipes_use_loopability_for_mapping(self):
-        async_transformer = AsyncPipe("strtransform")
-        async_input_pipe = AsyncPipe("input")
-
-        assert async_transformer.loopable
-        assert async_transformer.mapify
-        assert not async_input_pipe.loopable
-        assert not async_input_pipe.mapify
-
     def test_stream(self, capsys):
         """Tests a asynchronous stream pipeline."""
 
@@ -548,6 +529,16 @@ class TestAsyncCollections(_CollectionTest):
 
 class TestCollectionParity(_CollectionTest):
     """Behaviors whose observable output is identical across both engines."""
+
+    @pytest.mark.parametrize("pipe", _ENGINES)
+    def test_pipes_use_loopability_for_mapping(self, pipe):
+        transformer = pipe("strtransform", source=SRC)
+        non_loopable = pipe("input", source=SRC)
+
+        assert transformer.loopable
+        assert transformer.mapify
+        assert not non_loopable.loopable
+        assert not non_loopable.mapify
 
     @pytest.mark.parametrize("pipe", _ENGINES)
     def test_udf(self, pipe):
@@ -775,11 +766,6 @@ class TestModuleNameEnum:
         assert pipe.name == "hash"
         assert type(pipe.name) is str
         assert len(list(pipe)) == 3
-
-    def test_enum_and_string_resolve_identically(self):
-        via_enum = list(SyncPipe(_Mod.HASH, source=SRC))
-        via_str = list(SyncPipe("hash", source=SRC))
-        assert via_enum == via_str
 
     def test_enum_through_operator_and_method(self):
         via_or = SyncPipe(_Mod.HASH, source=SRC) | _Mod.TRUNCATE

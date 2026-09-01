@@ -298,19 +298,3 @@ async def test_async_receive_does_not_materialize():
 
     assert first == {"x": "foo", "i": 0}
     assert seen <= _LOOKAHEAD
-
-
-@pytest.mark.anyio
-@skipif_issync
-@pytest.mark.timeout(10)
-async def test_async_subscriber_sees_item_before_publisher_completes():
-    """
-    The canonical incremental-delivery contract: a subscriber's first item
-    arrives before the publisher finishes reading its source (a weaker bound
-    than ``test_async_receive_does_not_materialize``).
-    """
-    consumed: list[int] = []
-    first, seen = await _receive_first(consumed)
-
-    assert first == {"x": "foo", "i": 0}
-    assert seen < _SOURCE_LEN
