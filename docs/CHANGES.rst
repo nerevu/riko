@@ -13,6 +13,14 @@ Dev
 
 - Added ``manage missing`` to list release tags absent from GitHub or PyPI.
 
+- ``manage publish``/``release --dry-run`` now run a real ``uv publish --dry-run``
+  upload rehearsal instead of an import smoke test.
+
+- ``manage lint --yaml`` and ``manage prettify --yaml`` now target tracked YAML
+  files via ``git ls-files`` instead of a fixed path.
+
+- Pinned GitHub Actions steps to commit SHAs.
+
 
 v0.77.3 (2026-08-31)
 --------------------
