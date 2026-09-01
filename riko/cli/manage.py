@@ -40,16 +40,16 @@ sys.excepthook = partial(exception_hook, debug=False)
 
 TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
 LINE_ANCHOR_RE = re.compile(r"^L\d")
-CHANGELOG_PATH = ROOT_DIR / "docs" / "CHANGES.rst"
+DOCS_DIR = ROOT_DIR / "docs"
 WORKFLOW_DIR = ROOT_DIR / ".github" / "workflows"
+CHANGELOG_PATH = DOCS_DIR / "CHANGES.rst"
+RST_SUBHEADING_RE = re.compile(r"^(?P<title>[^\n]+)\n~+$", re.MULTILINE)
 RELEASE_SECTION_RE = re.compile(
     r"^(?P<version>v\d+\.\d+\.\d+) \((?P<release_date>[^)]+)\)\n-+\n\n"
     r"(?P<body>.*?)"
     r"(?=^v\d+\.\d+\.\d+ \([^)]+\)\n-+\n|\Z)",
     re.MULTILINE | re.DOTALL,
 )
-
-RST_SUBHEADING_RE = re.compile(r"^(?P<title>[^\n]+)\n~+$", re.MULTILINE)
 
 CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
     "config": (
@@ -238,7 +238,7 @@ def _slugify(text: str) -> str:
 
 def _gen_doc_files(where: str | None) -> Iterator[str]:
     """Resolve the RST files to check"""
-    for location in where.split(" ") if where else [ROOT_DIR, ROOT_DIR / "docs"]:
+    for location in where.split(" ") if where else [ROOT_DIR, DOCS_DIR]:
         if isdir(location):
             yield from glob(str(Path(location) / "*.rst"))
         elif Path(location).suffix == ".rst":
@@ -247,8 +247,8 @@ def _gen_doc_files(where: str | None) -> Iterator[str]:
 
 def _gen_yaml_files() -> Iterator[str]:
     """Return tracked YAML files."""
-    cmd = ["git", "ls-files", "*.yml", "*.yaml"]
-    yield from check_output(cmd, text=True).splitlines()
+    args = ["git", "ls-files", "*.yml", "*.yaml"]
+    yield from check_output(args, text=True).splitlines()
 
 
 def _render_rst(path: str) -> tuple[str, Any]:
@@ -366,7 +366,7 @@ def _check_yaml(where: Iterable[str] = ()) -> int:
     if not yamlfmt:
         raise RuntimeError("yamlfmt not found")
 
-    paths = list(where) or _gen_yaml_files()
+    paths = where or _gen_yaml_files()
     return call([yamlfmt, "-lint", *paths])
 
 
