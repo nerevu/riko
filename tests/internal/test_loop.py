@@ -51,8 +51,8 @@ _SYNC_SUBPIPE = mark_subpipe(_sync_subpipe)
 _ASYNC_SUBPIPE = mark_subpipe(_async_subpipe)
 
 
-def _tokenizer_loop(source: Stream, **kwargs) -> OperatorWrapperOutput:
-    return loop(source, embed=tokenizer, conf=TOKENIZER_CONF, field="title", **kwargs)
+def _tokenizer_loop(source: Stream, field="title", **kwargs) -> OperatorWrapperOutput:
+    return loop(source, embed=tokenizer, conf=TOKENIZER_CONF, field=field, **kwargs)
 
 
 class TestLoopCharacterization:
@@ -127,14 +127,11 @@ class TestLoopCharacterization:
         ]
 
     def test_loop_level_field_selects_child_input(self):
-        # Loop-level `field` feeds the embed, so the tokenizer sees parent["title"].
-        result = _tokenizer_loop(iter(PARENTS), count="all", emit=True)
-        assert list(result) == [
-            {"content": "a"},
-            {"content": "b"},
-            {"content": "c"},
-            {"content": "d"},
-        ]
+        # Loop-level `field` chooses which parent field feeds the embed: the
+        # tokenizer sees parent["alt"], not parent["title"].
+        parents = iter([{"title": "a b", "alt": "x y"}])
+        result = _tokenizer_loop(parents, field="alt", count="all", emit=True)
+        assert list(result) == [{"content": "x"}, {"content": "y"}]
 
     def test_loop_dynamic_conf_resolves_per_parent(self):
         parents = iter([{"title": "aa"}, {"title": "bb"}])
