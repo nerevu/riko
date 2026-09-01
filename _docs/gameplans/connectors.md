@@ -191,6 +191,16 @@ not treated as secret.
 Directory reads require an explicit glob, recursive flag, and maximum object count.
 Remote object metadata should be available without forcing content materialization.
 
+### 6.1 Sink verb vocabulary
+
+Writes use two collection verbs on a shared destination model. `write(dest, format=, mode=)` is a
+passthrough emit (fire-and-forget copy, non-keyed `append`/`replace`, returns the stream);
+`sink(dest, mode=, keys=, idempotency_key=)` is the terminal reconciler (keyed/destructive modes,
+returns a `SinkResult`/`Plan`). A destination resolves like a pipe module — bare name / `Sinks`
+enum / typed target object — with a path-signalled string defaulting to `File`. The write-mode
+contract (`SinkMode`, `SinkWrite`, `sink_write`) lives in `riko/sinks.py`; `output` is a compiler
+DAG terminal, not a sink. Full decision record: `monthly-dashboard.md` §5.
+
 ## 7. Mail connectors
 
 ```text

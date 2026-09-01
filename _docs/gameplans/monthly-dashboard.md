@@ -135,21 +135,36 @@ Notes that change the SOP:
   the CIPP CSV download. CIPP stays useful where its GDAP/MSP abstraction saves auth work; the Riko
   provider surface is `microsoft.managed_devices()`, not `download_csv_from_cipp_page()`.
 
-## 5. Airtable sink is upsert/append/replace/delete, not CSV import
+## 5. Sink interface: `write` vs `sink`, not CSV import
 
-The real Airtable operation is record synchronization. Consume the generic Airtable sink
-(`connectors.md`) with explicit modes; the CSV-import extension leaves the production workflow.
+The real Airtable operation is record synchronization, not a CSV-import extension. The scenario
+targets one unified sink interface — the decision record for the whole thing. Four verbs on the
+collection surface, each on its own axis:
+
+| Verb | Shape | Purpose |
+|---|---|---|
+| `write(dest, format=, mode=append\|replace)` | passthrough → `Stream` | emit a copy, keep chaining |
+| `sink(dest, mode=, keys=, idempotency_key=)` | terminal → `SinkResult`/`Plan` | reconcile records, report/plan |
+| `split(n)` / `subscribe(name, on_receive=…)` | branches / subscription | broadcast duplication |
+| `export(items, fmt)` | terminal → value | serialize a stream to a Python value |
+
+`write` **emits and continues** (fire-and-forget copy, non-keyed `append`/`replace`, returns the
+stream); `sink` **reconciles and reports** (keyed/destructive modes, returns a `SinkResult`/`Plan`).
+The discriminator is the return shape: keep the stream (`write`) or get the outcome (`sink`). `write`
+desugars to `subscribe(on_receive=…)`.
+
+Reconciliation writes therefore use `sink`:
 
 ```python
-flow.export(
+result = flow.sink(
     "airtable",
     base="apphfQxXXlf9Dajvf",
     table="tbl9FOPBKYC4q28zW",
     mode="merge",
     keys=("endpoint_id",),
-)
+)  # -> SinkResult(created=…, updated=…)
 
-flow.export(
+flow.sink(
     "airtable",
     table="tbl6EmH19hzEIbSjb",
     mode="append",
@@ -158,8 +173,33 @@ flow.export(
 ```
 
 `merge` upserts on `keys`; `append` uses `idempotency_key` so retries do not duplicate; `replace`
-and `delete` are the destructive modes reserved for reconciled removals (§7). Idempotency identity
-itself comes from `execution-semantics.md`; this scenario only supplies the keys.
+and `delete` are the destructive modes reserved for reconciled removals (§7), gated through
+`plan()`/`apply()`. Idempotency identity comes from `execution-semantics.md`; this scenario supplies
+only the keys.
+
+**Destination resolution mirrors module discovery** — a destination is named three interchangeable
+ways, resolved like any pipe module:
+
+```python
+flow.sink("airtable", base=…, table=…)       # bare key -> registry sink
+flow.sink(Sinks.AIRTABLE, base=…)            # generated enum (built-ins only)
+flow.sink(Airtable(base=…, table=…))         # typed object (externals get this in lieu of an enum)
+flow.write("out.csv")                         # path string -> File default, format from extension
+```
+
+A string with a path/url signal (a suffix, a `/`, or a `scheme://`) is a `File`; a bare registered
+name is that sink. `SinkMode` is the single mode axis; the file-open mode (`wb+`) becomes an internal
+`FileTarget` detail (escape hatch `File(url, open_mode=…)`).
+
+Ownership: the verb surface is core collection API; the **mode contract** — `SinkMode` (with
+`keyed`/`destructive`), the frozen `SinkWrite`, and `sink_write(mode, keys=, idempotency_key=)` —
+lives in `riko/sinks.py`; transports and typed targets (`Airtable`, …) stay external and follow
+`connectors.md`; `split`/`subscribe` are owned by `fanout-topology.md`.
+
+Rejected alternatives (recorded so they are not relitigated): `output` is **not** a sink — it is the
+compiler's DAG terminal marker (passthrough), excluded from this interface; `mirror`/`cc` conflate
+with `split`'s broadcast duplication; `tap` conflates with Singer's source-tap, so the subscriber
+side-effect parameter is `on_receive=`, not `tap=`.
 
 ## 6. Reconciliation is the heart of the system
 

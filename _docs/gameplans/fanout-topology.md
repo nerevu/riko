@@ -162,6 +162,10 @@ all branch failures into successful execution.
 
 ### 5.4 Tap semantics
 
+> **Naming (pending propagation):** the parameter is renamed `tap=` → `on_receive=` to avoid
+> conflation with Singer's source-`tap`; the semantics below are unchanged. Decision record:
+> `monthly-dashboard.md` §5.
+
 A subscriber `tap=` may be sync or async. Its return value is discarded:
 
 ```python

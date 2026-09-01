@@ -232,12 +232,13 @@ contract are authoritative.
 
 Within a private module, split the rule by name:
 
-- A **non-underscore function** — the module's own internal API, e.g.
+- A **non-underscore function or class** — the module's own internal API, e.g.
   `gen_return_inferences` — carries **all** the sections its signature implies
   (`Args:`, `Returns:`/`Yields:`, `Raises:`) **plus an `Examples:` doctest**,
   **always**, even when it looks obvious, exactly like a STABLE or EXTENSION
-  object. The summary and any prose lead with the **why, invariant, assumption,
-  or trap**; the sections stack on top, never in place of it.
+  object. A public class demonstrates construction plus its primary behavior in a
+  class-level `Examples:`. The summary and any prose lead with the **why,
+  invariant, assumption, or trap**; the sections stack on top, never in place of it.
 - An **underscore-prefixed helper may omit the sections — or the docstring
   entirely — when it is obvious**: `_matches_abc(candidate, abc) -> bool` needs
   none, and `"""Get the field."""` is worse than nothing. But the moment a `_`
@@ -413,9 +414,11 @@ compact executable example clarifies non-obvious behavior.
 - Properties document the exposed value as a noun, not a getter
   (`"""Whether the source stream has been fully consumed."""`).
 - Exception classes stay short — usually a single line.
-- Declarative type objects (`TypedDict`, `Protocol`, enum, dataclass) document the
-  concept in prose/`Attributes:`; no invented doctests for objects with no runtime
-  behavior worth demonstrating.
+- Declarative type objects (`TypedDict`, `Protocol`, enum, pure-data `dataclass`)
+  document the concept in prose/`Attributes:`; no invented doctests for objects with
+  no runtime behavior worth demonstrating. A public class **with** runtime behavior
+  (methods, construction validation, a resolved view) carries a class-level
+  `Examples:` like any other public object.
 - Most straightforward dunders need no docstring when the class already defines
   the behavior; cross-reference (`equivalent to :meth:\`run\``) instead of
   duplicating.
@@ -469,6 +472,13 @@ code block without interpreter prompts.
   private helpers.
 - Private-object doctests are rare; use one only when a compact executable
   example significantly clarifies non-obvious behavior.
+- **Doctests and unit tests share coverage, they do not duplicate it.** When a
+  doctest demonstrates a behavior an existing unit test also asserts, extract the
+  example *from* that test and delete the now-redundant test — the doctest is the
+  single source. Reserve unit tests for what a doctest should not carry: exception
+  and edge paths, unstable-`repr`/non-deterministic cases, and multi-step
+  integration. Before adding a doctest, grep the suite for an equivalent assertion;
+  before deleting a test, confirm the doctest actually runs it (`--doctest-modules`).
 
 ## Python syntax baseline
 

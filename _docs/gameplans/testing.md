@@ -116,7 +116,7 @@ they should be *updated, not deleted*, when the decision is made.
 | `internal/test_streams.py` | **Keep** | Strong primitives: boundedness, ordering, shared budgets, validation, merge incrementality. Parametrize ordered/unordered empty-source tests if desired. |
 | `public/test_collections.py` | **Keep, split responsibilities** | Doing too much (pub/sub, executors, resource ownership, chaining, parity, module enums). Keep `TestModuleNameEnum` here as the ModuleName owner; remove redundant enum/string equivalence. Share `_ENGINES` for sync/async loopability. Keep pub/sub identity/cleanup + pool ownership. `"hash"` basics exist in README doctests → concentrate on tuple/template/reverse-operator/error variants. |
 | `public/test_context_modes.py` | **Keep** | Compact, contract-focused. Keep the ignored-legacy-kwargs test as compatibility coverage while `Context` still accepts `**kwargs`. |
-| `public/test_modules.py` | **Split public from internal; remove doctest duplication** | Imports implementation objects despite living under `public`. Keep API errors + meaningful public filtering contracts; import stable APIs from `riko`. Move exact metadata derivation, `@operator` inference, direct `count_pipe`, and implementation constants to internal. Basic `list_modules()` type/loopable/subtype/metadata and `list_targets()` happy paths are already FAQ doctests. |
+| `public/test_modules.py` | **Split public from internal; remove doctest duplication** | Imports implementation objects despite living under `public`. Keep API errors + meaningful public filtering contracts; import from the **defining modules** (the stable `riko` facade is reserved for user-facing docs/examples — internal `riko/` and `tests/` files always import from a symbol's defining module). Move exact metadata derivation, `@operator` inference, direct `count_pipe`, and implementation constants to internal. Basic `list_modules()` type/loopable/subtype/metadata and `list_targets()` happy paths are already FAQ doctests. |
 | `public/test_parallel.py` | **Keep** | Good boundary vs primitive mechanics: it leaves precise backpressure math to `internal/test_streams.py`. Keep result equivalence, ordering, early close, non-materialization. |
 | `public/test_pipe_lifecycle.py` | **Keep as lifecycle owner** | Large but coherent; sync/async mirroring is intentional. Single owner of exhaustion/reiteration/partial-chain lifecycle behavior. Do not sacrifice readability for LOC. |
 | `public/test_sync_async_parity.py` | **Keep output parity; delete lifecycle class** | `TestOutputParity` is valuable. Remove `TestLifecycleObservableParity`: reiteration and partial-chain are already tested for both engines in `test_pipe_lifecycle.py`, and this file's own docstring says lifecycle parity lives there. |
@@ -185,6 +185,62 @@ CONSOLIDATE
 
 **Do not** reduce `test_compile`, `test_parallel`, `test_streams`, or the core lifecycle tests just
 to shrink the suite — they cover contracts hard to catch elsewhere.
+
+**Shipped (first-pass patch).** The conservative FIX/REMOVE set has landed:
+
+- `test_basics._load`/`_aload` now forward `value`/`check`; the two stale expected counts the
+  live assertions exposed were corrected to the deterministic fixture truth (`feeddiscovery`
+  25→15, `simplemath_1` 4→6).
+- Resolver precedence tests use distinguishable callables: `test_runtime_registration_shadows_entry_point`
+  now proves the runtime marker (not the entry-point one) wins, and `test_composite_store_first_hit_wins`
+  puts a different object in the first two stores so it proves precedence, not fallback.
+- `test_loop_level_field_selects_child_input` now isolates `field` (a parent carrying both
+  `title` and `alt`, tokenizing on `alt`), so it is no longer a duplicate of
+  `test_loop_count_all_flattens_embedded_results`.
+- `test_script.assert_output_matches` dropped the dead/broken `bool` branch and the
+  `SequenceMatcher` `partial` path; `test_benchmark` now asserts the stable benchmark labels
+  directly (each label heads a line, robust to the right-justified name padding).
+- Removed `test_loop_has_async_pipe`, `TestLifecycleObservableParity` (both engines already
+  covered in `test_pipe_lifecycle.py`), and the two redundant `test_gen_config` structural tests
+  (byte equality subsumes them).
+- Trimmed `_inference.infer_from_source` doctests to one descriptive example; the map/sum/unknown
+  edge cases live in `test_inference.py`.
+
+**Shipped (§ 3 consolidation, first batch).**
+
+- `test_dotdict.py` — nine deletion tests folded into one parametrized `(source, key, expected)`
+  matrix (root/nested/deep, case variation, missing paths), one case per `pytest.param` id.
+- `test_codegen_names.py` — the three taxonomy partition tests collapsed into a single golden
+  partition (`test_taxonomy_partition_matches_golden`); the enum override case folded into the
+  `test_enum_member_name` parametrization; the two provider tests now **execute** the generated
+  source (`exec`) and assert on the resulting enum objects instead of string-searching it.
+- `test_decorators.py` — dropped `test_lambda_infers_sync_without_isasync`/
+  `test_lambda_needs_explicit_isasync` (duplicates of `TestIsasyncInferenceValid` rows); the
+  class now owns only the end-to-end async-execution proof.
+- `public/test_modules.py` split public↔internal: exact metadata derivation
+  (`get_module_metadata` classification) + the `@operator` subtype inference moved to the new
+  `internal/test_metadata.py`; the public file now owns only discovery-filtering combinations,
+  API errors, and input test-flag scoping. (Internal tests import from defining modules per the
+  established convention — not the `riko` facade.)
+- `public/test_collections.py` deduped: the sync/async copies of
+  `test_pipes_use_loopability_for_mapping` folded into one `_ENGINES`-parametrized parity test,
+  and the redundant `test_enum_and_string_resolve_identically` dropped (equivalence is already
+  proven by `test_normalize_module_name` + `test_constructor_stores_plain_string`).
+- `public/test_imports.py` (the P13 exit test) consolidated **without weakening the contract**:
+  the two per-name `hasattr` parametrizations collapsed into one single-assertion resolve check
+  each (stable + extension); `test_no_private_names_in_public_all` removed and its guarantee folded
+  into `test_partial_surface_matches_expected` (equal surfaces already get no-private free from
+  golden-set equality; the partial `riko.modules`/`riko.exceptions` surfaces now assert it
+  explicitly — and the modules check now also covers `riko.modules._names`); and
+  `test_no_leaked_public_functions`'s overclaiming docstring corrected to state it guards
+  *functions* specifically (classes/constants like `Context` are intentionally unexported).
+
+**Remaining.** `tests/functional/test_pipeline.py` was removed. The rest of the § 3 CONSOLIDATE
+work (the deeper `public/test_collections.py` responsibility split into focused files + trimming
+chaining tests that README doctests already own, parametrize the `augment_entries` fallbacks +
+example pipelines in `functional/`, and the `internal/test_inference.py` call/annotation-shape
+parametrization) and the § 2b regression batch (new fixtures: `.xlsx`/`.sqlite`, threaded servers,
+sync/async parity bytes) are not yet done.
 
 ## 6. Relationship to the P-track
 
