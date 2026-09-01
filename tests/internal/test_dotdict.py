@@ -1,53 +1,64 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests DotDict deletion: root, nested, and case-insensitive.
+Tests DotDict deletion: root, nested, deep, case variation, and missing paths.
 """
+
+import pytest
 
 from riko.dotdict import DotDict
 
 
-class TestDotDictDelete:
-    def test_delete_root(self):
-        d = DotDict({"author": "bar", "title": "foo"})
-        d.delete("author")
-        assert d.asdict() == {"title": "foo"}
-
-    def test_delete_nested(self):
-        d = DotDict({"author": {"name": "bar", "url": "x.com"}})
-        d.delete("author.name")
-        assert d.asdict() == {"author": {"url": "x.com"}}
-
-    def test_delete_deeply_nested(self):
-        d = DotDict({"a": {"b": {"c": 1, "d": 2}}})
-        d.delete("a.b.c")
-        assert d.asdict() == {"a": {"b": {"d": 2}}}
-
-    def test_delete_root_case_insensitive(self):
-        d = DotDict({"author": "bar", "title": "foo"})
-        d.delete("AUTHOR")
-        assert d.asdict() == {"title": "foo"}
-
-    def test_delete_nested_case_insensitive(self):
-        d = DotDict({"author": {"name": "bar", "url": "x.com"}})
-        d.delete("Author.Name")
-        assert d.asdict() == {"author": {"url": "x.com"}}
-
-    def test_delete_deeply_nested_case_insensitive(self):
-        d = DotDict({"a": {"b": {"c": 1, "d": 2}}})
-        d.delete("A.B.C")
-        assert d.asdict() == {"a": {"b": {"d": 2}}}
-
-    def test_delete_missing_root_noop(self):
-        d = DotDict({"author": "bar"})
-        d.delete("missing")
-        assert d.asdict() == {"author": "bar"}
-
-    def test_delete_missing_nested_key_noop(self):
-        d = DotDict({"author": {"name": "bar"}})
-        d.delete("author.missing")
-        assert d.asdict() == {"author": {"name": "bar"}}
-
-    def test_delete_missing_intermediate_noop(self):
-        d = DotDict({"author": {"name": "bar"}})
-        d.delete("missing.name")
-        assert d.asdict() == {"author": {"name": "bar"}}
+@pytest.mark.parametrize(
+    ("source", "key", "expected"),
+    [
+        pytest.param(
+            {"author": "bar", "title": "foo"}, "author", {"title": "foo"}, id="root"
+        ),
+        pytest.param(
+            {"author": {"name": "bar", "url": "x.com"}},
+            "author.name",
+            {"author": {"url": "x.com"}},
+            id="nested",
+        ),
+        pytest.param(
+            {"a": {"b": {"c": 1, "d": 2}}}, "a.b.c", {"a": {"b": {"d": 2}}}, id="deep"
+        ),
+        pytest.param(
+            {"author": "bar", "title": "foo"},
+            "AUTHOR",
+            {"title": "foo"},
+            id="root-case-insensitive",
+        ),
+        pytest.param(
+            {"author": {"name": "bar", "url": "x.com"}},
+            "Author.Name",
+            {"author": {"url": "x.com"}},
+            id="nested-case-insensitive",
+        ),
+        pytest.param(
+            {"a": {"b": {"c": 1, "d": 2}}},
+            "A.B.C",
+            {"a": {"b": {"d": 2}}},
+            id="deep-case-insensitive",
+        ),
+        pytest.param(
+            {"author": "bar"}, "missing", {"author": "bar"}, id="missing-root-noop"
+        ),
+        pytest.param(
+            {"author": {"name": "bar"}},
+            "author.missing",
+            {"author": {"name": "bar"}},
+            id="missing-nested-key-noop",
+        ),
+        pytest.param(
+            {"author": {"name": "bar"}},
+            "missing.name",
+            {"author": {"name": "bar"}},
+            id="missing-intermediate-noop",
+        ),
+    ],
+)
+def test_delete(source, key, expected):
+    d = DotDict(source)
+    d.delete(key)
+    assert d.asdict() == expected
