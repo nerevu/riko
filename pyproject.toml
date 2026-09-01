@@ -40,6 +40,7 @@ dependencies = [
     "networkx>=3.4.2",
     "pygogo>=0.12.0,<2.0.0",
     "python-dateutil>=2.8.1,<3.0.0",
+    "python-slugify>=1.2.5",
     "pytz>=2019.3",
     "requests>=2.22.0,<3.0.0",
 ]
@@ -321,6 +322,8 @@ dependency_groups = ["lint"]
 commands = [
     ["python", "-m", "riko.cli.manage", "lint"],
     ["python", "-m", "riko.cli.manage", "lint", "--rst"],
+    ["python", "-m", "riko.cli.manage", "lint", "--actions"],
+    ["python", "-m", "riko.cli.manage", "lint", "--yaml"],
 ]
 
 [tool.uv.build-backend]
@@ -331,5 +334,5 @@ module-root = ""
 meza = { git = "https://github.com/reubano/meza.git", rev = "aa584e56edcd20e038b58379ab833e796dcf92df" }
 
 [build-system]
-requires = ["uv_build>=0.11.3,<0.12.0"]
+requires = ["uv_build>=0.11.3,<0.13.0"]
 build-backend = "uv_build"

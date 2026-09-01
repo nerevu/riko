@@ -5,10 +5,11 @@
 import re
 import shutil
 import sys
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from functools import partial
 from glob import glob
 from io import StringIO
+from itertools import chain
 from os import environ
 from os.path import basename, dirname, exists, getmtime, isdir, join
 from pathlib import Path
@@ -40,6 +41,7 @@ sys.excepthook = partial(exception_hook, debug=False)
 TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
 LINE_ANCHOR_RE = re.compile(r"^L\d")
 CHANGELOG_PATH = ROOT_DIR / "docs" / "CHANGES.rst"
+WORKFLOW_DIR = ROOT_DIR / ".github" / "workflows"
 RELEASE_SECTION_RE = re.compile(
     r"^(?P<version>v\d+\.\d+\.\d+) \((?P<release_date>[^)]+)\)\n-+\n\n"
     r"(?P<body>.*?)"
@@ -75,6 +77,9 @@ ruff: str | None = shutil.which("ruff")
 pylint: str | None = shutil.which("pylint")
 pyright: str | None = shutil.which("pyright")
 twine: str | None = shutil.which("twine")
+actionlint: str | None = shutil.which("actionlint")
+shellcheck: str | None = shutil.which("shellcheck")
+yamlfmt: str | None = shutil.which("yamlfmt")
 
 
 def parse_verbosity(verbose: int = 0, quiet: bool | None = None) -> str:
@@ -219,8 +224,13 @@ def _ruff_check(where: str | None = "", unsafe_fixes: bool = False) -> int:
     return call([*args, *paths]) or call([ruff, "format", "--check", *paths])
 
 
-def _github_slug(text: str) -> str:
-    """Convert a heading to its GitHub anchor slug"""
+def _slugify(text: str) -> str:
+    r"""
+    Convert a heading to its GitHub anchor slug
+
+    TODO: Update meza and replace with
+    slugify(text, allow_unicode=True, regex_pattern=r"[^\w-]+")
+    """
     lowered = text.strip().lower()
     kept = "".join(c for c in lowered if c.isalnum() or c in {" ", "-", "_"})
     return kept.replace(" ", "-")
@@ -233,6 +243,12 @@ def _gen_doc_files(where: str | None) -> Iterator[str]:
             yield from glob(str(Path(location) / "*.rst"))
         elif Path(location).suffix == ".rst":
             yield str(location)
+
+
+def _gen_yaml_files() -> Iterator[str]:
+    """Return tracked YAML files."""
+    cmd = ["git", "ls-files", "*.yml", "*.yaml"]
+    yield from check_output(cmd, text=True).splitlines()
 
 
 def _render_rst(path: str) -> tuple[str, Any]:
@@ -249,14 +265,14 @@ def _render_rst(path: str) -> tuple[str, Any]:
     return text, publish_doctree(text, source_path=path, settings_overrides=overrides)
 
 
-def _doc_anchors(doctree: Any) -> set[str]:
+def _get_doc_anchors(doctree: Any) -> set[str]:
     """Compute the GitHub heading anchors a rendered doc exposes"""
     seen: dict[str, int] = {}
     anchors: set[str] = set()
 
     for node in doctree.findall(nodes.title):
         if isinstance(node.parent, (nodes.section, nodes.document)):
-            base = _github_slug(node.astext())
+            base = _slugify(node.astext())
             count = seen.get(base, 0)
             anchors.add(base if count == 0 else f"{base}-{count}")
             seen[base] = count + 1
@@ -273,18 +289,25 @@ def _render_errors(path: str, doctree: Any) -> list[str]:
     ]
 
 
-def _anchors_for(path: str, cache: dict[str, set[str]]) -> set[str]:
+def _get_path_anchors(path: str, cache: dict[str, set[str]]) -> set[str]:
     """Return the cached anchor set for a doc, rendering it on first use"""
     if path not in cache:
         try:
-            cache[path] = _doc_anchors(_render_rst(path)[1])
+            cache[path] = _get_doc_anchors(_render_rst(path)[1])
         except OSError:
             cache[path] = set()
 
     return cache[path]
 
 
-def _link_errors(path: str, text: str, cache: dict[str, set[str]]) -> list[str]:
+def _get_staged() -> list[str]:
+    """List staged Python files (added/copied/modified, not deleted)"""
+    args = ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"]
+    staged = check_output(args, text=True).splitlines()
+    return [name for name in staged if name.endswith(".py")]
+
+
+def _check_links(path: str, text: str, cache: dict[str, set[str]]) -> list[str]:
     """Validate internal hyperlink targets resolve to files and anchors"""
     base_dir = dirname(path)
     errors: list[str] = []
@@ -302,13 +325,13 @@ def _link_errors(path: str, text: str, cache: dict[str, set[str]]) -> list[str]:
         elif anchor and not LINE_ANCHOR_RE.match(anchor) and target.endswith(".rst"):
             where = ref_path or basename(path)
 
-            if anchor not in _anchors_for(target, cache):
+            if anchor not in _get_path_anchors(target, cache):
                 errors.append(f"{path}: unknown anchor '#{anchor}' in {where}")
 
     return errors
 
 
-def _rst_check(where: str | None = None) -> int:
+def _check_rst(where: str | None = None) -> int:
     """Validate RST rendering and internal links"""
     if publish_doctree is None:
         raise RuntimeError("docutils not found")
@@ -318,9 +341,9 @@ def _rst_check(where: str | None = None) -> int:
 
     for path in _gen_doc_files(where):
         text, doctree = _render_rst(path)
-        cache[path] = _doc_anchors(doctree)
+        cache[path] = _get_doc_anchors(doctree)
         problems.extend(_render_errors(path, doctree))
-        problems.extend(_link_errors(path, text, cache))
+        problems.extend(_check_links(path, text, cache))
 
     for problem in problems:
         print(problem)
@@ -328,11 +351,23 @@ def _rst_check(where: str | None = None) -> int:
     return 1 if problems else 0
 
 
-def _staged_py_files() -> list[str]:
-    """List staged Python files (added/copied/modified, not deleted)"""
-    args = ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"]
-    staged = check_output(args, text=True).splitlines()
-    return [name for name in staged if name.endswith(".py")]
+def _check_actions(where: Iterable[str]) -> int:
+    """Validate GitHub Actions workflows with actionlint and shellcheck."""
+    if not actionlint:
+        raise RuntimeError("actionlint not found")
+    elif not shellcheck:
+        raise RuntimeError("shellcheck not found")
+
+    return call([actionlint, *where])
+
+
+def _check_yaml(where: Iterable[str] = ()) -> int:
+    """Link YAML files with yamlfmt."""
+    if not yamlfmt:
+        raise RuntimeError("yamlfmt not found")
+
+    paths = list(where) or _gen_yaml_files()
+    return call([yamlfmt, "-lint", *paths])
 
 
 def _check_staged() -> int:
@@ -340,7 +375,7 @@ def _check_staged() -> int:
     if not ruff:
         raise RuntimeError("ruff not found")
 
-    files = _staged_py_files()
+    files = _get_staged()
 
     if not files:
         return_code = 0
@@ -350,6 +385,18 @@ def _check_staged() -> int:
         )
 
     return return_code
+
+
+# ---------------------------------------------------------------------------
+# Prettify helpers
+# ---------------------------------------------------------------------------
+def _format_yaml(where: Iterable[str] = ()) -> int:
+    """Format YAML files with yamlfmt."""
+    if not yamlfmt:
+        raise RuntimeError("yamlfmt not found")
+
+    paths = list(where) or [str(ROOT_DIR)]
+    return call([yamlfmt, *paths])
 
 
 # ---------------------------------------------------------------------------
@@ -401,6 +448,8 @@ def check():
 @click.option(
     "-r", "--rst", help="Validate RST rendering and internal links", is_flag=True
 )
+@click.option("-a", "--actions", help="Validate GitHub Actions workflows", is_flag=True)
+@click.option("-y", "--yaml", help="Validate YAML files", is_flag=True)
 @click.option(
     "-p",
     "--parallel",
@@ -408,18 +457,20 @@ def check():
     is_flag=True,
 )
 def lint(
-    paths=(),
-    where=(),
+    paths: tuple[str, ...] = (),
+    where: tuple[str, ...] = (),
     unsafe_fixes=False,
     strict=False,
     check_types=False,
     verify_types=False,
     dist=False,
     rst=False,
+    actions=False,
+    yaml=False,
     parallel=False,
 ):
     """Check style with linters"""
-    where = " ".join([*where, *paths])
+    _where = " ".join([*where, *paths])
 
     if dist:
         return_code = _twine_check()
@@ -430,9 +481,15 @@ def lint(
     elif strict:
         return_code = _pylint_check(parallel)
     elif rst:
-        return_code = _rst_check(where)
+        return_code = _check_rst(_where)
+    elif actions:
+        exts = [".yml", ".yaml"]
+        _paths = (glob(str(WORKFLOW_DIR / f"*.{ext}")) for ext in exts)
+        return_code = _check_actions(chain.from_iterable(_paths))
+    elif yaml:
+        return_code = _check_yaml(_where)
     else:
-        return_code = _ruff_check(where, unsafe_fixes)
+        return_code = _ruff_check(_where, unsafe_fixes)
 
     exit(return_code)
 
@@ -440,12 +497,21 @@ def lint(
 @manager.command()
 @click.option("-w", "--where", help="Modules to check", multiple=True)
 @click.option("-s", "--sort/--no-sort", help="Sort module imports", default=True)
+@click.option("-y", "--yaml", help="Format YAML files", is_flag=True)
 @click.option("-F", "--unsafe-fixes", help="Applies unsafe fixes", is_flag=True)
-def prettify(where=(), sort=True, gen_config=False, unsafe_fixes=False):
+def prettify(
+    where: tuple[str, ...] = (),
+    sort=True,
+    yaml=False,
+    gen_config=False,
+    unsafe_fixes=False,
+):
     """Prettify code with ruff"""
     return_code = 0
 
-    if sort and ruff:
+    if yaml:
+        return_code = _format_yaml(where)
+    elif sort and ruff:
         sort_cmd = [ruff, "check", "--select", "I", "--fix"]
         style_cmd = [ruff, "check", "--fix"]
 
@@ -514,9 +580,9 @@ def prettify(where=(), sort=True, gen_config=False, unsafe_fixes=False):
 @click.option(
     "-p", "--parallel", help="Run tests in parallel in multiple processes", is_flag=True
 )
-def test(paths=(), where=(), stop=None, **kwargs):  # noqa: PT028
+def test(paths: tuple[str, ...] = (), where: tuple[str, ...] = (), stop=None, **kwargs):  # noqa: PT028
     """Run pytest, tox, and script tests"""
-    where = [*where, *paths]
+    _where = [*where, *paths]
 
     if kwargs.get("quiet"):
         verbosity = "q"
@@ -537,7 +603,7 @@ def test(paths=(), where=(), stop=None, **kwargs):  # noqa: PT028
         # -s disables capture so the pdb prompt is interactive in the subprocess
         opts += " --pdb -s"
 
-    opts += f" {' '.join(where)}" if where else ""
+    opts += f" {' '.join(_where)}" if _where else ""
 
     try:
         if tox and kwargs.get("tox"):

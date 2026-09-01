@@ -1,0 +1,13 @@
+line_ending: lf
+gitignore_excludes: true
+
+formatter:
+  type: basic
+  indent: 2
+  include_document_start: false
+  retain_line_breaks_single: true
+  max_line_length: 0
+  indentless_arrays: false
+  pad_line_comments: 2
+  trim_trailing_whitespace: true
+  eof_newline: true
