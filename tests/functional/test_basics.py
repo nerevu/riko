@@ -114,7 +114,7 @@ class TestBasics:
             pipeline: SyncPipelineDependencies = module.pipe
             pydeps = extract_dependencies(pipeline=pipeline)
 
-        _check_results(pydeps, items, pipe_name, value=0, check=1)
+        _check_results(pydeps, items, pipe_name, value=value, check=check)
 
     async def _aload(self, items: Sequence[Items], pipe_name, value=0, check=1):
         try:
@@ -125,7 +125,7 @@ class TestBasics:
             pipeline: AsyncPipelineDependencies = module.async_pipe
             pydeps = await extract_dependencies(pipeline=pipeline)
 
-        _check_results(pydeps, items, pipe_name, value=0, check=1)
+        _check_results(pydeps, items, pipe_name, value=value, check=check)
 
     def setup_method(self):
         """Compile common subpipe"""
@@ -157,7 +157,7 @@ class TestBasics:
         """
         pipe_name = "pipe_HrX5bjkv3BGEp9eSy6ky6g"
         items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 25, 0)
+        self._load(items, pipe_name, 15, 0)
         item = cast(dict, items[0])
         assert item["link"] == "http://sz.de/1.2104731"
 
@@ -778,7 +778,7 @@ class TestBasics:
         """Loads a pipeline containing simplemath"""
         pipe_name = "pipe_zKJifuNS3BGLRQK_GsevXg"
         items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 4, 0)
+        self._load(items, pipe_name, 6, 0)
         item = cast(dict, items[0])
         assert item["title"] == "Open researcher open course"
 
