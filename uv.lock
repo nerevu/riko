@@ -1415,7 +1415,7 @@ wheels = [
 
 [[package]]
 name = "riko"
-version = "0.77.2"
+version = "0.77.3"
 source = { editable = "." }
 dependencies = [
     { name = "babel" },
@@ -1429,6 +1429,7 @@ dependencies = [
     { name = "networkx" },
     { name = "pygogo" },
     { name = "python-dateutil" },
+    { name = "python-slugify" },
     { name = "pytz" },
     { name = "requests" },
 ]
@@ -1500,6 +1501,7 @@ requires-dist = [
     { name = "networkx", specifier = ">=3.4.2" },
     { name = "pygogo", specifier = ">=0.12.0,<2.0.0" },
     { name = "python-dateutil", specifier = ">=2.8.1,<3.0.0" },
+    { name = "python-slugify", specifier = ">=1.2.5" },
     { name = "pytz", specifier = ">=2019.3" },
     { name = "requests", specifier = ">=2.22.0,<3.0.0" },
     { name = "types-lxml", marker = "extra == 'perf'", specifier = ">=2026.2.16" },

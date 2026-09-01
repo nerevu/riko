@@ -17,7 +17,7 @@ examples/.ipynb_checkpoints/*
 *.egg-info
 .eggs
 .installed.cfg
-.installed.cfg
+.venv
 *-0.*/*
 examples/**/uv.lock
 dist

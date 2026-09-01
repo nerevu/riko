@@ -1,6 +1,20 @@
 Changelog
 =========
 
+v0.77.3 (2026-08-31)
+--------------------
+
+Dev
+~~~
+
+- Added ``manage lint --yaml``/``--actions`` and ``manage prettify --yaml`` to
+  lint and format YAML with ``yamlfmt``, ``actionlint``, and ``shellcheck``;
+  wired into CI and tox.
+
+- Reformatted workflow and config YAML with ``yamlfmt`` and added a
+  ``riko/cli/.yamlfmt`` config.
+
+
 v0.77.2 (2026-08-31)
 --------------------
 

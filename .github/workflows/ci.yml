@@ -1,39 +1,30 @@
 name: CI
-
 on:
   push:
     branches-ignore:
       - "v[0-9]+.[0-9]+.[0-9]+"
   pull_request:
-    branches: [ main, features ]
-
+    branches: [main, features]
 permissions:
-  contents: write  # Required to push the fixes back to the repo
-
+  contents: write # Required to push the fixes back to the repo
 env:
   PYTHONHASHSEED: "94967295"
-
 jobs:
   format:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-
       - name: Sort imports
         run: uvx --from "ruff~=0.16" ruff check --select I --fix
-
       - name: Fix style issues
         run: uvx --from "ruff~=0.16" ruff check --fix
-
       - name: Format
         run: uvx --from "ruff~=0.16" ruff format
-
   lint:
     name: lint (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -44,38 +35,48 @@ jobs:
         # aren't hidden (pyright infers its target version from the interpreter).
         python-version: ["3.12", "3.13", "3.14"]
     steps:
+      # Lint commands are config-driven, not runner-Python-specific, so run them once.
       - uses: actions/checkout@v4
-
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-
-      - name: Install
+      - name: Install dependencies
         # All extras are required so pyright can resolve optional-dependency
         # imports (anyio, lxml, httpx, csv2ofx); editable so the checkout's
         # source is type-checked rather than a cached wheel.
         run: |
           uv sync --group dev --all-extras
           uv pip install --reinstall --no-deps --editable .
-
+      - name: Install Go
+        if: matrix.python-version == '3.12'
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          cache: false
+      - name: Install workflow tools
+        if: matrix.python-version == '3.12'
+        run: |
+          go install github.com/google/yamlfmt/cmd/yamlfmt@v0.21.0
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Lint
-        # ruff is config-driven, not runner-Python-specific, so run it once.
         if: matrix.python-version == '3.12'
         run: uv run --no-sync manage lint
-
       - name: Lint docs
-        # RST rendering/link validation is content-driven, not runner-Python-specific.
         if: matrix.python-version == '3.12'
         run: uv run --no-sync manage lint --rst
-
+      - name: Lint yaml
+        if: matrix.python-version == '3.12'
+        run: uv run --no-sync manage lint --yaml
+      - name: Lint actions
+        if: matrix.python-version == '3.12'
+        run: uv run --no-sync manage lint --actions
       - name: Check types
         run: uv run --no-sync manage lint --check-types
-
       - name: Verify types
         run: uv run --no-sync manage lint --verify-types
-
   test:
     name: py${{ matrix.python-version }} (optional=${{ matrix.optional }})
     runs-on: ubuntu-latest
@@ -85,22 +86,20 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13", "3.14"]
         optional: [true, false]
+        experimental: [false]
     steps:
       - uses: actions/checkout@v4
-
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-
       - name: Reject unconditional skips
         run: |
           if grep -rn "@pytest.mark.skip$" tests; then
             echo "Unconditional pytest skips are not permitted."
             exit 1
           fi
-
       - name: Install (optional=${{ matrix.optional }})
         run: |
           if [ "${{ matrix.optional }}" = "true" ]; then
@@ -113,6 +112,5 @@ jobs:
           # serves from the persisted cache keyed by the (unchanged) version,
           # so source-only changes (new CLI options) never take effect on CI.
           uv pip install --reinstall --no-deps --editable .
-
       - name: Test
         run: uv run --no-sync manage test --no-cov
