@@ -408,7 +408,7 @@ acceptable for compatibility subscriber concurrency when tasks are tracked and c
 
 Do **not** move live hub/channel state onto `Context.resources`; `Context` owns immutable Resource
 definitions. Final F5/R7 moves live subscription/channel/task ownership into each private execution,
-changes sync and async together from transformation-shaped `func` to `tap=`, removes hidden
+changes sync and async together from transformation-shaped `func` to `on_receive=`, removes hidden
 PENDING/DONE/id lifecycle bookkeeping, and makes cleanup independent of draining ignored branch
 output. The current idle-drain teardown bug remains characterized rather than being repaired by
 extending the old DONE/`ids` machinery.
@@ -449,7 +449,7 @@ Folded in from the retired `REFINEMENT_PLAN.md`. Cross-phase decisions that surv
 10. **Compatibility pub/sub streaming and final F5 semantics are separate steps.** The revised MVP
     keeps string targets, the current AnyIO rendezvous backend, and `func` transformation semantics
     while making async `send`/`receive` Feed-native. Final F5 changes both modes together to
-    object-first Publisher/Subscription lifecycle, `tap=`, and execution-owned cleanup. Do not
+    object-first Publisher/Subscription lifecycle, `on_receive=`, and execution-owned cleanup. Do not
     extend compatibility DONE/id machinery or partially backport F5 semantics.
 
 **Backward-compatibility contract (evergreen).** Every phase ships compat shims (moved-name

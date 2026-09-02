@@ -309,6 +309,14 @@ class TestSyncCollections(_CollectionTest):
         with pytest.raises(TypeError, match="requires the 'others' keyword"):
             list(SyncPipe.publish([{"title": "orphan"}]))
 
+    def test_subscribe_rejects_func_and_on_receive_together(self):
+        """
+        ``func`` maps and ``on_receive`` sinks, so passing both is a call-site
+        error rather than one silently winning.
+        """
+        with pytest.raises(TypeError, match="either 'func' or 'on_receive'"):
+            SyncPipe.subscribe("both", func=lambda x: x, on_receive=lambda x: None)
+
     @pytest.mark.xfail(
         reason="Idle drain ending the pass is not yet implemented", strict=True
     )

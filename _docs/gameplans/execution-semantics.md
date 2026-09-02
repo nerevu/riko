@@ -188,7 +188,7 @@ An external subscription is an ordinary source:
 flow = Pipeline(source=subscription)
 ```
 
-`publish()` accepts a local subscription pipeline or an external `Publisher`. A published local subscription branch is attached to the owning execution. The user does not drain that branch to make cleanup occur; branch terminal values are discarded unless the branch has an explicit sink/tap/routing effect.
+`publish()` accepts a local subscription pipeline or an external `Publisher`. A published local subscription branch is attached to the owning execution. The user does not drain that branch to make cleanup occur; branch terminal values are discarded unless the branch has an explicit sink/on_receive/routing effect.
 
 Calling `list(events)` independently creates a fresh execution; subscriptions are not replay buffers.
 
@@ -227,7 +227,7 @@ Literal["raise", "ignore"]
 
 with `"raise"` the default. `"ignore"` is per-item continuation.
 
-A subscriber `tap=` may be sync or async; its return value is discarded and the original item continues. This tap contract must be changed for sync and async together rather than creating mode-specific semantics.
+A subscriber `on_receive=` may be sync or async; its return value is discarded and the original item continues. This on_receive contract must be changed for sync and async together rather than creating mode-specific semantics.
 
 When multiple publishers target one subscription, the subscription completes only after all attached publishers complete. Concurrent publishers preserve actual delivery order; no artificial global ordering is imposed.
 

@@ -312,7 +312,7 @@ surface.
 `receive.pipe`'s declared return does not satisfy `SyncOperatorParser`, and why chaining
 (`subscribe("x", func=…).sort()`) yields `{'content': None}`. This transformation behavior is
 preserved during the revised compatibility MVP so sync and async do not diverge. Final F5
-changes **both** modes together to `tap=` semantics, where the callback return is discarded
+changes **both** modes together to `on_receive=` semantics, where the callback return is discarded
 and the received item continues. Do not silence the current typing symptom by widening
 `OperatorParserOutput`.
 

@@ -84,7 +84,7 @@ flow = flow.publish(events)
 
 `publish(events)` attaches the complete subscription branch to the producer's execution. The user
 does not have to drain ignored branch output to trigger work or cleanup. Terminal branch values are
-discarded unless the branch contains an explicit sink, tap, or routing effect.
+discarded unless the branch contains an explicit sink, on_receive, or routing effect.
 
 Calling:
 
@@ -162,18 +162,18 @@ all branch failures into successful execution.
 
 ### 5.4 Tap semantics
 
-> **Naming (pending propagation):** the parameter is renamed `tap=` → `on_receive=` to avoid
+> **Naming:** the parameter is renamed `tap=` → `on_receive=` to avoid
 > conflation with Singer's source-`tap`; the semantics below are unchanged. Decision record:
 > `monthly-dashboard.md` §5.
 
-A subscriber `tap=` may be sync or async. Its return value is discarded:
+A subscriber `on_receive=` may be sync or async. Its return value is discarded:
 
 ```python
 def archive(item):
     saved.append(item)
 
 
-subscription = Pipeline.subscribe("archive", tap=archive)
+subscription = Pipeline.subscribe("archive", on_receive=archive)
 ```
 
 The received item remains the logical stream value. The old `receive(func=...)` transformation
@@ -338,7 +338,7 @@ Current hubs and modules are implementation/migration inputs:
 
 - sync currently uses queue/generator-coroutine mechanics and historical PENDING/DONE bookkeeping;
 - async uses AnyIO channels but has had incremental-delivery/materialization defects;
-- current receiver `func` behaves like a transform rather than a tap;
+- current receiver `func` behaves like a transform rather than an on_receive;
 - current lifecycle can tie cleanup to draining a receiver.
 
 The target rewrite must preserve useful observable behavior while deleting those hidden ownership
@@ -349,7 +349,7 @@ mechanisms. In particular:
 - registration/teardown belongs to execution-owned subscription handles;
 - cleanup does not depend on draining ignored output;
 - async delivery is incremental;
-- tap semantics change sync and async together.
+- on_receive semantics change sync and async together.
 
 Feed-native async parser support is therefore a prerequisite for the async compatibility modules and
 is implemented through the common Feed-native parser mechanism, not a pub/sub-specific wrapper hack.
@@ -369,7 +369,7 @@ For that MVP:
 - make async `send` and `receive` Feed-native and incremental, so the first delivered item is visible
   before publisher completion and unbounded feeds do not require whole-stream materialization;
 - preserve the current subscriber `func` **transformation** behavior in both sync and async during
-  the MVP. Do not change only the async side to tap semantics;
+  the MVP. Do not change only the async side to on_receive semantics;
 - `asyncio.create_task()` is acceptable for MVP subscriber concurrency when tasks are explicitly
   tracked and cleaned up; final structured orchestration belongs to the private execution;
 - do not repair the sync idle-drain teardown bug by extending the old DONE/id bookkeeping. Keep that
@@ -380,7 +380,7 @@ F5 then changes sync and async **together** to the final contract:
 
 - object-first `Publisher` / `Subscription` / `Channel` and `Pipeline.subscribe(...)` /
   `flow.publish(subscription)`;
-- `tap=` replaces transformation-shaped subscription `func`; the callback return is discarded and
+- `on_receive=` replaces transformation-shaped subscription `func`; the callback return is discarded and
   the received item remains the logical value;
 - subscription/channel/task lifetime belongs to the private execution and cleanup never depends on
   the user draining ignored subscriber output;
@@ -390,7 +390,7 @@ F5 then changes sync and async **together** to the final contract:
   complete.
 
 This staging boundary is intentional: F1 fixes compatibility streaming; F5 owns the semantic
-lifecycle/tap transition. Do not partially backport F5 semantics into the MVP.
+lifecycle/on_receive transition. Do not partially backport F5 semantics into the MVP.
 
 ## 15. Testing strategy
 
@@ -440,7 +440,7 @@ Topology:
 Keep these to pin present behavior, but do **not** read them as forward contracts:
 
 1. subscriber `func` transformation semantics in both sync and async (`test_pubsub_funcs`) — F5
-   replaces this with `tap=` (return discarded);
+   replaces this with `on_receive=` (return discarded);
 2. sync `receive` currently interleaves `PENDING`/`DONE` markers into the drained stream
    (`test_pubsub`) — the acceptance target that it must *not* is §15.1(7).
 
@@ -448,7 +448,7 @@ Keep these to pin present behavior, but do **not** read them as forward contract
 
 1. object-first `Publisher` / `Subscription` / `Channel` with `Pipeline.subscribe(...)` /
    `flow.publish(subscription)`;
-2. sync and async `tap=` both discard return values and preserve the item;
+2. sync and async `on_receive=` both discard return values and preserve the item;
 3. multiple same-name subscription objects remain distinct by identity;
 4. external `Subscription` works as a Pipeline source;
 5. topology introspection reports stream, fan-in, split, and subscription edges (F6 surface).
@@ -464,7 +464,7 @@ F1  Feed-native incremental async send/receive compatibility modules
 F2  Binary conditional branch
 F3  Named N-way route / partition
 F4  Final bounded subscription buffering/error policy
-F5  Execution-owned Publisher/Subscription lifecycle + tap semantics
+F5  Execution-owned Publisher/Subscription lifecycle + on_receive semantics
 F6  Topology introspection / serialized representation
 F7  Branch-to-union/join ergonomic contracts
 ```
@@ -480,7 +480,7 @@ create a parallel implementation sequence.
 2. Publish/subscribe and split are incremental and bounded in both sync and async execution.
 3. `split()` consumes upstream once, activates only reachable branches, and is lossless.
 4. Broadcast and routing remain separate concepts.
-5. Subscriber buffering, overflow, ordering, errors, and tap behavior are explicit.
+5. Subscriber buffering, overflow, ordering, errors, and on_receive behavior are explicit.
 6. Multiple publisher completion is correct and deterministic at the subscription-lifecycle level.
 7. `union` remains sequential fan-in; `join` remains relational fan-in.
 8. Branch outputs compose naturally with existing fan-in operators.

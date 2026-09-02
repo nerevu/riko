@@ -436,9 +436,9 @@ For serialized output, you can pass a file path or file like object as the secon
 argument.
 
 ``export()`` is a one-shot terminal call. To write **inside** a pipeline uninterrupted,
-use the ``write`` sink pipe: it serializes the stream to ``conf['url']`` with a
-``Targets`` converter (``target`` defaults to ``'json'``) and passes every item through
-unchanged. This allows you can persist an intermediate result and continue processing.
+use the ``write`` sink pipe: it serializes the stream to file with a ``Targets``
+converter (``target`` defaults to ``'json'``) and passes every item through unchanged.
+This allows you to persist an intermediate result and continue processing.
 
 .. code-block:: python
 
@@ -449,7 +449,7 @@ unchanged. This allows you can persist an intermediate result and continue proce
     ...     flow = (
     ...         SyncPipe(Sources.ITEMBUILDER, conf=conf)
     ...         .tokenizer()
-    ...         .write(conf={"url": fp.name})
+    ...         .write(fp.name)
     ...         .count()
     ...     )
     ...     next(flow)
@@ -712,8 +712,8 @@ subscriber:
     >>>
     >>> ### `archive` and `notify` stand in for your real side effects ###
     >>> archived, alerted = [], []
-    >>> everything = SyncPipe.subscribe('everything', func=archived.append)
-    >>> breaking = SyncPipe.subscribe('breaking', func=alerted.append)
+    >>> everything = SyncPipe.subscribe('everything', on_receive=archived.append)
+    >>> breaking = SyncPipe.subscribe('breaking', on_receive=alerted.append)
     >>>
     >>> items = [
     ...     {'title': 'quiet', 'score': 42},
@@ -734,15 +734,11 @@ subscriber:
     >>> [item['title'] for item in flow]  # sorted high score items
     ['also big', 'breaking: riko 4.0']
     >>>
-    >>> ### Subscriber funcs already ran as items were published ###
+    >>> ### Subscriber side effects already ran as items were published ###
     >>> [item['title'] for item in archived]  # all items in original order
     ['quiet', 'breaking: riko 4.0', 'also big']
     >>> [item['title'] for item in alerted]  # high score items in original order
     ['breaking: riko 4.0', 'also big']
-    >>>
-    >>> ### Drain and discard subscriber output after publishing is complete ###
-    >>> _ = list(breaking)
-    >>> _ = list(everything)
 
 You can publish to multiple subscribers by passing additional names:
 

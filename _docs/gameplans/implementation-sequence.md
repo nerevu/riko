@@ -304,7 +304,7 @@ Deliver:
 - multiple publishers complete a subscription only after all attached publishers finish;
 - per-subscription order guarantees;
 - buffer default `0`, overflow `block`, optional drop-oldest where permitted;
-- `tap=` semantics in sync and async together;
+- `on_receive=` semantics in sync and async together;
 - `split()` upstream-once, active-branches-only, bounded, never lossy;
 - no cleanup dependency on draining branch output.
 

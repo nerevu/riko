@@ -25,4 +25,4 @@ type StringFileLike = (
 type FileLike = BinaryFileLike | StringFileLike
 type Opener = Callable[[str], tuple[FileLike, str | None]]
 
-IOFileLikeType: tuple[type, ...] = (BytesIO, StringIO)
+IOFileLikeType: tuple[type[BytesIO], type[StringIO]] = (BytesIO, StringIO)

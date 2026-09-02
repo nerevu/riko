@@ -199,7 +199,14 @@ lives in `riko/sinks.py`; transports and typed targets (`Airtable`, …) stay ex
 Rejected alternatives (recorded so they are not relitigated): `output` is **not** a sink — it is the
 compiler's DAG terminal marker (passthrough), excluded from this interface; `mirror`/`cc` conflate
 with `split`'s broadcast duplication; `tap` conflates with Singer's source-tap, so the subscriber
-side-effect parameter is `on_receive=`, not `tap=`.
+side-effect parameter is `on_receive=`, not `tap=` (riko has no "taps" — the word is banned in code
+and docs).
+
+`Shipped:` the `write`/`sink` verbs and the `File` target (`riko/targets.py`). `write` streams
+`csv`/`jsonl` per item and buffers other formats into one document flushed on publisher completion or
+graceful `close()` (an abrupt `terminate()` discards it). `Current gap:` incremental framing so json
+et al. also stream (**C**), keyed file reconciliation via streaming `ijson` reads, and async `write`.
+Owner detail + rationale: `connectors.md` §6.2.
 
 ## 6. Reconciliation is the heart of the system
 

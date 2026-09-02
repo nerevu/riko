@@ -15,8 +15,8 @@ type Hashable = int | float | str | Decimal | date | struct_time | None
 type DateDict = dict[str, str | int | date | bool]
 
 # Instance Types
-AnyStrType: tuple[type, ...] = (str, bytes)
-BasicValueType: tuple[type, ...] = (str, int)
+AnyStrType: tuple[type[str], type[bytes]] = (str, bytes)
+BasicValueType: tuple[type[str], type[int]] = (str, int)
 TemporalType: tuple[type, ...] = (datetime, date, struct_time)
 DateLikeType: tuple[type, ...] = (str, int, datetime, date, struct_time)
 NumLikeType: tuple[type, ...] = (float, int, Decimal)
