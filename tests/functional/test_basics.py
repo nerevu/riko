@@ -44,6 +44,54 @@ COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
 type Items = ParserOutput | StatefulItem
 
+KAZEEKI1_EXAMPLE = {
+    "author": {"name": "riko", "uri": "https://github.com/nerevu/riko"},
+    "dc:creator": "riko",
+    "k:author": "Homepage for a germansocial organization",
+    "k:budget_raw": "0 - $250",
+    "k:client_location": "unknown",
+    "k:due": "unknown",
+    "k:job_type": "fixed",
+    "k:marketplace": "guru.com",
+    "updated": "Tue, 06 Jan 2015 17:13:47 GMT",
+    "k:submissions": "unknown",
+    "k:tags": "Web,Software,IT",
+    "k:work_location": " Worldwide",
+}
+KAZEEKI1_CONTENT = (
+    " With this specification sheet we",
+    "for implementing a website for a german...",
+)
+
+KAZEEKI2_EXAMPLE = {
+    "author": None,
+    "dc:creator": None,
+    "k:author": "Need to fix Ionic Rss Reader Application - oDesk",
+    "k:budget_raw": "0 - 10 EUR",
+    "k:client_location": " Israel",
+    "k:due": "unknown",
+    "k:job_type": "unknown",
+    "k:marketplace": "odesk.com",
+    "k:posted": None,
+    "k:submissions": "unknown",
+    "k:tags": "Web-Development,Web-Programming",
+    "k:work_location": "unknown",
+}
+KAZEEKI2_CONTENT = (
+    "<p>Hello, I need to fix an application",
+    "are welcome to this project.<br><br><b>",
+)
+
+
+def _assert_kazeeki(item: dict, example: dict, content: tuple[str, str]) -> None:
+    for key, expected in example.items():
+        got = item.get(key)
+        assert got == expected, f"Expected {expected} for key {key}, but got {got}"
+
+    start, end = content
+    assert item["k:content"].startswith(start)
+    assert item["k:content"].endswith(end)
+
 
 def _extract_dependencies(pipe_name) -> list[str]:
     pipe_file_name = TESTS_DIR / "pipelines" / f"{pipe_name}.json"
@@ -246,58 +294,14 @@ class TestBasics:
         pipe_name = "pipe_kazeeki1"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 5, 0)
-
-        example = {
-            "author": {"name": "riko", "uri": "https://github.com/nerevu/riko"},
-            "dc:creator": "riko",
-            "k:author": "Homepage for a germansocial organization",
-            "k:budget_raw": "0 - $250",
-            "k:client_location": "unknown",
-            "k:due": "unknown",
-            "k:job_type": "fixed",
-            "k:marketplace": "guru.com",
-            "updated": "Tue, 06 Jan 2015 17:13:47 GMT",
-            "k:submissions": "unknown",
-            "k:tags": "Web,Software,IT",
-            "k:work_location": " Worldwide",
-        }
-
-        item = cast(dict, items[0])
-
-        for k, v in example.items():
-            assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
-
-        assert item["k:content"].startswith(" With this specification sheet we")
-        assert item["k:content"].endswith("for implementing a website for a german...")
+        _assert_kazeeki(cast(dict, items[0]), KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT)
 
     def test_kazeeki2(self):
         """Loads the kazeeki simple test itembuilder pipeline."""
         pipe_name = "pipe_kazeeki2"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
-
-        example = {
-            "author": None,
-            "dc:creator": None,
-            "k:author": "Need to fix Ionic Rss Reader Application - oDesk",
-            "k:budget_raw": "0 - 10 EUR",
-            "k:client_location": " Israel",
-            "k:due": "unknown",
-            "k:job_type": "unknown",
-            "k:marketplace": "odesk.com",
-            "k:posted": None,
-            "k:submissions": "unknown",
-            "k:tags": "Web-Development,Web-Programming",
-            "k:work_location": "unknown",
-        }
-
-        item = cast(dict, items[0])
-
-        for k, v in example.items():
-            assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
-
-        assert item["k:content"].startswith("<p>Hello, I need to fix an application")
-        assert item["k:content"].endswith("are welcome to this project.<br><br><b>")
+        _assert_kazeeki(cast(dict, items[0]), KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
 
     @skipif_issync
     def test_async_kazeeki1(self):
@@ -311,29 +315,7 @@ class TestBasics:
             await self._aload(items, pipe_name, 5, 0)
 
         run(main)
-
-        example = {
-            "author": {"name": "riko", "uri": "https://github.com/nerevu/riko"},
-            "dc:creator": "riko",
-            "k:author": "Homepage for a germansocial organization",
-            "k:budget_raw": "0 - $250",
-            "k:client_location": "unknown",
-            "k:due": "unknown",
-            "k:job_type": "fixed",
-            "k:marketplace": "guru.com",
-            "updated": "Tue, 06 Jan 2015 17:13:47 GMT",
-            "k:submissions": "unknown",
-            "k:tags": "Web,Software,IT",
-            "k:work_location": " Worldwide",
-        }
-
-        item = cast(dict, items[0])
-
-        for k, v in example.items():
-            assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
-
-        assert item["k:content"].startswith(" With this specification sheet we")
-        assert item["k:content"].endswith("for implementing a website for a german...")
+        _assert_kazeeki(cast(dict, items[0]), KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT)
 
     @skipif_issync
     def test_async_kazeeki2(self):
@@ -347,29 +329,7 @@ class TestBasics:
             await self._aload(items, pipe_name, 1, 0)
 
         run(main)
-
-        example = {
-            "author": None,
-            "dc:creator": None,
-            "k:author": "Need to fix Ionic Rss Reader Application - oDesk",
-            "k:budget_raw": "0 - 10 EUR",
-            "k:client_location": " Israel",
-            "k:due": "unknown",
-            "k:job_type": "unknown",
-            "k:marketplace": "odesk.com",
-            "k:posted": None,
-            "k:submissions": "unknown",
-            "k:tags": "Web-Development,Web-Programming",
-            "k:work_location": "unknown",
-        }
-
-        item = cast(dict, items[0])
-
-        for k, v in example.items():
-            assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
-
-        assert item["k:content"].startswith("<p>Hello, I need to fix an application")
-        assert item["k:content"].endswith("are welcome to this project.<br><br><b>")
+        _assert_kazeeki(cast(dict, items[0]), KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
 
     def test_kazeeki_full(self):
         """Loads the kazeeki simple test pipeline."""
