@@ -10,6 +10,7 @@ or a codegen regression — fails here.
 
 from difflib import unified_diff
 from json import loads
+from keyword import iskeyword
 
 import pytest
 
@@ -20,6 +21,7 @@ from riko.compile import (
     convert_dag,
     get_wire,
     parse_pipe_def,
+    pythonise,
     resolve_module,
     stringify_pipe,
 )
@@ -395,3 +397,19 @@ class TestNecessaryLoopFixtures:
             {"title": "a b c", "tokens": {"content": "b"}},
             {"title": "a b c", "tokens": {"content": "c"}},
         ]
+
+
+@pytest.mark.xfail(
+    reason="pythonise does not sanitize ids into valid identifiers yet", strict=True
+)
+def test_pythonise_yields_valid_identifiers():
+    """
+    Every generated id must be a legal, non-keyword Python identifier.
+
+    ``pythonise`` only replaces four characters and ASCII-``replace``-encodes, so
+    ``"class"``/``"foo bar"``/``"foo.bar"``/``"café"`` survive into generated source
+    as invalid identifiers (``"1st"`` already becomes ``"_1st"``).
+    ``ext/codegen.py::enum_member_name`` already sanitizes properly.
+    """
+    results = [pythonise(raw) for raw in ("class", "foo bar", "foo.bar", "1st", "café")]
+    assert all(r.isidentifier() and not iskeyword(r) for r in results)
