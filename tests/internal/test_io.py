@@ -7,6 +7,7 @@ socket, so a fixture file cannot exercise them: the streamed text branch reads
 ``r.raw``, which is empty unless the request was made with ``stream=True``.
 """
 
+from io import BytesIO
 from typing import Any, cast
 from unittest.mock import Mock, patch
 
@@ -14,6 +15,7 @@ import pytest
 from requests import Response
 
 from riko._io import Fetch
+from riko._reencode import reencode
 from riko.modules import csv
 from riko.paths import get_path
 from riko.types._configs import CsvObjconf
@@ -77,6 +79,51 @@ def test_unified_http_backend():
     mock_requests.assert_called_once()
     mock_urlopen.assert_not_called()
     assert mock_requests.call_args.args[0] == target
+
+
+class TestReencode:
+    def test_reencode_read_honors_char_count(self):
+        """``read(1)`` yields a single character and the remainder survives."""
+        data = b"line one\nline two\nline three\n"
+        full = reencode(BytesIO(data), decode=True).read()
+        reader = reencode(BytesIO(data), decode=True)
+        head, rest = reader.read(1), reader.read()
+
+        assert head == "l"
+        assert rest == "ine one\nline two\nline three\n"
+        assert head + rest == full
+
+    def test_reencode_readline_honors_char_count(self):
+        """``readline(1)`` yields a single character and the remainder survives."""
+        data = b"line one\nline two\nline three\n"
+        full = reencode(BytesIO(data), decode=True).read()
+        reader = reencode(BytesIO(data), decode=True)
+        head, rest = reader.readline(1), reader.read()
+
+        assert head == "l"
+        assert rest == "ine one\nline two\nline three\n"
+        assert head + rest == full
+
+    def test_reencode_readline(self):
+        data = b"line one\nline two\nline three\n"
+        full = reencode(BytesIO(data), decode=True).readlines(keepends=False)
+        reader = reencode(BytesIO(data), decode=True)
+        head, rest = reader.readline(keepends=False), reader.readlines(keepends=False)
+
+        assert head == "line one"
+        assert rest == ["line two", "line three"]
+        assert [head] + rest == full
+
+    def test_reencode_read_and_readline(self):
+        data = b"line one\nline two\nline three\n"
+        full = reencode(BytesIO(data), decode=True).read()
+        reader = reencode(BytesIO(data), decode=True)
+        head, mid, rest = reader.read(1), reader.readline(), reader.readlines()
+
+        assert head == "l"
+        assert mid == "ine one\n"
+        assert rest == ["line two\n", "line three\n"]
+        assert head + mid + "".join(rest) == full
 
 
 @pytest.mark.simulated_network

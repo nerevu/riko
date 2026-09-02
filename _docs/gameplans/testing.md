@@ -81,7 +81,7 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | `compile_pipe` handles ids `"class"`, `"foo bar"`, `"foo.bar"`, `"1st"`, `"café"` | internal | R5 |
 | an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged | internal | R6 |
 | ~~`gather_results([none(), one(), none()])` preserves all three positions~~ — **landed** as `tests/internal/test_streams.py::test_gather_results_preserves_none_positions`; the defect was fixed with the `MISSING` sentinel (correctness-audit R7) | internal | R7 |
-| `Reencoder.read(1)` returns one character and the remainder survives the next `read` | internal | R8 |
+| ~~`Reencoder.read(1)` returns one character and the remainder survives the next `read`~~ — **landed** as `tests/internal/test_io.py::test_reencode_read_honors_char_count_with_remainder`; fixed with a char/byte remainder buffer (correctness-audit R8) | internal | R8 |
 | `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
 | `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
 | a tz-aware `struct_time` (`+03:00`) produces the matching epoch | internal | R11 |
