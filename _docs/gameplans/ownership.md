@@ -50,6 +50,7 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 | serialized agent scenarios, model policy, retrieval, evaluation | `agent-scenarios.md` | underlying Pipeline/loop/model/tool contracts |
 | Microsoft Graph/ARM/PowerShell adapters and Microsoft resource implementations | `azure-automation.md` | administrative policy specialization |
 | desired-state Microsoft administration, ChangePlan, approval, verify/handoff | `microsoft-administration.md` | adapter mechanics from Azure plan |
+| Git-first operation source-of-truth semantics, `OperationSpec`, operation-level planning/reproducibility, deployment drift, import/normalization, compatibility, and automation migration | `operations-as-code.md` | runtime/provider/domain planning details owned by their existing plans; target-specific importer/deployer specialization |
 | orchestration, external scheduling, `PipelineRunRequest`/`PipelineRef`, durable run boundaries | `orchestration.md` | in-process finite primitive semantics |
 | callable Pipeline node contract | `callable-pipes.md` | domain examples only |
 | Click-native CLI/plugin contract | `cli.md` | package-owned Click commands calling reusable services |
@@ -166,6 +167,32 @@ provider-integrations.md wait_operation
 Do not expose interval/event/hybrid provider-operation waiting as a competing generic
 `.poll()` API. `Pipeline.poll(source, interval=...)` is source recurrence; `Subscription.poll`
 uses the same recurrence vocabulary for a subscription source.
+
+### Operation specification versus provider operation handle
+
+These names describe different layers:
+
+```text
+operations-as-code.md OperationSpec / OperationPlan
+    versioned operational intent and one resolved plan for applying that intent
+
+provider-integrations.md OperationHandle
+    one already-started asynchronous provider job that must be tracked to terminal state
+```
+
+An `OperationPlan` may contain a step that starts and waits on an `OperationHandle`; it must
+not redefine provider wait semantics.
+
+### Operations as Code versus orchestration
+
+`operations-as-code.md` owns the version-controlled operational definition, reproducibility
+record, plan/apply/verify coordination, import/normalization, deployment identity, and
+automation-drift comparison.
+
+`orchestration.md` owns **when and where** a bounded run executes and how external schedulers
+or runners observe it. A SuperOps/RMM job, GitHub Actions workflow, Azure Automation job, or
+other external runner may be a deployment/execution target without becoming the canonical
+source of the operation.
 
 ### Retry versus recurrence versus orchestration rerun
 

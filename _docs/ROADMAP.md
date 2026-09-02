@@ -13,6 +13,11 @@ contract. In particular, the reconciled Pipeline/Context/resource/pubsub/state/i
 architecture is authoritative in
 [execution-semantics.md](gameplans/execution-semantics.md).
 
+Riko Core remains the configurable pipeline engine. Ecosystem gameplans may build larger
+capabilities — including Connect, AI, site generation, Microsoft administration, and
+Operations as Code — on those core execution contracts without expanding the promises of the
+core package itself.
+
 ## Which doc for which info
 
 | I need… | Doc |
@@ -23,6 +28,7 @@ architecture is authoritative in
 | **P-track file maps / exit tests / phase history** | [MILESTONES.md](MILESTONES.md) |
 | **Forward implementation dependency order** | [implementation-sequence.md](gameplans/implementation-sequence.md) |
 | **Detailed target design** | matching [gameplan](#gameplans) |
+| Git-first **Operations as Code** — reproducibility, plan/apply/verify, deployment drift, import, and automation migration | [operations-as-code.md](gameplans/operations-as-code.md) |
 | Public / EXT / private import surface | [API_SURFACE.md](API_SURFACE.md) |
 | User migration / changelog | [MIGRATION.rst](MIGRATION.rst) · [CHANGES.rst](CHANGES.rst) |
 
@@ -124,11 +130,12 @@ The complete `§0–27` routing map:
 | [agent-scenarios.md](gameplans/agent-scenarios.md) | Deterministic/policy-aware scenario/evaluation layer over the capability catalog. |
 | [mcp.md](gameplans/mcp.md) | MCP **client-first** capability discovery/catalog/execution, OpenAPI/APIs.guru, execution-owned session resources, policy/artifacts/telemetry; MCP server comes only after client contracts stabilize. |
 
-### Providers, Microsoft & orchestration
+### Providers, operations, Microsoft & orchestration
 
 | Gameplan | Covers |
 |---|---|
 | [provider-integrations.md](gameplans/provider-integrations.md) | SaaS provider CRUD/search/webhooks/cache/batch/idempotent writes/identity mapping/browser fallback/async operations using common Context/resources/state/idempotency. |
+| [operations-as-code.md](gameplans/operations-as-code.md) | **Operations as Code** — Git-first operation definitions, reproducibility, plan/apply/verify, client/environment overlays, deployment targets and automation drift, import/normalization, compatibility analysis, and RMM/platform migration without redefining Core execution or orchestration. |
 | [azure-automation.md](gameplans/azure-automation.md) | Azure ARM/PowerShell, Service Bus/Event Grid, desired-state adapters. |
 | [microsoft-administration.md](gameplans/microsoft-administration.md) | Microsoft administrative workflow semantics. |
 | [autopilot-provisioning.md](gameplans/autopilot-provisioning.md) | Windows Autopilot provisioning scenario. |
