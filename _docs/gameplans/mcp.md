@@ -182,7 +182,7 @@ appropriate confirmation/unattended authorization. Model confidence never overri
 
 Never establish a new MCP session/subprocess per item. Declare MCP client/session resources
 in `Context`; the private execution resolves and owns the live handle once per execution.
-Externally supplied resources use `external=True` and are never closed by Riko.
+Externally supplied resources use `Resource.from_external(...)` and are never closed by Riko.
 
 A module that needs the MCP manager declares it through common `resources=` metadata and
 receives the execution-bound resource view through existing wrapper preparation.

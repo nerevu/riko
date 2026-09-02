@@ -195,7 +195,7 @@ Replace today's mutable execution-oriented `Context` with the target immutable d
 - immutable `inputs`/configuration;
 - Context-local module definitions/shadowing;
 - `Resource` definitions and `Resource.from_factory()`;
-- owned vs `external=True` lifecycle contract;
+- owned vs `Resource.from_external(...)` lifecycle contract;
 - eager/lazy validation rules;
 - declared dependency bindings and aliases;
 - optional first-class `state_store` capability;

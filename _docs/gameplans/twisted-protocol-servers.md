@@ -44,7 +44,7 @@ Rules:
 - Credentials/bind config are references, never inline (`connectors.md`).
 - Immutable `Context` contains `Resource` definitions only. Live listening ports, factories,
   sessions, send/receive streams, and cleanup state are execution-owned resolved handles.
-- External resources supplied with `external=True` remain caller-owned; Riko never closes them.
+- External resources supplied with `Resource.from_external(...)` remain caller-owned; Riko never closes them.
 - One package per protocol family; no monolith.
 
 ## 4. Capability catalog

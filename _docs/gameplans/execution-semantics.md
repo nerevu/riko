@@ -58,25 +58,38 @@ Child contexts may shadow parent modules/resources; names must be unique within 
 
 ### Resource ownership
 
+An owned resource is declared as a **(sync or async) generator / context manager** — the idiomatic Python lifecycle shape used by `contextlib`, pytest fixtures, FastAPI `yield` dependencies, `dependency-injector`, and Dagster resources: setup runs before `yield`, the handle is injected, teardown runs after (guaranteed, even on error).
+
 ```python
-Resource(spec)  # Riko owns lifecycle
-Resource(client, external=True)  # caller owns; Riko never closes
-Resource.from_factory(make_db)
+def db(ctx):  # owned: setup -> yield handle -> teardown
+    pool = create_pool(...)
+    try:
+        yield pool
+    finally:
+        pool.close()
+
+
+ctx.with_resource("db", db)
+ctx.with_resource(
+    "client", Resource.from_external(client)
+)  # caller owns; Riko never closes
 ```
 
-A referenced owned resource is opened eagerly during execution preparation by default. An unreferenced resource is not opened. `lazy=True` validates eagerly but defers opening until first use. `external=True, lazy=True` is invalid because an external value is already supplied by the caller.
+`Resource.from_external(...)` is a distinct type that always resolves to the supplied handle and never closes it (rather than an `external=True` flag); it is inherently eager and takes no `lazy` because the value is already supplied by the caller. `Resource(handle, cleanup=...)` remains a low-level convenience for wrapping an already-live handle with an explicit closer; the generator/CM is the ergonomic primary and subsumes `from_factory` (the generator *is* the factory-with-teardown).
+
+A referenced owned resource is entered eagerly during execution preparation by default. An unreferenced resource is not entered. `lazy=True` validates eagerly but defers entry until first use.
 
 Each `Resource` resolves at most once per execution. Re-executing the same `Pipeline` resolves a fresh owned handle.
 
 Opening rules:
 
-- independent eager resources open in deterministic declaration order;
-- resource factories may depend on other declared resources;
+- independent eager resources enter in deterministic declaration order;
+- resource generators may depend on other declared resources;
 - dependencies are resolved dynamically with cycle detection;
-- if eager opening fails, all successfully opened owned resources are rolled back in reverse successful-open order;
+- lifecycle is managed by a single `AsyncExitStack` (sync generators/CMs bridged), so if eager entry fails, all successfully entered owned resources unwind in reverse order;
 - external resources are never closed by Riko.
 
-Cleanup prefers `aclose()`, then `close()`, unless an explicit `cleanup=` override is supplied. Resource specs may provide `open()` and/or `aopen()`; the native execution-mode implementation wins and the common sync/async bridge adapts the other mode. Cleanup always attempts all required closes. A single cleanup error is raised directly; multiple cleanup errors are grouped with `ExceptionGroup`.
+Teardown is the generator's post-`yield`/`finally` body (or the context manager's `__exit__`/`__aexit__`); an explicit `cleanup=` applies only to the low-level `Resource(handle)` form. The common sync/async bridge adapts a sync generator/CM into the async execution mode and vice versa. Cleanup always attempts all required closes: a single cleanup error is raised directly; multiple are grouped with `ExceptionGroup`.
 
 ### Execution-bound resource view
 

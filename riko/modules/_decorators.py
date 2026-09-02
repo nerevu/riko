@@ -44,6 +44,7 @@ from riko.modules._prepare import (
     parse_and_cast,
 )
 from riko.parsers import get_field, get_skip
+from riko.resources import bind_resources, coerce_binding
 from riko.types._collections import Inputs, RikoValue
 from riko.types._dynamic_conf import DynamicConf
 from riko.types._options import Casted, Defaults, ItemDispatch, Opts
@@ -310,7 +311,38 @@ class Module[B: (Literal[True], Literal[False])]:
             emit=_emit,
             is_source=is_source,
             static_casted=static_casted,
+            resources=coerce_binding(opts.get("resources")),
         )
+
+
+def _call_kwargs(
+    prepared: PreparedModule[ItemOrValue, object],
+    context: Context,
+    count: CountValues | None,
+    kwargs: Mapping[str, object],
+) -> dict[str, object]:
+    """
+    Builds the keyword arguments passed to a parser call.
+
+    Merges the run ``inputs``/``count`` and passthrough ``kwargs`` with the node's
+    resolved ``resources`` view when it declares a binding.
+
+    Args:
+        prepared: The immutable per-call state, holding the resource binding.
+        context: The parsed execution context.
+        count: The stream count option.
+        kwargs: The remaining passthrough options.
+
+    Returns:
+        The parser call kwargs, including ``resources`` when the node is bound.
+
+    """
+    pkwargs: dict[str, object] = {"inputs": context.inputs, "count": count, **kwargs}
+
+    if prepared.resources is not None:
+        pkwargs["resources"] = bind_resources(prepared.resources, context.resources)
+
+    return pkwargs
 
 
 _PROCESSOR_FORBIDDEN_OPTS: frozenset[str] = frozenset({"embed"})
@@ -720,11 +752,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                     context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
                     inputs = context.inputs
                     kwargs["test"] = context.test
-                    pkwargs: dict[str, object] = {
-                        "inputs": inputs,
-                        "count": count,
-                        **kwargs,
-                    }
+                    pkwargs = _call_kwargs(prepared, context, count, kwargs)
                     typed_casted = cast(Casted[T, E], casted)
                     result = aync_pipe(
                         typed_casted.field,
@@ -795,11 +823,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                     context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
                     inputs = context.inputs
                     kwargs["test"] = context.test
-                    pkwargs: dict[str, object] = {
-                        "inputs": inputs,
-                        "count": count,
-                        **kwargs,
-                    }
+                    pkwargs = _call_kwargs(prepared, context, count, kwargs)
                     typed_casted = cast(Casted[T, E], casted)
                     stream = sync_pipe(
                         typed_casted.field,
@@ -1251,11 +1275,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 processed = cast(Stream, embed_stream)
             else:
                 async_pipe = cast(AsyncOperatorParser[E], pipe)
-                pkwargs: dict[str, object] = {
-                    "inputs": inputs,
-                    "count": count,
-                    **kwargs,
-                }
+                pkwargs = _call_kwargs(prepared, context, count, kwargs)
                 extraction = cast(E, casted.extraction)
                 result = async_pipe(orig_stream, extraction, tuples, **pkwargs)
                 stream = (await result) if isawaitable(result) else result
@@ -1318,11 +1338,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 processed = embed_stream
             else:
                 sync_pipe = cast(SyncOperatorParser[E], pipe)
-                pkwargs: dict[str, object] = {
-                    "inputs": inputs,
-                    "count": count,
-                    **kwargs,
-                }
+                pkwargs = _call_kwargs(prepared, context, count, kwargs)
                 extraction = cast(E, casted.extraction)
                 stream = sync_pipe(orig_stream, extraction, tuples, **pkwargs)
 
