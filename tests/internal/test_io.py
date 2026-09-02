@@ -14,10 +14,43 @@ import pytest
 from requests import Response
 
 from riko._io import Fetch
+from riko.modules import csv
+from riko.paths import get_path
+from riko.types._configs import CsvObjconf
 from tests._loopback import loopback_url
 
 BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
 PAYLOAD = BODY.encode()
+
+
+def test_csv_headerless_closes_original_source(monkeypatch):
+    """
+    ``has_header=False`` buffers through ``seekable`` (a spooled copy) and leaves the
+    original fetch open. ``auto_close`` must still close it, not just the spool.
+    """
+    closed: list[bool] = []
+    real_fetch = csv.Fetch
+
+    class _SpyFetch(real_fetch):
+        def close(self) -> None:
+            closed.append(True)
+            super().close()
+
+    monkeypatch.setattr(csv, "Fetch", _SpyFetch)
+    conf = CsvObjconf(
+        {
+            "url": get_path("countries.csv"),
+            "has_header": False,
+            "skip_rows": 0,
+            "col_names": None,
+            "encoding": "utf-8",
+            "sanitize": False,
+            "dedupe": True,
+        }
+    )
+
+    list(csv.parser(cast(Any, None), None, conf))
+    assert closed
 
 
 @pytest.fixture(scope="module")
