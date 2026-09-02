@@ -79,17 +79,17 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | ~~keyed `join(count(), finite_other)` yields a first result~~ — **landed** as `tests/public/test_pipe_implementations.py` (keyed **and** natural; asserts bounded consumption, since the operator wrapper reads one item ahead) | public | R3 |
 | `async_pipe` (`send`) yields its first item before the source is exhausted | public | R4 |
 | `compile_pipe` handles ids `"class"`, `"foo bar"`, `"foo.bar"`, `"1st"`, `"café"` | internal | R5 |
-| an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged | internal | R6 |
+| ~~an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged~~ — **landed** as `tests/internal/test_serialize.py`; fixed by propagating `_UNSUPPORTED` in `_to_hashable` (correctness-audit R6) | internal | R6 |
 | ~~`gather_results([none(), one(), none()])` preserves all three positions~~ — **landed** as `tests/internal/test_streams.py::test_gather_results_preserves_none_positions`; the defect was fixed with the `MISSING` sentinel (correctness-audit R7) | internal | R7 |
 | ~~`Reencoder.read(1)` returns one character and the remainder survives the next `read`~~ — **landed** as `tests/internal/test_io.py::test_reencode_read_honors_char_count_with_remainder`; fixed with a char/byte remainder buffer (correctness-audit R8) | internal | R8 |
 | `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
 | `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
-| a tz-aware `struct_time` (`+03:00`) produces the matching epoch | internal | R11 |
-| `get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics | internal | R12 |
-| `listize=True` turns `0`/`False`/`""` into one-element lists | internal | R13 |
+| ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_dates.py`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
+| ~~`get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics~~ — **landed** in `tests/internal/test_parsers.py`; absent `text` no longer coerced to `"None"` (correctness-audit R12) | internal | R12 |
+| ~~`listize=True` turns `0`/`False`/`""` into one-element lists~~ — **landed** as `tests/internal/test_prepare.py`; `get_pieces_or_conf` branches on the option, not truthiness (correctness-audit R13) | internal | R13 |
 | a stalled async iterator is actually interrupted by `timeout` | internal | R14 |
 | the same bytes decode identically across sync HTTP, async HTTP and async local file | functional | R15 |
-| `has_header=False` closes the original source as well as the spool | internal | R16 |
+| ~~`has_header=False` closes the original source as well as the spool~~ — **landed** as `tests/internal/test_io.py::test_csv_headerless_closes_original_source` (spies the original's `close`, cross-version); fix predated this via the variadic `auto_close` (correctness-audit R16) | internal | R16 |
 
 Two rows want **characterization** tests rather than regressions, because the current
 behaviour may be intended: `filter`'s lexicographic `greater`/`less` (R19) and
@@ -226,6 +226,27 @@ to shrink the suite — they cover contracts hard to catch elsewhere.
   `test_pipes_use_loopability_for_mapping` folded into one `_ENGINES`-parametrized parity test,
   and the redundant `test_enum_and_string_resolve_identically` dropped (equivalence is already
   proven by `test_normalize_module_name` + `test_constructor_stores_plain_string`).
+- `internal/test_resolver.py`: dropped the facade-level `test_register_requires_name` (the
+  registry-level `test_runtime_register_requires_name` already owns the `"needs a name"`
+  validation; the facade just forwards, and its delegation is covered by
+  `test_register_resolves_via_facade`), and renamed the misleading
+  `test_pipeline_delegates_to_compiler` → `test_non_pipeline_name_routes_to_module_registry`
+  (it proves a plain name routes to the module registry, surfacing `UnsupportedModuleError`).
+- `functional/test_basics.py`: the identical `fetchpage`/`fetchpage_loop` tests folded into one
+  parametrized `test_fetchpage` (`plain`/`within-loop` ids) — they assert the same output.
+- `internal/test_inference.py` consolidated: the homogeneous classification tests folded into a
+  single `test_classification` `(pipe, kind, source)` matrix (module-level pipe fixtures; `source`
+  asserted only where the originals did, via an `_ANY` sentinel — no new claims), and the three
+  UNKNOWN-with-reason tests into one `test_unknown_with_reason` `(pipe, reasons)` matrix. Multi-kind,
+  decorator-unwrap, `infer_from_source`, and `gen_operator_return_kinds` cases kept as distinct
+  owners.
+- `functional/` layering: the three direct `augment_entries` unit tests moved to the new
+  `internal/test_rssutils.py` (parametrized fallback matrix), the mocked `_io` backend test moved
+  to `internal/test_io.py` (whose loopback-server tests are now grouped under a
+  `simulated_network`-marked class so the mock test isn't mislabeled), the sync/async Kazeeki
+  expected payloads shared via module constants + a `_assert_kazeeki` helper, and the four
+  single-item example pipelines (`simple1`/`simple2`/`split`/`wired`) folded into one
+  `test_simple_pipeline` parametrization.
 - `public/test_imports.py` (the P13 exit test) consolidated **without weakening the contract**:
   the two per-name `hasattr` parametrizations collapsed into one single-assertion resolve check
   each (stable + extension); `test_no_private_names_in_public_all` removed and its guarantee folded
@@ -235,12 +256,21 @@ to shrink the suite — they cover contracts hard to catch elsewhere.
   `test_no_leaked_public_functions`'s overclaiming docstring corrected to state it guards
   *functions* specifically (classes/constants like `Context` are intentionally unexported).
 
-**Remaining.** `tests/functional/test_pipeline.py` was removed. The rest of the § 3 CONSOLIDATE
-work (the deeper `public/test_collections.py` responsibility split into focused files + trimming
-chaining tests that README doctests already own, parametrize the `augment_entries` fallbacks +
-example pipelines in `functional/`, and the `internal/test_inference.py` call/annotation-shape
-parametrization) and the § 2b regression batch (new fixtures: `.xlsx`/`.sqlite`, threaded servers,
-sync/async parity bytes) are not yet done.
+**Not done, by design.** Two § 3 suggestions were assessed and **declined** as coverage-losing:
+
+- *Trim `test_collections.py` chaining tests as "README doctests already own hash basics."* README
+  covers `.hash()` and `| Transforms.HASH` (the **enum** form) only — it does **not** exercise the
+  **string** forms (`| "hash"`, `.pipe("hash")`) or their source-binding semantics, which those
+  chaining tests specifically own. Trimming them would drop real coverage, so they stay.
+- *Trim `test_examples.py` `gigs`/`kazeeki` exact records to smoke contracts.* The full-record
+  assertions are the only exact check of the example entry-point output; smoke-trimming loses that.
+
+The deeper `test_collections.py` split into focused files is not warranted either — the audit
+detail says "keep TestModuleNameEnum / pub-sub identity+cleanup / pool ownership **here**", i.e. the
+concern is dedupe (done), not file fragmentation.
+
+**Remaining.** The § 2b regression batch (new fixtures: `.xlsx`/`.sqlite`, threaded servers,
+sync/async parity bytes) is the only outstanding testing work.
 
 ## 6. Relationship to the P-track
 
