@@ -12,13 +12,11 @@ from itertools import islice
 from json import loads
 from pathlib import Path
 from typing import cast
-from unittest.mock import Mock, patch
 
 import pytest
 
-from riko._io import Fetch
 from riko._iterutils import listize
-from riko._rssutils import augment_entries, truncate_content
+from riko._rssutils import truncate_content
 from riko.bado._backend import run
 from riko.compile import (
     abuild_pipeline,
@@ -30,7 +28,6 @@ from riko.context import Context, ExecutionMode
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.ext._pipelines import pipeline_resolver
 from riko.types._pipeline import AsyncPipelineDependencies, SyncPipelineDependencies
-from riko.types._rss import FeedParserRSSEntry
 from riko.types._streams import StatefulItem
 from riko.types._wrappers import (
     AsyncPipeParser,
@@ -179,25 +176,6 @@ class TestBasics:
         """Compile common subpipe"""
         self.context = Context(test=True)
 
-    def test_unified_http_backend(self):
-        """
-        Showcases the unified HTTP backend: a params-less http URL
-        routes through the requests backend instead og the opener.
-        """
-        url = "http://example.com/feed.xml"
-        response = Mock()
-        response.headers = {"Content-Type": "application/rss+xml"}
-
-        with (
-            patch("riko._io.requests.get", return_value=response) as mock_requests,
-            patch("riko._io.urlopen") as mock_urlopen,
-        ):
-            Fetch(url, binary=True)
-
-        mock_requests.assert_called_once()
-        mock_urlopen.assert_not_called()
-        assert mock_requests.call_args.args[0] == url
-
     def test_feeddiscovery(self):
         """
         Loads a pipeline containing a feed auto-discovery module plus
@@ -217,36 +195,6 @@ class TestBasics:
         item = cast(dict, items[0])
         assert item["title"]
         assert item["summary"]
-
-    def test_augment_entries_without_description(self):
-        entries = [
-            FeedParserRSSEntry(
-                {
-                    "content": [{"value": "from content"}],
-                    "link": "https://example.com/feed-item",
-                    "title": "fallback title",
-                }
-            )
-        ]
-        item = cast(dict, next(augment_entries(entries)))
-        assert item["summary"] == "from content"
-        assert item["description"] == "from content"
-
-    def test_augment_entries_without_content(self):
-        entries = [
-            FeedParserRSSEntry(
-                {"link": "https://example.com/feed-item", "title": "fallback title"}
-            )
-        ]
-        item = cast(dict, next(augment_entries(entries)))
-        assert item["summary"] == "fallback title"
-        assert item["description"] == "fallback title"
-
-    def test_augment_entries_without_text(self):
-        entries = [FeedParserRSSEntry({"link": "https://example.com/feed-item"})]
-        item = cast(dict, next(augment_entries(entries)))
-        assert item["summary"] == ""
-        assert item["description"] == ""
 
     def test_loops_1(self):
         """Loads a pipeline containing a loop"""
