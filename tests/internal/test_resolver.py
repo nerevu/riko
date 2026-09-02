@@ -172,7 +172,9 @@ class TestPipeResolver:
     def test_module_resolves_via_registry(self, fixed_registry):
         assert pipe_resolver.resolve("tokenizer", "pipe").__name__ == "pipe"
 
-    def test_pipeline_delegates_to_compiler(self, fixed_registry):
+    def test_non_pipeline_name_routes_to_module_registry(self, fixed_registry):
+        # A plain (non ``pipe_*``) name resolves through the module registry, so a
+        # miss surfaces as UnsupportedModuleError, not UnsupportedPipelineError.
         with pytest.raises(UnsupportedModuleError):
             pipe_resolver.resolve(_MISSING_NAME, "pipe")
 
