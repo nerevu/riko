@@ -23,6 +23,8 @@ from collections.abc import Generator
 from contextlib import contextmanager, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from riko.types._scalars import AnyStr
+
 CHUNK = 8192
 
 
@@ -57,7 +59,7 @@ def _make_handler(
 
 @contextmanager
 def loopback_url(
-    body: str | bytes = "",
+    body: AnyStr = "",
     *,
     content_type: str = "text/plain; charset=utf-8",
     status: int = 200,

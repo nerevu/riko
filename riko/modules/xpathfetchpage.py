@@ -42,7 +42,7 @@ from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import any2dict
 from riko.types._configs import XpathFetchPageObjconf
-from riko.types._io import FileTypes
+from riko.types._io import FileLike
 from riko.types._options import Defaults
 from riko.types._streams import Item, Stream
 
@@ -157,7 +157,7 @@ def parser(
         ext = "html"
 
     with Fetch(url, encoding=objconf.encoding) as f:
-        content = cast(FileTypes, f)
+        content = cast(FileLike, f)
         yield from any2dict(content, ext, objconf.html5, path=objconf.xpath)
 
 

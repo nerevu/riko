@@ -1050,8 +1050,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         if prepared.static_casted:
             _, pre_casted_extract, pre_casted_conf = prepared.static_casted
             objconf = pre_casted_conf
-            item = cast(Item, DotDict())
-            casted = Casted(item, pre_casted_extract, pre_casted_conf)
+            casted = Casted[Item, E](DotDict(), pre_casted_extract, pre_casted_conf)
 
             if isinstance(input_, AsyncIterator):
                 orig_stream = cast(Stream, input_)
@@ -1088,8 +1087,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 tuples = ((d.item, d.casted.conf) for d in dispatches)
                 orig_stream = (d.item for d in dispatches)
 
-            item = cast(Item, DotDict())
-            casted = dispatcher(item, prepared.opts, **kwargs).casted
+            casted = dispatcher(DotDict(), prepared.opts, **kwargs).casted
 
         return (tuples, orig_stream, casted)
 

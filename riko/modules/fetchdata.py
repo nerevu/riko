@@ -35,7 +35,7 @@ from riko.cast import SourceOpts
 from riko.modules._prepare import require_conf
 from riko.parsers import any2dict
 from riko.types._configs import FetchDataObjconf
-from riko.types._io import FileTypes
+from riko.types._io import FileLike
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item, Stream
 
@@ -129,7 +129,7 @@ def parser(
 
     with Fetch(url, encoding=objconf.encoding, binary=(ext == "json")) as f:
         ext = ext or f.ext
-        content = cast(FileTypes, f)
+        content = cast(FileLike, f)
         yield from any2dict(content, ext, objconf.html5, path=path)
 
 

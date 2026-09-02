@@ -41,9 +41,10 @@ from riko._serialize import repr_cache
 from riko.dotdict import DotDict, is_sentinel, is_type_value
 from riko.types._collections import BasicArg, RikoDict, Stringy, StringyDict
 from riko.types._guards import is_mapping
-from riko.types._io import FileTypes
+from riko.types._io import FileLike
 from riko.types._options import SkipIf
 from riko.types._rss import ParserRSSEntry
+from riko.types._scalars import AnyStr
 from riko.types._streams import Item, ItemOrValue, Stream
 
 try:
@@ -198,12 +199,12 @@ def parse_rss(  # noqa: E704
 ) -> list[ParserRSSEntry]: ...
 @overload  # noqa: E302
 def parse_rss(  # noqa: E704
-    *, content: str | bytes, **kwargs: BasicArg
+    *, content: AnyStr, **kwargs: BasicArg
 ) -> list[ParserRSSEntry]: ...
 @overload
 def parse_rss(**kwargs: Any) -> list[ParserRSSEntry]: ...  # noqa: E704
 def parse_rss(  # noqa: E302
-    url: BasicArg = "", *, content: str | bytes | None = None, **kwargs: BasicArg
+    url: BasicArg = "", *, content: AnyStr | None = None, **kwargs: BasicArg
 ) -> list[ParserRSSEntry]:
     """Fetches (or reads) and parses an RSS/Atom feed into its entries."""
     f = None
@@ -425,7 +426,7 @@ def xpath(
 
 
 def xml2etree(  # noqa: E302
-    f: str | FileTypes, xml: bool = True, html5: bool = False
+    f: str | FileLike, xml: bool = True, html5: bool = False
 ) -> AnyElementTree:
     """
     Parses XML/HTML into an ElementTree. External XML is parsed with a hardened
@@ -513,7 +514,7 @@ def element2dict(element: AnyElement) -> StringyDict:
 
 
 def any2dict(
-    content: FileTypes | RikoDict | list[RikoDict],
+    content: FileLike | RikoDict | list[RikoDict],
     ext: str | None = "xml",
     html5: bool = False,
     path: str | None = None,

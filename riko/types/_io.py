@@ -10,12 +10,11 @@ if TYPE_CHECKING:
     from riko._io import Fetch
     from riko.bado.io import NamedTextIOWrapper
 
-# Opener = Callable[[str], tuple[Optional[str | Reencoder], Optional[str]]]
-# TODO: add type hint overloads to Reencoder with decode=True -> str
-type BinaryFileTypes = (
+type IOFileLike = BytesIO | StringIO
+type BinaryFileLike = (
     BytesIO | RawIOBase | Fetch[Literal[True]] | SpooledTemporaryFile[bytes]
 )
-type StringFileTypes = (
+type StringFileLike = (
     Fetch[Literal[False]]
     | NamedTextIOWrapper
     | SpooledTemporaryFile[str]
@@ -23,6 +22,7 @@ type StringFileTypes = (
     | StringIO
     | TextIOBase
 )
-type FileTypes = BinaryFileTypes | StringFileTypes
+type FileLike = BinaryFileLike | StringFileLike
+type Opener = Callable[[str], tuple[FileLike, str | None]]
 
-type Opener = Callable[[str], tuple[FileTypes, str | None]]
+IOFileLikeType: tuple[type, ...] = (BytesIO, StringIO)

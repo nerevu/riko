@@ -8,7 +8,6 @@ socket, so a fixture file cannot exercise them: the streamed text branch reads
 """
 
 from io import BytesIO
-from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
@@ -48,7 +47,7 @@ def test_csv_headerless_closes_original_source(monkeypatch):
         }
     )
 
-    list(csv.parser(cast(Any, None), None, conf))
+    list(csv.parser({}, None, conf))
     assert closed
 
 

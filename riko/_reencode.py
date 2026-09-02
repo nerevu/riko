@@ -26,25 +26,26 @@ from typing import TYPE_CHECKING
 from meza.io import Reencoder as _Reencoder
 
 from riko._constants import ENCODING
+from riko.types._scalars import AnyStr
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from typing import Protocol
+    from typing import Literal, Protocol, overload
 
-    from riko.types._io import FileTypes
+    from riko.types._io import FileLike
 
     class _Closeable(Protocol):
         def close(self) -> None: ...  # noqa: E704
 
-    class Reencoder:
+    class Reencoder[T: AnyStr]:
         _f: _Closeable
         binary: bool
-        join_char: str | bytes
-        stream: Iterator[str | bytes]
+        join_char: T
+        stream: Iterator[T]
 
         def __init__(  # noqa: E704
             self,
-            f: FileTypes,
+            f: FileLike,
             fromenc: str = ...,
             toenc: str = ...,
             *,
@@ -52,11 +53,11 @@ if TYPE_CHECKING:
             decode: bool = ...,
             remove_BOM: bool = ...,  # noqa: N803
         ) -> None: ...
-        def read(self, n: int | None = None) -> str | bytes: ...  # noqa: E704
+        def read(self, n: int | None = None) -> T: ...  # noqa: E704
         def readline(  # noqa: E301, E704
             self, n: int | None = None, keepends=True
-        ) -> str | bytes: ...
-        def readlines(self, keepends=True) -> list[str | bytes]: ...  # noqa: E704
+        ) -> T: ...
+        def readlines(self, keepends=True) -> list[T]: ...  # noqa: E704
         def close(self) -> None: ...  # noqa: E704
 else:
 
@@ -126,6 +127,30 @@ else:
 
         def close(self):
             self._f.close()
+
+
+if TYPE_CHECKING:
+
+    @overload
+    def reencode(  # noqa: E704
+        f: FileLike,
+        fromenc: str = ...,
+        toenc: str = ...,
+        *,
+        owner: _Closeable | None = ...,
+        decode: Literal[True],
+        remove_BOM: bool = ...,  # noqa: N803
+    ) -> Reencoder[str]: ...
+    @overload  # noqa: E301
+    def reencode(  # noqa: E704
+        f: FileLike,
+        fromenc: str = ...,
+        toenc: str = ...,
+        *,
+        owner: _Closeable | None = ...,
+        decode: Literal[False] = ...,
+        remove_BOM: bool = ...,  # noqa: N803
+    ) -> Reencoder[bytes]: ...
 
 
 def reencode(f, fromenc=ENCODING, toenc=ENCODING, *, owner=None, **kwargs):

@@ -109,7 +109,7 @@ import pygogo as gogo
 from riko._pubsub._types import ReceiveFunc
 from riko.types._collections import Inputs
 from riko.types._options import SkipIf
-from riko.types._scalars import BasicValue
+from riko.types._scalars import AnyStrType, BasicValue
 from riko.types.modules import Conf, ReceiveConf
 
 try:
@@ -189,7 +189,7 @@ def _is_source(obj: object) -> TypeGuard[Items]:
     A stream of items on the left of ``|`` — any iterable that isn't a bare
     string/bytes or a single ``Mapping`` item.
     """
-    return isinstance(obj, Iterable) and not isinstance(obj, str | bytes | Mapping)
+    return isinstance(obj, Iterable) and not isinstance(obj, (AnyStrType, Mapping))
 
 
 def _is_template(obj: object) -> TypeGuard[TemplatePipe]:
