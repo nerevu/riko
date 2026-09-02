@@ -203,10 +203,7 @@ def get_pieces_or_conf(
         else:
             pieces = cast(BasicReturn, pieces)
 
-        if pieces and opts.get("listize"):
-            pieces_or_conf = cast(list[BasicReturn], listize(pieces))
-        else:
-            pieces_or_conf = pieces
+        pieces_or_conf = listize(pieces) if opts.get("listize") else pieces
     else:
         pieces_or_conf = merged_conf
 

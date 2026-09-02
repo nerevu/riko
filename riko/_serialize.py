@@ -7,7 +7,7 @@ argument-repr memoization cache (``repr_cache``).
 """
 
 import sys
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, fields, is_dataclass
 from functools import cache, wraps
 from logging import Logger
@@ -129,8 +129,16 @@ def fromdict(
 _UNSUPPORTED: Hashable = cast(Hashable, object())
 
 
+def _has_unsupported(values: Iterable[HashableOrTuple]) -> bool:
+    return any(v is _UNSUPPORTED for v in values)
+
+
 def _to_hashable(obj: object) -> HashableOrTuple:
     """
+    A nested unsupported value propagates upward so the whole container hashes to
+    ``_UNSUPPORTED``. Otherwise a shallow membership check at the call site would
+    cache distinct instances onto one key.
+
     Examples:
         >>> _to_hashable([1, 2]) == _to_hashable((1, 2))
         False
@@ -144,22 +152,33 @@ def _to_hashable(obj: object) -> HashableOrTuple:
         hashed = cast(Hashable, obj)
     elif isinstance(obj, DotDict):
         inner = sorted((k, _to_hashable(v)) for k, v in obj._store.values())
-        hashed = (DotDict, tuple(inner))
+        keys = [v for _, v in inner]
+        hashed = _UNSUPPORTED if _has_unsupported(keys) else (DotDict, tuple(inner))
     elif isinstance(obj, Mapping):
         inner = sorted((k, _to_hashable(v)) for k, v in obj.items())
         typ = Objectify if isinstance(obj, Objectify) else dict
-        hashed = (typ, tuple(inner))
+        keys = [v for _, v in inner]
+        hashed = _UNSUPPORTED if _has_unsupported(keys) else (typ, tuple(inner))
     elif isinstance(obj, tuple):
-        hashed = (tuple, tuple(_to_hashable(v) for v in obj))
+        elems = tuple(_to_hashable(v) for v in obj)
+        hashed = _UNSUPPORTED if _has_unsupported(elems) else (tuple, elems)
     elif isinstance(obj, Sequence):
-        hashed = (list, tuple(_to_hashable(v) for v in obj))
+        elems = tuple(_to_hashable(v) for v in obj)
+        hashed = _UNSUPPORTED if _has_unsupported(elems) else (list, elems)
     elif is_dataclass(obj):
         items = asdict(cast("DataclassInstance", obj)).items()
         inner = tuple(sorted((k, _to_hashable(v)) for k, v in items))
-        hashed = ("dataclass", (type(obj), inner))
+        keys = [v for _, v in inner]
+
+        if _has_unsupported(keys):
+            hashed = _UNSUPPORTED
+        else:
+            hashed = ("dataclass", (type(obj), inner))
     else:
-        logger.error(f"Unsupported {type(obj)=}")
         hashed = _UNSUPPORTED
+
+    if hashed is _UNSUPPORTED:
+        logger.error(f"Unsupported {type(obj)=}")
 
     return hashed
 

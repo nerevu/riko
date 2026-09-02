@@ -8,6 +8,7 @@ Tests the AnyIO streaming primitives in riko.bado.itertools: ``async_map_stream`
 import pytest
 
 from riko.bado._backend import Semaphore, async_sleep, lowlevel, run
+from riko.bado._util import async_return, gather_results
 from riko.bado.itertools import (
     async_map,
     async_map_ordered_stream,
@@ -15,6 +16,13 @@ from riko.bado.itertools import (
     async_merge,
 )
 from tests import aresolve, skipif_issync
+
+
+@skipif_issync
+def test_gather_results_preserves_none_positions():
+    """A legitimate ``None`` result stays in place; the output aligns with inputs."""
+    awaitables = [async_return(None), async_return(1), async_return(None)]
+    assert run(gather_results, awaitables) == [None, 1, None]
 
 
 async def _double(x: int) -> int:
