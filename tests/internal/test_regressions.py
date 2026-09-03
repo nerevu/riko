@@ -2,10 +2,11 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import cast
+from zoneinfo import ZoneInfo
 
 import pytest
 
-from riko._date_utils import date_to_tt
+from riko._date_utils import TZINFOS, date_to_tt, parse_date_string
 from riko._io import Fetch
 from riko._rssutils import augment_entries
 from riko._serialize import repr_cache
@@ -34,6 +35,33 @@ class TestDates:
 
         result = tt_to_datedict(tt, aware.date())
         assert result["utime"] == int(aware.timestamp())
+
+    def test_ambiguous_cst_resolves_to_us_central(self):
+        """
+        ``CST`` is shared by US Central, China, and Cuba. The abbreviation map
+        must resolve it US-centrically (UTC-6), not to whichever zone happened
+        to sort last (Asia/Taipei, UTC+8).
+        """
+        parsed = parse_date_string("1 Feb 2015 12:00:00 CST")
+        assert parsed.utcoffset() == timedelta(hours=-6)
+
+    def test_tzinfos_capture_both_standard_and_daylight_names(self):
+        """
+        The abbreviation map is built at import; sampling only ``now()`` dropped
+        whichever of a zone's standard/daylight names was out of season. Both
+        must be present and stably point at US Eastern regardless of import date.
+        """
+        assert str(TZINFOS["EST"]) == "America/New_York"
+        assert str(TZINFOS["EDT"]) == "America/New_York"
+
+    def test_non_us_abbreviation_resolves(self):
+        """
+        Abbreviations outside ``_PREFERRED_ZONES`` (e.g. ``JST``) must be present.
+        """
+        assert TZINFOS["JST"] == ZoneInfo("Asia/Tokyo")
+
+        parsed = parse_date_string("1 Feb 2015 12:00:00 JST")
+        assert parsed.utcoffset() == timedelta(hours=9)
 
 
 class TestSerialize:

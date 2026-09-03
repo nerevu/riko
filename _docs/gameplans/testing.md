@@ -84,7 +84,7 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | ~~`Reencoder.read(1)` returns one character and the remainder survives the next `read`~~ — **landed** as `tests/internal/test_io.py::test_reencode_read_honors_char_count_with_remainder`; fixed with a char/byte remainder buffer (correctness-audit R8) | internal | R8 |
 | `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
 | `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
-| ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_dates.py`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
+| ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_regressions.py::TestDates`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
 | ~~`get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics~~ — **landed** in `tests/internal/test_parsers.py`; absent `text` no longer coerced to `"None"` (correctness-audit R12) | internal | R12 |
 | ~~`listize=True` turns `0`/`False`/`""` into one-element lists~~ — **landed** as `tests/internal/test_prepare.py`; `get_pieces_or_conf` branches on the option, not truthiness (correctness-audit R13) | internal | R13 |
 | a stalled async iterator is actually interrupted by `timeout` | internal | R14 |
