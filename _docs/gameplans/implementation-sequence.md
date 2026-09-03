@@ -8,10 +8,12 @@ Translate the reconciled target contracts into an implementation dependency grap
 This plan owns **implementation sequencing only**. Semantic ownership remains in the individual
 gameplans, especially:
 
-- `execution-semantics.md` — Pipeline/execution, Context/Resource, identity, state, batching;
-- `fanout-topology.md` — publish/subscribe/split topology;
-- `callable-pipes.md` — callable/decorator specialization;
+- `execution-semantics.md` — Pipeline execution, Context/Resource, identity, state, batching;
+- `extensibility.md` — canonical workflow specification and ecosystem contracts;
+- `fanout-topology.md` — publish/subscribe/split/routing/fan-in topology;
 - `feed-native-streaming.md` — per-module Feed-native migration;
+- `connectors.md` — connector/session/credential and concrete adapter contracts;
+- `callable-pipes.md` — callable/decorator specialization;
 - `provider-integrations.md` — provider semantics, operation waiting, provider-native operation
   import/export/deployment/inspection hooks;
 - `mcp.md` — capability discovery/catalog/policy/approval;
@@ -71,7 +73,12 @@ rather than layering a second serializer beside it.
 
 **Current sync/async pub/sub hubs** are useful behavioral fixtures and migration inputs. Their
 process/contextvar ownership and hidden sentinel/id bookkeeping are superseded by execution-owned
-`Publisher`/`Subscription` runtime state.
+subscription runtime state and canonical publish edges.
+
+**Current `write`/sink-target work** is also a migration input. Keep the useful adapter and streaming
+writer mechanics, but the target public model has one `Pipeline.write()` effect operation over
+`Target`/`Format`; there is no separate public `sink()` terminal in the final API. Terminality comes
+from graph position, not from a second destination verb.
 
 ### Superseded target designs
 
@@ -85,12 +92,13 @@ Do not implement these pending-plan shapes:
 - separate `AgentGraph` / `AgentNetwork` execution system;
 - argparse-shaped CLI plugin contracts;
 - public `collect()` / `first()` execution terminals;
+- a public `sink()` terminal parallel to `write()`;
 - execution knobs on `with_config()`;
 - RDP-owned generic `Checkpoint` or sequence/expansion-path identity;
 - duck-typed handle lifecycle discovery (`open`/`aopen`/`close`/`aclose` introspection) as the
   conceptual resource model;
 - a global batch backend preference ladder (`Arrow → Polars → Pandas → list`);
-- automatic callable fingerprinting treated as sufficient for durable semantic identity.
+- automatic callable fingerprinting treated as sufficient for durable semantic identity;
 - a Core-owned `OperationSpec`/`OperationPlan` or second operation runtime;
 - provider-local `CompatibilityReport` or capability catalog;
 - orchestration-owned operation source-of-truth/planning semantics.
@@ -98,9 +106,9 @@ Do not implement these pending-plan shapes:
 ## 3. Dependency graph
 
 ```text
-R0  characterization + internal naming
+R0   characterization + internal naming
  |
-R1  stable minimum error foundations
+R1   stable minimum error foundations
  |
  +---- R2A canonical value encoding
  |
@@ -109,44 +117,56 @@ R1  stable minimum error foundations
  +---- R3  Context + Resource definitions
               |
               v
-R4  Pipeline + private executions
-    - execution-owned task group
-    - execution-owned exit stack
-    - worker/portal bridge
-    - source normalization
-    - real external-resource lifecycle proof
+R4A  Pipeline definition + canonical Workflow v2 IR
               |
-        +-----+------------+
-        |                  |
-        v                  v
- R5 provenance        R7 fanout topology
-        |
-        v
- R6 state/checkpoint/CAS
-        |
-        +---------+
-        |         |
-        v         v
-   R8 batching   R9 loop
-        |         |
-        +----+----+
-             |
-             v
-   R10 Feed-native migration
-             |
-             v
-R11 adapters/providers/orchestration
-             |
-             v
-R12 external extension + 1.0 gate
- ```
+              v
+R4B  private executions + lifetime + EventSink transport
+              |
+              v
+R5A  FeedResult / _FeedItem / provenance
+       |                         |
+       |                         +---------------------> R7 fanout topology
+       v
+R5B  CacheNode runtime / Mezmoize replay
+       |
+       v
+R5C  WriteNode + ActionNode effect runtime
+       |
+       v
+R6   StateStore / checkpoint / CAS / idempotency
+       |                         |
+       +------------+------------+
+                    |
+              +-----+-----+
+              |           |
+              v           v
+             R8          R9
+          batching      loop
+              |           |
+              +-----+-----+
+                    |
+                    v
+R10  final Feed-native compatibility cleanup
+                    |
+                    v
+R11  adapters/providers/orchestration
+                    |
+                    v
+R12  external extension + 1.0 gate
+```
 
-The change from the earlier draft is that **lifetime ownership and structured concurrency become
-foundational execution primitives established in R4**, rather than details discovered while
-implementing individual features. R7 then consumes R4's task group instead of inventing branch
-lifetime; R6 consumes R4's exit stack instead of inventing store teardown. That is the recurring
-pattern in the frameworks this architecture is modelled on: establish ownership and lifetime
-boundaries first, then hang application semantics from them.
+Feed-native migration is **incremental across this graph**, not deferred wholesale to R10. Ordinary
+streaming transforms may migrate once R5A supplies the final value/provenance envelope; streaming
+write migrates with R5C; send/receive/split migrate with R7; batch representation optimization lands
+with R8. R10 is the final legacy-seam elimination and parity proof.
+
+The two R4 slices deliberately separate definition from execution. R4A freezes the graph language and
+normalization boundary before R4B executes it. That is the same definition/IR-before-runtime split
+used by mature workflow/compiler systems and keeps authoring sugar, migration, and graph validation
+out of execution code.
+
+R7 depends on R5A because branch delivery must carry the final `_FeedItem` identity/provenance
+envelope. It does **not** depend on cache, effects, or durable state.
 
 The graph is intentionally not identical to P8–P14 numbering. The reconciled architecture introduced
 foundational identity/resource/state work that cuts across those phases.
@@ -228,7 +248,7 @@ Deliver:
 durable consumers raise.
 
 **Exit:** golden canonical bytes/digests, cross-process deterministic fixtures, and no use of Python's
-randomized `hash()` for durable identity. R5/R6 may depend on R2A completely.
+randomized `hash()` for durable identity. R5A/R5B/R6 may depend on R2A completely.
 
 ### R2B — Semantic identity and version contract
 
@@ -254,33 +274,25 @@ automatic fingerprint = convenience/best-effort identity
 explicit version=      = authoritative durable semantic identity
 ```
 
-Automatic fingerprints stay excellent for local caching, debugging, obvious structural-change
-detection, and generated default node identity. Wherever checkpoints or idempotent side effects must
-survive a process or software upgrade, the **recommended** written form is:
-
-```python
-flow.map(transform, version="normalize-v3")
-```
-
-R5/R6 depend on R2B only through an explicitly documented compatibility contract, so a
-fingerprint miss degrades cache behavior rather than corrupting durable state.
+Automatic fingerprints stay useful for local caching, debugging, obvious structural-change
+detection, and semantic fingerprints. Durable checkpoints and idempotent side effects should use an
+explicit version when they must survive software/dependency changes.
 
 `execution-semantics.md` owns the semantics; this split governs sequencing and scope only.
 
 ### R3 — Immutable Context and Resource definitions
 
-**Goal:** establish the public environment model before Pipeline executions own live state.
+**Goal:** establish the public environment model before Pipeline definitions bind resources and
+private executions open them.
 
 Replace today's mutable execution-oriented `Context` with the target immutable definition:
 
 - immutable `inputs`/configuration;
 - Context-local module definitions/shadowing;
 - `Resource` definitions expressed as sync/async generators or context managers that yield the
-  handle; the generator subsumes `from_factory()`, which is retired rather than kept as a synonym;
+  handle;
 - owned vs `Resource.from_external(...)` lifecycle contract;
-- `Resource(handle, cleanup=...)` retained only as low-level compatibility, not the conceptual model
-  and not the documented form. The currently shipped `riko/resources.py` implements that wrapper,
-  including duck-typed `aclose`/`close` discovery, so R3 replaces it rather than extending it;
+- `Resource(handle, cleanup=...)` retained only as low-level compatibility, not the conceptual model;
 - eager/lazy validation rules;
 - declared dependency bindings and aliases;
 - optional first-class `state_store` capability;
@@ -288,81 +300,167 @@ Replace today's mutable execution-oriented `Context` with the target immutable d
 - `with_module()` / `with_resource()` derivation;
 - no catch-all ignored kwargs.
 
-Do **not** open resources in `Context`. Opening/resolution belongs to R4 private executions.
+Do **not** open resources in `Context`. Opening/resolution belongs to R4B private executions.
 
 P8's global built-in/entry-point registry remains the default. Context-local module definitions form
 an execution-time overlay; they do not require replacing entry-point discovery.
 
-### R4 — Public Pipeline and private SyncExecution/AsyncExecution
+### R4A — Public Pipeline definition and canonical Workflow v2 IR
 
-**Goal:** discharge R2 and create the architecture every later runtime feature attaches to.
+**Goal:** freeze one complete definition/serialization language before the new execution runtime
+consumes it.
+
+Deliver the public immutable `Pipeline[T]` definition/DAG plus the canonical Workflow v2 model.
+R4A owns definition structure, not runtime implementation of every node family.
+
+Canonical node families:
+
+```text
+ModuleNode
+ReadNode
+WriteNode
+CacheNode
+ActionNode
+SubscribeNode
+```
+
+Canonical edge families:
+
+```text
+StreamEdge
+PublishEdge
+```
+
+`publish` is a relationship/delivery edge, not a pass-through `PublishNode`. `split`, `branch`,
+`route`, `union`, `merge`, `join`, and `loop` remain registered module behavior represented by
+`ModuleNode`; `loop` does not gain a separate graph-node family.
+
+Canonical port grammar:
+
+```text
+in / out             default port
+in:N / out:N         positional port
+out:<name>            semantic named output port
+```
+
+Legacy stable mapping begins with:
+
+```text
+_INPUT   -> in
+_OTHER   -> in:1
+_OTHER2  -> in:2
+_OUTPUT  -> out
+_OUTPUT2 -> out:1
+_OUTPUT3 -> out:2
+```
+
+One source port may fan out to many stream edges. A target stream port has at most one incoming
+stream edge; fan-in is represented by distinct `in`, `in:1`, `in:2`, ... ports. `split` uses
+positional output ports; `branch`/`route` use semantic named ports where branch identity is semantic.
+The registered node/module contract declares valid ports; edges only connect them.
+
+Workflow v2 normalization is one ingress boundary:
+
+```text
+legacy v1 -> migrate_v1_to_v2()
+authoring v2 sugar
+        -> normalize_workflow()
+        -> strict canonical WorkflowSpec v2
+        -> validate
+        -> compile / serialize / execute
+```
 
 Deliver:
 
-- public immutable `Pipeline[T]` definition/DAG;
+- top-level `nodes`/`edges` graph envelope;
+- full `source`/`target` edge endpoints with explicit node/port; reject `src`/`tgt` and `from`/`to`;
+- top-level named `outputs`, with omitted output sugar only for one unambiguous leaf;
+- top-level typed `inputs` declarations normalized to full JSON Schema;
+- resource references and declared resource slots;
+- configured immutable serializable `Target` and `Format` definitions/references;
+- `TargetRegistry` contract and sync/async target capability protocols;
+- canonical read/write/action/cache/subscription/checkpoint/loop structural fields even when runtime
+  execution lands in later phases;
+- deterministic serialization;
+- v1 input accepted only at migration boundary, warning on migration, v2 emitted only;
+- strict closed canonical schema: unknown structural fields, ports, references, edge types, resource
+  slots, duplicate ids, and unsupported versions fail before execution.
+
+Authoring node ids are optional; every canonical node has an id. Omitted ids normalize to a
+deterministic readable `<name>-<occurrence>` form. Generated ids are stable for that normalized
+definition only; authors provide an explicit `id` when logical identity must survive structural
+revisions.
+
+`id` is graph-node identity; `name` is the stable registered implementation identity; `label` is
+optional human text.
+
+R4A also locks `Targets` as endpoint/provider identities and `Formats` as serialization formats.
+Concrete provider/storage implementations remain R11 adapters. A canonical workflow can therefore
+validate `Target`/`Format` structure without importing every optional client library.
+
+Structural validation answers "is this a valid WorkflowSpec v2?" Runtime preparation later answers
+"can this graph execute with the installed/available contracts and resources?" A valid v2 document
+may therefore round-trip a node whose runtime capability has not landed yet, while execution fails
+with a clear unsupported-capability error.
+
+**Exit:** every supported topology round-trips through canonical v2 without relying on traversal or
+JSON-array order for semantics.
+
+### R4B — Private SyncExecution/AsyncExecution and lifetime
+
+**Goal:** execute the frozen R4A definition model with one common lifetime boundary.
+
+Deliver:
+
 - private `_execution/` package;
 - fresh `SyncExecution` from `iter(flow)`;
 - fresh `AsyncExecution` from `aiter(flow)`;
 - native-wins module resolution over P8 definitions;
-- **the three execution lifetime primitives, established here and consumed by every later PR**:
-  execution-owned task group, execution-owned exit stack, execution-owned worker/portal bridge;
+- execution-owned task group;
+- execution-owned exit stack;
+- execution-owned worker/portal bridge;
 - one execution-local bridge/portal where adaptation is needed;
 - source normalization at one boundary;
 - immutable fluent chaining;
 - `with_execution(...)` for executor/concurrency/order settings;
-- no executing `collect()`/`first()` terminals;
-- `take()` remains a transform;
-- execution-local resource entry/rollback/exit from R3, driven by the exit stack rather than
-  duck-typed handle methods;
-- an external-resource lifecycle proof (below);
+- minimal execution-owned `EventSink` transport and no-op default;
+- execution-local resource entry/rollback/exit from R3;
+- external-resource lifecycle proof;
 - remove `SyncPipe`/`AsyncPipe`/Collection classes from the target public surface;
 - migrate P10 executor/bounded-stream mechanics out of `collections.py` rather than reimplementing
   them.
 
-**R2A exit condition:** omitted configuration is distinct from explicit `None`; a Pipeline definition
-and the options actually executed have one source of truth.
+The minimal `EventSink` is infrastructure, not the full observability layer. R4B owns dispatch and
+lifetime only. Later phases define the semantic events/results they produce; optional OpenTelemetry
+and other consumers remain ecosystem/observability work.
 
-#### R4 lifetime invariants
-
-These are R4 contracts, not R7 details:
+#### R4B lifetime invariants
 
 1. every execution-spawned task belongs to exactly one execution-owned task group; detached
    `asyncio.create_task()` exists only in explicitly characterized compatibility code;
 2. every context-managed component is entered on the execution exit stack, and rollback is that
    stack unwinding rather than a separate teardown path;
-3. lifecycle composition is not execution-mode adaptation. `AsyncExitStack` composes sync and async
-   context managers, but a potentially blocking sync `__enter__`/`__exit__` is still adapted to a
-   worker before it reaches the stack;
+3. lifecycle composition is not execution-mode adaptation: potentially blocking sync entry/exit is
+   adapted to a worker before it reaches an async stack;
 4. cross-mode adaptation happens only at an execution boundary chosen during preparation. Parser,
    module, factory, and extension code never creates event loops, portals, executors, worker
-   threads, or task groups.
+   threads, or task groups;
+5. event delivery is execution-owned and must not create a parallel callback/lifecycle framework.
 
-#### R4 external-resource proof
+#### R4B external-resource proof
 
-Do not wait until R12 to discover that the execution lifecycle cannot hold a real client. R4's exit
+Do not wait until R12 to discover that the execution lifecycle cannot hold a real client. R4B exit
 tests include at least one genuinely external async resource and one genuinely external sync
-resource, each proven under **both** sync and async Pipeline execution:
-
-```python
-@asynccontextmanager
-async def client(ctx):
-    async with httpx.AsyncClient() as c:
-        yield c
-
-
-@contextmanager
-def connection(ctx): ...
-```
+resource, each proven under **both** sync and async Pipeline execution.
 
 Covered cases: eager open, lazy open, mid-execution failure rollback, early consumer abandonment,
-cancellation, and cleanup-error grouping. R12 proves the **external package API**; R4 proves the
+cancellation, and cleanup-error grouping. R12 proves the **external package API**; R4B proves the
 **runtime architecture**.
 
+### R5A — FeedResult, Metadata, and private per-item provenance
 
-### R5 — FeedResult, Metadata, and private per-item provenance
-
-**Goal:** create the internal value envelope required by state, idempotency, generation, and
-cross-branch semantics without exposing wrapper objects to ordinary parsers.
+**Goal:** create the internal value envelope required by state, idempotency, generation, cache replay,
+and cross-branch semantics without exposing wrapper objects to ordinary parsers.
 
 Deliver:
 
@@ -381,9 +479,68 @@ Deliver:
 
 Normal parser APIs still receive values and their prepared arguments, not `_FeedItem`.
 
+Once R5A lands, ordinary Feed-native transforms whose semantics depend only on the final execution
+envelope may migrate immediately rather than waiting for R10.
+
+### R5B — CacheNode runtime / Mezmoize replay
+
+**Goal:** implement explicit replay/materialization semantics without inventing another cache backend
+hierarchy inside Riko.
+
+`Pipeline.cache()` compiles to `CacheNode`. Runtime cache behavior uses a private Riko-to-Mezmoize
+shim and Mezmoize/CacheLib backends rather than Riko-owned store classes.
+
+Deliver the locked cache semantics:
+
+- cache semantic identity belongs to the graph/Pipeline definition; mutable cache contents belong to
+  the cache service;
+- plain `.cache()` uses a deterministic bounded process-local Mezmoize `SimpleCache` resource;
+- explicit persistent/shared cache behavior is supplied through the normal CacheNode `cache`
+  Resource slot;
+- no semantic TTL by default; `ttl: datetime.timedelta | None`, canonicalized as exact integer
+  milliseconds when present;
+- default process-local capacity `DEFAULT_CACHE_SIZE = ByteSize(mebibytes=64)`;
+- private chunk size `_CACHE_CHUNK_SIZE = ByteSize(kibibytes=256)`;
+- chunk + manifest storage; publish the manifest only after all chunks exist;
+- stream items downstream while staging, but commit a fill only after successful complete traversal;
+- error, cancellation, or early consumer exit discards the incomplete fill;
+- missing chunk means miss plus stale cleanup;
+- concurrent duplicate fills are allowed and isolated by generation; no single-flight requirement;
+- `cached.invalidate()` rotates generation so old contents become unreachable without eager deletion;
+- backend failure emits an `EventSink` diagnostic and bypasses cache for the rest of the current
+  execution; the next execution retries the backend;
+- upstream execution failures remain execution failures, never cache bypasses.
+
+Cache capacity is Resource/backend policy, not a `.cache(limit=...)` node option. `ByteSize` is the
+public size-value type; canonical size representation is bytes.
+
+### R5C — Provider-neutral write/action effects
+
+**Goal:** establish one side-effect execution model before durable idempotency is layered on in R6.
+
+Deliver:
+
+- `WriteNode` runtime over the R4A Target/Format/registry contracts;
+- `ActionNode` runtime over registered provider-neutral action contracts;
+- `WriteResult` and `ActionResult` event/result values;
+- original input records pass downstream unchanged after successful write/action processing;
+- successful writes aggregate completion per write node;
+- results are emitted out-of-band through the R4B `EventSink`;
+- sync/async target/action implementations adapt through R4B rather than creating local bridges;
+- failure propagation and cancellation obey the common execution contract.
+
+`write()` is an effect operation, not a public module and not a terminal by definition. Its graph
+position determines whether the user continues chaining. There is no public `sink()` counterpart in
+the target API.
+
+`read()` owns acquisition plus interpretation/parsing through Target + Format. `write()` owns
+reconciliation/mutation. Provider commands that do not naturally mean data write are actions.
+Concrete FILE/HTTP/S3/Postgres/Airtable/Intune/etc. adapters remain R11.
+
 ### R6 — StateStore, checkpoint, CAS, and idempotency
 
-**Goal:** add durability only after canonical identity and provenance exist.
+**Goal:** add durability only after canonical identity, provenance, replay, and the effect runtime
+exist.
 
 Deliver public semantic types/protocols:
 
@@ -400,44 +557,48 @@ Deliver public semantic types/protocols:
 - recovery checkpoint deletion on successful owner completion;
 - durable intrinsic source/poll state retained after success;
 - backend-owned physical key/state serialization;
-- standardized configured-instance capability visibility through `StateStoreCapabilities`,
-  `StateStoreCapabilitiesLike`, `StateSerializationId`, and `StateSerializationLike`;
-- coarse `persistent` / `portable` / `serialization` metadata, not an exhaustive supported-type list;
+- standardized configured-instance capability visibility;
 - concrete `validate_state(state) -> None` preflight with `StateSerializationError` on failure;
-- `save()` repeats authoritative serialization validation and remains non-mutating on codec failure;
 - no generic leases.
 
-Third-party serialization IDs use the standardized `<provider>:<name>` namespace. Capability values
-describe the configured store instance, so the same backend may report different persistence or
-portability depending on its actual configuration/codec.
+Central execution derives idempotency keys from
+`(node_id, fingerprint, item_key, generation, iteration)` and injects them into R5C side-effecting
+nodes that declare support.
 
-Central execution also derives idempotency keys from
-`(node_id, fingerprint, item_key, generation, iteration)` and injects them into side-effecting nodes
-that declare support.
+Checkpoint declarations already exist structurally in R4A. R6 adds owner resolution, restore,
+persistence, CAS, cleanup, and runtime validation.
 
-### R7 — Execution-owned pub/sub and split
+### R7 — Execution-owned publish/subscribe and split
 
-**Goal:** replace hidden global hub lifecycle with the finalized object-first fan-out contract.
+**Goal:** implement the R4A `SubscribeNode`/`PublishEdge` topology and replace hidden global hub
+lifecycle.
+
+R7 depends on R5A so fanout transports the final `_FeedItem` provenance envelope. It does not depend
+on cache/effects/state.
 
 Deliver:
 
-- `Publisher[T]`, `Subscription[T]`, `Channel[T]` protocols;
+- `Publisher[T]`, `Subscription[T]`, `Channel[T]` runtime protocols;
 - `Pipeline.subscribe(name)` local declaration;
 - `flow.publish(subscription_or_publisher, isolate=True)`;
 - external `Subscription` accepted as `Pipeline(source=...)`;
 - execution-owned local branches and cleanup, with every subscriber/branch/merge task created under
-  R4's task group; no detached tasks outside characterized compatibility code;
+  R4B's task group;
 - multiple same-name local subscriptions distinguished by object identity;
-- multiple publishers complete a subscription only after all attached publishers finish, implemented
-  structurally through owned sender handles rather than integer publisher bookkeeping;
+- multiple publishers complete a subscription only after all attached publishers finish, derived
+  structurally from incoming `PublishEdge`s and owned sender handles;
+- no PENDING/DONE/sender-id markers in the data stream;
 - per-subscription order guarantees;
 - buffer default `0`, overflow `block`, optional drop-oldest where permitted;
 - `on_receive=` semantics in sync and async together;
 - `split()` upstream-once, active-branches-only, bounded, never lossy;
+- branch/route port behavior from the R4A contract;
 - no cleanup dependency on draining branch output.
 
 The existing `send`/`receive` modules may remain as low-level compatibility modules while the target
 Pipeline API is object-first.
+
+Feed-native send/receive/split migration belongs in this phase rather than being deferred to R10.
 
 ### R8 — Single-Pipeline batch execution
 
@@ -461,63 +622,79 @@ candidates = upstream representations ∩ representations the node accepts
 4. Python objects (universal fallback)
 ```
 
-The earlier `Arrow → Polars → Pandas → list` ladder is superseded: it encoded a framework preference
-that does not exist in practice, so a Pandas-native graph would convert to Arrow and back for no
-reason. Arrow still usually wins between frame libraries, but by measured conversion cost, not rank.
 Equal-cost ties resolve through a documented stable order so identical graphs negotiate identically
-across processes. Forced unavailable backend raises. `batch_size` is invalid when `batch=False`. Batches are ordinary
-logical values, so `.map(func)` receives the current batch in batch mode.
+across processes. Forced unavailable backend raises. `batch_size` is invalid when `batch=False`.
+Batches are ordinary logical values, so `.map(func)` receives the current batch in batch mode.
 
-Refactor Feed-native batching helpers to implement this contract rather than exposing a separate
-`BatchPolicy` user model.
+Batch-aware Feed-native representation optimization lands here; no separate R10 rewrite is required.
 
-### R9 — Loop/agent state
+### R9 — Loop/resumable iteration
 
-**Goal:** extend the existing `loop` construct rather than add an agent execution engine.
+**Goal:** extend the existing `loop` module rather than add a LoopNode or agent execution engine.
+
+Current/default semantics stay unchanged: for each parent, run the embedded processor/sub-pipeline
+once and fold its zero-to-many outputs according to the existing `count`/`emit`/`assign` behavior.
+
+Iterative behavior is opt-in by the presence of iterative controls:
+
+```text
+loop(embed=...)
+    -> current one-run-per-parent behavior
+
+loop(embed=..., max_iterations=N)
+    -> iterative fixed-count behavior
+
+loop(embed=..., until=...)
+    -> iterative conditional behavior
+
+loop(embed=..., until=..., max_iterations=N)
+    -> conditional behavior with a hard bound
+```
+
+There is no redundant `iterative=True` or mode enum.
 
 Deliver iterative mode:
 
-- each iteration output becomes next state;
-- exactly one embedded result per iterative iteration;
-- zero/multiple result → `LoopStateError`;
+- each iteration's single embedded result becomes the next state;
+- zero/multiple result → `LoopStateError` in iterative mode only;
 - `until(state, iteration)` checked before first iteration;
 - `max_iterations=None` default;
 - explicit false-at-limit → `LoopIterationError`;
 - checkpoint payload `LoopState[T](value, iteration)` through R6;
-- explicit stable loop `id=`;
+- explicit stable loop `id=` where cross-revision state identity is required;
 - resume counts total iterations across executions;
-- Pipeline DAG remains acyclic.
+- Pipeline DAG remains acyclic; feedback is internal loop execution semantics.
 
-Agent packages then compose Pipeline + loop + Publisher/Subscription + StateStore rather than
-creating `AgentGraph`/`AgentNetwork` runtime primitives.
+Agent packages compose Pipeline + loop + Publisher/Subscription + StateStore rather than creating
+`AgentGraph`/`AgentNetwork` runtime primitives.
 
-### R10 — Feed-native migration
+### R10 — Final Feed-native compatibility cleanup
 
-**Goal:** move the legacy materialization seam down to genuinely blocking operators after the new
-execution envelope exists.
+**Goal:** finish and prove the migration rather than begin it here.
 
-Recommended order remains:
+By R10, migrations that naturally belonged to earlier runtime capabilities have already landed:
 
 ```text
-truncate
-union
-filter
-uniq
-tail
-count
-sum
-timeout
-write
-remaining source/composer modules
+R5A  ordinary streaming transforms/reducers where otherwise ready
+R5C  streaming write
+R7   send/receive compatibility streaming + bounded split
+R8   batch representation optimization
 ```
 
-Pub/sub/split use R7 rather than separate ports. Batching uses R8. `sort`/`reverse` may remain eager
-where their semantics require whole-input knowledge.
+R10 therefore owns:
+
+- remaining eligible source/composer/module migrations;
+- final removal/minimization of the legacy whole-source materialization seam;
+- sync/async laziness/order/memory/side-effect timing parity audit;
+- cleanup of compatibility-only shims made obsolete by the final execution envelope;
+- proof that genuinely eager operators (`sort`, `reverse`, etc.) are the only intentional
+  materialization points.
 
 ### R11 — adapters: CLI, orchestration, providers, MCP
 
 Only after the core contracts above are stable:
 
+- concrete Target adapters and Format integrations implement the R4A/R5C contracts;
 - CLI plugins expose native Click command/group objects;
 - CLI assembles immutable `Context`, never a public execution object;
 - orchestration uses `PipelineRunRequest(pipeline=PipelineRef(...))`;
@@ -528,7 +705,7 @@ Only after the core contracts above are stable:
   provider catalog;
 - provider integrations establish the `OperationHandle` waiter contract before Operations as Code
   needs long-running provider steps;
-- RDP projects R5/R6 identity/state rather than owning parallel checkpoint semantics.
+- RDP projects R5A/R6 identity/state rather than owning parallel checkpoint semantics.
 
 ### R11A — Operations as Code implementation scaffolding
 
@@ -600,8 +777,7 @@ Then run the release-readiness wheel, typing, docs, optional-dependency, and pub
 
 ## 4a. Contracts that are not frozen yet
 
-Two areas are implemented against a deliberately provisional contract, and PRs touching them should
-expect the contract to move:
+Two areas remain deliberately provisional:
 
 - **automatic semantic fingerprinting (R2B).** The best-effort helper may grow or shrink. Nothing
   durable may depend on its completeness; `version=` is the stable surface;
@@ -609,39 +785,44 @@ expect the contract to move:
   shape, but declared conversion costs and the tiebreak order need real graphs before they are
   fixed.
 
-Everything else in this sequence — immutable Pipeline definition with fresh executions, immutable
-Context with live state in the execution, context-manager resources, one execution-owned portal,
-explicit fanout, rendezvous default and backpressure, execution-owned branch lifetime, the private
-provenance envelope, one StateStore/checkpoint model, one Pipeline rather than `BatchPipe`, and the
-external-extension proof before 1.0 — is treated as settled.
+The Workflow v2 topology/normalization decisions, Pipeline/private-execution split, Target/Format
+structural model, cache replay semantics, write/action effect model, state/checkpoint ownership,
+fanout topology, and additive loop iteration semantics are treated as settled.
 
 ## 5. Parallelizable work
 
 After R0/R1:
 
 - R2A encoding work and most R3 Context/Resource definition work may proceed in parallel if their
-  shared `identity_encoder` interface is kept narrow. R2B may proceed beside both, since it is
-  deliberately scoped to explicit id/version plus a best-effort fingerprint helper;
-- remaining P9 generated discoverability work can proceed independently of R2A/R2B/R3/R4, provided
-  stubs target final `Pipeline` names only when R4 is available;
-- P12 event rendering can proceed beside R2A/R2B/R3, but runtime emission hooks should land with
-  R4+;
+  shared `identity_encoder` interface is kept narrow. R2B may proceed beside both;
+- remaining P9 generated discoverability work can proceed independently of R2A/R2B/R3/R4A, provided
+  stubs target final `Pipeline` names only when R4A is available;
 - CLI command registry/Click plugin mechanics can proceed independently, but execution commands must
-  wait for R4.
+  wait for R4B.
+
+After R4B/R5A:
+
+- R5B cache/effect/state work follows its dependency chain, while R7 fanout may proceed independently
+  from R5A;
+- ordinary Feed-native transforms may migrate as soon as their only missing prerequisite is R5A;
+- observability consumers may be developed against the R4B `EventSink` contract while semantic event
+  types continue to land with their owning phases.
 
 After R11 service seams stabilize, provider import/export scaffolding, operation repository/model
 work, and CLI command-provider stubs may proceed in parallel only where their interfaces are already
 owned. The first cross-provider compatibility and orchestration scenarios wait for those seams.
 
-Do **not** parallelize competing implementations of identity, resource lifecycle, state, pub/sub,
-capability discovery/policy, operation planning, provider waiting, or compatibility ownership. Each
-has one authoritative implementation. In particular, no PR after R4 may introduce its own task group,
-exit stack, portal, or executor.
+Do **not** parallelize competing implementations of identity, workflow normalization, resource
+lifecycle, cache replay, state, pub/sub, effect dispatch, capability discovery/policy, operation
+planning, provider waiting, or compatibility ownership. Each has one authoritative implementation.
+In particular, no PR after R4B may introduce its own task group, exit stack, portal, event transport,
+or executor.
 
 ## 6. First implementation slice
 
-The recommended next coding PR remains **R0**, not an Operations as Code, state-store, or pub/sub PR,
-unless the branch has already completed the prerequisite sequence by the time implementation starts.
+The recommended next coding PR remains **R0**, not an Operations as Code, state-store, cache, or
+pub/sub PR, unless the branch has already completed the prerequisite sequence by the time
+implementation starts.
 
 R0 is deliberately small and low-risk:
 
@@ -660,22 +841,32 @@ first Operations as Code slice once the owning lower-level seams exist.
 The implementation reconciliation is complete when:
 
 1. `Pipeline` is the only target public pipeline definition;
-2. each iteration creates independent private execution state;
-3. Context contains immutable definitions, never live runtime handles;
-4. all durable identity/fingerprints/idempotency/checkpoints share one canonical encoder, and
-   durable semantics rest on explicit `version=` rather than on automatic callable introspection
-   being complete;
-5. resource lifetime is context-manager based, and every execution-spawned task and context-managed
+2. authoring forms normalize once to a strict canonical Workflow v2 definition consumed by
+   serialization, validation, compilation, and execution;
+3. each iteration creates independent private execution state;
+4. Context contains immutable definitions, never live runtime handles;
+5. all durable identity/fingerprints/idempotency/checkpoints share one canonical encoder, and durable
+   semantics rest on explicit `version=` rather than on automatic callable introspection being
+   complete;
+6. resource lifetime is context-manager based, and every execution-spawned task and context-managed
    component is owned by the execution's task group and exit stack;
-6. StateStore is the one persistence protocol and all writes are CAS-protected;
-7. pub/sub/split lifecycle is execution-owned and bounded;
-8. batch mode does not create a second pipeline hierarchy, and representation is negotiated by
-   capability/cost rather than by a global backend ranking;
-9. agent iteration reuses `loop` and the existing Pipeline DAG;
-10. external packages can use resources/state/pubsub without core changes;
-11. Operations as Code scaffolding lives outside Core and composes provider/capability/orchestration
+7. cache replay uses the finalized Mezmoize-backed CacheNode contract and never publishes an
+   incomplete fill;
+8. `write`/actions pass records through and report completion through the common EventSink; no public
+   `sink()` terminal survives in the target API;
+9. StateStore is the one persistence protocol and all writes are CAS-protected;
+10. pub/sub/split lifecycle is execution-owned, bounded, and derived from canonical topology rather
+    than hidden DONE/PENDING bookkeeping;
+11. batch mode does not create a second pipeline hierarchy, and representation is negotiated by
+    capability/cost rather than by a global backend ranking;
+12. iterative behavior extends the existing loop module and is activated by `until`/
+    `max_iterations`, while the default preserves current one-run semantics;
+13. Feed-native migration happens with its owning runtime phases and R10 leaves only genuinely eager
+    materialization points;
+14. external packages can use resources/state/pubsub/targets/actions without core changes;
+15. Operations as Code scaffolding lives outside Core and composes provider/capability/orchestration
     owners without duplicate contracts;
-12. the SuperOps→GitHub Actions and Autopilot fixtures prove import/deploy and
+16. the SuperOps→GitHub Actions and Autopilot fixtures prove import/deploy and
     plan/approval/wait/verify composition respectively;
-13. the release docs and generated public surface contain none of the superseded abstractions listed
+17. the release docs and generated public surface contain none of the superseded abstractions listed
     in §2.
