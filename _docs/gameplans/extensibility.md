@@ -17,7 +17,8 @@ Related authoritative plans:
 - [mcp.md](mcp.md) — capability catalog/execution policy;
 - [operations-as-code.md](operations-as-code.md) — operation source-of-truth, OperationSpec/Plan,
   import/compatibility/deployment semantics consumed by operation-pack extensions;
-- [implementation-sequence.md](implementation-sequence.md) — forward dependency order.
+- [implementation-sequence.md](implementation-sequence.md) — forward dependency order;
+- [release-readiness.md](release-readiness.md) — pre-1.0 Python API compatibility/removal policy.
 
 This gameplan also retains the useful conclusions from prior-art research on issue #10: Pypes,
 Mario, RssPercolator, Plagger, Turtle, node-machine, and the later comparison with Bonobo, petl,
@@ -174,8 +175,17 @@ both
 No compiler/runtime subsystem independently reinterprets authoring shorthand, old port names, inline
 targets, omitted outputs, or legacy v1 shapes.
 
-Riko accepts v1 only at the loader/migration boundary, warns when migration occurs, and serializes
-v2 only. `migrate_v1_to_v2()` is pure and testable.
+During the remaining 0.x line, Riko accepts **released** v1 documents only at the loader/migration
+boundary, warns when migration occurs, normalizes immediately to v2, and serializes v2 only.
+`migrate_v1_to_v2()` is pure and testable. A released v1 module node named `write` migrates
+deterministically to canonical `WriteNode` plus its Target/Format representation; execution never
+keeps a parallel v1 `write` runtime.
+
+The v1 loader is intentionally temporary. At **1.0**, normal workflow loading is v2-only and rejects
+v1 input. The offline `migrate_v1_to_v2()` utility may remain as a rescue/conversion tool without
+making v1 executable. Unreleased branch-only experiments, including the discarded public `sink()`
+surface, receive no loader compatibility and are not accepted as legacy grammar merely because a
+prototype once existed.
 
 ### E3.2 Canonical graph envelope
 
@@ -428,6 +438,9 @@ Acceptance:
   or publish edges;
 - normalize(normalize(x)) is stable;
 - v1 migration followed by v2 serialization never emits v1-only structure;
+- released v1 `write` normalizes to canonical `WriteNode` rather than executing a legacy module;
+- normal v1 loading warns/migrates during 0.x and is rejected at the 1.0 runtime boundary, while an
+  offline migration utility may remain;
 - GUI/CLI validation consumes the same normalized model as execution preparation;
 - a structurally valid node whose runtime capability is not implemented may round-trip, while
   execution fails with a clear unsupported-capability error.
@@ -604,10 +617,10 @@ The ecosystem side of 1.0 readiness includes:
 - external plugin proof;
 - external workflow consumer proof;
 - recipe fixtures;
-- migration/deprecation policy;
+- persisted-workflow migration/cutoff policy;
 - benchmark/regression evidence.
 
-Internal API/DX/release-package gating remains owned by
+Internal Python API compatibility/removal policy and release-package gating remain owned by
 [release-readiness.md](release-readiness.md). In particular, target execution configuration is
 `with_execution(...)`, not `with_config(executor=...)`.
 

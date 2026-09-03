@@ -141,8 +141,9 @@ class Subscription[T](Protocol): ...
 class Channel[T](Publisher[T], Subscription[T], Protocol): ...
 ```
 
-Low-level compatibility modules may remain named `send` / `receive`, but they do not define the
-final Python API.
+Current low-level `send` / `receive` modules exist only as pre-R7 migration/characterization inputs.
+R7 removes those Python modules when the object-first `publish` / `subscribe` surface lands; there is
+no deprecated low-level compatibility API in the target surface.
 
 ### 4.1 Local subscriptions
 
@@ -159,7 +160,7 @@ edges structurally define the publisher set and therefore completion semantics.
 
 `publish(events)` attaches the complete subscription branch to the producer's execution. The user
 does not have to drain ignored branch output to trigger work or cleanup. Terminal branch values are
-discarded unless the branch contains an explicit write/action/on_receive/routing effect.
+discarded unless the branch contains an explicit write/action/subscription-`func`/routing effect.
 
 Calling:
 
@@ -201,8 +202,8 @@ Synchronous subscriber work is inline by default. Parallel subscriber execution 
 execution-concurrency choice, not an implicit property of pub/sub.
 
 Async subscriber orchestration is owned by the private execution. Every subscriber task is created
-under the execution's task group; final code permits no detached tasks. Compatibility code may retain
-tracked transitional tasks only until the execution-owned model lands.
+under the execution's task group; final code permits no detached tasks. Transitional code may retain
+tracked tasks only until the execution-owned model lands.
 
 ### 5.2 Buffering
 
@@ -233,20 +234,22 @@ Literal["raise", "ignore"]
 Default is `"raise"`. `"ignore"` means per-item continuation for that subscriber; it does not turn
 all branch failures into successful execution.
 
-### 5.4 `on_receive` semantics
+### 5.4 `func` semantics
 
-A subscriber `on_receive=` may be sync or async. Its return value is discarded:
+A subscriber `func=` may be sync or async. It runs as the item is received/materialized by the
+subscription, not later when an ordinary downstream UDF is pulled. Its return value is discarded:
 
 ```python
 def archive(item):
     saved.append(item)
 
 
-subscription = Pipeline.subscribe("archive", on_receive=archive)
+subscription = Pipeline.subscribe("archive", func=archive)
 ```
 
-The received item remains the logical stream value. The old `receive(func=...)` transformation
-behavior is not the target contract; transformation belongs in an ordinary downstream node.
+The received item remains the logical stream value. `func` is retained specifically because its
+materialization timing is part of the subscription contract and differs from an ordinary downstream
+transform/UDF; callers should not infer transform semantics from the shared callable-shaped name.
 
 ## 6. Multiple publishers and completion
 
@@ -459,7 +462,8 @@ Current hubs and modules are implementation/migration inputs:
 
 - sync currently uses queue/generator-coroutine mechanics and historical PENDING/DONE bookkeeping;
 - async uses AnyIO channels but has had incremental-delivery/materialization defects;
-- current receiver `func` behaves like a transform rather than an on_receive callback;
+- current receiver `func` is the receive-time hook whose materialization timing is intentionally
+  distinct from ordinary downstream UDF evaluation;
 - current lifecycle can tie cleanup to draining a receiver.
 
 The target rewrite must preserve useful observable behavior while deleting those hidden ownership
@@ -470,23 +474,29 @@ mechanisms. In particular:
 - registration/teardown belongs to execution-owned handles;
 - cleanup does not depend on draining ignored output;
 - async delivery is incremental;
-- on_receive semantics change sync and async together.
+- `func` timing and return-discard/pass-through semantics match in sync and async.
 
 Feed-native async parser support is implemented through the common Feed-native parser mechanism, not
 a pub/sub-specific wrapper hack.
 
-### 14.1 Compatibility staging boundary
+### 14.1 Migration staging boundary
 
-Compatibility work may keep string-target `SyncPipe` / `AsyncPipe` send/receive behavior while the
-old surfaces survive. Strings also remain valid serialized/wire references after the final Python API
-becomes object-first.
+Before R7, characterization and bug-fix work may keep the existing string-target `SyncPipe` /
+`AsyncPipe` send/receive behavior while those shipped surfaces still exist. Such work must not make
+those Python modules part of the final contract. R7 removes `send` / `receive` from the Python module
+surface when `PublishEdge` / `SubscribeNode` and object-first `publish` / `subscribe` replace them.
 
-Compatibility fixes should make async send/receive incremental and preserve currently documented
+String subscription names remain valid serialized/wire references after the final Python API becomes
+object-first; that is subscription identity, not a compatibility module API. Released persisted v1
+shapes are handled only through the bounded v1 migration boundary where deterministic; no legacy
+send/receive runtime survives behind Workflow v2.
+
+Transitional fixes should make async send/receive incremental and preserve currently documented
 sync/async behavior together, but must not extend DONE/PENDING bookkeeping. Final R7 replaces that
 ownership mechanism with `SubscribeNode`/`PublishEdge` topology, execution-owned sender handles, and
-`on_receive=` semantics in both modes.
+receive-time `func=` semantics in both modes.
 
-Do not partially implement final object-first lifecycle semantics inside the compatibility hub.
+Do not partially implement final object-first lifecycle semantics inside the transitional hub.
 
 ## 15. Testing strategy
 
@@ -515,24 +525,27 @@ Encode these as behavior-level contracts independent of compatibility API shape:
 19. canonical fan-in ordering is preserved after deterministic edge sorting;
 20. invalid/duplicate target-port wiring fails before source consumption.
 
-### 15.2 Compatibility characterization
+### 15.2 Migration characterization
 
-Keep current compatibility tests that pin behavior scheduled to change, but do not treat them as
-forward contracts. In particular current transformation-shaped receiver callbacks and sentinel
-visibility are migration fixtures only.
+Keep current characterization tests that pin behavior scheduled to change, but do not treat them as
+forward contracts. In particular sentinel visibility and old hub ownership are migration fixtures;
+`func` itself is retained, while its final sync/async timing and pass-through behavior are tested as
+forward semantics.
 
 ### 15.3 Final API/IR contracts
 
 Assert once the object-first surface and Workflow v2 land:
 
 1. `SubscribeNode` + `PublishEdge` canonical topology;
-2. sync and async `on_receive=` both discard return values and preserve the item;
+2. sync and async `func=` both execute at subscription receive/materialization time, discard return
+   values, and preserve the item;
 3. multiple same-name subscription objects remain distinct by identity;
 4. external `Subscription` works as a Pipeline source;
 5. split uses positional output ports;
 6. branch/route use semantic output ports;
 7. union/join/merge operands use distinct indexed input ports;
-8. one target stream port accepts at most one incoming stream edge.
+8. one target stream port accepts at most one incoming stream edge;
+9. legacy `send` / `receive` Python modules are absent after R7.
 
 ## 16. Implementation phases
 
@@ -541,12 +554,12 @@ by [implementation-sequence.md](implementation-sequence.md). In particular, cano
 structure lands in R4A, provenance in R5A, and runtime fanout in R7.
 
 ```text
-F0  Document current compatibility topology
-F1  Feed-native incremental async send/receive compatibility modules
+F0  Document current migration topology
+F1  Feed-native incremental async send/receive transitional implementation
 F2  Binary conditional branch
 F3  Named N-way route / partition
 F4  Final bounded subscription buffering/error policy
-F5  Execution-owned Publisher/Subscription lifecycle + on_receive semantics
+F5  Execution-owned Publisher/Subscription lifecycle + receive-time func semantics
 F6  Workflow v2 topology integration / introspection
 F7  Branch-to-union/join ergonomic contracts
 ```
@@ -555,8 +568,8 @@ These F labels do not create a parallel implementation sequence.
 
 ## 17. Definition of done
 
-1. Public Python pub/sub uses `publish` / `subscribe` objects rather than requiring low-level
-   `send` / `receive` knowledge.
+1. Public Python pub/sub uses `publish` / `subscribe` objects and the legacy `send` / `receive`
+   modules are absent.
 2. Canonical Workflow v2 represents subscriptions as `SubscribeNode`s and publication as
    `PublishEdge`s.
 3. Publish/subscribe and split are incremental and bounded in both sync and async execution.
@@ -564,7 +577,7 @@ These F labels do not create a parallel implementation sequence.
 5. Split uses positional output ports; branch/route use semantic named ports.
 6. Fan-in operands use distinct indexed input ports, never edge-list order.
 7. Broadcast and routing remain separate concepts.
-8. Subscriber buffering, overflow, ordering, errors, and on_receive behavior are explicit.
+8. Subscriber buffering, overflow, ordering, errors, and receive-time `func` behavior are explicit.
 9. Multiple publisher completion is derived from topology/owned sender lifetime, not data sentinels.
 10. `union` remains sequential fan-in; `join` remains relational fan-in.
 11. Branch outputs compose naturally with existing fan-in operators.

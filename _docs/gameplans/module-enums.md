@@ -9,6 +9,10 @@
 > whose `Module` already names the decorator base — the wrapper was named **`Modules`** (plural)
 > to sidestep that collision). As-built detail: [IMPLEMENTED.md §24](../IMPLEMENTED.md#24-module-discovery-shipped);
 > status: [PHASE_CHECKLISTS.md § P9A](../PHASE_CHECKLISTS.md).
+>
+> The `Sinks` bucket above is as-built history, not the end-state taxonomy. Workflow v2 removes the
+> fake `output` module and R5C removes the `write` module, so final module discovery has no sink
+> category.
 
 Design record for the "generated module enums" work, scoped to **core riko only**. The
 `riko-microsoft` / Autopilot half is a downstream *consumer* of this work, owned by
@@ -22,12 +26,13 @@ P8/P11/P12); it appears here only as the fake in-repo example extension that pro
 - **Strings stay canonical.** Enums are a typed *discovery* layer over string identifiers. JSON
   pipelines, entry points, configs, and the CLI keep using strings. Every enum member's `.value`
   **is** the canonical id; serialization always emits the value, never the member name.
-- **Taxonomy is derived, not declared.** The user-facing tree category (`category`:
-  `Sources`/`Transforms`/`Sinks`, plus provider namespaces) is computed **deterministically from
-  metadata that already exists** (`ModuleMetadata.type`/`subtype`/`ftype` + provider). Built-in
-  authors declare nothing new. Extensions may *override* via an explicit field. The runtime
-  execution-role `type` (`operator`/`processor`/`splitter`) and the data-flow `category` are
-  **different axes** and both are kept: runtime `type` unchanged; `category` added for codegen only.
+- **Taxonomy is derived, not declared.** P9A shipped the user-facing module categories
+  `Sources`/`Transforms`/`Sinks` from existing metadata. The final target keeps only module
+  `Sources` and `Transforms`; `Sinks`, `ModuleCategory = "sink"`, and `SINK_NAMES` disappear when
+  `output`/`write` leave module space. Endpoint/provider and data-format discovery are separate
+  typed surfaces, `Targets` and `Formats`, backed by their own contracts/registries rather than
+  pretending destinations are modules. The runtime execution-role `type`
+  (`operator`/`processor`/`splitter`) remains a separate axis.
 - **No `.then()` — decision: Option C + `__or__`.** `.then()` is **rejected** (avoids a second
   chaining idiom and the `then`-means-callable semantic collision with §4 callable pipes). Instead:
   (a) **extend the existing `.pipe()`** to accept a positional `ModuleNameLike`
@@ -67,8 +72,12 @@ touched.
 
 - aggregate `riko.generated.Modules` covering the *installed* environment incl. entry-point
   extensions (the committed `riko/modules/_names.py` stays built-ins only, keeping the drift guard
-  env-stable).
-- `.pyi` fluent stubs.
+  env-stable);
+- align generated discovery with the final module set: `Sources` + `Transforms` only; do not carry
+  `Sinks`, `write`, or fake `output` forward solely for compatibility;
+- expose `Targets` and `Formats` through their dedicated target/format discovery contracts rather
+  than module taxonomy;
+- `.pyi` fluent stubs;
 - Optional taxonomy enums (`ModuleType`, per-provider subtype enums) if `list_modules` filtering
   benefits — low priority, additive; string/`StrEnum` filters suffice today.
 
