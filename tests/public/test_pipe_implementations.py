@@ -106,24 +106,61 @@ def test_natural_join_does_not_materialize_its_primary():
     assert len(consumed) <= _LOOKAHEAD
 
 
-def test_filter_greater_less_compare_strings_lexicographically():
+def test_filter_greater_less_compare_numeric_strings_numerically():
     """
-    ``greater``/``less`` only coerce to numeric when the field value is already numeric.
-    String values compare lexicographically, e.g.,``"9" > "10"`` is True. This lets
-    ``x greater "10"`` permit ``"9"``.
-
-    Numeric values compare numerically. So ``x greater 10`` permits neither ``9`` nor
-    ``10``.
+    ``greater``/``less`` compare numerically when both operands are numeric or
+    numeric strings. ``"10" greater "9"`` is True even though ``"10"`` sorts
+    lexicographically before ``"9"``. Non-numeric strings fall back to lexicographic
+    comparison.
     """
-    strings = [{"x": "9"}, {"x": "10"}]
-    string_rule = FilterConfRule(field="x", op="greater", value="10")
+    numeric_strings = [{"x": "9"}, {"x": "10"}]
+    string_rule = FilterConfRule(field="x", op="greater", value="9")
     conf = FilterConf({"rule": string_rule})
-    assert _values(filter_pipe(strings, conf=conf), "x") == ["9"]
+    assert _values(filter_pipe(numeric_strings, conf=conf), "x") == ["10"]
 
     numbers = [{"x": 9}, {"x": 10}]
-    numeric_rule = FilterConfRule(field="x", op="greater", value=10)
+    numeric_rule = FilterConfRule(field="x", op="greater", value=9)
     conf = FilterConf({"rule": numeric_rule})
-    assert _values(filter_pipe(numbers, conf=conf), "x") == []
+    assert _values(filter_pipe(numbers, conf=conf), "x") == [10]
+
+    words = [{"x": "apple"}, {"x": "banana"}]
+    word_rule = FilterConfRule(field="x", op="greater", value="apple")
+    conf = FilterConf({"rule": word_rule})
+    assert _values(filter_pipe(words, conf=conf), "x") == ["banana"]
+
+
+def test_filter_ordered_coercion_is_all_or_nothing():
+    """
+    Numeric coercion is all-or-nothing. A mixed numeric/text pair compares
+    lexicographically instead of raising ``TypeError`` from a ``Decimal`` vs
+    ``str`` comparison, and a non-finite operand (``inf``/``nan``) is demoted to a
+    string rather than compared as an infinity/NaN.
+    """
+    mixed = [{"x": "10"}, {"x": "apple"}]
+    conf = FilterConf({"rule": FilterConfRule(field="x", op="greater", value="banana")})
+    assert _values(filter_pipe(mixed, conf=conf), "x") == []
+
+    nonfinite = [{"x": "nan"}, {"x": "5"}]
+    conf = FilterConf({"rule": FilterConfRule(field="x", op="greater", value="9")})
+    assert _values(filter_pipe(nonfinite, conf=conf), "x") == ["nan"]
+
+
+def test_filter_allow_inf_flag(monkeypatch):
+    """
+    ``inf``/``-inf`` are well-ordered, so the opt-in ``ALLOW_INF`` flag (default
+    False) compares them numerically.
+    """
+    items = [{"x": "-inf"}]
+    conf = FilterConf({"rule": FilterConfRule(field="x", op="less", value="-5")})
+
+    assert _values(filter_pipe(items, conf=conf), "x") == []
+
+    monkeypatch.setattr("riko.modules.filter.ALLOW_INF", True)
+    assert _values(filter_pipe(items, conf=conf), "x") == ["-inf"]
+
+    nan_items = [{"x": "nan"}]
+    nan_conf = FilterConf({"rule": FilterConfRule(field="x", op="greater", value="9")})
+    assert _values(filter_pipe(nan_items, conf=nan_conf), "x") == ["nan"]
 
 
 @pytest.mark.parametrize(

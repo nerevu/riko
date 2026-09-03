@@ -55,9 +55,9 @@ type NumericCaster = Callable[[str | NumLike], NumLike]
 type ArgCaster[T] = Callable[..., T]
 
 
-class PreCaster(TypedDict):
+class PreCaster[T](TypedDict):
     default: PrimitiveValue | dict[str, str] | None
-    func: Caster
+    func: Caster[T]
 
 
 type ConversionOutput = Items | Iterable[str] | StringIO

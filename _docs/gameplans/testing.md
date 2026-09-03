@@ -291,12 +291,15 @@ the suite, forcing the marker's removal) the moment its owner lands:
 **Shipped (§ 2b characterization rows).** The two open-question rows landed as **characterization**
 tests that pin current behavior (to be *updated, not deleted*, when the behavior is decided):
 
-- **R19** — `tests/public/test_pipe_implementations.py::test_filter_greater_less_compare_strings_lexicographically`
-  pins that `filter`'s `greater`/`less` compare string values lexicographically (`"9" > "10"`) while
-  numeric values compare numerically.
 - **R17** — `tests/internal/test_compile.py::test_convert_dag_empty_modules_yields_only_output` pins
   that an empty DAG yields just the terminal `output` node (the reported `module_ids[-1]` crash is
   *not reproduced*), rather than raising.
+**Shipped (§ 2b open-question rows).** R19's characterization test was **updated, not deleted**, into
+a regression once the contract was decided (type-aware comparison):
+
+- **R19** — `tests/public/test_pipe_implementations.py::test_filter_greater_less_compare_numeric_strings_numerically`
+  asserts that `filter`'s `greater`/`less` compare numeric strings numerically (`"10" > "9"`) and fall
+  back to lexicographic comparison for non-numeric strings (correctness-audit R19, now fixed).
 
 **Remaining.** None — the § 2b regression batch is complete (local repairs fixed, owned rows guarded
 by strict-xfail tripwires, open questions pinned by characterization tests).

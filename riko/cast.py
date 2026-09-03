@@ -465,9 +465,34 @@ def cast_date(value: DateLike) -> date | None:
     return cast_datetime(value, as_date=True)
 
 
-CAST_SWITCH: dict[str, PreCaster] = {
+def cast_decimal[T](value: object, default: T | None = None) -> Decimal | T:
+    """Coerces a number or numeric string to ``Decimal``; raises otherwise."""
+    result = None
+
+    try:
+        if isinstance(value, float):
+            result = Decimal(str(value))
+        elif isinstance(value, (int, str, Decimal)):
+            result = Decimal(value)
+    except (TypeError, InvalidOperation, ValueError):
+        pass
+
+    if (result is None) and (default is not None):
+        result = default
+    elif result is None:
+        raise TypeError(f"cannot coerce {value} to Decimal")
+
+    return result
+
+
+def _cast_decimal(value: str | int) -> Decimal:
+    """Coerces to a str or int to ``Decimal``."""
+    return cast_decimal(value)
+
+
+CAST_SWITCH: dict[str, PreCaster[PrimitiveValue | AnyLocation]] = {
     "float": {"default": float("nan"), "func": float},
-    "decimal": {"default": Decimal("NaN"), "func": Decimal},
+    "decimal": {"default": Decimal("NaN"), "func": _cast_decimal},
     "int": {"default": 0, "func": lambda i: int(float(i))},
     "text": {"default": "", "func": str},
     "datetime": {"default": None, "func": cast_datetime},
