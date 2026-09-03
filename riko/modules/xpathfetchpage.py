@@ -112,7 +112,9 @@ async def async_parser(
         ext = "html"
 
     # TODO: centralize error handling and retry logic
-    f = await async_url_open(url, encoding=objconf.encoding)
+    f = await async_url_open(
+        url, encoding=objconf.encoding, user_agent=objconf.user_agent
+    )
     content = any2dict(f, ext, objconf.html5, path=objconf.xpath)
     return auto_close(content, f)
 
@@ -156,7 +158,7 @@ def parser(
     if url.startswith("http") and not ext:
         ext = "html"
 
-    with Fetch(url, encoding=objconf.encoding) as f:
+    with Fetch(url, encoding=objconf.encoding, user_agent=objconf.user_agent) as f:
         content = cast(FileLike, f)
         yield from any2dict(content, ext, objconf.html5, path=objconf.xpath)
 
@@ -182,6 +184,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
                 (default: False).
 
             encoding (str): Page encoding (default: "utf-8").
+
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 
@@ -250,6 +254,8 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
                 (default: False).
 
             encoding (str): Page encoding (default: "utf-8").
+
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 

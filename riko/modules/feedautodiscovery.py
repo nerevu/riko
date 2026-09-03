@@ -65,7 +65,8 @@ async def async_parser(
     Args:
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `strict` and `sort`.
+        objconf: The pipe configuration, containing `url`, `strict`, `sort` and
+            `user_agent`.
 
     Returns:
         One item per discovered feed link.
@@ -88,7 +89,9 @@ async def async_parser(
     """
     url: str = require_conf(objconf, "url", "feedautodiscovery")
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = await autorss.async_get_rss(url, link_type=None, **rkwargs)
+    stream = await autorss.async_get_rss(
+        url, link_type=None, user_agent=objconf.user_agent, **rkwargs
+    )
     return stream
 
 
@@ -101,7 +104,8 @@ def parser(
     Args:
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `strict` and `sort`.
+        objconf: The pipe configuration, containing `url`, `strict`, `sort` and
+            `user_agent`.
 
     Returns:
         One item per discovered feed link.
@@ -127,7 +131,9 @@ def parser(
     """
     url: str = require_conf(objconf, "url", "feedautodiscovery")
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = autorss.get_rss(url, link_type=None, **rkwargs)
+    stream = autorss.get_rss(
+        url, link_type=None, user_agent=objconf.user_agent, **rkwargs
+    )
     return stream
 
 
@@ -149,6 +155,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
             sort (bool): Whether to order links by how likely each is to be a
                 feed, rather than document order (default: False).
+
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 
@@ -200,6 +208,8 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
             sort (bool): Whether to order links by how likely each is to be a
                 feed, rather than document order (default: False).
+
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 

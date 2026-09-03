@@ -120,6 +120,11 @@ def default_user_agent(name: str = "riko") -> str:
     return f"{name}/{__version__}"
 
 
+def resolve_user_agent(user_agent: str | None = None) -> str:
+    """Uses an explicit user agent or falls back to riko's default."""
+    return user_agent if user_agent is not None else default_user_agent()
+
+
 def get_response_content_type(r: HTTPResponse | addinfourl | requests.Response) -> str:
     """
     Reads the response's ``Content-Type`` header.
@@ -332,6 +337,7 @@ def opener(  # noqa: E704
     *,
     binary: Literal[True],
     timeout: float | None = None,
+    user_agent: str | None = None,
     **_: object,
 ) -> tuple[BytesIO, str | None]: ...
 @overload  # noqa: E302
@@ -344,6 +350,7 @@ def opener(  # noqa: E704
     *,
     binary: Literal[True],
     timeout: float | None = None,
+    user_agent: str | None = None,
     **_: object,
 ) -> tuple[RawIOBase, str | None]: ...
 @overload  # noqa: E302
@@ -355,6 +362,7 @@ def opener(  # noqa: E704
     offline: bool = ...,
     binary: Literal[False] = ...,
     timeout: float | None = None,
+    user_agent: str | None = None,
     **_: object,
 ) -> tuple[StringIO, str | None]: ...
 @overload  # noqa: E302
@@ -366,6 +374,7 @@ def opener(  # noqa: E704
     offline: bool = ...,
     binary: Literal[False] = ...,
     timeout: float | None = None,
+    user_agent: str | None = None,
     **_: object,
 ) -> tuple[StreamReader, str | None]: ...
 def opener(  # noqa: E302
@@ -376,6 +385,7 @@ def opener(  # noqa: E302
     offline: bool = True,
     binary: bool = False,
     timeout: float | None = None,
+    user_agent: str | None = None,
     **_: object,
 ) -> tuple[FileLike, str | None]:
     """
@@ -394,6 +404,7 @@ def opener(  # noqa: E302
         offline: Whether to treat a schemeless path as a local file (not an http host).
         binary: Whether to return bytes rather than decoded text.
         timeout: Per-request timeout in seconds.
+        user_agent: HTTP user agent override; unset uses ``default_user_agent()``.
 
     Returns:
         A ``(stream, content_type)`` pair; ``content_type`` is ``None`` when the
@@ -409,14 +420,11 @@ def opener(  # noqa: E302
     params = params or {}
     url = get_abspath(url, offline=offline)
     r = None
+    headers = {"User-Agent": resolve_user_agent(user_agent)}
 
     if url.startswith("http"):
         r = requests.get(
-            url,
-            params=params,
-            headers={"User-Agent": default_user_agent()},
-            stream=not memoize,
-            timeout=timeout,
+            url, params=params, headers=headers, stream=not memoize, timeout=timeout
         )
         r.raise_for_status()
         r.raw.decode_content = True
@@ -434,7 +442,7 @@ def opener(  # noqa: E302
             reencoded = reencode(r.raw, encoding, decode=True, owner=r)
             response = cast(StreamReader, reencoded)
     else:
-        req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
+        req = Request(url, headers=headers)  # noqa: S310
 
         if (r := urlopen(req, timeout=timeout)) and binary:  # noqa: S310
             response = buffer(r, binary=True) if memoize else cast(RawIOBase, r)

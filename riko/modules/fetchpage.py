@@ -67,8 +67,8 @@ async def async_parser(
     Args:
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `start`, `end`, `token` and
-            `detag`.
+        objconf: The pipe configuration, containing `url`, `start`, `end`, `token`,
+            `detag` and `user_agent`.
 
     Returns:
         One string, or one per ``token`` separated piece. Each is stripped of
@@ -94,7 +94,7 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchpage")
-    content = await async_url_read(url)
+    content = await async_url_read(url, user_agent=objconf.user_agent)
     parsed = get_string(content, objconf.start or "", objconf.end or "")
     detagged = get_text(parsed) if objconf.detag else parsed
     split = detagged.split(objconf.token) if objconf.token else [detagged]
@@ -110,8 +110,8 @@ def parser(
     Args:
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `start`, `end`, `token` and
-            `detag`.
+        objconf: The pipe configuration, containing `url`, `start`, `end`, `token`,
+            `detag` and `user_agent`.
 
     Returns:
         One string, or one per ``token`` separated piece. Each is stripped of
@@ -134,7 +134,7 @@ def parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchpage")
-    with Fetch(url, encoding=objconf.encoding) as f:
+    with Fetch(url, encoding=objconf.encoding, user_agent=objconf.user_agent) as f:
         sliced = betwix(f, objconf.start, objconf.end, True)
         content = "\n".join(sliced)
 
@@ -169,6 +169,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
                 (default: False).
 
             encoding (str): Page encoding (default: "utf-8").
+
+            user_agent (str): HTTP User-Agent override. Uses riko's default when
+                unset.
 
         context (Context): the execution context
 
@@ -229,6 +232,9 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
                 (default: False).
 
             encoding (str): Page encoding (default: "utf-8").
+
+            user_agent (str): HTTP User-Agent override. Uses riko's default when
+                unset.
 
         context (Context): the execution context
 

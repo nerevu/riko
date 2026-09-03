@@ -79,7 +79,9 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetch")
-    content: str = await async_url_read(url, encoding=objconf.encoding)
+    content: str = await async_url_read(
+        url, encoding=objconf.encoding, user_agent=objconf.user_agent
+    )
     return augment_entries(parse_rss(content=content))
 
 
@@ -113,7 +115,7 @@ def parser(
 
     """
     url: str = require_conf(objconf, "url", "fetch")
-    entries = parse_rss(url, encoding=objconf.encoding)
+    entries = parse_rss(url, encoding=objconf.encoding, user_agent=objconf.user_agent)
     return augment_entries(entries)
 
 
@@ -129,6 +131,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
             url (str): The feed to fetch, local or remote. Required.
             encoding (str): Feed encoding (default: "utf-8").
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 
@@ -180,6 +183,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
             encoding (str): Feed encoding (default: "utf-8").
             memoize (bool): Whether to cache the fetched feed (default:
                 False).
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 
