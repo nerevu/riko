@@ -2,24 +2,26 @@
 
 ## 1. Mission
 
-Create optional SQL and dbt packages that provide bounded database reads, explicit
-writes, query push-down, batch interchange, and warehouse transformation coordination.
+Create optional SQL and dbt packages that provide bounded database reads, explicit writes, query
+push-down, batch interchange, and warehouse transformation coordination.
 
-This plan promotes Shelf milestones 5.1, 19, and 20.
+This plan specializes the common `Target`/`write`/Resource/batch contracts; it does not define a
+parallel SQL source/sink execution model.
 
 ## 2. Package boundaries
 
 ```text
 nerevu/riko
-    Pipeline runtime
+    Pipeline + Workflow v2 runtime/definition contracts
+    Target / Format / ReadNode / WriteNode structure
+    provider-neutral write/effect semantics
     Feed and Pipeline batch-mode contracts
     Context resource definitions and execution-owned handles
-    schema and artifact contracts
 
 nerevu/riko-sql
+    POSTGRES/DuckDB/etc Target adapters
     Ibis connection adapters
-    SQL read plans
-    SQL write/export target
+    SQL query/read planning specialization
     Arrow/Narwhals bridges
     query push-down
 
@@ -33,61 +35,53 @@ Do not add database drivers or dbt-core to the base Riko installation.
 
 ## 3. Connection and credential model
 
-Pipeline definitions use a named connection reference:
+Configured database Targets reference declared resources/credentials rather than embedding secrets:
 
 ```json
 {
-  "connection": "warehouse/analytics",
-  "table": "orders"
+  "name": "postgres",
+  "database": "analytics",
+  "table": "orders",
+  "resources": {"connection": "warehouse/analytics"}
 }
 ```
 
-The connection resolves through a declared `Context` resource binding to one
-execution-scoped Ibis connection or adapter. Passwords and tokens are never serialized in
-a URI inside the pipeline definition. The immutable `Context` contains resource
-definitions; the private execution owns the live connection handle and closes owned
-resources deterministically.
+The connection resolves to one execution-scoped adapter/handle. Passwords/tokens are never serialized
+in workflow URLs. Immutable Context contains definitions; private execution owns live connections and
+closes owned resources deterministically.
 
 ## 4. Read API
 
-Keep a familiar named source, but define an immutable plan before execution:
+The target user surface is `Pipeline.read(...)` over a configured SQL/database Target. SQL-specific
+query options may normalize into immutable adapter/query configuration before execution.
+
+Conceptually:
 
 ```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SqlReadPlan:
-    connection: str
-    table: str | None = None
-    query: str | None = None
-    columns: tuple[str, ...] = ()
-    predicate: SqlPredicate | None = None
-    batch_size: int = 65_536
-    limit: int | None = None
-```
-
-Exactly one of `table` or `query` is supplied. Raw SQL may be disabled by policy.
-
-```python
-flow = Pipeline(
-    "fetchsql",
-    conf={
-        "connection": "warehouse/analytics",
-        "table": "orders",
-        "columns": ["id", "status", "amount"],
-        "filter": {"field": "status", "op": "eq", "value": "active"},
-    },
-    batch=True,
-    batch_size=65_536,
+orders = Pipeline.read(
+    Target(
+        Targets.POSTGRES,
+        table="orders",
+        resources={"connection": "warehouse/analytics"},
+    ),
+    columns=("id", "status", "amount"),
+    predicate=...,  # declarative SQL-capable subset
 )
 ```
 
-The source streams the negotiated batch representation. Record mode remains available for
-small or compatibility workloads through the same `Pipeline`; there is no parallel
-`BatchPipe` hierarchy.
+Exact public argument typing belongs to the common Target/read contract once implemented; this plan
+owns SQL specialization, not a competing `SqlReadPlan` public identity.
+
+Exactly one of table/query forms is selected when an adapter supports raw query input. Raw SQL may be
+disabled by policy.
+
+The source streams the negotiated representation in batch mode and ordinary records in item mode.
+There is no parallel BatchPipe hierarchy.
 
 ## 5. Push-down
 
-Push-down occurs only for a documented expression subset. Unsupported transforms remain
-normal Riko pipes after the source.
+Push-down occurs only for a documented declarative expression subset. Unsupported transforms remain
+normal Riko nodes after read.
 
 Initial subset:
 
@@ -97,45 +91,50 @@ comparison predicates
 boolean conjunction/disjunction
 limit
 stable order when supported
-grouped aggregate in a later phase
+grouped aggregate later
 ```
 
-The resolved plan reports which operations were pushed down and which remain local.
-Do not inspect arbitrary Python callables to synthesize SQL.
+Preparation/explain reports which operations were pushed down and which remain local. Do not inspect
+arbitrary Python callables to synthesize SQL.
 
 ## 6. Write API
 
-Database writes are an export target or sink service, not a mode hidden inside a source
-module.
+Database mutation uses the common `Pipeline.write()` effect over a configured writable Target:
 
 ```python
-result = flow.export(
-    "sql",
-    connection="warehouse/analytics",
-    table="processed_orders",
+flow = flow.write(
+    Target(
+        Targets.POSTGRES,
+        table="processed_orders",
+        resources={"connection": "warehouse/analytics"},
+    ),
     mode="append",
     schema_policy="fail",
 )
 ```
 
-Supported modes begin with:
+Supported adapter modes may begin with:
 
 ```text
 append
 replace
-merge
+merge/upsert
 ```
 
-`merge` requires explicit keys. Destructive replacement and schema changes pass policy
-and approval checks. Transactions, partial failure, and commit boundaries are explicit.
-Side-effecting writes participate in the common execution-derived idempotency contract;
-when a backend cannot genuinely honor idempotency, retryable/resumable use fails
-validation unless the node explicitly opts out.
+`merge` requires explicit keys. Destructive replacement/schema change passes the applicable policy
+or approval checks. Transactions, partial failure, and commit boundaries are explicit.
+
+`write()` keeps its generic pass-through contract; SQL completion metadata is emitted as `WriteResult`
+through EventSink. There is no separate SQL `sink()` or `export()` effect contract.
+
+Side-effecting writes participate in the common execution-derived idempotency contract. When a
+backend cannot genuinely honor idempotency, retryable/resumable use follows the generic effect/
+execution validation rules rather than inventing SQL-local behavior.
 
 ## 7. Schema handling
 
-At read time, capture the source schema and fingerprint. At write time, compare incoming
-and target schemas using the core schema-drift contracts.
+At read time, capture truthful source schema metadata/fingerprint. At write time, compare incoming and
+target schemas using the applicable schema-drift contract.
 
 Initial policies:
 
@@ -149,22 +148,19 @@ Do not silently coerce lossy types or issue automatic destructive DDL.
 
 ## 8. Ibis to batch bridge
 
-Use Ibis for backend-neutral query construction and Arrow where it is the best negotiated
+Use Ibis for backend-neutral query construction and Arrow when it is actually the cheapest/native
 interchange representation:
 
 ```text
 Ibis expression
-→ to_pyarrow_batches
-→ Pipeline(batch=True)
-→ optional Narwhals/Polars/pandas view
+-> native/Arrow batch reader
+-> Pipeline(batch=True)
+-> optional Narwhals/Polars/pandas view
 ```
 
-Connections and readers close on early termination. Batch size is configurable and
-bounded. Backend capability differences are surfaced in the plan and events.
+Connections/readers close on early termination. Batch size is bounded.
 
-Batch backend negotiation follows the core execution contract in
-[execution-semantics.md](execution-semantics.md#161-backend-negotiation): representation is
-chosen from operator capability and conversion cost, not a global backend ranking.
+Batch negotiation follows `execution-semantics.md`:
 
 ```text
 candidates = upstream representations ∩ representations the node accepts
@@ -172,24 +168,21 @@ candidates = upstream representations ∩ representations the node accepts
 1. current representation
 2. zero-copy/interchange-backed candidate
 3. cheapest supported conversion
-4. Python objects (universal fallback)
+4. Python objects fallback
 ```
 
-For database transforms this usually still resolves to the driver's native Arrow path,
-because that is genuinely the cheapest bridge — not because Arrow outranks the alternatives.
-A pandas-native transform chain stays pandas.
+A database driver will often choose Arrow because that path is natively cheap, not because Arrow has
+a global rank. Pandas-native/Polars-native downstream work stays native when accepted.
 
-An explicit `batch_backend=` forces a representation and raises if that backend is not
-available; it does not silently choose another forced backend.
+Explicit `batch_backend=` forces a compatible representation and raises when unavailable.
 
-## 9. DataFrame source relationship
+## 9. DataFrame relationship
 
-`Pipeline.from_frame()` and declared runtime frame resources are local ingestion
-mechanisms. SQL sources should not materialize an entire result into a DataFrame before
-streaming.
+`Pipeline.from_frame()` is local ingestion. Database reads must not materialize an entire result into
+a DataFrame before streaming.
 
-Batches are ordinary pipeline values: `.map(func)` receives the current batch in batch
-mode and the current item in record mode.
+Batches are ordinary values: `.map(func)` receives a batch in batch mode and an item in item mode.
+Concrete frame conversion remains owned by `tabular-interop.md`.
 
 ## 10. dbt runner service
 
@@ -198,93 +191,86 @@ class DbtRunner(Protocol):
     async def run(self, request: DbtRunRequest, context: Context) -> DbtRunResult: ...
 ```
 
-`Context` is the public immutable environment/configuration input. Any live dbt/database
-handles required during execution come from declared resources and remain execution-owned;
-there is no public `ExecutionContext` type.
+Context is the immutable environment input. Live dbt/database handles come from declared Resources;
+there is no public ExecutionContext.
 
 Normalize:
 
-* invocation arguments;
-* project and profiles references;
-* selected nodes;
-* manifest fingerprint;
-* per-node status;
-* elapsed time;
-* generated artifact references;
-* sanitized errors.
+- invocation arguments;
+- project/profiles references;
+- selected nodes;
+- manifest fingerprint;
+- per-node status;
+- elapsed time;
+- generated artifact references;
+- sanitized errors.
 
-The first implementation may wrap `dbtRunner` in a worker thread. It must not expose dbt
-SDK objects publicly.
+The first implementation may adapt `dbtRunner` through the common worker boundary. It must not
+expose dbt SDK objects publicly.
 
 ## 11. dbt and Riko execution boundary
 
 ```text
-Riko extracts and loads
-→ durable table commit
-→ dbt transforms in warehouse
-→ durable dbt result
-→ Riko reads or delivers
+Riko reads/transforms/writes
+-> durable database commit
+-> dbt transforms in warehouse
+-> durable dbt result
+-> Riko reads/delivers next phase
 ```
 
-A dbt run is never invoked per item or in the middle of a lazy stream. Orchestration may
-coordinate these three steps as separate tasks because the database tables are durable
-boundaries.
+A dbt run is never invoked per record or in the middle of an uncommitted lazy write. Orchestration may
+coordinate the durable phases separately.
 
 ## 12. dbt-ibis
 
-Treat dbt-ibis as optional experimentation until its supported backends and API stability
-meet the package's compatibility policy. Shared expression helpers may live in a neutral
-module, but Riko must not promise that every local expression can be compiled by dbt.
-Golden SQL and result fixtures are required for each supported backend.
+Treat dbt-ibis as optional experimentation until supported backends/API stability meet compatibility
+policy. Golden SQL/result fixtures are required per supported backend.
 
 ## 13. Phases
 
 ```text
-S0  Ibis and backend compatibility spikes
-S1  Connection registry and SqlReadPlan
+S0  Ibis/backend compatibility spikes
+S1  database Target adapters + connection Resource conformance
 S2  Pipeline batch streaming and cleanup
-S3  Push-down subset and explain output
-S4  SQL export target and transactions/idempotency
-S5  Schema drift and merge semantics
-D0  dbt runner protocol and fake runner
-D1  dbt-core adapter and artifact normalization
-D2  orchestration and CLI plugins
+S3  push-down subset + explain output
+S4  SQL write Target + transactions/idempotency
+S5  schema drift + merge semantics
+D0  dbt runner protocol + fake runner
+D1  dbt-core adapter + artifact normalization
+D2  orchestration + CLI plugins
 D3  optional dbt-ibis evaluation
 ```
 
 ## 14. Definition of done
 
-1. Base Riko has no SQL or dbt dependency.
-2. Connections and credentials are named, declared `Context` resources.
-3. Reads stream bounded batches through ordinary `Pipeline` batch mode.
-4. Push-down is explicit and inspectable.
-5. Writes use a sink/export contract with transaction and idempotency semantics.
+1. Base Riko has no SQL/dbt dependency.
+2. Connections/credentials are declared Resources/references.
+3. Database reads use configured Targets and bounded ordinary Pipeline batch mode.
+4. Push-down is explicit/inspectable.
+5. Database mutation uses common `Pipeline.write()`/WriteResult semantics with transactions and
+   idempotency participation; no SQL-specific sink/export runtime is introduced.
 6. Schema changes never occur silently.
 7. dbt runs only after a durable load boundary.
-8. Public results contain no Ibis or dbt SDK objects.
-9. Early termination closes execution-owned readers and connections.
+8. Public results contain no Ibis/dbt SDK objects.
+9. Early termination closes execution-owned readers/connections.
 10. Backend contract tests cover at least DuckDB and one client/server database.
-
 
 ---
 
-> **Runtime-contract section extracted from ROADMAP §25.** the SQL/dbt/dataframe gameplan owns the Arrow/Polars/pandas execution path. `§N` refs point to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md).
+> **Runtime-contract section extracted from ROADMAP §25.** SQL/dbt specializes the common batch/
+> dataframe path. `§N` refs point to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md).
 
 ## 25. Conversion and dataframe integration
 
 > **Shipped:** see [IMPLEMENTED.md §25](../IMPLEMENTED.md#25-conversion--export-converters-shipped)
-> (meza-backed csv/json/geojson/ofx/qif/list/tuple export converters). **Remaining:** the
-> Pipeline batch/dataframe path below.
+> for current converters. **Remaining:** the Pipeline batch/dataframe path above.
 
-Meza owns conversion work.
+Meza owns conversion work where applicable. Riko may temporarily provide adapters/protocols needed by
+the new architecture, but conversion implementation should be upstreamed/finalized there when it is
+generally useful.
 
-Riko may temporarily provide adapters or protocols needed for the new architecture, but
-conversion implementation should eventually be upstreamed or finalized in Meza.
+The batch/dataframe path avoids pandas as a mandatory intermediary. Arrow, Narwhals, Polars, pandas,
+SQL-native values, or Python objects are execution representations selected by capability/conversion
+cost rather than separate public pipeline types or a global library preference.
 
-The batch/dataframe path should avoid pandas as a mandatory intermediary.
-
-Batch mode remains part of the single `Pipeline` abstraction. Arrow, Narwhals, Polars,
-pandas, SQL-native values, or Python lists are execution representations selected by
-capability and graph context rather than separate public pipeline types.
-
-"Zero-copy" should be claimed only when the actual path avoids conversion or copying.
+"Zero-copy" is claimed only when the actual path avoids conversion/copying.
