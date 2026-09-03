@@ -13,7 +13,6 @@ mirror each other test-for-test.
 
 import pytest
 
-from riko.bado._backend import run
 from riko.bado.itertools import async_iter
 from riko.collections import (
     AsyncCollection,
@@ -24,7 +23,6 @@ from riko.collections import (
 )
 from riko.exceptions import PipelineStateError
 from riko.paths import get_path
-from riko.types._streams import Items
 from riko.types.modules import ItemBuilderConf
 from tests import skipif_issync
 
@@ -198,25 +196,19 @@ class TestAsyncLifecycle:
     def test_new_state(self):
         assert AsyncPipe("itembuilder", conf=BUILDER_CONF).state is PipeState.NEW
 
-    def test_exhausted_after_full_iteration(self):
-        async def main():
-            pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
-            items = [item async for item in pipe]
-            return items, pipe.exhausted, pipe.state
-
-        items, exhausted, state = run(main)
+    @pytest.mark.anyio
+    async def test_exhausted_after_full_iteration(self):
+        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
+        items = [item async for item in pipe]
         assert items
-        assert exhausted
-        assert state is PipeState.EXHAUSTED
+        assert pipe.exhausted
+        assert pipe.state is PipeState.EXHAUSTED
 
-    def test_exhausted_reiterates_empty_without_reexecution(self):
-        async def main():
-            pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
-            first = [item async for item in pipe]
-            second = [item async for item in pipe]
-            return first, second
-
-        first, second = run(main)
+    @pytest.mark.anyio
+    async def test_exhausted_reiterates_empty_without_reexecution(self):
+        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
+        first = [item async for item in pipe]
+        second = [item async for item in pipe]
         assert first
         assert second == []
 
@@ -224,232 +216,178 @@ class TestAsyncLifecycle:
         chained = AsyncPipe("itembuilder", conf=BUILDER_CONF).hash()
         assert chained.state is PipeState.NEW
 
-    def test_chain_after_partial_iteration_wraps_remainder(self):
-        async def main():
-            pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
-            await anext(pipe)
-            return pipe.state, [item async for item in pipe.count()]
+    @pytest.mark.anyio
+    async def test_chain_after_partial_iteration_wraps_remainder(self):
+        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
+        await anext(pipe)
+        assert pipe.state is PipeState.RUNNING
+        assert [item async for item in pipe.count()] == [{"count": 2}]
 
-        state, rest = run(main)
-        assert state is PipeState.RUNNING
-        assert rest == [{"count": 2}]
+    @pytest.mark.anyio
+    async def test_chain_after_exhaustion_is_allowed(self):
+        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
+        [item async for item in pipe]
+        result = [item async for item in pipe.count()]
+        assert result == [{"count": 0}]
 
-    def test_chain_after_exhaustion_is_allowed(self):
-        async def main():
-            pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
-            [item async for item in pipe]
-            return [item async for item in pipe.count()]
+    @pytest.mark.anyio
+    async def test_close_is_idempotent(self):
+        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF)
+        await pipe.aclose()
+        await pipe.aclose()
+        assert pipe.closed
+        assert pipe.state is PipeState.CLOSED
 
-        assert run(main) == [{"count": 0}]
+    @pytest.mark.anyio
+    async def test_chain_after_close_raises(self):
+        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF)
+        await pipe.aclose()
 
-    def test_close_is_idempotent(self):
-        async def main():
-            pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF)
-            await pipe.aclose()
-            await pipe.aclose()
-            return pipe.closed, pipe.state
+        with pytest.raises(PipelineStateError):
+            pipe.tokenizer()
 
-        closed, state = run(main)
-        assert closed
-        assert state is PipeState.CLOSED
-
-    def test_chain_after_close_raises(self):
-        async def main():
-            pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF)
-            await pipe.aclose()
-            raised = False
-
-            try:
-                pipe.tokenizer()
-            except PipelineStateError:
-                raised = True
-
-            return raised
-
-        assert run(main) is True
-
-    def test_chain_after_failure_raises(self):
+    @pytest.mark.anyio
+    async def test_chain_after_failure_raises(self):
         async def boom():
             raise RuntimeError("boom")
 
-        async def main():
-            pipe = AsyncPipe(source=boom())
+        pipe = AsyncPipe(source=boom())
 
-            try:
-                [item async for item in pipe]
-            except RuntimeError:
-                pass
+        try:
+            [item async for item in pipe]
+        except RuntimeError:
+            pass
 
-            raised = False
+        with pytest.raises(PipelineStateError):
+            pipe.tokenizer()
 
-            try:
-                pipe.tokenizer()
-            except PipelineStateError:
-                raised = True
-
-            return raised
-
-        assert run(main) is True
-
-    def test_iterate_after_run_then_close_is_empty(self):
-        async def main():
-            pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
-            items = [item async for item in pipe]
-            await pipe.aclose()
-            after = [item async for item in pipe]
-            return items, after
-
-        items, after = run(main)
+    @pytest.mark.anyio
+    async def test_iterate_after_run_then_close_is_empty(self):
+        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
+        items = [item async for item in pipe]
+        await pipe.aclose()
+        after = [item async for item in pipe]
         assert items
         assert after == []
 
-    def test_close_before_iteration_does_not_execute(self):
+    @pytest.mark.anyio
+    async def test_close_before_iteration_does_not_execute(self):
         ran = []
 
         async def source():
             ran.append(1)
             yield {"content": "x"}
 
-        async def main():
-            pipe = AsyncPipe("hash", source=source())
-            await pipe.aclose()
-            return [item async for item in pipe]
+        pipe = AsyncPipe("hash", source=source())
+        await pipe.aclose()
+        result = [item async for item in pipe]
 
-        assert run(main) == []
+        assert result == []
         assert ran == []
 
-    def test_failed_state_reiterates_empty(self):
+    @pytest.mark.anyio
+    async def test_failed_state_reiterates_empty(self):
         async def boom():
             raise RuntimeError("boom")
 
-        async def main():
-            pipe = AsyncPipe(source=boom())
+        pipe = AsyncPipe(source=boom())
 
-            try:
-                [item async for item in pipe]
-            except RuntimeError:
-                pass
+        try:
+            [item async for item in pipe]
+        except RuntimeError:
+            pass
 
-            return pipe.failed, pipe.state, [item async for item in pipe]
+        reiter = [item async for item in pipe]
 
-        failed, state, reiter = run(main)
-        assert state is PipeState.FAILED
-        assert failed
+        assert pipe.state is PipeState.FAILED
+        assert pipe.failed
         assert reiter == []
 
-    def test_context_manager_closes(self):
-        async def main():
-            items = None
+    @pytest.mark.anyio
+    async def test_context_manager_closes(self):
+        items = None
 
-            async with AsyncPipe("itembuilder", conf=BUILDER_CONF) as pipe:
-                items = [item async for item in pipe]
+        async with AsyncPipe("itembuilder", conf=BUILDER_CONF) as pipe:
+            items = [item async for item in pipe]
 
-            return items, pipe.closed
-
-        items, closed = run(main)
         assert items
-        assert closed
+        assert pipe.closed
 
-    def test_collection_lifecycle(self):
-        async def main():
-            stream = AsyncCollection([{"url": get_path("feed.xml")}])
-            new = stream.state is PipeState.NEW
-            items = [item async for item in stream]
-            exhausted = stream.exhausted
-            reiter = [item async for item in stream]
-            return new, items, exhausted, reiter
+    @pytest.mark.anyio
+    async def test_collection_lifecycle(self):
+        stream = AsyncCollection([{"url": get_path("feed.xml")}])
+        assert stream.state is PipeState.NEW
+        assert [item async for item in stream]
+        assert stream.exhausted
+        assert [item async for item in stream] == []
 
-        new, items, exhausted, reiter = run(main)
-        assert new
-        assert items
-        assert exhausted
-        assert reiter == []
+    @pytest.mark.anyio
+    async def test_collection_close_is_idempotent(self):
+        stream = AsyncCollection([{"url": get_path("feed.xml")}])
+        await stream.aclose()
+        await stream.aclose()
+        assert stream.closed
+        assert stream.state is PipeState.CLOSED
 
-    def test_collection_close_is_idempotent(self):
-        async def main():
-            stream = AsyncCollection([{"url": get_path("feed.xml")}])
-            await stream.aclose()
-            await stream.aclose()
-            return stream.closed, stream.state
-
-        closed, state = run(main)
-        assert closed
-        assert state is PipeState.CLOSED
-
-    def test_collection_close_before_iteration_does_not_execute(self):
+    @pytest.mark.anyio
+    async def test_collection_close_before_iteration_does_not_execute(self):
         ran = []
 
         def sources():
             ran.append(1)
             yield {"url": get_path("feed.xml")}
 
-        async def main():
-            stream = AsyncCollection(sources())
-            await stream.aclose()
-            return [item async for item in stream], stream.closed
-
-        items, closed = run(main)
-        assert items == []
-        assert closed
+        stream = AsyncCollection(sources())
+        await stream.aclose()
+        assert [item async for item in stream] == []
+        assert stream.closed
         assert ran == []
 
-    def test_await_after_partial_iteration_consumes_remainder(self):
+    @pytest.mark.anyio
+    async def test_await_after_partial_iteration_consumes_remainder(self):
         runs = []
 
         def count[T](item: T) -> T:
             runs.append(1)
             return item
 
-        async def main():
-            pipe = (
-                AsyncPipe("itembuilder", conf=BUILDER_CONF)
-                .tokenizer(emit=True)
-                .udf(func=count)
-            )
-            first = await anext(pipe)
-            rest = list(await pipe)
-            return first, rest, len(runs)
+        pipe = (
+            AsyncPipe("itembuilder", conf=BUILDER_CONF)
+            .tokenizer(emit=True)
+            .udf(func=count)
+        )
+        assert await anext(pipe) == {"content": "a"}
+        assert list(await pipe) == [{"content": "b"}, {"content": "c"}]
+        assert len(runs) == 3
 
-        first, rest, run_count = run(main)
-        assert first == {"content": "a"}
-        assert rest == [{"content": "b"}, {"content": "c"}]
-        assert run_count == 3
+    @pytest.mark.anyio
+    async def test_await_twice_after_exhaustion_is_empty(self):
+        pipe = AsyncPipe(source=list(SRC))
+        assert list(await pipe) == SRC
+        assert list(await pipe) == []
 
-    def test_await_twice_after_exhaustion_is_empty(self):
-        async def main():
-            pipe = AsyncPipe(source=list(SRC))
-            first = list(await pipe)
-            second = list(await pipe)
-            return first, second
+    @pytest.mark.anyio
+    async def test_collection_await_after_partial_iteration_consumes_remainder(self):
+        full = AsyncCollection([{"url": get_path("feed.xml")}])
+        total = len([item async for item in full])
+        stream = AsyncCollection([{"url": get_path("feed.xml")}])
+        await anext(stream)
+        rest = len(list(await stream))
 
-        first, second = run(main)
-        assert first == SRC
-        assert second == []
-
-    def test_collection_await_after_partial_iteration_consumes_remainder(self):
-        async def main():
-            full = AsyncCollection([{"url": get_path("feed.xml")}])
-            total = len([item async for item in full])
-            stream = AsyncCollection([{"url": get_path("feed.xml")}])
-            await anext(stream)
-            rest = len(list(await stream))
-            return total, rest
-
-        total, rest = run(main)
         assert total > 1
         assert rest == total - 1
 
-    def test_collection_async_pipe_after_partial_iteration_consumes_remainder(self):
-        async def main():
-            full = AsyncCollection([{"url": get_path("feed.xml")}])
-            total = len([item async for item in full])
-            stream = AsyncCollection([{"url": get_path("feed.xml")}])
-            await anext(stream)
-            child = stream.async_pipe()
-            rest = len([item async for item in child])
-            return total, rest
+    @pytest.mark.anyio
+    async def test_collection_async_pipe_after_partial_iteration_consumes_remainder(
+        self,
+    ):
+        full = AsyncCollection([{"url": get_path("feed.xml")}])
+        total = len([item async for item in full])
+        stream = AsyncCollection([{"url": get_path("feed.xml")}])
+        await anext(stream)
+        child = stream.async_pipe()
+        rest = len([item async for item in child])
 
-        total, rest = run(main)
         assert total > 1
         assert rest == total - 1
 
@@ -463,36 +401,27 @@ class TestAsyncSourceAdapter:
     """
 
     @pytest.mark.parametrize("make_source", GOOD_SOURCES)
-    def test_source_iterates(self, make_source):
-        async def main() -> Items:
-            pipe = AsyncPipe("hash", source=make_source())
-            return [item async for item in pipe]
-
-        assert len(list(run(main))) == len(SRC)
+    @pytest.mark.anyio
+    async def test_source_iterates(self, make_source):
+        pipe = AsyncPipe("hash", source=make_source())
+        result = [item async for item in pipe]
+        assert len(result) == len(SRC)
 
     @pytest.mark.parametrize("make_source", RAISING_SOURCES)
-    def test_source_failure_propagates(self, make_source):
-        async def main():
-            pipe = AsyncPipe("hash", source=make_source())
-            failed = False
+    @pytest.mark.anyio
+    async def test_source_failure_propagates(self, make_source):
+        pipe = AsyncPipe("hash", source=make_source())
 
-            try:
-                [item async for item in pipe]
-            except RuntimeError:
-                failed = pipe.failed
+        with pytest.raises(RuntimeError):
+            [item async for item in pipe]
 
-            return failed
-
-        assert run(main) is True
+        assert pipe.failed
 
     @pytest.mark.parametrize("make_source", GOOD_SOURCES)
-    def test_source_closes(self, make_source):
-        async def main():
-            pipe = AsyncPipe("hash", source=make_source())
-            items = [item async for item in pipe]
-            await pipe.aclose()
-            return items, pipe.closed
-
-        items, closed = run(main)
+    @pytest.mark.anyio
+    async def test_source_closes(self, make_source):
+        pipe = AsyncPipe("hash", source=make_source())
+        items = [item async for item in pipe]
+        await pipe.aclose()
         assert len(items) == len(SRC)
-        assert closed is True
+        assert pipe.closed is True

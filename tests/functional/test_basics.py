@@ -19,7 +19,6 @@ import pytest
 
 from riko._iterutils import listize
 from riko._rssutils import truncate_content
-from riko.bado._backend import run
 from riko.collections import SyncPipe
 from riko.compile import (
     abuild_pipeline,
@@ -38,7 +37,7 @@ from riko.types._wrappers import (
     ParserOutput,
     SyncPipeParser,
 )
-from tests import TESTS_DIR, skipif_issync
+from tests import TESTS_DIR, async_test
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
@@ -282,32 +281,20 @@ class TestBasics:
         self._load(items, pipe_name, 1, 0)
         _assert_kazeeki(cast(dict, items[0]), KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
 
-    @skipif_issync
-    def test_async_kazeeki1(self):
+    @async_test
+    async def test_async_kazeeki1(self):
         """Loads the async kazeeki simple test fetchdata pipeline."""
         pipe_name = "pipe_async_kazeeki1"
-        items = []
-
-        async def main():
-            nonlocal items
-            items = await self._aget_pipeline(pipe_name)
-            await self._aload(items, pipe_name, 5, 0)
-
-        run(main)
+        items = await self._aget_pipeline(pipe_name)
+        await self._aload(items, pipe_name, 5, 0)
         _assert_kazeeki(cast(dict, items[0]), KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT)
 
-    @skipif_issync
-    def test_async_kazeeki2(self):
+    @async_test
+    async def test_async_kazeeki2(self):
         """Loads the async kazeeki simple test itembuilder pipeline."""
         pipe_name = "pipe_async_kazeeki2"
-        items = []
-
-        async def main():
-            nonlocal items
-            items = await self._aget_pipeline(pipe_name)
-            await self._aload(items, pipe_name, 1, 0)
-
-        run(main)
+        items = await self._aget_pipeline(pipe_name)
+        await self._aload(items, pipe_name, 1, 0)
         _assert_kazeeki(cast(dict, items[0]), KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
 
     def test_kazeeki_full(self):

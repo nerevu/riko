@@ -20,12 +20,11 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from riko.bado._backend import run
 from riko.ext import operator, processor, splitter
 from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.types._streams import Item
 from riko.types._wrappers import ProcessorWrapper
-from tests import skipif_issync
+from tests import async_test
 
 
 def _create_wrapper(name: str, *, iscoro: bool, isasync: bool) -> ProcessorWrapper:
@@ -73,15 +72,11 @@ class TestExplicitIsasyncRequired:
     (a lambda). This is the only case ``isasync=True`` is required.
     """
 
-    @skipif_issync
-    def test_explicit_lambda_runs_as_async_pipe(self):
+    @async_test
+    async def test_explicit_lambda_runs_as_async_pipe(self):
         async_shout = processor(isasync=True)(shout)
-
-        async def main():
-            result = await async_shout({"content": "hi"}, assign="content")
-            return list(result)
-
-        assert run(main) == [{"content": "HI"}]
+        result = await async_shout({"content": "hi"}, assign="content")
+        assert list(result) == [{"content": "HI"}]
 
 
 class TestInvalidCombinations:
@@ -136,20 +131,17 @@ class TestInvalidCombinations:
 class TestAsyncGeneratorSource:
     """An async-generator (Feed) source flows through an async operator wrapper."""
 
-    @skipif_issync
-    def test_feed_source_through_timeout(self):
+    @async_test
+    async def test_feed_source_through_timeout(self):
         async def feed():
             for x in range(3):
                 yield {"x": x}
 
-        async def main():
-            result = await timeout_async_pipe(feed(), conf={})
-            return list(result)
+        result = await timeout_async_pipe(feed(), conf={})
+        assert list(result) == [{"x": 0}, {"x": 1}, {"x": 2}]
 
-        assert run(main) == [{"x": 0}, {"x": 1}, {"x": 2}]
-
-    @skipif_issync
-    def test_feed_delivered_lazily_to_parser(self):
+    @async_test
+    async def test_feed_delivered_lazily_to_parser(self):
         received = {}
 
         @operator(isasync=True)
@@ -162,9 +154,6 @@ class TestAsyncGeneratorSource:
             for x in range(3):
                 yield {"content": x}
 
-        async def main():
-            result = await async_pipe(feed())
-            return list(result)
-
-        assert run(main) == [{"content": 0}, {"content": 1}, {"content": 2}]
+        result = await async_pipe(feed())
+        assert list(result) == [{"content": 0}, {"content": 1}, {"content": 2}]
         assert received["is_async"] is True

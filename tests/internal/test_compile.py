@@ -14,7 +14,6 @@ from keyword import iskeyword
 
 import pytest
 
-from riko.bado._backend import run
 from riko.compile import (
     build_pipeline,
     compile_pipe,
@@ -30,7 +29,7 @@ from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.types._streams import Item
 from riko.types.compile import DagModule, LoopModule, PipeDag, PipeDef, PipeModule
 from riko.types.modules import ItemBuilderRawConf, Param, TruncateRawConf
-from tests import TESTS_DIR, skipif_issync
+from tests import TESTS_DIR, async_test
 
 PIPELINE_DIR = TESTS_DIR / "pipelines"
 PYPIPELINE_DIR = TESTS_DIR / "pypipelines"
@@ -309,8 +308,8 @@ def test_convert_dag_generates_ids_when_omitted():
     assert edges == [("sw-1", "sw-2"), ("sw-2", "_OUTPUT")]
 
 
-@skipif_issync
-def test_async_codegen_matches_sync():
+@async_test
+async def test_async_codegen_matches_sync():
     """
     ``compile(is_async=True)`` emits a runnable anyio pipeline whose output
     matches the sync compilation.
@@ -320,15 +319,13 @@ def test_async_codegen_matches_sync():
     async_src = compile_pipe(pipe_def, "pipe_gigs", is_async=True)
     async_ns: dict = {}
     exec(async_src, async_ns)
-    async_result = list(run(async_ns["async_pipe"]))
+    async_result = await async_ns["async_pipe"]()
 
     sync_src = compile_pipe(pipe_def, "pipe_gigs", is_async=False)
     sync_ns: dict = {}
     exec(sync_src, sync_ns)
     sync_result = list(sync_ns["pipe"]())
-
-    assert async_result
-    assert async_result == sync_result
+    assert list(async_result) == sync_result
 
 
 class TestCompactLoopConsumption:

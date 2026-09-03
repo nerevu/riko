@@ -29,7 +29,7 @@ from riko.types.modules import (
     SortConf,
     SortConfRule,
 )
-from tests import skipif_issync
+from tests import async_test
 
 
 def _values(stream: Any, key: str) -> list[Any]:
@@ -260,10 +260,9 @@ async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
     return (first, seen)
 
 
-@pytest.mark.anyio
-@skipif_issync
 @pytest.mark.timeout(10)
 @pytest.mark.xfail(reason="lazy async fan-out is not yet implemented", strict=True)
+@async_test
 async def test_async_send_does_not_buffer_its_source():
     """
     Async ``send`` collects sent items and only returns after complete. So an unbounded
@@ -276,9 +275,8 @@ async def test_async_send_does_not_buffer_its_source():
     assert seen <= _LOOKAHEAD
 
 
-@pytest.mark.anyio
-@skipif_issync
 @pytest.mark.timeout(10)
+@async_test
 async def test_async_send_completes_targets_when_publish_fails():
     """
     A failed publish must still close the targets that did subscribe.
@@ -291,9 +289,8 @@ async def test_async_send_completes_targets_when_publish_fails():
     assert received == [{"x": "foo", "i": 0}]
 
 
-@pytest.mark.anyio
-@skipif_issync
 @pytest.mark.timeout(10)
+@async_test
 async def test_async_send_accepts_a_feed_source():
     """
     An async source reaches the parser as an ``AsyncIterator``, not a list.
@@ -310,9 +307,8 @@ async def test_async_send_accepts_a_feed_source():
     assert received == expected
 
 
-@pytest.mark.anyio
-@skipif_issync
 @pytest.mark.timeout(10)
+@async_test
 async def test_async_receive_does_not_materialize():
     """
     The zero-buffer rendezvous channel hands each published item to the

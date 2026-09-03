@@ -12,7 +12,6 @@ from dataclasses import dataclass
 import pytest
 
 from riko._pubsub import reset_pubsub
-from riko.bado._backend import run
 from riko.collections import AsyncPipe, SyncPipe
 from riko.sinks import SinkMode, SinkWrite
 from riko.targets import (
@@ -24,7 +23,7 @@ from riko.targets import (
     resolve_format,
     resolve_target,
 )
-from tests import skipif_issync
+from tests import async_test
 
 ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
 
@@ -115,14 +114,10 @@ class TestFileDeliver:
 
         assert path.read_bytes() == b'[{"x": 0}][{"x": 1}]'
 
-    @skipif_issync
-    def test_adeliver_matches_deliver(self, tmp_path):
+    @async_test
+    async def test_adeliver_matches_deliver(self, tmp_path):
         path = tmp_path / "out.json"
-
-        async def main():
-            return await File(str(path)).adeliver(ITEMS, SinkWrite(SinkMode.REPLACE))
-
-        result = run(main)
+        result = await File(str(path)).adeliver(ITEMS, SinkWrite(SinkMode.REPLACE))
         assert result.written > 0
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
@@ -223,14 +218,10 @@ class TestSink:
         with pytest.raises(ValueError, match="forbids 'keys'"):
             SyncPipe(source=ITEMS).sink(str(tmp_path / "out.csv"), keys="x")
 
-    @skipif_issync
-    def test_async_sink(self, tmp_path):
+    @async_test
+    async def test_async_sink(self, tmp_path):
         path = tmp_path / "out.json"
-
-        async def main():
-            return await AsyncPipe(source=ITEMS).sink(str(path), mode="replace")
-
-        result = run(main)
+        result = await AsyncPipe(source=ITEMS).sink(str(path), mode="replace")
         assert result.written > 0
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 

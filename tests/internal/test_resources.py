@@ -7,7 +7,7 @@ from riko.context import Context
 from riko.modules import operator
 from riko.resources import Resource, bind_resources
 from riko.types._streams import Stream
-from tests import skipif_issync
+from tests import async_test
 
 
 class _Handle:
@@ -35,8 +35,7 @@ def test_owned_resource_opens_and_closes_handle():
     assert handle.closed
 
 
-@pytest.mark.anyio
-@skipif_issync
+@async_test
 async def test_owned_resource_acloses_handle():
     handle = _AsyncHandle()
     resource = Resource(handle)

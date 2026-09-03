@@ -15,7 +15,6 @@ contract: same results as sequential, order control, and non-materialization.
 
 import pytest
 
-from riko.bado._backend import run
 from riko.collections import AsyncCollection, AsyncPipe
 from riko.paths import get_path
 from riko.types.modules import ItemBuilderConf
@@ -33,42 +32,37 @@ def _by_content(items):
 
 @skipif_issync
 class TestAsyncBoundedParallel:
-    def test_parallel_matches_sequential_as_multiset(self):
+    @pytest.mark.anyio
+    async def test_parallel_matches_sequential_as_multiset(self):
         def build(parallel):
             pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF, parallel=parallel)
             return pipe.tokenizer(emit=True).hash(assign="h")
 
-        async def main():
-            seq = [item async for item in build(False)]
-            par = [item async for item in build(True)]
-            return seq, par
-
-        seq, par = run(main)
+        seq = [item async for item in build(False)]
+        par = [item async for item in build(True)]
         assert len(par) == len(seq) == 4
         assert _by_content(par) == _by_content(seq)
 
-    def test_ordered_parallel_preserves_order(self):
-        async def main():
-            pipe = (
-                AsyncPipe("itembuilder", conf=BUILDER_CONF)
-                .tokenizer(emit=True)
-                .hash(assign="h")
-            )
-            seq = [item async for item in pipe]
+    @pytest.mark.anyio
+    async def test_ordered_parallel_preserves_order(self):
+        pipe = (
+            AsyncPipe("itembuilder", conf=BUILDER_CONF)
+            .tokenizer(emit=True)
+            .hash(assign="h")
+        )
+        seq = [item async for item in pipe]
 
-            pipe = (
-                AsyncPipe("itembuilder", conf=BUILDER_CONF, parallel=True, ordered=True)
-                .tokenizer(emit=True)
-                .hash(assign="h")
-            )
-            par = [item async for item in pipe]
-            return seq, par
-
-        seq, par = run(main)
+        pipe = (
+            AsyncPipe("itembuilder", conf=BUILDER_CONF, parallel=True, ordered=True)
+            .tokenizer(emit=True)
+            .hash(assign="h")
+        )
+        par = [item async for item in pipe]
         assert par == seq
 
     @pytest.mark.parametrize("ordered", [False, True])
-    def test_bounded_source_is_not_fully_drained(self, ordered):
+    @pytest.mark.anyio
+    async def test_bounded_source_is_not_fully_drained(self, ordered):
         consumed: list[int] = []
 
         async def tracking():
@@ -76,20 +70,17 @@ class TestAsyncBoundedParallel:
                 consumed.append(index)
                 yield {"content": str(index)}
 
-        async def main():
-            pipe = AsyncPipe(
-                "hash", source=tracking(), parallel=True, ordered=ordered, connections=2
-            )
-            first = await anext(pipe)
-            await pipe.aclose()
-            return first
-
-        first = run(main)
+        pipe = AsyncPipe(
+            "hash", source=tracking(), parallel=True, ordered=ordered, connections=2
+        )
+        first = await anext(pipe)
+        await pipe.aclose()
         assert first.get("content") in {str(i) for i in range(20)}
         assert len(consumed) < 20
 
     @pytest.mark.parametrize("ordered", [False, True])
-    def test_early_close_is_clean(self, ordered):
+    @pytest.mark.anyio
+    async def test_early_close_is_clean(self, ordered):
         """
         Closing a bounded pipe mid-flight (via ``async with`` + ``break``) tears
         the inner task-group stream down in the owning task — no cross-task
@@ -103,45 +94,32 @@ class TestAsyncBoundedParallel:
                 yield {"content": str(index)}
                 index += 1
 
-        async def main():
-            pipe = AsyncPipe(
-                "hash",
-                source=unbounded(),
-                parallel=True,
-                ordered=ordered,
-                connections=2,
-            )
-            async with pipe:
-                async for item in pipe:
-                    return item
+        pipe = AsyncPipe(
+            "hash", source=unbounded(), parallel=True, ordered=ordered, connections=2
+        )
 
-        first = run(main)
-        assert first.get("content") is not None
+        async with pipe:
+            async for item in pipe:
+                assert item.get("content")
+                return
 
 
 @skipif_issync
 class TestAsyncCollectionParallel:
-    def test_ordered_matches_unordered_as_multiset(self):
-        async def main():
-            unordered = [item async for item in AsyncCollection(SOURCES)]
-            ordered = [item async for item in AsyncCollection(SOURCES, ordered=True)]
-            return unordered, ordered
-
-        unordered, ordered = run(main)
+    @pytest.mark.anyio
+    async def test_ordered_matches_unordered_as_multiset(self):
+        unordered = [item async for item in AsyncCollection(SOURCES)]
+        ordered = [item async for item in AsyncCollection(SOURCES, ordered=True)]
         assert unordered
         assert ordered
         assert sorted(map(str, ordered)) == sorted(map(str, unordered))
 
     @pytest.mark.parametrize("ordered", [False, True])
-    def test_streams_more_sources_than_limit(self, ordered):
+    @pytest.mark.anyio
+    async def test_streams_more_sources_than_limit(self, ordered):
         sources = [{"url": get_path("feed.xml")}] * 5
-
-        async def main():
-            single = [item async for item in AsyncCollection(sources[:1])]
-            collection = AsyncCollection(sources, ordered=ordered, connections=2)
-            everything = [item async for item in collection]
-            return single, everything
-
-        single, everything = run(main)
+        single = [item async for item in AsyncCollection(sources[:1])]
+        collection = AsyncCollection(sources, ordered=ordered, connections=2)
+        everything = [item async for item in collection]
         assert single
         assert len(everything) == 5 * len(single)

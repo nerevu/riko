@@ -13,7 +13,8 @@ global-vs-per-parent ``count`` gap.
 
 from typing import cast
 
-from riko.bado._backend import run
+import pytest
+
 from riko.context import Context
 from riko.modules._subpipe import mark_subpipe
 from riko.modules.loop import async_pipe as async_loop
@@ -296,40 +297,41 @@ class TestAsyncLoop:
     fold as the sync loop (Phase 3 parity).
     """
 
-    def test_async_loop_matches_sync_emit(self):
-        async def main():
-            stream = await async_loop(
-                iter(PARENTS),
-                embed=async_tok,
-                conf=TOKENIZER_CONF,
-                field="title",
-                count="all",
-                emit=True,
-            )
-            return [item async for item in stream]
+    @pytest.mark.anyio
+    async def test_async_loop_matches_sync_emit(self):
+        stream = await async_loop(
+            iter(PARENTS),
+            embed=async_tok,
+            conf=TOKENIZER_CONF,
+            field="title",
+            count="all",
+            emit=True,
+        )
 
+        async_result = [item async for item in stream]
         sync_result = list(_tokenizer_loop(iter(PARENTS), count="all", emit=True))
-        assert run(main) == sync_result
+        assert async_result == sync_result
 
-    def test_async_loop_assign_per_parent(self):
-        async def main():
-            stream = await async_loop(
-                iter(PARENTS),
-                embed=async_tok,
-                conf=TOKENIZER_CONF,
-                field="title",
-                count="first",
-                assign="first",
-                emit=False,
-            )
-            return [item async for item in stream]
+    @pytest.mark.anyio
+    async def test_async_loop_assign_per_parent(self):
+        stream = await async_loop(
+            iter(PARENTS),
+            embed=async_tok,
+            conf=TOKENIZER_CONF,
+            field="title",
+            count="first",
+            assign="first",
+            emit=False,
+        )
+        result = [item async for item in stream]
 
-        assert run(main) == [
+        assert result == [
             {"title": "a b", "first": {"content": "a"}},
             {"title": "c d", "first": {"content": "c"}},
         ]
 
-    def test_async_loop_is_lazy_and_ordered(self):
+    @pytest.mark.anyio
+    async def test_async_loop_is_lazy_and_ordered(self):
         consumed: list[str] = []
 
         def tracking() -> Stream:
@@ -337,21 +339,18 @@ class TestAsyncLoop:
                 consumed.append(str(parent["title"]))
                 yield parent
 
-        async def main():
-            stream = await async_loop(
-                tracking(),
-                embed=async_tok,
-                conf=TOKENIZER_CONF,
-                field="title",
-                count="all",
-                emit=True,
-            )
-            first = await anext(cast(AsyncStream, stream))
-            return first, list(consumed)
+        stream = await async_loop(
+            tracking(),
+            embed=async_tok,
+            conf=TOKENIZER_CONF,
+            field="title",
+            count="all",
+            emit=True,
+        )
 
-        first, seen = run(main)
+        first = await anext(cast(AsyncStream, stream))
         assert first == {"content": "a"}
-        assert seen == ["a b"]
+        assert list(consumed) == ["a b"]
 
 
 @skipif_issync
@@ -361,40 +360,41 @@ class TestAsyncSubpipeLoop:
     runs once per parent (sequentially) and applies the per-parent fold.
     """
 
-    def test_emit_all_flattens_per_parent(self):
-        async def main():
-            stream = await async_loop(
-                iter([{"title": "ab"}, {"title": "cd"}]),
-                embed=_ASYNC_SUBPIPE,
-                count="all",
-                emit=True,
-            )
-            return [item async for item in stream]
+    @pytest.mark.anyio
+    async def test_emit_all_flattens_per_parent(self):
+        stream = await async_loop(
+            iter([{"title": "ab"}, {"title": "cd"}]),
+            embed=_ASYNC_SUBPIPE,
+            count="all",
+            emit=True,
+        )
+        result = [item async for item in stream]
 
-        assert run(main) == [
+        assert result == [
             {"content": "AB"},
             {"content": "ba"},
             {"content": "CD"},
             {"content": "dc"},
         ]
 
-    def test_assign_folds_first_onto_parent(self):
-        async def main():
-            stream = await async_loop(
-                iter([{"title": "ab"}, {"title": "cd"}]),
-                embed=_ASYNC_SUBPIPE,
-                count="first",
-                assign="up",
-                emit=False,
-            )
-            return [item async for item in stream]
+    @pytest.mark.anyio
+    async def test_assign_folds_first_onto_parent(self):
+        stream = await async_loop(
+            iter([{"title": "ab"}, {"title": "cd"}]),
+            embed=_ASYNC_SUBPIPE,
+            count="first",
+            assign="up",
+            emit=False,
+        )
+        result = [item async for item in stream]
 
-        assert run(main) == [
+        assert result == [
             {"title": "ab", "up": {"content": "AB"}},
             {"title": "cd", "up": {"content": "CD"}},
         ]
 
-    def test_count_first_is_lazy_and_closes_child(self):
+    @pytest.mark.anyio
+    async def test_count_first_is_lazy_and_closes_child(self):
         produced: list[int] = []
         closed: list[str] = []
 
@@ -409,15 +409,14 @@ class TestAsyncSubpipeLoop:
         async def _sub(item, context=None, **_):
             return child(str(item["title"]))
 
-        async def main():
-            stream = await async_loop(
-                iter([{"title": "a"}, {"title": "b"}]),
-                embed=mark_subpipe(_sub),
-                count="first",
-                emit=True,
-            )
-            return [item async for item in stream]
+        stream = await async_loop(
+            iter([{"title": "a"}, {"title": "b"}]),
+            embed=mark_subpipe(_sub),
+            count="first",
+            emit=True,
+        )
 
-        assert run(main) == [{"content": "a0"}, {"content": "b0"}]
+        result = [item async for item in stream]
+        assert result == [{"content": "a0"}, {"content": "b0"}]
         assert produced == [0, 0]
         assert closed == ["a", "b"]
