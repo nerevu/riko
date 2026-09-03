@@ -1,15 +1,18 @@
 # Extensibility & ecosystem gameplan
 
-> **Scope.** This plan owns the contracts/ecosystem plane: module contracts, plugins, workflow
-> serialization, observability, adapter packages, optional execution drivers, and GUI integration.
-> Runtime semantics are consumed from their owning gameplans rather than redefined here.
+> **Scope.** This plan owns the contracts/ecosystem plane: module contracts, plugins, canonical
+> workflow serialization, observability integrations, adapter packages, optional execution drivers,
+> and GUI integration. Runtime semantics are consumed from their owning gameplans rather than
+> redefined here.
 
 Related authoritative plans:
 
 - [execution-semantics.md](execution-semantics.md) — immutable `Pipeline`, Context/Resource,
   execution, identity/idempotency, `FeedState`/`StateStore`, checkpoints, batch semantics;
-- [fanout-topology.md](fanout-topology.md) — publish/subscribe/split topology;
-- [connectors.md](connectors.md) — connector/session/credential contracts;
+- [fanout-topology.md](fanout-topology.md) — publish/subscribe/split/routing/fan-in topology;
+- [cache.md](cache.md) — `Pipeline.cache()` / CacheNode replay semantics;
+- [effects.md](effects.md) — `write` / action effect semantics and result reporting;
+- [connectors.md](connectors.md) — connector/session/credential contracts and concrete adapters;
 - [cli.md](cli.md) — Click-native CLI extension layer;
 - [mcp.md](mcp.md) — capability catalog/execution policy;
 - [operations-as-code.md](operations-as-code.md) — operation source-of-truth, OperationSpec/Plan,
@@ -34,7 +37,7 @@ rather than inventing parallel models.
 4. **Optional integrations stay optional.** Plugin loading, OpenTelemetry, cloud SDKs, databases,
    and protocol clients do not inflate the minimal install.
 5. **Version data, not runtime objects.** Workflow files store serializable definitions/references,
-   never live clients, portals, channels, or private execution objects.
+   never live clients, portals, channels, cache contents, or private execution objects.
 6. **Secure by default.** Loading a workflow or operation pack never installs or downloads
    executable code.
 7. **Evidence before optimization.** Optional execution drivers/per-node optimizations require
@@ -55,7 +58,7 @@ A module definition should expose, where applicable:
 stable name / contract version
 type + subtype/role
 sync/async implementation availability
-input/output cardinality
+input/output cardinality + declared port contract
 configuration schema/defaults/required values
 boundedness / ordering / stable-order guarantees
 side-effect classification + idempotency support
@@ -83,10 +86,15 @@ A module does not declare a custom checkpoint protocol or lease mechanism.
 Resource requirements use the common `resources=` declaration and execution wrapper preparation.
 Live resource handles never become durable module-definition data.
 
+Port declarations follow the Workflow v2 grammar. Fixed-output modules declare their ports directly;
+configurable modules such as split/route derive the declared port set deterministically from
+normalized node configuration. Edges connect declared ports; edges never create ports.
+
 Deliverables:
 
 - extend/normalize module metadata contracts;
 - generate configuration JSON Schema from typed configs;
+- expose declared input/output port metadata where applicable;
 - catalog/describe/schema inspection;
 - deterministic built-in/plugin catalog export for docs/GUI;
 - conformance helpers for extension authors.
@@ -136,51 +144,305 @@ The evidence for all of this is one real external package, not another hundred i
 the `implementation-sequence.md` R12 proof as a hard pre-1.0 release criterion: entry-point
 registration, a declared `Resource` dependency, a sync-only or async-only implementation adapted in
 the opposite execution mode, an external `Publisher`/`Subscription` or `StateStore`, generated
-discoverability that includes the extension, and no core edit. An extension package exercises the
-plugin API the way a consumer will; internal tests exercise it the way its author already imagines
-it works.
+discoverability that includes the extension, and no core edit.
 
-Note the division of labor with R4: R4 proves the **runtime architecture** can hold a real external
-resource, and it does so early. R12 proves the **external package API**. Discovering a lifecycle
-defect at R12 would be discovering it eight PRs too late.
+Note the division of labor with R4B: R4B proves the **runtime architecture** can hold real external
+resources early. R12 proves the **external package API**.
 
-## E3. Workflow specification v1
+## E3. Canonical Workflow v2 specification
 
-Give existing serialized pipeline/DAG forms a versioned interoperable storage contract.
+Workflow v2 is the single normalized graph/storage contract consumed by validation, compilation,
+serialization, CLI/GUI tooling, and private execution preparation.
 
-Requirements:
+### E3.1 One normalization boundary
+
+Flexible authoring and migration stop at one boundary:
 
 ```text
-format_version
-stable node IDs when durable identity requires them
-explicit source/target ports
-linear/fan-out/fan-in/split/publish-subscribe topology
-loop/stateful-owner/checkpoint declarations
-resource references
-parameters/declared outputs
-canonical JSON-compatible normalized representation
-optional YAML authoring -> canonical representation
-deterministic serialization
-forward migration / explicit unsupported-version rejection
+legacy v1
+    -> migrate_v1_to_v2()
+
+v2 authoring sugar
+    -> normalize_workflow()
+
+both
+    -> strict canonical WorkflowSpec v2
+    -> validate
+    -> compile / serialize / execute
 ```
 
-Serialized configuration references credentials/resources/callables symbolically. It does not embed
-secret material or arbitrary Python objects.
+No compiler/runtime subsystem independently reinterprets authoring shorthand, old port names, inline
+targets, omitted outputs, or legacy v1 shapes.
 
-Same-name serialized subscription targeting follows the fan-out owner contract; explicit IDs can
-select one declaration when required.
+Riko accepts v1 only at the loader/migration boundary, warns when migration occurs, and serializes
+v2 only. `migrate_v1_to_v2()` is pure and testable.
 
-Acceptance: every supported Pipeline topology round-trips without losing ports, stateful-owner
-identity, checkpoint placement, resource references, or fan-out edges; GUI/CLI validation uses the
-same normalized model as execution preparation.
+### E3.2 Canonical graph envelope
 
-An `OperationSpec` may reference/reuse a serialized workflow/Pipeline definition, but this gameplan
-does not extend the workflow format with Operations as Code source-of-truth, plan/apply/verify,
-import, compatibility, deployment, or drift semantics. Those stay in `operations-as-code.md`.
+Canonical v2 uses top-level `nodes` and `edges` with explicit named outputs and typed inputs.
+
+Every edge endpoint has the full form:
+
+```json
+{"node": "normalize-1", "port": "out"}
+```
+
+Canonical edge keys are only:
+
+```text
+source
+target
+```
+
+Reject shorthand structural aliases such as `src`/`tgt` and `from`/`to` in canonical v2.
+
+Top-level outputs are explicit references:
+
+```json
+"outputs": {
+  "default": {"node": "normalize-1", "port": "out"},
+  "errors": {"node": "route-1", "port": "out:invalid"}
+}
+```
+
+There is no fake `type:"output"` module. Authoring may omit `outputs` only when exactly one
+unambiguous leaf exists; normalization materializes `outputs.default`.
+
+### E3.3 Node families
+
+Canonical node families are a closed discriminated union:
+
+```text
+ModuleNode
+ReadNode
+WriteNode
+CacheNode
+ActionNode
+SubscribeNode
+```
+
+`ModuleNode` covers registered transforms/operators including split, branch, route, union, merge,
+join, and loop. Loop remains a specialized registered module, not a separate LoopNode.
+
+`ReadNode` and `WriteNode` reference serializable Target/Format definitions. `ActionNode` references
+a registered provider/action identity. `CacheNode` carries cache semantic policy but never cache
+contents. `SubscribeNode` owns subscription policy.
+
+Node field meanings are consistent:
+
+```text
+id      graph-instance identity
+name    stable registered implementation identity
+label   optional human-readable text
+conf    registered module configuration; ModuleNode only
+params  registered action parameters; ActionNode only
+```
+
+Other node families use their own typed structural fields rather than `conf`.
+
+Resource slots are declared by the owning contract; canonical nodes use a normalized `resources`
+mapping. Authoring singular `resource` sugar is allowed only where the owning contract has exactly
+one resource slot.
+
+### E3.4 Edge families and topology
+
+Canonical edges are:
+
+```text
+StreamEdge
+PublishEdge
+```
+
+`PublishEdge` connects a producer output to a `SubscribeNode`; publication is relationship/delivery
+semantics, not a PublishNode.
+
+Port grammar:
+
+```text
+in / out             default port
+in:N / out:N         positional port
+out:<name>            semantic named output port
+```
+
+Legacy stable ports normalize as:
+
+```text
+_INPUT   -> in
+_OTHER   -> in:1
+_OTHER2  -> in:2
+_OUTPUT  -> out
+_OUTPUT2 -> out:1
+_OUTPUT3 -> out:2
+```
+
+A source stream port may have many outgoing edges. A target stream port has at most one incoming
+StreamEdge. Fan-in operands use distinct `in`, `in:1`, `in:2`, ... ports so ordering never depends on
+edge-list/traversal order.
+
+Split uses positional output ports (`out`, `out:1`, ...). Branch/route use semantic output ports such
+as `out:matched`, `out:unmatched`, `out:a`. The node/module contract declares valid ports; edge
+presence does not define the operator's port set.
+
+Same-name serialized subscription targeting follows the fanout contract; explicit node ids can
+select one declaration when necessary.
+
+### E3.5 Node identity
+
+Authoring node `id` is optional; canonical node `id` is required.
+
+Omitted ids normalize deterministically to a readable registered-name/occurrence form:
+
+```text
+fetch-1
+filter-1
+filter-2
+write-1
+```
+
+Generated ids identify this normalized graph definition. They are not promised stable across
+structural edits. Authors provide explicit ids when a logical node/boundary must survive revisions,
+for example durable state/checkpoint ownership or external references.
+
+Graph `id` remains distinct from semantic fingerprint/version identity.
+
+### E3.6 Inputs
+
+Workflow inputs are top-level typed declarations and execution values arrive through
+`Context.inputs`.
+
+Structural references use:
+
+```json
+{"input": "customer_id"}
+```
+
+Canonical input declarations use full JSON Schema. Authoring shorthands normalize to that form.
+Requiredness is inferred from absence of a default; `default:null` means the input has a default of
+null and therefore must also be nullable. Canonical object schemas use
+`additionalProperties:false` where the contract is closed.
+
+### E3.7 Targets and Formats
+
+`Target` is an immutable serializable endpoint/provider spec. `Format` is an immutable serializable
+interpretation/serialization spec. Resource bindings to live clients are separate.
+
+Canonical endpoint/provider vocabulary belongs under `Targets`, for example:
+
+```text
+FILE
+HTTP
+S3
+POSTGRES
+AIRTABLE
+INTUNE
+```
+
+Canonical data formats belong under `Formats`, for example:
+
+```text
+CSV
+JSON
+JSONL
+GEOJSON
+RSS
+XML
+TEXT
+```
+
+Targets use concrete backend granularity and are behaviorally inert definitions; adapters own
+behavior. A dedicated `TargetRegistry` parallels `ModuleRegistry`. Optional sync/async target
+protocols allow execution to adapt an implementation through its normal bridge.
+
+Read owns acquisition + interpretation. Write owns mutation/reconciliation. Format resolution order
+is:
+
+```text
+explicit Format
+-> Target default
+-> path/URL extension
+-> target media type
+-> error
+```
+
+No generic content sniffing is part of canonical resolution. HTTP Content-Type is secondary to an
+explicit/path-derived format rather than silently overriding it.
+
+Formats are inline/self-contained in canonical nodes; inferred formats are made explicit by
+normalization. Reusable Targets may be top-level declarations referenced by nodes; inline authoring
+Targets normalize deterministically.
+
+### E3.8 Loop, checkpoint, cache, and effects structure
+
+Workflow v2 defines the **structure** needed for later runtime phases even when those phases have not
+landed yet.
+
+- loop remains a `ModuleNode` with structural `embed` and existing loop-owned options;
+- absence of `until`/`max_iterations` means current one-run-per-parent loop semantics;
+- presence of either iterative control opts into iterative semantics;
+- checkpoint declarations may exist before a resumable owner is bound; compilation later resolves
+  every reachable checkpoint to exactly one owner;
+- CacheNode contains cache semantic identity/policy, not contents/live backends;
+- WriteNode contains serializable target/resource/write-operation fields, not live handles;
+- ActionNode contains serializable target/resource/`params` fields, not module `conf` or live handles;
+- SubscribeNode contains subscription policy; PublishEdge structurally defines publishers.
+
+### E3.9 Strict canonical validation
+
+Canonical v2 is a closed contract. Unknown structural fields are errors rather than ignored
+forward-compatibility bags.
+
+Validation rejects, before source consumption where applicable:
+
+```text
+unsupported format_version
+unknown node/edge family
+unknown structural field
+unknown/undeclared port
+duplicate node id
+missing referenced node
+more than one StreamEdge into one target stream port
+invalid/missing required fan-in positions
+undeclared resource slot
+unresolved Target/Resource/Input reference
+invalid registered module conf when the module contract is available
+invalid registered action params when the action contract is available
+invalid registered target configuration when the target contract is available
+```
+
+Forward compatibility comes from explicit `format_version`, not from an older runtime silently
+executing a workflow whose new semantics it does not understand.
+
+Extensions add registered vocabulary — modules, targets, actions, their schemas — rather than
+arbitrary graph grammar fields.
+
+### E3.10 Serialization and acceptance
+
+Canonical serialization is deterministic. Array/map ordering is stable for byte-comparison/golden
+fixtures, but semantic operator order comes from ids/ports/contracts rather than incidental JSON
+array order.
+
+Acceptance:
+
+- every supported Pipeline topology round-trips without losing ports, stateful-owner identity,
+  checkpoint placement, Target/Format/resource/input references, named outputs, cache/effect nodes,
+  or publish edges;
+- normalize(normalize(x)) is stable;
+- v1 migration followed by v2 serialization never emits v1-only structure;
+- GUI/CLI validation consumes the same normalized model as execution preparation;
+- a structurally valid node whose runtime capability is not implemented may round-trip, while
+  execution fails with a clear unsupported-capability error.
+
+An `OperationSpec` may reference/reuse a serialized Workflow v2 definition, but this gameplan does
+not extend the workflow format with Operations as Code source-of-truth, plan/apply/verify, import,
+compatibility, deployment, or drift semantics. Those stay in `operations-as-code.md`.
 
 ## E4. Observability hooks
 
 Observability extends, rather than replaces, execution semantics.
+
+R4B establishes the minimal execution-owned `EventSink` transport. Feature owners define their
+semantic event/result payloads; this section owns ecosystem consumers/integration rather than a
+second callback lifecycle.
 
 Useful lifecycle events include:
 
@@ -190,6 +452,8 @@ node start/finish
 item/batch counters
 retry/disposition
 resource open/close
+cache hit/miss/bypass/invalidate
+write/action result
 publish/subscription lifecycle
 checkpoint/state CAS outcome
 cancellation/deadline
@@ -240,21 +504,22 @@ provider-specific sessions
 Singer/RDP bridges
 ```
 
-Source/sink interoperability includes:
+Source/target interoperability includes:
 
 - standardized discovery/config;
 - schema/metadata when available;
 - declared `Context` resource requirements;
 - execution-owned session lifecycle;
-- source/sink provenance;
+- source/target provenance;
 - explicit acknowledgement/delivery semantics;
 - incremental source state represented through common `FeedState` / `StateStore`.
 
 Singer compatibility maps Singer STATE to the common core state model; RDP may project it for wire
 interchange but does not become a second checkpoint owner.
 
-Multi-sink broadcast uses the shared Publisher/Subscription/fan-out contract. Multi-source fan-in
-uses `union`/`merge` semantics from execution/fan-out owners.
+Multi-destination broadcast uses the shared Publisher/Subscription/fanout contract when the graph
+actually broadcasts. Multiple independent WriteNodes are ordinary explicit graph effects. Multi-source
+fan-in uses `union`/`merge` semantics from execution/fanout owners.
 
 Provider-native operation import/export/deployment adapters are specialized provider extensions and
 follow `provider-integrations.md`; their common normalized operation/compatibility model remains
@@ -269,7 +534,7 @@ outcomes. It must not reinterpret:
 
 ```text
 graph topology
-module semantics
+module/effect semantics
 resource ownership
 identity/generation
 checkpoint restore position
@@ -315,14 +580,15 @@ same service/API paths as Python/CLI.
 The GUI must understand:
 
 ```text
-ordinary data edges
-publish/subscription edges
+StreamEdge / PublishEdge
+positional + semantic ports
 split/route branches
+SubscribeNode
+read/write/action/cache nodes
 loop scopes
 checkpoint boundaries
-resource references
-side-effect/provider nodes
-materialization boundaries
+resource/Target/Format/input references
+named workflow outputs
 ```
 
 It does not need private execution objects to render or validate a workflow.
@@ -391,19 +657,15 @@ If the latter, prefer an adapter/driver or higher ecosystem package.
 ### Dependency ordering
 
 ```text
-core Pipeline / identity / Context / StateStore foundations
+core identity / Context / Resource foundations
     ↓
-E1 module contract
-    ├── E2 plugins
-    └── E3 workflow spec
-           ↓
-        E4 observability
-           ↓
-        E5 adapters
-           ↓
-        E6 optional drivers
-           ↓
-        E7 GUI/ecosystem readiness
+canonical Pipeline + Workflow v2 definition
+    ↓
+private execution
+    ↓
+module/plugin contracts + runtime feature implementations
+    ↓
+observability/adapters/drivers/GUI consumers
 ```
 
 Forward runtime dependency order is owned by `implementation-sequence.md`; E1–E7 specialize that
@@ -466,14 +728,14 @@ operation definitions accepted by `riko-ops`; it does not define another operati
 
 Requirements:
 
-* deterministic operation ID collisions and package/version provenance;
-* lazy discovery without opening provider sessions;
-* no credential material in package definitions;
-* loading a pack never executes an operation or installs remote code;
-* compatibility/API-version mismatch is reported before planning;
-* operation-pack dependencies may reference provider/capability IDs but do not bypass capability
+- deterministic operation ID collisions and package/version provenance;
+- lazy discovery without opening provider sessions;
+- no credential material in package definitions;
+- loading a pack never executes an operation or installs remote code;
+- compatibility/API-version mismatch is reported before planning;
+- operation-pack dependencies may reference provider/capability IDs but do not bypass capability
   discovery/policy;
-* external operation packs require no edit to `nerevu/riko` Core.
+- external operation packs require no edit to `nerevu/riko` Core.
 
 Provider importer/deployer implementations register through their provider package's extension
 mechanism; `provider-integrations.md` owns those provider-specific contracts. CLI operation commands
