@@ -3,215 +3,197 @@
 ## 1. Mission
 
 Define the **monthly MSP reconciliation scenario** that produces a client dashboard from live
-provider APIs — SuperOps, Microsoft Graph (Entra/Intune), Action1, Huntress, and Axcient — synced
-into Airtable. This is a **scenario** that specializes the generic connector/provider/Microsoft/
-execution contracts: it owns only the canonical device-identity reconciler, the license
-calculation, the dashboard target/period model, the monthly workflow sequencing, and the QA
-invariant set.
+provider APIs — SuperOps, Microsoft Graph (Entra/Intune), Action1, Huntress, and Axcient — written
+to Airtable.
 
-The design replaces the current manual **browser/report-export SOP** (export CSVs from six portals,
-CSV-import into Airtable tabs, then hand-resolve "missing" views) with an unattended reconciliation
-run. **CSV becomes a compatibility format, not the integration mechanism** — of the manual steps in
-the SOP, only a small residue should still require a browser once this lands.
+This scenario specializes generic connector/provider/Microsoft/execution contracts. It owns only:
+
+- canonical device identity/reconciliation;
+- license calculations;
+- dashboard period/QA data;
+- monthly workflow sequencing;
+- provider-field normalization for this scenario;
+- the `MonthlyDashboard` service/operator surface.
+
+It does **not** own generic Target/write semantics.
+
+The design replaces the current manual browser/report-export SOP (export CSVs from six portals,
+CSV-import Airtable tabs, then hand-resolve "missing" views) with an unattended reconciliation run.
+CSV becomes a compatibility format, not the integration mechanism.
 
 > **Dependencies:** this is an external `nerevu/riko-msp` package built on the shipped P8 entry-point
-> seam and the reconciled Pipeline/Context/resource/provider contracts. It reuses the Microsoft
-> adapters that [autopilot-provisioning.md](autopilot-provisioning.md) also consumes. Forward
-> dependency order is owned by [implementation-sequence.md](implementation-sequence.md), especially
-> the provider/external integration work in R11/R12. **No vendor-specific modules or dependencies
-> land in `nerevu/riko`.**
->
-> **Provenance.** Folded in from the untracked `_docs/reporting.md` design memo (the monthly-
-> reconciliation revision of the original CSV export/import SOP). That memo remains the informal
-> narrative; the target contract lives here.
+> seam and the reconciled Pipeline/Context/resource/provider contracts. Forward dependency order is
+> owned by [implementation-sequence.md](implementation-sequence.md), especially R11/R12. No
+> vendor-specific dependencies land in `nerevu/riko`.
 
-Related authoritative plans (this scenario **consumes**, it does not redefine them):
+Related authoritative plans this scenario consumes:
 
-* [azure-automation.md](azure-automation.md) — `MicrosoftContext`, Graph adapter, Microsoft
-  credential adapters, Intune/Entra adapter selection, long-running-operation normalization,
-  retry/throttling classification;
-* [microsoft-administration.md](microsoft-administration.md) — `ChangePlan`, desired state,
-  dry-run/WhatIf, approval, apply-then-verify, audit evidence for any **destructive** step
-  (license removal, shared-mailbox/proxy-address fixes, provider-side deletes);
-* [provider-integrations.md](provider-integrations.md) — SaaS provider CRUD/search, idempotent
-  writes, identity mapping, `OperationHandle`/operation wait, and explicit browser fallback;
-* [connectors.md](connectors.md) — connector/session lifecycle and credential references
-  (never serialized secrets); the Airtable sink transport and its write modes;
-* [extensibility.md](extensibility.md) / [module-registry.md](module-registry.md) —
-  `riko.ext.register` and package discovery through the `riko.modules` entry-point group;
-* [execution-semantics.md](execution-semantics.md) — immutable `Pipeline`/`Context`/resources,
-  common idempotency identity, retry, and state/checkpoint semantics;
-* [rest-incremental.md](rest-incremental.md) — REST pagination/auth/cursor machinery reused by the
-  SuperOps/Action1/Huntress/Axcient provider adapters;
-* [module-enums.md](module-enums.md) — the `msp.*` / provider module ids and generated discovery
-  names.
+- [effects.md](effects.md) — provider-neutral `write`/Action semantics, WriteResult/ActionResult,
+  Target/Format/Resource separation, idempotency participation;
+- [connectors.md](connectors.md) — concrete Airtable/HTTP connector Target adapters, credentials, and
+  session lifecycle;
+- [azure-automation.md](azure-automation.md) — Graph/Microsoft adapters;
+- [microsoft-administration.md](microsoft-administration.md) — `ChangePlan`, approval,
+  apply-then-verify for destructive Microsoft changes;
+- [provider-integrations.md](provider-integrations.md) — SaaS CRUD/search, provider identity,
+  OperationHandle/wait, browser fallback;
+- [execution-semantics.md](execution-semantics.md) — Pipeline/Context/resources, identity,
+  retry/state/checkpoint semantics;
+- [extensibility.md](extensibility.md) / [module-registry.md](module-registry.md) — Workflow v2 and
+  extension registration;
+- [rest-incremental.md](rest-incremental.md) — REST pagination/auth/cursor machinery;
+- [module-enums.md](module-enums.md) — generated discovery names.
 
 ## 2. Ownership boundary
 
 **This plan owns:**
 
 ```text
-canonical DeviceIdentity + the identity-precedence reconciler
+canonical DeviceIdentity + identity-precedence reconciler
 license reallocatability calculation (distinct-union semantics)
-the monthly dashboard workflow sequencing (source -> normalize -> reconcile -> export)
-the Airtable dashboard target: reporting period, generated-at, QA record
-the QA invariant set (dashboard "obvious errors" turned into checks)
-per-provider device-field normalization schemas
-the MonthlyDashboard operator API + small HTTP surface
-the scenario DoD/tests
+monthly workflow sequencing (read -> normalize -> reconcile -> write)
+reporting period + generated-at + QA record
+the QA invariant set
+per-provider device normalization schemas
+MonthlyDashboard service/operator API + small HTTP surface
+scenario tests
 ```
 
-**It does not own** (consumed from the plans in §1):
+**It consumes:**
 
 ```text
-riko.ext.register / entry-point discovery         extensibility.md / module-registry.md
-Context -> execution resources / credential refs  execution-semantics.md / connectors.md
-generic Airtable/provider sink transports         connectors.md / provider-integrations.md
-Microsoft Graph / subscribedSkus adapter          azure-automation.md
-ChangePlan / approval / apply / verify            microsoft-administration.md
-OperationHandle / operation wait / browser fallback  provider-integrations.md
-REST pagination / cursors                         rest-incremental.md
+Workflow v2 / Target / Format structure              extensibility.md
+write/action dataflow + result semantics              effects.md
+Airtable Target transport / credentials / sessions    connectors.md
+provider CRUD/identity/wait/browser fallback          provider-integrations.md
+Graph/Microsoft adapters                              azure-automation.md
+ChangePlan / approval / apply / verify                microsoft-administration.md
+REST pagination / cursors                             rest-incremental.md
+Context / state / retry / idempotency identity        execution-semantics.md
 ```
 
-**The four-layer rule** — do not collapse these into one module:
+The four-layer rule:
 
 ```text
-provider API (SuperOps/Graph/Action1/Huntress/Axcient)  = a source
-Airtable sink                                           = an adapter
-device reconciliation + license calc                    = the domain service
-Riko's registry                                         = the exposure mechanism
+provider APIs (SuperOps/Graph/Action1/Huntress/Axcient) = readable Targets/provider services
+Airtable                                                  = writable Target adapter
+device reconciliation + license calculation               = domain service
+Riko registries                                            = exposure/discovery mechanism
 ```
 
 ## 3. Scope
 
-**MVP:** one client, one reporting period; live-API ingestion for every source that exposes one;
-per-provider device-field normalization; the canonical reconciler with deterministic identity
-precedence; deterministic dedupe with recorded reasons; distinct-union license calculation from
-`subscribedSkus` + user/mailbox reads; Airtable sync via typed sink modes (`append`/`merge`/
-`replace`/`delete`) with idempotency keys; QA invariants emitted as a machine-readable record;
-period/generated-at stored as data; `plan()` then `apply()`; dry-run; structured per-source and
-per-record results.
+**MVP:** one client, one reporting period; live-API ingestion wherever available; provider device
+normalization; deterministic identity reconciliation/dedupe; distinct-union license calculation from
+Microsoft data; Airtable writes using explicit operation modes such as `append`/`merge`/`replace`/
+`delete` where supported; QA record; dry-run/plan/apply for destructive provider changes; structured
+source/write/domain results.
 
-**Out of scope (consumed or deferred):** the Airtable CSV-import extension; the "New Security
-Events" Airtable *form* (create records through the API instead); generic Microsoft administration
-beyond this workflow (owned by `microsoft-administration.md`); the shared-mailbox/proxy-address
-**remediation** workflow itself (this scenario only *detects* candidates and hands a `ChangePlan`
-to the remediation path); Playwright automation of anything an API already covers.
+A rerun must be convergent/idempotent where the destination supports that contract.
 
-## 4. Sources: replace the export/import SOP with APIs
+**Out of scope:** generic Airtable/Target write design; generic Microsoft administration; browser
+automation for APIs that already expose the needed capability; the actual shared-mailbox/proxy
+remediation workflow (this scenario only detects and hands off candidates).
 
-Each manual "export a report / CSV-import a tab" step becomes a provider adapter feeding an Airtable
-sink mode. The `mode` column is the Airtable write semantics, not a CSV-import extension.
+## 4. Sources: replace export/import SOP with APIs
+
+Each manual export/import step becomes a provider read followed by an Airtable write mode. The
+`Airtable mode` column below is operation configuration consumed from `effects.md`/the Airtable Target
+adapter, not a second `sink()` API.
 
 | SOP step | Provider adapter | Airtable mode | Key |
 |---|---|---|---|
 | SuperOps Detailed Asset Inventory | SuperOps GraphQL `getAssetList` | `merge` | `superops_asset_id` |
-| Interactive SignIns | Graph `GET /auditLogs/signIns` (period `$filter`) | `merge` | sign-in id |
-| Action1 Endpoint Vuln Status | Action1 `GET /reportdata/{org}/{report}/data` | `append` | `(report_month, endpoint_id, source_record_id)` |
+| Interactive SignIns | Graph `GET /auditLogs/signIns` | `merge` | sign-in id |
+| Action1 Endpoint Vuln Status | Action1 report-data API | `append` | `(report_month, endpoint_id, source_record_id)` |
 | Action1 Hardware Summary | Action1 report-data API | `merge` | `endpoint_id` |
 | Installed Windows Updates | Action1 report-data API | `append` | `(report_month, endpoint_id, update_id)` |
 | Huntress Agents | Huntress REST agents | `merge` | agent id |
-| Huntress monthly report | Huntress REST summary/incident reports | `append` (Security Events) | report-derived id |
-| Axcient Usage | x360Cloud API where equivalent, else report export | `merge` | `item_id` |
-| Intune Devices | Graph `GET /deviceManagement/managedDevices` | `merge` | `deviceName` / device id |
+| Huntress monthly report | Huntress REST summary/incidents | `append` | report-derived id |
+| Axcient Usage | x360Cloud API where equivalent, else scoped export | `merge` | `item_id` |
+| Intune Devices | Graph `GET /deviceManagement/managedDevices` | `merge` | provider device id |
 
-Notes that change the SOP:
+Scenario notes:
 
-* **SuperOps** — prefer GraphQL (`getAssetList`/`getAsset`/`getAssetSummary`) exposing asset id,
-  name, serial, manufacturer, model, hostname, platform, last-comms. The "verify report name / click
-  Custom tab" step disappears.
-* **SignIns** — `createdDateTime >= period start` and `< next period start`, paginated. No Entra CSV.
-* **Action1** — the org/report IDs already in the SOP URLs become API path parameters. For the two
-  `append` reports, key on `(report_month, endpoint_id, update_id/source_record_id)` so a rerun is
-  idempotent and does not double the month.
-* **Huntress** — Agents and most of the monthly report come from the REST API; the Airtable form is a
-  human interface, not an integration API, so create Security-Event records directly.
-* **Axcient** — the one source to **test before eliminating the browser**: take one current Usage
-  export, diff its columns against the x360Cloud API (`/client/{id}`, `/backup_status`, `/user`,
-  `/shared_resource`). If everything is present, drop the browser path; if a field is missing, keep a
-  **small Playwright fallback for only the unsupported export**, not the whole Microsoft-login /
-  x360Portal navigation.
-* **Intune** — Graph `managedDevices` (id, `deviceName`, enrollment/last-sync/OS/compliance) replaces
-  the CIPP CSV download. CIPP stays useful where its GDAP/MSP abstraction saves auth work; the Riko
-  provider surface is `microsoft.managed_devices()`, not `download_csv_from_cipp_page()`.
+- **SuperOps:** prefer GraphQL asset APIs; report-download UI disappears.
+- **SignIns:** query period boundaries directly; no Entra CSV.
+- **Action1:** org/report IDs become API parameters. Append reports use stable record/month identity so
+  reruns do not duplicate the month.
+- **Huntress:** agents/reports come from REST; Airtable form is a human UI, not integration API.
+- **Axcient:** compare one current Usage export against x360Cloud API fields before eliminating the
+  browser. Keep a narrow browser fallback only for an actually missing export capability.
+- **Intune:** Graph `managedDevices` replaces CIPP CSV export. CIPP may still be useful as an MSP auth/
+  GDAP abstraction, but the Riko-facing capability is provider data, not browser CSV navigation.
 
-## 5. Sink interface: `write` vs `sink`, not CSV import
+## 5. Airtable is a writable Target
 
-The real Airtable operation is record synchronization, not a CSV-import extension. The scenario
-targets one unified sink interface — the decision record for the whole thing. Four verbs on the
-collection surface, each on its own axis:
+The scenario's persistence surface is the common write effect:
 
-| Verb | Shape | Purpose |
-|---|---|---|
-| `write(dest, format=, mode=append\|replace)` | passthrough → `Stream` | emit a copy, keep chaining |
-| `sink(dest, mode=, keys=, idempotency_key=)` | terminal → `SinkResult`/`Plan` | reconcile records, report/plan |
-| `split(n)` / `subscribe(name, on_receive=…)` | branches / subscription | broadcast duplication |
-| `export(items, fmt)` | terminal → value | serialize a stream to a Python value |
+```text
+records
+    -> Pipeline.write(Airtable Target, operation mode/keys/...)
+    -> same records continue if the graph continues
 
-`write` **emits and continues** (fire-and-forget copy, non-keyed `append`/`replace`, returns the
-stream); `sink` **reconciles and reports** (keyed/destructive modes, returns a `SinkResult`/`Plan`).
-The discriminator is the return shape: keep the stream (`write`) or get the outcome (`sink`). `write`
-desugars to `subscribe(on_receive=…)`.
+WriteResult
+    -> EventSink
+```
 
-Reconciliation writes therefore use `sink`:
+There is no target public `sink()` terminal. Keyed/destructive reconciliation does not require a
+second verb; it is write-operation behavior validated against the Airtable Target's capabilities.
+Graph position determines terminality.
+
+Conceptually, a scenario may build a configured Airtable Target once and write different tables with
+operation-specific configuration:
 
 ```python
-result = flow.sink(
-    "airtable",
-    base="apphfQxXXlf9Dajvf",
-    table="tbl9FOPBKYC4q28zW",
+target = Target(Targets.AIRTABLE, base=base, table=table)
+
+flow = flow.write(
+    target,
     mode="merge",
     keys=("endpoint_id",),
-)  # -> SinkResult(created=…, updated=…)
-
-flow.sink(
-    "airtable",
-    table="tbl6EmH19hzEIbSjb",
-    mode="append",
-    idempotency_key=("report_month", "endpoint_id", "update_id"),
 )
 ```
 
-`merge` upserts on `keys`; `append` uses `idempotency_key` so retries do not duplicate; `replace`
-and `delete` are the destructive modes reserved for reconciled removals (§7), gated through
-`plan()`/`apply()`. Idempotency identity comes from `execution-semantics.md`; this scenario supplies
-only the keys.
-
-**Destination resolution mirrors module discovery** — a destination is named three interchangeable
-ways, resolved like any pipe module:
+For append-style history:
 
 ```python
-flow.sink("airtable", base=…, table=…)       # bare key -> registry sink
-flow.sink(Sinks.AIRTABLE, base=…)            # generated enum (built-ins only)
-flow.sink(Airtable(base=…, table=…))         # typed object (externals get this in lieu of an enum)
-flow.write("out.csv")                         # path string -> File default, format from extension
+flow = flow.write(
+    Target(Targets.AIRTABLE, base=base, table=security_events),
+    mode="append",
+    # operation/domain identity participates in the common idempotency contract
+)
 ```
 
-A string with a path/url signal (a suffix, a `/`, or a `scheme://`) is a `File`; a bare registered
-name is that sink. `SinkMode` is the single mode axis; the file-open mode (`wb+`) becomes an internal
-`FileTarget` detail (escape hatch `File(url, open_mode=…)`).
+These examples are conceptual target API shape; the authoritative generic contract is `effects.md`.
+This scenario owns which business keys/modes to use, not the generic method signature.
 
-Ownership: the verb surface is core collection API; the **mode contract** — `SinkMode` (with
-`keyed`/`destructive`), the frozen `SinkWrite`, and `sink_write(mode, keys=, idempotency_key=)` —
-lives in `riko/sinks.py`; transports and typed targets (`Airtable`, …) stay external and follow
-`connectors.md`; `split`/`subscribe` are owned by `fanout-topology.md`.
+Mode meaning for this scenario:
 
-Rejected alternatives (recorded so they are not relitigated): `output` is **not** a sink — it is the
-compiler's DAG terminal marker (passthrough), excluded from this interface; `mirror`/`cc` conflate
-with `split`'s broadcast duplication; `tap` conflates with Singer's source-tap, so the subscriber
-side-effect parameter is `on_receive=`, not `tap=` (riko has no "taps" — the word is banned in code
-and docs).
+```text
+append   add a history/event record with stable idempotency identity
+merge    upsert/reconcile current-state records by keys
+replace  destructive full-scope replacement; plan/approval when risk requires it
+delete   destructive removal; plan/approval when provider/domain policy requires it
+```
 
-`Shipped:` the `write`/`sink` verbs and the `File` target (`riko/targets.py`). `write` streams
-`csv`/`jsonl` per item and buffers other formats into one document flushed on publisher completion or
-graceful `close()` (an abrupt `terminate()` discards it). `Current gap:` incremental framing so json
-et al. also stream (**C**), keyed file reconciliation via streaming `ijson` reads, and async `write`.
-Owner detail + rationale: `connectors.md` §6.2.
+The execution-derived idempotency identity comes from `execution-semantics.md`; the Airtable adapter
+maps that identity to provider behavior where supported.
+
+`output` remains workflow output metadata, not a destination/effect node. `split`/`publish` remain
+fan-out topology, not destination aliases.
+
+### Current shipped compatibility
+
+The current `features` branch has `write`/`sink` collection verbs and `riko/targets.py`. Those are
+as-built migration inputs documented in `IMPLEMENTED.md`/`CLAUDE.md`; they do not override the target
+architecture above. Migration should reuse useful writer/Target mechanics while converging on
+`Pipeline.write()` + `WriteNode` + `WriteResult`.
 
 ## 6. Reconciliation is the heart of the system
 
-The five manual "missing views" collapse into **one canonical device-identity reconciler**. The
-Airtable "missing" tabs become **QA outputs, not work queues**.
+The manual "missing" tabs collapse into one canonical device-identity reconciler. Airtable missing
+views become QA outputs, not work queues.
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -227,8 +209,7 @@ class DeviceIdentity:
     hostname: str | None = None
 ```
 
-Matching precedence — **never make hostname or asset name the primary identity; they change and they
-collide**:
+Matching precedence:
 
 ```text
 1. exact provider/device IDs
@@ -239,59 +220,56 @@ collide**:
 6. manual review
 ```
 
-Every run reports counts rather than opening a view:
+Hostname/asset name are fallback identities, never primary durable identity.
+
+Every run reports:
 
 ```text
 matched: 84   new matches: 3   unmatched: 2   ambiguous: 1
 ```
 
-Dedupe is deterministic — SuperOps on serial then asset name, Huntress on serial — returning a
-`DuplicateSet(canonical, duplicates, reason)` instead of requiring a human to open a tab.
+Dedupe is deterministic and returns a reasoned result such as
+`DuplicateSet(canonical, duplicates, reason)`.
 
-**"remove from SuperOps" is a deliberate ambiguity to resolve per deployment:** removing the
-duplicate *row from the Airtable SuperOps table* is safe to automate; deleting the asset from the
-*actual SuperOps service* is a destructive provider action and must route through
-`plan -> approval -> apply` (§8). Same rule for Huntress.
+Removing a duplicate **dashboard row** is different from deleting an asset in a provider service.
+Provider-side deletion is a destructive Action/write and must follow the applicable plan/approval/
+apply contract.
 
-## 7. License calculation comes from Microsoft data, not cross-referencing
+## 7. License calculation comes from Microsoft data
 
-Purchased/consumed seats come from Graph `GET /subscribedSkus`:
+Purchased/consumed seats come from Graph `subscribedSkus`:
 
 ```python
 total = enabled_seats
 available = enabled_seats - consumed_seats
 ```
 
-Reallocatable licenses are a **distinct union**, not a sum — one user can satisfy several categories:
+Reallocatable licenses are a **distinct union**, not a sum:
 
 ```python
 reallocatable = shared_mailbox_ids | shared_email_ids | disabled_licensed_user_ids
 ```
 
-Store the components *and* the distinct total so the dashboard can show both without over-counting:
+Store component counts and the distinct total so overlapping users are not double-counted.
+
+Shared-email/account-enabled-shared-mailbox fixes are remediation, not dashboard generation.
+`proxyAddresses`/Exchange changes go through the Microsoft administration/PowerShell adapter and a
+`ChangePlan`. Dashboard generation never silently mutates Microsoft 365.
 
 ```text
-Shared mailbox licenses: 4
-Shared email licenses: 2
-Disabled user licenses: 3
-Distinct reallocatable licenses: 7
+monthly_dashboard
+    -> detect remediation candidates
+    -> emit/handoff ChangePlan
+
+monthly_remediation
+    -> approval -> apply -> verify
 ```
 
-**Shared-email / account-enabled-shared-mailbox fixes are remediation, not dashboard generation.**
-`proxyAddresses` is not directly writable through the normal Graph user API, so those changes go
-behind the PowerShell/Exchange adapter (`Set-Mailbox`) and are expressed as a `ChangePlan` owned by
-`microsoft-administration.md`. Generating a dashboard must never silently mutate Microsoft 365:
+## 8. Plan/apply for destructive mutations
 
-```text
-monthly_dashboard -> find remediation candidates -> emit ChangePlan
-monthly_remediation -> approval -> execute -> verify   (separate run)
-```
-
-## 8. Plan/apply for mutations
-
-Reads and Airtable synchronization run unattended. Anything destructive — removing licenses,
-changing shared mailboxes, deleting a record from a provider service — produces a change plan first,
-consuming the `microsoft-administration.md` / `provider-integrations.md` contract:
+Reads and normal convergent Airtable synchronization run unattended according to configured policy.
+Destructive provider changes — license removal, mailbox changes, provider-side deletes — produce a
+plan before apply.
 
 ```python
 plan = await run.plan()
@@ -302,13 +280,12 @@ plan.approvals
 result = await plan.apply()
 ```
 
-A provider "write succeeded" response is not sufficient; final state is verified through the
-authoritative service. No independent retry/idempotency framework — reuse the execution contract.
+A provider "accepted" response is not sufficient where authoritative verification is available.
+Use provider/Microsoft wait/verify contracts; do not invent a scenario-local retry/idempotency system.
 
-## 9. Dashboard "obvious errors" become QA invariants
+## 9. Dashboard QA invariants
 
-The SOP's final "look over dashboard for obvious errors" is automation debt. Turn it into explicit
-invariants emitted as a record on every run:
+Replace "look over dashboard for obvious errors" with machine-readable checks:
 
 ```text
 no duplicate device keys
@@ -323,6 +300,8 @@ every linked device resolves
 reporting month is consistent
 ```
 
+Example:
+
 ```json
 {
   "status": "warning",
@@ -336,42 +315,34 @@ reporting month is consistent
 }
 ```
 
-The monthly Interface rename ("change name with updated month and year") is cosmetic: store
-`Reporting Month` and `Report Generated` as data and let the interface display the period. Only if
-Airtable's interface designer cannot bind that dynamically does that single title stay a Playwright
-operation — never design a browser robot for one title.
+Store `Reporting Month` and `Report Generated` as data. Only retain a browser operation for a UI title
+if Airtable truly cannot bind that presentation dynamically.
 
-## 10. Operator API and package layout
+## 10. Service/API and package layout
 
-Primary surface is the high-level run object; the per-source pipeline stays ordinary Riko underneath.
+Primary surface is a high-level domain service; its provider pipelines remain ordinary Riko under the
+hood.
 
 ```python
 run = MonthlyDashboard(
     client="centralillinoisfriends",
     period="2026-07",
-    target=AirtableTarget(base="apphfQxXXlf9Dajvf"),
+    target=airtable_target,
 )
 
 plan = await run.plan()
 result = await plan.apply()
 ```
 
-```python
-superops = SyncPipe("superops.assets", conf={"client": client}).normalize_device(
-    source="superops"
-)
-intune = SyncPipe("graph.managed_devices", conf={"tenant": tenant}).normalize_device(
-    source="intune"
-)
+Pipeline construction should use the target `Pipeline` API once R4+ lands rather than preserving
+`SyncPipe` in the target design. Conceptually:
 
-assets = superops.reconcile(intune, keys=["device_id", "serial", "hostname"])
-assets.export(
-    "airtable",
-    base=base,
-    table="tblWp7NZAMiKXujkg",
-    mode="merge",
-    keys=["superops_asset_id"],
-)
+```text
+read SuperOps -> normalize_device
+read Intune    -> normalize_device
+       \          /
+        reconcile
+            -> write Airtable(mode="merge", keys=...)
 ```
 
 Small HTTP surface:
@@ -384,86 +355,73 @@ POST /v1/monthly-dashboard/runs/{run_id}/apply
 GET  /v1/monthly-dashboard/runs/{run_id}/qa
 ```
 
-Suggested `nerevu/riko-msp` layout:
+Suggested external package:
 
 ```text
 riko_msp/
-    providers/{airtable,superops,microsoft,cipp,action1,huntress,axcient}.py
+    providers/{airtable,superops,microsoft,action1,huntress,axcient}.py
     reconcile/{devices,licenses,security}.py
     schemas/{device,signin,patch,license}.py
     workflows/monthly_dashboard.py
     modules/msp.py
 ```
 
-Register through the existing entry-point seam once independently testable, with no `nerevu/riko`
-edit:
-
-```toml
-[project.entry-points."riko.modules"]
-msp = "riko_msp.modules:definitions"
-```
-
-Reuse `nerevu/authorizer` where it saves work (secrets/auth), but do **not** force every provider
-call through a mandatory proxy; the reconciled architecture moved away from that.
+Register through entry points with no `nerevu/riko` code edit.
 
 ## 11. Phases
 
 ```text
-MD0  riko.ext.register + entry-point discovery available (extensibility.md prerequisite)
-MD1  execution resources + credential references (execution-semantics.md prerequisite)
-MD2  generic Airtable sink: append / merge / replace / delete
+MD0  extension registration prerequisite
+MD1  execution resources + credential references prerequisite
+MD2  Airtable Target adapter + write-mode conformance proof
 MD3  Microsoft Graph provider (signIns, managedDevices, subscribedSkus, users)
-MD4  SuperOps GraphQL provider + device normalization
-MD5  Action1 report-data provider (idempotent append keys)
-MD6  Huntress REST provider (agents + reports -> Security Events)
-MD7  Axcient x360Cloud API-vs-export comparison; scoped Playwright fallback only if required
+MD4  SuperOps provider + device normalization
+MD5  Action1 report-data provider
+MD6  Huntress provider
+MD7  Axcient API-vs-export comparison + scoped fallback if required
 MD8  canonical DeviceIdentity reconciler + deterministic dedupe
 MD9  distinct-union license calculation
 MD10 QA invariants record
-MD11 plan/apply for destructive removals + shared-mailbox/proxy remediation handoff
-MD12 MonthlyDashboard operator API + HTTP surface + module registration
+MD11 destructive ChangePlan/action handoff
+MD12 MonthlyDashboard service/API + package registration
 ```
 
-MD0–MD1 are consumed prerequisites owned by their gameplans; the rest is the specialization order
-inside `riko-msp`. Forward cross-cutting runtime order remains owned by
-`implementation-sequence.md`.
+MD0–MD2 consume Core/R11 contracts. Forward cross-cutting order remains authoritative in
+`implementation-sequence.md`; this list is scenario specialization order only.
 
 ## 12. Definition of done
 
-1. No vendor-specific module or dependency lands in `nerevu/riko`; `riko-msp` loads through the
-   entry-point seam.
-2. Every source with a live API is ingested through that API; CSV/browser is fallback only, and each
-   residual browser step is named explicitly (Axcient export residue, at most one interface title).
-3. Airtable sync uses typed `append`/`merge`/`replace`/`delete` with idempotency keys; a rerun of a
-   converged month produces zero duplicate records.
-4. Device reconciliation is deterministic with the documented identity precedence; "missing" tabs
-   are QA outputs, and every run emits `matched/new/unmatched/ambiguous` counts.
-5. Reallocatable licenses are a distinct union with components stored alongside the total.
-6. No destructive action (license removal, mailbox/proxy fix, provider-side delete) occurs without a
-   `ChangePlan` -> approval -> apply -> authoritative verify; dashboard generation never mutates M365.
-7. Reporting period and generated-at are data; "obvious errors" are machine-checked QA invariants
-   with a stored record.
-8. Generic registry, resources, sink, Graph, plan/apply, wait, and REST pagination are referenced
-   from their owning gameplans rather than redefined here.
+1. No vendor-specific dependency lands in `nerevu/riko`; `riko-msp` registers externally.
+2. Every source with a usable API is ingested through that API; browser/CSV remains explicit fallback
+   only.
+3. Airtable synchronization uses the common writable Target/effect model with typed operation modes,
+   stable business keys, and idempotency participation; no target public `sink()` contract is
+   reintroduced.
+4. A converged rerun creates no duplicate history/current-state records where the adapter contract can
+   enforce convergence.
+5. Device reconciliation is deterministic and emits matched/new/unmatched/ambiguous QA counts.
+6. Reallocatable licenses use distinct-union semantics with component counts retained.
+7. No destructive Microsoft/provider mutation occurs without its required plan/approval/apply/verify
+   path; dashboard generation never mutates M365 as a side effect.
+8. Reporting period/generated-at are data and QA checks are machine-readable.
+9. Generic Workflow/Target/write/resources/provider/wait/REST contracts are linked to their owners
+   rather than redefined here.
 
 ## 13. Required tests
 
 Cover:
 
-- **providers:** each adapter maps its API response into normalized device/records; pagination uses
-  the shared REST contract; Axcient API-vs-export column diff is asserted before dropping the browser;
-- **sink:** `merge` upserts on keys; `append` with idempotency key does not duplicate on rerun;
-  `replace`/`delete` are gated behind plan/apply;
-- **reconciler:** identity precedence order; serial/hostname collisions do not become primary
-  identity; ambiguous match reported not silently merged; dedupe returns canonical + reason;
-- **license:** distinct-union never exceeds the component sum; components and total both stored;
-  disabled/shared-mailbox/shared-email categories intersect correctly;
-- **QA:** every invariant emits into the record; a >20% delta or a stale source flips status to
-  `warning`; reporting-month consistency enforced;
-- **plan/apply:** destructive removal/remediation produces a plan with zero writes in dry-run;
-  apply verifies authoritative state; dashboard run performs no M365 mutation;
-- **idempotency:** a second converged monthly run produces `changed=False` and no duplicate Airtable
-  records;
-- **security:** credential references, never serialized secrets; tokens/proxy values redacted from
-  logs and plans;
-- **registration:** `riko-msp` loads through the entry point with no core edit.
+- **providers:** API responses normalize correctly; pagination uses shared REST contract; Axcient
+  API-vs-export fields are compared before browser fallback removal;
+- **Airtable write:** merge/upsert keys converge; append identity does not duplicate on rerun;
+  unsupported/destructive modes are gated by adapter/domain policy;
+- **reconciler:** precedence order, serial/hostname collisions, ambiguity reporting, deterministic
+  duplicate reason;
+- **license:** distinct-union correctness and stored component totals;
+- **QA:** every invariant emits; threshold violations become warnings; reporting-month consistency;
+- **plan/apply:** destructive changes produce plans; dry-run performs no writes; apply verifies
+  authoritative state;
+- **idempotency:** a second converged run produces no duplicate Airtable records;
+- **security:** serialized definitions contain credential references, not secrets; events/logs redact
+  sensitive values;
+- **registration:** external package loads through entry point with no Core edit.
