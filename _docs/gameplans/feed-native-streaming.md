@@ -33,8 +33,8 @@ wait wholesale for R10. Once the runtime capability a module needs is stable, th
 
 ```text
 R5A  ordinary transforms/reducers using the final _FeedItem envelope
-R5C  streaming write/effect path
-R7   send/receive compatibility streaming + bounded split
+R5C  streaming WriteNode/effect path + removal of legacy Python write module
+R7   publish/subscribe runtime + removal of send/receive modules + bounded split
 R8   batch representation optimization
 R10  remaining legacy-seam cleanup and parity proof
 ```
@@ -51,10 +51,10 @@ R10  remaining legacy-seam cleanup and parity proof
 | `count` | A | incremental accumulator | R5A+ |
 | `sum` | A | incremental accumulator | R5A+ |
 | `timeout` | A | cancellation/deadline around awaited next item | R5A+ / execution |
-| compatibility `receive` | A | yield directly from subscription/feed | R7 |
-| compatibility `send` | A | publish then pass item through | R7 |
+| legacy `receive` | A | reuse incremental receive mechanics inside final Subscription runtime, then remove module | R7 |
+| legacy `send` | A | reuse publish-then-pass mechanics inside final PublishEdge runtime, then remove module | R7 |
 | `split` | A/B | execution-owned bounded branch channels | R7 |
-| `write` | A/B | bounded effect writer over `WriteNode` | R5C |
+| legacy `write` | A/B | reuse bounded writer mechanics behind `WriteNode`, then remove module | R5C |
 | `forever` | B | native async repeat/source | R10 if not earlier |
 | `join` | B/C | incremental/hash strategy where semantics permit | R10 if not earlier |
 | `sort` | C | collect then sort | intentionally eager |
@@ -128,8 +128,10 @@ ordinary records continue downstream unchanged. Incremental downstream delivery 
 later downstream side effects if a subsequent write fails, so retry/resume correctness relies on the
 common side-effect/idempotency and checkpoint/disposition rules from `execution-semantics.md`.
 
-There is no separate public `sink()` terminal in the target API. Reconciliation/destructive write
-modes are write semantics of the Target/operation contract; terminality comes from graph position.
+There is no separate public `sink()` terminal in the target API. The unreleased sink-specific
+surface is removed outright; useful writer/codec mechanics are reused only behind `WriteNode`.
+Reconciliation/destructive write modes are write semantics of the Target/operation contract;
+terminality comes from graph position.
 
 ## 6. Internal batching uses the single Pipeline batch contract
 
@@ -219,21 +221,25 @@ invent new item identity.
 
 ## 9. Pub/sub migration boundary
 
-Compatibility `send`/`receive` parsers should become incremental, but the final Python API is
-object-first:
+The existing `send`/`receive` parsers may be made incremental as transitional implementation work,
+but R7 consumes those mechanics into the final object-first API and removes the Python modules:
 
 ```python
-events = Pipeline.subscribe("events")
+events = Pipeline.subscribe("events", func=archive)
 flow = flow.publish(events)
 ```
 
 Canonical Workflow v2 represents that relationship as a `PublishEdge` targeting a `SubscribeNode`.
 Attached local subscription branches are execution-owned; users do not drain them for cleanup.
-Async buffering/backpressure, branch error handling, isolation, multiple publishers, and completion
-semantics remain owned by the fan-out/execution contracts.
+Async buffering/backpressure, branch error handling, isolation, multiple publishers, completion, and
+receive-time `func` semantics remain owned by the fan-out/execution contracts.
 
-Compatibility streaming work may precede the final object-first API, but it must not harden the old
-DONE/PENDING lifecycle that R7 removes.
+`func` is intentionally retained: it executes when an item is received/materialized by the
+subscription, which is different from ordinary downstream UDF evaluation timing. Its return value is
+discarded and the original item remains the logical stream value.
+
+Pre-R7 streaming fixes must not harden the old DONE/PENDING lifecycle or create a compatibility API.
+Once R7 lands, no legacy send/receive runtime/module survives behind the object-first surface.
 
 ## 10. Side effects, identity, cache, and checkpoints
 
@@ -256,9 +262,9 @@ S0  source normalization + Feed-native inference tests
 S1  truncate/filter/union/uniq after R5A
 S2  tail/count/sum bounded reducers after R5A
 S3  timeout cancellation around blocked next-item
-S4  fan-out compatibility parser streaming under R7
+S4  transitional send/receive streaming mechanics folded into R7 publish/subscribe runtime
 S5  bounded split implementation under R7
-S6  StreamEncoder + streaming write under R5C
+S6  StreamEncoder + streaming WriteNode under R5C
 S7  remaining eligible modules / legacy seam minimization
 S8  Pipeline batch representation optimization under R8
 ```
@@ -271,12 +277,13 @@ R10 is the final S7-style cleanup/proof, not the first time S1–S6 are attempte
 2. Inherently EOF-blocking reducers remain bounded-memory where possible.
 3. Sync/async laziness/order/memory/side-effect timing match semantically.
 4. `split()` uses bounded execution-owned branches, not unbounded tee or whole-source copy.
-5. `write` streams through bounded memory, passes records through, emits `WriteResult` through the
-   common EventSink, and participates in common side-effect/idempotency semantics.
+5. `WriteNode` streams through bounded memory, passes records through, emits `WriteResult` through the
+   common EventSink, participates in common side-effect/idempotency semantics, and the legacy Python
+   `write` module is absent.
 6. Public batching is only `Pipeline(batch=True, batch_size=...)`; no `BatchPolicy` or `BatchPipe`
    target remains and no global dataframe-backend ranking is documented.
 7. FeedResult metadata/state and private per-item provenance survive streaming ports correctly.
-8. Compatibility `send`/`receive` may remain implementation names, but public docs use
-   `publish`/`subscribe`.
+8. Legacy `send`/`receive` modules are absent after R7; public pub/sub uses `publish`/`subscribe`, and
+   subscriber `func=` retains receive/materialization-time semantics distinct from downstream UDFs.
 9. Feed-native migration lands with its owning runtime capability; R10 leaves only intentionally
-   eager materialization points and compatibility cleanup.
+   eager materialization points and legacy-seam cleanup.

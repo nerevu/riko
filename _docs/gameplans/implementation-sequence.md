@@ -21,7 +21,7 @@ gameplans, especially:
   validate/plan/apply/verify, compatibility, migration, deployment drift;
 - `orchestration.md` — external scheduling and durable run boundaries;
 - `cli.md` — terminal adapters;
-- `release-readiness.md` — public-release gate;
+- `release-readiness.md` — public-release gate and pre-1.0 Python API removal policy;
 - `module-enums.md` — generated discoverability;
 - `testing.md` — test-layer ownership.
 
@@ -47,9 +47,11 @@ lifecycle contracts.
 Do **not** redo that separation. Refactor its types and resolution API when the public `Pipeline`
 class lands.
 
-**P9A module-name/taxonomy work** is also retained. Generated module identifiers remain a discovery
-layer over canonical string IDs. The remaining installed-environment aggregate and `.pyi` work can
-proceed when it does not encode removed `SyncPipe`/`AsyncPipe` classes.
+**P9A module-name/taxonomy mechanics** are also retained. Generated module identifiers remain a
+discovery layer over canonical string IDs. The shipped `Sinks` bucket is historical, not part of the
+final taxonomy: remaining installed-environment aggregate and `.pyi` work must target module
+`Sources` / `Transforms` plus the separate `Targets` / `Formats` discovery surfaces and must not
+encode removed `SyncPipe`/`AsyncPipe`, `write`, `output`, or `Sinks` APIs.
 
 **P10 bounded execution algorithms** are retained conceptually:
 
@@ -75,10 +77,20 @@ rather than layering a second serializer beside it.
 process/contextvar ownership and hidden sentinel/id bookkeeping are superseded by execution-owned
 subscription runtime state and canonical publish edges.
 
-**Current `write`/sink-target work** is also a migration input. Keep the useful adapter and streaming
-writer mechanics, but the target public model has one `Pipeline.write()` effect operation over
-`Target`/`Format`; there is no separate public `sink()` terminal in the final API. Terminality comes
-from graph position, not from a second destination verb.
+**Current writer/adapter mechanics** behind the `write`/sink-target experiments are useful migration
+inputs. Reuse streaming writer, codec, and adapter mechanics where they fit `WriteNode`; retaining
+those mechanics does not retain either old public abstraction.
+
+### Remove outright
+
+**Unreleased `sink()`** and every sink-specific public/discovery/serialization surface are removed,
+not deprecated. There is no alias to `write()`, no compatibility enum/category, and no legacy loader
+form. It never shipped, so it carries no compatibility obligation.
+
+The shipped Python `riko.modules.write` surface is different: it remains only until R5C replaces it
+with `Pipeline.write()` / `WriteNode`, then is removed under the pre-1.0 clean-break policy with no
+deprecated wrapper. Released persisted v1 workflows containing `write` are handled only by the
+bounded v1 migration boundary in R4A/extensibility.
 
 ### Superseded target designs
 
@@ -146,7 +158,7 @@ R6   StateStore / checkpoint / CAS / idempotency
               +-----+-----+
                     |
                     v
-R10  final Feed-native compatibility cleanup
+R10  final Feed-native legacy-seam cleanup
                     |
                     v
 R11  adapters/providers/orchestration
@@ -189,7 +201,7 @@ Changes:
 
 Keep P8 behavior unchanged except for type-name cleanup.
 
-**Exit:** no public API change; tests prove the seams the following PRs will replace.
+**Exit:** no released public API change; tests prove the seams the following PRs will replace.
 
 ### R1 — Stable errors first
 
@@ -382,7 +394,12 @@ Deliver:
 - canonical read/write/action/cache/subscription/checkpoint/loop structural fields even when runtime
   execution lands in later phases;
 - deterministic serialization;
-- v1 input accepted only at migration boundary, warning on migration, v2 emitted only;
+- during 0.x, released v1 input accepted only at the migration boundary, warning on migration and
+  normalizing immediately to v2; v2 emitted only;
+- released v1 `write` module nodes migrate to canonical `WriteNode` plus Target/Format structure;
+  unreleased `sink` experiments are not accepted as legacy grammar;
+- normal runtime loading becomes v2-only at 1.0; an offline pure `migrate_v1_to_v2()` utility may
+  remain;
 - strict closed canonical schema: unknown structural fields, ports, references, edge types, resource
   slots, duplicate ids, and unsupported versions fail before execution.
 
@@ -404,7 +421,8 @@ may therefore round-trip a node whose runtime capability has not landed yet, whi
 with a clear unsupported-capability error.
 
 **Exit:** every supported topology round-trips through canonical v2 without relying on traversal or
-JSON-array order for semantics.
+JSON-array order for semantics, and the bounded v1 migration path is explicit rather than a parallel
+runtime.
 
 ### R4B — Private SyncExecution/AsyncExecution and lifetime
 
@@ -426,7 +444,7 @@ Deliver:
 - minimal execution-owned `EventSink` transport and no-op default;
 - execution-local resource entry/rollback/exit from R3;
 - external-resource lifecycle proof;
-- remove `SyncPipe`/`AsyncPipe`/Collection classes from the target public surface;
+- remove `SyncPipe`/`AsyncPipe`/Collection classes rather than retain deprecated wrappers;
 - migrate P10 executor/bounded-stream mechanics out of `collections.py` rather than reimplementing
   them.
 
@@ -437,7 +455,8 @@ and other consumers remain ecosystem/observability work.
 #### R4B lifetime invariants
 
 1. every execution-spawned task belongs to exactly one execution-owned task group; detached
-   `asyncio.create_task()` exists only in explicitly characterized compatibility code;
+   `asyncio.create_task()` exists only in explicitly characterized transitional code scheduled for
+   removal;
 2. every context-managed component is entered on the execution exit stack, and rollback is that
    stack unwinding rather than a separate teardown path;
 3. lifecycle composition is not execution-mode adaptation: potentially blocking sync entry/exit is
@@ -527,11 +546,15 @@ Deliver:
 - successful writes aggregate completion per write node;
 - results are emitted out-of-band through the R4B `EventSink`;
 - sync/async target/action implementations adapt through R4B rather than creating local bridges;
-- failure propagation and cancellation obey the common execution contract.
+- failure propagation and cancellation obey the common execution contract;
+- remove the shipped `riko.modules.write` Python module/discovery entry when `Pipeline.write()` /
+  `WriteNode` lands; do not keep a deprecated wrapper;
+- preserve only the bounded persisted-v1 `write` migration owned by R4A/extensibility.
 
 `write()` is an effect operation, not a public module and not a terminal by definition. Its graph
 position determines whether the user continues chaining. There is no public `sink()` counterpart in
-the target API.
+the target API, and the unreleased sink-specific surface has already been removed rather than
+migrated.
 
 `read()` owns acquisition plus interpretation/parsing through Target + Format. `write()` owns
 reconciliation/mutation. Provider commands that do not naturally mean data write are actions.
@@ -579,7 +602,7 @@ on cache/effects/state.
 Deliver:
 
 - `Publisher[T]`, `Subscription[T]`, `Channel[T]` runtime protocols;
-- `Pipeline.subscribe(name)` local declaration;
+- `Pipeline.subscribe(name, ..., func=...)` local declaration;
 - `flow.publish(subscription_or_publisher, isolate=True)`;
 - external `Subscription` accepted as `Pipeline(source=...)`;
 - execution-owned local branches and cleanup, with every subscriber/branch/merge task created under
@@ -590,15 +613,19 @@ Deliver:
 - no PENDING/DONE/sender-id markers in the data stream;
 - per-subscription order guarantees;
 - buffer default `0`, overflow `block`, optional drop-oldest where permitted;
-- `on_receive=` semantics in sync and async together;
+- receive-time `func=` semantics in sync and async together: run at subscription
+  delivery/materialization time, discard the return value, and preserve the original item;
 - `split()` upstream-once, active-branches-only, bounded, never lossy;
 - branch/route port behavior from the R4A contract;
-- no cleanup dependency on draining branch output.
+- no cleanup dependency on draining branch output;
+- remove legacy `send` / `receive` Python modules when the object-first surface lands rather than
+  retain low-level compatibility modules.
 
-The existing `send`/`receive` modules may remain as low-level compatibility modules while the target
-Pipeline API is object-first.
+`func` is intentionally retained rather than renamed to `on_receive`: its materialization timing is
+part of subscription semantics and differs from ordinary downstream UDF evaluation timing.
 
-Feed-native send/receive/split migration belongs in this phase rather than being deferred to R10.
+Feed-native send/receive/split implementation migration belongs in this phase rather than being
+deferred to R10; only the useful mechanics survive behind the new API.
 
 ### R8 — Single-Pipeline batch execution
 
@@ -668,7 +695,7 @@ Deliver iterative mode:
 Agent packages compose Pipeline + loop + Publisher/Subscription + StateStore rather than creating
 `AgentGraph`/`AgentNetwork` runtime primitives.
 
-### R10 — Final Feed-native compatibility cleanup
+### R10 — Final Feed-native legacy-seam cleanup
 
 **Goal:** finish and prove the migration rather than begin it here.
 
@@ -676,8 +703,8 @@ By R10, migrations that naturally belonged to earlier runtime capabilities have 
 
 ```text
 R5A  ordinary streaming transforms/reducers where otherwise ready
-R5C  streaming write
-R7   send/receive compatibility streaming + bounded split
+R5C  streaming WriteNode + removal of the legacy Python write module
+R7   publish/subscribe runtime + removal of send/receive modules + bounded split
 R8   batch representation optimization
 ```
 
@@ -686,7 +713,7 @@ R10 therefore owns:
 - remaining eligible source/composer/module migrations;
 - final removal/minimization of the legacy whole-source materialization seam;
 - sync/async laziness/order/memory/side-effect timing parity audit;
-- cleanup of compatibility-only shims made obsolete by the final execution envelope;
+- cleanup of transitional/internal shims made obsolete by the final execution envelope;
 - proof that genuinely eager operators (`sort`, `reverse`, etc.) are the only intentional
   materialization points.
 
@@ -766,14 +793,16 @@ Prove the architecture with at least one external extension package before freez
 - declared Resource dependency;
 - sync-only or async-only implementation adapted in the opposite execution mode;
 - external Publisher/Subscription or StateStore implementation;
-- generated P9 discoverability includes the extension;
+- generated P9 discoverability includes the extension and contains no removed `Sinks`/legacy-module
+  surface;
 - no core edit required.
 
 Operations as Code scaffolding may provide an additional ecosystem proof, but it does not replace the
 Core external-extension proof above; Core 1.0 must remain independently extensible without requiring
 `riko-ops`.
 
-Then run the release-readiness wheel, typing, docs, optional-dependency, and public-surface gates.
+Then run the release-readiness wheel, typing, docs, optional-dependency, public-surface, and Workflow
+v1-cutoff gates.
 
 ## 4a. Contracts that are not frozen yet
 
@@ -796,7 +825,8 @@ After R0/R1:
 - R2A encoding work and most R3 Context/Resource definition work may proceed in parallel if their
   shared `identity_encoder` interface is kept narrow. R2B may proceed beside both;
 - remaining P9 generated discoverability work can proceed independently of R2A/R2B/R3/R4A, provided
-  stubs target final `Pipeline` names only when R4A is available;
+  stubs target final `Pipeline` names only when R4A is available and do not preserve the old `Sinks`
+  bucket;
 - CLI command registry/Click plugin mechanics can proceed independently, but execution commands must
   wait for R4B.
 
@@ -830,7 +860,7 @@ R0 is deliberately small and low-risk:
 2. add characterization tests for resolver native selection and source normalization;
 3. add the failing desired-behavior test for R2A omitted-vs-`None` semantics;
 4. add characterization tests around current pub/sub lifecycle;
-5. make no public runtime change yet.
+5. make no released public runtime change yet.
 
 After R0, R1/R2A/R2B/R3 can proceed without fighting the public `Pipeline` class name or relying on
 unrecorded legacy behavior. R11A is **not** permission to jump around those prerequisites; it is the
@@ -840,33 +870,39 @@ first Operations as Code slice once the owning lower-level seams exist.
 
 The implementation reconciliation is complete when:
 
-1. `Pipeline` is the only target public pipeline definition;
+1. `Pipeline` is the only target public pipeline definition and the old Pipe/Collection classes are
+   absent rather than wrapped;
 2. authoring forms normalize once to a strict canonical Workflow v2 definition consumed by
    serialization, validation, compilation, and execution;
-3. each iteration creates independent private execution state;
-4. Context contains immutable definitions, never live runtime handles;
-5. all durable identity/fingerprints/idempotency/checkpoints share one canonical encoder, and durable
+3. during 0.x released Workflow v1 input migrates only at the loader boundary, and normal 1.0
+   runtime loading is v2-only;
+4. each iteration creates independent private execution state;
+5. Context contains immutable definitions, never live runtime handles;
+6. all durable identity/fingerprints/idempotency/checkpoints share one canonical encoder, and durable
    semantics rest on explicit `version=` rather than on automatic callable introspection being
    complete;
-6. resource lifetime is context-manager based, and every execution-spawned task and context-managed
+7. resource lifetime is context-manager based, and every execution-spawned task and context-managed
    component is owned by the execution's task group and exit stack;
-7. cache replay uses the finalized Mezmoize-backed CacheNode contract and never publishes an
+8. cache replay uses the finalized Mezmoize-backed CacheNode contract and never publishes an
    incomplete fill;
-8. `write`/actions pass records through and report completion through the common EventSink; no public
-   `sink()` terminal survives in the target API;
-9. StateStore is the one persistence protocol and all writes are CAS-protected;
-10. pub/sub/split lifecycle is execution-owned, bounded, and derived from canonical topology rather
-    than hidden DONE/PENDING bookkeeping;
-11. batch mode does not create a second pipeline hierarchy, and representation is negotiated by
+9. `write`/actions pass records through and report completion through the common EventSink; the
+   legacy Python `write` module and unreleased `sink()` surface are absent;
+10. StateStore is the one persistence protocol and all writes are CAS-protected;
+11. pub/sub/split lifecycle is execution-owned, bounded, and derived from canonical topology rather
+    than hidden DONE/PENDING bookkeeping; legacy `send`/`receive` modules are absent and subscriber
+    `func=` retains its receive/materialization-time semantics;
+12. batch mode does not create a second pipeline hierarchy, and representation is negotiated by
     capability/cost rather than by a global backend ranking;
-12. iterative behavior extends the existing loop module and is activated by `until`/
+13. iterative behavior extends the existing loop module and is activated by `until`/
     `max_iterations`, while the default preserves current one-run semantics;
-13. Feed-native migration happens with its owning runtime phases and R10 leaves only genuinely eager
+14. Feed-native migration happens with its owning runtime phases and R10 leaves only genuinely eager
     materialization points;
-14. external packages can use resources/state/pubsub/targets/actions without core changes;
-15. Operations as Code scaffolding lives outside Core and composes provider/capability/orchestration
+15. generated discovery contains module `Sources`/`Transforms` plus separate `Targets`/`Formats`,
+    with no `Sinks` compatibility bucket;
+16. external packages can use resources/state/pubsub/targets/actions without core changes;
+17. Operations as Code scaffolding lives outside Core and composes provider/capability/orchestration
     owners without duplicate contracts;
-16. the SuperOps→GitHub Actions and Autopilot fixtures prove import/deploy and
+18. the SuperOps→GitHub Actions and Autopilot fixtures prove import/deploy and
     plan/approval/wait/verify composition respectively;
-17. the release docs and generated public surface contain none of the superseded abstractions listed
+19. the release docs and generated public surface contain none of the superseded abstractions listed
     in §2.
