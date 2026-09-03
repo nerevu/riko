@@ -8,41 +8,65 @@ Migrating riko
 API Stability
 -------------
 
-riko follows semantic versioning for its stable application and extension
-surfaces. ``riko.bado`` is additionally documented as the supported async-runtime
-namespace.
+riko follows semantic versioning for the supported public surfaces listed below.
+A module's ``__all__`` defines the public names exported by that module; it does
+**not** by itself define the complete set of supported modules or namespaces.
 
 Tiers
 ^^^^^
 
-Stable: ``riko`` / ``riko.api``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Stable application API: ``riko``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The stable application-facing API is everything listed in ``riko.__all__``, mirrored by
-``riko.api.__all__``. Breaking changes to this surface require the corresponding SemVer
+The top-level application-facing facade is everything listed in ``riko.__all__``.
+It includes the pipe/collection API, compiler API, module-discovery API, public
+exceptions and context types, path/temp-file helpers, and the promoted async
+runtime helpers. Breaking changes to these names require the corresponding SemVer
 treatment. The current export list is intentionally not duplicated here.
 
-Extension: ``riko.ext``
-~~~~~~~~~~~~~~~~~~~~~~~
+Stable typing API: ``riko.types``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``riko.types`` is the supported typing surface for applications and extension
+code. Its package exports are stable. The non-underscored typing submodules
+``riko.types.modules`` and ``riko.types.compile`` are also supported import paths.
+Underscore-prefixed modules under ``riko.types`` are implementation typing
+machinery and are private. Export lists are intentionally not duplicated here.
+
+Extension API: ``riko.ext``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``riko.ext`` is the supported API for module and integration authors. Its current
-membership is defined by ``riko.ext.__all__`` and includes decorators, module metadata
-and naming types, parsed configuration types, parser/wrapper protocols, and registry
-interfaces. The export list is intentionally not duplicated here.
+membership is defined by ``riko.ext.__all__`` and includes decorators, module
+metadata and naming types, parsed configuration types, parser/wrapper protocols,
+and registry interfaces. Non-underscored submodules beneath ``riko.ext`` are part
+of the extension surface; underscore-prefixed modules are private. The export list
+is intentionally not duplicated here.
 
-Async runtime: ``riko.bado``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Module catalog API: ``riko.modules``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``riko.modules`` is a supported secondary namespace for built-in module discovery,
+metadata, and the module decorators it re-exports. Its ``__all__`` is protected by
+SemVer; extension authors should prefer ``riko.ext`` for authoring contracts.
+Individual implementation modules beneath ``riko.modules`` are not made stable by
+this guarantee unless they are documented separately.
+
+Async runtime API: ``riko.bado``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``riko.bado`` is the supported async-runtime namespace. Its current membership is
 defined by ``riko.bado.__all__``; every exported name is also re-exported from the
 top-level ``riko``. The export list is intentionally not duplicated here.
 
-Private implementation
-~~~~~~~~~~~~~~~~~~~~~~
+Private and unspecified modules
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Underscore-prefixed names and modules are implementation details unless they are
-explicitly re-exported through a supported namespace. They carry no independent
-compatibility guarantee.
+Any import path containing an underscore-prefixed module or name is an
+implementation detail unless that name is explicitly re-exported through a
+supported namespace. Other non-underscored modules may remain importable for
+compatibility, but they carry no SemVer guarantee unless listed above or
+explicitly documented as public.
 
 Marker
 ^^^^^^
@@ -50,7 +74,7 @@ Marker
 riko ships a ``py.typed`` marker, so type checkers treat it as a typed dependency.
 
 Compatibility during refactors
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 After 1.0 release, names that move will keep a re-export at their old import path for at
 least one minor release; behavior-changing removals will be listed in `CHANGES`_.
