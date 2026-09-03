@@ -89,7 +89,9 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchtable")
-    r = await async_url_open(url, encoding=objconf.encoding)
+    r = await async_url_open(
+        url, encoding=objconf.encoding, user_agent=objconf.user_agent
+    )
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
     source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
@@ -132,7 +134,7 @@ def parser(
     url: str = require_conf(objconf, "url", "fetchtable")
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
-    f = Fetch(url, encoding=objconf.encoding)
+    f = Fetch(url, encoding=objconf.encoding, user_agent=objconf.user_agent)
     source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     ext = splitext(url)[1]
@@ -155,6 +157,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             delimiter (str): Field delimiter (default: ",").
             quotechar (str): Quote character (default: '"').
             encoding (str): File encoding (default: "utf-8").
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
             has_header (bool): Whether the first row names the columns. When
                 False the source is buffered so it can be read twice
@@ -220,6 +223,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             delimiter (str): Field delimiter (default: ",").
             quotechar (str): Quote character (default: '"').
             encoding (str): File encoding (default: "utf-8").
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
             has_header (bool): Whether the first row names the columns. When
                 False the source is buffered so it can be read twice

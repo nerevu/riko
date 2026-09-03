@@ -76,7 +76,9 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchtext")
-    f = await async_url_open(url, encoding=objconf.encoding)
+    f = await async_url_open(
+        url, encoding=objconf.encoding, user_agent=objconf.user_agent
+    )
     return auto_close(map(str.strip, f), f)
 
 
@@ -109,7 +111,7 @@ def parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchtext")
-    f = Fetch(url, encoding=objconf.encoding)
+    f = Fetch(url, encoding=objconf.encoding, user_agent=objconf.user_agent)
     return auto_close(map(str.strip, f), f)
 
 
@@ -125,6 +127,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
             url (str): The file to fetch, local or remote. Required.
             encoding (str): File encoding (default: "utf-8").
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 
@@ -171,6 +174,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
             url (str): The file to fetch, local or remote. Required.
             encoding (str): File encoding (default: "utf-8").
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 

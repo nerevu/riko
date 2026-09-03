@@ -85,7 +85,9 @@ async def async_parser(
     path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
     # TODO: Figure out if html/xml files should be parsed as binary too.
     binary = ext == "json"
-    f = await async_url_open(url, encoding=objconf.encoding, binary=binary)
+    f = await async_url_open(
+        url, encoding=objconf.encoding, binary=binary, user_agent=objconf.user_agent
+    )
     ext = ext or getattr(f, "ext", None) or ""
     content = any2dict(f, ext, objconf.html5, path=path)
     return auto_close(content, f)
@@ -127,7 +129,12 @@ def parser(
     paths = cast(list[str], listize(objconf.path))
     path = ".".join(paths)
 
-    with Fetch(url, encoding=objconf.encoding, binary=(ext == "json")) as f:
+    with Fetch(
+        url,
+        encoding=objconf.encoding,
+        binary=(ext == "json"),
+        user_agent=objconf.user_agent,
+    ) as f:
         ext = ext or f.ext
         content = cast(FileLike, f)
         yield from any2dict(content, ext, objconf.html5, path=path)
@@ -153,6 +160,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             html5 (bool): Whether to use the HTML5 parser (default: False).
 
             encoding (str): File encoding (default: "utf-8").
+
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 
@@ -208,6 +217,8 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             html5 (bool): Whether to use the HTML5 parser (default: False).
 
             encoding (str): File encoding (default: "utf-8").
+
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 

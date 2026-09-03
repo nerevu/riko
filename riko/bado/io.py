@@ -200,13 +200,16 @@ class NamedTextIOWrapper(TextIOWrapper):
         return ext_from_content_type(self.content_type)
 
 
-async def _read_bytes(url: str, timeout: float) -> tuple[bytes, str, str | None]:
+async def _read_bytes(
+    url: str, timeout: float, user_agent: str | None = None
+) -> tuple[bytes, str, str | None]:
     """
     Reads a resource as raw bytes over HTTP or from the local filesystem.
 
     Args:
         url: An ``http(s)`` URL or a local path, optionally ``file://``-prefixed.
         timeout: The HTTP request timeout in seconds (ignored for local reads).
+        user_agent: HTTP user agent override; unset uses riko's default.
 
     Returns:
         The content bytes, a name (the URL for HTTP, the ``file://``-stripped
@@ -214,7 +217,7 @@ async def _read_bytes(url: str, timeout: float) -> tuple[bytes, str, str | None]
 
     """
     if url.startswith("http"):
-        response = await async_get(url, timeout=timeout)
+        response = await async_get(url, timeout=timeout, user_agent=user_agent)
         content_type = response.headers.get("content-type")
         result = (response.content, url, content_type)
     else:
@@ -259,6 +262,7 @@ def async_url_open(  # noqa: E704
     encoding: str = ...,
     *,
     binary: Literal[True],
+    user_agent: str | None = None,
     **_: object,
 ) -> _AsyncURLStream[BytesIO]: ...
 @overload  # noqa: E302
@@ -267,6 +271,7 @@ def async_url_open(  # noqa: E704
     timeout: float = ...,
     encoding: str = ...,
     binary: Literal[False] = ...,
+    user_agent: str | None = None,
     **_: object,
 ) -> _AsyncURLStream[NamedTextIOWrapper]: ...
 def async_url_open(  # noqa: E302
@@ -274,6 +279,7 @@ def async_url_open(  # noqa: E302
     timeout: float = 0,
     encoding: str = ENCODING,
     binary: bool = False,
+    user_agent: str | None = None,
     **_: object,
 ) -> _AsyncURLStream[BytesIO | NamedTextIOWrapper]:
     """
@@ -295,6 +301,7 @@ def async_url_open(  # noqa: E302
         timeout: The HTTP request timeout in seconds; ``0`` means no timeout.
         encoding: The text decoding used when ``binary`` is False.
         binary: Whether to return raw bytes rather than decoded text.
+        user_agent: HTTP user agent override; unset uses riko's default.
 
     Returns:
         A handle whose buffer is a ``BytesIO`` when ``binary`` is True, else a
@@ -315,7 +322,7 @@ def async_url_open(  # noqa: E302
     """
 
     async def opener() -> BytesIO | NamedTextIOWrapper:
-        data, name, content_type = await _read_bytes(url, timeout)
+        data, name, content_type = await _read_bytes(url, timeout, user_agent)
 
         if binary:
             f: BytesIO | NamedTextIOWrapper = BytesIO(data)
@@ -330,7 +337,11 @@ def async_url_open(  # noqa: E302
 
 
 async def async_url_read(
-    url: str, timeout: float = 0, encoding: str = ENCODING, **_: object
+    url: str,
+    timeout: float = 0,
+    encoding: str = ENCODING,
+    user_agent: str | None = None,
+    **_: object,
 ) -> str:
     """
     Reads a URL or local file in full.
@@ -339,6 +350,7 @@ async def async_url_read(
         url: An ``http(s)`` URL or a local path; resolved to an absolute path.
         timeout: The HTTP request timeout in seconds; ``0`` means no timeout.
         encoding: The text decoding used for local reads.
+        user_agent: HTTP user agent override; unset uses riko's default.
 
     Returns:
         The full resource contents as text.
@@ -357,7 +369,7 @@ async def async_url_read(
     url = get_abspath(url, offline=True)
 
     if url.startswith("http"):
-        response = await async_get(url, timeout=timeout)
+        response = await async_get(url, timeout=timeout, user_agent=user_agent)
         content = response.text
     else:
         content = await async_read(url, encoding=encoding)

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, cast
 
 import pygogo as gogo
 
-from riko._io import Fetch, auto_close
+from riko._io import Fetch, auto_close, resolve_user_agent
 from riko.bado.io import async_url_open
 from riko.parsers import LinkParser
 from riko.types._io import StringFileLike
@@ -62,6 +62,7 @@ async def async_get_rss(
     link_type: str | Iterable[str] | None = None,
     convert_charrefs: bool = False,
     auto_sort: bool = False,
+    user_agent: str | None = None,
     **kwargs: bool,
 ) -> Stream:
     try:
@@ -72,7 +73,7 @@ async def async_get_rss(
         parser = RSSLinkParser(link_type=link_type, **kwargs)
 
     try:
-        f = await async_url_open(url, timeout=TIMEOUT)
+        f = await async_url_open(url, timeout=TIMEOUT, user_agent=user_agent)
     except ValueError:
         entries = file2entries(filter(None, url.splitlines()), parser)
     else:
@@ -90,6 +91,7 @@ def get_rss(
     link_type: str | Iterable[str] | None = None,
     convert_charrefs: bool = False,
     auto_sort: bool = False,
+    user_agent: str | None = None,
     **kwargs: bool,
 ) -> Stream:
     try:
@@ -100,7 +102,7 @@ def get_rss(
         parser = RSSLinkParser(link_type=link_type, **kwargs)
 
     try:
-        f = Fetch(url, timeout=TIMEOUT)
+        f = Fetch(url, timeout=TIMEOUT, user_agent=resolve_user_agent(user_agent))
     except ValueError:
         entries = file2entries(filter(None, url.splitlines()), parser)
     else:

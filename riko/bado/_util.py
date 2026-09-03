@@ -14,6 +14,7 @@ from functools import partial
 from inspect import isawaitable
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
+from riko._io import resolve_user_agent
 from riko.types._sentinels import MISSING
 
 try:
@@ -26,15 +27,22 @@ if TYPE_CHECKING:
     from httpx import Response
 
 
-async def async_get(url: str, **kwargs: Any) -> "Response":
+async def async_get(
+    url: str, user_agent: str | None = None, **kwargs: Any
+) -> "Response":
     """
     Fetches ``url`` via httpx and follows redirects.
 
     A ``timeout`` of ``0`` means no timeout, which mirrors the sync backend.
+    ``user_agent`` overrides riko's default HTTP user agent when set.
 
     """
     if kwargs.get("timeout") == 0:
         kwargs["timeout"] = None
+
+    headers = dict(kwargs.pop("headers", {}) or {})
+    headers["User-Agent"] = resolve_user_agent(user_agent)
+    kwargs["headers"] = headers
 
     async with httpx.AsyncClient(follow_redirects=True) as client:
         return await client.get(url, **kwargs)

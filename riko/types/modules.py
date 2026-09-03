@@ -130,7 +130,11 @@ class RegexRule(TypedDict):
 
 
 # Raw
-class FetchRawConf(TypedDict):
+class _HttpRawConf(TypedDict, total=False):
+    user_agent: Value
+
+
+class FetchRawConf(_HttpRawConf):
     url: Value | list[Value]
     offline: NotRequired[Value]
 
@@ -185,7 +189,7 @@ class CountRawConf(TypedDict, total=False):
     count_key: Value
 
 
-class CsvRawConf(TypedDict):
+class CsvRawConf(_HttpRawConf):
     url: Value | list[Value]
     delimiter: NotRequired[Value]
     quotechar: NotRequired[Value]
@@ -209,7 +213,7 @@ class DateFormatRawConf(TypedDict, total=False):
     timezone: Value
 
 
-class ExchangeRateRawConf(TypedDict, total=False):
+class ExchangeRateRawConf(_HttpRawConf, total=False):
     url: Value | list[Value]
     param: Value
     currency: Value
@@ -217,19 +221,19 @@ class ExchangeRateRawConf(TypedDict, total=False):
     precision: Value
 
 
-class FeedAutoDiscoveryRawConf(TypedDict):
+class FeedAutoDiscoveryRawConf(_HttpRawConf):
     url: Value | list[Value]
     strict: NotRequired[Value]
     sort: NotRequired[Value]
 
 
-class FetchDataRawConf(TypedDict):
+class FetchDataRawConf(_HttpRawConf):
     url: Value | list[Value]
     path: NotRequired[Value]
     html5: NotRequired[Value]
 
 
-class FetchPageRawConf(TypedDict):
+class FetchPageRawConf(_HttpRawConf):
     url: Value | list[Value]
     start: NotRequired[Value]
     end: NotRequired[Value]
@@ -237,11 +241,11 @@ class FetchPageRawConf(TypedDict):
     detag: NotRequired[Value]
 
 
-class FetchSiteFeedRawConf(TypedDict):
+class FetchSiteFeedRawConf(_HttpRawConf):
     url: Value | list[Value]
 
 
-class FetchTableRawConf(TypedDict):
+class FetchTableRawConf(_HttpRawConf):
     url: Value | list[Value]
     delimiter: NotRequired[Value]
     quotechar: NotRequired[Value]
@@ -253,7 +257,7 @@ class FetchTableRawConf(TypedDict):
     col_names: NotRequired[Value]
 
 
-class FetchTextRawConf(TypedDict):
+class FetchTextRawConf(_HttpRawConf):
     url: Value | list[Value]
     encoding: NotRequired[Value]
 
@@ -431,7 +435,7 @@ class UrlParseRawConf(TypedDict, total=False):
     parse_key: Value
 
 
-class XpathFetchPageRawConf(TypedDict):
+class XpathFetchPageRawConf(_HttpRawConf):
     url: Value | list[Value]
     xpath: NotRequired[Value]
     html5: NotRequired[Value]
@@ -605,7 +609,11 @@ class InputConf(TypedDict, total=False):
     input_key: str
 
 
-class FetchConf(TypedDict, total=False):
+class _HttpConf(TypedDict, total=False):
+    user_agent: str
+
+
+class FetchConf(_HttpConf, total=False):
     url: str
     encoding: str = "utf-8"
 
@@ -642,7 +650,7 @@ class CountConf(TypedDict, total=False):
     count_key: str | None
 
 
-class CsvConf(TypedDict, total=False):
+class CsvConf(_HttpConf, total=False):
     url: Required[str]
     encoding: str = "utf-8"
     col_names: NotRequired[Sequence[str] | None]
@@ -664,7 +672,7 @@ class DateFormatConf(TypedDict, total=False):
     format: str = "%m/%d/%Y %H:%M:%S"
 
 
-class ExchangeRateConf(TypedDict, total=False):
+class ExchangeRateConf(_HttpConf, total=False):
     url: str
     param: dict[str, str]
     currency: str = "USD"
@@ -673,20 +681,20 @@ class ExchangeRateConf(TypedDict, total=False):
     precision: int = 6
 
 
-class FeedAutoDiscoveryConf(TypedDict, total=False):
+class FeedAutoDiscoveryConf(_HttpConf, total=False):
     url: Required[str]
     strict: bool = True
     sort: bool = False
 
 
-class FetchDataConf(TypedDict):
+class FetchDataConf(_HttpConf):
     url: str
     encoding: NotRequired[str]
     path: NotRequired[str]
     html5: NotRequired[bool]
 
 
-class FetchPageConf(TypedDict, total=False):
+class FetchPageConf(_HttpConf, total=False):
     url: Required[str]
     encoding: NotRequired[str]
     start: NotRequired[str]
@@ -695,7 +703,7 @@ class FetchPageConf(TypedDict, total=False):
     detag: bool = False
 
 
-class FetchSiteFeedConf(TypedDict):
+class FetchSiteFeedConf(_HttpConf):
     url: str
 
 
@@ -703,7 +711,7 @@ class FetchTableConf(CsvConf, total=False):
     sanitize: bool = True
 
 
-class FetchTextConf(TypedDict, total=False):
+class FetchTextConf(_HttpConf, total=False):
     url: Required[str]
     encoding: str = "utf-8"
 
@@ -847,7 +855,7 @@ class WriteConf(TypedDict, total=False):
     mode: str = "wb+"
 
 
-class XpathFetchPageConf(TypedDict, total=False):
+class XpathFetchPageConf(_HttpConf, total=False):
     url: Required[str]
     xpath: str
     encoding: str = "utf-8"

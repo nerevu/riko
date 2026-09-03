@@ -59,7 +59,7 @@ async def async_parser(
     Args:
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`.
+        objconf: The pipe configuration, containing `url` and `user_agent`.
 
     Returns:
         Feed entries, or nothing when the page advertises no feed.
@@ -81,13 +81,15 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchsitefeed")
-    rss = await autorss.async_get_rss(url)
+    rss = await autorss.async_get_rss(url, user_agent=objconf.user_agent)
 
     if (first := next(rss, None)) is None:
         logger.warning(f"No feed found at {url}")
         entries = []
     else:
-        content = await async_url_read(str(first["link"]))
+        content = await async_url_read(
+            str(first["link"]), user_agent=objconf.user_agent
+        )
         entries = parse_rss(content=content)
 
     return augment_entries(entries)
@@ -102,7 +104,7 @@ def parser(
     Args:
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`.
+        objconf: The pipe configuration, containing `url` and `user_agent`.
 
     Returns:
         Feed entries, or nothing when the page advertises no feed.
@@ -121,13 +123,13 @@ def parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchsitefeed")
-    rss = autorss.get_rss(url)
+    rss = autorss.get_rss(url, user_agent=objconf.user_agent)
 
     if (first := next(rss, None)) is None:
         logger.warning(f"No feed found at {url}")
         entries = []
     else:
-        entries = parse_rss(str(first["link"]))
+        entries = parse_rss(str(first["link"]), user_agent=objconf.user_agent)
 
     return augment_entries(entries)
 
@@ -143,6 +145,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         conf (dict): The pipe configuration.
 
             url (str): The page to examine, local or remote. Required.
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 
@@ -190,6 +193,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         conf (dict): The pipe configuration.
 
             url (str): The page to examine, local or remote. Required.
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 

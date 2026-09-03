@@ -108,8 +108,8 @@ async def async_parser(
     Args:
         base: The currency being exchanged from.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `param`, `currency`
-            and `precision`.
+        objconf: The pipe configuration, containing `url`, `param`, `currency`,
+            `precision` and `user_agent`.
 
     Returns:
         The rate, ``1`` when both currencies match, or ``Decimal("NaN")`` when
@@ -139,10 +139,12 @@ async def async_parser(
     if same_currency:
         rate = Decimal(1)
     elif objconf.url.startswith("http"):
-        r = await async_get(objconf.url, params=objconf.param)
+        r = await async_get(
+            objconf.url, params=objconf.param, user_agent=objconf.user_agent
+        )
         rates = await async_json(r)
     else:
-        content = await async_url_read(objconf.url)
+        content = await async_url_read(objconf.url, user_agent=objconf.user_agent)
         rates = cast(dict[str, Any], loads(content).get("rates", {}))
 
     if rates and not same_currency:
@@ -162,8 +164,8 @@ def parser(
     Args:
         base: The currency being exchanged from.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `param`, `currency`
-            and `precision`.
+        objconf: The pipe configuration, containing `url`, `param`, `currency`,
+            `precision` and `user_agent`.
 
     Returns:
         The rate, ``1`` when both currencies match, or ``Decimal("NaN")`` when
@@ -188,7 +190,12 @@ def parser(
     if base == objconf.currency:
         rate = Decimal(1)
     else:
-        with Fetch(objconf.url, encoding=objconf.encoding, params=objconf.param) as f:
+        with Fetch(
+            objconf.url,
+            encoding=objconf.encoding,
+            params=objconf.param,
+            user_agent=objconf.user_agent,
+        ) as f:
             json = load(f)
 
             if rates := json.get("rates", {}):
@@ -221,6 +228,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
             precision (int): Decimal places to round the rate to (default: 6).
             memoize (bool): Whether to cache the API response (default: True).
             encoding (str): Response encoding (default: "utf-8").
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 
@@ -281,6 +289,7 @@ def pipe(*args: Any, **kwargs: object) -> Decimal:
             precision (int): Decimal places to round the rate to (default: 6).
             memoize (bool): Whether to cache the API response (default: True).
             encoding (str): Response encoding (default: "utf-8").
+            user_agent (str): HTTP User-Agent override; unset uses riko's default.
 
         context (Context): the execution context
 

@@ -50,7 +50,11 @@ class InputObjconf(DynamicConf):
     input_key: str
 
 
-class FetchObjconf(DynamicConf):
+class _HttpObjconf(DynamicConf):
+    user_agent: str
+
+
+class FetchObjconf(_HttpObjconf):
     url: str
     encoding: str
 
@@ -87,7 +91,7 @@ class CountObjconf(DynamicConf):
     count_key: str | None
 
 
-class CsvObjconf(DynamicConf):
+class CsvObjconf(_HttpObjconf):
     url: str
     encoding: str
     col_names: Sequence[str] | None
@@ -109,7 +113,7 @@ class DateFormatObjconf(DynamicConf):
     format: str
 
 
-class ExchangeRateObjconf(DynamicConf):
+class ExchangeRateObjconf(_HttpObjconf):
     url: str
     param: dict[str, str]
     currency: str
@@ -118,20 +122,20 @@ class ExchangeRateObjconf(DynamicConf):
     precision: int
 
 
-class FeedAutoDiscoveryObjconf(DynamicConf):
+class FeedAutoDiscoveryObjconf(_HttpObjconf):
     url: str
     strict: bool
     sort: bool
 
 
-class FetchDataObjconf(DynamicConf):
+class FetchDataObjconf(_HttpObjconf):
     url: str
     encoding: str
     path: str
     html5: bool
 
 
-class FetchPageObjconf(DynamicConf):
+class FetchPageObjconf(_HttpObjconf):
     url: str
     encoding: str
     start: str
@@ -140,7 +144,7 @@ class FetchPageObjconf(DynamicConf):
     detag: bool
 
 
-class FetchSiteFeedObjconf(DynamicConf):
+class FetchSiteFeedObjconf(_HttpObjconf):
     url: str
 
 
@@ -148,7 +152,7 @@ class FetchTableObjconf(CsvObjconf):
     sanitize: bool
 
 
-class FetchTextObjconf(DynamicConf):
+class FetchTextObjconf(_HttpObjconf):
     url: str
     encoding: str
 
@@ -292,7 +296,7 @@ class WriteObjconf(DynamicConf):
     mode: str
 
 
-class XpathFetchPageObjconf(DynamicConf):
+class XpathFetchPageObjconf(_HttpObjconf):
     url: str
     xpath: str
     encoding: str
