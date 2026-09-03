@@ -9,6 +9,7 @@
 > * Feed-native parser inference / `parser_mode` escape hatch -> `callable-pipes.md`;
 > * Pipeline batch semantics/backend negotiation -> `execution-semantics.md`;
 > * public fan-out/subscription semantics -> `fanout-topology.md`;
+> * canonical Workflow v2 structure/ordering -> `implementation-sequence.md` + `extensibility.md`;
 > * AnyIO helper/version audit -> `bado-anyio-alignment.md`;
 > * serialized streaming codecs -> `artifact-conversion.md`.
 
@@ -27,25 +28,37 @@ Acceptance target:
 > the legacy materialization seam is reached only by genuinely eager legacy operators or
 > extensions, not ordinary streaming composers/reducers.
 
+Feed-native migration is **incremental across the forward implementation sequence**. It does not
+wait wholesale for R10. Once the runtime capability a module needs is stable, that module may migrate:
+
+```text
+R5A  ordinary transforms/reducers using the final _FeedItem envelope
+R5C  streaming write/effect path
+R7   send/receive compatibility streaming + bounded split
+R8   batch representation optimization
+R10  remaining legacy-seam cleanup and parity proof
+```
+
 ## 2. Per-module migration audit
 
-| Pipe | Priority | Feed-native approach | Memory/output effect |
+| Pipe | Priority | Feed-native approach | Natural owner |
 |---|:---:|---|---|
-| `truncate` | A | async islice-equivalent | lazy, stops upstream early |
-| `union` | A | async chain-equivalent | lazy sequential concatenation; preserves each input provenance |
-| `filter` | A | native `async for` over rule engine | lazy |
-| `uniq` | A | `async for` + bounded deque | O(limit) |
-| `tail` | A | `async for` + `deque(maxlen=count)` | EOF-before-output, O(count) |
-| `count` | A | incremental accumulator | O(1) or O(groups) |
-| `sum` | A | incremental accumulator | O(1) or O(groups) |
-| compatibility `receive` | A / fanout owner | yield directly from subscription/feed | incremental; public target is `subscribe` |
-| compatibility `send` | A / fanout owner | publish then pass item through | incremental; public target is `publish` |
-| `timeout` | A | cancellation/deadline around awaited next item | bounds stalled `anext()` |
-| `split` | A/B | execution-owned bounded branch channels | bounded lossless fan-out |
-| `forever` | B | native async repeat/source | unbounded source |
-| `join` | B/C | incremental/hash strategy where semantics permit | preserve exact contributor provenance |
-| `sort` | C | collect then sort | inherently eager |
-| `reverse` | C | collect then reverse | inherently eager |
+| `truncate` | A | async islice-equivalent; lazy, stops upstream early | R5A+ |
+| `union` | A | async chain-equivalent; preserves input provenance | R5A+ |
+| `filter` | A | native `async for` over rule engine | R5A+ |
+| `uniq` | A | `async for` + bounded deque | R5A+ |
+| `tail` | A | `async for` + `deque(maxlen=count)` | R5A+ |
+| `count` | A | incremental accumulator | R5A+ |
+| `sum` | A | incremental accumulator | R5A+ |
+| `timeout` | A | cancellation/deadline around awaited next item | R5A+ / execution |
+| compatibility `receive` | A | yield directly from subscription/feed | R7 |
+| compatibility `send` | A | publish then pass item through | R7 |
+| `split` | A/B | execution-owned bounded branch channels | R7 |
+| `write` | A/B | bounded effect writer over `WriteNode` | R5C |
+| `forever` | B | native async repeat/source | R10 if not earlier |
+| `join` | B/C | incremental/hash strategy where semantics permit | R10 if not earlier |
+| `sort` | C | collect then sort | intentionally eager |
+| `reverse` | C | collect then reverse | intentionally eager |
 
 The target is semantic sync/async parity, not replacing every helper with AnyIO.
 
@@ -79,18 +92,22 @@ Only reachable/used outputs become active. Unused outputs allocate no queue and 
 backpressure. Active branches are lossless. Default buffer size is zero/rendezvous; bounded
 non-zero buffers may be supported but split never has a lossy/drop overflow mode.
 
+Canonical Workflow v2 still represents split as an ordinary multi-output `ModuleNode` with
+`out`, `out:1`, `out:2`, ... ports. Runtime queues are execution state, not serialized graph objects.
+
 The runtime provides observable branch isolation and chooses the cheapest safe copy/share
 strategy. There is no public copy-mode override initially.
 
-This section implements the semantics owned by `fanout-topology.md` /
-`execution-semantics.md`; it does not define a second split contract.
+This section implements semantics owned by `fanout-topology.md` / `execution-semantics.md`; it does
+not define a second split contract.
 
-## 5. Streaming `write` is a on_receive/passthrough side effect
+## 5. Streaming `write` is a passthrough effect
 
 `write` emits each logical value unchanged after performing its side effect; it is not a
-whole-stream terminal by definition.
+whole-stream terminal by definition. In the target graph it is a `WriteNode`, not a public module and
+not a desugared subscription callback.
 
-Incremental codec interface remains useful:
+Incremental codec interfaces remain useful:
 
 ```python
 class StreamEncoder(Protocol):
@@ -106,9 +123,13 @@ A writer may use bounded internal chunks while preserving Pipeline semantics. De
 file atomicity can use temp-write + flush/fsync/close + atomic replace where appropriate.
 Failure removes the temp artifact and does not publish it as successful.
 
-Incremental downstream delivery cannot roll back downstream side effects if a later write
-fails. Retry/resume correctness therefore relies on the common side-effect/idempotency and
-checkpoint/disposition rules from `execution-semantics.md`.
+Successful write completion is reported out-of-band through the common `EventSink` as `WriteResult`;
+ordinary records continue downstream unchanged. Incremental downstream delivery cannot roll back
+later downstream side effects if a subsequent write fails, so retry/resume correctness relies on the
+common side-effect/idempotency and checkpoint/disposition rules from `execution-semantics.md`.
+
+There is no separate public `sink()` terminal in the target API. Reconciliation/destructive write
+modes are write semantics of the Target/operation contract; terminality comes from graph position.
 
 ## 6. Internal batching uses the single Pipeline batch contract
 
@@ -119,14 +140,23 @@ There is one public batch model:
 Pipeline(source=source, batch=True, batch_size=1000)
 ```
 
-`batch_size` is invalid without `batch=True`. Batch representation is negotiated using the
-core order:
+`batch_size` is invalid without `batch=True`.
+
+Batch representation follows the execution-semantics capability/cost model, **not** a global
+Arrow/Polars/Pandas ranking:
 
 ```text
-native safe/zero-copy -> Arrow -> Polars -> Pandas -> Python list
+candidates = upstream representations ∩ representations the node accepts
+
+1. keep the current representation when accepted
+2. prefer a zero-copy/interchange-backed candidate
+3. otherwise use the cheapest supported conversion
+4. Python objects are the universal fallback
 ```
 
-A forced unavailable `batch_backend=` raises.
+Equal-cost ties use a documented deterministic order; that order is a tiebreak, not a statement that
+one dataframe library is globally preferred. A forced unavailable/incompatible `batch_backend=`
+raises.
 
 Implementation helpers such as:
 
@@ -184,7 +214,8 @@ is only committable after successful completion of `items`; infinite feeds requi
 incremental checkpoint boundaries.
 
 Per-item provenance remains private in `_FeedItem` and is not surfaced as a second parser
-API.
+API. Fanout transports that envelope so crossing a split/publish boundary does not accidentally
+invent new item identity.
 
 ## 9. Pub/sub migration boundary
 
@@ -196,34 +227,43 @@ events = Pipeline.subscribe("events")
 flow = flow.publish(events)
 ```
 
-Attached local subscription branches are execution-owned; users do not drain them for
-cleanup. Async buffering/backpressure, branch error handling, isolation, multiple publishers,
-and completion semantics remain owned by the fan-out/execution contracts.
+Canonical Workflow v2 represents that relationship as a `PublishEdge` targeting a `SubscribeNode`.
+Attached local subscription branches are execution-owned; users do not drain them for cleanup.
+Async buffering/backpressure, branch error handling, isolation, multiple publishers, and completion
+semantics remain owned by the fan-out/execution contracts.
 
-## 10. Side effects, identity, and checkpoints
+Compatibility streaming work may precede the final object-first API, but it must not harden the old
+DONE/PENDING lifecycle that R7 removes.
 
-Streaming ports must not invent their own replay/checkpoint semantics.
+## 10. Side effects, identity, cache, and checkpoints
 
-* item identity/generation follows the canonical `_FeedItem` propagation rules;
-* side-effecting `write` uses the centrally derived idempotency key where the destination
-  supports it;
-* generic persistence uses `FeedState` / `StateStore` / `.checkpoint()`;
-* CAS conflicts propagate rather than causing an automatic reload/rerun;
-* a streaming port cannot advance committed state beyond a failed required handoff.
+Streaming ports must not invent replay/checkpoint semantics.
+
+- item identity/generation follows canonical `_FeedItem` propagation rules;
+- explicit `Pipeline.cache()` owns replay semantics; ordinary streaming helpers do not cache results;
+- side-effecting `write` uses the centrally derived idempotency key where the destination supports it;
+- generic persistence uses `FeedState` / `StateStore` / `.checkpoint()`;
+- CAS conflicts propagate rather than causing automatic reload/rerun;
+- a streaming port cannot advance committed state beyond a failed required handoff.
 
 ## 11. Implementation order
 
+This local order is subordinate to `implementation-sequence.md`; it records module migration order,
+not a second runtime roadmap:
+
 ```text
 S0  source normalization + Feed-native inference tests
-S1  truncate/filter/union/uniq
-S2  tail/count/sum bounded reducers
+S1  truncate/filter/union/uniq after R5A
+S2  tail/count/sum bounded reducers after R5A
 S3  timeout cancellation around blocked next-item
-S4  fan-out compatibility parser streaming under fanout owner
-S5  bounded split implementation under fanout contract
-S6  StreamEncoder + streaming write
+S4  fan-out compatibility parser streaming under R7
+S5  bounded split implementation under R7
+S6  StreamEncoder + streaming write under R5C
 S7  remaining eligible modules / legacy seam minimization
-S8  Pipeline batch representation optimization
+S8  Pipeline batch representation optimization under R8
 ```
+
+R10 is the final S7-style cleanup/proof, not the first time S1–S6 are attempted.
 
 ## 12. Definition of done
 
@@ -231,10 +271,12 @@ S8  Pipeline batch representation optimization
 2. Inherently EOF-blocking reducers remain bounded-memory where possible.
 3. Sync/async laziness/order/memory/side-effect timing match semantically.
 4. `split()` uses bounded execution-owned branches, not unbounded tee or whole-source copy.
-5. `write` streams through bounded memory and participates in common side-effect/idempotency
-   semantics.
-6. Public batching is only `Pipeline(batch=True, batch_size=...)`; no `BatchPolicy` or
-   `BatchPipe` target remains.
+5. `write` streams through bounded memory, passes records through, emits `WriteResult` through the
+   common EventSink, and participates in common side-effect/idempotency semantics.
+6. Public batching is only `Pipeline(batch=True, batch_size=...)`; no `BatchPolicy` or `BatchPipe`
+   target remains and no global dataframe-backend ranking is documented.
 7. FeedResult metadata/state and private per-item provenance survive streaming ports correctly.
 8. Compatibility `send`/`receive` may remain implementation names, but public docs use
    `publish`/`subscribe`.
+9. Feed-native migration lands with its owning runtime capability; R10 leaves only intentionally
+   eager materialization points and compatibility cleanup.
