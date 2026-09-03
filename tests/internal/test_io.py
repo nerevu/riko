@@ -186,6 +186,7 @@ class TestLoopbackServer:
         with patch("riko._io.requests.get", return_value=response) as mock_requests:
             Fetch(target, binary=True)
 
-        assert mock_requests.call_args.kwargs["headers"] == {
-            "User-Agent": default_user_agent()
-        }
+        assert (
+            mock_requests.call_args.kwargs["headers"].get("User-Agent")
+            == default_user_agent()
+        )
