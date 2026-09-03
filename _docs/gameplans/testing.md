@@ -301,6 +301,33 @@ tests that pin current behavior (to be *updated, not deleted*, when the behavior
 **Remaining.** None — the § 2b regression batch is complete (local repairs fixed, owned rows guarded
 by strict-xfail tripwires, open questions pinned by characterization tests).
 
+## 5b. Execution lifetime proofs (R4)
+
+`implementation-sequence.md` R4 adds a proof obligation that does not fit the existing file map, so
+name its owner now: **functional tests** own the external-resource lifecycle proof, because it needs
+a real client rather than a fixture double.
+
+The matrix is small and deliberately non-negotiable — two resource kinds crossed with two execution
+modes:
+
+| | sync Pipeline execution | async Pipeline execution |
+|---|---|---|
+| `@contextmanager` sync resource | native entry | worker-adapted entry |
+| `@asynccontextmanager` async resource | portal entry | native entry |
+
+Each cell proves eager open, lazy open, mid-execution failure rollback, early consumer abandonment,
+cancellation, and `ExceptionGroup` grouping of multiple cleanup errors.
+
+Two internal drift guards accompany it:
+
+- no execution-spawned task escapes the execution's task group (assert no surviving tasks after
+  teardown, including on the cancellation and abandonment paths);
+- no module, parser, factory, or extension code constructs an event loop, portal, executor, worker
+  thread, or task group. A grep-style guard over `riko/` outside `riko/_execution/` is adequate and
+  cheap.
+
+Both guards belong in `tests/internal/`, since they are drift guards rather than API behavior.
+
 ## 6. Relationship to the P-track
 
 - **P13 exit tests** (see [MILESTONES.md](../MILESTONES.md)) — `public/test_imports.py` (extended

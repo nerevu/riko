@@ -202,17 +202,33 @@ than inventing an independent Polars record model.
 
 ## 10. Batch backend negotiation
 
-Batch representation is graph/capability-aware. The core preference order is:
+Batch representation is negotiated from operator capability and conversion cost. There is no
+global library ranking: Riko does not prefer Arrow over Polars over Pandas as a framework
+opinion, because that ordering encodes a preference most pipelines do not have. A Pandas-native
+graph should stay Pandas; a Polars graph should not convert unless an operator forces it.
+
+Negotiation resolves per boundary:
 
 ```text
-native safe/zero-copy
-→ Arrow
-→ Polars
-→ Pandas
-→ Python list
+candidates = upstream representations ∩ representations the node accepts
 ```
 
-This is a preference order, not a requirement to install every backend.
+then chooses:
+
+1. the current representation, when the node accepts it;
+2. a zero-copy/interchange-backed candidate;
+3. the cheapest supported conversion, by declared conversion cost;
+4. Python objects as the universal fallback.
+
+Equal-cost ties resolve through a documented stable order so identical graphs negotiate
+identically across processes. Arrow's role is unchanged in practice — it is usually the
+cheapest zero-copy bridge between frame libraries, so cost-based negotiation picks it where it
+genuinely is the efficient path — but it wins by measured cost, not by rank.
+
+Nodes declare accepted representations and conversion costs as ordinary execution metadata. A
+node accepting anything imposes no conversion. A node accepting one representation forces one
+conversion at its own boundary, not across the whole graph. Installing every backend is never
+required.
 
 An explicit:
 
@@ -220,8 +236,11 @@ An explicit:
 batch_backend = "arrow"
 ```
 
-forces the requested supported backend. If unavailable/incompatible, raise rather than
-silently choosing another forced representation.
+forces the requested supported backend for the execution. If unavailable/incompatible, raise
+rather than silently choosing another forced representation.
+
+`execution-semantics.md` §16.1 owns this contract; this section is the tabular-boundary
+projection of it.
 
 Backend choice is an execution representation decision. The logical Pipeline remains one
 `Pipeline[T]` definition.

@@ -174,6 +174,20 @@ before resource opening/source consumption.
 
 ### Callable fingerprints and `version=`
 
+Automatic fingerprinting is best-effort; explicit `version=` is the authoritative durable
+identity. Write the version whenever a checkpoint or an idempotent side effect must survive a
+process restart or a dependency upgrade:
+
+```python
+flow.map(transform, version="normalize-v3")
+```
+
+Automatic inspection remains excellent for process-local caching, debugging, obvious
+structural-change detection, and generated default node identity — but it cannot see through a
+changed third-party callee, a runtime-derived global, a C extension, generated code, or
+monkeypatching. See [execution-semantics.md](execution-semantics.md#callable-and-resource-fingerprints)
+for the owning contract.
+
 Semantic fingerprints are resolved during execution preparation and fixed for that run.
 Inspectable Python callables use normalized AST while ignoring formatting, comments, source
 locations, docstrings, and annotations. Relevant defaults, kwdefaults, closure nonlocals,

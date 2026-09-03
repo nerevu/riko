@@ -375,7 +375,7 @@ Example Context override:
 
 ```python
 context = Context(
-    resources={"capabilities": Resource.from_factory(make_capability_manager)}
+    resources={"capabilities": capability_manager}  # generator/CM resource definition
 )
 ```
 

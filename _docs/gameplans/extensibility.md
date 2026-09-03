@@ -132,6 +132,18 @@ Requirements:
 
 An installed Python plugin has host-process privileges; package installation is a trust decision.
 
+The evidence for all of this is one real external package, not another hundred internal tests. Keep
+the `implementation-sequence.md` R12 proof as a hard pre-1.0 release criterion: entry-point
+registration, a declared `Resource` dependency, a sync-only or async-only implementation adapted in
+the opposite execution mode, an external `Publisher`/`Subscription` or `StateStore`, generated
+discoverability that includes the extension, and no core edit. An extension package exercises the
+plugin API the way a consumer will; internal tests exercise it the way its author already imagines
+it works.
+
+Note the division of labor with R4: R4 proves the **runtime architecture** can hold a real external
+resource, and it does so early. R12 proves the **external package API**. Discovering a lifecycle
+defect at R12 would be discovering it eight PRs too late.
+
 ## E3. Workflow specification v1
 
 Give existing serialized pipeline/DAG forms a versioned interoperable storage contract.

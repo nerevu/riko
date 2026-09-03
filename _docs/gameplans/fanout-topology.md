@@ -125,8 +125,13 @@ explicit serialized id selects one declaration.
 Synchronous subscriber work is inline by default. Parallel subscriber execution is an explicit
 execution-concurrency choice, not an implicit property of pub/sub.
 
-Async subscriber orchestration is owned by the private execution. An MVP may use
-`asyncio.create_task()` internally, but cancellation and teardown belong to the execution lifecycle.
+Async subscriber orchestration is owned by the private execution, and ownership is expressed
+structurally: every subscriber task is created under the execution's task group, which shares its
+cancellation scope and cannot exit while a subscriber is still running. The compatibility MVP may use
+`asyncio.create_task()` internally while the old hub machinery survives, provided those tasks are
+explicitly tracked and marked as scheduled for replacement; the final contract permits no detached
+tasks. See [execution-semantics.md](execution-semantics.md#execution-lifetime-primitives) for the
+owning primitives.
 
 ### 5.2 Buffering
 
@@ -371,7 +376,8 @@ For that MVP:
 - preserve the current subscriber `func` **transformation** behavior in both sync and async during
   the MVP. Do not change only the async side to on_receive semantics;
 - `asyncio.create_task()` is acceptable for MVP subscriber concurrency when tasks are explicitly
-  tracked and cleaned up; final structured orchestration belongs to the private execution;
+  tracked and cleaned up, and the call sites are annotated as compatibility code; the final contract
+  is structured concurrency under the execution-owned task group, with no detached tasks;
 - do not repair the sync idle-drain teardown bug by extending the old DONE/id bookkeeping. Keep that
   behavior characterized while F5 replaces the ownership mechanism instead of hardening machinery
   that is scheduled for deletion.
@@ -387,7 +393,11 @@ F5 then changes sync and async **together** to the final contract:
 - PENDING/DONE data markers and hidden sender ids are removed from the public lifecycle;
 - multiple same-name local subscriptions are distinguished by object identity;
 - one subscription targeted by multiple publishers completes only after all attached publishers
-  complete.
+  complete. Implement that completion rule structurally, through owned sender handles whose close is
+  reference-counted by the runtime, rather than through explicit integer publisher bookkeeping. The
+  cloned-memory-stream lifetime rule is the model: a receiving end is not closed until every
+  corresponding sender clone has closed. Only the ownership/close rule is borrowed; delivery remains
+  broadcast, not distribute.
 
 This staging boundary is intentional: F1 fixes compatibility streaming; F5 owns the semantic
 lifecycle/on_receive transition. Do not partially backport F5 semantics into the MVP.
