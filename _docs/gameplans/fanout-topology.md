@@ -7,7 +7,8 @@ iteration and keeping distributed-runtime concerns out of core.
 
 This plan owns the **topology** contract: explicit broadcast, routing, split, subscriber lifecycle,
 and fan-in composition. Generic execution/resource/state semantics remain owned by
-[execution-semantics.md](execution-semantics.md).
+[execution-semantics.md](execution-semantics.md). Canonical Workflow v2 normalization and schema
+sequencing are ordered by [implementation-sequence.md](implementation-sequence.md).
 
 Current `send` / `receive` and eager legacy `split` implementations are migration inputs, not the
 final public topology contract.
@@ -30,8 +31,60 @@ join
     related records from multiple streams -> combined records
 ```
 
-Shared DAG ancestry alone never implies fan-out. A definition branches only through an explicit
-fan-out primitive such as `split()` or `publish()`.
+Shared DAG ancestry alone never implies fan-out. A definition branches only through explicit topology.
+
+The canonical graph rule is:
+
+```text
+node = executable/owned behavior
+edge = relationship/delivery semantics
+```
+
+Therefore:
+
+```text
+split        -> ModuleNode + StreamEdges from distinct output ports
+branch/route -> ModuleNode + StreamEdges from semantic output ports
+publish      -> PublishEdge
+subscription -> SubscribeNode
+union/join   -> ModuleNode + distinct indexed input ports
+```
+
+There is no public/canonical `PublishNode` and no top-level channel table. A subscription is a node
+because it owns delivery/buffering/error policy; publication is an edge because it is a relationship
+between a producer output and that subscription.
+
+Canonical edges are a discriminated union:
+
+```text
+StreamEdge
+PublishEdge
+```
+
+Canonical ports use one grammar:
+
+```text
+in / out             default port
+in:N / out:N         positional ports
+out:<name>            semantic named output port
+```
+
+A source port may have multiple outgoing stream edges. A target stream port has at most one incoming
+stream edge. Multi-input operators use distinct input ports rather than repeated edges into one port.
+
+Legacy positional identities normalize as:
+
+```text
+_INPUT   -> in
+_OTHER   -> in:1
+_OTHER2  -> in:2
+_OTHER3  -> in:3
+_OUTPUT  -> out
+_OUTPUT2 -> out:1
+_OUTPUT3 -> out:2
+```
+
+Port identity, never traversal order or JSON array order, carries operand/branch position.
 
 ## 3. Fan-in semantics preserved
 
@@ -48,6 +101,21 @@ union(A, B)
 -> a1 a2 b1 b2
 ```
 
+Canonical wiring makes today's positional semantics explicit:
+
+```text
+A.out -> union.in
+B.out -> union.in:1
+C.out -> union.in:2
+```
+
+which maps directly to the current logical call shape:
+
+```text
+stream = A
+others = [B, C]
+```
+
 Each input item retains its own provenance. `union()` does not synthesize a combined identity.
 Concurrent interleaving belongs to `merge` and its execution-semantics scheduling contract.
 
@@ -55,6 +123,9 @@ Concurrent interleaving belongs to `merge` and its execution-semantics schedulin
 
 `join` combines related records, optionally through `join_key` / `other_join_key`. It remains
 distinct from `union`, `merge`, positional pairing, and temporal synchronization.
+
+Like union, each distinct operand is represented by a distinct canonical input port. Module metadata
+owns what those positional inputs mean semantically.
 
 ## 4. Public publish / subscribe contract
 
@@ -82,9 +153,13 @@ events = Pipeline.subscribe("events")
 flow = flow.publish(events)
 ```
 
+Canonical Workflow v2 represents this with a `SubscribeNode` and one or more incoming `PublishEdge`s.
+The subscription node owns `buffer_size`, `overflow`, and error policy. Multiple incoming publish
+edges structurally define the publisher set and therefore completion semantics.
+
 `publish(events)` attaches the complete subscription branch to the producer's execution. The user
 does not have to drain ignored branch output to trigger work or cleanup. Terminal branch values are
-discarded unless the branch contains an explicit sink, on_receive, or routing effect.
+discarded unless the branch contains an explicit write/action/on_receive/routing effect.
 
 Calling:
 
@@ -125,13 +200,9 @@ explicit serialized id selects one declaration.
 Synchronous subscriber work is inline by default. Parallel subscriber execution is an explicit
 execution-concurrency choice, not an implicit property of pub/sub.
 
-Async subscriber orchestration is owned by the private execution, and ownership is expressed
-structurally: every subscriber task is created under the execution's task group, which shares its
-cancellation scope and cannot exit while a subscriber is still running. The compatibility MVP may use
-`asyncio.create_task()` internally while the old hub machinery survives, provided those tasks are
-explicitly tracked and marked as scheduled for replacement; the final contract permits no detached
-tasks. See [execution-semantics.md](execution-semantics.md#execution-lifetime-primitives) for the
-owning primitives.
+Async subscriber orchestration is owned by the private execution. Every subscriber task is created
+under the execution's task group; final code permits no detached tasks. Compatibility code may retain
+tracked transitional tasks only until the execution-owned model lands.
 
 ### 5.2 Buffering
 
@@ -149,10 +220,7 @@ Literal["block", "drop"]
 ```
 
 `block` is lossless and is the default. For a bounded buffered subscription, `drop` discards the
-oldest buffered item and keeps the newest item, matching the useful behavior of the current sync
-queue.
-
-There is no implicit lossy mode.
+oldest buffered item and keeps the newest item. There is no implicit lossy mode.
 
 ### 5.3 Error policy
 
@@ -165,11 +233,7 @@ Literal["raise", "ignore"]
 Default is `"raise"`. `"ignore"` means per-item continuation for that subscriber; it does not turn
 all branch failures into successful execution.
 
-### 5.4 Tap semantics
-
-> **Naming:** the parameter is renamed `tap=` → `on_receive=` to avoid
-> conflation with Singer's source-`tap`; the semantics below are unchanged. Decision record:
-> `monthly-dashboard.md` §5.
+### 5.4 `on_receive` semantics
 
 A subscriber `on_receive=` may be sync or async. Its return value is discarded:
 
@@ -189,6 +253,10 @@ behavior is not the target contract; transformation belongs in an ordinary downs
 More than one publisher may target one subscription. The subscription completes only after **all**
 attached publishers complete.
 
+This is structural in canonical v2: all incoming `PublishEdge`s are known before execution. Runtime
+sender-handle ownership derives from that topology; there are no PENDING/DONE data markers and no
+explicit integer publisher-count protocol in user-visible data.
+
 Per-subscription delivery order is guaranteed. When multiple publishers run concurrently, observed
 order is actual delivery order; Riko does not invent a global source ordering.
 
@@ -201,6 +269,15 @@ The final `split()` contract supersedes the legacy eager finite duplication beha
 
 ```python
 left, right = flow.split(2)
+```
+
+`split` remains an ordinary registered multi-output module. Its output contract is positional:
+
+```text
+split.out
+split.out:1
+split.out:2
+...
 ```
 
 Semantics:
@@ -234,12 +311,19 @@ to be safe and desired.
 
 ## 8. Conditional routing
 
-Broadcast and routing are separate. A binary branch sends each item to exactly one output:
+Broadcast and routing are separate. A binary branch sends each item to exactly one semantic output:
 
 ```python
 matched, unmatched = flow.branch(
     conf={"rule": {"field": "score", "op": "greater", "value": 500}}
 )
+```
+
+Canonical ports are semantic rather than positional:
+
+```text
+branch.out:matched
+branch.out:unmatched
 ```
 
 Requirements:
@@ -262,6 +346,14 @@ After binary branch semantics are stable, N-way routing may support:
 flow.route(field="customer_id", branches=["a", "b", "c"], strategy="hash")
 ```
 
+Canonical output ports preserve route identity:
+
+```text
+route.out:a
+route.out:b
+route.out:c
+```
+
 Initial strategies may include:
 
 ```text
@@ -278,21 +370,36 @@ Requirements:
 - routing remains local to one execution;
 - no distributed leases, partition ownership, or worker-assignment system is introduced here.
 
-## 10. Topology representation
+## 10. Port declaration and validation
 
-Branching must be visible to workflow introspection rather than existing only as runtime side
-effects.
+The registered node/module contract declares the valid ports. Edges connect declared ports; edges do
+not create ports.
 
-A compiled plan must distinguish:
+For fixed routing, the contract statically declares semantic ports. For configurable routing/split,
+node configuration determines the declared port set during normalization/preparation.
 
-- primary stream edges;
-- secondary fan-in edges;
-- publish/subscription edges;
-- split branches;
-- routed branches.
+Examples:
 
-A serialized workflow may use display names for convenience, but the compiled graph resolves them
-to concrete node/subscription identities before execution.
+```text
+split(splits=3)
+    -> out, out:1, out:2
+
+branch(...)
+    -> out:matched, out:unmatched
+
+route(branches=["a", "b", "c"])
+    -> out:a, out:b, out:c
+```
+
+An unconnected declared output remains valid. Reachability determines whether runtime machinery is
+allocated for it.
+
+Canonical validation rejects:
+
+- edges referencing undeclared ports;
+- more than one incoming stream edge to the same target stream port;
+- fan-in operand gaps when the owning contract requires contiguous positional inputs;
+- topology whose referenced nodes do not exist.
 
 ## 11. Branch-to-fan-in composition
 
@@ -306,7 +413,14 @@ matched, unmatched = flow.branch(conf=rule)
 result = Pipeline.union(matched.transform(...), unmatched.transform(...))
 ```
 
-and relational branches may feed `join`.
+Canonical wiring is explicit:
+
+```text
+branch.out:matched   -> left_transform.in
+branch.out:unmatched -> right_transform.in
+left_transform.out   -> union.in
+right_transform.out  -> union.in:1
+```
 
 Concurrent async fan-in uses `merge`; sequential concatenation remains `union`.
 
@@ -320,9 +434,11 @@ Ordering is defined per primitive:
 - `branch`: preserves relative order in each selected output;
 - `route`: preserves relative order per selected branch unless the routing strategy explicitly says
   otherwise;
-- `union`: input streams concatenate in declared order;
+- `union`: input streams concatenate in port/declaration order (`in`, `in:1`, `in:2`, ...);
 - `merge`: follows the execution-semantics scheduling contract;
 - `join`: follows relational operator semantics, not temporal synchronization semantics.
+
+JSON edge-list order never determines semantic input ordering.
 
 ## 13. Memory and boundedness
 
@@ -343,98 +459,50 @@ Current hubs and modules are implementation/migration inputs:
 
 - sync currently uses queue/generator-coroutine mechanics and historical PENDING/DONE bookkeeping;
 - async uses AnyIO channels but has had incremental-delivery/materialization defects;
-- current receiver `func` behaves like a transform rather than an on_receive;
+- current receiver `func` behaves like a transform rather than an on_receive callback;
 - current lifecycle can tie cleanup to draining a receiver.
 
 The target rewrite must preserve useful observable behavior while deleting those hidden ownership
 mechanisms. In particular:
 
-- no PENDING records on the final data stream;
-- completion is channel/subscription lifecycle, not a user-visible DONE item;
-- registration/teardown belongs to execution-owned subscription handles;
+- no PENDING/DONE records on the final data stream;
+- completion is subscription/channel lifecycle, not a user-visible sentinel;
+- registration/teardown belongs to execution-owned handles;
 - cleanup does not depend on draining ignored output;
 - async delivery is incremental;
 - on_receive semantics change sync and async together.
 
-Feed-native async parser support is therefore a prerequisite for the async compatibility modules and
-is implemented through the common Feed-native parser mechanism, not a pub/sub-specific wrapper hack.
+Feed-native async parser support is implemented through the common Feed-native parser mechanism, not
+a pub/sub-specific wrapper hack.
 
-### 14.1 Revised compatibility MVP boundary
+### 14.1 Compatibility staging boundary
 
-The compatibility MVP is deliberately narrower than the final F5 contract. Its purpose is to make
-the existing sync/async pub/sub surfaces stream equivalently without prematurely rebuilding final
-Pipeline ownership on top of compatibility machinery.
+Compatibility work may keep string-target `SyncPipe` / `AsyncPipe` send/receive behavior while the
+old surfaces survive. Strings also remain valid serialized/wire references after the final Python API
+becomes object-first.
 
-For that MVP:
+Compatibility fixes should make async send/receive incremental and preserve currently documented
+sync/async behavior together, but must not extend DONE/PENDING bookkeeping. Final R7 replaces that
+ownership mechanism with `SubscribeNode`/`PublishEdge` topology, execution-owned sender handles, and
+`on_receive=` semantics in both modes.
 
-- keep string-target `SyncPipe` / `AsyncPipe` publish/send and subscribe/receive behavior; strings
-  also remain valid serialized/wire references after the final Python API becomes object-first;
-- keep the current AnyIO zero-buffer/rendezvous async channel backend rather than adding a second
-  buffering model;
-- make async `send` and `receive` Feed-native and incremental, so the first delivered item is visible
-  before publisher completion and unbounded feeds do not require whole-stream materialization;
-- preserve the current subscriber `func` **transformation** behavior in both sync and async during
-  the MVP. Do not change only the async side to on_receive semantics;
-- `asyncio.create_task()` is acceptable for MVP subscriber concurrency when tasks are explicitly
-  tracked and cleaned up, and the call sites are annotated as compatibility code; the final contract
-  is structured concurrency under the execution-owned task group, with no detached tasks;
-- do not repair the sync idle-drain teardown bug by extending the old DONE/id bookkeeping. Keep that
-  behavior characterized while F5 replaces the ownership mechanism instead of hardening machinery
-  that is scheduled for deletion.
-
-F5 then changes sync and async **together** to the final contract:
-
-- object-first `Publisher` / `Subscription` / `Channel` and `Pipeline.subscribe(...)` /
-  `flow.publish(subscription)`;
-- `on_receive=` replaces transformation-shaped subscription `func`; the callback return is discarded and
-  the received item remains the logical value;
-- subscription/channel/task lifetime belongs to the private execution and cleanup never depends on
-  the user draining ignored subscriber output;
-- PENDING/DONE data markers and hidden sender ids are removed from the public lifecycle;
-- multiple same-name local subscriptions are distinguished by object identity;
-- one subscription targeted by multiple publishers completes only after all attached publishers
-  complete. Implement that completion rule structurally, through owned sender handles whose close is
-  reference-counted by the runtime, rather than through explicit integer publisher bookkeeping. The
-  cloned-memory-stream lifetime rule is the model: a receiving end is not closed until every
-  corresponding sender clone has closed. Only the ownership/close rule is borrowed; delivery remains
-  broadcast, not distribute.
-
-This staging boundary is intentional: F1 fixes compatibility streaming; F5 owns the semantic
-lifecycle/on_receive transition. Do not partially backport F5 semantics into the MVP.
+Do not partially implement final object-first lifecycle semantics inside the compatibility hub.
 
 ## 15. Testing strategy
 
-The tests below are grouped by **what they constrain**, not by phase. §15.1 are behavioral
-outcomes that any implementation (F1…F5) must satisfy — they assert observable stream behavior, not
-the pub/sub API surface, so they survive the F5 object-first transition unchanged. §15.2 documents
-current compatibility behavior that F5 is *expected to change*; it is characterization, not a forward
-contract. §15.3 asserts the F5 object-first surface itself and must not be frozen as migration tests
-before that surface lands. (Test names below reference behavior only; xfail reasons stay
-API-agnostic — "… not yet implemented" — never an internal F-label.)
+### 15.1 Acceptance contracts
 
-### 15.1 Acceptance contracts (behavioral outcomes — decoupled from the API surface)
-
-Encode these now. Where the behavior is not yet true, land a `strict=True` xfail so the guard flips
-(and demands removal) the moment the behavior arrives.
-
-Pub/sub streaming:
+Encode these as behavior-level contracts independent of compatibility API shape:
 
 1. one source broadcasts incrementally to two subscriptions;
-2. an async subscriber sees its first item before the publisher finishes reading its source
-   — *shipped*; `test_async_subscriber_sees_item_before_publisher_completes`;
-3. async `receive` does not materialize its source; the zero-buffer rendezvous channel delivers each
-   item as it is published — *shipped*; `test_async_receive_does_not_materialize`;
-4. async `send` does not buffer its own passthrough return (an unbounded source still returns a
-   stream) — *not yet*; strict-xfail `test_async_send_does_not_buffer_its_source`;
-5. publish/send is transparent: the publisher's own stream passes through unchanged;
+2. an async subscriber sees its first item before the publisher finishes reading its source;
+3. async receive does not materialize its source;
+4. async send does not buffer its own passthrough return;
+5. publication is transparent to the producer's ordinary stream;
 6. zero-buffer subscription propagates backpressure;
-7. lifecycle/state markers never leak into user data — *not yet* (sync `receive` surfaces
-   `PENDING`/`DONE`); strict-xfail `test_lifecycle_markers_do_not_leak_into_user_data`;
+7. lifecycle/state markers never leak into user data;
 8. bounded `overflow="drop"` drops oldest only on that configured subscription;
-9. multiple publishers keep one subscription open until all publishers finish (completion outcome).
-
-Topology:
-
+9. multiple publishers keep one subscription open until all publishers finish;
 10. `split()` consumes upstream once and streams to active branches;
 11. unused split outputs allocate no runtime branch/backpressure;
 12. split is lossless under slow consumers;
@@ -443,30 +511,34 @@ Topology:
 15. `union` preserves sequential concatenation and input provenance;
 16. join retains keyed relational semantics;
 17. cancellation/early close leaks no tasks/channels/subscriptions;
-18. attached publication branches clean up without a user drain.
+18. attached publication branches clean up without a user drain;
+19. canonical fan-in ordering is preserved after deterministic edge sorting;
+20. invalid/duplicate target-port wiring fails before source consumption.
 
-### 15.2 MVP characterization (current compatibility behavior; expected to change under F5)
+### 15.2 Compatibility characterization
 
-Keep these to pin present behavior, but do **not** read them as forward contracts:
+Keep current compatibility tests that pin behavior scheduled to change, but do not treat them as
+forward contracts. In particular current transformation-shaped receiver callbacks and sentinel
+visibility are migration fixtures only.
 
-1. subscriber `func` transformation semantics in both sync and async (`test_pubsub_funcs`) — F5
-   replaces this with `on_receive=` (return discarded);
-2. sync `receive` currently interleaves `PENDING`/`DONE` markers into the drained stream
-   (`test_pubsub`) — the acceptance target that it must *not* is §15.1(7).
+### 15.3 Final API/IR contracts
 
-### 15.3 F5 API-shape contracts (assert once the object-first surface lands; not migration tests)
+Assert once the object-first surface and Workflow v2 land:
 
-1. object-first `Publisher` / `Subscription` / `Channel` with `Pipeline.subscribe(...)` /
-   `flow.publish(subscription)`;
+1. `SubscribeNode` + `PublishEdge` canonical topology;
 2. sync and async `on_receive=` both discard return values and preserve the item;
 3. multiple same-name subscription objects remain distinct by identity;
 4. external `Subscription` works as a Pipeline source;
-5. topology introspection reports stream, fan-in, split, and subscription edges (F6 surface).
+5. split uses positional output ports;
+6. branch/route use semantic output ports;
+7. union/join/merge operands use distinct indexed input ports;
+8. one target stream port accepts at most one incoming stream edge.
 
 ## 16. Implementation phases
 
-The historical F-labels remain useful for work tracking, but the final contracts above supersede
-earlier eager-split / AsyncPipe-first API sketches.
+Historical F-labels remain useful for local work tracking, but the forward dependency order is owned
+by [implementation-sequence.md](implementation-sequence.md). In particular, canonical topology
+structure lands in R4A, provenance in R5A, and runtime fanout in R7.
 
 ```text
 F0  Document current compatibility topology
@@ -475,26 +547,27 @@ F2  Binary conditional branch
 F3  Named N-way route / partition
 F4  Final bounded subscription buffering/error policy
 F5  Execution-owned Publisher/Subscription lifecycle + on_receive semantics
-F6  Topology introspection / serialized representation
+F6  Workflow v2 topology integration / introspection
 F7  Branch-to-union/join ergonomic contracts
 ```
 
-Forward dependency ordering across core runtime PRs is owned by
-[implementation-sequence.md](implementation-sequence.md), especially R4/R5/R7. These F labels do not
-create a parallel implementation sequence.
+These F labels do not create a parallel implementation sequence.
 
 ## 17. Definition of done
 
 1. Public Python pub/sub uses `publish` / `subscribe` objects rather than requiring low-level
    `send` / `receive` knowledge.
-2. Publish/subscribe and split are incremental and bounded in both sync and async execution.
-3. `split()` consumes upstream once, activates only reachable branches, and is lossless.
-4. Broadcast and routing remain separate concepts.
-5. Subscriber buffering, overflow, ordering, errors, and on_receive behavior are explicit.
-6. Multiple publisher completion is correct and deterministic at the subscription-lifecycle level.
-7. `union` remains sequential fan-in; `join` remains relational fan-in.
-8. Branch outputs compose naturally with existing fan-in operators.
-9. Workflow introspection can describe explicit branch/channel topology.
-10. Cancellation, early close, subscriber failure, and ignored attached branches leak no runtime
+2. Canonical Workflow v2 represents subscriptions as `SubscribeNode`s and publication as
+   `PublishEdge`s.
+3. Publish/subscribe and split are incremental and bounded in both sync and async execution.
+4. `split()` consumes upstream once, activates only reachable branches, and is lossless.
+5. Split uses positional output ports; branch/route use semantic named ports.
+6. Fan-in operands use distinct indexed input ports, never edge-list order.
+7. Broadcast and routing remain separate concepts.
+8. Subscriber buffering, overflow, ordering, errors, and on_receive behavior are explicit.
+9. Multiple publisher completion is derived from topology/owned sender lifetime, not data sentinels.
+10. `union` remains sequential fan-in; `join` remains relational fan-in.
+11. Branch outputs compose naturally with existing fan-in operators.
+12. Cancellation, early close, subscriber failure, and ignored attached branches leak no runtime
     resources.
-11. No topology feature requires a distributed runtime.
+13. No topology feature requires a distributed runtime.
