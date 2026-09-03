@@ -411,7 +411,13 @@ def opener(  # noqa: E302
     r = None
 
     if url.startswith("http"):
-        r = requests.get(url, params=params, stream=not memoize, timeout=timeout)
+        r = requests.get(
+            url,
+            params=params,
+            headers={"User-Agent": default_user_agent()},
+            stream=not memoize,
+            timeout=timeout,
+        )
         r.raise_for_status()
         r.raw.decode_content = True
 
