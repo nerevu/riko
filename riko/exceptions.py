@@ -47,7 +47,8 @@ class ReceiverUnavailableError(PubSubError):
 
 class ReceiveTimeoutError(PubSubError):
     def __init__(self, name: str, max_wait: float):
-        msg = f"pub/sub receiver {name!r} timed out after {max_wait} seconds without activity"
+        msg = f"pub/sub receiver {name!r} timed out after {max_wait} seconds "
+        msg += "without activity"
         super().__init__(msg)
         self.name = name
         self.max_wait = max_wait
