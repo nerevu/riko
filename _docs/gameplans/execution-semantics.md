@@ -29,7 +29,7 @@ The same `Pipeline` definition may run in either mode. Native implementations wi
 | sync only | native sync | sync on a worker unless explicitly inline-safe |
 | async only | async on the execution portal | native async |
 
-Legacy `SyncPipe` / `AsyncPipe` / collection classes remain migration surfaces only; they are not the target architecture.
+Legacy `SyncPipe` / `AsyncPipe` / collection classes are current implementation/characterization inputs only. When `Pipeline` plus private executions land, those released Python classes are removed under the pre-1.0 clean-break policy rather than retained as compatibility wrappers.
 
 ### Definition configuration vs execution configuration
 
@@ -203,7 +203,7 @@ class Subscription[T](Protocol): ...
 class Channel[T](Publisher[T], Subscription[T], Protocol): ...
 ```
 
-Low-level compatibility modules may remain named `send` / `receive`; the final Pipeline API uses `publish` / `subscribe`.
+Current `send` / `receive` modules are transitional implementation inputs only. R7 removes those Python modules when the final `publish` / `subscribe` API lands; no low-level compatibility wrapper survives in the target surface.
 
 Local declaration:
 
@@ -218,7 +218,7 @@ An external subscription is an ordinary source:
 flow = Pipeline(source=subscription)
 ```
 
-`publish()` accepts a local subscription pipeline or an external `Publisher`. A published local subscription branch is attached to the owning execution. The user does not drain that branch to make cleanup occur; branch terminal values are discarded unless the branch has an explicit sink/on_receive/routing effect.
+`publish()` accepts a local subscription pipeline or an external `Publisher`. A published local subscription branch is attached to the owning execution. The user does not drain that branch to make cleanup occur; branch terminal values are discarded unless the branch has an explicit write/action/subscription-`func`/routing effect.
 
 Calling `list(events)` independently creates a fresh execution; subscriptions are not replay buffers.
 
@@ -232,7 +232,7 @@ and a target name resolves all same-name declarations unless an explicit seriali
 
 ### Subscriber scheduling and buffering
 
-Sync subscribers execute inline by default. Execution concurrency is an explicit opt-in. Async orchestration is execution-owned; the MVP may use `asyncio.create_task()` while the final execution layer owns cancellation and teardown.
+Sync subscribers execute inline by default. Execution concurrency is an explicit opt-in. Async orchestration is execution-owned; transitional code may use `asyncio.create_task()` only while the current hub machinery exists and only when the owning execution tracks cleanup.
 
 Async subscriptions default to rendezvous behavior:
 
@@ -257,7 +257,7 @@ Literal["raise", "ignore"]
 
 with `"raise"` the default. `"ignore"` is per-item continuation.
 
-A subscriber `on_receive=` may be sync or async; its return value is discarded and the original item continues. This on_receive contract must be changed for sync and async together rather than creating mode-specific semantics.
+A subscriber `func=` may be sync or async. It runs at subscription receive/materialization time rather than ordinary downstream UDF evaluation time; its return value is discarded and the original item continues. This timing and pass-through contract must match in sync and async execution.
 
 When multiple publishers target one subscription, the subscription completes only after all attached publishers complete. Concurrent publishers preserve actual delivery order; no artificial global ordering is imposed.
 
@@ -335,7 +335,9 @@ explicit version=      = authoritative durable semantic identity
 
 Automatic inspection cannot be complete, and the architecture must not depend on it being complete. A normalized AST says nothing about a changed third-party library called from the body, runtime-derived module globals, C extension callables, dynamically generated code, or a monkeypatched module. Closing those gaps would turn durable identity into a Python-semantics hashing project.
 
-Automatic fingerprints are therefore authoritative for process-local caching, debugging, obvious structural-change detection, and generated default node identity — and explicit `version=` is the **recommended** form wherever checkpoints or idempotent side effects must survive a process restart, dependency upgrade, or deploy:
+Automatic fingerprints are therefore suitable for process-local caching, debugging, and obvious semantic-change detection. They do not determine canonical Workflow v2 node IDs. Graph-node identity and generated IDs are owned by the Workflow v2 specification in `extensibility.md`.
+
+Explicit `version=` is the authoritative semantic identity wherever checkpoints, idempotent side effects, or other durable behavior must survive a process restart, dependency upgrade, or deploy:
 
 ```python
 flow.map(transform, version="normalize-v3")
@@ -363,7 +365,7 @@ Structural compilation may be cached process-locally with a bounded internal cac
 
 ### Provenance propagation
 
-Root identity is automatically namespaced by the source node identity. A generated source node id is sufficient within one compiled definition; use explicit `id=` where identity must remain stable across structural edits that would otherwise change the generated id.
+Root identity is automatically namespaced by the source node's canonical graph ID. A generated Workflow v2 node ID is sufficient within one normalized definition. Use explicit `id=` where the logical node identity must remain stable across structural revisions that could change the generated ID.
 
 Generation propagation follows operator semantics:
 
@@ -386,7 +388,7 @@ A custom derive operator may additionally need `stable_order=True` before positi
 
 ### Idempotency
 
-Every Riko side-effecting module supports idempotency where its destination permits it; pure transforms require none. Execution derives and injects a key centrally rather than asking modules to reconstruct provenance:
+Every Riko side-effecting node/effect supports idempotency where its destination permits it; pure transforms require none. Execution derives and injects a key centrally rather than asking effect implementations to reconstruct provenance:
 
 ```text
 (node_id, fingerprint, item_key, generation, iteration)
@@ -704,7 +706,7 @@ Ordered concurrent execution uses a bounded reorder buffer. When the buffer fill
 
 Final async execution uses structured concurrency:
 
-> Every execution-spawned task belongs to exactly one execution-owned task group. Subscriptions, concurrent branches, merge workers, and internal service tasks are created under the execution's task-group tree. Detached `asyncio.create_task()` is not permitted outside explicitly characterized compatibility code.
+> Every execution-spawned task belongs to exactly one execution-owned task group. Subscriptions, concurrent branches, merge workers, and internal service tasks are created under the execution's task-group tree. Detached `asyncio.create_task()` is not permitted outside explicitly characterized transitional code scheduled for removal.
 
 This is what makes the ownership rule enforceable rather than aspirational: children share the owning cancellation scope, and the scope cannot exit while a child is still running.
 
@@ -763,7 +765,7 @@ Definitions:
 
 ### 7.1 Async receive timeout
 
-The current sync and async compatibility `receive` implementations do not have equivalent timeout behavior: sync polling honors `max_wait`, while the async path can block indefinitely. Feed-native async receive must bound the wait itself and map expiry to the common timeout policy rather than inventing separate receive-only semantics.
+The current sync and async legacy `receive` implementations do not have equivalent timeout behavior: sync polling honors `max_wait`, while the async path can block indefinitely. Feed-native async receive must bound the wait itself and map expiry to the common timeout policy rather than inventing separate receive-only semantics. R7 removes the legacy module after the object-first subscription runtime lands.
 
 ### 7.2 A blocked `anext()` must not outlive the deadline
 
@@ -950,7 +952,7 @@ A Feed/stream's finiteness is independent of its iteration mechanism.
 
 ### Pub/sub implementation
 
-The compatibility sync backend may continue to use generator coroutines + bounded/deque buffering internally. The current async backend may continue to use AnyIO memory object streams, including zero-buffer rendezvous behavior; the public `buffer_size = 0` default matches that primitive deliberately, so backpressure is structural rather than a configured number. Those mechanisms are implementation details behind the public `Publisher` / `Subscription` / `Channel` protocols.
+The current sync backend may continue to use generator coroutines + bounded/deque buffering internally until R7 replaces the hub. The current async backend may continue to use AnyIO memory object streams, including zero-buffer rendezvous behavior; the public `buffer_size = 0` default matches that primitive deliberately, so backpressure is structural rather than a configured number. Those mechanisms are implementation details behind the public `Publisher` / `Subscription` / `Channel` protocols.
 
 Final lifecycle is execution-owned:
 
@@ -960,7 +962,7 @@ Final lifecycle is execution-owned:
 - cancellation/normal completion close all execution-owned channel ends;
 - multiple independent pipeline executions never share implicit pub/sub lifecycle state.
 
-Structured concurrency is the final contract, not a preference: every branch, subscriber, and internal service task runs under the execution's task-group tree, per [§6.4](#64-cancellation). A compatibility MVP may use `asyncio.create_task()` for subscriber concurrency while the old hub machinery still exists, provided the owning execution tracks, joins/cancels, and cleans up those tasks deterministically, and provided that code is explicitly marked as scheduled for replacement.
+Structured concurrency is the final contract, not a preference: every branch, subscriber, and internal service task runs under the execution's task-group tree, per [§6.4](#64-cancellation). Transitional code may use `asyncio.create_task()` for subscriber concurrency while the old hub machinery still exists, provided the owning execution tracks, joins/cancels, and cleans up those tasks deterministically, and provided that code is explicitly marked as scheduled for replacement in R7.
 
 ### Producer/consumer bridges
 
