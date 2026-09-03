@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch
 import pytest
 from requests import Response
 
-from riko._io import Fetch
+from riko._io import Fetch, default_user_agent
 from riko._reencode import Reencoder, reencode
 from riko.bado.io import async_url_open
 from riko.modules import csv
@@ -177,3 +177,15 @@ class TestLoopbackServer:
         mock_requests.assert_called_once()
         mock_urlopen.assert_not_called()
         assert mock_requests.call_args.args[0] == target
+
+    def test_http_uses_default_user_agent(self):
+        response = Mock()
+        response.headers = {}
+        target = "http://example.com/feed.xml"
+
+        with patch("riko._io.requests.get", return_value=response) as mock_requests:
+            Fetch(target, binary=True)
+
+        assert mock_requests.call_args.kwargs["headers"] == {
+            "User-Agent": default_user_agent()
+        }
