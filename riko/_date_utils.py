@@ -127,9 +127,7 @@ def tzinfo_from_tt(
     Try to get a ZoneInfo from struct_time's tm_zone name,
     falling back to a fixed-offset timezone from tm_gmtoff.
     """
-    if not tt:
-        _tzinfo = None
-    elif tt.tm_zone and tt.tm_zone in available_timezones():
+    if tt.tm_zone and tt.tm_zone in available_timezones():
         _tzinfo = ZoneInfo(tt.tm_zone)
     elif tt.tm_zone and tt.tm_zone in TZINFOS:
         _tzinfo = TZINFOS[tt.tm_zone]
