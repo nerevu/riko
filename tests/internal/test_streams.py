@@ -5,6 +5,8 @@ Tests the AnyIO streaming primitives in riko.bado.itertools: ``async_map_stream`
 (same bound, results in source order).
 """
 
+from time import monotonic
+
 import pytest
 
 from riko.bado._backend import Semaphore, async_sleep, lowlevel, run
@@ -15,7 +17,8 @@ from riko.bado.itertools import (
     async_map_stream,
     async_merge,
 )
-from tests import aresolve, skipif_issync
+from riko.modules.timeout import AsyncTimeoutIterator
+from tests import aresolve, async_test, skipif_issync
 
 
 @skipif_issync
@@ -27,6 +30,30 @@ def test_gather_results_preserves_none_positions():
 
 async def _double(x: int) -> int:
     return x * 2
+
+
+@pytest.mark.timeout(5)
+@pytest.mark.xfail(
+    strict=True,
+    reason="AsyncTimeoutIterator only checks its deadline between anexts. A source that"
+    "stalls past the deadline is awaited to completion rather than interrupted.",
+)
+@async_test
+async def test_timeout_interrupts_a_stalled_source():
+    """
+    A stalled source must be abandoned after timeout, not awaited to completion.
+    """
+
+    async def source():
+        yield {"x": 0}
+        await async_sleep(1.0)
+        yield {"x": 1}
+
+    it = AsyncTimeoutIterator(source(), timeout_ms=50)
+    start = monotonic()
+    [item async for item in it]
+    run_time = monotonic() - start
+    assert run_time < 0.5
 
 
 @skipif_issync

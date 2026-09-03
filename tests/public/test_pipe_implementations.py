@@ -13,6 +13,7 @@ from riko.bado._backend import create_task_group
 from riko.cast import SortableCastType
 from riko.exceptions import ReceiverUnavailableError
 from riko.modules.aggregate import pipe as aggregate_pipe
+from riko.modules.filter import pipe as filter_pipe
 from riko.modules.join import pipe as join_pipe
 from riko.modules.receive import pipe as receive_pipe
 from riko.modules.send import async_pipe as async_send
@@ -20,7 +21,14 @@ from riko.modules.send import pipe as send_pipe
 from riko.modules.sort import pipe as sort_pipe
 from riko.modules.udf import pipe as udf_pipe
 from riko.types._streams import Feed, Item, ItemOrValue, Stream
-from riko.types.modules import JoinConf, SendConf, SortConf, SortConfRule
+from riko.types.modules import (
+    FilterConf,
+    FilterConfRule,
+    JoinConf,
+    SendConf,
+    SortConf,
+    SortConfRule,
+)
 from tests import skipif_issync
 
 
@@ -96,6 +104,26 @@ def test_natural_join_does_not_materialize_its_primary():
 
     assert next(joined) == {"x": "foo", "i": 0, "c": 5}
     assert len(consumed) <= _LOOKAHEAD
+
+
+def test_filter_greater_less_compare_strings_lexicographically():
+    """
+    ``greater``/``less`` only coerce to numeric when the field value is already numeric.
+    String values compare lexicographically, e.g.,``"9" > "10"`` is True. This lets
+    ``x greater "10"`` permit ``"9"``.
+
+    Numeric values compare numerically. So ``x greater 10`` permits neither ``9`` nor
+    ``10``.
+    """
+    strings = [{"x": "9"}, {"x": "10"}]
+    string_rule = FilterConfRule(field="x", op="greater", value="10")
+    conf = FilterConf({"rule": string_rule})
+    assert _values(filter_pipe(strings, conf=conf), "x") == ["9"]
+
+    numbers = [{"x": 9}, {"x": 10}]
+    numeric_rule = FilterConfRule(field="x", op="greater", value=10)
+    conf = FilterConf({"rule": numeric_rule})
+    assert _values(filter_pipe(numbers, conf=conf), "x") == []
 
 
 @pytest.mark.parametrize(

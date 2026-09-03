@@ -184,6 +184,20 @@ class TestPipeResolver:
         PipeResolver(fixed_registry, pipeline_resolver).resolve("tokenizer", "pipe")
         assert "riko.compile" not in sys.modules
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="a runtime-registered pipe_* module is routed to the pipeline "
+        "resolver by name prefix and raises UnsupportedPipelineError.",
+    )
+    def test_runtime_registered_pipe_prefixed_module_resolves(self, fixed_registry):
+        """
+        A runtime registration whose name begins with ``pipe_`` should win over
+        the pipeline-name routing and resolve to the registered callable.
+        """
+        name = "pipe_transform"
+        fixed_registry.register(ModuleDefinition(name=name, sync_pipe=marker))
+        assert pipe_resolver.resolve(name, "pipe") is marker
+
 
 class TestEntryPointModules:
     """an external package supplies modules via entry points"""

@@ -269,8 +269,37 @@ The deeper `test_collections.py` split into focused files is not warranted eithe
 detail says "keep TestModuleNameEnum / pub-sub identity+cleanup / pool ownership **here**", i.e. the
 concern is dedupe (done), not file fragmentation.
 
-**Remaining.** The § 2b regression batch (new fixtures: `.xlsx`/`.sqlite`, threaded servers,
-sync/async parity bytes) is the only outstanding testing work.
+**Shipped (§ 2b regression batch).** The local-repair rows (R6/R7/R8/R11/R12/R13/R16) are fixed
+with regressions verified failing-first (see the [correctness-audit register](correctness-audit.md#8-open-defect-register--features-branch-audit)
+for per-row detail). The remaining rows are owned by other gameplans, so each landed as a **strict
+xfail tripwire** — it asserts the future-correct behavior, fails today, and flips to XPASS (failing
+the suite, forcing the marker's removal) the moment its owner lands:
+
+- **R5** — `tests/internal/test_compile.py::test_pythonise_yields_valid_identifiers` (module-enums.md).
+- **R9** — `tests/functional/test_basics.py::test_fetchtable_reads_sqlite_fixture` — the sqlite half
+  proves the binary-as-text defect (no xlsx writer in the env; the xlsx and async halves stay owned)
+  (connectors.md).
+- **R10** — `tests/public/test_fetchdata.py::TestExtensionlessFetchdata::test_query_string_does_not_defeat_extension`
+  (connectors.md).
+- **R14** — `tests/internal/test_streams.py::test_timeout_interrupts_a_stalled_source`, asserting
+  elapsed rather than content (content is unchanged across the fix) (execution-semantics.md § 7.2).
+- **R15** — `tests/internal/test_io.py::test_async_url_open_honors_content_type_charset` — the
+  async-HTTP charset half (the `async_url_read`/`fetchpage` halves stay owned) (bado-anyio § 2c).
+- **R18** — `tests/internal/test_resolver.py::TestPipeResolver::test_runtime_registered_pipe_prefixed_module_resolves`
+  (extensibility § 24).
+
+**Shipped (§ 2b characterization rows).** The two open-question rows landed as **characterization**
+tests that pin current behavior (to be *updated, not deleted*, when the behavior is decided):
+
+- **R19** — `tests/public/test_pipe_implementations.py::test_filter_greater_less_compare_strings_lexicographically`
+  pins that `filter`'s `greater`/`less` compare string values lexicographically (`"9" > "10"`) while
+  numeric values compare numerically.
+- **R17** — `tests/internal/test_compile.py::test_convert_dag_empty_modules_yields_only_output` pins
+  that an empty DAG yields just the terminal `output` node (the reported `module_ids[-1]` crash is
+  *not reproduced*), rather than raising.
+
+**Remaining.** None — the § 2b regression batch is complete (local repairs fixed, owned rows guarded
+by strict-xfail tripwires, open questions pinned by characterization tests).
 
 ## 6. Relationship to the P-track
 

@@ -265,6 +265,17 @@ def test_convert_dag_linear_default_matches_explicit_wires():
     assert linear == wired
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="An empty module list never reaches ``module_ids[-1]`` because the terminal "
+    "``output`` node is appended unconditionally. So ``convert_dag`` returns just that"
+    " node with no wires rather than raising.",
+)
+def test_convert_dag_empty_modules_raises():
+    with pytest.raises(IndexError):
+        convert_dag({"modules": []})
+
+
 def test_convert_dag_wires_override_listing_order():
     dag = loads((DAG_DIR / "pipe_reordered.json").read_text())
     wires = convert_dag(dag)["wires"]

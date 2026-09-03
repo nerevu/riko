@@ -5,6 +5,8 @@ Note: many of these tests simply make sure the module compiles and runs.
 We need more extensive tests with stable data feeds!
 """
 
+import gc
+import sqlite3
 from collections.abc import Sequence
 from decimal import Decimal
 from importlib import import_module
@@ -18,6 +20,7 @@ import pytest
 from riko._iterutils import listize
 from riko._rssutils import truncate_content
 from riko.bado._backend import run
+from riko.collections import SyncPipe
 from riko.compile import (
     abuild_pipeline,
     build_pipeline,
@@ -116,6 +119,34 @@ def _check_results(
         msg += f"{len(items)} items. First item is {truncate_content(first)}"
 
     assert compared == _check, msg
+
+
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
+@pytest.mark.xfail(
+    strict=True,
+    reason="fetchtable opens the binary source as text via Fetch(url, encoding=...),"
+    " so a sqlite (or xlsx) fixture raises UnicodeDecodeError",
+)
+def test_fetchtable_reads_sqlite_fixture(tmp_path):
+    """
+    A binary tabular source (sqlite here; xlsx under the same defect) must be
+    opened in binary mode and yield its rows.
+    """
+    dbpath = tmp_path / "cars.sqlite"
+    connection = sqlite3.connect(dbpath)
+    connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
+    connection.execute("INSERT INTO t VALUES ('ford', 7213)")
+    connection.commit()
+    connection.close()
+
+    try:
+        rows = list(SyncPipe("fetchtable", conf={"url": str(dbpath)}))
+    except UnicodeDecodeError:
+        rows = []
+
+    gc.collect()
+    assert rows
+    assert rows[0]["make"] == "ford"
 
 
 class TestBasics:

@@ -15,9 +15,11 @@ from requests import Response
 
 from riko._io import Fetch
 from riko._reencode import Reencoder, reencode
+from riko.bado.io import async_url_open
 from riko.modules import csv
 from riko.paths import get_path
 from riko.types._configs import CsvObjconf
+from tests import async_test
 from tests._loopback import loopback_url
 
 
@@ -49,6 +51,27 @@ def test_csv_headerless_closes_original_source(monkeypatch):
 
     list(csv.parser({}, None, conf))
     assert closed
+
+
+@pytest.mark.simulated_network
+@pytest.mark.xfail(
+    strict=True, reason="async_url_open ignores the Content-Type and decodes as utf-8"
+)
+@async_test
+async def test_async_url_open_honors_content_type_charset():
+    """
+    The async opener must decode using the declared response charset (what the sync
+    ``Fetch`` path already does).
+    """
+    body = "café ünïcode".encode("iso-8859-1")
+
+    with loopback_url(
+        body, content_type="text/plain; charset=iso-8859-1", path="p.txt"
+    ) as url:
+        async with async_url_open(url) as f:
+            result = f.read()
+            assert result
+            assert "é" in result
 
 
 class TestReencode:
