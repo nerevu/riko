@@ -181,6 +181,11 @@ boundary, warns when migration occurs, normalizes immediately to v2, and seriali
 deterministically to canonical `WriteNode` plus its Target/Format representation; execution never
 keeps a parallel v1 `write` runtime.
 
+Released v1 terminal `_OUTPUT` pseudo-nodes are loader syntax only. `migrate_v1_to_v2()` consumes the
+pseudo-node and its terminal wire, translates the producer endpoint to top-level canonical
+`outputs`, and drops the pseudo-node before canonical validation. No canonical node/edge or v2
+serializer recreates it.
+
 The v1 loader is intentionally temporary. At **1.0**, normal workflow loading is v2-only and rejects
 v1 input. The offline `migrate_v1_to_v2()` utility may remain as a rescue/conversion tool without
 making v1 executable. Unreleased branch-only experiments, including the discarded public `sink()`
@@ -217,6 +222,11 @@ Top-level outputs are explicit references:
 
 There is no fake `type:"output"` module. Authoring may omit `outputs` only when exactly one
 unambiguous leaf exists; normalization materializes `outputs.default`.
+
+A canonical workflow must contain at least one executable node. Top-level `outputs` describe how a
+non-empty graph is exposed; they do not make an empty graph meaningful. Legacy
+`convert_dag({"modules": []})` therefore becomes a definition error when it is routed through this
+normalization boundary rather than producing an output-only pseudo-graph.
 
 ### E3.3 Node families
 
@@ -405,6 +415,7 @@ Validation rejects, before source consumption where applicable:
 
 ```text
 unsupported format_version
+empty node set / no executable node
 unknown node/edge family
 unknown structural field
 unknown/undeclared port
@@ -418,6 +429,11 @@ invalid registered module conf when the module contract is available
 invalid registered action params when the action contract is available
 invalid registered target configuration when the target contract is available
 ```
+
+Invalid graph/workflow structure raises `InvalidPipelineError`, a `PipelineError` subtype, rather
+than leaking traversal accidents such as `IndexError`/`KeyError`. At the legacy DAG adapter boundary,
+`convert_dag({"modules": []})` must fail immediately with this domain-error family (the message must
+state that at least one module/node is required) once R4A owns conversion.
 
 Forward compatibility comes from explicit `format_version`, not from an older runtime silently
 executing a workflow whose new semantics it does not understand.
@@ -438,6 +454,10 @@ Acceptance:
   or publish edges;
 - normalize(normalize(x)) is stable;
 - v1 migration followed by v2 serialization never emits v1-only structure;
+- a released v1 `_OUTPUT` pseudo-node migrates to top-level canonical `outputs` and is never emitted
+  by v2 normalization/serialization;
+- empty v1 DAGs and empty v2 workflows fail with `InvalidPipelineError` before graph traversal or
+  source consumption;
 - released v1 `write` normalizes to canonical `WriteNode` rather than executing a legacy module;
 - normal v1 loading warns/migrates during 0.x and is rejected at the 1.0 runtime boundary, while an
   offline migration utility may remain;
