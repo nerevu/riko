@@ -308,3 +308,74 @@ by strict-xfail tripwires, open questions pinned by characterization tests).
   *layering* half of P13; the `tests/typing/{valid,invalid}/` type-check split is MILESTONES' half.
 - **Live status** (done/next/suite count) lives only in the
   [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) tracker — do not restate it here.
+
+## 7. Operations as Code and cross-package test ownership
+
+Operations as Code adds cross-package scenarios but **does not change the one-test-owner rule**.
+Tests follow the contract owner rather than being copied into every package that participates:
+
+| Concern | Test owner |
+|---|---|
+| `OperationSpec`, `OperationPlan`, reproducibility, overlays, import provenance/lossiness, `CompatibilityReport`, deployment drift | `operations-as-code.md` / `riko-ops` |
+| provider-native asset discovery/acquisition/export/deployment/inspection and target compatibility facts | `provider-integrations.md` / provider package |
+| common capability discovery/catalog/policy/approval | `mcp.md` / `riko-mcp` |
+| provider `OperationHandle` waiting | `provider-integrations.md` |
+| Microsoft `ChangePlan`/desired-state/apply/verify | `microsoft-administration.md` / `riko-microsoft` |
+| durable scheduler/runner phase boundaries | `orchestration.md` / orchestration adapter package |
+| operation command parsing/rendering/exit codes | `cli.md` / `riko-cli` |
+| Pipeline/runtime/state/idempotency mechanics used underneath | existing Core public/internal owners |
+
+Do not create a giant duplicated "Operations as Code" test suite inside Core. Cross-package
+functional fixtures should prove composition while each semantic assertion remains concentrated in
+its owning package.
+
+Two architecture fixtures are required once the corresponding adapters exist:
+
+### SuperOps script → GitHub Actions
+
+A functional fixture should prove the composition:
+
+```text
+provider discovery/acquisition
+→ preserved source artifact/provenance
+→ normalized OperationSpec
+→ shared capability discovery
+→ CompatibilityReport
+→ target deployment
+→ target inspection
+→ automation-drift comparison
+```
+
+The provider fixture owns extraction/deployment facts; `riko-ops` owns normalization, compatibility,
+and drift assertions; CLI tests, if any, only prove command adaptation. The fixture must include at
+least one target-specific semantic that is flagged as adaptation/manual/unsupported so the test does
+not accidentally assert universal portability.
+
+### Windows Autopilot approval + long provider wait
+
+A functional fixture should prove:
+
+```text
+OperationSpec
+→ Microsoft ChangePlan
+→ OperationPlan containing the ChangePlan fingerprint
+→ human/policy approval
+→ apply
+→ OperationHandle
+→ wait_operation
+→ authoritative Microsoft verification
+→ operation verification/evidence
+```
+
+The test must invalidate approval when the nested `ChangePlan` changes and must prove that long
+waiting still uses provider `OperationHandle` semantics even if orchestration persists/resumes the
+handle across a run boundary.
+
+These fixtures should use deterministic fake providers/runners until live integration tests are
+explicitly enabled. Secrets, tenant IDs, remote script contents, and unredacted imported values do
+not belong in snapshots/golden files.
+
+Implementation scaffolding should add tests in the same order as the corresponding owners land:
+provider hooks → operations services → orchestration/CLI adapters → cross-package fixtures. The
+`testing.md` layer rules remain unchanged; Operations as Code is another consumer of them, not a
+fifth test layer.

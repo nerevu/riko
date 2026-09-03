@@ -12,6 +12,13 @@ gameplans, especially:
 - `fanout-topology.md` — publish/subscribe/split topology;
 - `callable-pipes.md` — callable/decorator specialization;
 - `feed-native-streaming.md` — per-module Feed-native migration;
+- `provider-integrations.md` — provider semantics, operation waiting, provider-native operation
+  import/export/deployment/inspection hooks;
+- `mcp.md` — capability discovery/catalog/policy/approval;
+- `operations-as-code.md` — `OperationSpec`, `OperationPlan`, Git source-of-truth,
+  validate/plan/apply/verify, compatibility, migration, deployment drift;
+- `orchestration.md` — external scheduling and durable run boundaries;
+- `cli.md` — terminal adapters;
 - `release-readiness.md` — public-release gate;
 - `module-enums.md` — generated discoverability;
 - `testing.md` — test-layer ownership.
@@ -19,6 +26,10 @@ gameplans, especially:
 The P-track remains useful as history/status, but its older P11/P12 sketches are not an API contract.
 Where this dependency graph conflicts with a pending-phase sketch, the reconciled gameplan owner and
 this graph win.
+
+Operations as Code is deliberately sequenced **after** the shared Core/provider/capability seams it
+consumes. This document may say when its scaffolding lands; it must not restate its types or
+lifecycle contracts.
 
 ## 2. Existing work classification
 
@@ -75,7 +86,10 @@ Do not implement these pending-plan shapes:
 - argparse-shaped CLI plugin contracts;
 - public `collect()` / `first()` execution terminals;
 - execution knobs on `with_config()`;
-- RDP-owned generic `Checkpoint` or sequence/expansion-path identity.
+- RDP-owned generic `Checkpoint` or sequence/expansion-path identity;
+- a Core-owned `OperationSpec`/`OperationPlan` or second operation runtime;
+- provider-local `CompatibilityReport` or capability catalog;
+- orchestration-owned operation source-of-truth/planning semantics.
 
 ## 3. Dependency graph
 
@@ -102,9 +116,15 @@ R0  characterization + type-name cleanup
                               |
                               +--> R10 Feed-native module migration
 
-R1..R10 --> R11 CLI/orchestration/provider integration
-         --> R12 external extension proof + release gate
+R1..R10 --> R11 CLI/orchestration/provider/MCP integration
+                |
+                +--> R11A Operations as Code scaffolding
+                |
+                +--> R12 external extension proof + release gate
 ```
+
+`R11A` is a dependency-order label, not a new semantic owner or public phase family. The detailed
+Operations as Code semantics remain in `operations-as-code.md`.
 
 The graph is intentionally not identical to P8–P14 numbering. The reconciled architecture introduced
 foundational identity/resource/state work that cuts across those phases.
@@ -391,7 +411,62 @@ Only after the core contracts above are stable:
 - REST/monitoring persist source state through R6 rather than SourceCheckpoint/CheckpointStore;
 - provider/MCP sessions are declared `Resource`s resolved once per execution;
 - provider side effects consume centrally derived idempotency keys;
+- provider resources/actions project into the shared `CapabilityCatalog` rather than a second
+  provider catalog;
+- provider integrations establish the `OperationHandle` waiter contract before Operations as Code
+  needs long-running provider steps;
 - RDP projects R5/R6 identity/state rather than owning parallel checkpoint semantics.
+
+### R11A — Operations as Code implementation scaffolding
+
+**Goal:** introduce the minimum external/package scaffolding needed to prove the Operations as Code
+architecture without changing Core runtime contracts.
+
+This slice starts only after the relevant R11 service seams exist. It consumes, rather than
+redefines, the contracts in `operations-as-code.md`, `provider-integrations.md`, `mcp.md`,
+`orchestration.md`, `extensibility.md`, and `cli.md`.
+
+Recommended PR order:
+
+```text
+R11A.1  riko-ops package skeleton + repository loader/OperationSpec serialization boundary
+R11A.2  validate + OperationPlan aggregation over shared CapabilityCatalog/domain plans
+R11A.3  provider operation-asset discovery/acquisition hook + preserved-source fixture
+R11A.4  provider target compatibility-facts + export/deploy/inspect hook
+R11A.5  apply + verify service using existing Pipeline/capability/provider contracts
+R11A.6  source/deployment identity + automation-drift service
+R11A.7  common import provenance/lossiness + CompatibilityReport
+R11A.8  orchestration adapter for one-run and split plan/apply/verify flows
+R11A.9  Click command-provider stub for `riko operation ...`
+R11A.10 external operation-pack registration proof
+R11A.11 cross-package scenario fixtures
+```
+
+Implementation guardrails:
+
+- `nerevu/riko` receives no Operations as Code runtime classes merely for convenience;
+- repository/config loaders store credential references, never resolved secrets;
+- capability discovery/policy/approval comes from MCP;
+- provider-specific import/export/deploy/inspect code lives with provider integrations;
+- orchestration carries exact plan identity across durable boundaries and never silently re-plans;
+- the CLI stays a thin service adapter;
+- operation-pack discovery lands through extensibility after one external-pack proof;
+- common migration/compatibility logic does not embed any one RMM's API model.
+
+Two implementation-readiness fixtures close the slice:
+
+1. **SuperOps-like script → Git-backed OperationSpec → GitHub-Actions-like target**: preserve the
+   source artifact, normalize known semantics, report at least one lossy/unsupported target fact,
+   deploy a derived artifact through a fake provider target, and detect target drift.
+2. **Autopilot operation**: aggregate a Microsoft `ChangePlan` into `OperationPlan`, bind human
+   approval to the nested plan identity, apply, receive `OperationHandle`, exercise bounded waiting
+   (including a durable orchestration handoff), and verify authoritative final state.
+
+Use fakes/golden fixtures first. Live provider implementations are later external-package work and do
+not block proving ownership boundaries.
+
+**Exit:** both fixtures compose existing owners without introducing a second capability catalog,
+state store, scheduler, provider waiter, Microsoft plan, or runtime execution model.
 
 ### R12 — external proof and release gate
 
@@ -403,6 +478,10 @@ Prove the architecture with at least one external extension package before freez
 - external Publisher/Subscription or StateStore implementation;
 - generated P9 discoverability includes the extension;
 - no core edit required.
+
+Operations as Code scaffolding may provide an additional ecosystem proof, but it does not replace the
+Core external-extension proof above; Core 1.0 must remain independently extensible without requiring
+`riko-ops`.
 
 Then run the release-readiness wheel, typing, docs, optional-dependency, and public-surface gates.
 
@@ -418,12 +497,18 @@ After R0/R1:
 - CLI command registry/Click plugin mechanics can proceed independently, but execution commands must
   wait for R4.
 
-Do **not** parallelize competing implementations of identity, resource lifecycle, state, or pub/sub
-ownership. Each has one authoritative core implementation.
+After R11 service seams stabilize, provider import/export scaffolding, operation repository/model
+work, and CLI command-provider stubs may proceed in parallel only where their interfaces are already
+owned. The first cross-provider compatibility and orchestration scenarios wait for those seams.
+
+Do **not** parallelize competing implementations of identity, resource lifecycle, state, pub/sub,
+capability discovery/policy, operation planning, provider waiting, or compatibility ownership. Each
+has one authoritative implementation.
 
 ## 6. First implementation slice
 
-The recommended next coding PR is **R0**, not a state-store or pub/sub PR.
+The recommended next coding PR remains **R0**, not an Operations as Code, state-store, or pub/sub PR,
+unless the branch has already completed the prerequisite sequence by the time implementation starts.
 
 R0 is deliberately small and low-risk:
 
@@ -434,7 +519,8 @@ R0 is deliberately small and low-risk:
 5. make no public runtime change yet.
 
 After R0, R1/R2/R3 can proceed without fighting the public `Pipeline` class name or relying on
-unrecorded legacy behavior.
+unrecorded legacy behavior. R11A is **not** permission to jump around those prerequisites; it is the
+first Operations as Code slice once the owning lower-level seams exist.
 
 ## 7. Completion criteria
 
@@ -449,5 +535,9 @@ The implementation reconciliation is complete when:
 7. batch mode does not create a second pipeline hierarchy;
 8. agent iteration reuses `loop` and the existing Pipeline DAG;
 9. external packages can use resources/state/pubsub without core changes;
-10. the release docs and generated public surface contain none of the superseded abstractions listed
+10. Operations as Code scaffolding lives outside Core and composes provider/capability/orchestration
+    owners without duplicate contracts;
+11. the SuperOps→GitHub Actions and Autopilot fixtures prove import/deploy and
+    plan/approval/wait/verify composition respectively;
+12. the release docs and generated public surface contain none of the superseded abstractions listed
     in §2.

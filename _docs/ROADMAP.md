@@ -13,10 +13,35 @@ contract. In particular, the reconciled Pipeline/Context/resource/pubsub/state/i
 architecture is authoritative in
 [execution-semantics.md](gameplans/execution-semantics.md).
 
-Riko Core remains the configurable pipeline engine. Ecosystem gameplans may build larger
-capabilities — including Connect, AI, site generation, Microsoft administration, and
-Operations as Code — on those core execution contracts without expanding the promises of the
-core package itself.
+## Core and ecosystem boundary
+
+**Riko Core is the configurable Python pipeline engine.** Its job is to define, compose, inspect,
+and execute reusable Pipelines with the common runtime contracts for Context/resources,
+sync/async execution, identity/idempotency, state/checkpoints, fan-out, batching, retry, and
+artifacts.
+
+The broader **Riko ecosystem is built on Core**. Connect/RDP, provider integrations, MCP/AI,
+Microsoft administration, site generation, orchestration adapters, and Operations as Code consume
+Core contracts while owning their domain semantics in separate gameplans/packages.
+
+That boundary matters for both architecture and product direction:
+
+```text
+Riko Core
+    configurable Pipeline engine and runtime contracts
+        ↓
+ecosystem packages
+    Connect / providers / MCP / AI / Microsoft / Site / Operations as Code
+        ↓
+applications and products
+    managed services / hosted tooling / vertical solutions / control planes
+```
+
+The roadmap may point to strategic ecosystem opportunities, but they do not expand what the `riko`
+package promises. Migration and automation portability are important Operations as Code adoption
+levers; they are compatibility goals and reports, **not guarantees of lossless translation between
+vendors**. Commercial packaging is documented separately in
+[commercialization.md](gameplans/commercialization.md) and does not own runtime contracts.
 
 ## Which doc for which info
 
@@ -28,7 +53,8 @@ core package itself.
 | **P-track file maps / exit tests / phase history** | [MILESTONES.md](MILESTONES.md) |
 | **Forward implementation dependency order** | [implementation-sequence.md](gameplans/implementation-sequence.md) |
 | **Detailed target design** | matching [gameplan](#gameplans) |
-| Git-first **Operations as Code** — reproducibility, plan/apply/verify, deployment drift, import, and automation migration | [operations-as-code.md](gameplans/operations-as-code.md) |
+| Git-first **Operations as Code** — reproducibility, validate/plan/apply/verify, deployment drift, import, and automation migration | [operations-as-code.md](gameplans/operations-as-code.md) |
+| **Commercial ecosystem strategy** without changing Core contracts | [commercialization.md](gameplans/commercialization.md) |
 | Public / EXT / private import surface | [API_SURFACE.md](API_SURFACE.md) |
 | User migration / changelog | [MIGRATION.rst](MIGRATION.rst) · [CHANGES.rst](CHANGES.rst) |
 
@@ -39,7 +65,8 @@ Tie-breakers:
 - live status -> PHASE_CHECKLISTS;
 - P-track mechanics/history/file maps -> MILESTONES;
 - forward implementation dependency order -> implementation-sequence;
-- target/end-state API semantics -> owning gameplan.
+- target/end-state API semantics -> owning gameplan;
+- commercial packaging/market hypotheses -> commercialization, never a semantic owner.
 
 `§N` contract topics and `PN` implementation phases are separate axes.
 
@@ -113,12 +140,12 @@ The complete `§0–27` routing map:
 
 | Gameplan | Covers |
 |---|---|
-| [extensibility.md](gameplans/extensibility.md) | Module/plugin/workflow/observability/adapters/drivers ecosystem; §24 module registry. |
+| [extensibility.md](gameplans/extensibility.md) | Module/plugin/workflow/observability/adapters/drivers ecosystem; §24 module registry; registration seams consumed by Operations as Code packs without owning operation semantics. |
 | [module-registry.md](gameplans/module-registry.md) | P8 registry/resolution seam. |
 | [module-enums.md](gameplans/module-enums.md) | Generated module enum/tree/discovery naming. |
-| [cli.md](gameplans/cli.md) | Click-native CLI/plugin API, configuration, immutable Context assembly, output/events/approval/exit codes, PipelineRef run adapters. |
-| [ownership.md](gameplans/ownership.md) | One-owner-per-contract map and boundary calls. |
-| [implementation-sequence.md](gameplans/implementation-sequence.md) | Forward implementation dependency graph; classifies existing work as keep/refactor/supersede without redefining semantic contracts. |
+| [cli.md](gameplans/cli.md) | Click-native CLI/plugin API, configuration, immutable Context assembly, output/events/approval/exit codes, PipelineRef run adapters, and thin Operations as Code command adapters. |
+| [ownership.md](gameplans/ownership.md) | One-owner-per-contract map, canonical terminology, and boundary calls. |
+| [implementation-sequence.md](gameplans/implementation-sequence.md) | Forward implementation dependency graph; classifies existing work as keep/refactor/supersede and sequences Operations as Code scaffolding without redefining semantic contracts. |
 
 ### AI & agents
 
@@ -128,28 +155,29 @@ The complete `§0–27` routing map:
 | [ai-inference-research.md](gameplans/ai-inference-research.md) | Research/ADR rationale for AI inference. |
 | [agents.md](gameplans/agents.md) | Agent-oriented workflows built from ordinary `Pipeline`, public pub/sub protocols, existing `loop` iterative state, common `StateStore`, and provider/tool side effects; no `AgentGraph`. |
 | [agent-scenarios.md](gameplans/agent-scenarios.md) | Deterministic/policy-aware scenario/evaluation layer over the capability catalog. |
-| [mcp.md](gameplans/mcp.md) | MCP **client-first** capability discovery/catalog/execution, OpenAPI/APIs.guru, execution-owned session resources, policy/artifacts/telemetry; MCP server comes only after client contracts stabilize. |
+| [mcp.md](gameplans/mcp.md) | MCP **client-first** capability discovery/catalog/execution, OpenAPI/APIs.guru, execution-owned session resources, policy/artifacts/telemetry; Operations as Code consumes the same catalog/policy rather than defining another. |
 
 ### Providers, operations, Microsoft & orchestration
 
 | Gameplan | Covers |
 |---|---|
-| [provider-integrations.md](gameplans/provider-integrations.md) | SaaS provider CRUD/search/webhooks/cache/batch/idempotent writes/identity mapping/browser fallback/async operations using common Context/resources/state/idempotency. |
-| [operations-as-code.md](gameplans/operations-as-code.md) | **Operations as Code** — Git-first operation definitions, reproducibility, plan/apply/verify, client/environment overlays, deployment targets and automation drift, import/normalization, compatibility analysis, and RMM/platform migration without redefining Core execution or orchestration. |
+| [provider-integrations.md](gameplans/provider-integrations.md) | SaaS provider CRUD/search/webhooks/cache/batch/idempotent writes/identity mapping/browser fallback/async operations plus provider-specific operation-asset import/export/deployment/compatibility hooks using shared capability and Operations as Code models. |
+| [operations-as-code.md](gameplans/operations-as-code.md) | **Operations as Code** — Git-first operation definitions, reproducibility, validate/plan/apply/verify, client/environment overlays, deployment targets and automation drift, import/normalization, compatibility analysis, and RMM/platform migration without redefining Core execution or orchestration. |
 | [azure-automation.md](gameplans/azure-automation.md) | Azure ARM/PowerShell, Service Bus/Event Grid, desired-state adapters. |
-| [microsoft-administration.md](gameplans/microsoft-administration.md) | Microsoft administrative workflow semantics. |
-| [autopilot-provisioning.md](gameplans/autopilot-provisioning.md) | Windows Autopilot provisioning scenario. |
+| [microsoft-administration.md](gameplans/microsoft-administration.md) | Microsoft administrative desired-state/`ChangePlan`/approval/apply/verify semantics consumed by Operations as Code when Microsoft steps are present. |
+| [autopilot-provisioning.md](gameplans/autopilot-provisioning.md) | Windows Autopilot provisioning scenario and long-running provider-operation proof. |
 | [monthly-dashboard.md](gameplans/monthly-dashboard.md) | MSP monthly reconciliation/dashboard scenario: SuperOps/Graph/Action1/Huntress/Axcient providers → canonical device reconciler + license calc + QA invariants → Airtable sink; consumes the Microsoft/provider/sink/plan-apply contracts. |
-| [orchestration.md](gameplans/orchestration.md) | Cron/webhook/Airflow/Prefect/Dagster/dbt run adapters; canonical Python run requests use `PipelineRef`. |
+| [orchestration.md](gameplans/orchestration.md) | Cron/webhook/Airflow/Prefect/Dagster/dbt run adapters; schedules bounded Pipeline/operation phases without owning Operations as Code source-of-truth or planning semantics. |
 
-### Documentation & testing
+### Strategy, documentation & testing
 
 | Gameplan | Covers |
 |---|---|
+| [commercialization.md](gameplans/commercialization.md) | Ecosystem commercialization strategy, Operations as Code adoption/managed-product paths, MSP client-facing products, and small-nonprofit MissionOps tiers; owns no runtime/API contract. |
 | [module-documentation.md](gameplans/module-documentation.md) | Yahoo! Pipes module reference documentation. |
 | [inspiration-coverage.md](gameplans/inspiration-coverage.md) | Traceability from preserved prior-art ideas to active gameplans. |
-| [riko-site.md](gameplans/riko-site.md) | Site pipeline. |
-| [testing.md](gameplans/testing.md) | Test-suite layering and file-by-file cleanup plan. |
+| [riko-site.md](gameplans/riko-site.md) | Framework-neutral site pipeline built on Core. |
+| [testing.md](gameplans/testing.md) | Test-suite layering and file-by-file cleanup plan, including where Operations as Code cross-package scenario coverage belongs. |
 
 ### Retired redirects
 

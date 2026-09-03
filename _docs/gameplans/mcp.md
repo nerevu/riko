@@ -23,6 +23,9 @@ AI ranking, decomposition, synthesis, and verification belong in `riko-ai`, not 
 Agent-oriented workflows reuse ordinary Riko `Pipeline` definitions; MCP does not provide an
 agent graph/runtime.
 
+Operations as Code consumes this package's common capability discovery/catalog/policy/approval
+contracts; it does not create an operation-specific capability catalog or security policy engine.
+
 ---
 
 # 2. Prerequisites
@@ -78,6 +81,13 @@ There is no public `ExecutionContext`.
 verification, summarization/research, and model routing. It consumes public `riko-mcp`
 contracts.
 
+## `nerevu/riko-ops`
+
+Operations as Code owns `OperationSpec`, `OperationPlan`, Git/repository semantics, operation-level
+validate/plan/apply/verify coordination, import/normalization, compatibility, deployment identity,
+and automation drift. It consumes `CapabilityCatalog`, `CapabilityPlan`, effects, policy, and
+approval from this plan rather than duplicating them.
+
 ---
 
 # 4. Source design retained from Langly and AutoGen
@@ -128,8 +138,10 @@ then remote auth/OAuth. Transport choices never create their own event loop.
 
 ## 5.4 One unified capability catalog
 
-The catalog includes native Riko modules/exports, MCP tools/resources/templates, and OpenAPI
-operations. Multi-step AI planning belongs in `riko-ai`.
+The catalog includes native Riko modules/exports, MCP tools/resources/templates, OpenAPI
+operations, and provider-projected capabilities. Multi-step AI planning belongs in `riko-ai`.
+Operations as Code resolves required capabilities from this same catalog; operation compatibility
+may consume catalog facts but does not create another catalog.
 
 ## 5.5 No independently persisted derived tags
 
@@ -148,7 +160,9 @@ discover
 → execute
 ```
 
-Selection never performs execution implicitly.
+Selection never performs execution implicitly. An Operations as Code `plan` may reference one or
+more validated `CapabilityPlan` values, but the operation lifecycle uses `apply` for the operation
+phase; capability `execute` remains this package's term.
 
 ## 5.7 Context precedence
 
@@ -178,6 +192,10 @@ Default is policy-driven. Known read-only actions may run automatically; unknown
 writes require confirmation by default; destructive actions require explicit policy plus
 appropriate confirmation/unattended authorization. Model confidence never overrides policy.
 
+Operations as Code approval may be bound to an `OperationPlan` fingerprint by its owner; the
+underlying capability/domain plan identities must remain part of that binding so an operation
+cannot use one approval to execute a materially changed capability plan.
+
 ## 5.9 Sessions are execution resources
 
 Never establish a new MCP session/subprocess per item. Declare MCP client/session resources
@@ -189,7 +207,8 @@ receives the execution-bound resource view through existing wrapper preparation.
 
 ## 5.10 MCP is not internal Riko transport
 
-Do not route ordinary `rename`, `filter`, `sort`, `map`, pub/sub, or export edges through MCP.
+Do not route ordinary `rename`, `filter`, `sort`, `map`, pub/sub, export edges, or operation
+repository/deployment metadata through MCP.
 
 ---
 
@@ -310,6 +329,10 @@ ApisGuruProvider
 OpenApiProvider
 ```
 
+Provider integrations may also project provider-native resources/actions through this same contract;
+provider-specific discovery mechanics remain in `provider-integrations.md` while catalog identity and
+conflict resolution remain here.
+
 Catalog construction validates identity conflicts and creates one deterministic catalog
 fingerprint using the common Riko fingerprinting contract where applicable.
 
@@ -335,6 +358,10 @@ The model may not inject a new base URL/schema URL, undeclared headers, raw cred
 HTTP method, or schema-invalid arguments.
 
 Discovery plans may expand a catalog but may not execute the final user task.
+
+An `OperationPlan` may reference `CapabilityPlan` values, but it remains a distinct higher-level
+contract owned by `operations-as-code.md`; do not broaden `CapabilityPlan` into a generic operation
+plan.
 
 ---
 
@@ -462,6 +489,20 @@ Stdio commands come only from trusted operator configuration. AI output cannot d
 executable/arguments. Use executable/working-directory allowlists, minimal environment,
 bounded stderr, and deterministic child-process cleanup.
 
+Operations as Code must pass through the same policy boundary:
+
+* an imported script/workflow is **data**, not permission to execute it;
+* importer/compatibility output cannot add a host, credential, capability, method, executable, or
+  effect to an allowlist;
+* an operation's required capabilities must resolve through the shared catalog before apply;
+* target deployment/export is a side effect and receives normal effect/policy/approval treatment;
+* AI-assisted operation normalization or target mapping is a proposal and cannot reduce policy;
+* operation/source/deployment fingerprints do not substitute for authorization;
+* plan-bound approval is rejected after `OperationPlan` or referenced `CapabilityPlan` identity
+  changes.
+
+The Operations as Code layer may be more restrictive, but it cannot silently weaken this policy.
+
 ---
 
 # 14. Session lifecycle
@@ -525,6 +566,9 @@ Rules:
   numeric/code/freshness/size bounds, and catalog/schema fingerprints;
 * automatic capability reselection belongs in `riko-ai`, not retry handling.
 
+An Operations as Code caller must not treat capability retry/reselection as permission to re-plan an
+already-approved `OperationPlan` silently.
+
 ---
 
 # 17. Parallel execution
@@ -563,6 +607,9 @@ Execution history may record task/plan/catalog fingerprints, status, latency/cos
 validation result, and reviewer outcome. History is telemetry/audit data, not hidden planner
 state.
 
+Operation-level evidence may reference this telemetry through stable capability/plan/run IDs; MCP
+history does not become the canonical operation repository or deployment record.
+
 ---
 
 # 20. Sandboxed computation
@@ -570,6 +617,9 @@ state.
 Never expose an in-process Python REPL. Sandboxed computation is an external MCP capability
 with isolated filesystem/process/network/resource limits and explicit artifact inputs/outputs.
 Default approval is `always` initially.
+
+Imported operation source does not become a sandboxed-computation request automatically; it must be
+resolved to an explicitly allowed capability through normal Operations as Code validation/planning.
 
 ---
 
@@ -639,6 +689,10 @@ M17  MCP server after client contracts stabilize
 M0/M2 must explicitly verify execution-owned resource cleanup in both sync and async Pipeline
 execution and ensure no production code depends on public `ExecutionContext`.
 
+Operations as Code integration requires no new MCP phase: once M1/M7 are stable, `riko-ops` consumes
+catalog/policy/approval as an external package. M14 should include imported-operation security
+fixtures proving an importer/AI proposal cannot widen policy.
+
 ---
 
 # 24. Testing requirements
@@ -659,6 +713,10 @@ Unit/contract coverage includes:
 * SSRF/private-network/redirect/size controls;
 * stale catalog/schema plans;
 * malicious schemas/invalid results;
+* imported operation/compatibility proposals cannot expand allowlists or bypass effect/approval
+  policy;
+* changed referenced `CapabilityPlan` identity invalidates an operation-level approval supplied by a
+  caller;
 * strict Pyright for all public APIs.
 
 Use fake MCP servers and golden catalogs/plans/operation lists/audit/artifact/candidate fixtures.
@@ -677,8 +735,8 @@ credential reference
 → connector/OpenAPI executor
 ```
 
-Token values never enter capability plans, catalog records, pipeline definitions, artifacts,
-or normal items.
+Token values never enter capability plans, catalog records, pipeline definitions, operation specs,
+compatibility reports, artifacts, or normal items.
 
 An authorizer-style API proxy is represented as configured OpenAPI capability providers, not
 a special core module. Tenant/provider configuration comes from immutable `Context` /
@@ -704,7 +762,8 @@ Do not initially implement:
 * automatic model training or hidden ranking changes;
 * distributed session management;
 * browser-based MCP clients;
-* OAuth before basic Streamable HTTP works.
+* OAuth before basic Streamable HTTP works;
+* an Operations as Code source-of-truth, compatibility, migration, or deployment model.
 
 ---
 
@@ -722,3 +781,26 @@ Phase M0 implementation work must:
 7. record request counts/bytes/schema sizes;
 8. write architecture decisions;
 9. stop before production modules, OAuth, server, AI selection, or third-party execution.
+
+---
+
+# 27. Operations as Code boundary summary
+
+Use these terms consistently across gameplans:
+
+```text
+CapabilityCatalog / CapabilityPlan / capability execute
+    owned here
+
+OperationSpec / OperationPlan / validate-plan-apply-verify / compatibility / drift
+    operations-as-code.md
+
+provider-native operation asset/deployment facts + OperationHandle waiting
+    provider-integrations.md
+
+ChangePlan
+    microsoft-administration.md
+```
+
+The security rule is equally simple: **import/discovery proposes what exists; policy decides what is
+allowed; approval authorizes an exact permitted plan; execution never widens policy itself.**

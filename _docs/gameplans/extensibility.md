@@ -12,14 +12,17 @@ Related authoritative plans:
 - [connectors.md](connectors.md) — connector/session/credential contracts;
 - [cli.md](cli.md) — Click-native CLI extension layer;
 - [mcp.md](mcp.md) — capability catalog/execution policy;
+- [operations-as-code.md](operations-as-code.md) — operation source-of-truth, OperationSpec/Plan,
+  import/compatibility/deployment semantics consumed by operation-pack extensions;
 - [implementation-sequence.md](implementation-sequence.md) — forward dependency order.
 
 This gameplan also retains the useful conclusions from prior-art research on issue #10: Pypes,
 Mario, RssPercolator, Plagger, Turtle, node-machine, and the later comparison with Bonobo, petl,
 Singer, Streamz, Bytewax, and FastPipe.
 
-The organizing rule is **contracts before interfaces**: CLI, GUI, plugins, connectors, and optional
-drivers consume one Pipeline/module/resource/state contract rather than inventing parallel models.
+The organizing rule is **contracts before interfaces**: CLI, GUI, plugins, connectors, operation
+packs, and optional drivers consume authoritative Pipeline/module/resource/state/operation contracts
+rather than inventing parallel models.
 
 ## E0. Roadmap principles
 
@@ -32,9 +35,13 @@ drivers consume one Pipeline/module/resource/state contract rather than inventin
    and protocol clients do not inflate the minimal install.
 5. **Version data, not runtime objects.** Workflow files store serializable definitions/references,
    never live clients, portals, channels, or private execution objects.
-6. **Secure by default.** Loading a workflow never installs or downloads executable code.
+6. **Secure by default.** Loading a workflow or operation pack never installs or downloads
+   executable code.
 7. **Evidence before optimization.** Optional execution drivers/per-node optimizations require
    measurable benefit without semantic drift.
+8. **Extensions specialize owners.** Operation packs, provider packages, and CLIs register
+   implementations/references; they do not redefine `OperationSpec`, capability policy, provider
+   waiting, or Core execution.
 
 ## E1. Module contract v1
 
@@ -155,6 +162,10 @@ Acceptance: every supported Pipeline topology round-trips without losing ports, 
 identity, checkpoint placement, resource references, or fan-out edges; GUI/CLI validation uses the
 same normalized model as execution preparation.
 
+An `OperationSpec` may reference/reuse a serialized workflow/Pipeline definition, but this gameplan
+does not extend the workflow format with Operations as Code source-of-truth, plan/apply/verify,
+import, compatibility, deployment, or drift semantics. Those stay in `operations-as-code.md`.
+
 ## E4. Observability hooks
 
 Observability extends, rather than replaces, execution semantics.
@@ -233,6 +244,10 @@ interchange but does not become a second checkpoint owner.
 Multi-sink broadcast uses the shared Publisher/Subscription/fan-out contract. Multi-source fan-in
 uses `union`/`merge` semantics from execution/fan-out owners.
 
+Provider-native operation import/export/deployment adapters are specialized provider extensions and
+follow `provider-integrations.md`; their common normalized operation/compatibility model remains
+owned by `operations-as-code.md`.
+
 ## E6. Experimental execution drivers
 
 Optional drivers are allowed only after the local semantic contracts are stable.
@@ -274,6 +289,11 @@ generic distributed locks/leases in core
 exactly-once claims
 ```
 
+An Operations as Code external deployment target is not automatically an E6 execution driver. If a
+GitHub Action, RMM, or Azure Automation job runs a generated artifact out of process, deployment and
+run-boundary semantics come from `operations-as-code.md`, `provider-integrations.md`, and
+`orchestration.md` respectively.
+
 ## E7. Visual tooling and 1.0 ecosystem readiness
 
 A GUI is a separate consumer of exported module/workflow contracts. It should generate palette,
@@ -294,6 +314,10 @@ materialization boundaries
 ```
 
 It does not need private execution objects to render or validate a workflow.
+
+An Operations as Code/control-plane UI may additionally render `OperationSpec`, `OperationPlan`,
+compatibility, approvals, deployments, and drift by consuming `riko-ops` service contracts. Those
+are not added to Core's workflow/GUI contract here.
 
 The ecosystem side of 1.0 readiness includes:
 
@@ -350,7 +374,7 @@ Durable local checkpoint/recovery is **not** on this non-goal list; its semantic
 > Does this make Riko better at expressing, inspecting, or executing configuration-driven
 > record-stream transformations, or mainly reproduce infrastructure another project specializes in?
 
-If the latter, prefer an adapter/driver.
+If the latter, prefer an adapter/driver or higher ecosystem package.
 
 ### Dependency ordering
 
@@ -412,6 +436,41 @@ register(ModuleDefinition(name="example.lookup", async_pipe=pipe))
 Supplying both sync and async implementations is an optimization when they genuinely differ, not a
 parity requirement.
 
+## 25. Operation packs and extension registration
+
+Operations as Code creates an additional ecosystem consumer without moving operation semantics into
+Core. `operations-as-code.md` remains authoritative for `OperationSpec`, `OperationPlan`,
+validate/plan/apply/verify, import/compatibility/deployment, and drift.
+
+A provisional installed-package seam may expose version-controlled operation definitions:
+
+```toml
+[project.entry-points."riko.operations"]
+example = "riko_example.operations:definitions"
+```
+
+This gameplan owns the **registration mechanics** only. The provider returns references/serialized
+operation definitions accepted by `riko-ops`; it does not define another operation model.
+
+Requirements:
+
+* deterministic operation ID collisions and package/version provenance;
+* lazy discovery without opening provider sessions;
+* no credential material in package definitions;
+* loading a pack never executes an operation or installs remote code;
+* compatibility/API-version mismatch is reported before planning;
+* operation-pack dependencies may reference provider/capability IDs but do not bypass capability
+  discovery/policy;
+* external operation packs require no edit to `nerevu/riko` Core.
+
+Provider importer/deployer implementations register through their provider package's extension
+mechanism; `provider-integrations.md` owns those provider-specific contracts. CLI operation commands
+register through `riko.commands`; `cli.md` owns that adapter surface.
+
+Before freezing `riko.operations` as public, prove it with at least one external pack and one
+cross-provider scenario. If the proof shows ordinary package/resource registries are sufficient,
+reuse them rather than adding a redundant registry.
+
 ## Prior-art sources
 
 Research sources retained by this plan:
@@ -422,4 +481,5 @@ Research sources retained by this plan:
 - JSON Schema;
 - OpenTelemetry Python.
 
-Related issues include plugin discovery, benchmarks, pipeline format, GUI, and protocol adapters.
+Related issues include plugin discovery, benchmarks, pipeline format, GUI, protocol adapters, and
+operation-pack distribution.
