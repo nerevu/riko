@@ -2,252 +2,270 @@
 
 ## 1. Mission
 
-Create optional connector packages that let Riko resolve and execute external data
-sources and sinks without placing protocol clients, credentials, or a monolithic fetch
-dispatcher in core.
+Create optional connector packages that let Riko read from and write to external systems without
+placing protocol clients, credentials, or provider-specific behavior in Core.
 
-This plan promotes the useful parts of Shelf milestones 5, 6, 11, 12, and 13 while
-aligning them with AnyIO, immutable `Context`/`Resource` definitions, the module registry,
-RDP, MCP policy, and private execution lifecycles.
+This plan owns concrete connector/Target adapter behavior, credential/session mechanics,
+acknowledgements, and optional protocol packages. It consumes:
+
+- canonical `Target` / `Format` / `ReadNode` / `WriteNode` structure from `extensibility.md`;
+- provider-neutral write/action behavior from `effects.md`;
+- immutable `Context` / `Resource` and execution lifetime from `execution-semantics.md`;
+- state/checkpoint semantics from `execution-semantics.md`;
+- fan-out/pub-sub semantics from `fanout-topology.md`;
+- file/artifact codecs from `artifact-conversion.md`;
+- provider semantics from `provider-integrations.md` where the adapter is a SaaS/provider package.
 
 ## 2. Package boundaries
 
 ```text
 nerevu/riko
-    SourcePlan and minimal resolver protocol, only if multiple packages need them
-    Context / Resource definitions and execution-owned resource lifecycle
-    module/export registries
+    Target / Format definitions
+    TargetRegistry contract
+    ReadNode / WriteNode / ActionNode graph structure
+    Context / Resource definitions
     Feed / FeedResult / FeedState contracts
     Publisher / Subscription protocols
 
 nerevu/riko-connect
-    source resolver registry
-    HTTP response adapter
-    file and object-storage connectors
-    FTP/SFTP
-    IMAP/SMTP
-    broker publishers and consumers
-    tabular file readers
-    CKAN and Prometheus adapters
+    concrete FILE / HTTP / object-storage / transfer / mail / broker adapters
+    optional credential implementations
     connector capability projection
 
 nerevu/riko-mcp
-    OpenAPI and MCP capability execution and policy
+    OpenAPI and MCP capability execution/policy
 
 nerevu/riko-microsoft
-    Graph, ARM, Exchange, Service Bus, Event Grid, and Microsoft credentials
+    Graph, ARM, Exchange, Service Bus, Event Grid, Microsoft credentials/actions
 ```
 
 Provider-specific dependencies remain optional extras or separate distributions.
 
+Core knows how to **describe** a Target and how an execution invokes a registered target contract;
+it does not import every SDK needed to operate those targets.
+
 ## 3. Non-negotiable decisions
 
-### 3.1 AnyIO runtime; protocols are orthogonal
+### 3.1 Target is the canonical endpoint definition
 
-Do not reintroduce Twisted as the **execution runtime**. A connector may wrap a synchronous
-stdlib or third-party client in a worker thread, or use an async client compatible with the
-AnyIO runtime (prefer asyncio-native protocol libraries: `asyncssh`, `aiosmtplib`/`aiosmtpd`,
-`aioftp`, `aioimaplib`, `bottom`, `slixmpp`). No connector starts a private event loop.
+Do not create a parallel public `SourcePlan`/`SinkPlan` identity system.
 
-**Twisted protocol implementations are not banned — only Twisted-as-runtime is.** Protocol
-support is an orthogonal adapter-layer concern (ROADMAP §23.1). Where a Twisted implementation is
-genuinely superior (chiefly server-side roles and AMP — see
-[twisted-protocol-servers.md](twisted-protocol-servers.md)), a connector may run it on the shared
-asyncio loop via `twisted.internet.asyncioreactor` **inside that connector package** — this is not
-"starting a private event loop," it is installing the asyncio reactor so Twisted protocol code
-cooperates with the AnyIO/asyncio loop the engine already runs on.
+```text
+Target
+    immutable endpoint/provider identity + reusable defaults
 
-### 3.2 Credentials are references
+Format
+    immutable interpretation/serialization identity
 
-Serialized configuration contains:
+Resource
+    live execution-owned client/session
+
+ReadNode / WriteNode
+    operation-specific behavior
+```
+
+Examples:
+
+```python
+Target(Targets.FILE, path="data.csv")
+Target(Targets.HTTP, url="https://example/api")
+Target(Targets.S3, bucket="reports", key="daily.jsonl")
+```
+
+Concrete optional packages register adapters for target names; Workflow v2 can still parse and
+validate the Target definition without importing the SDK.
+
+### 3.2 AnyIO runtime; protocols are orthogonal
+
+Do not reintroduce Twisted as the **execution runtime**. A connector may wrap synchronous clients in
+the common worker adapter or use async clients compatible with the AnyIO runtime. No connector starts
+a private event loop/portal/task group.
+
+Twisted protocol implementations are not categorically banned where they are genuinely superior;
+when used, they cooperate with the execution's asyncio/AnyIO runtime inside the optional connector
+package rather than becoming Riko's runtime.
+
+### 3.3 Credentials are references
+
+Serialized configuration contains references such as:
 
 ```json
 {"credential": "clients/contoso/sftp"}
 ```
 
-It never contains passwords, private keys, access tokens, or URI user-info. A credential
-provider resolves material inside execution scope and redacts it from events and errors.
+It never contains passwords, private keys, access tokens, or URI user-info. A credential Resource
+resolves material inside execution scope and redacts it from events/errors.
 
-### 3.3 Resolution is not execution
+### 3.4 Definition is not execution
+
+A Target can be normalized, validated structurally, fingerprinted, displayed, and serialized without
+opening a connection.
+
+Execution preparation resolves:
 
 ```text
-URI + explicit hints
-→ SourcePlan
-→ policy and credential resolution
-→ connector session
-→ records or artifacts
+Target
+-> registered adapter contract
+-> declared Resource bindings / credentials
+-> execution-owned session
+-> read/write operation
 ```
 
-`SourcePlan` is immutable, serializable, fingerprinted, and inspectable.
-
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SourcePlan:
-    resolver: str
-    uri: str
-    capability_id: str
-    media_type: str | None
-    boundedness: Literal["finite", "unbounded", "unknown"]
-    options: Mapping[str, JsonValue]
-```
-
-### 3.4 Do not steal `fetch` silently
-
-Keep the existing RSS `fetch` behavior through the current compatibility window and make
-`fetchrss` the documented canonical name. Introduce the resolver-backed entry point as
-`source` or `fetchauto` first. A future major release may rename it to `fetch` after
-warnings, migration tooling, and fixtures prove compatibility.
+No network probing occurs merely because a workflow file was loaded.
 
 ### 3.5 No hidden duplicate downloads
 
-HTTP type detection must reuse one response when possible. A resolver may use path and
-configured media type without I/O. Network probing is explicit, bounded, cached, and
-visible in the plan or events. It must not issue an unconditional HEAD followed by a
-second GET for every source.
+HTTP Format selection should reuse known Target/path/media metadata before making additional requests.
+Network probing is explicit and bounded. Do not perform unconditional HEAD + GET solely for generic
+format detection.
 
 ### 3.6 Streaming and lifecycle
 
-Connectors return lazy records, batches, `FeedResult`s, or artifact references. Sessions are
-resolved as execution-owned resources and close on exhaustion, cancellation, error, or early
-consumer termination. Connections are never opened once per item unless the protocol requires it.
+Connectors return lazy records, batches, `FeedResult`s, or artifact references where appropriate.
+Sessions are execution-owned Resources and close on exhaustion, cancellation, error, or early
+consumer termination. Connections are not opened once per item unless the protocol requires it.
 
-`Context` contains immutable resource definitions; live sessions/clients are not stored on the
-public Context.
+## 4. Target registry and execution handoff
 
-## 4. Resolver registry and execution handoff
+A dedicated `TargetRegistry` parallels `ModuleRegistry`.
 
-```python
-class SourceResolver(Protocol):
-    name: str
-    schemes: frozenset[str]
+A target definition identifies its concrete backend/provider:
 
-    def resolve(self, request: SourceRequest) -> SourcePlan | None: ...
+```text
+FILE
+HTTP
+S3
+GCS
+AZURE_BLOB
+POSTGRES
+AIRTABLE
+...
 ```
 
-A connector implementation is bound to a Pipeline node through the normal Riko module/resource
-preparation path. The node declares its direct resource dependencies, and the existing wrapper
-machinery passes the execution-bound `resources` view. Do not introduce a second public
-`ExecutionContext` or a connector-specific dependency-injection system.
+Registered adapters may implement sync, async, or both read/write protocols. The private execution
+adapts missing modes once through its shared worker/portal boundary.
 
 Conceptually:
 
 ```python
-def parser(plan: SourcePlan, resources, **kwargs):
-    return resources.connector.open(plan)
+adapter = target_registry.resolve(target.name)
+handle = resources.connector
+records = adapter.read(target, format=fmt, resource=handle)
 ```
 
-where `resources.connector` is the live execution-local handle resolved from an immutable
-`Context` `Resource` definition.
+or:
 
-Resolution precedence:
-
-```text
-explicit connector/capability
-→ explicit media type
-→ exact URI scheme resolver
-→ HTTP path/header/body resolver when probing is allowed
-→ unsupported-source error
+```python
+result = adapter.write(target, records, format=fmt, operation=write_conf, resource=handle)
 ```
 
-Duplicate exact-scheme claims fail registry construction unless an operator explicitly
-selects one resolver.
+Those are conceptual roles, not a second public API alongside `Pipeline.read()` / `Pipeline.write()`.
 
-## 5. HTTP response and document handling
+Duplicate target-name registrations fail deterministically unless the extension registration policy
+explicitly allows a qualified namespace/override.
 
-The HTTP connector emits a normalized response record with body, status, content type,
-final URL, selected headers, and timing metadata. Size limits and redirect limits are
-required.
+## 5. Format resolution and HTTP handling
 
-Content extraction is a downstream named capability:
+Canonical Format resolution order is owned by Workflow v2/effects:
 
 ```text
-http
-→ documenttext
-→ markdown
-→ contactextract
+explicit Format
+-> Target default
+-> path/URL extension
+-> target media type
+-> error
 ```
 
-PDF and DOCX extraction are optional document extras. Fetching does not accept an
-arbitrary `postprocess` callable in serialized configuration.
+Connectors provide trustworthy media metadata; they do not silently override an explicit/path-derived
+Format. Generic body sniffing is not the default contract.
 
-## 6. Storage and file connectors
+An HTTP adapter should expose response metadata needed by downstream interpretation/provenance:
+status, final URL, selected headers, content/media type, request/provider ids, and timing where useful.
+Size/redirect/time limits remain explicit.
 
-Initial finite connectors:
+Content extraction such as PDF/DOCX/HTML-to-text is downstream interpretation/transformation, not an
+arbitrary serialized `postprocess` callable hidden inside HTTP transport.
+
+## 6. Storage and file Targets
+
+Initial finite adapters:
 
 ```text
-file
+FILE
 S3
 GCS
-Azure Blob
+AZURE_BLOB
 FTP
 SFTP
-XLS/XLSX
 ```
 
-OpenDAL may back object and file storage behind an adapter, but public errors and events
-identify the Riko connector and the underlying cause. The implementation dependency is
-not treated as secret.
+OpenDAL or other maintained storage abstractions may back several adapters internally, but public
+errors/events identify the Riko target plus underlying cause.
 
-Directory reads require an explicit glob, recursive flag, and maximum object count.
-Remote object metadata should be available without forcing content materialization.
+Directory reads require explicit glob/recursive/maximum-count policy. Remote object metadata should
+be accessible without forcing content materialization.
 
-### 6.1 Sink verb vocabulary
+### 6.1 File write behavior
 
-Writes use two collection verbs on a shared destination model. `write(dest, format=, mode=)` is a
-passthrough emit (fire-and-forget copy, non-keyed `append`/`replace`, returns the stream);
-`sink(dest, mode=, keys=, idempotency_key=)` is the terminal reconciler (keyed/destructive modes,
-returns a `SinkResult`/`Plan`). A destination resolves like a pipe module — bare name / `Sinks`
-enum / typed target object — with a path-signalled string defaulting to `File`. The write-mode
-contract (`SinkMode`, `SinkWrite`, `sink_write`) lives in `riko/sinks.py`; `output` is a compiler
-DAG terminal, not a sink. Full decision record: `monthly-dashboard.md` §5.
+Generic `Pipeline.write()` semantics are owned by `effects.md`: records pass through unchanged,
+completion is reported through `WriteResult`, and graph position determines terminality.
 
-### 6.2 File write serialization and reconciliation
+The FILE adapter specializes that contract:
 
-`Shipped:` `riko/targets.py` — the `File` target, capability-aware `build_write`, and the
-`file_writer` used by the `write` verb. `write` desugars to `subscribe(on_receive=…)` (riko has no
-"taps"): a **streamable** format (`csv`/`jsonl`, `STREAMABLE_FORMATS`, overridable via
-`write(stream=…)`) is written per item as it flows; any other format buffers and writes **one
-document** when the publisher completes — full consumption or a graceful `close()`/context-manager
-exit — while an abrupt `terminate()` discards the partial buffer. `sink` (terminal, sync + async)
-resolves the target, validates the mode against its capabilities, and delivers.
+- streamable formats such as CSV/JSONL may encode per logical item;
+- framed document formats may emit bounded incremental framing when possible;
+- atomic replacement may use temp-write + flush/fsync/close + atomic rename;
+- failed/cancelled publication cleans partial artifacts best-effort and emits no success result;
+- keyed reconciliation against an existing document may stream the existing file where practical
+  (for example `ijson` for large JSON) instead of materializing it wholesale.
 
-`Current gap:`
-- **(C) Incremental framing for buffered document formats** — emit the open/separator/close frame
-  per format (`[ … ]` for json, a `FeatureCollection` wrapper for geojson, header/footer for
-  ofx/qif) so those formats also stream without holding the whole buffer, closing the frame on
-  completion/graceful close. This is hand-rolled framing over the per-item encoder, **not** an
-  `ijson` job — `ijson` is a streaming *parser*, not a serializer.
-- **Keyed file reconciliation** — `merge`/`replace`/`delete` against an existing file destination
-  needs to read the current document to diff incoming records against it. Stream that read with
-  `ijson` (the `perf` extra, already used for large-JSON ingest in `riko/parsers.py`) so a large
-  destination is reconciled without full materialization. File targets today expose only the
-  non-keyed `append`/`replace`; keyed modes stay a record-store (`build_write` `serializes=False`)
-  concern until this lands.
-- **Async `write`** — the `on_receive` writer over `async_hub`; `AsyncPipe/AsyncCollection.write`
-  raise `NotImplementedError` until then. `sink` is already async.
+The shipped compatibility `write`/`sink` collection verbs and `riko/targets.py` are migration inputs.
+The target architecture does **not** retain a separate public `sink()` terminal. Append/merge/replace/
+delete/upsert-style semantics are write-operation modes validated against Target capabilities.
 
-`Dependencies:` the mode contract (`riko/sinks.py`) and target adapters (`riko/targets.py`) are in
-place; keyed reconciliation also depends on the plan/apply gate (`monthly-dashboard.md` §8) for the
-destructive modes.
+File-open flags remain adapter implementation detail rather than the semantic write-mode axis.
 
-## 7. Mail connectors
+## 7. Database / record-store Targets
+
+Database/store adapters such as POSTGRES/AIRTABLE may expose keyed mutation capabilities:
 
 ```text
-imapread
-smtpwrite
+append
+merge/upsert
+replace
+delete
+```
+
+The generic semantics remain in `effects.md`:
+
+- required keys are explicit;
+- unsupported modes fail preparation;
+- idempotency participation is declared;
+- successful completion reports truthful WriteResult metadata;
+- destructive policy/approval may be more restrictive in provider/domain layers.
+
+Do not encode these capabilities by adding a second public collection verb.
+
+## 8. Mail connectors
+
+Examples:
+
+```text
+IMAP Target / mail source adapter
+SMTP Target / send action/write adapter where semantics fit
 ```
 
 Requirements:
 
-* parsed message metadata and raw MIME content are distinct fields;
-* attachment bodies may become artifacts above a size threshold;
-* mailbox checkpointing uses UID validity and UID, not only timestamps;
-* mailbox state persists through the common `FeedState` / `StateStore` contract;
-* SMTP write operations declare side effects and idempotency limitations;
-* Microsoft 365-specific behavior should prefer the `riko-microsoft` Graph/Exchange
-  adapter when mailbox semantics exceed generic IMAP/SMTP.
+- parsed message metadata and raw MIME content remain distinguishable;
+- attachment bodies may become artifacts above a configured threshold;
+- mailbox checkpointing uses stable UID validity/UID semantics rather than timestamps alone;
+- mailbox state persists through common FeedState/StateStore;
+- SMTP side effects declare idempotency limitations;
+- Microsoft 365-specific administration should prefer Microsoft provider adapters when generic SMTP/
+  IMAP semantics are insufficient.
 
-## 8. Broker connectors
+## 9. Broker connectors
 
 Initial adapters may include:
 
@@ -257,131 +275,126 @@ RabbitMQ
 Azure Service Bus
 ```
 
-Every adapter declares delivery semantics and acknowledgement behavior. Publishers and
-consumers implement/project the shared `Publisher` / `Subscription` protocols where applicable.
-Broker sessions are execution resources. At-least-once consumers expose message IDs and
-acknowledgement handles; best-effort transports clearly state message-loss behavior.
+Every adapter declares delivery/acknowledgement semantics. Publishers/consumers project the shared
+`Publisher` / `Subscription` protocols where applicable. Sessions are execution Resources.
 
-## 9. Structured source adapters
+At-least-once consumers expose message/change identity and acknowledgement handles needed to map
+successful disposition/checkpoint behavior. Best-effort transports state message-loss limitations
+explicitly.
 
-### 9.1 CKAN
+## 10. Structured source adapters
 
-Use CKAN APIs with explicit pagination, server-side filters where supported, resource
-hash metadata, and bounded retries. API keys are credential references.
+### 10.1 CKAN / public APIs
 
-### 9.2 Prometheus exposition
+Use maintained APIs with explicit pagination/filter support, bounded retries, and credential
+references. REST collection traversal/cursors remain owned by `rest-incremental.md`.
 
-Parse the current exposition format through a maintained parser when available. Preserve
-metric name, labels, value, timestamp, and sample type. One scrape is finite and bounded.
+### 10.2 Prometheus exposition
 
-Repeated observations **inside one Riko workflow** use `Pipeline.poll(...)` and the recurring
-observation/state semantics owned by [feed-monitoring.md](feed-monitoring.md). External schedulers may
-rerun the whole finite Pipeline through [orchestration.md](orchestration.md), but orchestration is not
-the only recurrence mechanism.
+Parse current exposition formats through maintained parsers where possible. Preserve metric name,
+labels, value, timestamp, and sample type. One scrape is finite; recurrence belongs to
+`Pipeline.poll()` / feed-monitoring or external orchestration according to the intended run boundary.
 
-### 9.3 Tabular files
+### 10.3 Tabular files
 
-CSV remains core-compatible. XLS/XLSX and other optional formats live in connector extras.
-Rows normalize through the accepted frame/Arrow interchange without requiring pandas.
+CSV remains core-compatible as a Format; XLS/XLSX and other optional formats live in connector/
+artifact extras. Frame conversion follows the capability/cost model from execution/tabular owners;
+connectors do not impose pandas as a universal dependency.
 
-## 10. Singer compatibility
+## 11. Singer compatibility
 
-Do not add permanent `fetchtap` and `singerexport` core modules that bypass the common state/schema
-contracts.
+Do not add permanent `fetchtap`/`singerexport` core modules that bypass common state/schema contracts.
 
-Create a Singer adapter whose runtime state maps to core state first:
+Singer adapters map:
 
 ```text
-Singer SCHEMA -> RDP/schema projection
-Singer RECORD -> RDP record/batch projection when interchange is required
+Singer SCHEMA -> common schema/RDP projection
+Singer RECORD -> records/batches
 Singer STATE  -> FeedState / StateStore
 ```
 
-RDP may project that state for wire interchange, but it does not own a second generic checkpoint
-model. The reverse adapter may emit Singer STATE from the committed source/observation state when a
-Singer target requires it.
-
-Subprocesses are execution resources with cancellation, stderr capture, bounded line size,
+RDP may project state for wire interchange but does not become a second checkpoint owner.
+Subprocesses are execution-owned Resources with cancellation, stderr capture, bounded line size,
 exit-code validation, and secret redaction.
 
-## 11. SaaS and REST APIs
+## 12. SaaS and REST APIs
 
-Generic public APIs remain OpenAPI capabilities in `riko-mcp`. An authorizer-style proxy
-is simply a configured OpenAPI provider. A token-vending service is a credential provider.
-Do not add one module per SaaS provider unless streaming behavior cannot be represented by
-OpenAPI or a generic HTTP connector.
+Generic public APIs may be represented through OpenAPI/MCP capabilities or HTTP/REST Targets rather
+than one core module per SaaS provider. Provider packages are justified when provider semantics,
+long-running operations, batching, identity mapping, webhooks, auth, or administration exceed generic
+transport semantics.
 
-REST collection traversal/pagination/cursor semantics are owned by
-[rest-incremental.md](rest-incremental.md); connectors provide transport/session capabilities rather
-than a second REST state model.
+Provider-specific Actions remain actions; do not disguise commands as fake write modes.
 
-## 12. Capability and module projection
+## 13. Capability/module projection
 
-A connector may expose:
+A connector/provider package may expose:
 
-* a named Riko source/operator for fluent pipelines;
-* a capability record for MCP/AI selection;
-* a CLI command provider.
+- registered Target adapter(s);
+- named source/operator modules where transformation semantics warrant them;
+- registered Actions;
+- MCP/capability records;
+- CLI command providers.
 
-All three project the same service object and configuration schema. They do not duplicate
-execution logic.
+These surfaces share service/resource implementations rather than duplicating execution logic.
 
-## 13. Phases
+## 14. Phases
 
-### C0 — Contracts and spikes
+### C0 — Contracts and lifecycle spikes
 
-* source request and plan fixtures;
-* resolver collision rules;
-* HTTP response envelope;
-* file and HTTP lifecycle spikes;
-* credential redaction tests.
+- Target adapter protocol/conformance fixtures;
+- registry collision rules;
+- HTTP response metadata;
+- FILE/HTTP lifecycle tests;
+- credential redaction tests.
 
-### C1 — HTTP and local files
+### C1 — Core-compatible FILE/HTTP adapters
 
-* resolver registry;
-* explicit probing;
-* `fetchrss` compatibility aliasing;
-* `source`/`fetchauto` entry point;
-* document extraction boundary.
+- FILE Target read/write adapter;
+- HTTP Target read adapter;
+- explicit metadata/probing rules;
+- Format inference integration;
+- document extraction boundary.
 
-### C2 — Object and transfer storage
+### C2 — Object/transfer storage
 
-* S3/GCS/Azure Blob adapters;
-* FTP/SFTP;
-* directory limits and artifactization.
+- S3/GCS/Azure Blob;
+- FTP/SFTP;
+- directory limits/artifactization.
 
-### C3 — Mail and brokers
+### C3 — Mail/brokers
 
-* IMAP/SMTP;
-* ZeroMQ and RabbitMQ;
-* acknowledgement and delivery contracts.
+- IMAP/SMTP;
+- ZeroMQ/RabbitMQ/Service Bus as useful;
+- acknowledgement/delivery contracts.
 
 ### C4 — Structured ecosystems
 
-* XLS/XLSX;
-* CKAN;
-* Prometheus;
-* Singer/core-state/RDP bridge.
+- XLS/XLSX;
+- CKAN/Prometheus;
+- Singer/core-state/RDP bridge;
+- initial DB/record-store adapter proof.
 
-### C5 — Catalog and CLI integration
+### C5 — Catalog/CLI integration
 
-* capability projection;
-* source inspection and test commands;
-* deterministic evaluation fixtures.
+- capability/Target discovery projection;
+- inspect/test commands;
+- deterministic conformance fixtures.
 
 Forward cross-cutting implementation order is owned by
-[implementation-sequence.md](implementation-sequence.md); these connector phases describe package
-specialization only.
+[implementation-sequence.md](implementation-sequence.md); these connector phases specialize R11 and
+do not create a competing Core sequence.
 
-## 14. Definition of done
+## 15. Definition of done
 
-1. Core imports no connector protocol library.
-2. No connector starts a private event loop.
-3. Credentials never appear in serialized plans or records.
-4. Resolution can be inspected without execution.
-5. HTTP probing is explicit and bounded.
-6. Every execution-owned session closes on early termination.
-7. Long-lived/recurring source state uses common `FeedState` / `StateStore` semantics.
-8. Broker delivery semantics are declared and tested against shared pub/sub protocols where used.
-9. Singer state maps to core state; RDP is an interchange projection rather than the generic owner.
-10. Plugin modules, capabilities, and CLI commands share one execution service.
+1. Core imports no optional connector protocol library merely to parse Workflow v2.
+2. No connector starts a private event loop/task group/portal.
+3. Credentials never appear in serialized Target definitions, records, or event payloads.
+4. Targets can be inspected/validated structurally without execution.
+5. HTTP probing is explicit/bounded and no generic hidden duplicate download is required.
+6. Every execution-owned session closes on early termination/cancellation/error.
+7. Long-lived/recurring source state uses common FeedState/StateStore semantics.
+8. Broker delivery semantics are declared against shared pub/sub/disposition contracts.
+9. Singer state maps to core state; RDP is an interchange projection rather than generic owner.
+10. Concrete adapters implement the same read/write/effect contracts without inventing `SourcePlan`,
+    `SinkPlan`, a second `sink()` API, or connector-specific execution lifecycle.
