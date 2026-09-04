@@ -45,6 +45,15 @@ class ReceiverUnavailableError(PubSubError):
         self.name = name
 
 
+class ReceiveTimeoutError(PubSubError):
+    def __init__(self, name: str, max_wait: float):
+        msg = f"pub/sub receiver {name!r} timed out after {max_wait} seconds "
+        msg += "without activity"
+        super().__init__(msg)
+        self.name = name
+        self.max_wait = max_wait
+
+
 class DuplicateReceiverError(PubSubError):
     def __init__(self, name: str):
         super().__init__(f"pub/sub receiver {name!r} already has an active subscriber")
@@ -57,6 +66,7 @@ __all__ = [
     "PipelineError",
     "PipelineStateError",
     "PubSubError",
+    "ReceiveTimeoutError",
     "ReceiverUnavailableError",
     "RikoError",
     "UnsupportedModuleError",

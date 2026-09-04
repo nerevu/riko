@@ -47,7 +47,9 @@ from meza.fntools import dfilter
 from riko._pubsub import async_hub, coroutine, sync_hub
 from riko._pubsub._types import ReceiveFunc, Receiver
 from riko._strutils import gen_name
+from riko.bado._backend import fail_after
 from riko.cast import BasicCastType
+from riko.exceptions import ReceiveTimeoutError
 from riko.types._configs import ReceiveObjconf
 from riko.types._guards import is_missing_type, is_stateful_item
 from riko.types._options import Defaults, Opts
@@ -137,11 +139,13 @@ async def async_parser(
     """
     Asynchronously collects items the sender pushes.
 
-    There is no timeout, so this waits forever if the sender never runs.
+    Each wait for the next item or sender completion is bounded by ``max_wait``.
+    Receiving an item starts a fresh idle window, so active long-lived senders are
+    not limited by the total receiver lifetime.
 
     Args:
         _: The source stream. Unused; items arrive from the sender.
-        objconf: The pipe configuration, containing `name`.
+        objconf: The pipe configuration, containing `name` and `max_wait`.
         tuples: Iterable of (item, objconf). Unused.
 
         func: Applied to each received item. It gets the kwargs it names, or
@@ -151,13 +155,26 @@ async def async_parser(
     Returns:
         Every item received before the sender finished.
 
+    Raises:
+        ReceiveTimeoutError: If no item or sender completion arrives within
+            ``max_wait`` seconds.
+
     """
     name = objconf.name or "".join(gen_name())
+    max_wait = objconf.max_wait
     fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
     results: list[Item] = []
 
     async with async_hub.subscribe(name) as receive_stream:
-        async for item in receive_stream:
+        while True:
+            try:
+                with fail_after(max_wait):
+                    item = await anext(receive_stream)
+            except StopAsyncIteration:
+                break
+            except TimeoutError as e:
+                raise ReceiveTimeoutError(name, max_wait) from e
+
             results.append(cast(Item, _apply(func, item, **fkwargs) if func else item))
 
     return iter(results)
@@ -247,6 +264,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             name (str): Receiver identifier the sender targets. A random name
                 is generated when unset (default: "").
 
+            max_wait (int | float): Seconds to wait without an item or sender
+                completion before raising ``ReceiveTimeoutError`` (default: 5).
+
         context (Context): the execution context
 
     Kwargs:
@@ -259,8 +279,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         Every item received before the sender finished.
 
     Notes:
-        ``wait``, ``max_wait`` and ``max_len`` apply to the sync pipe only.
-        This path has no timeout.
+        ``max_wait`` is an idle timeout and resets after each item. ``wait`` and
+        ``max_len`` apply only to the sync pipe.
 
     """
     return await async_parser(*args, **kwargs)
