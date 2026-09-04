@@ -27,7 +27,7 @@ batteries-included peer.
 riko-<proto>  (external package; entry-point registered per §24)
     installs twisted.internet.asyncioreactor once for the host asyncio loop
     declares the Twisted listener/session as a Context Resource
-    private execution opens the live listening port/factory handle
+    private execution opens the live listening port / protocol factory
     each inbound message -> bounded AnyIO memory-object-stream bridge
     exposes:
         Subscription[T] / Feed source       for inbound messages
@@ -43,7 +43,8 @@ Rules:
   capacity returns; otherwise an aggressive peer can outrun downstream consumption.
 - Credentials/bind config are references, never inline (`connectors.md`).
 - Immutable `Context` contains `Resource` definitions only. Live listening ports, factories,
-  sessions, send/receive streams, and cleanup state are execution-owned resolved handles.
+  sessions, send/receive streams, and cleanup state are execution-owned resource values/runtime
+  state.
 - External resources supplied with `Resource.from_external(...)` remain caller-owned; Riko never closes them.
 - One package per protocol family; no monolith.
 

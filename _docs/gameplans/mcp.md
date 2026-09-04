@@ -35,7 +35,7 @@ Assume Riko provides:
 * one reusable immutable `Pipeline[T]` definition;
 * private `SyncExecution` / `AsyncExecution` runtimes created by iteration;
 * immutable public `Context` and declared `Resource` definitions;
-* execution-owned resource/session handles and deterministic cleanup;
+* execution-owned clients/sessions and deterministic cleanup;
 * Feed-native async iteration plus a supported sync bridge;
 * cancellation/deadline propagation;
 * module/export registries;
@@ -176,8 +176,8 @@ package defaults
 A same-name server/resource definition supplied through `Context` replaces the file-defined
 entry rather than deep-merging it.
 
-`Context` stores immutable definitions/configuration. Live MCP sessions are execution-owned
-resource handles, not values mutated onto Context.
+`Context` stores immutable definitions/configuration. Live MCP sessions are execution-owned resolved
+resource values, not values mutated onto Context.
 
 ## 5.8 Approval
 
@@ -199,7 +199,7 @@ cannot use one approval to execute a materially changed capability plan.
 ## 5.9 Sessions are execution resources
 
 Never establish a new MCP session/subprocess per item. Declare MCP client/session resources
-in `Context`; the private execution resolves and owns the live handle once per execution.
+in `Context`; the private execution resolves and owns the live session once per execution.
 Externally supplied resources use `Resource.from_external(...)` and are never closed by Riko.
 
 A module that needs the MCP manager declares it through common `resources=` metadata and
@@ -317,7 +317,7 @@ class CapabilityProvider(Protocol):
 ```
 
 `context` is immutable public configuration. Providers needing live clients declare
-resources; execution resolves those handles privately.
+resources; execution resolves those resource values privately.
 
 Initial providers:
 
@@ -380,7 +380,7 @@ context = Context(
 ```
 
 The resource definition/factory may carry immutable MCP server configuration. Live sessions,
-secret-provider handles, HTTP clients, and artifact-store handles are resolved by execution.
+secret-provider clients, HTTP clients, and artifact-store clients are resolved by execution.
 
 Do not describe already-open sessions or mutable runtime credentials as ordinary Context
 values.

@@ -107,8 +107,8 @@ Do not implement these pending-plan shapes:
 - a public `sink()` terminal parallel to `write()`;
 - execution knobs on `with_config()`;
 - RDP-owned generic `Checkpoint` or sequence/expansion-path identity;
-- duck-typed handle lifecycle discovery (`open`/`aopen`/`close`/`aclose` introspection) as the
-  conceptual resource model;
+- duck-typed lifecycle discovery on arbitrary resolved resource values (`open`/`aopen`/`close`/
+  `aclose` introspection) as the conceptual resource model;
 - a global batch backend preference ladder (`Arrow → Polars → Pandas → list`);
 - automatic callable fingerprinting treated as sufficient for durable semantic identity;
 - a Core-owned `OperationSpec`/`OperationPlan` or second operation runtime;
@@ -302,11 +302,11 @@ the type/normalization boundary, not the execution lifecycle:
 
 - immutable `inputs`/configuration;
 - Context-local module definitions and child-Context shadowing;
-- public generic `Resource[H]` umbrella with unconstrained handle type `H`;
-- public `ReusableResource[H]` category for wrappers safe in reusable Context definitions;
+- public generic `Resource[T]` umbrella with unconstrained resolved value type `T`;
+- public `ReusableResource[T]` category for wrappers safe in reusable Context definitions;
 - private concrete external/factory/one-shot-owned resource variants;
-- canonical `ResourceDefinition[H] = ReusableResource[H] | ResourceFactory[H]`;
-- `Resource.from_external(handle)` for caller-owned reusable live handles;
+- canonical `ResourceDefinition[T] = ReusableResource[T] | ResourceFactory[T]`;
+- `Resource.from_external(value)` for caller-owned reusable resource values;
 - explicit `Resource.from_factory(factory, *args, **kwargs)` for arbitrary constructors/provider
   callables, including sync/async callables and optional explicit cleanup;
 - direct implicit ResourceFactory recognition only for unambiguous lifecycle-definition forms
@@ -315,13 +315,13 @@ the type/normalization boundary, not the execution lifecycle:
 - bind `from_factory` args first, then validate the remaining invocation signature as exactly `()`,
   `(ctx)`, or `(ctx, resources)` with the reserved semantic names;
 - return annotations remain optional and advisory for typing only;
-- one-shot `Resource(handle, cleanup=...)` remains a low-level compatibility/execution-local form
+- one-shot `Resource(value, cleanup=...)` remains a low-level compatibility/execution-local form
   outside `ResourceDefinition`, so reusable `Context.with_resource()` cannot accept it;
 - eager validation of the complete declared resource graph, including symbolic dependency aliases,
   late binding through effective Context shadowing, missing dependencies, duplicate declarations,
   signatures, and cycles regardless of `lazy=True`;
 - resource identity metadata includes stable factory/bound-argument/cleanup/dependency configuration,
-  while live external handles stay opaque and explicit `version=` remains authoritative;
+  while live external resource values stay opaque and explicit `version=` remains authoritative;
 - optional first-class `state_store` capability using the same reusable resource-definition contract;
 - identity-encoder selection;
 - `with_module()` / `with_resource()` immutable derivation;
@@ -329,12 +329,13 @@ the type/normalization boundary, not the execution lifecycle:
 
 R3 classifies and normalizes what can be known from the definition. It must **not** inspect a
 not-yet-created factory result to guess its runtime lifecycle. Context construction also does not open,
-await, enter, close, or serialize execution-created handles. Runtime factory-result validation,
-single-flight lazy acquisition, sync/async adaptation, rollback, and teardown belong to R4B.
+await, enter, close, or serialize execution-created resource values. Runtime factory-result
+validation, single-flight lazy acquisition, sync/async adaptation, rollback, and teardown belong to
+R4B.
 
 Caller-owned `Resource.from_external(...)` values are the explicit exception to "no live values in a
-Context": the wrapper may hold the supplied process-local handle, but Riko never owns/closes it and no
-durable serialization guarantee follows from doing so.
+Context": the wrapper may hold the supplied process-local resource value, but Riko never owns/closes
+it and no durable serialization guarantee follows from doing so.
 
 P8's global built-in/entry-point registry remains the default. Context-local module definitions form
 an execution-time overlay; they do not require replacing entry-point discovery.
@@ -640,7 +641,7 @@ Deliver:
   R4B's task group;
 - multiple same-name local subscriptions distinguished by object identity;
 - multiple publishers complete a subscription only after all attached publishers finish, derived
-  structurally from incoming `PublishEdge`s and owned sender handles;
+  structurally from incoming `PublishEdge`s and owned sender endpoints;
 - no PENDING/DONE/sender-id markers in the data stream;
 - per-subscription order guarantees;
 - buffer default `0`, overflow `block`, optional drop-oldest where permitted;
@@ -908,8 +909,8 @@ The implementation reconciliation is complete when:
 3. during 0.x released Workflow v1 input migrates only at the loader boundary, and normal 1.0
    runtime loading is v2-only;
 4. each iteration creates independent private execution state;
-5. Context contains immutable definitions; execution-created live handles never live in Context,
-   while explicitly caller-owned `Resource.from_external(...)` handles remain process-local and
+5. Context contains immutable definitions; execution-created resource values never live in Context,
+   while explicitly caller-owned `Resource.from_external(...)` values remain process-local and
    carry no durable serialization guarantee;
 6. all durable identity/fingerprints/idempotency/checkpoints share one canonical encoder, and durable
    semantics rest on explicit `version=` rather than on automatic callable introspection being

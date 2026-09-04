@@ -99,8 +99,8 @@ final public Pipeline API; legacy low-level names are migration inputs only unti
   (`Context(verbsoe=...)` must not look successful). Unknown/renamed kwargs raise an actionable
   error.
 - **`Context` is immutable environment definition, not live execution state.** Context-local module
-  and `Resource` definitions are derived with `with_module()` / `with_resource()`; resolved handles,
-  portals, state-store adapters, and pub/sub hubs belong to the private execution.
+  and `Resource` definitions are derived with `with_module()` / `with_resource()`; resolved resource
+  values, portals, state-store adapters, and pub/sub hubs belong to the private execution.
 - **Validate module config early** — unknown keys, invalid enums/operators, conflicting options,
   wrong types — at Pipeline construction/preparation rather than after source consumption begins.
 - **Step config and execution config are separate.** Step configuration is fixed when a step is
@@ -151,8 +151,8 @@ final public Pipeline API; legacy low-level names are migration inputs only unti
 - **Decorator DX is owned by [callable-pipes.md](callable-pipes.md).** `@processor async def pipe`
   works for single-implementation async modules; `isasync=`/`async_pipe` remain for the cases where
   they are structurally needed.
-- **`Context` becomes the immutable environment.** Runtime handles do not live on it. Resource
-  definitions, optional `state_store`, Context-local module definitions, and identity-encoder
+- **`Context` becomes the immutable environment.** Resolved resource values do not live on it.
+  Resource definitions, optional `state_store`, Context-local module definitions, and identity-encoder
   selection are resolved during execution preparation.
 - **Constructor stops being a union of every module's knobs.** `assign`/`field`/`func`/`targets`/
   `skip_if` belong to the declared node/step rather than global Pipeline execution config.

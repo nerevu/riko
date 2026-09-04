@@ -534,7 +534,7 @@ Execution
 
 Context / Resource
     immutable definitions
-    execution-owned live handles
+    execution-owned resolved resource values
 
 Schema
     boundary inspection/diff/validation

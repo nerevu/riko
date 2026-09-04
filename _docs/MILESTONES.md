@@ -98,7 +98,7 @@ Do **not** implement these older P11–P14 shapes merely because they appear in 
 
 ```text
 public ExecutionContext
-mutable Context.resources containing live handles
+mutable Context.resources containing resolved resource values
 process-global pub/sub as final ownership
 poll(interval|event|hybrid) as one generic source API
 BatchPipe / public BatchPolicy hierarchy
@@ -114,7 +114,7 @@ global Arrow -> Polars -> Pandas backend preference
 
 Current replacements include:
 
-- immutable Context + Resource definitions; private execution owns live handles;
+- immutable Context + Resource definitions; private execution owns resolved resource values;
 - canonical Workflow v2 with explicit node/edge/port identity;
 - one execution EventSink transport;
 - object-first Publisher/Subscription and `SubscribeNode` + `PublishEdge`;

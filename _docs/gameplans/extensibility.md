@@ -85,7 +85,7 @@ source/observation FeedState production
 A module does not declare a custom checkpoint protocol or lease mechanism.
 
 Resource requirements use the common `resources=` declaration and execution wrapper preparation.
-Live resource handles never become durable module-definition data.
+Resolved resource values never become durable module-definition data.
 
 Port declarations follow the Workflow v2 grammar. Fixed-output modules declare their ports directly;
 configurable modules such as split/route derive the declared port set deterministically from
@@ -402,8 +402,8 @@ landed yet.
 - checkpoint declarations may exist before a resumable owner is bound; compilation later resolves
   every reachable checkpoint to exactly one owner;
 - CacheNode contains cache semantic identity/policy, not contents/live backends;
-- WriteNode contains serializable target/resource/write-operation fields, not live handles;
-- ActionNode contains serializable target/resource/`params` fields, not module `conf` or live handles;
+- WriteNode contains serializable target/resource/write-operation fields, not resolved resource values;
+- ActionNode contains serializable target/resource/`params` fields, not module `conf` or resolved resource values;
 - SubscribeNode contains subscription policy; PublishEdge structurally defines publishers.
 
 ### E3.9 Strict canonical validation

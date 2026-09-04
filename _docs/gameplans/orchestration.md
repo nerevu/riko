@@ -358,7 +358,7 @@ O10 cross-adapter contract tests and deployment templates
 
 1. No lazy stream crosses an orchestrator boundary implicitly.
 2. Every multi-task split occurs at a durable handoff.
-3. Public configuration uses `Context`; private execution owns runtime handles.
+3. Public configuration uses `Context`; private execution owns resolved resource values and runtime state.
 4. Canonical Python pipeline run requests use `PipelineRef`, with serialized string shorthand
    resolved before runtime.
 5. Cancellation/deadlines reach the Riko execution.
