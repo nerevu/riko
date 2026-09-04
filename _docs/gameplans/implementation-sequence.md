@@ -294,25 +294,47 @@ explicit version when they must survive software/dependency changes.
 
 ### R3 — Immutable Context and Resource definitions
 
-**Goal:** establish the public environment model before Pipeline definitions bind resources and
-private executions open them.
+**Goal:** establish the public environment/resource-definition model before Pipeline definitions bind
+resources and private executions acquire them.
 
-Replace today's mutable execution-oriented `Context` with the target immutable definition:
+Replace today's mutable execution-oriented `Context` with the target immutable definition and land
+the type/normalization boundary, not the execution lifecycle:
 
 - immutable `inputs`/configuration;
-- Context-local module definitions/shadowing;
-- `Resource` definitions expressed as sync/async generators or context managers that yield the
-  handle;
-- owned vs `Resource.from_external(...)` lifecycle contract;
-- `Resource(handle, cleanup=...)` retained only as low-level compatibility, not the conceptual model;
-- eager/lazy validation rules;
-- declared dependency bindings and aliases;
-- optional first-class `state_store` capability;
+- Context-local module definitions and child-Context shadowing;
+- public generic `Resource[H]` umbrella with unconstrained handle type `H`;
+- public `ReusableResource[H]` category for wrappers safe in reusable Context definitions;
+- private concrete external/factory/one-shot-owned resource variants;
+- canonical `ResourceDefinition[H] = ReusableResource[H] | ResourceFactory[H]`;
+- `Resource.from_external(handle)` for caller-owned reusable live handles;
+- explicit `Resource.from_factory(factory, *args, **kwargs)` for arbitrary constructors/provider
+  callables, including sync/async callables and optional explicit cleanup;
+- direct implicit ResourceFactory recognition only for unambiguous lifecycle-definition forms
+  (sync/async generator or context-manager definitions), never arbitrary `callable(x)` or bare
+  classes;
+- bind `from_factory` args first, then validate the remaining invocation signature as exactly `()`,
+  `(ctx)`, or `(ctx, resources)` with the reserved semantic names;
+- return annotations remain optional and advisory for typing only;
+- one-shot `Resource(handle, cleanup=...)` remains a low-level compatibility/execution-local form
+  outside `ResourceDefinition`, so reusable `Context.with_resource()` cannot accept it;
+- eager validation of the complete declared resource graph, including symbolic dependency aliases,
+  late binding through effective Context shadowing, missing dependencies, duplicate declarations,
+  signatures, and cycles regardless of `lazy=True`;
+- resource identity metadata includes stable factory/bound-argument/cleanup/dependency configuration,
+  while live external handles stay opaque and explicit `version=` remains authoritative;
+- optional first-class `state_store` capability using the same reusable resource-definition contract;
 - identity-encoder selection;
-- `with_module()` / `with_resource()` derivation;
+- `with_module()` / `with_resource()` immutable derivation;
 - no catch-all ignored kwargs.
 
-Do **not** open resources in `Context`. Opening/resolution belongs to R4B private executions.
+R3 classifies and normalizes what can be known from the definition. It must **not** inspect a
+not-yet-created factory result to guess its runtime lifecycle. Context construction also does not open,
+await, enter, close, or serialize execution-created handles. Runtime factory-result validation,
+single-flight lazy acquisition, sync/async adaptation, rollback, and teardown belong to R4B.
+
+Caller-owned `Resource.from_external(...)` values are the explicit exception to "no live values in a
+Context": the wrapper may hold the supplied process-local handle, but Riko never owns/closes it and no
+durable serialization guarantee follows from doing so.
 
 P8's global built-in/entry-point registry remains the default. Context-local module definitions form
 an execution-time overlay; they do not require replacing entry-point discovery.
@@ -440,10 +462,17 @@ Deliver:
 - one execution-local bridge/portal where adaptation is needed;
 - source normalization at one boundary;
 - immutable fluent chaining;
-- `with_execution(...)` for executor/concurrency/order settings;
+- `with_execution(...)` for executor/concurrency/order settings plus the execution-level
+  shutdown/cleanup budget;
 - minimal execution-owned `EventSink` transport and no-op default;
-- execution-local resource entry/rollback/exit from R3;
-- external-resource lifecycle proof;
+- execution-local resource acquisition/entry/rollback/exit from R3;
+- runtime factory-result handling: await awaitables once, honor explicit cleanup first, otherwise
+  prefer context-manager lifecycle over close/aclose capability and native execution mode over
+  bridging;
+- lazy-resource single-flight acquisition and dependency-first/dependent-first lifetime ordering;
+- transactional partial-acquisition unwind and comprehensive cleanup-error grouping;
+- bounded cancellation-shielded resource teardown;
+- external-resource lifecycle/concurrency proof;
 - remove `SyncPipe`/`AsyncPipe`/Collection classes rather than retain deprecated wrappers;
 - migrate P10 executor/bounded-stream mechanics out of `collections.py` rather than reimplementing
   them.
@@ -464,7 +493,9 @@ and other consumers remain ecosystem/observability work.
 4. cross-mode adaptation happens only at an execution boundary chosen during preparation. Parser,
    module, factory, and extension code never creates event loops, portals, executors, worker
    threads, or task groups;
-5. event delivery is execution-owned and must not create a parallel callback/lifecycle framework.
+5. resource teardown is shielded from ambient cancellation only within the shared execution shutdown
+   budget; cancellation remains the primary outcome and no per-resource timeout exists initially;
+6. event delivery is execution-owned and must not create a parallel callback/lifecycle framework.
 
 #### R4B external-resource proof
 
@@ -877,12 +908,15 @@ The implementation reconciliation is complete when:
 3. during 0.x released Workflow v1 input migrates only at the loader boundary, and normal 1.0
    runtime loading is v2-only;
 4. each iteration creates independent private execution state;
-5. Context contains immutable definitions, never live runtime handles;
+5. Context contains immutable definitions; execution-created live handles never live in Context,
+   while explicitly caller-owned `Resource.from_external(...)` handles remain process-local and
+   carry no durable serialization guarantee;
 6. all durable identity/fingerprints/idempotency/checkpoints share one canonical encoder, and durable
    semantics rest on explicit `version=` rather than on automatic callable introspection being
    complete;
-7. resource lifetime is context-manager based, and every execution-spawned task and context-managed
-   component is owned by the execution's task group and exit stack;
+7. reusable owned resource lifecycle is definition/factory based, and every execution-owned
+   acquisition, context manager, task, rollback, bridge, and teardown is attached to the execution's
+   lifetime primitives;
 8. cache replay uses the finalized Mezmoize-backed CacheNode contract and never publishes an
    incomplete fill;
 9. `write`/actions pass records through and report completion through the common EventSink; the
