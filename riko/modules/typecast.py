@@ -5,6 +5,7 @@ Casts an item field into a specific type.
 Useful as terminal data. Loopable.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.typecast import pipe
@@ -44,14 +45,17 @@ def parser(
     Casts ``content`` to the configured type.
 
     Args:
+
         content: The value to cast.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `type`.
 
     Returns:
+
         The cast value, or ``content`` unchanged when ``type`` is unset.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> item = {"content": "1.0"}
@@ -73,6 +77,7 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -84,6 +89,7 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to cast. A missing field casts ``None``
             (default: "content").
 
@@ -94,12 +100,14 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
             than assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <value>}`` when ``emit`` is False and no item given
         - ``<value>`` when ``emit`` is True
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -122,6 +130,7 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -133,6 +142,7 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to cast. A missing field casts ``None``
             (default: "content").
 
@@ -143,12 +153,14 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
             than assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <value>}`` when ``emit`` is False and no item given
         - ``<value>`` when ``emit`` is True
 
     Examples:
+
         >>> from datetime import datetime as dt
         >>>
         >>> next(pipe({"content": "1.0"}, conf={"type": "int"}))["typecast"]

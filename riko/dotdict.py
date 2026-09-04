@@ -273,6 +273,7 @@ class DotDict(CaseInsensitiveDict[VT]):
     A dictionary whose keys can be accessed using dot notation
 
     Examples:
+
         >>> r = DotDict({'a': {'content': 'value'}})
         >>> r.get('a')
         {'content': 'value'}

@@ -11,6 +11,7 @@ empty, so a caller has to filter those out. ``riko.SyncPipe.subscribe`` is the h
 path — it registers up front and drains without ever emitting a marker.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.receive import pipe as receiver
@@ -140,6 +141,7 @@ async def async_parser(
     There is no timeout, so this waits forever if the sender never runs.
 
     Args:
+
         _: The source stream. Unused; items arrive from the sender.
         objconf: The pipe configuration, containing `name`.
         tuples: Iterable of (item, objconf). Unused.
@@ -149,6 +151,7 @@ async def async_parser(
             ``assign``, and ``stream`` are always withheld (default: None).
 
     Returns:
+
         Every item received before the sender finished.
 
     """
@@ -174,6 +177,7 @@ def parser(
     Yields items as the sender pushes them.
 
     Args:
+
         _: The source stream. Unused; items arrive from the sender.
 
         objconf: The pipe configuration, containing `name`, `wait`, `max_wait`
@@ -186,11 +190,13 @@ def parser(
             ``assign``, and ``stream`` are always withheld (default: None).
 
     Yields:
+
         Each received item, or ``StreamState.PENDING`` while waiting. Stops
         when the sender finishes, or after ``max_wait`` seconds without an
         item.
 
     Examples:
+
         >>> from itertools import repeat
         >>> from riko.modules.send import pipe as sender
         >>> from meza.fntools import Objectify
@@ -240,6 +246,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Collects every item the sender pushes and yields them once the sender finishes.
 
     Args:
+
         items (Items): The source stream. Unused.
 
         conf (dict): The pipe configuration.
@@ -250,15 +257,18 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         func (callable): Applied to each received item before it is yielded.
             It gets the kwargs it names, or all of them if it accepts
             ``**kwargs``. The pipe's own ``conf``, ``assign``, and ``stream``
             are always withheld (default: None).
 
     Yields:
+
         Every item received before the sender finished.
 
     Notes:
+
         ``wait``, ``max_wait`` and ``max_len`` apply to the sync pipe only.
         This path has no timeout.
 
@@ -275,6 +285,7 @@ def pipe(*args: Any, **kwargs: object) -> StreamOrValueStream | Iterator[Statefu
     while waiting. Stops waiting after ``max_wait`` seconds.
 
     Args:
+
         items (Items): The source stream. Unused.
 
         conf (dict): The pipe configuration.
@@ -293,22 +304,26 @@ def pipe(*args: Any, **kwargs: object) -> StreamOrValueStream | Iterator[Statefu
         context (Context): the execution context
 
     Kwargs:
+
         func (callable): Applied to each received item before it is yielded.
             It gets the kwargs it names, or all of them if it accepts
             ``**kwargs``. The pipe's own ``conf``, ``assign``, and ``stream``
             are always withheld (default: None).
 
     Yields:
+
         - each received item as the sender pushes it
         - ``{"state": StreamState.PENDING}`` while waiting
 
     Notes:
+
         The marker exists so a poll on an empty queue neither blocks nor ends
         the stream. Setting ``max_wait`` to 0 makes the drain non-blocking
         instead, which renders the marker unreachable — that is what
         ``riko.SyncPipe.subscribe`` does.
 
     Examples:
+
         >>> from riko.modules.send import pipe as sender
         >>>
         >>> target = pipe(conf={"name": "receiver3", "wait": 0.01, "max_wait": 2})

@@ -8,6 +8,7 @@ Provides resolution for named pipelines.
 Pipelines can be loaded from generated modules or JSON definitions.
 
 Examples:
+
     Basic usage::
 
         >>> from types import ModuleType
@@ -186,6 +187,7 @@ class PipelineResolver:
         Resolves a ``pipe_<id>`` / ``pipe:<id>`` name to its marked callable.
 
         Raises:
+
             UnsupportedPipelineError: If no store supplies ``name``, or its module
                 has no ``interface`` callable.
 
@@ -208,6 +210,7 @@ class PipelineResolver:
         directory when ``directory`` is given.
 
         Raises:
+
             UnsupportedPipelineError: If the definition cannot be found.
 
         """

@@ -6,6 +6,7 @@ The field value and ``other`` are both cast to ``Decimal``, so results are
 exact rather than binary floats.
 
 Examples:
+
     Basic usage::
 
         >>> from decimal import Decimal
@@ -69,18 +70,22 @@ def parser(
     Applies the configured operation to ``num`` and ``other``.
 
     Args:
+
         num: The first operand, already cast to ``Decimal``.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `op` and `other`.
 
     Returns:
+
         The result of ``op`` applied to ``num`` and ``other``.
 
     Raises:
+
         TypeError: If ``conf`` has no ``op`` or ``other`` key, or ``op`` is
             unsupported.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> conf = {"op": "divide", "other": 4}
@@ -109,6 +114,7 @@ def async_pipe(*args: Any, **kwargs: object) -> NumLike:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -120,6 +126,7 @@ def async_pipe(*args: Any, **kwargs: object) -> NumLike:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute holding the first operand, cast to
             ``Decimal`` (default: "content").
 
@@ -130,16 +137,19 @@ def async_pipe(*args: Any, **kwargs: object) -> NumLike:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <result>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <result>}`` when ``emit`` is False and no item given
         - ``<result>`` when ``emit`` is True
 
     Raises:
+
         TypeError: If ``conf`` has no ``op`` or ``other`` key, or ``op`` is
             unsupported.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -163,6 +173,7 @@ def pipe(*args: Any, **kwargs: object) -> NumLike:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -174,6 +185,7 @@ def pipe(*args: Any, **kwargs: object) -> NumLike:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute holding the first operand, cast to
             ``Decimal`` (default: "content").
 
@@ -184,16 +196,19 @@ def pipe(*args: Any, **kwargs: object) -> NumLike:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <result>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <result>}`` when ``emit`` is False and no item given
         - ``<result>`` when ``emit`` is True
 
     Raises:
+
         TypeError: If ``conf`` has no ``op`` or ``other`` key, or ``op`` is
             unsupported.
 
     Examples:
+
         >>> from decimal import Decimal
         >>>
         >>> conf = {"op": "divide", "other": "5"}

@@ -10,6 +10,7 @@ For explicit interface callables, see ``register_module.py``. For the packaged
 entry-point plugin path, see ``riko-example-ext/``.
 
 Examples:
+
     Run it::
 
         python examples/register_alias.py

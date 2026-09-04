@@ -6,6 +6,7 @@ Not lazy: reversing needs the last item first, so the source is materialized
 into memory and cannot be unbounded.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.reverse import pipe
@@ -43,6 +44,7 @@ def parser(
     Returns the stream in reverse order.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
@@ -53,9 +55,11 @@ def parser(
             `stream` as well.
 
     Returns:
+
         The source items in reverse order.
 
     Examples:
+
         >>> from itertools import repeat
         >>>
         >>> stream = ({"x": x} for x in range(5))
@@ -75,11 +79,13 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
+
         items (Items): The source stream.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "reverse").
 
@@ -87,10 +93,12 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -113,11 +121,13 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
+
         items (Items): The source stream.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "reverse").
 
@@ -125,10 +135,12 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> items = ({"x": x} for x in range(5))
         >>> next(pipe(items))
         {'x': 4}

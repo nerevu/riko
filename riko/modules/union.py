@@ -5,6 +5,7 @@ Merges separate sources into a single stream of items.
 Lazy: the source and every ``others`` stream are chained, not materialized.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.union import pipe
@@ -48,6 +49,7 @@ def parser(
     Chains the source and every ``others`` stream into one stream.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
@@ -60,9 +62,11 @@ def parser(
         others: Streams to append after the source. Defaults to no streams.
 
     Returns:
+
         A lazy chain of the source followed by each stream in ``others``.
 
     Examples:
+
         >>> from itertools import repeat
         >>>
         >>> stream = ({"x": x} for x in range(5))
@@ -87,11 +91,13 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Lazy: streams are chained, not materialized.
 
     Args:
+
         items (Items): The source stream.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
     Kwargs:
+
         others (list[Items]): Streams appended after ``items`` (default: none).
 
         assign (str): Field each item is nested under. Ignored when ``emit`` is
@@ -101,10 +107,12 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -129,11 +137,13 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Lazy: streams are chained, not materialized.
 
     Args:
+
         items (Items): The source stream.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
     Kwargs:
+
         others (list[Items]): Streams appended after ``items`` (default: none).
 
         assign (str): Field each item is nested under. Ignored when ``emit`` is
@@ -143,10 +153,12 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> items = ({"x": x} for x in range(5))
         >>> other1 = ({"x": x + 5} for x in range(5))
         >>> other2 = ({"x": x + 10} for x in range(5))

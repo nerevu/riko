@@ -8,6 +8,7 @@ rewrites fields on the item itself rather than producing a separate value, so
 rules may target different fields in one pass.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.regex import pipe
@@ -58,14 +59,17 @@ async def async_parser(
     Rules are grouped by field, so one pass can rewrite several fields.
 
     Args:
+
         item: The entry to process.
         rules: The parsed replacement rules.
         objconf: The pipe configuration, containing `multi`.
 
     Returns:
+
         The item with each named field rewritten.
 
     Examples:
+
         >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
@@ -121,14 +125,17 @@ def parser(
     Rules are grouped by field, so one pass can rewrite several fields.
 
     Args:
+
         item: The entry to process.
         rules: The parsed replacement rules.
         objconf: The pipe configuration, containing `multi`.
 
     Returns:
+
         The item with each named field rewritten.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({"content": "hello world", "title": "greeting"})
@@ -180,6 +187,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -212,6 +220,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the rewritten item is nested under. Ignored when
             ``emit`` is True (default: "regex").
 
@@ -219,17 +228,21 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
             nest it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - the rewritten ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
 
     Notes:
+
         A rule naming a field the item lacks is skipped, leaving the item
         untouched.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> item = {"content": "hello world", "title": "greeting"}
@@ -257,6 +270,7 @@ def pipe(*args: Any, **kwargs: object) -> Item:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -289,6 +303,7 @@ def pipe(*args: Any, **kwargs: object) -> Item:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the rewritten item is nested under. Ignored when
             ``emit`` is True (default: "regex").
 
@@ -296,17 +311,21 @@ def pipe(*args: Any, **kwargs: object) -> Item:
             nest it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - the rewritten ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
 
     Notes:
+
         A rule naming a field the item lacks is skipped, leaving the item
         untouched.
 
     Examples:
+
         >>> # default matching
         >>> item = {"content": "hello world", "title": "greeting"}
         >>> match = r"(\\w+)\\s(\\w+)"

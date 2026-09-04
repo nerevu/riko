@@ -5,6 +5,7 @@ A format ``input`` feeds a ``dateformat`` whose result is built into an item wit
 ``itembuilder``.
 
 Examples:
+
     Run it::
 
         run-pipe wired

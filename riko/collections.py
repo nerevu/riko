@@ -3,6 +3,7 @@
 Provides functions for creating (a)synchronous riko flows and streams.
 
 Examples:
+
     sync usage::
 
         >>> from riko import get_path, SyncPipe
@@ -371,6 +372,7 @@ class _SendDispatcher:
         Returns a publisher that pushes source items to each named subscriber.
 
         Raises:
+
             TypeError: If no subscriber name is given.
 
         Examples:
@@ -388,6 +390,7 @@ class _SendDispatcher:
         Returns a publisher that pushes a pipeline's items to each named subscriber.
 
         Raises:
+
             TypeError: If no subscriber name is given.
 
         Examples:
@@ -464,6 +467,7 @@ def list_targets() -> list[str]:
     ``ofx`` and ``qif`` are present only with the ``finance`` extra installed.
 
     Examples:
+
         >>> targets = list_targets()
         >>> targets[:4]
         ['csv', 'geojson', 'json', 'list']
@@ -530,6 +534,7 @@ def export(  # noqa: E302
     Converts a stream to ``type_``, optionally writing it to ``f``.
 
     Args:
+
         items: The stream to convert.
 
         type_: An ``export`` target. ``list``/``tuple`` return the records
@@ -541,13 +546,16 @@ def export(  # noqa: E302
         kwargs: Passed through to the underlying converter and writer.
 
     Returns:
+
         The records for ``list``/``tuple``, a ``StringIO`` for a serializing
         target, or the number of bytes written when ``f`` is given.
 
     Raises:
+
         ValueError: If ``type_`` is not a known target.
 
     Examples:
+
         >>> items = [{"x": 1}, {"x": 2}]
         >>>
         >>> export(items)
@@ -643,6 +651,7 @@ class PyPipe(_Lifecycle):
     lifecycle state. ``SyncPipe`` and ``AsyncPipe`` add the execution model.
 
     Args:
+
         name: Module to run. A source pipe takes no ``source``.
         source: Upstream stream, or another pipe to chain onto.
         verbose: Whether to print debug output while running.
@@ -763,6 +772,7 @@ class SyncPipe(PyPipe):
     confines to one pipe.
 
     Args:
+
         name: Module to run. A source pipe takes no ``source``.
         source: Upstream stream, or another pipe to chain onto.
         conf: The module's configuration.
@@ -1049,6 +1059,7 @@ class SyncPipe(PyPipe):
         Nothing published before ``subscribe`` is replayed; buffering starts here.
 
         Args:
+
             name: Subscriber the publisher sends to.
 
             func: Maps each received item; the subscriber yields its return value,
@@ -1072,10 +1083,12 @@ class SyncPipe(PyPipe):
                 and ``stream`` are reserved and never forwarded.
 
         Returns:
+
             A one-shot pipe over the channel. Draining it a second time yields
             nothing; subscribe again for another pass.
 
         Raises:
+
             TypeError: If both ``func`` and ``on_receive`` are given.
 
         Examples:
@@ -1313,6 +1326,7 @@ class SyncPipe(PyPipe):
         materializes and reports a ``SinkResult`` unconditionally.
 
         Args:
+
             dest: The destination file path.
 
             format: A serialization format, or ``None`` to derive it from the path
@@ -1327,6 +1341,7 @@ class SyncPipe(PyPipe):
             kwargs: Passed through to the chained publisher.
 
         Returns:
+
             The publisher pipe, so writing can sit mid-chain.
 
         Examples:
@@ -1362,6 +1377,7 @@ class SyncPipe(PyPipe):
         them per its capabilities.
 
         Args:
+
             dest: A path, or a ``SinkTarget``.
             mode: The reconciliation mode, validated against the target. (default: append)
             keys: The match keys for a keyed record target.
@@ -1369,6 +1385,7 @@ class SyncPipe(PyPipe):
             format: A ``Targets`` converter override for a file destination.
 
         Returns:
+
             A ``SinkResult`` describing what the delivery did.
 
         Examples:
@@ -1400,6 +1417,7 @@ class PyCollection(_Lifecycle):
     model.
 
     Args:
+
         sources: One conf mapping per source.
         conf: Defaults merged under every source's own conf.
         workers: Pool size when ``parallel``. Derived from the source count when unset.
@@ -1429,6 +1447,7 @@ class SyncCollection(PyCollection):
     A synchronous PyCollection object.
 
     Examples:
+
         >>> from riko import get_path
         >>>
         >>> sources = [{"url": get_path(f)} for f in ["feed.xml", "gawker.xml"]]
@@ -1661,6 +1680,7 @@ class AsyncPipe(PyPipe):
     draining yields the same result as ``SyncPipe``.
 
     Args:
+
         name: Module to run. A source pipe takes no ``source``.
         source: Upstream stream, feed, or another pipe to chain onto.
         conf: The module's configuration.
@@ -1890,6 +1910,7 @@ class AsyncPipe(PyPipe):
         use :meth:`sink` for a terminal async write in the meantime.
 
         Raises:
+
             NotImplementedError: Always, until the async writer lands.
 
         """
@@ -2031,6 +2052,7 @@ class AsyncCollection(PyCollection):
     than batched.
 
     Examples:
+
         >>> from riko import get_path, issync, run
         >>>
         >>> sources = [{"url": get_path(f)} for f in ["feed.xml", "gawker.xml"]]
@@ -2129,6 +2151,7 @@ class AsyncCollection(PyCollection):
         The async collection counterpart of :meth:`SyncPipe.write` (not yet done).
 
         Raises:
+
             NotImplementedError: Always, until the async writer lands.
 
         """

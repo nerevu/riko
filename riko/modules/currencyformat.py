@@ -6,6 +6,7 @@ The currency's own conventions decide the symbol and the number of decimal
 places, so ``100`` is ``$100.00`` in USD but ``¥100`` in JPY.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.currencyformat import pipe
@@ -49,14 +50,17 @@ def parser(
     Formats ``amount`` in the configured currency.
 
     Args:
+
         amount: The amount to format.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `currency`.
 
     Returns:
+
         The formatted amount, or ``""`` when there is no amount to format.
 
     Examples:
+
         >>> from decimal import Decimal
         >>> from meza.fntools import Objectify
         >>>
@@ -92,6 +96,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -107,6 +112,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to format (default: "content").
 
         assign (str): Field the text is assigned to. Ignored when ``emit`` is
@@ -116,18 +122,21 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item is
           given (default)
         - ``{<assign>: <text>}`` when ``emit`` is False and no item given
         - ``<text>`` when ``emit`` is True
 
     Notes:
+
         A field that is missing or not numeric yields ``""``.
 
         Amounts are laid out US style whatever the currency, and an unrecognized
         ISO code is used verbatim in place of a symbol.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -150,6 +159,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -165,6 +175,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to format (default: "content").
 
         assign (str): Field the text is assigned to. Ignored when ``emit`` is
@@ -174,18 +185,21 @@ def pipe(*args: Any, **kwargs: object) -> str:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item is
           given (default)
         - ``{<assign>: <text>}`` when ``emit`` is False and no item given
         - ``<text>`` when ``emit`` is True
 
     Notes:
+
         A field that is missing or not numeric yields ``""``.
 
         Amounts are laid out US style whatever the currency, and an unrecognized
         ISO code is used verbatim in place of a symbol.
 
     Examples:
+
         >>> next(pipe({"content": "1000.33"}))["currencyformat"]
         '$1,000.33'
         >>> conf = {"currency": "GBP"}

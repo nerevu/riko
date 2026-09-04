@@ -7,6 +7,7 @@ remembered, so a duplicate that falls outside the window is yielded again.
 Lazy, and memory is bounded by ``limit``.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.uniq import pipe
@@ -46,6 +47,7 @@ def parser(
     Yields items whose ``uniq_key`` value has not been seen recently.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
@@ -56,9 +58,11 @@ def parser(
             `stream` as well.
 
     Yields:
+
         Each item whose ``uniq_key`` value is not among the last ``limit`` seen.
 
     Examples:
+
         >>> from itertools import repeat
         >>> from meza.fntools import Objectify
         >>>
@@ -89,6 +93,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Lazy: items stream through and memory is bounded by ``limit``.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -101,6 +106,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "uniq").
 
@@ -108,10 +114,12 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -134,6 +142,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Lazy: items stream through and memory is bounded by ``limit``.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -146,6 +155,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "uniq").
 
@@ -153,10 +163,12 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> items = [{"content": x, "mod": x % 2} for x in range(5)]
         >>> list(pipe(items, conf={"uniq_key": "mod"}))
         [{'content': 0, 'mod': 0}, {'content': 1, 'mod': 1}]

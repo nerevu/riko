@@ -74,6 +74,7 @@ def fromdict(
 ) -> "DataclassInstance":
     """
     Examples:
+
         >>> from dataclasses import dataclass
         >>>
         >>> @dataclass
@@ -140,6 +141,7 @@ def _to_hashable(obj: object) -> HashableOrTuple:
     cache distinct instances onto one key.
 
     Examples:
+
         >>> _to_hashable([1, 2]) == _to_hashable((1, 2))
         False
 
@@ -222,6 +224,7 @@ def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
     cache so distinct instances never collide on a shared key.
 
     Examples:
+
         >>> calls = []
         >>> @repr_cache
         ... def tally(x):

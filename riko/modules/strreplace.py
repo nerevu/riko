@@ -7,6 +7,7 @@ be listed; each runs on the previous one's result. ``param`` selects whether to
 replace every occurrence, just the first, or just the last.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.strreplace import pipe
@@ -68,14 +69,17 @@ async def async_parser(
     Asynchronously applies each replacement rule to ``word``.
 
     Args:
+
         word: The string to transform.
         rules: The parsed replacement rules.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The transformed string, unchanged where nothing matched.
 
     Examples:
+
         >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
@@ -103,14 +107,17 @@ def parser(
     Applies each replacement rule to ``word``.
 
     Args:
+
         word: The string to transform.
         rules: The parsed replacement rules.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The transformed string, unchanged where nothing matched.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> item = {"content": "hello world"}
@@ -132,6 +139,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration.
 
@@ -147,6 +155,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to search (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
@@ -156,15 +165,18 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <text>}`` when ``emit`` is False and no item given
         - ``<text>`` when ``emit`` is True
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -188,6 +200,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration.
 
@@ -203,6 +216,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to search (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
@@ -212,15 +226,18 @@ def pipe(*args: Any, **kwargs: object) -> str:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <text>}`` when ``emit`` is False and no item given
         - ``<text>`` when ``emit`` is True
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
 
     Examples:
+
         >>> conf = {"rule": {"find": "hello", "replace": "bye"}}
         >>> item = {"content": "hello world"}
         >>> next(pipe(item, conf=conf))["strreplace"]

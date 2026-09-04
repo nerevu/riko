@@ -6,6 +6,7 @@ Not lazy: ranking needs every item, so the source is materialized and cannot be
 unbounded.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.sort import pipe
@@ -58,6 +59,7 @@ async def async_parser(
     Rules are applied in reverse so the first rule is the primary key.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
@@ -68,9 +70,11 @@ async def async_parser(
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Returns:
+
         The fully sorted stream.
 
     Examples:
+
         >>> from itertools import repeat
         >>> from riko import run, issync
         >>> from meza.fntools import Objectify
@@ -102,6 +106,7 @@ def parser(
     Rules are applied in reverse so the first rule is the primary key.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
@@ -112,9 +117,11 @@ def parser(
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Returns:
+
         The fully sorted stream.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>> from itertools import repeat
         >>>
@@ -138,6 +145,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Listing several rules sorts by the first, breaking ties with the rest.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -159,6 +167,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "sort").
 
@@ -166,10 +175,12 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -193,6 +204,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Listing several rules sorts by the first, breaking ties with the rest.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -214,6 +226,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "sort").
 
@@ -221,10 +234,12 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> items = [
         ...     {"rank": "b", "name": "adam"},
         ...     {"rank": "a", "name": "sue"},

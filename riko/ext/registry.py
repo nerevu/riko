@@ -8,6 +8,7 @@ Provides registration and resolution for named modules.
 Resolution order is runtime registration, entry point, then built-in module.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.ext import ModuleDefinition, ModuleRegistry
@@ -59,6 +60,7 @@ class ModuleDefinition:
     off the module and its ``description`` from the module docstring summary.
 
     Attributes:
+
         name: Canonical identifier. Required by ``register``, but optional for an
             entry-point definition. The registry stamps it from the entry-point key
             so the external declaration stays the single source of truth.
@@ -173,6 +175,7 @@ class ModuleRegistry:
         Adds ``definition`` to the runtime tier that shadows any lower tier.
 
         Raises:
+
             ValueError: If ``definition`` has no name, or names an already
                 registered module and ``replace`` is False.
 
@@ -198,6 +201,7 @@ class ModuleRegistry:
         Returns ``name``'s callable for ``interface`` and honors tier precedence.
 
         Raises:
+
             UnsupportedModuleError: If no tier defines ``name``, or the tier that
                 does has no ``interface`` callable.
 
@@ -243,6 +247,7 @@ def register(definition: ModuleDefinition, *, replace: bool = False) -> None:
     Registers a module on the process-global registry.
 
     Raises:
+
         ValueError: If ``definition`` has no name, or names an already registered
             module and ``replace`` is False.
 

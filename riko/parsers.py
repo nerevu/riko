@@ -258,13 +258,16 @@ def extract_namespace(tree: AnyElementTree | AnyElement) -> str | None:
     Extracts the XML namespace URI from an element's tag.
 
     Args:
+
         tree: An element whose tag may contain a Clark-notation namespace, e.g.
             ``{http://example.com/ns}root``.
 
     Returns:
+
         The namespace URI, or ``None`` if the tag has no namespace.
 
     Examples:
+
         >>> from xml.etree.ElementTree import fromstring
         >>>
         >>> tree = fromstring('<root xmlns="http://example.com/ns"/>')
@@ -294,15 +297,18 @@ def verify_pos(tree: AnyElementTree | AnyElement, pos: int, *tags: str) -> int:
     the comparison.
 
     Args:
+
         tree: The root element to inspect.
         pos: Current position in *tags*.
         *tags: Ordered tag names derived from the XPath expression.
 
     Returns:
+
         ``pos + 1`` if the local tag of *tree* equals ``tags[pos]``, otherwise *pos*
         unchanged.
 
     Examples:
+
         >>> from xml.etree.ElementTree import fromstring
         >>>
         >>> rss = fromstring('<rss/>')
@@ -352,6 +358,7 @@ def xpath(
     descendant searches start at the correct level.
 
     Args:
+
         tree: The root element to search.
 
         path: An XPath-like expression. A leading ``/`` indicates an absolute
@@ -366,9 +373,11 @@ def xpath(
         ns_prefix: Prefix token used in namespace-qualified path segments.
 
     Yields:
+
         AnyElement: Each matched element.
 
     Examples:
+
         >>> from xml.etree.ElementTree import fromstring
         >>>
         >>> xml = '<rss><channel><item>a</item><item>b</item></channel></rss>'
@@ -434,6 +443,7 @@ def xml2etree(  # noqa: E302
     guard against XXE and entity-expansion attacks.
 
     Examples:
+
         >>> from io import StringIO
         >>>
         >>> xxe = (
@@ -617,6 +627,7 @@ def conf_is_dynamic(conf: object, memoize: bool = False, **kwargs: object) -> bo
     Whether ``conf`` holds a ``subkey`` or sentinel needing per-item parsing.
 
     Examples:
+
         >>> _conf_is_dynamic_cached.cache_clear()
         >>> conf_is_dynamic({'type': 'text', 'value': 'hello'}, True)
         False
@@ -693,6 +704,7 @@ def parse_conf[VT](
     Static confs are memoized by default. ``memoize`` forces the choice.
 
     Examples:
+
         >>> param = {
         ...     "key": {"type": "text", "value": "q"},
         ...     "value": {"type": "text", "subkey": "title"}
@@ -748,13 +760,16 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
     Determines whether or not to skip an item.
 
     Args:
+
         item: The entry to process.
         skip_if: The skipping criteria.
 
     Returns:
+
         Whether or not to skip.
 
     Examples:
+
         >>> item = {"content": "Some content"}
         >>> get_skip(item, lambda x: x["content"] == "Some content")
         True

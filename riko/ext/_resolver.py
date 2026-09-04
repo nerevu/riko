@@ -9,6 +9,7 @@ Names prefixed with ``pipe_`` or ``pipe:`` resolve as pipelines, everything
 else as a module.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.ext._resolver import pipe_resolver
@@ -44,6 +45,7 @@ class PipeResolver:
     :class:`PipelineResolver` for composed ``pipe_*`` sub-pipelines.
 
     Notes:
+
         Neither resolver imports the compiler at module scope. The two ``riko.compile``
         imports on this path are deliberately function-local (marked
         ``noqa: PLC0415``). That is what keeps importing this module, and therefore
@@ -69,6 +71,7 @@ class PipeResolver:
         Returns ``name``'s callable for ``interface``.
 
         Raises:
+
             UnsupportedModuleError: If a module name is unresolved.
             UnsupportedPipelineError: If a ``pipe_*`` name is unresolved.
 

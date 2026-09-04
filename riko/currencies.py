@@ -11,6 +11,7 @@ guaranteed; a handful of withdrawn currencies omit ``locale`` or the name and
 symbol fields, so read the optional ones with ``get``.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.currencies import CURRENCY_CODES, CURRENCY_SYMBOLS

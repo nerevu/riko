@@ -48,6 +48,7 @@ def coroutine(
     anything else. The generator itself is returned, not the hub entry.
 
     Args:
+
         registry_name: Channel to register under. Defaults to the decorated
             function's name, which is only useful for a module-level receiver.
 
@@ -55,6 +56,7 @@ def coroutine(
             drops its oldest item.
 
     Raises:
+
         ValueError: If ``maxlen`` is set below 1. A ``0``-length queue would
             silently discard every item.
 

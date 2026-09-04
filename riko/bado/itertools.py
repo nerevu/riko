@@ -59,6 +59,7 @@ def _cap[T, S](
     outer fan-out stays unbudgeted and only the leaves draw from the budget.
 
     Returns:
+
         *func* wrapped to acquire *budget* per call, or *func* unchanged when
         *budget* is ``None``.
 
@@ -83,13 +84,16 @@ def as_async[T](source: AsyncIterable[T] | Iterable[T]) -> AsyncIterable[T]:
     Adapts *source* to an ``AsyncIterable``.
 
     Args:
+
         source: A sync or async iterable.
 
     Returns:
+
         *source* unchanged when already async-iterable, else wrapped via
             :func:`async_iter`.
 
     Examples:
+
         >>> from riko import issync, run
         >>>
         >>> stream = as_async([1, 2])
@@ -111,15 +115,18 @@ async def async_iter[T](
     Converts a sync iterable into an async generator.
 
     Args:
+
         elements: The sync iterable to wrap.
 
         cooperative: Yield control (``async_sleep(0)``) before each item
             so concurrent tasks (e.g. a timeout) can run (default: False).
 
     Yields:
+
         Each element from *elements* in order.
 
     Examples:
+
         >>> from riko import issync, run
         >>>
         >>> async def main():
@@ -151,6 +158,7 @@ async def coop_reduce[T, S](  # noqa: E302 # pyright: ignore[reportInconsistentO
     Reduces *content* with *func* while yielding control between steps.
 
     Args:
+
         func: A two-argument reducer, e.g. ``lambda x, y: x + y``.
 
         content: The sequence to reduce.
@@ -159,9 +167,11 @@ async def coop_reduce[T, S](  # noqa: E302 # pyright: ignore[reportInconsistentO
             is consumed as the seed (``None`` if *content* is empty).
 
     Returns:
+
         The final accumulated value.
 
     Examples:
+
         >>> from riko import issync, run
         >>>
         >>> async def main():
@@ -192,6 +202,7 @@ def async_reduce[T, S](
     The reducer is awaited only when it returns an awaitable.
 
     Args:
+
         func: A two-argument reducer.
 
         content: The sequence to reduce.
@@ -200,9 +211,11 @@ def async_reduce[T, S](
             element as the seed.
 
     Returns:
+
         The final accumulated value.
 
     Examples:
+
         >>> from riko import issync, run
         >>>
         >>> async def main():
@@ -237,6 +250,7 @@ async def async_map[T, S](
     Maps *func* over *content* concurrently.
 
     Args:
+
         func: An async function applied to each element.
 
         content: The items to map over.
@@ -247,9 +261,11 @@ async def async_map[T, S](
         **kwargs: Extra keyword arguments forwarded to *func*.
 
     Returns:
+
         The results, in iteration order.
 
     Examples:
+
         >>> from riko import issync, run
         >>>
         >>> async def double(x):
@@ -304,6 +320,7 @@ async def _pool_stream[T, S](
     This bounds in-flight memory to ``limit`` open items plus ``buffer`` queued results.
 
     Args:
+
         source: Items to hand to the worker pool.
 
         drain: ``async (item, out) -> None`` — does the per-item work
@@ -314,6 +331,7 @@ async def _pool_stream[T, S](
         buffer: Size of the completed-results queue (must be >= 0).
 
     Yields:
+
         Each result *drain* sends, in arrival order.
 
     """
@@ -364,6 +382,7 @@ async def async_map_stream[T, S](
     unbounded sources. For source order use :func:`async_map_ordered_stream`.
 
     Args:
+
         func: An async function applied to each source item.
         source: The items to map over.
         limit: Maximum number of concurrent calls (default: ``DEF_CONNECTION_COUNT``).
@@ -371,9 +390,11 @@ async def async_map_stream[T, S](
         budget: Optional shared concurrency budget (default: None).
 
     Yields:
+
         Each ``func(item)`` result, in completion order.
 
     Examples:
+
         >>> from riko import issync, run
         >>>
         >>> async def double(x):
@@ -411,6 +432,7 @@ async def async_map_ordered_stream[T, S](
     bounded windows, so in-flight memory stays within ``limit + buffer`` items.
 
     Args:
+
         func: An async function applied to each source item.
         source: The items to map over.
         limit: Maximum number of concurrent calls (default: 16).
@@ -418,9 +440,11 @@ async def async_map_ordered_stream[T, S](
         budget: Optional shared concurrency budget (default: None).
 
     Yields:
+
         Each ``func(item)`` result, in *source* order.
 
     Examples:
+
         >>> from riko import issync, run
         >>>
         >>> async def double(x):
@@ -469,6 +493,7 @@ async def async_merge[S](
     time. *limit* and *buffer* bound in-flight memory.
 
     Args:
+
         feeds: The async feeds to merge.
 
         limit: Maximum number of feeds drained concurrently (default:
@@ -477,9 +502,11 @@ async def async_merge[S](
         buffer: Size of the merged-records queue (default: 0).
 
     Yields:
+
         Each record from every feed, in arrival order.
 
     Examples:
+
         >>> from riko import issync, run
         >>>
         >>> async def feed(*items):

@@ -14,6 +14,7 @@ transports themselves live outside core. It is a distinct axis from the ``write`
 module's file-open ``mode``.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.sinks import SinkMode, sink_write
@@ -61,6 +62,7 @@ class SinkWrite:
     A normalized, validated sink write specification.
 
     Attributes:
+
         mode: How incoming records reconcile with the destination.
         keys: The match keys for a keyed mode; empty otherwise.
         idempotency_key: The dedupe key for an ``append``; empty otherwise.
@@ -94,14 +96,17 @@ def sink_write(
     Validates and normalizes a sink write for ``mode``.
 
     Args:
+
         mode: The sink mode, as a ``SinkMode`` or its string value.
         keys: The match keys for a keyed mode (``merge``/``replace``/``delete``).
         idempotency_key: The dedupe key for an ``append``.
 
     Returns:
+
         The normalized, validated write specification.
 
     Raises:
+
         ValueError: When ``mode`` is unknown, a keyed mode is missing ``keys`` or
             supplies ``idempotency_key``, or ``append`` supplies ``keys``.
 

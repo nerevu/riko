@@ -6,6 +6,7 @@ Produces one item is per component: ``scheme``, ``netloc``, ``path``, ``params``
 ``query``, and ``fragment``.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.urlparse import pipe
@@ -45,14 +46,17 @@ def parser(
     Yields one item per url component.
 
     Args:
+
         url: The link to parse.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `parse_key`.
 
     Returns:
+
         Six items, each ``{"component": <name>, <parse_key>: <value>}``.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({"parse_key": "value"})
@@ -75,6 +79,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -85,6 +90,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute holding the url (default: "content").
 
         assign (str): Field the components are assigned to. Ignored when ``emit``
@@ -94,6 +100,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
             them. Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``{"component": <name>, <parse_key>: <value>}`` when ``emit`` is True
           (default)
         - ``{<assign>: <component>}`` when ``emit`` is False and no item given
@@ -101,6 +108,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
           False and item is given
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -123,6 +131,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -133,6 +142,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute holding the url (default: "content").
 
         assign (str): Field the components are assigned to. Ignored when ``emit``
@@ -142,6 +152,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
             them. Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``{"component": <name>, <parse_key>: <value>}`` when ``emit`` is True
           (default)
         - ``{<assign>: <component>}`` when ``emit`` is False and no item given
@@ -149,6 +160,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
           False and item is given
 
     Examples:
+
         >>> item = {"content": "http://yahoo.com"}
         >>> next(pipe(item))
         {'component': 'scheme', 'content': 'http'}

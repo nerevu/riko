@@ -109,9 +109,11 @@ def _unwrap_alias(annotation: object) -> object:
     ``type B = Iterator[Item]``), this loops until it reaches a terminal value.
 
     Args:
+
         annotation: The annotation to unwrap; a non-alias passes through.
 
     Returns:
+
         The alias's underlying value, or the annotation itself when it is not a
         ``TypeAliasType``.
 
@@ -134,9 +136,11 @@ def _gen_members(annotation: object) -> Iterator[AnnotationMember]:
     the arm itself when it has none.
 
     Args:
+
         annotation: The return annotation to decompose.
 
     Yields:
+
         One ``AnnotationMember`` per surviving arm; nothing for an empty
         ``Awaitable``/``Coroutine`` with no type argument.
 
@@ -170,9 +174,11 @@ def _expression_path(node: ast.expr) -> str | None:
     guessing.
 
     Args:
+
         node: The call-target expression to render.
 
     Returns:
+
         The dotted path (``"itertools.chain"``, ``"map"``), or ``None`` for any
         node that is not a name or attribute chain.
 
@@ -197,10 +203,12 @@ def _infer_callable_kind(node: ast.expr) -> Inference:
     what defeated it.
 
     Args:
+
         node: The call-target expression (a call's ``func``, or a bare argument
             handed through from a passthrough call).
 
     Returns:
+
         An ``Inference`` pairing the classified kind with ``None``, or ``UNKNOWN``
         with a ``reason`` when the target is not whitelisted.
 
@@ -238,11 +246,13 @@ def _infer_expression_kind(
     the wrapper), otherwise the call target is classified directly.
 
     Args:
+
         node: The expression to classify (a function's final return value).
         assignments: Top-level name -> value bindings a returned name may resolve to.
         seen: Names already being resolved, used to break assignment cycles.
 
     Returns:
+
         An ``Inference`` pairing the classified kind with ``None``, or ``UNKNOWN``
         with a ``reason`` when the expression cannot be classified.
 
@@ -297,13 +307,16 @@ def infer_from_source(pipe: Callable) -> ReturnInference:
     function contract.
 
     Args:
+
         pipe: The undecorated pipe function to inspect.
 
     Returns:
+
         A ``ReturnInference`` whose ``source`` is ``AST`` on success, or ``None``
         with a populated ``reason`` when the return kind cannot be classified.
 
     Examples:
+
         >>> def mapped(items):
         ...     return map(str, items)
         >>>
@@ -361,13 +374,16 @@ def gen_return_inferences(pipe: Callable) -> Iterator[ReturnInference]:
     back to the AST inspection of ``infer_from_source``.
 
     Args:
+
         pipe: The undecorated pipe function to classify.
 
     Yields:
+
         One ``ReturnInference`` per considered arm (a single inference for the
         generator and source-fallback paths).
 
     Examples:
+
         >>> from collections.abc import Iterator
         >>>
         >>> def gen(items):
@@ -419,12 +435,15 @@ def gen_operator_return_kinds(pipe: Callable) -> Iterator[OperatorReturnKind]:
     ``aggregator``/``composer``, not where each kind came from.
 
     Args:
+
         pipe: The undecorated pipe function to classify.
 
     Yields:
+
         The bare ``OperatorReturnKind`` of each inference, in order.
 
     Examples:
+
         >>> def counted(items) -> int:
         ...     return sum(items)
         >>>

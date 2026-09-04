@@ -6,6 +6,7 @@ riko.context
 Provides the execution context for a pipeline.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.context import Context, ExecutionMode, parse_context
@@ -42,6 +43,7 @@ class Context:
     A pipeline execution context.
 
     Attributes:
+
         mode: Whether to run or describe the pipeline.
         verbose: Whether to print debug output.
         test: Whether to use defaults instead of prompting.
@@ -73,10 +75,12 @@ class Context:
         Binds ``resource`` to ``name`` in a new copy of this Context.
 
         Args:
+
             name: The Context name the resource is bound to.
             resource: The resource definition to add.
 
         Returns:
+
             A new Context; the original is left unchanged.
 
         """

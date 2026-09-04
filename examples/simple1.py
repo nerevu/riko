@@ -2,6 +2,7 @@
 Builds an item holding a URL, then rewrites it with ``regex``.
 
 Examples:
+
     Run it::
 
         run-pipe simple1

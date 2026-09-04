@@ -5,6 +5,7 @@ Fetches an RSS feed and yields feed entries.
 Understands RSS, Atom, and RDF. The url may be local or remote.
 
 Examples:
+
     Basic usage::
 
         >>> from riko import get_path
@@ -55,17 +56,21 @@ async def async_parser(
     ``encoding`` is honored here; ``memoize`` is not.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`.
 
     Returns:
+
         Feed entries augmented with the common `keys`.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
@@ -92,17 +97,21 @@ def parser(
     ``encoding`` and ``memoize`` are honored here.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`.
 
     Returns:
+
         Feed entries augmented with the common `keys`.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
@@ -123,6 +132,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     Asynchronously fetches an RSS feed and yields one feed entries.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -133,6 +143,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each entry is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -140,18 +151,22 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<entry>`` when ``emit`` is True (default)
         - ``{<assign>: <entry>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<entry>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Notes:
+
         ``memoize`` is ignored on this path.
 
     Examples:
+
         >>> from riko import get_path, run
         >>>
         >>> async def main():
@@ -172,6 +187,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     Fetches an RSS feed and yields one feed entries.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -184,6 +200,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each entry is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -191,15 +208,18 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<entry>`` when ``emit`` is True (default)
         - ``{<assign>: <entry>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<entry>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>>
         >>> url = get_path("feed.xml")

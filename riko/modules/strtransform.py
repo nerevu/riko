@@ -8,6 +8,7 @@ Applies a named ``str`` method to an item field.
 one's result.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.strtransform import pipe
@@ -90,15 +91,18 @@ async def async_parser(
     Asynchronously applies each transform rule to ``word``.
 
     Args:
+
         word: The string to transform.
         rules: The parsed transform rules.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The transformed value. ``count`` and ``find`` return an int rather than
         a string.
 
     Examples:
+
         >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
@@ -126,15 +130,18 @@ def parser(
     Applies each transform rule to ``word``.
 
     Args:
+
         word: The string to transform.
         rules: The parsed transform rules.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The transformed value. ``count`` and ``find`` return an int rather than
         a string.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> item = {"content": "hello world"}
@@ -158,6 +165,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> str | int:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration.
 
@@ -174,6 +182,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> str | int:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to transform (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
@@ -183,21 +192,25 @@ async def async_pipe(*args: Any, **kwargs: object) -> str | int:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <value>}`` when ``emit`` is False and no item given
         - ``<value>`` when ``emit`` is True
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
 
     Notes:
+
         An unrecognized ``transform`` logs a warning and leaves the field
         unchanged. ``count`` and ``find`` yield an int. For the methods taking
         an int (``zfill``, and the optional arguments of ``replace``, ``count``
         and ``find``) pass ``args`` as a scalar or list, not a string.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -221,6 +234,7 @@ def pipe(*args: Any, **kwargs: object) -> str | int:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration.
 
@@ -238,6 +252,7 @@ def pipe(*args: Any, **kwargs: object) -> str | int:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to transform (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
@@ -247,21 +262,25 @@ def pipe(*args: Any, **kwargs: object) -> str | int:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <value>}`` when ``emit`` is False and no item given
         - ``<value>`` when ``emit`` is True
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
 
     Notes:
+
         An unrecognized ``transform`` logs a warning and leaves the field
         unchanged. ``count`` and ``find`` yield an int. For the methods taking
         an int (``zfill``, and the optional arguments of ``replace``, ``count``
         and ``find``) pass ``args`` as a scalar or list, not a string.
 
     Examples:
+
         >>> conf = {"rule": {"transform": "title"}}
         >>> item = {"content": "hello world"}
         >>> next(pipe(item, conf=conf))["strtransform"]

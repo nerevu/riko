@@ -6,6 +6,7 @@ Transliterates the field to ascii, lowercases it, and joins what is left with
 ``separator``, giving a value safe to use in a url or filename.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.slugify import pipe
@@ -51,14 +52,17 @@ def parser(
     Slugifies ``word``.
 
     Args:
+
         word: The string to slugify.
         separator: The slug separator, or None to use the default.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The slug.
 
     Examples:
+
         >>> item = {"content": "hello world"}
         >>> parser(item["content"], "-", None, stream=item)
         'hello-world'
@@ -77,6 +81,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration.
 
@@ -85,6 +90,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to slugify (default: "content").
 
         assign (str): Field the slug is assigned to. Ignored when ``emit`` is
@@ -94,15 +100,18 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <slug>}`` when ``emit`` is False and item is
           given (default)
         - ``{<assign>: <slug>}`` when ``emit`` is False and no item given
         - ``<slug>`` when ``emit`` is True
 
     Notes:
+
         A field the item lacks slugifies to ``""``.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -125,6 +134,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration.
 
@@ -133,6 +143,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to slugify (default: "content").
 
         assign (str): Field the slug is assigned to. Ignored when ``emit`` is
@@ -142,15 +153,18 @@ def pipe(*args: Any, **kwargs: object) -> str:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <slug>}`` when ``emit`` is False and item is
           given (default)
         - ``{<assign>: <slug>}`` when ``emit`` is False and no item given
         - ``<slug>`` when ``emit`` is True
 
     Notes:
+
         A field the item lacks slugifies to ``""``.
 
     Examples:
+
         >>> next(pipe({"content": "hello world"}))["slugify"]
         'hello-world'
         >>> conf = {"separator": "_"}

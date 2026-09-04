@@ -6,6 +6,7 @@ Useful when you need to build a string from multiple substrings, some coded
 into the pipe, other parts supplied when the pipe is run.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.strconcat import pipe
@@ -48,14 +49,17 @@ def parser(
     nothing.
 
     Args:
+
         _: The item. Unused; the parts arrive already resolved.
         extraction: The resolved parts.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The concatenated string.
 
     Examples:
+
         >>> parser(None, ["one", "two"], None)
         'onetwo'
 
@@ -72,6 +76,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -88,6 +93,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
             True (default: "strconcat").
 
@@ -95,19 +101,23 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <string>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <string>}`` when ``emit`` is False and no item given
         - ``<string>`` when ``emit`` is True
 
     Raises:
+
         TypeError: If ``conf`` has no ``part`` key.
 
     Notes:
+
         Only ``None`` is dropped. So a ``subkey`` that finds nothing adds nothing, while
         other falsy values are kept.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -132,6 +142,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -148,6 +159,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
             True (default: "strconcat").
 
@@ -155,19 +167,23 @@ def pipe(*args: Any, **kwargs: object) -> str:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <string>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <string>}`` when ``emit`` is False and no item given
         - ``<string>`` when ``emit`` is True
 
     Raises:
+
         TypeError: If ``conf`` has no ``part`` key.
 
     Notes:
+
         Only ``None`` is dropped. So a ``subkey`` that finds nothing adds nothing, while
         other falsy values are kept.
 
     Examples:
+
         >>> item = {"img": {"src": "http://www.site.com"}}
         >>> part = ['<img src="', {"subkey": "img.src", "type": "text"}, '">']
         >>> conf = {"part": part}

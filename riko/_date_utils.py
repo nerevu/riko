@@ -52,6 +52,7 @@ def _parse_date_cached(value: str) -> dt | BaseException:
 def parse_date_string(value: str) -> dt:
     """
     Examples:
+
         >>> from datetime import datetime
         >>>
         >>> _parse_date_cached.cache_clear()
@@ -278,6 +279,7 @@ def ensure_tzinfo(  # noqa: E302
 ) -> AwareDT | AwareST | date | None:
     """
     Examples:
+
         >>> import time
         >>> from datetime import datetime
         >>>

@@ -10,6 +10,7 @@ before the last item is known, though only ``count`` items are ever held. An
 unbounded source never yields.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.tail import pipe
@@ -51,6 +52,7 @@ def parser(
     Yields the last ``count`` items of the stream.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
@@ -61,9 +63,11 @@ def parser(
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Yields:
+
         The final ``count`` items, in source order.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>> from itertools import repeat
         >>>
@@ -87,6 +91,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     items. Do not use on an unbounded stream.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -98,6 +103,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "tail").
 
@@ -105,10 +111,12 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -132,6 +140,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     items. Do not use on an unbounded stream.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -143,6 +152,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "tail").
 
@@ -150,10 +160,12 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> items = [{"x": x} for x in range(5)]
         >>> next(pipe(items, conf={"count": 2}))
         {'x': 3}

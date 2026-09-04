@@ -70,6 +70,7 @@ def parser(
     item and its results folded back before the stream reaches a consumer.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so
             consuming it will consume `tuples` as well.
 
@@ -80,6 +81,7 @@ def parser(
             will consume `stream` as well.
 
     Yields:
+
         Each source item, untouched.
 
     """
@@ -96,10 +98,12 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     ``count="first"`` stops after the first result.
 
     Args:
+
         items (Items): The source stream.
         context (Context): the execution context
 
     Kwargs:
+
         embed (callable): The submodule to run once per item. Any loopable
             processor (everything except ``*input``) or a compiled sub-pipeline.
             Required.
@@ -119,11 +123,13 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             normal item stream).
 
     Yields:
+
         - the submodule output per item when ``emit`` is True (default)
         - merged ``{Item, <assign>: <result>}`` once per kept result when
           ``emit`` is False
 
     Notes:
+
         A submodule that yields one value per item (``rename``, ``strconcat``,
         ``urlbuilder``, ``regex``) suits ``emit=True``, which replaces the item
         and makes ``count`` irrelevant. One that yields many (``tokenizer``,
@@ -145,10 +151,12 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     stream.
 
     Args:
+
         items (Items): The source stream.
         context (Context): the execution context
 
     Kwargs:
+
         embed (callable): The submodule to run once per item. Any loopable
             processor (everything except ``*input``) or a compiled sub-pipeline.
             Required.
@@ -168,11 +176,13 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             normal item stream).
 
     Yields:
+
         - the submodule output per item when ``emit`` is True (default)
         - merged ``{Item, <assign>: <result>}`` once per kept result when
           ``emit`` is False
 
     Notes:
+
         A submodule that yields one value per item (``rename``, ``strconcat``,
         ``urlbuilder``, ``regex``) suits ``emit=True``, which replaces the item
         and makes ``count`` irrelevant. One that yields many (``tokenizer``,

@@ -17,6 +17,7 @@ overwrite, and ``append`` as append. Files have no keys, so it builds a ``SinkWr
 directly rather than through the keyed ``sink_write`` validator.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.targets import File, resolve_target
@@ -53,6 +54,7 @@ class SinkResult:
     What a sink delivery did.
 
     Attributes:
+
         created: Records inserted (keyed record targets).
         updated: Records updated (keyed record targets).
         deleted: Records removed (keyed record targets).
@@ -72,6 +74,7 @@ class SinkCapabilities:
     What a sink target supports.
 
     Attributes:
+
         modes: The ``SinkMode`` values the target accepts.
         serializes: Whether the target encodes records with a format (a file),
             as opposed to sending native records (a record store).
@@ -112,11 +115,13 @@ class File:
     ``SinkMode`` maps to the file-open mode, which is no longer caller-visible.
 
     Attributes:
+
         url: The destination path.
         format: The ``Targets`` converter name, or ``None`` to derive it from the
             path extension (falling back to ``json``).
 
     Examples:
+
         >>> from riko import get_temp_file
         >>> from riko.sinks import SinkMode, SinkWrite
         >>> from riko.targets import File
@@ -155,12 +160,14 @@ class File:
         Serializes ``records`` and writes them to ``url``.
 
         Args:
+
             records: The records to serialize.
             write: The write spec; only ``mode`` is read (``append`` vs ``replace``).
             fmt: A ``Targets`` converter override; else ``format``, else derived
                 from the path extension.
 
         Returns:
+
             A result carrying the number of bytes written.
 
         """
@@ -183,12 +190,14 @@ class File:
         :func:`riko.bado.io.async_write`.
 
         Args:
+
             records: The records to serialize.
             write: The write spec; only ``mode`` is read (``append`` vs ``replace``).
             fmt: A ``Targets`` converter override; else ``format``, else derived
                 from the path extension.
 
         Returns:
+
             A result carrying the number of bytes written.
 
         """
@@ -221,19 +230,23 @@ def build_write(
     keyed :func:`riko.sinks.sink_write` validator.
 
     Args:
+
         target: The resolved sink target.
         mode: The sink mode, as a ``SinkMode`` or its string value.
         keys: The match keys for a keyed record target.
         idempotency_key: The dedupe key for an ``append`` on a record target.
 
     Returns:
+
         The normalized, validated write specification.
 
     Raises:
+
         ValueError: When ``mode`` is unsupported by the target, or a serializing
             target is given ``keys``/``idempotency_key``.
 
     Examples:
+
         >>> from riko.targets import File, build_write
         >>>
         >>> build_write(File("out.csv"), "append")
@@ -270,17 +283,21 @@ def resolve_target(dest: Destination, **conf: object) -> SinkTarget:
     exists, so every string is currently treated as a file path.
 
     Args:
+
         dest: A ``SinkTarget``, or a path string/``Path``.
         conf: Extra keyword configuration for a constructed ``File`` (e.g.
             ``format``).
 
     Returns:
+
         The resolved sink target.
 
     Raises:
+
         TypeError: When ``dest`` is neither a ``SinkTarget`` nor a path.
 
     Examples:
+
         >>> from riko.targets import File, resolve_target
         >>>
         >>> resolve_target("out.csv")
@@ -307,13 +324,16 @@ def resolve_format(url: str | Path | None, fmt: str | None) -> str:
     when it names a known format; anything else falls back to ``json``.
 
     Args:
+
         url: The destination path, or ``None``.
         fmt: The explicit format, or ``None`` to derive one.
 
     Returns:
+
         The resolved format name.
 
     Examples:
+
         >>> from riko.targets import resolve_format
         >>>
         >>> resolve_format("out.jsonl", None)
@@ -341,6 +361,7 @@ class _FileWriter:
     publisher completes.
 
     Attributes:
+
         target: The resolved file target.
         mode: ``append`` or ``replace``.
         fmt: The resolved serialization format.
@@ -404,6 +425,7 @@ def file_writer(
     extension) unless ``stream`` overrides it.
 
     Args:
+
         dest: A path, or a ``SinkTarget``.
         mode: ``append`` or ``replace``; the keyed record modes are rejected.
         fmt: A serialization format override, else derived from the extension.
@@ -411,12 +433,15 @@ def file_writer(
             ``None`` infers it from the format.
 
     Returns:
+
         The configured file writer.
 
     Raises:
+
         ValueError: When ``mode`` is not ``append`` or ``replace``.
 
     Examples:
+
         >>> from riko.targets import file_writer
         >>>
         >>> file_writer("out.jsonl").stream

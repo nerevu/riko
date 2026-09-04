@@ -12,6 +12,7 @@ named ``send``/``receive`` channels instead. Each branch deep copies its items,
 so mutating one branch never affects another.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.split import pipe
@@ -52,6 +53,7 @@ def parser(
     Yields ``splits`` independent copies of the source stream.
 
     Args:
+
         stream: The source stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
@@ -62,9 +64,11 @@ def parser(
             consume `stream` as well.
 
     Yields:
+
         One stream per split. Each stream replays a deep copy of every source item.
 
     Examples:
+
         >>> from itertools import repeat
         >>>
         >>> conf = {"splits": 3}
@@ -90,6 +94,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
     Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -100,10 +105,12 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
         context (Context): the execution context
 
     Yields:
+
         One stream per split. Each stream yields a deep copy of every source item, so
         the branches can be consumed independently and in any order.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -125,6 +132,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
     Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -135,10 +143,12 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
         context (Context): the execution context
 
     Yields:
+
         One stream per split. Each stream yields a deep copy of every source item, so
         the branches can be consumed independently and in any order.
 
     Examples:
+
         >>> items = [{"x": x} for x in range(5)]
         >>> stream1, stream2 = pipe(items)
         >>> next(stream1)

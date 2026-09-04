@@ -7,6 +7,7 @@ works: ``"%m-%d-%Y"`` gives ``02-12-2008``, ``"%R"`` gives ``20:45``, and
 ``"%A, %b %d, %y at %I:%M %p"`` gives ``Tuesday, Feb 12, 08 at 08:45 PM``.
 
 Examples:
+
     Basic usage::
 
         >>> from datetime import date
@@ -48,14 +49,17 @@ def parser(
     Formats ``date`` with the configured format string.
 
     Args:
+
         date: The date to format, or None when there is none.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `format`.
 
     Returns:
+
         The formatted date, or ``""`` when there is no date to format.
 
     Examples:
+
         >>> from datetime import date
         >>> from meza.fntools import Objectify
         >>>
@@ -81,6 +85,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -91,6 +96,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to format (default: "date").
 
         assign (str): Field the text is assigned to. Ignored when ``emit`` is
@@ -100,12 +106,14 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item is
           given (default)
         - ``{<assign>: <text>}`` when ``emit`` is False and no item given
         - ``<text>`` when ``emit`` is True
 
     Notes:
+
         The field is cast before formatting, so a ``date``, ``datetime``,
         ``struct_time``, epoch ``int``, or date string all work, and any time of
         day they carry is kept.
@@ -113,6 +121,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         A field that is missing or names no date yields ``""``.
 
     Examples:
+
         >>> from datetime import date
         >>> from riko import run
         >>>
@@ -136,6 +145,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -146,6 +156,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to format (default: "date").
 
         assign (str): Field the text is assigned to. Ignored when ``emit`` is
@@ -155,12 +166,14 @@ def pipe(*args: Any, **kwargs: object) -> str:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item is
           given (default)
         - ``{<assign>: <text>}`` when ``emit`` is False and no item given
         - ``<text>`` when ``emit`` is True
 
     Notes:
+
         The field is cast before formatting, so a ``date``, ``datetime``,
         ``struct_time``, epoch ``int``, or date string all work, and any time of
         day they carry is kept.
@@ -168,6 +181,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
         A field that is missing or names no date yields ``""``.
 
     Examples:
+
         >>> from datetime import date, datetime
         >>>
         >>> item = {"date": date(2015, 5, 4)}

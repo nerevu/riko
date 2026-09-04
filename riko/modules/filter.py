@@ -14,6 +14,7 @@ whether an item must match all the rules, or if it can just match any rule.
 Lazy: items are tested and yielded one at a time.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.filter import pipe
@@ -145,6 +146,7 @@ def parse_arg[VT](arg: VT, op: str, memoize: bool = False) -> str | date | VT | 
 def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
     """
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> numeric = Objectify({"field": "x", "op": "atleast", "value": 3})
@@ -205,6 +207,7 @@ def parser(
     raises before any item is read.
 
     Args:
+
         _: The source. Unused; items are read from `tuples` instead.
 
         extract: The item independent rules.
@@ -214,13 +217,16 @@ def parser(
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Yields:
+
         Each item for which the combined rules match, or fail to match when
         ``permit`` is False.
 
     Raises:
+
         ValueError: If a rule names an unsupported ``op``.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>> from itertools import repeat
         >>>
@@ -275,6 +281,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Lazy: items are tested and yielded one at a time.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -301,6 +308,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "filter").
 
@@ -308,14 +316,17 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
         ValueError: If a rule names an unsupported ``op``.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -339,6 +350,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Lazy: items are tested and yielded one at a time.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -365,6 +377,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "filter").
 
@@ -372,14 +385,17 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
         ValueError: If a rule names an unsupported ``op``.
 
     Examples:
+
         >>> items = [{"title": "Good job!"}, {"title": "Website Developer"}]
         >>> rule = {"field": "title", "op": "contains", "value": "web"}
         >>> next(pipe(items, conf={"rule": rule}))

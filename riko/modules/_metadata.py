@@ -203,12 +203,15 @@ def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
     resolves either.
 
     Args:
+
         name: The module name, either a str or a discovery-tree member.
 
     Returns:
+
         The definition, or None when no module answers to ``name``.
 
     Examples:
+
         >>> from riko import Sources
         >>>
         >>> fetch = describe_module(Sources.FETCH)

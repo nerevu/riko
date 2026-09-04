@@ -5,6 +5,7 @@ Splits a string into tokens.
 Each token is whitespace-stripped and emitted on its own.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.tokenizer import pipe
@@ -51,6 +52,7 @@ def parser(
     Splits ``content`` on the configured delimiter.
 
     Args:
+
         content: The string to split.
 
         extraction: The extracted conf value. Unused.
@@ -59,9 +61,11 @@ def parser(
             `token_key`.
 
     Returns:
+
         The tokens, each wrapped in a dict.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({"delimiter": "//", "token_key": "token"})
@@ -85,6 +89,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -102,6 +107,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to split (default: "content").
 
         assign (str): Field the tokens are nested under. Ignored when ``emit``
@@ -111,16 +117,19 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<token>`` when ``emit`` is True (default)
         - ``{<assign>: <token>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<token>, ...]}`` when ``emit`` is False
           and item is given
 
     Notes:
+
         Empty tokens are dropped, and ``dedupe`` keeps the first occurrence of
         each, so the input order survives. A field the item lacks yields nothing.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -143,6 +152,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -160,6 +170,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to split (default: "content").
 
         assign (str): Field the tokens are nested under. Ignored when ``emit``
@@ -169,16 +180,19 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<token>`` when ``emit`` is True (default)
         - ``{<assign>: <token>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<token>, ...]}`` when ``emit`` is False
           and item is given
 
     Notes:
+
         Empty tokens are dropped, and ``dedupe`` keeps the first occurrence of
         each, so the input order survives. A field the item lacks yields nothing.
 
     Examples:
+
         >>> item = {"description": "Once//twice//thrice//no more"}
         >>> conf = {"delimiter": "//", "sort": True}
         >>> kwargs = {"field": "description", "emit": False, "assign": "tokens"}

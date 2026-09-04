@@ -9,6 +9,7 @@ Lazy: consumption stops once ``count`` items have been yielded, so the rest of
 the source is never read.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.truncate import pipe
@@ -50,6 +51,7 @@ def parser(
     Returns the ``count`` items beginning at ``start``.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
@@ -60,9 +62,11 @@ def parser(
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Returns:
+
         A lazy slice of the source, empty when ``count`` is 0.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>> from itertools import repeat
         >>>
@@ -87,6 +91,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Lazy: the source is read only until ``count`` items have been yielded.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -100,6 +105,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "truncate").
 
@@ -107,10 +113,12 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -133,6 +141,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Lazy: the source is read only until ``count`` items have been yielded.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -146,6 +155,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "truncate").
 
@@ -153,10 +163,12 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> items = [{"x": x} for x in range(5)]
         >>> len(list(pipe(items, conf={"count": "4"})))
         4

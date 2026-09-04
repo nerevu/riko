@@ -53,9 +53,11 @@ def async_pipe(*args: Any, **kwargs: Any) -> Stream:
     ``isasync=True`` form.
 
     Yields:
+
         Each item with its ``content`` uppercased.
 
     Examples:
+
         >>> from riko import issync, run
         >>>
         >>> async def main():
@@ -65,6 +67,7 @@ def async_pipe(*args: Any, **kwargs: Any) -> Stream:
         {'content': 'HI'}
 
     Notes:
+
         ``_shout`` is synchronous, so this reuses the sync ``parser``. If it performed
         I/O, you should create an async version (e.g. ``httpx`` instead of ``requests``)
         and await it from an ``async_parser`` here. E.g.
@@ -80,9 +83,11 @@ def pipe(*args: Any, **kwargs: Any) -> Stream:
     Uppercases each item's ``content`` field.
 
     Yields:
+
         Each item with its ``content`` uppercased.
 
     Examples:
+
         >>> next(pipe(iter([{'content': 'hi'}])))
         {'content': 'HI'}
 

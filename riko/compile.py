@@ -2,6 +2,7 @@
 Provides functions for compiling pipeline definitions into Python.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.compile import build_pipeline, compile_pipe
@@ -744,6 +745,7 @@ def resolve_module(module_name: str, interface: Interface) -> Pipeline:  # noqa:
     ``pipeline_resolver.load_definition``.
 
     Examples:
+
         >>> resolve_module("filter", "pipe")
         <function pipe at ...>
         >>> resolve_module("does_not_exist", "pipe")
@@ -876,10 +878,12 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPip
     Parses pipe JSON into internal structures.
 
     Args:
+
         pipe_def: JSON representation of the pipe.
         pipe_name: Name used to link this pipe to others.
 
     Returns:
+
         An internal representation of the pipe.
 
     """

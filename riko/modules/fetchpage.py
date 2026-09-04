@@ -8,6 +8,7 @@ records, so the result is usually assigned to a field or fed to the regex
 module.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.fetchpage import pipe
@@ -65,19 +66,23 @@ async def async_parser(
     Asynchronously fetches the page and returns the requested slice.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`, `start`, `end`, `token` and
             `detag`.
 
     Returns:
+
         One string, or one per ``token`` separated piece. Each is stripped of
         surrounding whitespace.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
@@ -108,19 +113,23 @@ def parser(
     Fetches the page and returns the requested slice.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`, `start`, `end`, `token` and
             `detag`.
 
     Returns:
+
         One string, or one per ``token`` separated piece. Each is stripped of
         surrounding whitespace.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>> from riko import get_path
         >>>
@@ -150,6 +159,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     Asynchronously fetches the content of a web page as a string.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -173,6 +183,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each string is assigned to. Ignored when ``emit`` is
             True (default: "content").
 
@@ -180,15 +191,18 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<text>`` as a bare string when ``emit`` is True (default)
         - ``{<assign>: <text>}`` when ``emit`` is False, no item given
         - one merged ``{Item, <assign>: [<text>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>>
         >>> async def main():
@@ -210,6 +224,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     Fetches the content of a web page as a string.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -233,6 +248,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each string is assigned to. Ignored when ``emit`` is
             True (default: "content").
 
@@ -240,15 +256,18 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<text>`` as a bare string when ``emit`` is True (default)
         - ``{<assign>: <text>}`` when ``emit`` is False, no item given
         - one merged ``{Item, <assign>: [<text>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>>
         >>> url = get_path("bbc.html")

@@ -10,6 +10,7 @@ Since not every site advertises auto-discovery links, the fetchsitefeed module c
 used instead to return the content of the first discovered feed.
 
 Examples:
+
     Basic usage::
 
         >>> from riko import get_path
@@ -63,17 +64,21 @@ async def async_parser(
     Asynchronously discovers the feed links advertised by a page.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`, `strict` and `sort`.
 
     Returns:
+
         One item per discovered feed link.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
@@ -99,17 +104,21 @@ def parser(
     Discovers the feed links advertised by a page.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`, `strict` and `sort`.
 
     Returns:
+
         One item per discovered feed link.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
@@ -137,6 +146,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Asynchronously discovers RSS/Atom feed links on a page.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -153,6 +163,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each link is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -160,15 +171,18 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<link>`` per discovered feed when ``emit`` is True (default)
         - ``{<assign>: <link>}`` per feed when ``emit`` is False, no item given
         - one merged ``{Item, <assign>: [<link>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>>
         >>> async def main():
@@ -188,6 +202,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Discovers RSS/Atom feed links on a page.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -204,6 +219,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each link is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -211,15 +227,18 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<link>`` per discovered feed when ``emit`` is True (default)
         - ``{<assign>: <link>}`` per feed when ``emit`` is False, no item given
         - one merged ``{Item, <assign>: [<link>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>>
         >>> conf = {"url": get_path("bbc.html")}

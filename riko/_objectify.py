@@ -60,6 +60,7 @@ else:
             Initializes the object with lowercased attribute names.
 
             Args:
+
                 data: The attributes to set.
                 func: Optional callable applied to each value on access.
                 defaults: Default attributes, used for keys absent from ``data``.
@@ -104,11 +105,13 @@ def objectify[T](  # noqa: E302
     Wraps a mapping as ``Objectify`` and applies ``func`` to any other value.
 
     Args:
+
         data: The value to objectify.
         func: Optional callable applied to non-mapping values.
         defaults: Default attributes for the resulting ``Objectify``.
 
     Returns:
+
         An ``Objectify`` for a mapping, a list for a sequence, ``func(data)``
         for any other value, or ``data`` unchanged when no ``func`` is given.
 
