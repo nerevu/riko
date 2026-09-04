@@ -140,7 +140,7 @@ def transform(item: Item, *, context: Context, **kwargs) -> Item: ...
 
 Do not turn `Context` into mutable per-item execution state. Position, item key, generation,
 and observation live in the private `_FeedItem` runtime wrapper; task groups, state-store
-adapters, channels, portals, and live resource handles stay on the private execution.
+adapters, channels, portals, and resolved resource values stay on the private execution.
 
 There is no public `ExecutionContext`, `CallableContext`, `call_kwargs`, or per-item
 `context.bind(...)` execution model.
@@ -163,7 +163,7 @@ type ResourcesLike = str | Iterable[str] | Mapping[str, str]
 
 to an immutable local-name -> Context-name mapping.
 
-Resolved handles are passed through the existing module wrapper/preparation machinery in
+Resolved resource values are passed through the existing module wrapper/preparation machinery in
 the same way current `stream`, `objconf`, and `tuples` arguments are prepared. Only directly
 declared bindings are visible to the callable/parser. Transitive resource dependencies
 affect lifecycle/fingerprinting but are not implicitly exposed.
@@ -238,7 +238,7 @@ configuration/definition values cross the process boundary. Live runtime objects
 
 ```text
 open files/sockets
-resolved resource handles
+resolved resource values
 StateStore adapter
 publish/subscription channels
 task groups/portal

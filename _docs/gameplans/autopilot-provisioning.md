@@ -119,7 +119,7 @@ username unless later made an explicit configurable policy.
 ## 6. Authentication
 
 Use the existing `MicrosoftContext(tenant_id, credential, cloud, operator_id, correlation_id)`.
-Credentials stay **references, not serialized secrets**; live tenant/session handles remain
+Credentials stay **references, not serialized secrets**; live tenant clients/sessions remain
 execution-owned so concurrent MSP client work cannot leak state between tenants.
 
 Credential preference:

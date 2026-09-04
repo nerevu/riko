@@ -469,8 +469,8 @@ result = await wait_operation(
 )
 ```
 
-Here `context` is the public immutable `Context`; execution-owned resource/session handles
-are resolved privately when the capability runs.
+Here `context` is the public immutable `Context`; execution-owned resource/session values are
+resolved privately when the capability runs.
 
 ### Interval mode
 

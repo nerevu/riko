@@ -196,11 +196,16 @@ conversion details.
 formats/rendered artifacts. A connector may transport records or artifacts but does not own frame
 APIs.
 
-### Context/resources versus live runtime handles
+### Context/resources versus resolved resource values
 
-`Context` contains immutable definitions. Live clients/sessions/handles are private-execution-owned
-resolved resources. Domain plans may define resource implementations or aliases but must not
-introduce public `ExecutionContext` or mutable handle bags.
+`Context` contains immutable definitions. Resolved resource values belong to the private execution;
+use concrete nouns such as client, session, connection, pool, or stream when the resource type is
+known. Domain plans may define resource implementations or aliases but must not introduce public
+`ExecutionContext` or mutable runtime-resource bags.
+
+Generic resource terminology follows `execution-semantics.md`: say **resource value** for the value a
+resource definition resolves to. Reserve **handle** for a genuine reference/control object whose
+purpose is to identify or control something else, such as `OperationHandle`.
 
 ### Provider authentication versus credential storage
 

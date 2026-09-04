@@ -58,7 +58,7 @@ Format
     immutable interpretation/serialization identity
 
 Resource
-    live execution-owned client/session
+    execution-scoped client/session/resource value
 
 ReadNode / WriteNode
     operation-specific behavior
@@ -149,14 +149,14 @@ Conceptually:
 
 ```python
 adapter = target_registry.resolve(target.name)
-handle = resources.connector
-records = adapter.read(target, format=fmt, resource=handle)
+resource = resources.connector
+records = adapter.read(target, format=fmt, resource=resource)
 ```
 
 or:
 
 ```python
-result = adapter.write(target, records, format=fmt, operation=write_conf, resource=handle)
+result = adapter.write(target, records, format=fmt, operation=write_conf, resource=resource)
 ```
 
 Those are conceptual roles, not a second public API alongside `Pipeline.read()` / `Pipeline.write()`.
