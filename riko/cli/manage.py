@@ -192,20 +192,22 @@ def _twine_check() -> int:
 # ---------------------------------------------------------------------------
 # Lint helpers
 # ---------------------------------------------------------------------------
-def _check_types() -> int:
+def _check_types(where: str | None = None) -> int:
     """Check type annotations with pyright"""
     if not pyright:
         raise RuntimeError("pyright not found")
 
-    return call([pyright])
+    paths = where.split(" ") if where else []
+    return call([pyright, *paths])
 
 
-def _verify_types() -> int:
+def _verify_types(where: str | None = None) -> int:
     """Verify type completeness with pyright"""
     if not pyright:
         raise RuntimeError("pyright not found")
 
-    return call([pyright, "--verifytypes", "riko", "--ignoreexternal"])
+    paths = where.split(" ") if where else []
+    return call([pyright, "--verifytypes", "riko", "--ignoreexternal", *paths])
 
 
 def _pylint_check(parallel: bool = False) -> int:
@@ -580,9 +582,9 @@ def lint(
     if dist:
         return_code = _twine_check()
     elif check_types:
-        return_code = _check_types()
+        return_code = _check_types(_where)
     elif verify_types:
-        return_code = _verify_types()
+        return_code = _verify_types(_where)
     elif strict:
         return_code = _pylint_check(parallel)
     elif rst:
