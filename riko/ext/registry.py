@@ -146,8 +146,8 @@ class ModuleRegistry:
 
             if definition is None:
                 raise TypeError(
-                    f"entry point {ep.name!r} returned {type(obj).__name__}, expected a "
-                    "ModuleDefinition or a module exposing 'pipe'/'async_pipe'"
+                    f"entry point {ep.name!r} returned {type(obj).__name__}, expected a"
+                    " ModuleDefinition or a module exposing 'pipe'/'async_pipe'"
                 )
             elif not definition.name:
                 definition = _replace(definition, name=ep.name)
