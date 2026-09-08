@@ -142,7 +142,7 @@ class ModuleRegistry:
         if name not in self._loaded and (ep := self._discover_entry_points().get(name)):
             loaded = ep.load()
             obj = loaded() if callable(loaded) else loaded
-            definition = _coerce_definition(obj)
+            definition: ModuleDefinition | None = _coerce_definition(obj)
 
             if definition is None:
                 raise TypeError(

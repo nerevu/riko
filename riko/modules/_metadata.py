@@ -227,7 +227,9 @@ def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
 
     """
     if canonical := normalize_module_name(name):
-        if (definition := registry.definition(canonical)) is None:  # noqa: SIM102
+        definition: ModuleDefinition | None = registry.definition(canonical)
+
+        if definition is None:  # noqa: SIM102
             if module := import_or_else(f"{_PACKAGE}.{canonical}"):
                 definition = ModuleDefinition(
                     name=canonical,
