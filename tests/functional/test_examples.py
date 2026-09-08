@@ -69,7 +69,6 @@ class TestExamples:
         msg = f"Pipeline {pipe_name} has {length=}, but {expected=}"
         assert length == expected, msg
         last = pipeline[-1]
-        # print(last)
 
         for k, v in example.items():
             got = last[k]

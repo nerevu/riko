@@ -666,8 +666,8 @@ class TestBasics:
             msg = "expected 210 in {link} or Poroschenko: in {title}".format(**item)
             assert ("210" in item["link"]) or ("Poroschenko:" in item["title"]), msg
 
-    def test_stringtokeniser(self):
-        """Loads a pipeline containing a stringtokeniser"""
+    def test_stringtokenizer(self):
+        """Loads a pipeline containing a stringtokenizer"""
         pipe_name = "pipe_975789b47f17690a21e89b10a702bcbd"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 2, 0)
