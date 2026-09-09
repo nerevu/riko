@@ -12,16 +12,56 @@ fidelity** gate; it routes the parts owned elsewhere to their owners.
 >
 > **Provenance.** Folded in from the untracked `_docs/ux_polish.md` scratch analysis.
 >
-> **Ownership boundary.** This is **internal API-shape + release readiness**. It is distinct from
+> **Ownership boundary.** This is **internal API-shape + release readiness**. It owns the pre-1.0
+> Python API compatibility/removal policy below. It is distinct from
 > [extensibility.md](extensibility.md) **E7 "1.0 readiness"**, which owns the *ecosystem* side
-> (conformance badges, stable-API publication, deprecation/migration windows, "ship 1.0 only after
-> >=1 external plugin"). Owned-elsewhere clusters this plan only *sequences*:
+> (conformance badges, stable-API publication, external-plugin proof) and E3, which owns the bounded
+> Workflow v1 → v2 persisted-format migration/cutoff. Owned-elsewhere clusters this plan only
+> *sequences*:
 > - **Pub/sub 1.0 contract** → [fanout-topology.md](fanout-topology.md) **F1/F4/F5** + P11;
 > - **Fluent discoverability** → [module-enums.md](module-enums.md) (P9);
 > - **Error hierarchy** → P12 ([MILESTONES.md](../MILESTONES.md));
 > - **Execution, Context/resources, state, identity, batching** →
 >   [execution-semantics.md](execution-semantics.md);
 > - **Unified CLI** → [cli.md](cli.md).
+
+### 1.1 Pre-1.0 compatibility policy
+
+Compatibility follows the status and persistence of the surface, not whether useful implementation
+code exists behind it:
+
+```text
+unreleased API/experiment
+    -> remove outright
+    -> no deprecation alias, loader form, or compatibility burden
+
+released Python API superseded by the target architecture
+    -> clean break during 0.x
+    -> document old -> new migration
+    -> no deprecated wrapper solely for compatibility
+
+released persisted/user-authored format
+    -> deterministic migration for a bounded window when practical
+    -> normalize immediately to the current canonical form
+
+retained architecture
+    -> preserve normally
+```
+
+Concrete consequences already locked:
+
+- unreleased `sink()` and its sink-specific public/discovery/serialization surfaces are removed
+  outright;
+- the shipped `riko.modules.write` module is removed when `Pipeline.write()` / `WriteNode` lands;
+- `SyncPipe` / `AsyncPipe` / `SyncCollection` / `AsyncCollection` are removed when the Pipeline /
+  private-execution replacement lands;
+- low-level `send` / `receive` Python modules are removed when R7 lands the object-first
+  `publish` / `subscribe` API;
+- Workflow v1 is accepted only through the migration boundary during 0.x; normal v1 loading is
+  removed at 1.0, while an offline `migrate_v1_to_v2()` utility may remain.
+
+Useful algorithms, adapters, codecs, or lifecycle mechanics may be refactored behind replacement
+APIs. Reusing implementation does not preserve the superseded public abstraction.
 
 ## 2. Pub/sub: the minimum 1.0-caliber contract (owned by fanout-topology.md)
 
@@ -31,8 +71,8 @@ The pre-1.0 gate requires the full pub/sub contract — whose mechanics and rati
 
 Release-readiness gates these outcomes:
 
-- public object-first `publish` / `subscribe` vocabulary; low-level `send` / `receive` may remain as
-  compatibility modules;
+- public object-first `publish` / `subscribe` vocabulary; low-level `send` / `receive` are removed
+  when the replacement lands rather than retained as compatibility modules;
 - eager local subscription declarations, with no `next(receiver)` priming;
 - no `PENDING` records on the data stream — waiting is a `Subscription` concern, not an `Item`
   variant;
@@ -42,14 +82,16 @@ Release-readiness gates these outcomes:
 - pub/sub runtime state owned by each private execution, never by process globals or mutable public
   `Context` state;
 - async receive/delivery is incremental and sync/async observable semantics match;
-- subscriber `on_receive=` discards its return value and passes the original item onward;
+- subscriber `func=` is retained as the receive-time hook; its return value is discarded and the
+  original item passes onward;
 - subscription objects replace hidden `ids`/`DONE` bookkeeping;
 - local `publish(subscription_pipeline)` attaches the complete side branch to the owning execution,
   so cleanup does not depend on the user draining ignored branch output.
 
-**Vocabulary:** `others`→`targets`, `max_len`→`buffer_size`, `max_wait`→`timeout`/`idle_timeout`,
-`receive`'s transformation-shaped `func`→`on_receive`. Clean break for the final public Pipeline API;
-legacy low-level modules may retain compatibility names while they exist.
+**Vocabulary:** `others`→`targets`, `max_len`→`buffer_size`, `max_wait`→`timeout`/`idle_timeout`.
+`func` is retained intentionally: it runs at subscription delivery/materialization time, which is
+semantically different from ordinary downstream UDF evaluation timing. This is a clean break for the
+final public Pipeline API; legacy low-level names are migration inputs only until R7 removes them.
 
 ## 3. Configuration correctness
 
@@ -96,7 +138,7 @@ legacy low-level modules may retain compatibility names while they exist.
   class lands.
 - **Iteration is the execution API.** Do not add executing `collect()` or `first()` terminals.
   `list(flow)`, `for`, and `async for` execute; `take(n)` remains a transform. Side-effecting
-  operations such as `write` remain explicit pipeline nodes/taps rather than a second execution
+  operations such as `write` remain explicit pipeline nodes/effects rather than a second execution
   mechanism.
 - **One execution-configuration vocabulary.** Use
   `flow.with_execution(executor=..., concurrency=..., ordered=..., ...)` for execution-wide
@@ -162,16 +204,21 @@ Same principle for optional parser/frame/finance/connector dependencies.
 
 - **Shrink `riko.modules.__all__`** to module-author contracts only; keep implementation details
   private.
+- **Final discovery matches the target model.** Module discovery exposes `Sources` and `Transforms`;
+  endpoint/provider and serialization discovery use `Targets` and `Formats`. The legacy `Sinks` /
+  `"sink"` module category does not survive once `output` and `write` leave module space.
 - **Resolve doc/spec drift** — one authoritative shipped-behavior document, one roadmap/router,
   gameplan owners for planned contracts, and generated API documentation.
 - **Docs teach only public imports.** User-facing examples should teach `Pipeline`, `Context`,
-  `Resource`, `Publisher`/`Subscription`, and normal iteration rather than private runtime helpers.
+  `Resource`, `Publisher`/`Subscription`, `Targets`/`Formats`, and normal iteration rather than
+  private runtime helpers or removed compatibility APIs.
 
 ## 9. Pre-public-release triage (the gate)
 
-**Must land:** remaining P9 discoverability/stubs; strict configuration validation; the
-Pipeline/private-execution split and `with_execution(...)`; P12/stable state+identity errors;
-unified CLI; wheel/dependency smoke tests; and the pub/sub release contract.
+**Must land:** remaining P9 discoverability/stubs aligned to `Sources`/`Transforms`/`Targets`/`Formats`;
+strict configuration validation; the Pipeline/private-execution split and `with_execution(...)`;
+P12/stable state+identity errors; unified CLI; wheel/dependency smoke tests; the pub/sub release
+contract; and removal of superseded Python surfaces according to §1.1.
 
 **Strongly preferred:** shrink `riko.modules`; finish doc drift cleanup; benchmark the private
 sync/async adapters and canonical identity encoder before freezing optimization choices.
@@ -209,5 +256,6 @@ remaining parser/date cases. Each repair lands with its matching regression test
   [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md), and P-track history/file maps remain in
   [MILESTONES.md](../MILESTONES.md).
 - P8 and P10 foundations are retained. P9 completion can proceed independently where it does not
-  encode removed runtime classes. P11/P12 are reshaped by the finalized execution/resource/state
-  contracts rather than implemented from their older phase sketches verbatim.
+  encode removed runtime classes or the removed `Sinks` module category. P11/P12 are reshaped by the
+  finalized execution/resource/state contracts rather than implemented from their older phase
+  sketches verbatim.
