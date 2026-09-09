@@ -126,7 +126,7 @@ flow = flow.publish(events)
 
 Local published branches are attached to and owned by the execution. The caller does not
 need to drain a subscriber merely to make cleanup occur. Terminal values on an attached
-branch are discarded unless the branch contains an explicit sink/tap/routing effect.
+branch are discarded unless the branch contains an explicit sink/on_receive/routing effect.
 
 `split()` is lossless streaming fan-out with bounded per-branch buffering; unused outputs
 remain inactive. `publish()` isolates branches by default (`isolate=True`) with an explicit

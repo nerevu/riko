@@ -79,17 +79,17 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | ~~keyed `join(count(), finite_other)` yields a first result~~ — **landed** as `tests/public/test_pipe_implementations.py` (keyed **and** natural; asserts bounded consumption, since the operator wrapper reads one item ahead) | public | R3 |
 | `async_pipe` (`send`) yields its first item before the source is exhausted | public | R4 |
 | `compile_pipe` handles ids `"class"`, `"foo bar"`, `"foo.bar"`, `"1st"`, `"café"` | internal | R5 |
-| an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged | internal | R6 |
-| `gather_results([none(), one(), none()])` preserves all three positions | internal | R7 |
-| `Reencoder.read(1)` returns one character and the remainder survives the next `read` | internal | R8 |
+| ~~an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged~~ — **landed** as `tests/internal/test_serialize.py`; fixed by propagating `_UNSUPPORTED` in `_to_hashable` (correctness-audit R6) | internal | R6 |
+| ~~`gather_results([none(), one(), none()])` preserves all three positions~~ — **landed** as `tests/internal/test_streams.py::test_gather_results_preserves_none_positions`; the defect was fixed with the `MISSING` sentinel (correctness-audit R7) | internal | R7 |
+| ~~`Reencoder.read(1)` returns one character and the remainder survives the next `read`~~ — **landed** as `tests/internal/test_io.py::test_reencode_read_honors_char_count_with_remainder`; fixed with a char/byte remainder buffer (correctness-audit R8) | internal | R8 |
 | `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
 | `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
-| a tz-aware `struct_time` (`+03:00`) produces the matching epoch | internal | R11 |
-| `get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics | internal | R12 |
-| `listize=True` turns `0`/`False`/`""` into one-element lists | internal | R13 |
+| ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_dates.py`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
+| ~~`get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics~~ — **landed** in `tests/internal/test_parsers.py`; absent `text` no longer coerced to `"None"` (correctness-audit R12) | internal | R12 |
+| ~~`listize=True` turns `0`/`False`/`""` into one-element lists~~ — **landed** as `tests/internal/test_prepare.py`; `get_pieces_or_conf` branches on the option, not truthiness (correctness-audit R13) | internal | R13 |
 | a stalled async iterator is actually interrupted by `timeout` | internal | R14 |
 | the same bytes decode identically across sync HTTP, async HTTP and async local file | functional | R15 |
-| `has_header=False` closes the original source as well as the spool | internal | R16 |
+| ~~`has_header=False` closes the original source as well as the spool~~ — **landed** as `tests/internal/test_io.py::test_csv_headerless_closes_original_source` (spies the original's `close`, cross-version); fix predated this via the variadic `auto_close` (correctness-audit R16) | internal | R16 |
 
 Two rows want **characterization** tests rather than regressions, because the current
 behaviour may be intended: `filter`'s lexicographic `greater`/`less` (R19) and
@@ -116,7 +116,7 @@ they should be *updated, not deleted*, when the decision is made.
 | `internal/test_streams.py` | **Keep** | Strong primitives: boundedness, ordering, shared budgets, validation, merge incrementality. Parametrize ordered/unordered empty-source tests if desired. |
 | `public/test_collections.py` | **Keep, split responsibilities** | Doing too much (pub/sub, executors, resource ownership, chaining, parity, module enums). Keep `TestModuleNameEnum` here as the ModuleName owner; remove redundant enum/string equivalence. Share `_ENGINES` for sync/async loopability. Keep pub/sub identity/cleanup + pool ownership. `"hash"` basics exist in README doctests → concentrate on tuple/template/reverse-operator/error variants. |
 | `public/test_context_modes.py` | **Keep** | Compact, contract-focused. Keep the ignored-legacy-kwargs test as compatibility coverage while `Context` still accepts `**kwargs`. |
-| `public/test_modules.py` | **Split public from internal; remove doctest duplication** | Imports implementation objects despite living under `public`. Keep API errors + meaningful public filtering contracts; import stable APIs from `riko`. Move exact metadata derivation, `@operator` inference, direct `count_pipe`, and implementation constants to internal. Basic `list_modules()` type/loopable/subtype/metadata and `list_targets()` happy paths are already FAQ doctests. |
+| `public/test_modules.py` | **Split public from internal; remove doctest duplication** | Imports implementation objects despite living under `public`. Keep API errors + meaningful public filtering contracts; import from the **defining modules** (the stable `riko` facade is reserved for user-facing docs/examples — internal `riko/` and `tests/` files always import from a symbol's defining module). Move exact metadata derivation, `@operator` inference, direct `count_pipe`, and implementation constants to internal. Basic `list_modules()` type/loopable/subtype/metadata and `list_targets()` happy paths are already FAQ doctests. |
 | `public/test_parallel.py` | **Keep** | Good boundary vs primitive mechanics: it leaves precise backpressure math to `internal/test_streams.py`. Keep result equivalence, ordering, early close, non-materialization. |
 | `public/test_pipe_lifecycle.py` | **Keep as lifecycle owner** | Large but coherent; sync/async mirroring is intentional. Single owner of exhaustion/reiteration/partial-chain lifecycle behavior. Do not sacrifice readability for LOC. |
 | `public/test_sync_async_parity.py` | **Keep output parity; delete lifecycle class** | `TestOutputParity` is valuable. Remove `TestLifecycleObservableParity`: reiteration and partial-chain are already tested for both engines in `test_pipe_lifecycle.py`, and this file's own docstring says lifecycle parity lives there. |
@@ -186,6 +186,148 @@ CONSOLIDATE
 **Do not** reduce `test_compile`, `test_parallel`, `test_streams`, or the core lifecycle tests just
 to shrink the suite — they cover contracts hard to catch elsewhere.
 
+**Shipped (first-pass patch).** The conservative FIX/REMOVE set has landed:
+
+- `test_basics._load`/`_aload` now forward `value`/`check`; the two stale expected counts the
+  live assertions exposed were corrected to the deterministic fixture truth (`feeddiscovery`
+  25→15, `simplemath_1` 4→6).
+- Resolver precedence tests use distinguishable callables: `test_runtime_registration_shadows_entry_point`
+  now proves the runtime marker (not the entry-point one) wins, and `test_composite_store_first_hit_wins`
+  puts a different object in the first two stores so it proves precedence, not fallback.
+- `test_loop_level_field_selects_child_input` now isolates `field` (a parent carrying both
+  `title` and `alt`, tokenizing on `alt`), so it is no longer a duplicate of
+  `test_loop_count_all_flattens_embedded_results`.
+- `test_script.assert_output_matches` dropped the dead/broken `bool` branch and the
+  `SequenceMatcher` `partial` path; `test_benchmark` now asserts the stable benchmark labels
+  directly (each label heads a line, robust to the right-justified name padding).
+- Removed `test_loop_has_async_pipe`, `TestLifecycleObservableParity` (both engines already
+  covered in `test_pipe_lifecycle.py`), and the two redundant `test_gen_config` structural tests
+  (byte equality subsumes them).
+- Trimmed `_inference.infer_from_source` doctests to one descriptive example; the map/sum/unknown
+  edge cases live in `test_inference.py`.
+
+**Shipped (§ 3 consolidation, first batch).**
+
+- `test_dotdict.py` — nine deletion tests folded into one parametrized `(source, key, expected)`
+  matrix (root/nested/deep, case variation, missing paths), one case per `pytest.param` id.
+- `test_codegen_names.py` — the three taxonomy partition tests collapsed into a single golden
+  partition (`test_taxonomy_partition_matches_golden`); the enum override case folded into the
+  `test_enum_member_name` parametrization; the two provider tests now **execute** the generated
+  source (`exec`) and assert on the resulting enum objects instead of string-searching it.
+- `test_decorators.py` — dropped `test_lambda_infers_sync_without_isasync`/
+  `test_lambda_needs_explicit_isasync` (duplicates of `TestIsasyncInferenceValid` rows); the
+  class now owns only the end-to-end async-execution proof.
+- `public/test_modules.py` split public↔internal: exact metadata derivation
+  (`get_module_metadata` classification) + the `@operator` subtype inference moved to the new
+  `internal/test_metadata.py`; the public file now owns only discovery-filtering combinations,
+  API errors, and input test-flag scoping. (Internal tests import from defining modules per the
+  established convention — not the `riko` facade.)
+- `public/test_collections.py` deduped: the sync/async copies of
+  `test_pipes_use_loopability_for_mapping` folded into one `_ENGINES`-parametrized parity test,
+  and the redundant `test_enum_and_string_resolve_identically` dropped (equivalence is already
+  proven by `test_normalize_module_name` + `test_constructor_stores_plain_string`).
+- `internal/test_resolver.py`: dropped the facade-level `test_register_requires_name` (the
+  registry-level `test_runtime_register_requires_name` already owns the `"needs a name"`
+  validation; the facade just forwards, and its delegation is covered by
+  `test_register_resolves_via_facade`), and renamed the misleading
+  `test_pipeline_delegates_to_compiler` → `test_non_pipeline_name_routes_to_module_registry`
+  (it proves a plain name routes to the module registry, surfacing `UnsupportedModuleError`).
+- `functional/test_basics.py`: the identical `fetchpage`/`fetchpage_loop` tests folded into one
+  parametrized `test_fetchpage` (`plain`/`within-loop` ids) — they assert the same output.
+- `internal/test_inference.py` consolidated: the homogeneous classification tests folded into a
+  single `test_classification` `(pipe, kind, source)` matrix (module-level pipe fixtures; `source`
+  asserted only where the originals did, via an `_ANY` sentinel — no new claims), and the three
+  UNKNOWN-with-reason tests into one `test_unknown_with_reason` `(pipe, reasons)` matrix. Multi-kind,
+  decorator-unwrap, `infer_from_source`, and `gen_operator_return_kinds` cases kept as distinct
+  owners.
+- `functional/` layering: the three direct `augment_entries` unit tests moved to the new
+  `internal/test_rssutils.py` (parametrized fallback matrix), the mocked `_io` backend test moved
+  to `internal/test_io.py` (whose loopback-server tests are now grouped under a
+  `simulated_network`-marked class so the mock test isn't mislabeled), the sync/async Kazeeki
+  expected payloads shared via module constants + a `_assert_kazeeki` helper, and the four
+  single-item example pipelines (`simple1`/`simple2`/`split`/`wired`) folded into one
+  `test_simple_pipeline` parametrization.
+- `public/test_imports.py` (the P13 exit test) consolidated **without weakening the contract**:
+  the two per-name `hasattr` parametrizations collapsed into one single-assertion resolve check
+  each (stable + extension); `test_no_private_names_in_public_all` removed and its guarantee folded
+  into `test_partial_surface_matches_expected` (equal surfaces already get no-private free from
+  golden-set equality; the partial `riko.modules`/`riko.exceptions` surfaces now assert it
+  explicitly — and the modules check now also covers `riko.modules._names`); and
+  `test_no_leaked_public_functions`'s overclaiming docstring corrected to state it guards
+  *functions* specifically (classes/constants like `Context` are intentionally unexported).
+
+**Not done, by design.** Two § 3 suggestions were assessed and **declined** as coverage-losing:
+
+- *Trim `test_collections.py` chaining tests as "README doctests already own hash basics."* README
+  covers `.hash()` and `| Transforms.HASH` (the **enum** form) only — it does **not** exercise the
+  **string** forms (`| "hash"`, `.pipe("hash")`) or their source-binding semantics, which those
+  chaining tests specifically own. Trimming them would drop real coverage, so they stay.
+- *Trim `test_examples.py` `gigs`/`kazeeki` exact records to smoke contracts.* The full-record
+  assertions are the only exact check of the example entry-point output; smoke-trimming loses that.
+
+The deeper `test_collections.py` split into focused files is not warranted either — the audit
+detail says "keep TestModuleNameEnum / pub-sub identity+cleanup / pool ownership **here**", i.e. the
+concern is dedupe (done), not file fragmentation.
+
+**Shipped (§ 2b regression batch).** The local-repair rows (R6/R7/R8/R11/R12/R13/R16) are fixed
+with regressions verified failing-first (see the [correctness-audit register](correctness-audit.md#8-open-defect-register--features-branch-audit)
+for per-row detail). The remaining rows are owned by other gameplans, so each landed as a **strict
+xfail tripwire** — it asserts the future-correct behavior, fails today, and flips to XPASS (failing
+the suite, forcing the marker's removal) the moment its owner lands:
+
+- **R5** — `tests/internal/test_compile.py::test_pythonise_yields_valid_identifiers` (module-enums.md).
+- **R9** — `tests/functional/test_basics.py::test_fetchtable_reads_sqlite_fixture` — the sqlite half
+  proves the binary-as-text defect (no xlsx writer in the env; the xlsx and async halves stay owned)
+  (connectors.md).
+- **R10** — `tests/public/test_fetchdata.py::TestExtensionlessFetchdata::test_query_string_does_not_defeat_extension`
+  (connectors.md).
+- **R14** — `tests/internal/test_streams.py::test_timeout_interrupts_a_stalled_source`, asserting
+  elapsed rather than content (content is unchanged across the fix) (execution-semantics.md § 7.2).
+- **R15** — `tests/internal/test_io.py::test_async_url_open_honors_content_type_charset` — the
+  async-HTTP charset half (the `async_url_read`/`fetchpage` halves stay owned) (bado-anyio § 2c).
+- **R18** — `tests/internal/test_resolver.py::TestPipeResolver::test_runtime_registered_pipe_prefixed_module_resolves`
+  (extensibility § 24).
+
+**Shipped (§ 2b characterization rows).** The two open-question rows landed as **characterization**
+tests that pin current behavior (to be *updated, not deleted*, when the behavior is decided):
+
+- **R19** — `tests/public/test_pipe_implementations.py::test_filter_greater_less_compare_strings_lexicographically`
+  pins that `filter`'s `greater`/`less` compare string values lexicographically (`"9" > "10"`) while
+  numeric values compare numerically.
+- **R17** — `tests/internal/test_compile.py::test_convert_dag_empty_modules_yields_only_output` pins
+  that an empty DAG yields just the terminal `output` node (the reported `module_ids[-1]` crash is
+  *not reproduced*), rather than raising.
+
+**Remaining.** None — the § 2b regression batch is complete (local repairs fixed, owned rows guarded
+by strict-xfail tripwires, open questions pinned by characterization tests).
+
+## 5b. Execution lifetime proofs (R4)
+
+`implementation-sequence.md` R4 adds a proof obligation that does not fit the existing file map, so
+name its owner now: **functional tests** own the external-resource lifecycle proof, because it needs
+a real client rather than a fixture double.
+
+The matrix is small and deliberately non-negotiable — two resource kinds crossed with two execution
+modes:
+
+| | sync Pipeline execution | async Pipeline execution |
+|---|---|---|
+| `@contextmanager` sync resource | native entry | worker-adapted entry |
+| `@asynccontextmanager` async resource | portal entry | native entry |
+
+Each cell proves eager open, lazy open, mid-execution failure rollback, early consumer abandonment,
+cancellation, and `ExceptionGroup` grouping of multiple cleanup errors.
+
+Two internal drift guards accompany it:
+
+- no execution-spawned task escapes the execution's task group (assert no surviving tasks after
+  teardown, including on the cancellation and abandonment paths);
+- no module, parser, factory, or extension code constructs an event loop, portal, executor, worker
+  thread, or task group. A grep-style guard over `riko/` outside `riko/_execution/` is adequate and
+  cheap.
+
+Both guards belong in `tests/internal/`, since they are drift guards rather than API behavior.
+
 ## 6. Relationship to the P-track
 
 - **P13 exit tests** (see [MILESTONES.md](../MILESTONES.md)) — `public/test_imports.py` (extended
@@ -193,3 +335,74 @@ to shrink the suite — they cover contracts hard to catch elsewhere.
   *layering* half of P13; the `tests/typing/{valid,invalid}/` type-check split is MILESTONES' half.
 - **Live status** (done/next/suite count) lives only in the
   [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) tracker — do not restate it here.
+
+## 7. Operations as Code and cross-package test ownership
+
+Operations as Code adds cross-package scenarios but **does not change the one-test-owner rule**.
+Tests follow the contract owner rather than being copied into every package that participates:
+
+| Concern | Test owner |
+|---|---|
+| `OperationSpec`, `OperationPlan`, reproducibility, overlays, import provenance/lossiness, `CompatibilityReport`, deployment drift | `operations-as-code.md` / `riko-ops` |
+| provider-native asset discovery/acquisition/export/deployment/inspection and target compatibility facts | `provider-integrations.md` / provider package |
+| common capability discovery/catalog/policy/approval | `mcp.md` / `riko-mcp` |
+| provider `OperationHandle` waiting | `provider-integrations.md` |
+| Microsoft `ChangePlan`/desired-state/apply/verify | `microsoft-administration.md` / `riko-microsoft` |
+| durable scheduler/runner phase boundaries | `orchestration.md` / orchestration adapter package |
+| operation command parsing/rendering/exit codes | `cli.md` / `riko-cli` |
+| Pipeline/runtime/state/idempotency mechanics used underneath | existing Core public/internal owners |
+
+Do not create a giant duplicated "Operations as Code" test suite inside Core. Cross-package
+functional fixtures should prove composition while each semantic assertion remains concentrated in
+its owning package.
+
+Two architecture fixtures are required once the corresponding adapters exist:
+
+### SuperOps script → GitHub Actions
+
+A functional fixture should prove the composition:
+
+```text
+provider discovery/acquisition
+→ preserved source artifact/provenance
+→ normalized OperationSpec
+→ shared capability discovery
+→ CompatibilityReport
+→ target deployment
+→ target inspection
+→ automation-drift comparison
+```
+
+The provider fixture owns extraction/deployment facts; `riko-ops` owns normalization, compatibility,
+and drift assertions; CLI tests, if any, only prove command adaptation. The fixture must include at
+least one target-specific semantic that is flagged as adaptation/manual/unsupported so the test does
+not accidentally assert universal portability.
+
+### Windows Autopilot approval + long provider wait
+
+A functional fixture should prove:
+
+```text
+OperationSpec
+→ Microsoft ChangePlan
+→ OperationPlan containing the ChangePlan fingerprint
+→ human/policy approval
+→ apply
+→ OperationHandle
+→ wait_operation
+→ authoritative Microsoft verification
+→ operation verification/evidence
+```
+
+The test must invalidate approval when the nested `ChangePlan` changes and must prove that long
+waiting still uses provider `OperationHandle` semantics even if orchestration persists/resumes the
+handle across a run boundary.
+
+These fixtures should use deterministic fake providers/runners until live integration tests are
+explicitly enabled. Secrets, tenant IDs, remote script contents, and unredacted imported values do
+not belong in snapshots/golden files.
+
+Implementation scaffolding should add tests in the same order as the corresponding owners land:
+provider hooks → operations services → orchestration/CLI adapters → cross-package fixtures. The
+`testing.md` layer rules remain unchanged; Operations as Code is another consumer of them, not a
+fifth test layer.

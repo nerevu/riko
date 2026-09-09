@@ -41,7 +41,8 @@ from riko._rssutils import truncate_content
 from riko._serialize import repr_cache
 from riko.paths import get_abspath
 from riko.types._collections import BasicArg
-from riko.types._io import BinaryFileTypes, FileTypes, Opener, StringFileTypes
+from riko.types._io import BinaryFileLike, FileLike, Opener, StringFileLike
+from riko.types._scalars import AnyStr
 
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 
@@ -177,7 +178,7 @@ def get_response_encoding(
 
 
 # https://docs.python.org/3.3/reference/expressions.html#examples
-def auto_close[T](stream: Iterable[T], *files: FileTypes) -> Iterator[T]:
+def auto_close[T](stream: Iterable[T], *files: FileLike) -> Iterator[T]:
     """
     Passes ``stream`` through so it closes ``files`` when iteration ends.
 
@@ -216,22 +217,22 @@ def auto_close[T](stream: Iterable[T], *files: FileTypes) -> Iterator[T]:
 
 @overload
 def buffer(  # noqa: E704
-    f: StringFileTypes, binary: bool = ..., encoding: str = ...
+    f: StringFileLike, binary: bool = ..., encoding: str = ...
 ) -> SpooledTemporaryFile[str]: ...
 @overload  # noqa: E302
 def buffer(  # noqa: E704
-    f: BinaryFileTypes, binary: bool = ..., encoding: str = ...
+    f: BinaryFileLike, binary: bool = ..., encoding: str = ...
 ) -> SpooledTemporaryFile[bytes]: ...
 @overload  # noqa: E302
 def buffer(  # noqa: E704
-    f: BinaryFileTypes, binary: bool = ..., *, encoding: str
+    f: BinaryFileLike, binary: bool = ..., *, encoding: str
 ) -> SpooledTemporaryFile[str]: ...
 @overload  # noqa: E302
 def buffer(  # noqa: E704
-    f: FileTypes, binary: bool | None = ..., encoding: str | None = ...
+    f: FileLike, binary: bool | None = ..., encoding: str | None = ...
 ) -> SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]: ...
 def buffer(  # noqa: E302
-    f: FileTypes, binary: bool | None = None, encoding: str | None = None
+    f: FileLike, binary: bool | None = None, encoding: str | None = None
 ) -> SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]:
     """
     Buffers ``f`` into a re-readable copy.
@@ -282,8 +283,8 @@ def buffer(  # noqa: E302
 
 
 def seekable(
-    f: FileTypes, binary: bool | None = None, encoding: str | None = None
-) -> FileTypes | SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]:
+    f: FileLike, binary: bool | None = None, encoding: str | None = None
+) -> FileLike | SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]:
     """
     Rewinds ``f``, or buffers a copy when it cannot be rewound.
 
@@ -326,7 +327,7 @@ def opener(  # noqa: E704
     url: str,
     memoize: Literal[True],
     encoding: str = ...,
-    params: Mapping[str, str | bytes | int | float] | None = ...,
+    params: Mapping[str, AnyStr | int | float] | None = ...,
     offline: bool = ...,
     *,
     binary: Literal[True],
@@ -338,7 +339,7 @@ def opener(  # noqa: E704
     url: str,
     memoize: Literal[False] = ...,
     encoding: str = ...,
-    params: Mapping[str, str | bytes | int | float] | None = ...,
+    params: Mapping[str, AnyStr | int | float] | None = ...,
     offline: bool = ...,
     *,
     binary: Literal[True],
@@ -350,7 +351,7 @@ def opener(  # noqa: E704
     url: str,
     memoize: Literal[True],
     encoding: str = ...,
-    params: Mapping[str, str | bytes | int | float] | None = ...,
+    params: Mapping[str, AnyStr | int | float] | None = ...,
     offline: bool = ...,
     binary: Literal[False] = ...,
     timeout: float | None = None,
@@ -361,7 +362,7 @@ def opener(  # noqa: E704
     url: str,
     memoize: Literal[False] = ...,
     encoding: str = ...,
-    params: Mapping[str, str | bytes | int | float] | None = ...,
+    params: Mapping[str, AnyStr | int | float] | None = ...,
     offline: bool = ...,
     binary: Literal[False] = ...,
     timeout: float | None = None,
@@ -371,12 +372,12 @@ def opener(  # noqa: E302
     url: str,
     memoize: bool = False,
     encoding: str = ENCODING,
-    params: Mapping[str, str | bytes | int | float] | None = None,
+    params: Mapping[str, AnyStr | int | float] | None = None,
     offline: bool = True,
     binary: bool = False,
     timeout: float | None = None,
     **_: object,
-) -> tuple[FileTypes, str | None]:
+) -> tuple[FileLike, str | None]:
     """
     Opens a url or file.
 
@@ -506,7 +507,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
     """
 
     binary: B
-    file: FileTypes | None
+    file: FileLike | None
     content_type: str | None
 
     @overload

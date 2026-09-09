@@ -45,6 +45,35 @@ There are no executing `collect()` / `first()` terminals in the target API. Norm
 
 Pipeline immutability does not imply source replayability. One-shot iterators, lazy generators, subscriptions, and other one-shot sources preserve their native semantics; a second execution may therefore observe an already-consumed external source unless the source itself is replayable.
 
+## Execution lifetime primitives
+
+Every private execution owns exactly three lifetime primitives. Resources, fan-out, state adapters, batching, and loops attach to these rather than inventing their own ownership mechanics.
+
+| primitive | owns | used by |
+|---|---|---|
+| exit stack (`ExitStack` / `AsyncExitStack`) | entry/exit order of every context-managed component | resources, state-store adapters, provider/MCP sessions, channel ends |
+| task group (AnyIO task group or equivalent) | lifetime and cancellation scope of every execution-spawned task | subscriptions, split/publish branches, merge workers, internal service tasks |
+| bridge (AnyIO `BlockingPortal` / worker adaptation) | crossing between sync and async execution modes | async-only components under sync execution, blocking sync work under async execution |
+
+Two invariants govern their use.
+
+**Lifecycle composition is not execution-mode adaptation.** `AsyncExitStack` does compose synchronous and asynchronous context managers in one unwind order — but that is a composition guarantee, not a threading guarantee. Entering a synchronous context manager through `enter_context()` still runs its `__enter__`/`__exit__` on the event-loop thread. "AsyncExitStack supports sync context managers" therefore does **not** mean "synchronous resource startup is safe on the event loop." The two decisions are made separately:
+
+```text
+async context manager
+    -> AsyncExitStack.enter_async_context()
+
+fast/explicitly inline-safe sync context manager
+    -> AsyncExitStack.enter_context()
+
+potentially blocking sync acquisition or cleanup
+    -> worker adaptation, then registered on the stack
+```
+
+The same split applies in reverse for `SyncExecution`: an async-only context manager is entered through the execution portal, and its exit is registered on the sync `ExitStack`.
+
+**Adaptation happens only at an execution boundary chosen during preparation.** Module, parser, factory, and extension code never creates event loops, portals, executors, worker threads, or task groups. Those belong to the execution that prepared the graph.
+
 ## Context and resources
 
 There is one public `Context`; there is no public `ExecutionContext`. `Context` is an immutable environment/configuration definition. Runtime handles belong to the private execution.
@@ -58,25 +87,39 @@ Child contexts may shadow parent modules/resources; names must be unique within 
 
 ### Resource ownership
 
+An owned resource is declared as a **(sync or async) generator / context manager** — the idiomatic Python lifecycle shape used by `contextlib`, pytest fixtures, FastAPI `yield` dependencies, `dependency-injector`, and Dagster resources: setup runs before `yield`, the handle is injected, teardown runs after (guaranteed, even on error).
+
 ```python
-Resource(spec)  # Riko owns lifecycle
-Resource(client, external=True)  # caller owns; Riko never closes
-Resource.from_factory(make_db)
+def db(ctx):  # owned: setup -> yield handle -> teardown
+    pool = create_pool(...)
+    try:
+        yield pool
+    finally:
+        pool.close()
+
+
+ctx.with_resource("db", db)
+ctx.with_resource(
+    "client", Resource.from_external(client)
+)  # caller owns; Riko never closes
 ```
 
-A referenced owned resource is opened eagerly during execution preparation by default. An unreferenced resource is not opened. `lazy=True` validates eagerly but defers opening until first use. `external=True, lazy=True` is invalid because an external value is already supplied by the caller.
+`Resource.from_external(...)` is a distinct type that always resolves to the supplied handle and never closes it (rather than an `external=True` flag); it is inherently eager and takes no `lazy` because the value is already supplied by the caller. `Resource(handle, cleanup=...)` remains a low-level convenience for wrapping an already-live handle with an explicit closer; the generator/CM is the ergonomic primary and subsumes `from_factory` (the generator *is* the factory-with-teardown).
+
+A referenced owned resource is entered eagerly during execution preparation by default. An unreferenced resource is not entered. `lazy=True` validates eagerly but defers entry until first use.
 
 Each `Resource` resolves at most once per execution. Re-executing the same `Pipeline` resolves a fresh owned handle.
 
 Opening rules:
 
-- independent eager resources open in deterministic declaration order;
-- resource factories may depend on other declared resources;
+- independent eager resources enter in deterministic declaration order;
+- resource generators may depend on other declared resources;
 - dependencies are resolved dynamically with cycle detection;
-- if eager opening fails, all successfully opened owned resources are rolled back in reverse successful-open order;
+- lifecycle is managed by the single execution exit stack, so if eager entry fails, all successfully entered owned resources unwind in reverse order. Rollback and normal completion are one mechanism, not two paths;
+- "bridged" means composed on the stack, not made non-blocking. A potentially blocking sync generator/CM is adapted to a worker *before* it reaches an `AsyncExitStack`; registering it directly is a defect. See [Execution lifetime primitives](#execution-lifetime-primitives);
 - external resources are never closed by Riko.
 
-Cleanup prefers `aclose()`, then `close()`, unless an explicit `cleanup=` override is supplied. Resource specs may provide `open()` and/or `aopen()`; the native execution-mode implementation wins and the common sync/async bridge adapts the other mode. Cleanup always attempts all required closes. A single cleanup error is raised directly; multiple cleanup errors are grouped with `ExceptionGroup`.
+Teardown is the generator's post-`yield`/`finally` body (or the context manager's `__exit__`/`__aexit__`); an explicit `cleanup=` applies only to the low-level `Resource(handle)` form. Execution **enters resource definitions**; it does not introspect handles for lifecycle methods. `open()`, `aopen()`, `close()`, and `aclose()` are not part of the target public abstraction, and duck-typed `aclose`-then-`close` discovery survives only inside the low-level compatibility wrapper, where a handle was supplied without a definition. The currently shipped `riko/resources.py` is that wrapper, not the model: it is a migration surface for R3/R4, not the shape to extend. The common sync/async bridge adapts a sync generator/CM into the async execution mode and vice versa. Cleanup always attempts all required closes: a single cleanup error is raised directly; multiple are grouped with `ExceptionGroup`.
 
 ### Execution-bound resource view
 
@@ -175,7 +218,7 @@ An external subscription is an ordinary source:
 flow = Pipeline(source=subscription)
 ```
 
-`publish()` accepts a local subscription pipeline or an external `Publisher`. A published local subscription branch is attached to the owning execution. The user does not drain that branch to make cleanup occur; branch terminal values are discarded unless the branch has an explicit sink/tap/routing effect.
+`publish()` accepts a local subscription pipeline or an external `Publisher`. A published local subscription branch is attached to the owning execution. The user does not drain that branch to make cleanup occur; branch terminal values are discarded unless the branch has an explicit sink/on_receive/routing effect.
 
 Calling `list(events)` independently creates a fresh execution; subscriptions are not replay buffers.
 
@@ -214,7 +257,7 @@ Literal["raise", "ignore"]
 
 with `"raise"` the default. `"ignore"` is per-item continuation.
 
-A subscriber `tap=` may be sync or async; its return value is discarded and the original item continues. This tap contract must be changed for sync and async together rather than creating mode-specific semantics.
+A subscriber `on_receive=` may be sync or async; its return value is discarded and the original item continues. This on_receive contract must be changed for sync and async together rather than creating mode-specific semantics.
 
 When multiple publishers target one subscription, the subscription completes only after all attached publishers complete. Concurrent publishers preserve actual delivery order; no artificial global ordering is imposed.
 
@@ -282,6 +325,25 @@ hashlib.blake2b(data, digest_size=16).hexdigest()
 The result is a 32-character lowercase hex string. Domains are fixed Riko-owned values (for example fingerprint, generation, idempotency, state-key encoding); callers do not supply arbitrary digest-domain strings. The domain/version participate in the hashed bytes but are not embedded in the returned hex text.
 
 ### Callable and resource fingerprints
+
+Two levels of identity exist, and they are not equally authoritative:
+
+```text
+automatic fingerprint  = convenience / best-effort identity
+explicit version=      = authoritative durable semantic identity
+```
+
+Automatic inspection cannot be complete, and the architecture must not depend on it being complete. A normalized AST says nothing about a changed third-party library called from the body, runtime-derived module globals, C extension callables, dynamically generated code, or a monkeypatched module. Closing those gaps would turn durable identity into a Python-semantics hashing project.
+
+Automatic fingerprints are therefore authoritative for process-local caching, debugging, obvious structural-change detection, and generated default node identity — and explicit `version=` is the **recommended** form wherever checkpoints or idempotent side effects must survive a process restart, dependency upgrade, or deploy:
+
+```python
+flow.map(transform, version="normalize-v3")
+```
+
+Docs, examples, and the checkpoint/idempotency guidance treat an explicit version as the normal thing to write at a durability boundary, not as an escape hatch for hard cases.
+
+Within that contract:
 
 Inspectable Python callables are fingerprinted from normalized AST, excluding formatting, comments, source locations, docstrings, and annotations. Defaults, kwdefaults, closure nonlocals, durably freezeable referenced globals, decorators, and relevant captured configuration participate.
 
@@ -500,7 +562,7 @@ FeedState(checkpoint=current_value, observation=current_observation)
 
 Checkpointing commits state; it does not independently decide how to restore. Restore belongs to an enclosing resumable/stateful owner such as `loop`, polling, or a stateful source.
 
-A reachable checkpoint requires a configured `state_store` before source consumption begins. `Context(state_store=Resource.from_factory(...))` is a first-class Context capability, not a magic ordinary resource binding.
+A reachable checkpoint requires a configured `state_store` before source consumption begins. `Context(state_store=...)` takes a resource definition (the same generator/context-manager form as any other resource) and is a first-class Context capability, not a magic ordinary resource binding.
 
 A checkpoint may exist in a reusable/unbound pipeline fragment, but compilation of a concrete graph requires every reachable checkpoint to resolve to exactly one enclosing resumable owner. Nested scopes bind to the nearest enclosing owner. The compiled graph records that owner explicitly.
 
@@ -640,6 +702,12 @@ Ordered concurrent execution uses a bounded reorder buffer. When the buffer fill
 
 ### 6.4 Cancellation
 
+Final async execution uses structured concurrency:
+
+> Every execution-spawned task belongs to exactly one execution-owned task group. Subscriptions, concurrent branches, merge workers, and internal service tasks are created under the execution's task-group tree. Detached `asyncio.create_task()` is not permitted outside explicitly characterized compatibility code.
+
+This is what makes the ownership rule enforceable rather than aspirational: children share the owning cancellation scope, and the scope cannot exit while a child is still running.
+
 The final execution owns cancellation and teardown. On cancellation it stops accepting new work, cancels queued work where supported, allows unavoidable running threads to finish, and deterministically tears down execution-owned resources/channels/portal state.
 
 A future explicit cancellation policy may distinguish draining from cancelling pending work, but cancellation correctness must not depend on users draining published subscription branches.
@@ -653,6 +721,8 @@ Execution resource cleanup follows the resource rules above. If both execution a
 ### Execution-mode adaptation (`Pipeline` sync <-> async)
 
 A single `SyncExecution` owns one lazily-created AnyIO `BlockingPortal` if async-only components are encountered. It is reused for async steps, async sources, async resources, and async pub/sub for that execution. Never create one portal per item. The portal closes on exhaustion, explicit close, or exception. Independent executions get independent portals.
+
+Cross-mode adaptation occurs only at an execution boundary chosen during preparation. Individual parser, module, factory, or extension code never creates event loops, portals, executors, worker threads, or task groups; it declares what it implements and the execution decides where that runs.
 
 If the async extra is absent and sync execution requires an async-only component, raise a Riko-level installation/capability error rather than leaking a deep AnyIO/Asyncer import failure.
 
@@ -831,15 +901,26 @@ always passes the current logical value to `func`: an individual item in item mo
 
 ### 16.1 Backend negotiation
 
-Batch representation/backend is negotiated graph- and capability-aware. Preference order is:
+Batch representation is negotiated from **operator capability and conversion cost**, not from a global ranking of libraries. There is no `Arrow > Polars > Pandas` preference: a Pandas-native graph must not be routed through Arrow, and a Polars graph must not convert unless an operator forces it.
 
-1. native safe/zero-copy representation when available;
-2. Arrow;
-3. Polars;
-4. Pandas;
-5. Python list fallback.
+Negotiation resolves per boundary:
 
-An explicit `batch_backend=` forces a supported backend; requesting an unavailable backend raises rather than silently falling back to another representation.
+```text
+candidates = upstream representations ∩ representations the node accepts
+```
+
+and chooses, in order:
+
+1. the current representation, when the node accepts it;
+2. a zero-copy/interchange-backed representation among the candidates;
+3. the cheapest supported conversion, by declared conversion cost;
+4. Python objects as the universal fallback.
+
+Ties at equal cost resolve deterministically so identical graphs negotiate identically across processes; the tiebreak is a documented stable order, not a claim about which library is better. Arrow still usually wins between frame libraries because it usually *is* the cheapest bridge — it wins on measured cost, not rank.
+
+Nodes declare accepted representations and conversion costs the same way they declare other execution metadata. A node that accepts anything imposes no conversion; a node that accepts only one representation forces exactly one conversion at its own boundary rather than for the whole graph.
+
+An explicit `batch_backend=` forces a supported backend for the execution; requesting an unavailable or incompatible backend raises rather than silently choosing another representation.
 
 Batching must remain streaming/bounded. It may not require materializing an unbounded source. Stateful boundaries, source completion, and operator semantics determine when buffered values must be made visible/committed; implementation details may use internal batching helpers without exposing a second public pipeline type.
 
@@ -869,7 +950,7 @@ A Feed/stream's finiteness is independent of its iteration mechanism.
 
 ### Pub/sub implementation
 
-The compatibility sync backend may continue to use generator coroutines + bounded/deque buffering internally. The current async backend may continue to use AnyIO memory object streams, including zero-buffer rendezvous behavior. Those mechanisms are implementation details behind the public `Publisher` / `Subscription` / `Channel` protocols.
+The compatibility sync backend may continue to use generator coroutines + bounded/deque buffering internally. The current async backend may continue to use AnyIO memory object streams, including zero-buffer rendezvous behavior; the public `buffer_size = 0` default matches that primitive deliberately, so backpressure is structural rather than a configured number. Those mechanisms are implementation details behind the public `Publisher` / `Subscription` / `Channel` protocols.
 
 Final lifecycle is execution-owned:
 
@@ -879,7 +960,7 @@ Final lifecycle is execution-owned:
 - cancellation/normal completion close all execution-owned channel ends;
 - multiple independent pipeline executions never share implicit pub/sub lifecycle state.
 
-Structured concurrency (`TaskGroup` or equivalent execution-owned task management) is appropriate where branch lifetime must be tied to execution. An MVP may use `asyncio.create_task()` for subscriber concurrency, provided the owning execution still tracks, joins/cancels, and cleans up those tasks deterministically.
+Structured concurrency is the final contract, not a preference: every branch, subscriber, and internal service task runs under the execution's task-group tree, per [§6.4](#64-cancellation). A compatibility MVP may use `asyncio.create_task()` for subscriber concurrency while the old hub machinery still exists, provided the owning execution tracks, joins/cancels, and cleans up those tasks deterministically, and provided that code is explicitly marked as scheduled for replacement.
 
 ### Producer/consumer bridges
 

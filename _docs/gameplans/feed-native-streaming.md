@@ -85,7 +85,7 @@ strategy. There is no public copy-mode override initially.
 This section implements the semantics owned by `fanout-topology.md` /
 `execution-semantics.md`; it does not define a second split contract.
 
-## 5. Streaming `write` is a tap/passthrough side effect
+## 5. Streaming `write` is a on_receive/passthrough side effect
 
 `write` emits each logical value unchanged after performing its side effect; it is not a
 whole-stream terminal by definition.

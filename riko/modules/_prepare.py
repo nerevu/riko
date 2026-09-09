@@ -27,6 +27,7 @@ from riko.cast import (
 )
 from riko.dotdict import DotDict, is_mapping
 from riko.parsers import conf_is_dynamic, get_field, parse_conf
+from riko.resources import ResourcesLike
 from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
 from riko.types._dynamic_conf import DynamicConf
 from riko.types._locations import AnyLocation
@@ -203,10 +204,7 @@ def get_pieces_or_conf(
         else:
             pieces = cast(BasicReturn, pieces)
 
-        if pieces and opts.get("listize"):
-            pieces_or_conf = cast(list[BasicReturn], listize(pieces))
-        else:
-            pieces_or_conf = pieces
+        pieces_or_conf = listize(pieces) if opts.get("listize") else pieces
     else:
         pieces_or_conf = merged_conf
 
@@ -234,6 +232,7 @@ class PreparedModule[T, E]:
         is_source: Whether the pipe is a source (``ftype`` is ``"none"``).
         static_casted: Precomputed cast for conf that does not vary per item, or
             ``None`` when the conf is dynamic.
+        resources: The node's declared resource binding, or ``None``.
 
     """
 
@@ -246,6 +245,7 @@ class PreparedModule[T, E]:
     emit: bool | Callable[[ParserOutput], bool] | None
     is_source: bool
     static_casted: tuple[ArgCaster[T], E, DynamicConf] | None
+    resources: ResourcesLike | None = None
 
 
 @overload

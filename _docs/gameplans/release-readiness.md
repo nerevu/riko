@@ -42,13 +42,13 @@ Release-readiness gates these outcomes:
 - pub/sub runtime state owned by each private execution, never by process globals or mutable public
   `Context` state;
 - async receive/delivery is incremental and sync/async observable semantics match;
-- subscriber `tap=` discards its return value and passes the original item onward;
+- subscriber `on_receive=` discards its return value and passes the original item onward;
 - subscription objects replace hidden `ids`/`DONE` bookkeeping;
 - local `publish(subscription_pipeline)` attaches the complete side branch to the owning execution,
   so cleanup does not depend on the user draining ignored branch output.
 
 **Vocabulary:** `others`→`targets`, `max_len`→`buffer_size`, `max_wait`→`timeout`/`idle_timeout`,
-`receive`'s transformation-shaped `func`→`tap`. Clean break for the final public Pipeline API;
+`receive`'s transformation-shaped `func`→`on_receive`. Clean break for the final public Pipeline API;
 legacy low-level modules may retain compatibility names while they exist.
 
 ## 3. Configuration correctness

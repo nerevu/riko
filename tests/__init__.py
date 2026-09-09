@@ -20,6 +20,13 @@ TESTS_DIR = Path(__file__).parent.absolute()
 skipif_issync = pytest.mark.skipif(issync, reason="async support not available")
 
 
+def async_test(f):
+    """Shortcut to apply multiple pytest markers at once."""
+    f = pytest.mark.anyio(f)
+    f = skipif_issync(f)
+    return f
+
+
 def aresolve[T](aiterable: AsyncIterable[T]) -> list[T]:
     """Drain *aiterable* to a list via ``riko.bado.run`` (one event loop)."""
 

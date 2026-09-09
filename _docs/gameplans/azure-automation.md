@@ -20,6 +20,12 @@ Related authoritative plans:
 * `microsoft-administration.md` — ChangePlan, desired state, dry-run, approval, verification,
   audit evidence, certificate workflows, and handoffs.
 
+Downstream *scenarios* that consume these adapters (they specialize, they do not redefine them):
+
+* `autopilot-provisioning.md` — Windows Autopilot new-device provisioning;
+* `monthly-dashboard.md` — MSP monthly reconciliation/dashboard, which uses the Graph adapter
+  (`signIns`, `managedDevices`, `subscribedSkus`, users) as its Microsoft data sources.
+
 ## 2. Ownership boundary
 
 This plan owns:

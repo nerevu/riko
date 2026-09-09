@@ -10,16 +10,17 @@ or a codegen regression — fails here.
 
 from difflib import unified_diff
 from json import loads
+from keyword import iskeyword
 
 import pytest
 
-from riko.bado._backend import run
 from riko.compile import (
     build_pipeline,
     compile_pipe,
     convert_dag,
     get_wire,
     parse_pipe_def,
+    pythonise,
     resolve_module,
     stringify_pipe,
 )
@@ -28,7 +29,7 @@ from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.types._streams import Item
 from riko.types.compile import DagModule, LoopModule, PipeDag, PipeDef, PipeModule
 from riko.types.modules import ItemBuilderRawConf, Param, TruncateRawConf
-from tests import TESTS_DIR, skipif_issync
+from tests import TESTS_DIR, async_test
 
 PIPELINE_DIR = TESTS_DIR / "pipelines"
 PYPIPELINE_DIR = TESTS_DIR / "pypipelines"
@@ -263,6 +264,17 @@ def test_convert_dag_linear_default_matches_explicit_wires():
     assert linear == wired
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="An empty module list never reaches ``module_ids[-1]`` because the terminal "
+    "``output`` node is appended unconditionally. So ``convert_dag`` returns just that"
+    " node with no wires rather than raising.",
+)
+def test_convert_dag_empty_modules_raises():
+    with pytest.raises(IndexError):
+        convert_dag({"modules": []})
+
+
 def test_convert_dag_wires_override_listing_order():
     dag = loads((DAG_DIR / "pipe_reordered.json").read_text())
     wires = convert_dag(dag)["wires"]
@@ -296,8 +308,8 @@ def test_convert_dag_generates_ids_when_omitted():
     assert edges == [("sw-1", "sw-2"), ("sw-2", "_OUTPUT")]
 
 
-@skipif_issync
-def test_async_codegen_matches_sync():
+@async_test
+async def test_async_codegen_matches_sync():
     """
     ``compile(is_async=True)`` emits a runnable anyio pipeline whose output
     matches the sync compilation.
@@ -307,15 +319,13 @@ def test_async_codegen_matches_sync():
     async_src = compile_pipe(pipe_def, "pipe_gigs", is_async=True)
     async_ns: dict = {}
     exec(async_src, async_ns)
-    async_result = list(run(async_ns["async_pipe"]))
+    async_result = await async_ns["async_pipe"]()
 
     sync_src = compile_pipe(pipe_def, "pipe_gigs", is_async=False)
     sync_ns: dict = {}
     exec(sync_src, sync_ns)
     sync_result = list(sync_ns["pipe"]())
-
-    assert async_result
-    assert async_result == sync_result
+    assert list(async_result) == sync_result
 
 
 class TestCompactLoopConsumption:
@@ -395,3 +405,19 @@ class TestNecessaryLoopFixtures:
             {"title": "a b c", "tokens": {"content": "b"}},
             {"title": "a b c", "tokens": {"content": "c"}},
         ]
+
+
+@pytest.mark.xfail(
+    reason="pythonise does not sanitize ids into valid identifiers yet", strict=True
+)
+def test_pythonise_yields_valid_identifiers():
+    """
+    Every generated id must be a legal, non-keyword Python identifier.
+
+    ``pythonise`` only replaces four characters and ASCII-``replace``-encodes, so
+    ``"class"``/``"foo bar"``/``"foo.bar"``/``"café"`` survive into generated source
+    as invalid identifiers (``"1st"`` already becomes ``"_1st"``).
+    ``ext/codegen.py::enum_member_name`` already sanitizes properly.
+    """
+    results = [pythonise(raw) for raw in ("class", "foo bar", "foo.bar", "1st", "café")]
+    assert all(r.isidentifier() and not iskeyword(r) for r in results)

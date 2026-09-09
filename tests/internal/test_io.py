@@ -7,52 +7,173 @@ socket, so a fixture file cannot exercise them: the streamed text branch reads
 ``r.raw``, which is empty unless the request was made with ``stream=True``.
 """
 
-from typing import Any, cast
+from io import BytesIO
+from unittest.mock import Mock, patch
 
 import pytest
 from requests import Response
 
 from riko._io import Fetch
+from riko._reencode import Reencoder, reencode
+from riko.bado.io import async_url_open
+from riko.modules import csv
+from riko.paths import get_path
+from riko.types._configs import CsvObjconf
+from tests import async_test
 from tests._loopback import loopback_url
 
-BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
-PAYLOAD = BODY.encode()
 
-pytestmark = pytest.mark.simulated_network
+def test_csv_headerless_closes_original_source(monkeypatch):
+    """
+    ``has_header=False`` buffers through ``seekable`` (a spooled copy) and leaves the
+    original fetch open. ``auto_close`` must still close it, not just the spool.
+    """
+    closed: list[bool] = []
+    real_fetch = csv.Fetch
 
+    class _SpyFetch(real_fetch):
+        def close(self) -> None:
+            closed.append(True)
+            super().close()
 
-@pytest.fixture(scope="module")
-def url():
-    with loopback_url(BODY) as served:
-        yield served
+    monkeypatch.setattr(csv, "Fetch", _SpyFetch)
+    conf = CsvObjconf(
+        {
+            "url": get_path("countries.csv"),
+            "has_header": False,
+            "skip_rows": 0,
+            "col_names": None,
+            "encoding": "utf-8",
+            "sanitize": False,
+            "dedupe": True,
+        }
+    )
 
-
-def test_streamed_text_read_returns_full_body(url):
-    with Fetch(url) as f:
-        assert f.read() == BODY
-
-
-def test_streamed_text_iterates_every_line(url):
-    with Fetch(url) as f:
-        lines = list(f)
-
-    assert len(lines) == 2000
-    assert lines[-1] == "line 1999 ünïcode\n"
-
-
-def test_streamed_text_closes_its_response(url):
-    f = Fetch(url)
-    response = cast(Response, cast(Any, f.file)._f)
-    f.close()
-
-    assert response.raw.closed
+    list(csv.parser({}, None, conf))
+    assert closed
 
 
-def test_memoized_text_matches_streamed(url):
-    with Fetch(url, memoize=True) as f:
-        assert f.read() == BODY
+@pytest.mark.simulated_network
+@pytest.mark.xfail(
+    strict=True, reason="async_url_open ignores the Content-Type and decodes as utf-8"
+)
+@async_test
+async def test_async_url_open_honors_content_type_charset():
+    """
+    The async opener must decode using the declared response charset (what the sync
+    ``Fetch`` path already does).
+    """
+    body = "café ünïcode".encode("iso-8859-1")
+
+    with loopback_url(
+        body, content_type="text/plain; charset=iso-8859-1", path="p.txt"
+    ) as url:
+        async with async_url_open(url) as f:
+            result = f.read()
+            assert result
+            assert "é" in result
 
 
-def test_streamed_binary_read_returns_payload(url):
-    with Fetch(url, binary=True) as f:
-        assert f.read() == PAYLOAD
+class TestReencode:
+    def test_reencode_read_honors_char_count(self):
+        """``read(1)`` yields a single character and the remainder survives."""
+        data = b"line one\nline two\nline three\n"
+        full = reencode(BytesIO(data), decode=True).read()
+        reader = reencode(BytesIO(data), decode=True)
+        head, rest = reader.read(1), reader.read()
+
+        assert head == "l"
+        assert rest == "ine one\nline two\nline three\n"
+        assert head + rest == full
+
+    def test_reencode_readline_honors_char_count(self):
+        """``readline(1)`` yields a single character and the remainder survives."""
+        data = b"line one\nline two\nline three\n"
+        full = reencode(BytesIO(data), decode=True).read()
+        reader = reencode(BytesIO(data), decode=True)
+        head, rest = reader.readline(1), reader.read()
+
+        assert head == "l"
+        assert rest == "ine one\nline two\nline three\n"
+        assert head + rest == full
+
+    def test_reencode_readline(self):
+        data = b"line one\nline two\nline three\n"
+        full = reencode(BytesIO(data), decode=True).readlines(keepends=False)
+        reader = reencode(BytesIO(data), decode=True)
+        head, rest = reader.readline(keepends=False), reader.readlines(keepends=False)
+
+        assert head == "line one"
+        assert rest == ["line two", "line three"]
+        assert [head] + rest == full
+
+    def test_reencode_read_and_readline(self):
+        data = b"line one\nline two\nline three\n"
+        full = reencode(BytesIO(data), decode=True).read()
+        reader = reencode(BytesIO(data), decode=True)
+        head, mid, rest = reader.read(1), reader.readline(), reader.readlines()
+
+        assert head == "l"
+        assert mid == "ine one\n"
+        assert rest == ["line two\n", "line three\n"]
+        assert head + mid + "".join(rest) == full
+
+
+@pytest.mark.simulated_network
+class TestLoopbackServer:
+    """The streamed/memoized branches exercised against a real loopback server."""
+
+    BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
+    PAYLOAD = BODY.encode()
+
+    @pytest.fixture(scope="class")
+    def url(self):
+        with loopback_url(self.BODY) as served:
+            yield served
+
+    def test_streamed_text_read_returns_full_body(self, url):
+        with Fetch(url) as f:
+            assert f.read() == self.BODY
+
+    def test_streamed_text_iterates_every_line(self, url):
+        with Fetch(url) as f:
+            lines = list(f)
+
+        assert len(lines) == 2000
+        assert lines[-1] == "line 1999 ünïcode\n"
+
+    def test_streamed_text_closes_its_response(self, url):
+        f = Fetch(url)
+        assert isinstance(f.file, Reencoder)
+        response = f.file._f
+        assert isinstance(response, Response)
+        f.close()
+
+        assert response.raw.closed
+
+    def test_memoized_text_matches_streamed(self, url):
+        with Fetch(url, memoize=True) as f:
+            assert f.read() == self.BODY
+
+    def test_streamed_binary_read_returns_payload(self, url):
+        with Fetch(url, binary=True) as f:
+            assert f.read() == self.PAYLOAD
+
+    def test_unified_http_backend(self):
+        """
+        A params-less http URL routes through the requests backend rather than the
+        urllib opener.
+        """
+        response = Mock()
+        response.headers = {"Content-Type": "application/rss+xml"}
+        target = "http://example.com/feed.xml"
+
+        with (
+            patch("riko._io.requests.get", return_value=response) as mock_requests,
+            patch("riko._io.urlopen") as mock_urlopen,
+        ):
+            Fetch(target, binary=True)
+
+        mock_requests.assert_called_once()
+        mock_urlopen.assert_not_called()
+        assert mock_requests.call_args.args[0] == target

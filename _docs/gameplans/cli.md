@@ -671,3 +671,68 @@ excluding cold-Python variability.
 6. Heavy package SDKs remain lazy and root help is fast/offline.
 7. MCP/AI/site/conversation business logic stays in reusable owning-package services.
 8. The shell/TUI reuse the same command/service contracts rather than creating another CLI.
+
+---
+
+# 31. Operations as Code command adapter
+
+`riko-ops` owns `OperationSpec`, `OperationPlan`, repository/source-of-truth behavior,
+validate/plan/apply/verify services, import/normalization, compatibility, deployment identity, and
+automation drift. `riko-cli` owns only the terminal adapter for those services.
+
+Register through the same Click-native command-provider seam:
+
+```toml
+[project.entry-points."riko.commands"]
+ops = "riko_ops.cli:provider"
+```
+
+Initial command surface:
+
+```text
+riko operation list
+riko operation inspect NAME
+riko operation validate NAME
+riko operation plan NAME
+riko operation apply NAME
+riko operation verify NAME
+riko operation import PROVIDER ...
+riko operation compatibility NAME --target TARGET
+riko operation deploy NAME --target TARGET
+riko operation diff NAME --target TARGET
+```
+
+Canonical terminology is deliberate:
+
+* **validate** checks the operation/configuration without provider mutation;
+* **plan** creates an `OperationPlan` and does not apply it;
+* **apply** applies the exact validated/approved `OperationPlan` through the owning service;
+* **verify** verifies the operation's declared postconditions through domain/provider services;
+* **import** acquires/normalizes external operational assets but does not deploy them;
+* **compatibility** reports target fit/lossiness and never implies deployment;
+* **deploy** publishes a derived target automation through provider deployment hooks;
+* **diff** compares canonical source/deployment identity through Operations as Code drift services.
+
+Do not add `riko operation execute` as a synonym for `apply`. `execute` remains appropriate for
+Pipeline/capability execution surfaces; the Operations as Code lifecycle uses
+`validate → plan → apply → verify` consistently.
+
+`plan`, `compatibility`, `inspect`, and normal import analysis are non-mutating. Importers may need
+read access to remote provider assets but must not mutate them. `apply` and `deploy` pass through
+common capability/policy/approval rules; `--yes` cannot authorize a stale plan, an effect forbidden
+by policy, or missing credentials.
+
+Imported scripts/workflows are untrusted data until validated. CLI convenience must never turn
+source text into arbitrary local shell/Python execution, auto-install dependencies, serialize
+resolved secrets, or treat AI-generated normalization as authorization. Plans and compatibility
+reports must redact sensitive values using their owning contracts.
+
+The command adapter belongs after the reusable `riko-ops` services stabilize; add it as a later CLI
+phase rather than coupling Operations as Code implementation to parser work:
+
+```text
+C12 Operations as Code command provider + noninteractive JSON/approval tests
+```
+
+CLI tests own argument parsing/rendering/exit codes/redaction for these commands. Operation,
+provider, compatibility, planning, and drift contract tests stay with their authoritative owners.

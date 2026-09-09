@@ -162,15 +162,22 @@ Ibis expression
 Connections and readers close on early termination. Batch size is configurable and
 bounded. Backend capability differences are surfaced in the plan and events.
 
-Batch backend negotiation follows the core execution contract:
+Batch backend negotiation follows the core execution contract in
+[execution-semantics.md](execution-semantics.md#161-backend-negotiation): representation is
+chosen from operator capability and conversion cost, not a global backend ranking.
 
 ```text
-native safe/zero-copy
-→ Arrow
-→ Polars
-→ pandas
-→ Python list
+candidates = upstream representations ∩ representations the node accepts
+
+1. current representation
+2. zero-copy/interchange-backed candidate
+3. cheapest supported conversion
+4. Python objects (universal fallback)
 ```
+
+For database transforms this usually still resolves to the driver's native Arrow path,
+because that is genuinely the cheapest bridge — not because Arrow outranks the alternatives.
+A pandas-native transform chain stays pandas.
 
 An explicit `batch_backend=` forces a representation and raises if that backend is not
 available; it does not silently choose another forced backend.

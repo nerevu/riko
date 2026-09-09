@@ -55,21 +55,14 @@ def categories() -> dict[str, ModuleCategory]:
     return {md.name: derive_category(md) for md in gen_module_catalog()}
 
 
-def test_sources_bucket_matches_golden(categories):
-    sources = {name for name, category in categories.items() if category == "source"}
-    assert sources == _SOURCES
+def test_taxonomy_partition_matches_golden(categories):
+    buckets: dict[str, set[str]] = {"source": set(), "sink": set(), "transform": set()}
+    for name, category in categories.items():
+        buckets[category].add(name)
 
-
-def test_sinks_bucket_matches_golden(categories):
-    sinks = {name for name, category in categories.items() if category == "sink"}
-    assert sinks == _SINKS
-
-
-def test_remaining_builtins_are_transforms(categories):
-    transforms = {
-        name for name, category in categories.items() if category == "transform"
-    }
-    assert transforms == set(categories) - _SOURCES - _SINKS
+    assert buckets["source"] == _SOURCES
+    assert buckets["sink"] == _SINKS
+    assert buckets["transform"] == set(categories) - _SOURCES - _SINKS
 
 
 def test_provider_override_wins():
@@ -85,21 +78,18 @@ def test_sink_name_is_classified_as_sink():
 
 
 @pytest.mark.parametrize(
-    ("name", "expected"),
+    ("name", "override", "expected"),
     [
-        ("fetch", "FETCH"),
-        ("fetch-page", "FETCH_PAGE"),
-        ("microsoft.autopilot.ensure", "MICROSOFT_AUTOPILOT_ENSURE"),
-        ("a--b..c", "A_B_C"),
-        ("3m", "_3M"),
+        ("fetch", None, "FETCH"),
+        ("fetch-page", None, "FETCH_PAGE"),
+        ("microsoft.autopilot.ensure", None, "MICROSOFT_AUTOPILOT_ENSURE"),
+        ("a--b..c", None, "A_B_C"),
+        ("3m", None, "_3M"),
+        ("fetch", "grab", "GRAB"),
     ],
 )
-def test_enum_member_name(name, expected):
-    assert enum_member_name(name, override=None) == expected
-
-
-def test_enum_member_name_override():
-    assert enum_member_name("fetch", override="grab") == "GRAB"
+def test_enum_member_name(name, override, expected):
+    assert enum_member_name(name, override=override) == expected
 
 
 def test_generated_names_match():
@@ -138,13 +128,21 @@ def test_member_collision_fails_with_diagnostic():
     assert "'my-mod'" in str(excinfo.value)
 
 
+def _exec_generated_names(*entries: NameEntry) -> dict:
+    namespace: dict = {}
+    exec(generate_module_names(*entries), namespace)  # noqa: S102
+    return namespace
+
+
 def test_enum_name_override_resolves_collision():
     entries = [
         NameEntry(name="my.mod", category="transform"),
         NameEntry(name="my-mod", category="transform", enum_name="my_mod_alt"),
     ]
-    src = generate_module_names(*entries)
-    assert "MY_MOD_ALT" in src
+    transforms = _exec_generated_names(*entries)["Transforms"]
+
+    assert transforms.MY_MOD_ALT.value == "my-mod"
+    assert transforms.MY_MOD.value == "my.mod"
 
 
 def test_provider_namespace_flattens():
@@ -152,9 +150,9 @@ def test_provider_namespace_flattens():
         NameEntry(name="fetch", category="source"),
         NameEntry(name="microsoft.autopilot.ensure", category="microsoft"),
     ]
-    src = generate_module_names(*entries)
-    assert "class Microsoft(ModuleName):" in src
-    assert 'MICROSOFT_AUTOPILOT_ENSURE = "microsoft.autopilot.ensure"' in src
-    assert (
-        "    MICROSOFT_AUTOPILOT_ENSURE = Microsoft.MICROSOFT_AUTOPILOT_ENSURE" in src
-    )
+    namespace = _exec_generated_names(*entries)
+    provider = namespace["Microsoft"]
+    modules = namespace["Modules"]
+
+    assert provider.MICROSOFT_AUTOPILOT_ENSURE.value == "microsoft.autopilot.ensure"
+    assert modules.MICROSOFT_AUTOPILOT_ENSURE is provider.MICROSOFT_AUTOPILOT_ENSURE

@@ -40,11 +40,12 @@ from riko._rssutils import truncate_content
 from riko._serialize import repr_cache
 from riko.dotdict import DotDict, is_sentinel, is_type_value
 from riko.types._collections import BasicArg, RikoDict, Stringy, StringyDict
-from riko.types._io import FileTypes
-from riko.types._options import SkipFunc, SkipIf
+from riko.types._guards import is_mapping
+from riko.types._io import FileLike
+from riko.types._options import SkipIf
 from riko.types._rss import ParserRSSEntry
+from riko.types._scalars import AnyStr
 from riko.types._streams import Item, ItemOrValue, Stream
-from riko.types.modules import Skip
 
 try:
     from lxml import etree, html
@@ -198,12 +199,12 @@ def parse_rss(  # noqa: E704
 ) -> list[ParserRSSEntry]: ...
 @overload  # noqa: E302
 def parse_rss(  # noqa: E704
-    *, content: str | bytes, **kwargs: BasicArg
+    *, content: AnyStr, **kwargs: BasicArg
 ) -> list[ParserRSSEntry]: ...
 @overload
 def parse_rss(**kwargs: Any) -> list[ParserRSSEntry]: ...  # noqa: E704
 def parse_rss(  # noqa: E302
-    url: BasicArg = "", *, content: str | bytes | None = None, **kwargs: BasicArg
+    url: BasicArg = "", *, content: AnyStr | None = None, **kwargs: BasicArg
 ) -> list[ParserRSSEntry]:
     """Fetches (or reads) and parses an RSS/Atom feed into its entries."""
     f = None
@@ -425,7 +426,7 @@ def xpath(
 
 
 def xml2etree(  # noqa: E302
-    f: str | FileTypes, xml: bool = True, html5: bool = False
+    f: str | FileLike, xml: bool = True, html5: bool = False
 ) -> AnyElementTree:
     """
     Parses XML/HTML into an ElementTree. External XML is parsed with a hardened
@@ -513,7 +514,7 @@ def element2dict(element: AnyElement) -> StringyDict:
 
 
 def any2dict(
-    content: FileTypes | RikoDict | list[RikoDict],
+    content: FileLike | RikoDict | list[RikoDict],
     ext: str | None = "xml",
     html5: bool = False,
     path: str | None = None,
@@ -754,45 +755,51 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
         Whether or not to skip.
 
     Examples:
-        >>> item = {'content': 'Some content'}
-        >>> get_skip(item, lambda x: x['content'] == 'Some content')
+        >>> item = {"content": "Some content"}
+        >>> get_skip(item, lambda x: x["content"] == "Some content")
         True
         >>> get_skip(item)
         False
-        >>> get_skip(item, {'field': 'content'})
+        >>> get_skip(item, {"field": "content"})
         False
-        >>> bool(get_skip(item, {'field': 'content', 'include': True}))
+        >>> get_skip(item, {"field": "content", "text": None})
+        False
+        >>> get_skip(item, {"field": "content", "text": 0})
+        False
+        >>> get_skip(item, {"field": "content", "text": ""})
         True
-        >>> get_skip(item, {'field': 'content', 'text': 'some'})
+        >>> get_skip({}, {"field": "content"})
         True
-        >>> get_skip(item, {'field': 'content', 'text': 'some', 'include': True})
+        >>> bool(get_skip(item, {"field": "content", "include": True}))
+        True
+        >>> get_skip(item, {"field": "content", "text": "some"})
+        True
+        >>> get_skip(item, {"field": "content", "text": "some", "include": True})
         False
-        >>> get_skip(item, {'field': 'content', 'text': 'other'})
+        >>> get_skip(item, {"field": "content", "text": "other"})
         False
-        >>> get_skip(item, {'field': 'content', 'text': 'other', 'include': True})
+        >>> get_skip(item, {"field": "content", "text": "other", "include": True})
         True
 
     """
     item = item or {}
     skip = False
 
-    if isinstance(item, (dict, CaseInsensitiveDict)):
-        for __skip in listize(skip_if):
-            _skip = cast(SkipFunc | Skip, __skip)
-
+    if is_mapping(item):
+        for _skip in listize(skip_if):
             if callable(_skip):
                 skip = _skip(item)
-            else:
-                _skip = cast(Skip, _skip)
-                field = _skip["field"]
-                value = str(item.get(field, ""))
+            elif is_mapping(_skip) and (field := _skip["field"]):
+                value = item.get(field)
 
-                if text := str(_skip.get("text")):
-                    op = str(_skip.get("op", "contains"))
-                    match = not SKIP_SWITCH[op](text, value)
-                    skip = match if _skip.get("include") else not match
-                else:
+                if (text := _skip.get("text")) is None:
                     skip = bool(value) if _skip.get("include") else not value
+                elif value is None:
+                    skip = not _skip.get("include")
+                else:
+                    op = str(_skip.get("op", "contains"))
+                    match = SKIP_SWITCH[op](str(text), str(value))
+                    skip = not match if _skip.get("include") else match
 
             if skip:
                 break

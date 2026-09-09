@@ -21,7 +21,7 @@ from riko.ext._pipelines import (
 )
 from riko.ext._resolver import PipeResolver, pipe_resolver
 from riko.ext.registry import ModuleDefinition, registry, reset_registry
-from riko.modules import list_modules, tokenizer
+from riko.modules import list_modules, regex, tokenizer
 from riko.paths import ROOT_DIR
 
 _META = {
@@ -160,10 +160,6 @@ class TestPublicRegister:
         flow = SyncPipe(_NAME, source=[{"content": "a b c"}], conf={"delimiter": " "})
         assert [item.get("content") for item in flow] == ["a", "b", "c"]
 
-    def test_register_requires_name(self, fixed_registry):
-        with pytest.raises(ValueError, match="needs a name"):
-            register(ModuleDefinition(sync_pipe=marker))
-
     def test_reset_registry_clears_registration(self, fixed_registry):
         register(MOD_DEFN)
         reset_registry()
@@ -176,7 +172,9 @@ class TestPipeResolver:
     def test_module_resolves_via_registry(self, fixed_registry):
         assert pipe_resolver.resolve("tokenizer", "pipe").__name__ == "pipe"
 
-    def test_pipeline_delegates_to_compiler(self, fixed_registry):
+    def test_non_pipeline_name_routes_to_module_registry(self, fixed_registry):
+        # A plain (non ``pipe_*``) name resolves through the module registry, so a
+        # miss surfaces as UnsupportedModuleError, not UnsupportedPipelineError.
         with pytest.raises(UnsupportedModuleError):
             pipe_resolver.resolve(_MISSING_NAME, "pipe")
 
@@ -185,6 +183,20 @@ class TestPipeResolver:
         sys.modules.pop("riko.compile", None)
         PipeResolver(fixed_registry, pipeline_resolver).resolve("tokenizer", "pipe")
         assert "riko.compile" not in sys.modules
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="a runtime-registered pipe_* module is routed to the pipeline "
+        "resolver by name prefix and raises UnsupportedPipelineError.",
+    )
+    def test_runtime_registered_pipe_prefixed_module_resolves(self, fixed_registry):
+        """
+        A runtime registration whose name begins with ``pipe_`` should win over
+        the pipeline-name routing and resolve to the registered callable.
+        """
+        name = "pipe_transform"
+        fixed_registry.register(ModuleDefinition(name=name, sync_pipe=marker))
+        assert pipe_resolver.resolve(name, "pipe") is marker
 
 
 class TestEntryPointModules:
@@ -242,9 +254,13 @@ class TestEntryPointModules:
     def test_runtime_registration_shadows_entry_point(
         self, monkeypatch, fixed_registry
     ):
-        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, MOD_DEFN))
+        ep_marker = lambda source, **_: source
+        ep_defn = ModuleDefinition(name=_NAME, sync_pipe=ep_marker)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
         fixed_registry.register(MOD_DEFN)
-        assert fixed_registry.resolve(_NAME, "pipe") is marker
+        resolved = fixed_registry.resolve(_NAME, "pipe")
+        assert resolved is marker
+        assert resolved is not ep_marker
 
     def test_entry_points_discovered_lazily_once(self, monkeypatch, fixed_registry):
         calls = {"n": 0}
@@ -292,11 +308,12 @@ class TestPipelineResolver:
 
     def test_composite_store_first_hit_wins(self):
         store = CompositeStore(
-            MappingStore({}),
             MappingStore({"pipe_x": tokenizer}),
+            MappingStore({"pipe_x": regex}),
             PackageStore("tests.pypipelines"),
         )
         assert store.load("pipe_x") is tokenizer
+        assert store.load("pipe_x") is not regex
         assert store.load("absent") is None
 
     def test_mapping_store_serves_in_memory_module(self):

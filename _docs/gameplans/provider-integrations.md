@@ -3,12 +3,18 @@
 ## 1. Mission
 
 Define reusable provider semantics for authenticated SaaS APIs, resource CRUD/search,
-webhooks, caching, idempotent writes, identity mapping, browser fallback, and asynchronous
-provider operations without recreating the monolithic API gateways found in earlier Nerevu
-projects.
+webhooks, caching, idempotent writes, identity mapping, browser fallback, asynchronous provider
+operations, and provider-specific import/export/deployment hooks without recreating the monolithic
+API gateways found in earlier Nerevu projects.
 
-This plan owns **provider semantics**, not generic transport, secrets, REST pagination,
-retry, monitoring persistence, or the common capability catalog.
+This plan exists so provider packages can expose authoritative platform facts and target-specific
+mechanics through one adapter model while Riko Core remains provider-neutral and higher layers can
+reuse those facts for capability discovery, Operations as Code, migration, and orchestration.
+
+This plan owns **provider semantics**, including provider-specific extraction/deployment and
+compatibility facts. It does not own generic transport, secrets, REST pagination, retry, monitoring
+persistence, the common capability catalog, or the common Operations as Code import/compatibility
+model.
 
 Related authoritative plans:
 
@@ -17,7 +23,10 @@ Related authoritative plans:
 * `feed-monitoring.md` — dedupe/change/anomaly monitoring policy;
 * `execution-semantics.md` — `Context`, resources, `StateStore`, identity/idempotency, retry,
   timeout, cancellation, and error policy;
-* `mcp.md` — common `CapabilityInfo`, effects, catalog, policy, and OpenAPI projection;
+* `mcp.md` — common `CapabilityInfo`, `CapabilityCatalog`, discovery, effects, policy, and OpenAPI
+  projection;
+* `operations-as-code.md` — common `OperationSpec`/`OperationPlan`, imported-operation provenance,
+  normalization/lossiness, `CompatibilityReport`, deployment identity, and automation drift;
 * `orchestration.md` — durable run boundaries and external scheduling.
 
 ## 2. Inspiration integrated by this plan
@@ -58,18 +67,30 @@ provider webhook EventEnvelope
 OperationHandle + wait_operation semantics
 provider diagnostics
 provider-specific sensitivity/provenance metadata
+provider-specific operation-asset discovery/acquisition hooks
+provider-specific operation export/deployment hooks
+provider-specific target capability/compatibility facts
+provider deployment inspection/identity hooks
 ```
 
 It does not redefine:
 
 ```text
-CredentialProvider / secret material    connectors.md
-REST pagination / source cursor         rest-incremental.md
-FeedState / StateStore / checkpoints    execution-semantics.md
-monitoring observation policy           feed-monitoring.md
-RetryPolicy / timeout / cancellation    execution-semantics.md
-CapabilityInfo / CapabilityCatalog      mcp.md
+CredentialProvider / secret material       connectors.md
+REST pagination / source cursor            rest-incremental.md
+FeedState / StateStore / checkpoints       execution-semantics.md
+monitoring observation policy              feed-monitoring.md
+RetryPolicy / timeout / cancellation       execution-semantics.md
+CapabilityInfo / CapabilityCatalog         mcp.md
+capability discovery/catalog construction  mcp.md
+OperationSpec / OperationPlan              operations-as-code.md
+import provenance/lossiness model          operations-as-code.md
+CompatibilityReport / automation drift     operations-as-code.md
+scheduling / durable runner boundaries     orchestration.md
 ```
+
+A provider package supplies facts and mechanics. Higher layers own the cross-provider models that
+consume them.
 
 ## 4. Architectural rule
 
@@ -87,6 +108,21 @@ normalized records / action result / OperationHandle
 shared capability catalog projection
 ```
 
+For Operations as Code import/deployment:
+
+```text
+provider-native automation asset
+    ↓ provider-specific discover/acquire
+source artifact + provider metadata
+    ↓ operations-as-code normalization
+OperationSpec / CompatibilityReport
+    ↓ provider-specific export/deploy
+provider-native derived automation
+    ↓ provider-specific inspect
+source/deployment identity facts
+    ↓ operations-as-code drift comparison
+```
+
 Provider packages describe semantics. Core Riko continues to process records.
 
 Do not introduce:
@@ -95,7 +131,7 @@ Do not introduce:
 riko -> one giant provider proxy service -> every external API
 ```
 
-as a required architecture.
+or a provider-owned parallel Operations as Code model.
 
 ## 5. Package boundaries
 
@@ -115,15 +151,21 @@ riko-connect
 
 riko-mcp
     CapabilityInfo / CapabilityCatalog
-    OpenAPI/MCP projection and execution policy
+    discovery + OpenAPI/MCP projection + execution policy
+
+riko-ops
+    OperationSpec / OperationPlan
+    normalized import/provenance/lossiness
+    CompatibilityReport / deployment drift
 
 provider extras
     behavior not faithfully represented by generic REST/OpenAPI
+    provider-native automation import/export/deployment/inspection
 ```
 
-There is no public `ExecutionContext`. A provider-specific adapter is justified by
-distinctive pagination, streaming, mutation, state, auth, or operation semantics—not merely
-a brand name.
+There is no public `ExecutionContext`. A provider-specific adapter is justified by distinctive
+pagination, streaming, mutation, state, auth, operation, automation-asset, or deployment semantics —
+not merely a brand name.
 
 ## 6. Provider definition
 
@@ -286,7 +328,7 @@ Rules:
 * browser clients/contexts are declared resources;
 * live contexts are execution-owned and close on success, error, timeout, or cancellation;
 * concurrency is tightly bounded;
-* plan/events disclose browser fallback;
+* plans/events disclose browser fallback where relevant;
 * rendered-page parsing remains a downstream parser where practical.
 
 ## 14. Batched mutations
@@ -364,6 +406,7 @@ source position       where acquisition resumes
 response cache         acquisition optimization
 observation state      whether an entity changed
 artifact version       durable output identity
+operation deployment   where a derived automation lives
 ```
 
 ## 17. Webhook ingress
@@ -486,13 +529,16 @@ provider resource/action list
 cache status/invalidate
 rate-limit status
 queued-operation status
+automation-asset inventory where supported
+deployment inspection where supported
 ```
 
-They are diagnostics/control-plane capabilities, not user data records.
+They are diagnostics/control-plane capabilities, not user data records or a second Operations as
+Code service.
 
-## 21. Capability catalog projection
+## 21. Capability catalog projection and discovery
 
-`mcp.md` owns the common capability model and catalog.
+`mcp.md` owns the common capability model, discovery contract, and catalog.
 
 Provider resources/actions project into that model:
 
@@ -500,29 +546,72 @@ Provider resources/actions project into that model:
 ProviderSpec / ResourceSpec / ActionSpec
 -> CapabilityInfo / provider-specific CapabilitySpec
 -> CapabilityCatalog
--> CLI / MCP / docs / agent-oriented Pipelines
+-> CLI / MCP / docs / agent-oriented Pipelines / OperationPlan resolution
 ```
 
-Do not maintain a second provider-only catalog containing duplicate fields such as input
-schema, output shape, effects, boundedness, credential kind, or description.
+A provider adapter may **discover provider-native resources/actions** and project their facts, but it
+must not maintain a second provider-only capability catalog containing duplicate fields such as
+input schema, output shape, effects, boundedness, credential kind, or description.
 
 Provider-specific semantics that are not generic catalog fields remain on the provider
-spec and are referenced by capability identity.
+spec and are referenced by capability identity. Operations as Code resolves required target
+capabilities against the shared `CapabilityCatalog`; it does not ask providers to invent a parallel
+operation capability registry.
 
-## 22. PII and sensitive-resource metadata
+## 22. Operations as Code import/export and compatibility hooks
 
-Provider records may contain personal, financial, or administrative data.
-Provider-specific metadata may augment shared capability policy with hints such as:
+Provider integrations own target-specific mechanics needed to get operational knowledge into or out
+of proprietary platforms. The common normalized models remain in `operations-as-code.md`.
+
+A provider package may expose reusable services shaped around:
+
+```text
+discover operation assets
+acquire/export original source artifact
+map provider-native fields/actions to known semantic facts
+report provider-native target capabilities/constraints
+compile/export a normalized operation for that target
+deploy/update a derived target object
+inspect the deployed target object and its fingerprints/metadata
+```
+
+Examples of provider-native assets include scripts, workflow definitions, automation steps,
+policies, monitor/remediation rules, scheduled jobs, runbooks, and provider variables.
+
+Rules:
+
+* extraction preserves original source bytes/text and stable provider identity when available;
+* provider packages may report **mapping facts and constraints**, not a provider-local
+  `CompatibilityReport`;
+* `operations-as-code.md` owns normalization confidence/lossiness, `CompatibilityReport`, and the
+  decision that a mapping is exact/partial/manual/unsupported;
+* export/deployment never mutates the canonical `OperationSpec` to match a target silently;
+* generated target objects carry source revision/fingerprint metadata where the target permits it;
+* deployment inspection returns target identity/fingerprint facts that Operations as Code compares
+  for automation drift;
+* import/export/deploy actions project into the shared capability policy model when they are exposed
+  as executable capabilities;
+* raw credentials and provider session objects never enter imported artifacts or operation specs.
+
+A provider may support only import, only deployment, both, or neither. Missing support is an explicit
+compatibility fact, not an error in Core.
+
+## 23. PII and sensitive-resource metadata
+
+Provider records and imported operational artifacts may contain personal, financial,
+administrative, or secret-adjacent data. Provider-specific metadata may augment shared capability
+policy with hints such as:
 
 ```python
 sensitivity = "personal"
 fields = {"email": "pii", "phone": "pii"}
 ```
 
-These hints inform logging/redaction/artifact policy without changing ordinary record
-semantics. Raw PII should not be copied into diagnostics by default.
+These hints inform logging/redaction/artifact policy without changing ordinary record semantics.
+Raw PII, tokens, embedded passwords, or secret-bearing script values should not be copied into
+diagnostics, compatibility reports, or imported-operation metadata by default.
 
-## 23. Testing strategy
+## 24. Testing strategy
 
 Contract tests should cover:
 
@@ -546,9 +635,18 @@ Contract tests should cover:
 18. operation waiter respects timeout/cancellation and shared RetryPolicy;
 19. provider adapters do not create nested retry loops;
 20. provider projections use the common capability catalog;
-21. logs redact credentials and sensitive payload fields.
+21. provider operation-asset discovery preserves original artifact/provider identity;
+22. provider compatibility hooks return target facts without constructing a competing
+    `CompatibilityReport`;
+23. provider export/deployment records source revision/fingerprint when supported;
+24. deployment inspection distinguishes target identity/fingerprint from canonical operation
+    identity;
+25. imported/deployment diagnostics redact credentials and sensitive payload fields.
 
-## 24. Phases
+Cross-provider normalization and RMM-to-RMM compatibility tests belong to
+`operations-as-code.md`; this plan tests only the provider specialization.
+
+## 25. Phases
 
 ```text
 P0  ProviderSpec / ResourceSpec / ActionSpec
@@ -563,12 +661,15 @@ P8  verified webhook EventEnvelope
 P9  OperationHandle + wait_operation
 P10 provider diagnostics + capability projection
 P11 sensitivity/provenance metadata
+P12 operation-asset discovery/acquisition hook
+P13 target compatibility-facts + export/deployment/inspection hook
 ```
 
-## 25. Definition of done
+## 26. Definition of done
 
 1. A provider integration is an adapter/capability, not a mandatory proxy service.
-2. Raw credentials never enter provider specs or serialized workflows.
+2. Raw credentials never enter provider specs, serialized workflows, or imported operation
+   artifacts/metadata.
 3. Common resource operations share semantics without erasing provider differences.
 4. REST pagination/cursors, `FeedState`/`StateStore`, retry, and capability metadata reuse
    their authoritative contracts.
@@ -579,6 +680,10 @@ P11 sensitivity/provenance metadata
    common idempotency contract.
 9. Webhooks verify/authenticate before registered dispatch.
 10. Long-running actions use one `OperationHandle`/`wait_operation` contract.
-11. CLI, MCP, docs, and agent-oriented Pipelines discover provider operations through the
-    shared capability catalog rather than a second provider registry.
-12. Provider-specific dependencies remain outside core unless broadly justified.
+11. CLI, MCP, docs, agents, and Operations as Code discover provider operations through the shared
+    capability catalog rather than a second provider registry.
+12. Provider packages can expose import/export/deployment/inspection hooks without owning
+    `OperationSpec`, `OperationPlan`, `CompatibilityReport`, or automation-drift semantics.
+13. A provider-specific migration/deployment adapter reports semantic loss and unsupported target
+    facts rather than silently rewriting the canonical operation.
+14. Provider-specific dependencies remain outside core unless broadly justified.

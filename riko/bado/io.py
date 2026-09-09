@@ -35,6 +35,8 @@ from typing_extensions import TypeIs
 from riko._constants import ENCODING
 from riko._io import ext_from_content_type
 from riko.paths import get_abspath
+from riko.types._io import IOFileLike
+from riko.types._scalars import AnyStr
 
 from . import _backend
 from ._backend import open_file
@@ -84,7 +86,7 @@ def chunk(  # noqa: E704
     content: BytesIO, chunksize: int | None = None, *args: int, **kwargs: int
 ) -> Iterator[bytes]: ...
 def chunk(  # noqa: E302
-    content: str | bytes | BytesIO | StringIO,
+    content: AnyStr | IOFileLike,
     chunksize: int | None = None,
     *args: int,
     **kwargs: int,
@@ -126,8 +128,8 @@ def _chunk_content(  # noqa: E704
     content: bytes | BytesIO, chunksize: int | None = None
 ) -> Iterator[bytes]: ...
 def _chunk_content(  # noqa: E302
-    content: str | bytes | BytesIO | StringIO, chunksize: int | None = None
-) -> Iterator[str | bytes]:
+    content: AnyStr | IOFileLike, chunksize: int | None = None
+) -> Iterator[AnyStr]:
     """
     Splits content into whole ``str`` or ``bytes`` chunks for the write path.
 
@@ -162,9 +164,9 @@ def _chunk_content(  # noqa: E302
         yield from chunk(content, chunksize)
 
 
-def _coerce_chunk(raw: str | bytes, binary: bool, encoding: str) -> str | bytes:
+def _coerce_chunk(raw: AnyStr, binary: bool, encoding: str) -> AnyStr:
     if isinstance(raw, str):
-        result: str | bytes = raw.encode(encoding) if binary else raw
+        result: AnyStr = raw.encode(encoding) if binary else raw
     else:
         result = raw if binary else raw.decode(encoding)
 
@@ -365,7 +367,7 @@ async def async_url_read(
 
 async def async_write(
     filepath: str | Path,
-    content: str | bytes | BytesIO | StringIO,
+    content: AnyStr | IOFileLike,
     mode: str = "wb+",
     encoding: str = ENCODING,
     chunksize: int | None = None,

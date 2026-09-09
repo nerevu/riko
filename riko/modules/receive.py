@@ -35,7 +35,7 @@ Attributes:
 
 """
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from inspect import signature
 from logging import Logger
 from time import sleep
@@ -80,11 +80,18 @@ def register_receiver(
     name: str,
     maxlen: int | None = None,
     func: ReceiveFunc | None = None,
-    **kwargs: object,
+    *,
+    on_receive: Callable[[Item], object] | None = None,
+    on_complete: Callable[[], object] | None = None,
+    func_kwargs: Mapping[str, object] | None = None,
 ) -> None:
     # See https://github.com/ICRAR/ijson#push-interfaces
+    if func is not None and on_receive is not None:
+        msg = "the 'receive' pipe accepts either 'func' or 'on_receive', not both"
+        raise TypeError(msg)
+
     if name not in sync_hub.receivers:
-        fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
+        fkwargs = dfilter(func_kwargs or {}, ["conf", "assign", "stream"])
 
         @coroutine(registry_name=name, maxlen=maxlen)
         def receiver() -> Receiver:
@@ -92,12 +99,20 @@ def register_receiver(
                 item = yield
 
                 if item is not None:
+                    state, result = None, MISSING
+
                     if is_stateful_item(item):
                         state = item["state"]
-                        result = MISSING
+
+                        if state is StreamState.DONE and on_complete is not None:
+                            on_complete()
                     else:
-                        state = None
                         item = cast(Item, item)
+
+                        if on_receive is not None:
+                            on_receive(item)
+                            continue
+
                         result = _apply(func, item, **fkwargs) if func else item
 
                     queue = sync_hub.queues[name]
@@ -196,7 +211,7 @@ def parser(
     wait = objconf.wait
     max_wait = objconf.max_wait
     total_waited = 0
-    register_receiver(name, maxlen=objconf.max_len, func=func, **kwargs)
+    register_receiver(name, maxlen=objconf.max_len, func=func, func_kwargs=kwargs)
 
     while True:
         if _buf := sync_hub.queues[name]:

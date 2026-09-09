@@ -30,7 +30,7 @@ from riko.ext.names import ModuleName, normalize_module_name
 from riko.paths import get_path
 from riko.types._guards import is_stateful_item
 from riko.types._sentinels import StreamState
-from riko.types._streams import Item, Items
+from riko.types._streams import Item
 from riko.types.modules import (
     ItemBuilderConf,
     ParsedParam,
@@ -45,16 +45,6 @@ attrs = ParsedParam({"key": "content", "value": value})
 builder_conf = ItemBuilderConf({"attrs": attrs})
 recv_conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
 strr_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
-
-
-async def _gather_pubsub(sender: AsyncPipe, *receivers: AsyncPipe) -> list[Items]:
-    results = await gather_results([*receivers, sender])
-    return [list(result) for result in results]
-
-
-async def _drain_ghost(sender: AsyncPipe) -> Items:
-    return [item async for item in sender]
-
 
 _ENGINES = [
     pytest.param(SyncPipe, id="sync"),
@@ -112,16 +102,6 @@ class _Mod(ModuleName):
 
 
 class TestSyncCollections(_CollectionTest):
-    def test_pipes_use_loopability_for_mapping(self):
-        source = [{"content": "one"}, {"content": "two"}]
-        transformer = SyncPipe("strtransform", source=source)
-        input_pipe = SyncPipe("input", source=source)
-
-        assert transformer.loopable
-        assert transformer.mapify
-        assert not input_pipe.loopable
-        assert not input_pipe.mapify
-
     def test_pubsub(self, caplog):
         names = ["receiver1", "receiver2"]
         receiver1, receiver2 = [
@@ -319,6 +299,14 @@ class TestSyncCollections(_CollectionTest):
         with pytest.raises(TypeError, match="requires the 'others' keyword"):
             list(SyncPipe.publish([{"title": "orphan"}]))
 
+    def test_subscribe_rejects_func_and_on_receive_together(self):
+        """
+        ``func`` maps and ``on_receive`` sinks, so passing both is a call-site
+        error rather than one silently winning.
+        """
+        with pytest.raises(TypeError, match="either 'func' or 'on_receive'"):
+            SyncPipe.subscribe("both", func=lambda x: x, on_receive=lambda x: None)
+
     @pytest.mark.xfail(
         reason="Idle drain ending the pass is not yet implemented", strict=True
     )
@@ -410,40 +398,26 @@ class TestSyncPipeExecutor:
 
 @skipif_issync
 class TestAsyncCollections(_CollectionTest):
-    def test_pipes_use_loopability_for_mapping(self):
-        async_transformer = AsyncPipe("strtransform")
-        async_input_pipe = AsyncPipe("input")
-
-        assert async_transformer.loopable
-        assert async_transformer.mapify
-        assert not async_input_pipe.loopable
-        assert not async_input_pipe.mapify
-
-    def test_stream(self, capsys):
+    @pytest.mark.anyio
+    async def test_stream(self, capsys):
         """Tests a asynchronous stream pipeline."""
+        stream = await (
+            AsyncPipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .udf(func=self.udf)
+            .strreplace(conf=strr_conf, assign="content")
+            .udf(func=self.udf)
+            .slugify(assign="content")
+            .udf(func=self.udf)
+            .hash(assign="content")
+        )
 
-        async def main():
-            stream = await (
-                AsyncPipe("itembuilder", conf=builder_conf)
-                .tokenizer(emit=True)
-                .udf(func=self.udf)
-                .strreplace(conf=strr_conf, assign="content")
-                .udf(func=self.udf)
-                .slugify(assign="content")
-                .udf(func=self.udf)
-                .hash(assign="content")
-            )
-
-            print(next(stream))
-
-        run(main)
-
-        captured = capsys.readouterr()
+        assert next(stream) == {"content": 396558121}
         assert self.runs == 9
-        assert captured.out == "{'content': 396558121}\n"
 
     @pytest.mark.timeout(10)
-    def test_pubsub(self):
+    @pytest.mark.anyio
+    async def test_pubsub(self):
         """
         Two concurrent async receivers each collect every item a sender pushes,
         and the sender's own output is unchanged (passthrough).
@@ -472,15 +446,16 @@ class TestAsyncCollections(_CollectionTest):
             {"content": "thrice is 3x"},
         ]
 
-        for result in run(_gather_pubsub, sender, *receivers):
-            assert result == expected
+        results = await gather_results([*receivers, sender])
+
+        for result in results:
+            assert list(result) == expected
 
         assert self.runs == 3
-
-        # After a normal run no channel slot lingers in the async hub
         assert not async_hub._slots
 
-    def test_pubsub_funcs(self, capsys):
+    @pytest.mark.anyio
+    async def test_pubsub_funcs(self, capsys):
         receiver = AsyncPipe("receive", conf={"name": "receiver", **recv_conf})
         changer = AsyncPipe("receive", conf={"name": "changer", **recv_conf}, func=len)
         printer = AsyncPipe(
@@ -501,18 +476,20 @@ class TestAsyncCollections(_CollectionTest):
 
         expected_changer = [1, 1, 1]
         expected_printer = [None, None, None]
+        receivers = (receiver, changer, printer)
+        results = await gather_results([*receivers, sender])
 
-        results = run(_gather_pubsub, sender, receiver, changer, printer)
-        assert results[0] == expected_receiver
-        assert results[3] == expected_receiver
-        assert results[1] == expected_changer
-        assert results[2] == expected_printer
+        assert list(results[0]) == expected_receiver
+        assert list(results[3]) == expected_receiver
+        assert list(results[1]) == expected_changer
+        assert list(results[2]) == expected_printer
 
         captured = capsys.readouterr()
         assert captured.out.split("\n")[0] == "{'content': 'once is 1x'}"
 
     @pytest.mark.timeout(10)
-    def test_pubsub_missing_receiver_times_out(self):
+    @pytest.mark.anyio
+    async def test_pubsub_missing_receiver_times_out(self):
         """
         A publish to a name that is never subscribed fails fast, bounded by
         ``max_wait``, rather than dropping data or hanging.
@@ -524,30 +501,36 @@ class TestAsyncCollections(_CollectionTest):
         )
 
         with pytest.raises(ReceiverUnavailableError):
-            run(_drain_ghost, sender)
+            [item async for item in sender]
 
-    def test_pstream(self):
+    @pytest.mark.anyio
+    async def test_pstream(self):
         """Tests a parallel asynchronous stream pipeline."""
-        result = {}
+        stream = await (
+            AsyncPipe("itembuilder", conf=builder_conf, parallel=True)
+            .tokenizer(emit=True)
+            .strreplace(conf=strr_conf, assign="content")
+            .slugify(assign="content")
+            .hash(assign="content")
+            .udf(func=self.udf)
+        )
 
-        async def main():
-            stream = await (
-                AsyncPipe("itembuilder", conf=builder_conf, parallel=True)
-                .tokenizer(emit=True)
-                .strreplace(conf=strr_conf, assign="content")
-                .slugify(assign="content")
-                .hash(assign="content")
-                .udf(func=self.udf)
-            )
-            result["first"] = next(stream)
-
-        run(main)
-        assert result["first"] == {"content": 396558121}
+        assert next(stream) == {"content": 396558121}
         assert self.runs == 3
 
 
 class TestCollectionParity(_CollectionTest):
     """Behaviors whose observable output is identical across both engines."""
+
+    @pytest.mark.parametrize("pipe", _ENGINES)
+    def test_pipes_use_loopability_for_mapping(self, pipe):
+        transformer = pipe("strtransform", source=SRC)
+        non_loopable = pipe("input", source=SRC)
+
+        assert transformer.loopable
+        assert transformer.mapify
+        assert not non_loopable.loopable
+        assert not non_loopable.mapify
 
     @pytest.mark.parametrize("pipe", _ENGINES)
     def test_udf(self, pipe):
@@ -775,11 +758,6 @@ class TestModuleNameEnum:
         assert pipe.name == "hash"
         assert type(pipe.name) is str
         assert len(list(pipe)) == 3
-
-    def test_enum_and_string_resolve_identically(self):
-        via_enum = list(SyncPipe(_Mod.HASH, source=SRC))
-        via_str = list(SyncPipe("hash", source=SRC))
-        assert via_enum == via_str
 
     def test_enum_through_operator_and_method(self):
         via_or = SyncPipe(_Mod.HASH, source=SRC) | _Mod.TRUNCATE

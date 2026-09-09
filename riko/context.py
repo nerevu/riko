@@ -18,9 +18,13 @@ Examples:
 
 """
 
+from collections.abc import Mapping
 from copy import copy
 from enum import StrEnum
+from types import MappingProxyType
+from typing import Any
 
+from riko.resources import Resource
 from riko.types._collections import Inputs
 
 
@@ -43,6 +47,8 @@ class Context:
         test: Whether to use defaults instead of prompting.
         inputs: Values that override input defaults.
         submodule: Whether inputs come from a parent pipeline.
+        resources: The immutable resource definitions, keyed by name; populated
+            only via ``with_resource``.
 
     """
 
@@ -60,6 +66,32 @@ class Context:
         self.test: bool = bool(test)
         self.inputs: Inputs = inputs or {}
         self.submodule: bool = bool(submodule)
+        self.resources: Mapping[str, Resource[Any, Any]] = MappingProxyType({})
+
+    def with_resource(self, name: str, resource: Resource[Any, Any]) -> "Context":
+        """
+        Binds ``resource`` to ``name`` in a new copy of this Context.
+
+        Args:
+            name: The Context name the resource is bound to.
+            resource: The resource definition to add.
+
+        Returns:
+            A new Context; the original is left unchanged.
+
+        """
+        merged = {**self.resources, name: resource}
+        new_context = copy(self)
+        new_context.resources = MappingProxyType(merged)
+        return new_context
+
+    def __getstate__(self) -> dict[str, object]:
+        return {**self.__dict__, "resources": dict(self.resources)}
+
+    def __setstate__(self, state: dict[str, object]) -> None:
+        raw = state.get("resources")
+        resources = raw if isinstance(raw, Mapping) else {}
+        self.__dict__.update({**state, "resources": MappingProxyType(dict(resources))})
 
     @property
     def describe_input(self) -> bool:
@@ -87,7 +119,7 @@ def parse_context(
     **kwargs: bool | None,
 ) -> "Context":
     """
-    Returns a Context with its own inputs withoout mutating the caller's.
+    Copies or builds a Context with independent inputs, never mutating the caller's.
 
     Copies a supplied ``context`` (or builds a fresh one) so a shared Context is
     safe to reuse, then substitutes ``inputs`` when given.

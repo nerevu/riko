@@ -12,7 +12,7 @@ import pygogo as gogo
 from riko._io import Fetch, auto_close
 from riko.bado.io import async_url_open
 from riko.parsers import LinkParser
-from riko.types._io import StringFileTypes
+from riko.types._io import StringFileLike
 from riko.types._streams import Stream
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ class RSSLinkParser(LinkParser):
         super().__init__(rss_only=True, link_type=link_type, **kwargs)
 
 
-def file2entries(f: StringFileTypes | Iterator[str], parser: RSSLinkParser) -> Stream:
+def file2entries(f: StringFileLike | Iterator[str], parser: RSSLinkParser) -> Stream:
     for line in f:
         parser.feed(line)
         for entry in parser.entry:
@@ -104,7 +104,7 @@ def get_rss(
     except ValueError:
         entries = file2entries(filter(None, url.splitlines()), parser)
     else:
-        stream = file2entries(cast(StringFileTypes, f), parser)
+        stream = file2entries(cast(StringFileLike, f), parser)
         entries = auto_close(stream, f)
 
     if auto_sort:

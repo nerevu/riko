@@ -3,7 +3,6 @@
 Provides date and time helpers
 """
 
-from calendar import timegm
 from collections.abc import Callable
 from datetime import UTC, date, timedelta, tzinfo
 from datetime import datetime as dt
@@ -89,7 +88,8 @@ def tt_to_datedict(  # noqa: E302
         isdst = None if tt[8] == -1 else bool(tt[8])
         _tzinfo = tzinfo_from_tt(tt, def_tzinfo=def_tzinfo)
         tm_zone = _tzinfo.tzname(None) if _tzinfo else None
-        result = {"utime": timegm(tt), "timezone": tm_zone, "date": normal}
+        aware = dt(*tt[:5], min(tt[5], 59), tzinfo=_tzinfo or UTC)
+        result = {"utime": int(aware.timestamp()), "timezone": tm_zone, "date": normal}
         result.update(zip(TT_KEYS, tt, strict=False))  # pylint: disable=W1637
         result.update({"day_of_week": day_of_w, "daylight_savings": isdst})
     else:

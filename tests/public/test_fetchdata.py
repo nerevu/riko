@@ -9,12 +9,13 @@ is threaded through ``async_url_open`` onto ``NamedTextIOWrapper.ext``.
 """
 
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
-from riko.bado._backend import run
 from riko.bado.io import async_url_open
 from riko.modules.fetchdata import async_pipe
+from riko.types._streams import Item
 from tests import skipif_issync
 
 URL = "https://example.test/data"
@@ -22,21 +23,16 @@ JSON = b'{"items": [{"title": "A"}, {"title": "B"}]}'
 XML = b"<root><items><title>A</title></items><items><title>B</title></items></root>"
 
 
-def _fake_get(content, content_type):
-    async def _get(url, **kwargs):
+def _async_get(content, content_type):
+    async def async_get(url, **_):
         return SimpleNamespace(content=content, headers={"content-type": content_type})
 
-    return _get
+    return async_get
 
 
-def _titles(conf):
-    captured = []
-
-    async def main():
-        captured.extend(await async_pipe(conf=conf))
-
-    run(main)
-    return [item["title"] for item in captured]
+async def _titles(conf):
+    items = await async_pipe(conf=conf)
+    return [cast(Item, item).get("title") for item in items]
 
 
 @skipif_issync
@@ -51,30 +47,41 @@ class TestExtensionlessAsyncUrlOpen:
             ("text/html", "html"),
         ],
     )
-    def test_ext_from_content_type(self, monkeypatch, content_type, expected):
-        monkeypatch.setattr("riko.bado.io.async_get", _fake_get(b"{}", content_type))
-        captured = {}
-
-        async def main():
-            f = await async_url_open(URL)
-            captured["ext"] = f.ext
-            captured["content_type"] = f.content_type
-
-        run(main)
-        assert captured["ext"] == expected
-        assert captured["content_type"] == content_type
+    @pytest.mark.anyio
+    async def test_ext_from_content_type(self, monkeypatch, content_type, expected):
+        monkeypatch.setattr("riko.bado.io.async_get", _async_get(b"{}", content_type))
+        f = await async_url_open(URL)
+        assert f.ext == expected
+        assert f.content_type == content_type
 
 
 @skipif_issync
 class TestExtensionlessFetchdata:
     """``fetchdata`` infers the parser for an extensionless HTTP URL."""
 
-    def test_json(self, monkeypatch):
-        monkeypatch.setattr(
-            "riko.bado.io.async_get", _fake_get(JSON, "application/json")
-        )
-        assert _titles({"url": URL, "path": "items"}) == ["A", "B"]
+    @pytest.mark.parametrize(
+        ("content", "content_type"), [(JSON, "application/json"), (XML, "text/xml")]
+    )
+    @pytest.mark.anyio
+    async def test_file_contents(self, monkeypatch, content, content_type):
+        monkeypatch.setattr("riko.bado.io.async_get", _async_get(content, content_type))
+        result = await _titles({"url": URL, "path": "items"})
+        assert result == ["A", "B"]
 
-    def test_xml(self, monkeypatch):
-        monkeypatch.setattr("riko.bado.io.async_get", _fake_get(XML, "text/xml"))
-        assert _titles({"url": URL, "path": "items"}) == ["A", "B"]
+    @pytest.mark.xfail(
+        strict=True,
+        reason="splitext keeps the query string in the extension ('json?token=abc'), "
+        "so the JSON parser is never selected ",
+    )
+    @pytest.mark.anyio
+    async def test_query_string_does_not_defeat_extension(self, monkeypatch):
+        """
+        A URL carrying both an extension and a query string must still detect
+        its format from the extension alone.
+        """
+        monkeypatch.setattr(
+            "riko.bado.io.async_get", _async_get(JSON, "application/json")
+        )
+        url = "https://example.test/export.json?token=abc"
+        result = await _titles({"url": url, "path": "items"})
+        assert result == ["A", "B"]

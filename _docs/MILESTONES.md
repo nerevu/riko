@@ -179,9 +179,11 @@ Its high-level order is:
 ```text
 R0  characterization + internal type-name cleanup
 R1  stable errors
-R2  canonical identity/freezing
-R3  immutable Context + Resource definitions
+R2A canonical value encoding
+R2B semantic identity + explicit version contract
+R3  immutable Context + Resource definitions (context-manager lifecycle)
 R4  public Pipeline + private SyncExecution/AsyncExecution
+    (task group + exit stack + portal/worker bridge established here)
 R5  FeedResult / Metadata / private per-item provenance
 R6  StateStore / checkpoint / CAS / StateStoreCapabilities / idempotency
 R7  execution-owned pub/sub + streaming split
@@ -194,6 +196,10 @@ R12 external extension proof + release gate
 
 This R-sequence is intentionally not a renumbering of P8–P14; it captures cross-cutting foundations
 that were discovered during reconciliation.
+
+Note the namespace collision: `correctness-audit.md`, `rdp-connect.md`, and `rest-incremental.md`
+each use their own `R<n>` labels for unrelated things. A bare "R2" is ambiguous across documents;
+always qualify it (implementation-sequence R2A, correctness-audit R2).
 
 ---
 
@@ -217,20 +223,23 @@ Semantic owners:
 | `riko/pipeline.py` NEW | public immutable `Pipeline[T]` definition/DAG; `iter` -> private sync execution, `aiter` -> private async execution |
 | `riko/_execution/__init__.py` NEW | private execution package |
 | `riko/_execution/base.py` NEW | shared execution scaffolding/options/plan state |
+| `riko/_execution/lifetime.py` NEW | the three execution lifetime primitives: task group, exit stack, portal/worker bridge. Every later feature borrows these rather than creating its own |
 | `riko/_execution/sync.py` NEW | `SyncExecution`, portal/resource ownership, deterministic teardown |
-| `riko/_execution/async_.py` NEW | `AsyncExecution`, native async, bounded concurrency |
+| `riko/_execution/async_.py` NEW | `AsyncExecution`, native async, bounded concurrency, structured task-group ownership |
 | `riko/_execution/adapters.py` NEW | private sync<->async adaptation; native implementation wins |
 | `riko/_execution/streams.py` NEW | one source-normalization boundary |
 | `riko/_execution/plan.py` NEW | resolved DAG/steps and execution preparation |
 | `riko/context.py` MOD | immutable Context definitions, Context-local modules/resources, first-class state-store capability |
-| `riko/resources.py` NEW/MOD | `Resource`, factories, lifecycle/dependency declarations |
+| `riko/resources.py` NEW/MOD | `Resource`, factories, dependency declarations; context-manager/generator lifecycle with `from_external()` for caller-owned objects |
 | `riko/types/general.py` MOD | current internal callable alias `Pipeline` -> `PipeCallable` before public class lands |
 | `riko/collections.py` MOD/RETIRE | migrate reusable mechanics into `_execution`; legacy public classes are not the target surface |
 | `riko/modules/_decorators.py` MOD | Feed-native async parser forms and prepared `resources` argument |
 | `riko/ext/{registry,_resolver}.py` MOD | execution-mode/native-wins resolution over retained P8 definitions |
 | `riko/api.py` / `riko/__init__.py` MOD | export final public Pipeline/Context/state/pubsub surface deliberately |
 
-### Configuration correctness / R2
+### Configuration correctness / correctness-audit R2
+
+(That is the audit register's R2, not implementation-sequence R2A/R2B.)
 
 The current `PyPipe.__call__` can erase constructor options when omitted call-time kwargs are written
 as `None`, and object attributes can disagree with the kwargs actually executed.

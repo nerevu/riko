@@ -21,13 +21,71 @@ from riko.modules._inference import (
     gen_return_inferences,
     infer_from_source,
 )
+from riko.types._sentinels import MISSING
 from riko.types.modules import InferenceSource, OperatorReturnKind
 
 STREAM = OperatorReturnKind.STREAM
 NONSTREAM = OperatorReturnKind.NONSTREAM
 UNKNOWN = OperatorReturnKind.UNKNOWN
+GENERATOR = InferenceSource.GENERATOR
+ANNOTATION = InferenceSource.ANNOTATION
+AST = InferenceSource.AST
 
 type _AliasStream = Iterator[int]
+
+
+def _broad(items) -> Any:
+    return items
+
+
+def _ambiguous(items):
+    return build_result(items)  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
+
+
+def _gen_sync(items):
+    yield from items
+
+
+async def _gen_async(items):
+    for item in items:
+        yield item
+
+
+def _ann_iterator(items) -> Iterator[int]:
+    return iter(items)
+
+
+def _ann_value(items) -> int:
+    return len(items)
+
+
+def _ann_wrapper(items) -> Annotated[Iterator[int], "meta"]:
+    return iter(items)
+
+
+def _alias(items) -> _AliasStream:
+    return iter(items)
+
+
+def _builtin_stream(items):
+    return map(str, items)
+
+
+def _builtin_nonstream(items):
+    return list(items)
+
+
+def _itertools_stream(items):
+    return itertools.chain(items)
+
+
+async def _passthrough(items):
+    result = await asyncio.to_thread(map, str, items)
+    return result
+
+
+def _unresolvable(items) -> "Nonexistent":  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
+    return sum(items)
 
 
 def only(pipe):
@@ -38,39 +96,48 @@ def kinds(pipe):
     return [inference.kind for inference in gen_return_inferences(pipe)]
 
 
-def test_sync_generator():
-    def pipe(items):
-        yield from items
-
+@pytest.mark.parametrize(
+    ("pipe", "kind", "source"),
+    [
+        pytest.param(_gen_sync, STREAM, GENERATOR, id="sync-generator"),
+        pytest.param(_gen_async, STREAM, GENERATOR, id="async-generator"),
+        pytest.param(_ann_iterator, STREAM, ANNOTATION, id="annotated-iterator"),
+        pytest.param(_builtin_nonstream, NONSTREAM, AST, id="builtin-nonstream"),
+        pytest.param(_unresolvable, NONSTREAM, AST, id="unresolvable-annotation"),
+        pytest.param(_ann_value, NONSTREAM, MISSING, id="annotated-value"),
+        pytest.param(_ann_wrapper, STREAM, MISSING, id="annotated-wrapper"),
+        pytest.param(_alias, STREAM, MISSING, id="type-alias"),
+        pytest.param(_builtin_stream, STREAM, MISSING, id="builtin-stream"),
+        pytest.param(_itertools_stream, STREAM, MISSING, id="itertools-stream"),
+        pytest.param(_passthrough, STREAM, MISSING, id="passthrough-wrapper"),
+    ],
+)
+def test_classification(pipe, kind, source):
     inference = only(pipe)
-    assert inference.kind is STREAM
-    assert inference.source is InferenceSource.GENERATOR
+    assert inference.kind is kind
+
+    if source is not MISSING:
+        assert inference.source is source
 
 
-def test_async_generator():
-    async def pipe(items):
-        for item in items:
-            yield item
-
+@pytest.mark.parametrize(
+    ("pipe", "reasons"),
+    [
+        pytest.param(_broad, ("too broad",), id="broad-annotation"),
+        pytest.param(len, ("return annotation",), id="unavailable-source"),
+        pytest.param(
+            _ambiguous, ("build_result", "return annotation"), id="ambiguous-call"
+        ),
+    ],
+)
+def test_unknown_with_reason(pipe, reasons):
     inference = only(pipe)
-    assert inference.kind is STREAM
-    assert inference.source is InferenceSource.GENERATOR
+    assert inference.kind is UNKNOWN
+    assert inference.source is None
+    assert inference.reason is not None
 
-
-def test_annotated_iterator():
-    def pipe(items) -> Iterator[int]:
-        return iter(items)
-
-    inference = only(pipe)
-    assert inference.kind is STREAM
-    assert inference.source is InferenceSource.ANNOTATION
-
-
-def test_annotated_value():
-    def pipe(items) -> int:
-        return len(items)
-
-    assert only(pipe).kind is NONSTREAM
+    for reason in reasons:
+        assert reason in inference.reason
 
 
 def test_annotated_union():
@@ -78,81 +145,6 @@ def test_annotated_union():
         return iter(items)
 
     assert set(kinds(pipe)) == {STREAM, NONSTREAM}
-
-
-def test_annotated_wrapper():
-    def pipe(items) -> Annotated[Iterator[int], "meta"]:
-        return iter(items)
-
-    assert only(pipe).kind is STREAM
-
-
-def test_type_alias():
-    def pipe(items) -> _AliasStream:
-        return iter(items)
-
-    assert only(pipe).kind is STREAM
-
-
-def test_broad_annotation_is_unknown_with_reason():
-    def pipe(items) -> Any:
-        return items
-
-    inference = only(pipe)
-    assert inference.kind is UNKNOWN
-    assert inference.source is None
-    assert inference.reason is not None
-    assert "too broad" in inference.reason
-
-
-def test_builtin_nonstream():
-    def pipe(items):
-        return list(items)
-
-    inference = only(pipe)
-    assert inference.kind is NONSTREAM
-    assert inference.source is InferenceSource.AST
-
-
-def test_builtin_stream():
-    def pipe(items):
-        return map(str, items)
-
-    assert only(pipe).kind is STREAM
-
-
-def test_itertools_stream():
-    def pipe(items):
-        return itertools.chain(items)
-
-    assert only(pipe).kind is STREAM
-
-
-def test_passthrough_wrapper():
-    async def pipe(items):
-        result = await asyncio.to_thread(map, str, items)
-        return result
-
-    assert only(pipe).kind is STREAM
-
-
-def test_unavailable_source_is_unknown_with_hint():
-    inference = only(len)
-    assert inference.kind is UNKNOWN
-    assert inference.source is None
-    assert inference.reason is not None
-    assert "return annotation" in inference.reason
-
-
-def test_ambiguous_call_is_unknown_with_hint():
-    def pipe(items):
-        return build_result(items)  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
-
-    inference = only(pipe)
-    assert inference.kind is UNKNOWN
-    assert inference.source is None
-    assert "build_result" in inference.reason
-    assert "return annotation" in inference.reason
 
 
 def test_nested_decorator_with_wraps():
@@ -170,15 +162,6 @@ def test_nested_decorator_with_wraps():
     assert only(pipe).kind is NONSTREAM
 
 
-def test_unresolvable_annotation_falls_back_to_ast():
-    def pipe(items) -> "Nonexistent":  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
-        return sum(items)
-
-    inference = only(pipe)
-    assert inference.kind is NONSTREAM
-    assert inference.source is InferenceSource.AST
-
-
 def test_gen_operator_return_kinds_yields_bare_kinds():
     def pipe(items) -> Iterator[int] | int:
         return iter(items)
@@ -192,7 +175,7 @@ def test_infer_from_source_direct():
 
     inference = infer_from_source(pipe)
     assert inference.kind is NONSTREAM
-    assert inference.source is InferenceSource.AST
+    assert inference.source is AST
 
 
 @pytest.mark.parametrize(

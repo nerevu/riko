@@ -191,6 +191,45 @@ not treated as secret.
 Directory reads require an explicit glob, recursive flag, and maximum object count.
 Remote object metadata should be available without forcing content materialization.
 
+### 6.1 Sink verb vocabulary
+
+Writes use two collection verbs on a shared destination model. `write(dest, format=, mode=)` is a
+passthrough emit (fire-and-forget copy, non-keyed `append`/`replace`, returns the stream);
+`sink(dest, mode=, keys=, idempotency_key=)` is the terminal reconciler (keyed/destructive modes,
+returns a `SinkResult`/`Plan`). A destination resolves like a pipe module — bare name / `Sinks`
+enum / typed target object — with a path-signalled string defaulting to `File`. The write-mode
+contract (`SinkMode`, `SinkWrite`, `sink_write`) lives in `riko/sinks.py`; `output` is a compiler
+DAG terminal, not a sink. Full decision record: `monthly-dashboard.md` §5.
+
+### 6.2 File write serialization and reconciliation
+
+`Shipped:` `riko/targets.py` — the `File` target, capability-aware `build_write`, and the
+`file_writer` used by the `write` verb. `write` desugars to `subscribe(on_receive=…)` (riko has no
+"taps"): a **streamable** format (`csv`/`jsonl`, `STREAMABLE_FORMATS`, overridable via
+`write(stream=…)`) is written per item as it flows; any other format buffers and writes **one
+document** when the publisher completes — full consumption or a graceful `close()`/context-manager
+exit — while an abrupt `terminate()` discards the partial buffer. `sink` (terminal, sync + async)
+resolves the target, validates the mode against its capabilities, and delivers.
+
+`Current gap:`
+- **(C) Incremental framing for buffered document formats** — emit the open/separator/close frame
+  per format (`[ … ]` for json, a `FeatureCollection` wrapper for geojson, header/footer for
+  ofx/qif) so those formats also stream without holding the whole buffer, closing the frame on
+  completion/graceful close. This is hand-rolled framing over the per-item encoder, **not** an
+  `ijson` job — `ijson` is a streaming *parser*, not a serializer.
+- **Keyed file reconciliation** — `merge`/`replace`/`delete` against an existing file destination
+  needs to read the current document to diff incoming records against it. Stream that read with
+  `ijson` (the `perf` extra, already used for large-JSON ingest in `riko/parsers.py`) so a large
+  destination is reconciled without full materialization. File targets today expose only the
+  non-keyed `append`/`replace`; keyed modes stay a record-store (`build_write` `serializes=False`)
+  concern until this lands.
+- **Async `write`** — the `on_receive` writer over `async_hub`; `AsyncPipe/AsyncCollection.write`
+  raise `NotImplementedError` until then. `sink` is already async.
+
+`Dependencies:` the mode contract (`riko/sinks.py`) and target adapters (`riko/targets.py`) are in
+place; keyed reconciliation also depends on the plan/apply gate (`monthly-dashboard.md` §8) for the
+destructive modes.
+
 ## 7. Mail connectors
 
 ```text

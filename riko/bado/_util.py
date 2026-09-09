@@ -14,6 +14,8 @@ from functools import partial
 from inspect import isawaitable
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
+from riko.types._sentinels import MISSING
+
 try:
     import anyio
     import httpx
@@ -68,11 +70,12 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
     """
     Runs ``awaitables`` concurrently, returning results in submission order.
 
-    ``None`` results are dropped.
+    A legitimate ``None`` result is preserved (the unfilled slot is marked with
+    ``MISSING``, not ``None``), so the output aligns with the inputs.
 
     """
     aws = list(awaitables)
-    results: list[T | None] = [None] * len(aws)
+    results: list[Any] = [MISSING] * len(aws)
 
     async def collect(index: int, awaitable: Awaitable[T]) -> None:
         results[index] = await awaitable
@@ -81,7 +84,7 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
         for index, awaitable in enumerate(aws):
             tg.start_soon(collect, index, awaitable)
 
-    return [r for r in results if r is not None]
+    return [r for r in results if r is not MISSING]
 
 
 async def maybe_deferred[T](func: Callable[..., T], *args: Any, **kwargs: object) -> T:

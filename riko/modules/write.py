@@ -36,7 +36,6 @@ Attributes:
 
 """
 
-from io import BytesIO, StringIO
 from logging import Logger
 from pathlib import Path
 from typing import Any
@@ -46,8 +45,10 @@ from meza import io
 
 from riko.bado.io import async_write
 from riko.types._configs import WriteObjconf
+from riko.types._io import IOFileLikeType
 from riko.types._names import TargetLike
 from riko.types._options import Defaults, Opts
+from riko.types._scalars import AnyStrType
 from riko.types._streams import Stream
 from riko.types._wrappers import PipeTuples
 
@@ -141,7 +142,7 @@ async def async_parser(
         logger.warning(f"The target {target} is not a known converter")
     elif (content := convert([dict(item) for item in items])) is None:
         logger.warning(f"The {target} converter produced no content")
-    elif not isinstance(content, str | bytes | BytesIO | StringIO):
+    elif not isinstance(content, (AnyStrType, IOFileLikeType)):
         logger.warning(f"The {target} converter produced unwritable content")
     else:
         await async_write(objconf.url, content, mode=objconf.mode)
@@ -197,7 +198,7 @@ def parser(
         logger.warning(f"The target {target} is not a known converter")
     elif (content := convert([dict(item) for item in items])) is None:
         logger.warning(f"The {target} converter produced no content")
-    elif not isinstance(content, str | bytes | BytesIO | StringIO):
+    elif not isinstance(content, (AnyStrType, IOFileLikeType)):
         logger.warning(f"The {target} converter produced unwritable content")
     else:
         io.write(objconf.url, content, mode=objconf.mode)

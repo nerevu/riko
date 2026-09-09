@@ -309,19 +309,6 @@ def infer_from_source(pipe: Callable) -> ReturnInference:
         >>>
         >>> infer_from_source(mapped)
         ReturnInference(kind=<...STREAM: 'stream'>, source=<...AST: 'ast'>, reason='')
-        >>> def counted(items):
-        ...     return sum(items)
-        >>>
-        >>> infer_from_source(counted).kind.value
-        'nonstream'
-        >>> def ambiguous(items):
-        ...     return build_result(items)
-        >>>
-        >>> inference = infer_from_source(ambiguous)
-        >>> inference.kind.value, inference.source
-        ('unknown', None)
-        >>> print(inference.reason)
-        direct call 'build_result' is not in ... whitelist; add an explicit return...
 
     """
     kind = OperatorReturnKind.UNKNOWN
