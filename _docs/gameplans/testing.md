@@ -91,10 +91,14 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | the same bytes decode identically across sync HTTP, async HTTP and async local file | functional | R15 |
 | ~~`has_header=False` closes the original source as well as the spool~~ — **landed** as `tests/internal/test_io.py::test_csv_headerless_closes_original_source` (spies the original's `close`, cross-version); fix predated this via the variadic `auto_close` (correctness-audit R16) | internal | R16 |
 
-Two rows want **characterization** tests rather than regressions, because the current
-behaviour may be intended: `filter`'s lexicographic `greater`/`less` (R19) and
-`convert_dag` on an empty module list (R17, not reproduced). Their docstrings must say
-they should be *updated, not deleted*, when the decision is made.
+Both open-question rows are now resolved. R19 (`filter`'s `greater`/`less` over strings) was
+**decided** in favour of type-aware comparison — numeric when both operands coerce to a number,
+else lexicographic — so its characterization test was *updated, not deleted*, into a regression.
+R17 (`convert_dag` on an empty module list, not reproduced) landed as a **strict-xfail tripwire** —
+the divergent empty-input handling (full-def `IndexError` vs DAG silent output-only) is a gap
+deferred to the Workflow v2 normalization boundary
+([extensibility § E3](extensibility.md#e3-canonical-workflow-v2-specification)), not accepted
+behaviour to pin.
 
 ## 3. File-by-file audit
 
@@ -287,13 +291,15 @@ the suite, forcing the marker's removal) the moment its owner lands:
   async-HTTP charset half (the `async_url_read`/`fetchpage` halves stay owned) (bado-anyio § 2c).
 - **R18** — `tests/internal/test_resolver.py::TestPipeResolver::test_runtime_registered_pipe_prefixed_module_resolves`
   (extensibility § 24).
+- **R17** — `tests/internal/test_compile.py::test_convert_dag_empty_modules_raises` asserts that
+  `convert_dag({"modules": []})` raises. It does *not* today — the terminal `output` node is appended
+  unconditionally, so an empty DAG silently yields `{_OUTPUT}` (the reported `module_ids[-1]` crash is
+  *not reproduced* on this path; only the full-pipe-def path raises, via `MALFORMED["empty"]`). A clean
+  typed rejection + one validation front-door that makes both paths reject identically is owned by the
+  **Workflow v2 spec** ([extensibility § E3](extensibility.md#e3-canonical-workflow-v2-specification) —
+  the E3.1 `normalize_workflow() -> validate` boundary; CLI surface: cli.md `riko pipeline validate`);
+  recalibrate the tripwire from `IndexError` to the spec's error when it lands.
 
-**Shipped (§ 2b characterization rows).** The two open-question rows landed as **characterization**
-tests that pin current behavior (to be *updated, not deleted*, when the behavior is decided):
-
-- **R17** — `tests/internal/test_compile.py::test_convert_dag_empty_modules_yields_only_output` pins
-  that an empty DAG yields just the terminal `output` node (the reported `module_ids[-1]` crash is
-  *not reproduced*), rather than raising.
 **Shipped (§ 2b open-question rows).** R19's characterization test was **updated, not deleted**, into
 a regression once the contract was decided (type-aware comparison):
 
@@ -302,7 +308,7 @@ a regression once the contract was decided (type-aware comparison):
   back to lexicographic comparison for non-numeric strings (correctness-audit R19, now fixed).
 
 **Remaining.** None — the § 2b regression batch is complete (local repairs fixed, owned rows guarded
-by strict-xfail tripwires, open questions pinned by characterization tests).
+by strict-xfail tripwires).
 
 ## 5b. Execution lifetime proofs (R4)
 
