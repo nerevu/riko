@@ -148,11 +148,7 @@ operation-specific configuration:
 ```python
 target = Target(Targets.AIRTABLE, base=base, table=table)
 
-flow = flow.write(
-    target,
-    mode="merge",
-    keys=("endpoint_id",),
-)
+flow = flow.write(target, mode="merge", keys=("endpoint_id",))
 ```
 
 For append-style history:
@@ -325,9 +321,7 @@ hood.
 
 ```python
 run = MonthlyDashboard(
-    client="centralillinoisfriends",
-    period="2026-07",
-    target=airtable_target,
+    client="centralillinoisfriends", period="2026-07", target=airtable_target
 )
 
 plan = await run.plan()

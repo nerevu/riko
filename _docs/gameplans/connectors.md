@@ -156,7 +156,9 @@ records = adapter.read(target, format=fmt, resource=resource)
 or:
 
 ```python
-result = adapter.write(target, records, format=fmt, operation=write_conf, resource=resource)
+result = adapter.write(
+    target, records, format=fmt, operation=write_conf, resource=resource
+)
 ```
 
 Those are conceptual roles, not a second public API alongside `Pipeline.read()` / `Pipeline.write()`.

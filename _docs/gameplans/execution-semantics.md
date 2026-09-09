@@ -110,9 +110,9 @@ Resource[T]
 `Resource` and `ReusableResource` are public typing/construction abstractions. The concrete external/factory/owned variants are private implementation types and are not normal user construction surfaces. `Resource` is the public facade:
 
 ```python
-Resource(value, cleanup=...)          # one-shot live-owned compatibility form
-Resource.from_external(value)         # reusable caller-owned value
-Resource.from_factory(factory, ...)    # reusable Riko-owned provider
+Resource(value, cleanup=...)  # one-shot live-owned compatibility form
+Resource.from_external(value)  # reusable caller-owned value
+Resource.from_factory(factory, ...)  # reusable Riko-owned provider
 ```
 
 A one-shot live-owned `Resource(value, ...)` is not a `ResourceDefinition` and cannot be stored in a reusable Context. Its legitimate use is an explicitly one-shot execution-local adaptation/compatibility boundary. `Resource.from_external(value)` may wrap any actual caller-owned resource value and never closes it; independent executions using the same Context may therefore receive the same external object concurrently, and concurrency/thread safety remains the caller's responsibility. Use a factory when each execution requires an isolated instance.
@@ -138,10 +138,7 @@ ctx.with_resource("db", db)
 Arbitrary callable objects are **not** inferred to be factories merely because `callable(x)` is true; callable resource values are legitimate Python objects. Bare classes/constructors likewise are not implicit resource factories. Use `Resource.from_factory(...)` to state that intent explicitly:
 
 ```python
-ctx.with_resource(
-    "client",
-    Resource.from_factory(Client, base_url=url),
-)
+ctx.with_resource("client", Resource.from_factory(Client, base_url=url))
 ```
 
 `Resource.from_factory(factory, *args, **kwargs)` first binds its explicit arguments using normal partial-like semantics, then validates the remaining invocation contract. The only valid remaining signatures are exactly:
