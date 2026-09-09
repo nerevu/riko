@@ -62,7 +62,7 @@ def get_subpipe(  # noqa: E704
     embedded_kwargs: EmbedKwargs | None = ...,
     field: str | None = ...,
 ) -> partial[Awaitable[ProcessorWrapperOutput]]: ...
-def get_subpipe(  # noqa: E302 # pyright: ignore[reportInconsistentOverload]
+def get_subpipe(  # noqa: E302
     embed: ProcessorWrapper | SubPipe,
     context: Context,
     embedded_kwargs: EmbedKwargs | None = None,

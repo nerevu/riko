@@ -27,7 +27,14 @@ Examples:
 import builtins
 import keyword
 from collections import defaultdict
-from collections.abc import Awaitable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import (
+    AsyncIterator,
+    Awaitable,
+    Iterable,
+    Iterator,
+    Mapping,
+    Sequence,
+)
 from datetime import date
 from decimal import Decimal
 from functools import partial, reduce, update_wrapper
@@ -43,17 +50,21 @@ from jinja2 import Environment, PackageLoader
 
 from riko._iterutils import listize
 from riko._strutils import replacer
+from riko.bado.itertools import as_async
 from riko.context import Context, ExecutionMode
 from riko.dotdict import DotDict
+from riko.exceptions import InvalidPipelineError
 from riko.ext._resolver import pipe_resolver
 from riko.ext.codegen import ruff_format
-from riko.pprint2 import Id, repr_arg, repr_args
+from riko.pprint2 import Id, PyKwargValue, repr_arg, repr_args
 from riko.topsort import topological_sort
 from riko.types._collections import Inputs
-from riko.types._guards import is_loop_module
+from riko.types._guards import is_loop_module, is_mapping
 from riko.types._pipeline import (
     AsyncPipelineDependencies,
     AsyncPyInput,
+    AsyncStep,
+    AsyncSteps,
     PipelineDependencies,
     PyInput,
     Step,
@@ -61,15 +72,23 @@ from riko.types._pipeline import (
     StepValue,
     SyncPipelineDependencies,
     SyncPyInput,
+    SyncStep,
+    SyncSteps,
+    SyncStepValue,
 )
-from riko.types._streams import AsyncStream, Stream
+from riko.types._streams import (
+    AsyncStreamOrValueStream,
+    ItemOrValue,
+    Stream,
+    StreamOrValueStream,
+)
 from riko.types._wrappers import (
-    AsyncPipeItems,
-    AsyncPipeParser,
-    Interface,
-    ParserOutput,
-    Pipeline,
-    SyncPipeParser,
+    AsyncPipeWrapper,
+    AsyncWrapperOutput,
+    Pipe,
+    SyncPipeWrapper,
+    SyncWrapperOutput,
+    WrapperOutput,
 )
 from riko.types.compile import (
     AbbrevStringModule,
@@ -77,6 +96,9 @@ from riko.types.compile import (
     PipeDag,
     PipeDef,
     PipelineDescription,
+    PipelineDescriptionLike,
+    PipelineDescriptions,
+    PipelineDescriptionStream,
     PipeModule,
     StringModule,
     TemplateData,
@@ -170,12 +192,22 @@ class CustomEncoder(JSONEncoder):
         return result
 
 
-def _as_named_pipe(module_name: str, interface: Interface, module_id: str) -> Pipeline:
-    """Returns a renamed wrapper without modifying the imported pipeline."""
-    pipeline = resolve_module(module_name, interface)
+@overload
+def _as_named_pipe(  # noqa: E704
+    module_name: str, module_id: str, is_async: Literal[False] = ...
+) -> SyncPipeWrapper: ...
+@overload  # noqa: E302
+def _as_named_pipe(  # noqa: E704
+    module_name: str, module_id: str, is_async: Literal[True]
+) -> AsyncPipeWrapper: ...
+def _as_named_pipe(  # noqa: E302
+    module_name: str, module_id: str, is_async: bool = False
+) -> Pipe:
+    """Returns a renamed wrapper without modifying the imported pipe."""
+    pipe = resolve_module(module_name, is_async)
     name = str(f"pipe_{module_id}")
-    wrapper = cast(Pipeline, partial(pipeline))
-    update_wrapper(wrapper, pipeline)
+    wrapper = cast(Pipe, partial(pipe))
+    update_wrapper(wrapper, pipe)
 
     wrapper.__name__ = name
     wrapper.__qualname__ = name
@@ -185,7 +217,7 @@ def _as_named_pipe(module_name: str, interface: Interface, module_id: str) -> Pi
 def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
     modules = pipe_def["modules"]
 
-    if isinstance(modules, dict):
+    if is_mapping(modules):
         embed = pipe_def.get("embed") or {}
         modules = [module for key, module in modules.items() if key not in embed]
 
@@ -232,7 +264,7 @@ def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str, ...]]:
     values = ["type", "value"]
     modules = pipe_def["modules"]
 
-    if isinstance(modules, dict):
+    if is_mapping(modules):
         embed = pipe_def.get("embed") or {}
         modules = [m for k, m in modules.items() if k not in embed]
 
@@ -336,39 +368,16 @@ def pythonise(
     return reduced.encode(encoding, "replace").decode(encoding)
 
 
-@overload
-def gen_names(  # noqa: E704
-    module_ids: Sequence[str] | Sequence[tuple[str, ...]],
-    parsed_pipe_def: ParsedPipeDef,
-    ntype: Interface,
-) -> Iterator[Interface]: ...
-@overload  # noqa: E302
-def gen_names(  # noqa: E704
-    module_ids: Sequence[str] | Sequence[tuple[str, ...]],
-    parsed_pipe_def: ParsedPipeDef,
-    ntype: Literal["module"] = ...,
-) -> Iterator[str]: ...
 def gen_names(  # noqa: E302
     module_ids: Sequence[str] | Sequence[tuple[str, ...]],
     parsed_pipe_def: ParsedPipeDef,
-    ntype: Interface | Literal["module"] = "module",
 ) -> Iterator[str]:
     for module_id in module_ids:
         if isinstance(module_id, str):
             module_id = (module_id,)
 
         for _module_id in module_id:
-            module_type = parsed_pipe_def["modules"][_module_id]["type"]
-
-            if ntype == "module":
-                name = module_type
-            elif ntype in {"pipe", "async_pipe"}:
-                name = ntype
-            else:
-                msg = f"Invalid {ntype=}. (Expected 'module', 'pipe', or 'async_pipe')"
-                raise ValueError(msg)
-
-            yield name
+            yield parsed_pipe_def["modules"][_module_id]["type"]
 
 
 @overload
@@ -456,7 +465,7 @@ def _module_alias(module_name: str) -> str:
 
 
 def _lower_keys[T](obj: T) -> T:
-    if isinstance(obj, dict):
+    if is_mapping(obj):
         result = {
             (k.lower() if isinstance(k, str) and k.isupper() else k): _lower_keys(v)
             for k, v in obj.items()
@@ -469,13 +478,13 @@ def _lower_keys[T](obj: T) -> T:
     return cast(T, result)
 
 
-def _conf_source(module_name: str, conf: AnyModuleRawConf | Id | Context) -> str:
+def _conf_source(module_name: str, conf: Id | PyKwargValue) -> str:
     raw = _RAW_CONFS.get(module_name)
     inner = repr_arg(conf)
     return f"{raw}({inner})" if raw else inner
 
 
-def _render_conf(module_name: str, conf: AnyModuleRawConf | Id | Context) -> str:
+def _render_conf(module_name: str, conf: Id | PyKwargValue) -> str:
     return _conf_source(module_name, _lower_keys(conf))
 
 
@@ -500,7 +509,7 @@ def _gen_embed_subpipe_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
 def _get_sources(conf: AnyModuleRawConf | None) -> list[dict[str, str]] | None:
     if conf and (url := conf.get("url")) and isinstance(url, list):
         urls = cast(list[Value], url)
-        return [{"url": cast(str, url["value"])} for url in urls]
+        return [{"url": cast(str, url.get("value"))} for url in urls]
 
 
 def _used_raw_confs(parsed_pipe_def: ParsedPipeDef) -> set[str]:
@@ -524,7 +533,7 @@ def _used_raw_confs(parsed_pipe_def: ParsedPipeDef) -> set[str]:
 def _render_args(
     module_name: str,
     pyarg: Id | None,
-    pykwargs: Iterable[tuple[str, AnyModuleRawConf | Id | Context]],
+    pykwargs: Iterable[tuple[str, Id | PyKwargValue]],
 ) -> str:
     parts = []
     rendered = repr_arg(pyarg)
@@ -550,18 +559,18 @@ def _gen_string_modules(
     parsed_pipe_def: ParsedPipeDef,
     module_ids: Iterable[str],
     module_names: Iterable[str],
-    pipe_names: Iterable[str],
+    is_async: bool = False,
     context: Context | None = None,
     mode: ExecutionMode | None = None,
     inputs: Inputs | None = None,
     **kwargs: bool,
 ) -> Iterator[StringModule]:
-    zipped = zip(module_ids, module_names, pipe_names, strict=False)
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
     split_ids = defaultdict(int)
     checked = False
+    pipe_name = "async_pipe" if is_async else "pipe"
 
-    for module_id, module_name, pipe_name in zipped:
+    for module_id, module_name in zip(module_ids, module_names, strict=False):
         if module_id in parsed_pipe_def["embed"]:
             continue
 
@@ -630,11 +639,11 @@ def _get_pyarg(  # noqa: E704
 @overload  # noqa: E302
 def _get_pyarg(  # noqa: E704
     *args: Any, steps: Steps, **kwargs: Any
-) -> ParserOutput | SyncPipeParser: ...
+) -> SyncStepValue | str: ...
 @overload  # noqa: E302
 def _get_pyarg(  # noqa: E704
     *args: Any, **kwargs: Any
-) -> ParserOutput | SyncPipeParser | Id: ...
+) -> SyncStepValue | Id | str: ...
 def _get_pyarg(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,
     module_id: str,
@@ -645,7 +654,7 @@ def _get_pyarg(  # noqa: E302
     mode: ExecutionMode | None = None,
     inputs: Inputs | None = None,
     **kwargs: bool,
-) -> StepValue | Id | None:
+) -> StepValue | Id | str | None:
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
     split_ids = split_ids or {}
 
@@ -665,11 +674,11 @@ def _is_default(wire: Wire, module_id: str, in_and_out: bool = False) -> bool:
 @overload
 def _gen_pykwargs(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef, module_id: str, steps: None = ..., **kwargs: Any
-) -> Iterator[tuple[str, Id | Context | AnyModuleRawConf]]: ...
+) -> Iterator[tuple[str, Id | PyKwargValue]]: ...
 @overload  # noqa: E302
 def _gen_pykwargs(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef, module_id: str, steps: Steps, **kwargs: Any
-) -> Iterator[tuple[str, StepValue | Context | AnyModuleRawConf]]: ...
+) -> Iterator[tuple[str, StepValue | PyKwargValue]]: ...
 def _gen_pykwargs(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,
     module_id: str,
@@ -678,7 +687,7 @@ def _gen_pykwargs(  # noqa: E302
     mode: ExecutionMode | None = None,
     inputs: Inputs | None = None,
     **kwargs: bool,
-) -> Iterator[tuple[str, StepValue | Id | Context | AnyModuleRawConf]]:
+) -> Iterator[tuple[str, StepValue | Id | PyKwargValue]]:
     module = parsed_pipe_def["modules"][module_id]
     yield ("conf", module["conf"])
 
@@ -692,7 +701,7 @@ def _gen_pykwargs(  # noqa: E302
     if steps and context.mode is not ExecutionMode.RUN:
         print("You must not specify both describe and steps. Assuming steps.")
 
-    others = []
+    others: list[StepValue | Id] = []
 
     # find the default input of this module
     for wire in parsed_pipe_def["wires"].values():
@@ -728,27 +737,27 @@ def _gen_pykwargs(  # noqa: E302
 
 @overload
 def resolve_module(  # noqa: E704
-    module_name: str, interface: Literal["pipe"]
-) -> SyncPipeParser: ...
+    module_name: str, is_async: Literal[False] = ...
+) -> SyncPipeWrapper: ...
 @overload  # noqa: E302
 def resolve_module(  # noqa: E704
-    module_name: str, interface: Literal["async_pipe"]
-) -> AsyncPipeParser: ...
+    module_name: str, is_async: Literal[True]
+) -> AsyncPipeWrapper: ...
 @overload  # noqa: E302
 def resolve_module(  # noqa: E704
-    module_name: str, interface: Interface
-) -> Pipeline: ...
-def resolve_module(module_name: str, interface: Interface) -> Pipeline:  # noqa: E302
+    module_name: str, is_async: bool = False
+) -> Pipe: ...
+def resolve_module(module_name: str, is_async: bool = False) -> Pipe:  # noqa: E302
     """
-    Resolves a leaf module or generated ``pipe_*`` sub-pipeline to its callable.
+    Resolves a leaf module or generated ``pipe_*`` sub-pipe to its callable.
     JSON pipeline *definitions* are a separate concern — see
     ``pipeline_resolver.load_definition``.
 
     Examples:
 
-        >>> resolve_module("filter", "pipe")
+        >>> resolve_module("filter")
         <function pipe at ...>
-        >>> resolve_module("does_not_exist", "pipe")
+        >>> resolve_module("does_not_exist")
         Traceback (most recent call last):
             ...
         riko.exceptions.UnsupportedModuleError: Unsupported riko module: does_not_exist
@@ -758,23 +767,44 @@ def resolve_module(module_name: str, interface: Interface) -> Pipeline:  # noqa:
     ``tests/internal/test_resolver.py``.
 
     """
-    return pipe_resolver.resolve(module_name, interface)
+    return pipe_resolver.resolve(module_name, is_async)
 
 
-def _gen_steps(
+@overload
+def _gen_steps(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef,
     *,
+    is_async: Literal[True],
     module_ids: Iterable[str],
     module_names: Iterable[str],
-    interfaces: Iterable[Interface],
+    steps: AsyncSteps | None = ...,
+    context: Context | None = ...,
+    **kwargs: bool,
+) -> Iterator[AsyncStep]: ...
+@overload  # noqa: E302
+def _gen_steps(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef,
+    *,
+    is_async: Literal[False] = ...,
+    module_ids: Iterable[str],
+    module_names: Iterable[str],
+    steps: SyncSteps | None = ...,
+    context: Context | None = ...,
+    **kwargs: bool,
+) -> Iterator[SyncStep]: ...
+def _gen_steps(  # noqa: E302  # pyright: ignore[reportInconsistentOverload]
+    parsed_pipe_def: ParsedPipeDef,
+    *,
+    is_async=False,
+    module_ids: Iterable[str],
+    module_names: Iterable[str],
     steps: Steps | None = None,
     context: Context | None = None,
     **kwargs: bool,
 ) -> Iterator[Step]:
-    zipped = zip(module_ids, module_names, interfaces, strict=False)
     steps = steps or {}
 
-    for module_id, module_name, interface in zipped:
+    for module_id, module_name in zip(module_ids, module_names, strict=False):
         args = (parsed_pipe_def, module_id)
 
         if module_name == "output":
@@ -785,17 +815,18 @@ def _gen_steps(
             # We need to wrap submodules (used by loops) so we can pass the
             # input at runtime (as we can to sub-pipelines)
             # Note: no embed (so no subloops) or wire pykwargs are passed
-            pipeline = _as_named_pipe(module_name, interface, module_id)
-            step = (module_id, pipeline)
+            pipe = _as_named_pipe(module_name, module_id, is_async)
+            step = (module_id, pipe)
         else:  # else this module is not embedded:
-            pipeline = resolve_module(module_name, interface)
+            pipe = resolve_module(module_name, is_async)
             pyarg = _get_pyarg(*args, steps=steps, context=context, **kwargs)
             _pykwargs = _gen_pykwargs(*args, steps=steps, context=context, **kwargs)
             pykwargs = dict(_pykwargs)
-            step = (module_id, pipeline(pyarg, **pykwargs))
+            step = (module_id, pipe(pyarg, **pykwargs))
 
-        steps.update([step])
-        yield step
+        _step = cast(Step, step)
+        steps.update([_step])
+        yield _step
 
 
 def _get_input_module(
@@ -803,7 +834,7 @@ def _get_input_module(
     module_id: str,
     steps: Steps | None = None,
     **split_ids: int,
-) -> Id | StepValue | None:
+) -> Id | StepValue | str | None:
     source = None if steps is None else iter([{"forever": True}])
 
     if module_id in parsed_pipe_def["embed"]:
@@ -911,11 +942,11 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPip
 @overload
 def _build_pipeline(  # noqa: E704
     *args: Any, is_async: Literal[True], **kwargs: Any
-) -> AsyncPipeParser | AsyncPipeItems: ...
+) -> AsyncWrapperOutput: ...
 @overload  # noqa: E302
 def _build_pipeline(  # noqa: E704
     *args: Any, is_async: Literal[False] = ..., **kwargs: Any
-) -> SyncPipeParser | ParserOutput: ...
+) -> SyncWrapperOutput: ...
 def _build_pipeline(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,
     module_names: Iterable[str],
@@ -924,14 +955,12 @@ def _build_pipeline(  # noqa: E302
     is_async: bool = False,
     context: Context | None = None,
     **kwargs: bool,
-) -> StepValue:
-    ntype = "async_pipe" if is_async else "pipe"
-    pipe_names = gen_names(module_ids, parsed_pipe_def, ntype)
+) -> WrapperOutput:
     _steps = _gen_steps(
         parsed_pipe_def,
+        is_async=is_async,
         module_ids=module_ids,
         module_names=module_names,
-        interfaces=pipe_names,
         steps={},
         context=context,
         **kwargs,
@@ -939,7 +968,12 @@ def _build_pipeline(  # noqa: E302
     steps = dict(_steps)
     _module_id = module_ids[-1]
     module_id = _module_id if isinstance(_module_id, str) else _module_id[-1]
-    return steps[module_id]
+
+    if module_id in parsed_pipe_def["embed"]:
+        msg = f"pipeline output {module_id!r} resolves to an embedded module"
+        raise InvalidPipelineError(msg)
+
+    return cast(WrapperOutput, steps[module_id])
 
 
 def _get_descriptions(
@@ -948,7 +982,7 @@ def _get_descriptions(
     mode: ExecutionMode | None = None,
     inputs: Inputs | None = None,
     **kwargs: bool,
-) -> list[PipelineDescription] | list[str | tuple[str, ...]] | list[str]:
+) -> PipelineDescriptions:
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
     pydeps = extract_dependencies(parsed_pipe_def)
     pyinput = extract_input(parsed_pipe_def)
@@ -973,16 +1007,28 @@ def _resolve_leaf_modules(parsed_pipe_def: ParsedPipeDef) -> None:
         module_name = module["type"]
 
         if module_name != "output" and not module_name.startswith("pipe"):
-            resolve_module(module_name, "pipe")
+            resolve_module(module_name)
 
 
-def build_pipeline(
+@overload
+def build_pipeline(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef, context: Context | None = ...
+) -> StreamOrValueStream: ...
+@overload  # noqa: E302
+def build_pipeline(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef,
+    context: Context | None = ...,
+    *,
+    mode: ExecutionMode,
+) -> PipelineDescriptionStream: ...
+def build_pipeline(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,
     context: Context | None = None,
+    *,
     mode: ExecutionMode | None = None,
     inputs: Inputs | None = None,
     **kwargs: bool,
-) -> Stream:
+) -> Iterator[ItemOrValue | Stream | PipelineDescriptionLike]:
     """
     Builds an executable Python pipeline from a parsed pipe definition.
 
@@ -1004,13 +1050,25 @@ def build_pipeline(
     yield from pipeline
 
 
-async def abuild_pipeline(
+@overload
+def abuild_pipeline(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef, context: Context | None = ...
+) -> AsyncStreamOrValueStream: ...
+@overload  # noqa: E302
+def abuild_pipeline(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef,
+    context: Context | None = ...,
+    *,
+    mode: ExecutionMode,
+) -> AsyncIterator[PipelineDescription | str | tuple[str, ...]]: ...
+async def abuild_pipeline(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,
     context: Context | None = None,
+    *,
     mode: ExecutionMode | None = None,
     inputs: Inputs | None = None,
     **kwargs: bool,
-) -> AsyncStream:
+) -> AsyncIterator[ItemOrValue | Stream | PipelineDescriptionLike]:
     """
     Builds an executable Python pipeline from a parsed pipe definition.
 
@@ -1027,12 +1085,14 @@ async def abuild_pipeline(
         pipeline = await _build_pipeline(
             *args, is_async=True, context=context, **kwargs
         )
+
+        async for item in as_async(pipeline):
+            yield item
     else:
         args = (parsed_pipe_def, context)
-        pipeline = _get_descriptions(*args, mode=None, inputs=None, **kwargs)
 
-    for item in pipeline:
-        yield item
+        for item in _get_descriptions(*args, mode=None, inputs=None, **kwargs):
+            yield item
 
 
 def stringify_pipe(
@@ -1047,7 +1107,6 @@ def stringify_pipe(
     """Converts a pipe into a Python script, using AnyIO when ``is_async``."""
     module_ids = topological_sort(parsed_pipe_def["graph"], strict=True)
     module_names = gen_names(module_ids, parsed_pipe_def)
-    pipe_names = gen_names(module_ids, parsed_pipe_def, ntype="pipe")
 
     env = Environment(loader=PackageLoader("riko"), autoescape=False)  # noqa: S701
     template = env.get_template("pypipe_async.txt" if is_async else "pypipe.txt")
@@ -1055,7 +1114,7 @@ def stringify_pipe(
         parsed_pipe_def,
         module_ids=module_ids,
         module_names=module_names,
-        pipe_names=pipe_names,
+        is_async=is_async,
         context=context,
         mode=mode,
         inputs=inputs,

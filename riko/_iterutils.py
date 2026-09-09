@@ -50,7 +50,9 @@ NON_SORTABLE = (Mapping, Sequence)
 B = TypeVar("B", Literal[True], Literal[False])
 T = TypeVar("T")
 
-noop: Callable[[T], T] = lambda item: item
+
+def noop[T](item: T) -> T:
+    return item
 
 
 class Chainable:
@@ -689,17 +691,17 @@ def listize(  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
 @overload
 def listize[T](value: list[T]) -> list[T]: ...  # noqa: E704
 @overload  # noqa: E302
-def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+def listize[T](  # noqa: E704
     value: dict[str, T],
 ) -> list[dict[str, T]]: ...
 @overload  # noqa: E302
-def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+def listize[T](  # noqa: E704
     value: CaseInsensitiveDict[T],
 ) -> list[CaseInsensitiveDict[T]]: ...
 @overload
 def listize[T](value: Mapping[str, T]) -> list[Mapping[str, T]]: ...  # noqa: E704
 @overload  # noqa: E302
-def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+def listize[T](  # noqa: E704
     value: Sequence[T],
 ) -> Sequence[T]: ...
 @overload

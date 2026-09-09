@@ -333,7 +333,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         ...     items = [{"title": "Good job!"}, {"title": "Website Developer"}]
         ...     rule = {"field": "title", "op": "contains", "value": "web"}
         ...     result = await async_pipe(items, conf={"rule": rule})
-        ...     print(next(result)["title"])
+        ...     print((await anext(result))["title"])
         >>>
         >>> run(main)
         Website Developer

@@ -124,7 +124,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> async def main():
         ...     items = ({"x": x} for x in range(5))
         ...     result = await async_pipe(items, conf={"count": 4})
-        ...     print(len(list(result)))
+        ...     print(len([item async for item in result]))
         >>>
         >>> run(main)
         4

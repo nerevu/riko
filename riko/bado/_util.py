@@ -33,6 +33,9 @@ async def async_get(url: str, **kwargs: Any) -> "Response":
     A ``timeout`` of ``0`` means no timeout, which mirrors the sync backend.
 
     """
+    if not httpx:
+        raise RuntimeError("httpx is required for async_get")
+
     if kwargs.get("timeout") == 0:
         kwargs["timeout"] = None
 
@@ -52,6 +55,9 @@ async def async_read(  # noqa: E302
     url: str, binary: bool = False, encoding: str | None = None
 ) -> bytes | str:
     """Reads a local ``file://`` path as bytes or text."""
+    if not anyio:
+        raise RuntimeError("anyio is required for async_read")
+
     path = anyio.Path(url.replace("file://", ""))
     return await (path.read_bytes() if binary else path.read_text(encoding))
 
@@ -74,6 +80,9 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
     ``MISSING``, not ``None``), so the output aligns with the inputs.
 
     """
+    if not anyio:
+        raise RuntimeError("anyio is required for gather_results")
+
     aws = list(awaitables)
     results: list[Any] = [MISSING] * len(aws)
 
@@ -87,10 +96,15 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
     return [r for r in results if r is not MISSING]
 
 
-async def maybe_deferred[T](func: Callable[..., T], *args: Any, **kwargs: object) -> T:
+async def as_awaitable[T](value: T | Awaitable[T]) -> T:
+    return cast(T, (await value)) if isawaitable(value) else value
+
+
+async def maybe_deferred[T](
+    func: Callable[..., T | Awaitable[T]], *args: Any, **kwargs: object
+) -> T:
     """Calls ``func`` and awaits its result only when it is awaitable."""
-    result = func(*args, **kwargs)
-    return cast(T, (await result)) if isawaitable(result) else result
+    return await as_awaitable(func(*args, **kwargs))
 
 
 def async_partial(f, **kwargs):

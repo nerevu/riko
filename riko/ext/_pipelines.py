@@ -17,7 +17,7 @@ Examples:
         >>> module = ModuleType("pipe_demo")
         >>> module.pipe = lambda stream=None, **kwargs: iter([{"x": 1}])
         >>> resolver = PipelineResolver(store=MappingStore({"pipe_demo": module}))
-        >>> list(resolver.resolve("pipe_demo", "pipe")())
+        >>> list(resolver.resolve("pipe_demo")())
         [{'x': 1}]
 
 Attributes:
@@ -33,43 +33,43 @@ from pathlib import Path
 from types import ModuleType
 from typing import Literal, Protocol, cast, overload
 
-from riko._importutils import import_or_else
+from riko._importutils import import_or_else, resolve_interface
 from riko.exceptions import UnsupportedPipelineError
 from riko.modules._subpipe import is_subpipe, mark_subpipe
-from riko.types._wrappers import AsyncPipeParser, Interface, Pipeline, SyncPipeParser
+from riko.types._wrappers import AsyncPipeWrapper, Pipe, SyncPipeWrapper
 from riko.types.compile import ParsedPipeDef
 from riko.types.modules import ModuleSubtype
 
 
-def _as_subpipe(pipeline: Pipeline) -> Pipeline:
+def _as_subpipe(pipe: Pipe) -> Pipe:
     """
-    Returns a sub-pipeline-marked wrapper around ``pipeline``.
+    Returns a sub-pipe-marked wrapper around ``pipe``.
 
     The marker goes on a fresh ``partial`` because the module callable is shared
-    with anyone importing the generated pipeline directly; marking it in place
-    would leak sub-pipeline semantics into those calls.
+    with anyone importing the generated pipe directly; marking it in place
+    would leak sub-pipe semantics into those calls.
 
     """
-    if is_subpipe(pipeline):
-        subpipe = pipeline
+    if is_subpipe(pipe):
+        subpipe = pipe
     else:
-        subpipe = cast(Pipeline, partial(pipeline))
-        update_wrapper(subpipe, pipeline)
-        subtype = cast(ModuleSubtype, getattr(pipeline, "subtype", "source"))
-        loopable = cast(bool, getattr(pipeline, "loopable", True))
+        subpipe = cast(Pipe, partial(pipe))
+        update_wrapper(subpipe, pipe)
+        subtype = cast(ModuleSubtype, getattr(pipe, "subtype", "source"))
+        loopable = cast(bool, getattr(pipe, "loopable", True))
         mark_subpipe(subpipe, subtype=subtype, loopable=loopable)
 
     return subpipe
 
 
 class ModuleStore(Protocol):
-    """Loads generated pipeline modules by name and returns ``None`` if absent."""
+    """Loads generated pipe modules by name and returns ``None`` if absent."""
 
     def load(self, name: str) -> ModuleType | None: ...  # noqa: E704
 
 
 class PackageStore:
-    """Loads pipeline modules from a Python package."""
+    """Loads pipe modules from a Python package."""
 
     def __init__(self, package: str) -> None:
         self._package = package
@@ -79,7 +79,7 @@ class PackageStore:
 
 
 class MappingStore:
-    """Loads pipeline modules from an in-memory mapping."""
+    """Loads pipe modules from an in-memory mapping."""
 
     def __init__(self, modules: Mapping[str, ModuleType]) -> None:
         self._modules = dict(modules)
@@ -89,7 +89,7 @@ class MappingStore:
 
 
 class CompositeStore:
-    """Loads a pipeline module from the first store that has it."""
+    """Loads a pipe module from the first store that has it."""
 
     def __init__(self, *stores: ModuleStore) -> None:
         self._stores = stores
@@ -137,7 +137,7 @@ class PipelineResolver:
     Resolves whole sub-pipelines, where the module registry resolves leaf modules.
 
     Lookup has two independent halves: ``store`` supplies generated Python
-    pipeline modules for ``resolve``, and ``definitions`` supplies JSON pipeline
+    pipe modules for ``resolve``, and ``definitions`` supplies JSON pipeline
     definitions for ``load_definition``. Both are **injected** rather than
     hardcoded. This is what keeps test-only locations out of the core compiler. The
     suite points the global at its own package and directory via ``conftest``.
@@ -171,18 +171,18 @@ class PipelineResolver:
         self._definitions = definitions
 
     def load(self, name: str) -> ModuleType | None:
-        """Returns the generated pipeline module for ``name``, or ``None``."""
+        """Returns the generated pipe module for ``name``, or ``None``."""
         return self._store.load(name) if self._store is not None else None
 
     @overload
     def resolve(  # noqa: E704
-        self, name: str, interface: Literal["pipe"]
-    ) -> SyncPipeParser: ...
+        self, name: str, is_async: Literal[False] = ...
+    ) -> SyncPipeWrapper: ...
     @overload  # noqa: E301
     def resolve(  # noqa: E704
-        self, name: str, interface: Literal["async_pipe"]
-    ) -> AsyncPipeParser: ...
-    def resolve(self, name: str, interface: Interface) -> Pipeline:  # noqa: E301
+        self, name: str, is_async: Literal[True]
+    ) -> AsyncPipeWrapper: ...
+    def resolve(self, name: str, is_async: bool = False) -> Pipe:  # noqa: E301
         """
         Resolves a ``pipe_<id>`` / ``pipe:<id>`` name to its marked callable.
 
@@ -194,13 +194,9 @@ class PipelineResolver:
         """
         from riko.compile import pythonise  # noqa: PLC0415
 
-        module = self.load(pythonise(name))
-        pipeline = getattr(module, interface, None) if module else None
-
-        if pipeline is None:
-            raise UnsupportedPipelineError(name)
-
-        return _as_subpipe(pipeline)
+        kwargs = {"is_async": is_async, "builtin": False}
+        pipe = resolve_interface(pythonise(name), loader=self.load, **kwargs)
+        return _as_subpipe(pipe)
 
     def load_definition(
         self, name: str, *, directory: Path | None = None

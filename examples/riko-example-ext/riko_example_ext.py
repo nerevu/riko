@@ -61,7 +61,7 @@ def async_pipe(*args: Any, **kwargs: Any) -> Stream:
         >>> from riko import issync, run
         >>>
         >>> async def main():
-        ...     print(next(await async_pipe(iter([{"content": "hi"}]))))
+        ...     print(await anext(await async_pipe(iter([{"content": "hi"}]))))
         >>>
         >>> print({"content": "HI"}) if issync else run(main)
         {'content': 'HI'}

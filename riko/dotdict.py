@@ -42,10 +42,9 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 TV_KEYS = ("type", "value")
 WIRE_KEYS = ("id", "src", "tgt")
 PASSTHROUGH_TYPES = (str, int, float, date, Decimal, Objectify)
-
 D = TypeVar("D")
-VT = TypeVar("VT")
-type Data = Iterable[tuple[str, VT]] | RSSEntry
+
+type Data[VT] = Iterable[tuple[str, VT]] | RSSEntry
 
 
 def parse_key(key: Key | None = None) -> list[str]:
@@ -268,7 +267,7 @@ def gen_dict[VT](  # noqa: E302
 #     return success
 #
 #
-class DotDict(CaseInsensitiveDict[VT]):
+class DotDict[VT](CaseInsensitiveDict[VT]):
     """
     A dictionary whose keys can be accessed using dot notation
 
@@ -318,7 +317,7 @@ class DotDict(CaseInsensitiveDict[VT]):
 
     """
 
-    def __init__(self, data: Mapping[str, VT] | Data | None = None, **kwargs: VT):
+    def __init__(self, data: Mapping[str, VT] | Data[VT] | None = None, **kwargs: VT):
         super().__init__()
         self.update(data, **kwargs)
 
@@ -664,10 +663,10 @@ class DotDict(CaseInsensitiveDict[VT]):
         self, data: SupportsKeysAndGetItem[str, VT], **kwargs: VT
     ) -> None: ...
     @overload
-    def update(self, data: Data) -> None: ...  # noqa: E704
+    def update(self, data: Data[VT]) -> None: ...  # noqa: E704
     @overload  # noqa: E301
     def update(  # noqa: E704
-        self, data: Data, **kwargs: VT
+        self, data: Data[VT], **kwargs: VT
     ) -> None: ...
     @overload
     def update[V](self, data: Mapping[str, V]) -> None: ...  # noqa: E704
@@ -676,7 +675,9 @@ class DotDict(CaseInsensitiveDict[VT]):
     @overload
     def update(self, data: None) -> None: ...  # noqa: E704
     def update(  # noqa: E301  # pyright: ignore[reportInconsistentOverload]
-        self, data: SupportsKeysAndGetItem[str, VT] | Data | None = None, **kwargs: VT
+        self,
+        data: SupportsKeysAndGetItem[str, VT] | Data[VT] | None = None,
+        **kwargs: VT,
     ):
         """
         >>> r = DotDict({'author': 'bar'})

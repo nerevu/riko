@@ -109,7 +109,7 @@ class TestParsers:
                 "status",
             ]
 
-            assert sorted(cast(dict, result["info"])) == [
+            assert sorted(cast(dict, result.get("info"))) == [
                 "area",
                 "category",
                 "certainty",

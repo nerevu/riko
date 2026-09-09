@@ -11,7 +11,8 @@ Lifecycle/close/split/export parity lives in ``test_pipe_lifecycle.py`` and
 """
 
 from riko.collections import AsyncPipe, SyncPipe
-from riko.types._streams import Item
+from riko.types._guards import is_mapping
+from riko.types._streams import RikoItem
 from riko.types.modules import ItemBuilderConf, StrReplaceConf, StrReplaceConfRule
 from tests import PipeBuilder, aresolve, skipif_issync
 
@@ -21,7 +22,7 @@ STRR_CONF = StrReplaceConf({"rule": StrReplaceConfRule(find="c", replace="C")})
 
 def _both[P: (SyncPipe, AsyncPipe), T](
     build: PipeBuilder,
-) -> tuple[list[Item], list[Item]]:
+) -> tuple[list[RikoItem], list[RikoItem]]:
     """
     Run *build* on both engines; return ``(sync_result, async_result)``.
     """
@@ -42,9 +43,12 @@ class TestOutputParity:
 
     def test_assignment_preserves_parent(self):
         sync_result, async_result = _both(lambda pipe: _tokenize(pipe).hash(assign="h"))
+        expected = ["a", "bb", "ccc"]
         assert sync_result == async_result
-        assert [item.get("content") for item in sync_result] == ["a", "bb", "ccc"]
-        assert all("h" in item for item in sync_result)
+        assert [
+            item.get("content") for item in sync_result if is_mapping(item)
+        ] == expected
+        assert all("h" in item for item in sync_result if is_mapping(item))
 
     def test_emit_false_assigns_onto_content(self):
         build = lambda pipe: _tokenize(pipe).strreplace(

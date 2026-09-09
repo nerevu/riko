@@ -92,7 +92,7 @@ async def async_parser(
         logger.warning(f"No feed found at {url}")
         entries = []
     else:
-        content = await async_url_read(str(first["link"]))
+        content = await async_url_read(str(first.get("link")))
         entries = parse_rss(content=content)
 
     return augment_entries(entries)
@@ -136,7 +136,7 @@ def parser(
         logger.warning(f"No feed found at {url}")
         entries = []
     else:
-        entries = parse_rss(str(first["link"]))
+        entries = parse_rss(str(first.get("link")))
 
     return augment_entries(entries)
 

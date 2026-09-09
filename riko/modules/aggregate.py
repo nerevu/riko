@@ -25,13 +25,13 @@ Attributes:
 """
 
 from collections.abc import Awaitable, Callable
-from inspect import isawaitable
 from logging import Logger
 from typing import Any
 
 import pygogo as gogo
 
 from riko._iterutils import listize
+from riko.bado._util import as_awaitable
 from riko.modules._prepare import require_arg
 from riko.types._configs import AggregateObjconf
 from riko.types._options import Defaults
@@ -101,7 +101,7 @@ async def async_parser(
     """
     func = require_arg(func, "func", "aggregate", strict=True)
     unawaited = func(stream)
-    result = await unawaited if isawaitable(unawaited) else unawaited
+    result = await as_awaitable(unawaited)
     return iter(listize(result))
 
 
@@ -199,7 +199,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         ...     func = lambda stream: ({"y": item["x"] + 3} for item in stream)
         ...     items = ({"x": x} for x in range(5))
         ...     result = await async_pipe(items, func=func)
-        ...     print(next(result))
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         {'y': 3}

@@ -28,7 +28,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator, AsyncIterable, Awaitable, Callable, Iterable
 from functools import partial
-from inspect import isawaitable
 from typing import cast, overload
 
 from riko._constants import DEF_CONNECTION_COUNT
@@ -41,6 +40,7 @@ from riko.bado._backend import (
     create_memory_object_stream,
     create_task_group,
 )
+from riko.bado._util import as_awaitable
 from riko.types._sentinels import MISSING
 
 
@@ -79,7 +79,9 @@ def _cap[T, S](
     return wrapped
 
 
-def as_async[T](source: AsyncIterable[T] | Iterable[T]) -> AsyncIterable[T]:
+def as_async[T](
+    source: AsyncIterable[T] | Iterable[T], cooperative: bool = False
+) -> AsyncIterable[T]:
     """
     Adapts *source* to an ``AsyncIterable``.
 
@@ -105,7 +107,12 @@ def as_async[T](source: AsyncIterable[T] | Iterable[T]) -> AsyncIterable[T]:
         [1, 2]
 
     """
-    return source if isinstance(source, AsyncIterable) else async_iter(source)
+    if isinstance(source, AsyncIterable):
+        result = source
+    else:
+        result = async_iter(source, cooperative=cooperative)
+
+    return result
 
 
 async def async_iter[T](
@@ -231,7 +238,7 @@ def async_reduce[T, S](
     async def work(async_func, content, value):
         for item in content:
             result = async_func(value, item)
-            value = (await result) if isawaitable(result) else result
+            value = await as_awaitable(result)
 
         return value
 

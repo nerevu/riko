@@ -25,8 +25,8 @@ from riko.compile import (
     stringify_pipe,
 )
 from riko.context import Context
-from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
-from riko.types._streams import Item
+from riko.exceptions import UnsupportedModuleError
+from riko.types._streams import Item, ItemOrValue
 from riko.types.compile import DagModule, LoopModule, PipeDag, PipeDef, PipeModule
 from riko.types.modules import ItemBuilderRawConf, Param, TruncateRawConf
 from tests import TESTS_DIR, async_test
@@ -157,11 +157,11 @@ def _run_generated(source, pipe_name) -> list[Item]:
     return list(namespace["pipe"](context=Context()))
 
 
-def _run_executor(parsed) -> list[Item]:
+def _run_executor(parsed) -> list[ItemOrValue]:
     return list(build_pipeline(parsed, context=Context()))
 
 
-def _compile_and_run(pipe_def, pipe_name) -> list[Item]:
+def _compile_and_run(pipe_def, pipe_name) -> list[ItemOrValue]:
     return _run_executor(parse_pipe_def(pipe_def, pipe_name))
 
 
@@ -225,8 +225,8 @@ def test_compile_wraps_parse_and_stringify():
 
 
 def test_unresolved_subpipeline_raises():
-    with pytest.raises(UnsupportedPipelineError):
-        resolve_module("pipe_missing", "pipe")
+    with pytest.raises(UnsupportedModuleError):
+        resolve_module("pipe_missing")
 
 
 def test_convert_dag_appends_output():
@@ -315,17 +315,16 @@ async def test_async_codegen_matches_sync():
     matches the sync compilation.
     """
     pipe_def = loads((PIPELINE_DIR / "pipe_gigs.json").read_text())
-
     async_src = compile_pipe(pipe_def, "pipe_gigs", is_async=True)
     async_ns: dict = {}
     exec(async_src, async_ns)
-    async_result = await async_ns["async_pipe"]()
+    async_result = [item async for item in await async_ns["async_pipe"]()]
 
     sync_src = compile_pipe(pipe_def, "pipe_gigs", is_async=False)
     sync_ns: dict = {}
     exec(sync_src, sync_ns)
     sync_result = list(sync_ns["pipe"]())
-    assert list(async_result) == sync_result
+    assert async_result == sync_result
 
 
 class TestCompactLoopConsumption:

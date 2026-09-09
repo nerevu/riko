@@ -198,7 +198,7 @@ def _check_types(where: str | None = None) -> int:
         raise RuntimeError("pyright not found")
 
     paths = where.split(" ") if where else []
-    return call([pyright, *paths])
+    return call([pyright, "-p", "pyproject.toml", *paths])
 
 
 def _verify_types(where: str | None = None) -> int:
@@ -207,7 +207,17 @@ def _verify_types(where: str | None = None) -> int:
         raise RuntimeError("pyright not found")
 
     paths = where.split(" ") if where else []
-    return call([pyright, "--verifytypes", "riko", "--ignoreexternal", *paths])
+    return call(
+        [
+            pyright,
+            "-p",
+            "pyproject.toml",
+            "--verifytypes",
+            "riko",
+            "--ignoreexternal",
+            *paths,
+        ]
+    )
 
 
 def _pylint_check(parallel: bool = False) -> int:
@@ -266,6 +276,9 @@ def _gen_yaml_files() -> Iterator[str]:
 
 def _render_rst(path: str) -> tuple[str, Any]:
     """Read and parse an RST file into (source, doctree)"""
+    if not publish_doctree:
+        raise RuntimeError("docutils not found")
+
     with open(path, encoding="utf-8") as f:
         text = f.read()
 
@@ -283,23 +296,29 @@ def _get_doc_anchors(doctree: Any) -> set[str]:
     seen: dict[str, int] = {}
     anchors: set[str] = set()
 
-    for node in doctree.findall(nodes.title):
-        if isinstance(node.parent, (nodes.section, nodes.document)):
-            base = _slugify(node.astext())
-            count = seen.get(base, 0)
-            anchors.add(base if count == 0 else f"{base}-{count}")
-            seen[base] = count + 1
+    if nodes is None:
+        raise RuntimeError("docutils not found")
+    else:
+        for node in doctree.findall(nodes.title):
+            if isinstance(node.parent, (nodes.section, nodes.document)):
+                base = _slugify(node.astext())
+                count = seen.get(base, 0)
+                anchors.add(base if count == 0 else f"{base}-{count}")
+                seen[base] = count + 1
 
     return anchors
 
 
 def _render_errors(path: str, doctree: Any) -> list[str]:
     """Collect docutils warning/error/severe messages from a rendered doc"""
-    return [
-        f"{path}:{node.get('line', '?')}: [{node['type']}] {node.children[0].astext()}"
-        for node in doctree.findall(nodes.system_message)
-        if node["level"] >= 2
-    ]
+    if nodes is None:
+        raise RuntimeError("docutils not found")
+    else:
+        return [
+            f"{path}:{node.get('line', '?')}: [{node['type']}] {node.children[0].astext()}"
+            for node in doctree.findall(nodes.system_message)
+            if node["level"] >= 2
+        ]
 
 
 def _get_path_anchors(path: str, cache: dict[str, set[str]]) -> set[str]:

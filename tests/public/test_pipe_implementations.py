@@ -238,7 +238,7 @@ async def _send_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
     ):
         tg.start_soon(_drain, receive_stream)
         stream = await async_send(_finite_source(consumed), others=["r4-lazy"])
-        first = next(stream)
+        first = await anext(stream)
         seen = len(consumed)
 
     return (first, seen)
@@ -268,7 +268,7 @@ async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrVa
     ):
         tg.start_soon(_drain, receive_stream, received)
         stream = await async_send(_afinite_source(consumed), others=["r4-feed"])
-        out = list(stream)
+        out = [item async for item in stream]
 
     return out
 

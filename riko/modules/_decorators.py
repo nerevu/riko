@@ -22,7 +22,7 @@ Examples:
 
 from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterator, Mapping
 from functools import partial, wraps
-from inspect import isawaitable, iscoroutinefunction
+from inspect import iscoroutinefunction
 from itertools import chain
 from logging import Logger
 from typing import ClassVar, Literal, cast, overload
@@ -30,7 +30,7 @@ from typing import ClassVar, Literal, cast, overload
 import pygogo as gogo
 
 from riko._iterutils import dispatch, is_listlike
-from riko.bado.itertools import async_map
+from riko.bado.itertools import as_awaitable, async_iter, async_map
 from riko.cast import BasicCastType
 from riko.context import Context, ExecutionMode, parse_context
 from riko.dotdict import DotDict, is_mapping
@@ -53,6 +53,7 @@ from riko.types._scalars import PrimitiveValue
 from riko.types._streams import (
     AsyncItemsOrValues,
     AsyncStream,
+    AsyncStreamOrValueStream,
     Feed,
     Item,
     ItemOrValue,
@@ -65,6 +66,7 @@ from riko.types._streams import (
 from riko.types._wrappers import (
     AsyncOperatorParser,
     AsyncOperatorWrapper,
+    AsyncOperatorWrapperOutput,
     AsyncProcessorParser,
     AsyncProcessorWrapper,
     AsyncSplitterParser,
@@ -193,7 +195,7 @@ class Module[B: (Literal[True], Literal[False])]:
         return isasync
 
     def _set_wrapper_metadata(
-        self, wrapper: wraps, pipe: ModuleParser, isasync: bool
+        self, wrapper: Callable[..., object], pipe: ModuleParser, isasync: bool
     ) -> None:
         """
         Stamps discovery metadata onto a finished wrapper.
@@ -265,7 +267,7 @@ class Module[B: (Literal[True], Literal[False])]:
         """
         def_emit = self._opts.get("emit") if emit is None else emit
         def_assign = assign or self._opts.get("assign", "")
-        opts = Opts(self._opts)
+        opts: Opts = Opts(self._opts)
         opts.setdefault("objectify", self._opts.get("ptype") != BasicCastType.NONE)
 
         _type_name = type(self).__name__
@@ -783,7 +785,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                         typed_casted.conf,
                         **pkwargs,
                     )
-                    stream = (await result) if isawaitable(result) else result
+                    stream = await as_awaitable(result)
                     args = (input_, stream, assign)
 
                     if callable(prepared.emit) and not isinstance(stream, Iterator):
@@ -989,9 +991,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             >>>
             >>> async def main():
             ...     r1 = await async_pipe1(items, **kwargs)
-            ...     print(next(r1))
+            ...     print(await anext(r1))
             ...     r2 = await async_pipe2(items, **kwargs)
-            ...     print(next(r2))
+            ...     print(await anext(r2))
             >>>
             >>> if issync:
             ...     {"content": 'say "hello world" three times!'}
@@ -1242,9 +1244,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             >>>
             >>> async def main():
             ...     r1 = await wrapped_async_pipe1(items, **kwargs)
-            ...     print(next(r1))
+            ...     print(await anext(r1))
             ...     r2 = await wrapped_async_pipe2(items, **kwargs)
-            ...     print(next(r2))
+            ...     print(await anext(r2))
             >>>
             >>> if issync:
             ...     {"content": 'say "hello world" three times!'}
@@ -1257,6 +1259,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         """
         module_name = pipe.__module__.split(".")[-1]
         is_loop = module_name == "loop"
+        async_native = iscoroutinefunction(pipe)
 
         async def async_wrapper(
             items: OperatorWrapperInput | Feed | None = None,
@@ -1270,9 +1273,17 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             inputs: Inputs | None = None,
             embed: AsyncProcessorWrapper | AsyncSubPipe | None = None,
             **kwargs: bool,
-        ) -> OperatorWrapperOutput:
+        ) -> AsyncOperatorWrapperOutput:
             if isinstance(items, AsyncIterable):
-                input_ = self.aparse(items)
+                # Async-native composers (async def async_pipe, e.g. timeout/send)
+                # consume the async stream lazily to bound an infinite Feed. Legacy
+                # aggregators reuse the sync parser, which can't iterate async
+                # tuples, so materialize the async input here — the same legacy
+                # materialization seam the AsyncPipe collection path applies.
+                if async_native:
+                    input_ = self.aparse(items)
+                else:
+                    input_ = iter([item async for item in self.aparse(items)])
             else:
                 input_ = self.parse(items)
 
@@ -1304,15 +1315,15 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             )
 
             if looped:
-                processed = cast(StreamOrValueStream, embed_stream)
+                processed = cast(AsyncStreamOrValueStream, embed_stream)
             elif handled:
-                processed = cast(Stream, embed_stream)
+                processed = async_iter(cast(Stream, embed_stream))
             else:
                 async_pipe = cast(AsyncOperatorParser[E], pipe)
                 pkwargs = _call_kwargs(prepared, context, count, kwargs)
                 extraction = cast(E, casted.extraction)
                 result = async_pipe(orig_stream, extraction, tuples, **pkwargs)
-                stream = (await result) if isawaitable(result) else result
+                stream = await as_awaitable(result)
 
                 if isinstance(stream, Iterator):
                     emit = bool(prepared.emit)
@@ -1321,7 +1332,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 else:
                     emit = bool(prepared.emit)
 
-                processed = self.process(stream, assign, emit=emit)
+                processed = async_iter(self.process(stream, assign, emit=emit))
 
             return processed
 
@@ -1593,7 +1604,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             async_pipe = cast(AsyncSplitterParser[E], pipe)
             extraction = cast(E, casted.extraction)
             result = async_pipe(orig_stream, extraction, tuples, **kwargs)
-            return (await result) if isawaitable(result) else result
+            return await as_awaitable(result)
 
         def sync_wrapper(
             items: SplitterWrapperInput | None = None,

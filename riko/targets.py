@@ -28,15 +28,15 @@ Examples:
 """
 
 import json
-from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from riko.sinks import KeyLike, SinkMode, SinkWrite, sink_write
+from riko.types._guards import is_mapping
 from riko.types._io import IOFileLikeType
 from riko.types._scalars import AnyStrType
-from riko.types._streams import Item
+from riko.types._streams import Item, RikoItems
 from riko.types._wrappers import ConversionOutput
 
 type Destination = str | Path | "SinkTarget"
@@ -94,13 +94,13 @@ class SinkTarget(Protocol):
         ...
 
     def deliver(
-        self, records: Iterable[Item], write: SinkWrite, *, fmt: str | None = None
+        self, records: RikoItems, write: SinkWrite, *, fmt: str | None = None
     ) -> SinkResult:
         """Delivers ``records`` to the destination under ``write`` semantics."""
         ...
 
     async def adeliver(
-        self, records: Iterable[Item], write: SinkWrite, *, fmt: str | None = None
+        self, records: RikoItems, write: SinkWrite, *, fmt: str | None = None
     ) -> SinkResult:
         """Asynchronously delivers ``records`` under ``write`` semantics."""
         ...
@@ -141,20 +141,18 @@ class File:
         modes = frozenset({SinkMode.APPEND, SinkMode.REPLACE})
         return SinkCapabilities(modes=modes, serializes=True)
 
-    def _encode(
-        self, records: Iterable[Item], fmt: str | None
-    ) -> ConversionOutput | None:
+    def _encode(self, records: RikoItems, fmt: str | None) -> ConversionOutput | None:
         """Serializes ``records`` with the resolved ``Targets`` converter."""
         from riko.collections import CONVERSION_FUNCS  # noqa: PLC0415
         from riko.modules.write import _resolve_target  # noqa: PLC0415
 
-        items = [dict(item) for item in records]
+        items = [dict(item) for item in records if is_mapping(item)]
         target = _resolve_target(self.url, fmt or self.format, *CONVERSION_FUNCS)
         convert = CONVERSION_FUNCS.get(target)
         return convert(items) if convert else None
 
     def deliver(
-        self, records: Iterable[Item], write: SinkWrite, *, fmt: str | None = None
+        self, records: RikoItems, write: SinkWrite, *, fmt: str | None = None
     ) -> SinkResult:
         """
         Serializes ``records`` and writes them to ``url``.
@@ -181,7 +179,7 @@ class File:
         return SinkResult(written=written)
 
     async def adeliver(
-        self, records: Iterable[Item], write: SinkWrite, *, fmt: str | None = None
+        self, records: RikoItems, write: SinkWrite, *, fmt: str | None = None
     ) -> SinkResult:
         """
         Asynchronously serializes ``records`` and writes them to ``url``.

@@ -22,12 +22,12 @@ Attributes:
 """
 
 from collections.abc import Awaitable, Callable
-from inspect import isawaitable
 from logging import Logger
 from typing import Any
 
 import pygogo as gogo
 
+from riko.bado._util import maybe_deferred
 from riko.modules._prepare import require_arg
 from riko.types._configs import UdfObjconf
 from riko.types._options import Defaults, Opts
@@ -82,8 +82,7 @@ async def async_parser(
 
     """
     func = require_arg(func, "func", "udf", strict=True)
-    result = func(item)
-    return await result if isawaitable(result) else result
+    return await maybe_deferred(func, item)
 
 
 def parser(

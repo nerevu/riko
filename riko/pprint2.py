@@ -8,7 +8,8 @@ from functools import total_ordering
 from typing import cast
 
 from riko.context import Context
-from riko.types.modules import AnyModuleRawConf, ConfArg, RawConfValues, Value
+from riko.types._pipeline import StepValue
+from riko.types.modules import AnyModuleRawConf, CountValues, RawConfValues, Value
 
 
 def cmp(a: object, b: object) -> int:
@@ -38,17 +39,13 @@ class Id:
             return False
 
 
+type PyKwargValue = (
+    AnyModuleRawConf | bool | str | CountValues | Context | list[StepValue | Id]
+)
+
+
 def repr_arg(
-    arg: str
-    | RawConfValues
-    | AnyModuleRawConf
-    | ConfArg
-    | Id
-    | Context
-    # | EmbeddedModule
-    | Value
-    | dict[str, str]
-    | None,
+    arg: PyKwargValue | RawConfValues | Id | Value | dict[str, str] | None,
 ) -> str:
     """
     Formats a function argument prettily but as working code

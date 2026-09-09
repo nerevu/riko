@@ -19,7 +19,7 @@ from pprint import pprint
 from typing import cast
 
 from riko import AsyncPipe, SyncPipe, get_path
-from riko.types import Items
+from riko.types._streams import RikoItems
 from riko.types.modules import (
     CurrencyFormatConf,
     CurrencyFormatRawConf,
@@ -624,7 +624,7 @@ def parse_freelancer[T: SyncPipe | AsyncPipe](source: T) -> T:
     return cast(T, result)
 
 
-def pipe(test=False, parallel=False, threads=False) -> Items:
+def pipe(test=False, parallel=False, threads=False) -> RikoItems:
     kwargs = {"parallel": parallel, "threads": threads}
 
     pipe = partial(SyncPipe, "fetchdata", **kwargs)
@@ -642,7 +642,7 @@ def pipe(test=False, parallel=False, threads=False) -> Items:
     return list(odesk_pipe.union(others=others))
 
 
-async def async_pipe(test=None) -> Items:
+async def async_pipe(test=None) -> RikoItems:
     pipe = partial(AsyncPipe, "fetchdata")
     odesk_source = pipe(conf=odesk_conf)
     guru_source = pipe(conf=guru_conf)

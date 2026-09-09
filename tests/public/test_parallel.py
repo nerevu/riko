@@ -17,6 +17,7 @@ import pytest
 
 from riko.collections import AsyncCollection, AsyncPipe
 from riko.paths import get_path
+from riko.types._guards import is_mapping
 from riko.types.modules import ItemBuilderConf
 from tests import skipif_issync
 
@@ -75,6 +76,7 @@ class TestAsyncBoundedParallel:
         )
         first = await anext(pipe)
         await pipe.aclose()
+        assert is_mapping(first)
         assert first.get("content") in {str(i) for i in range(20)}
         assert len(consumed) < 20
 
@@ -100,6 +102,7 @@ class TestAsyncBoundedParallel:
 
         async with pipe:
             async for item in pipe:
+                assert is_mapping(item)
                 assert item.get("content")
                 return
 

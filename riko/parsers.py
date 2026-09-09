@@ -100,9 +100,9 @@ if TYPE_CHECKING:
     from lxml.etree import _ElementTree as lxmlElementTree
 
 type AnyElementTree = (
-    "nativeElementTree" | "lxmlElementTree" | "nativeElementTree[nativeElement[str]]"
+    "nativeElementTree | lxmlElementTree | nativeElementTree[nativeElement[str]]"
 )
-type AnyElement = "nativeElement" | "lxmlElement"
+type AnyElement = "nativeElement | lxmlElement"
 
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 logger.debug(f"{IS_LXML=}")
@@ -163,7 +163,7 @@ class LinkParser(HTMLParser):
     ) -> None:
         entry = dict(attrs)
         link = entry.get("href")
-        type_ = entry.get("type", "")
+        type_ = entry.get("type") or ""
         type_match = any(type_.endswith(t) for t in self.link_type)
 
         if link and not self.strict:
@@ -228,7 +228,7 @@ def parse_rss(  # noqa: E302
         source, source_name = content, "content"
 
     try:
-        parsed = rss_parser.parse(source)  # pyright: ignore[reportArgumentType]
+        parsed = rss_parser.parse(source)
     finally:
         if f:
             f.close()
@@ -569,7 +569,7 @@ def any2dict(
         else:
             use_ijson = isinstance(content, RawIOBase)
 
-        if use_ijson:
+        if use_ijson and ijson:
             if path and not path.endswith(".item"):
                 prefix = f"{path}.item"
             else:
@@ -828,7 +828,7 @@ def get_field(
     """Returns ``item[field]``, or ``item`` itself when no field is given."""
     if field and isinstance(item, DotDict):
         value = item.get(field, **kwargs)
-    elif field and isinstance(item, dict):
+    elif field and is_mapping(item):
         value = item.get(field)
     else:
         value = item

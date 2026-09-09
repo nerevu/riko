@@ -186,7 +186,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> async def main():
         ...     items = [{"rank": "b"}, {"rank": "a"}, {"rank": "c"}]
         ...     result = await async_pipe(items, conf={"rule": {"field": "rank"}})
-        ...     print(next(result))
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         {'rank': 'a'}

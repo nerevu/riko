@@ -4,12 +4,11 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ._wrappers import (
-        AsyncPipeItems,
-        AsyncPipeParser,
-        ParserOutput,
-        Pipeline,
-        SyncPipeParser,
+    from riko.types._wrappers import (
+        AsyncPipeWrapper,
+        AsyncWrapperOutput,
+        SyncPipeWrapper,
+        SyncWrapperOutput,
     )
 
 # dependencies
@@ -18,15 +17,17 @@ type AsyncPipelineDependencies = Callable[..., Awaitable[list[str]]]
 type PipelineDependencies = SyncPipelineDependencies | AsyncPipelineDependencies
 
 # generated/executable steps
-type SyncStep = tuple[str, ParserOutput | SyncPipeParser]
-type SyncSteps = dict[str, ParserOutput | SyncPipeParser]
+type SyncStepValue = SyncWrapperOutput | SyncPipeWrapper
+type SyncStep = tuple[str, SyncStepValue]
+type SyncSteps = dict[str, SyncStepValue]
 
-type AsyncStep = tuple[str, AsyncPipeItems | AsyncPipeParser]
-type AsyncSteps = dict[str, AsyncPipeItems | AsyncPipeParser]
+type AsyncStepValue = AsyncWrapperOutput | AsyncPipeWrapper
+type AsyncStep = tuple[str, AsyncStepValue]
+type AsyncSteps = dict[str, AsyncStepValue]
 
-type StepValue = ParserOutput | Pipeline | AsyncPipeItems
-type Step = tuple[str, StepValue]
-type Steps = dict[str, StepValue]
+type StepValue = SyncStepValue | AsyncStepValue
+type Step = tuple[str, SyncStepValue | AsyncStepValue]
+type Steps = dict[str, SyncStepValue | AsyncStepValue]
 
 # generated Python input
 type SyncPyInput = list[str | tuple[str, ...]]

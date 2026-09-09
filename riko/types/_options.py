@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, TypedDict
 
 if TYPE_CHECKING:
     from riko.cast import BasicCastType
+    from riko.types._wrappers import ParserOutput
 
     from ._collections import BasicArg, RikoDict, RikoList
     from ._dynamic_conf import DynamicConf
@@ -72,7 +73,7 @@ class Opts(TypedDict, total=False):
     ptype: BasicCastType
     assign: str
     count: CountValues
-    emit: bool
+    emit: bool | Callable[[ParserOutput], bool] | None
     extract: str
     field: str
     listize: bool

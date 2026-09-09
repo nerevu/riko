@@ -193,7 +193,7 @@ class NamedTextIOWrapper(TextIOWrapper):
     content_type: str | None = None
 
     @property
-    def name(self) -> str:  # type: ignore[override]
+    def name(self) -> str:
         """The stream's filename or source URL."""
         return self._name
 

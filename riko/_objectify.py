@@ -87,7 +87,7 @@ def objectify[T](data: Mapping[str, T]) -> Objectify[T]: ...  # noqa: E704
 @overload  # noqa: E302
 def objectify[T](data: T) -> T: ...  # noqa: E704
 @overload  # noqa: E302
-def objectify[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+def objectify[T](  # noqa: E704
     data: Mapping[str, T], func: ArgCaster
 ) -> Objectify[T]: ...
 @overload  # noqa: E302

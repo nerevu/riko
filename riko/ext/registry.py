@@ -18,7 +18,7 @@ Examples:
         >>>
         >>> registry = ModuleRegistry()
         >>> registry.register(ModuleDefinition(name="double", sync_pipe=double))
-        >>> list(registry.resolve("double", "pipe")([{"x": 2}]))
+        >>> list(registry.resolve("double")([{"x": 2}]))
         [{'x': 4}]
 
 Attributes:
@@ -29,18 +29,19 @@ Attributes:
 
 from dataclasses import dataclass
 from dataclasses import replace as _replace
+from functools import partial
 from importlib.metadata import EntryPoint, entry_points
-from typing import Literal, cast, overload
+from typing import Literal, overload
 
-from riko._importutils import import_or_else
+from riko._importutils import resolve_interface
 from riko.exceptions import UnsupportedModuleError
 from riko.types._wrappers import (
     AsyncPipeCallable,
-    AsyncPipeParser,
-    Interface,
-    Pipeline,
+    AsyncPipeWrapper,
+    Pipe,
+    PipeCallable,
     SyncPipeCallable,
-    SyncPipeParser,
+    SyncPipeWrapper,
 )
 
 ENTRY_POINT_GROUP = "riko.modules"
@@ -82,14 +83,21 @@ class ModuleDefinition:
     module: object | None = None
     description: str | None = None
 
-    def get_pipe(self, interface: Interface) -> Pipeline | None:
+    def get_pipe(self, is_async: bool = False) -> PipeCallable | Pipe | None:
         """Returns the callable for ``interface``, or ``None`` if undefined."""
-        pipe = self.sync_pipe if interface == "pipe" else self.async_pipe
+        kwargs = {"is_async": is_async, "builtin": False}
+        loader = partial(getattr, self)
+        pipe: PipeCallable | Pipe | None = (
+            self.async_pipe if is_async else self.sync_pipe
+        )
 
-        if pipe is None and self.module is not None:
-            pipe = getattr(self.module, interface, None)
+        if pipe is None:
+            try:
+                pipe = resolve_interface("module", loader=loader, **kwargs)
+            except UnsupportedModuleError:
+                pass
 
-        return cast(Pipeline | None, pipe)
+        return pipe
 
 
 def _module_summary(module: object) -> str | None:
@@ -161,14 +169,8 @@ class ModuleRegistry:
 
         return self._loaded.get(name)
 
-    def _resolve_builtin(self, name: str, interface: Interface) -> Pipeline:
-        if module := import_or_else(f"riko.modules.{name}"):
-            if (resolved := getattr(module, interface, None)) is None:
-                raise UnsupportedModuleError(f"{name!r} has no {interface!r}")
-        else:
-            raise UnsupportedModuleError(name)
-
-        return resolved
+    def _resolve_builtin(self, name: str, is_async: bool = False) -> Pipe:
+        return resolve_interface(name, is_async=is_async)
 
     def register(self, definition: ModuleDefinition, *, replace: bool = False) -> None:
         """
@@ -190,13 +192,13 @@ class ModuleRegistry:
 
     @overload
     def resolve(  # noqa: E704
-        self, name: str, interface: Literal["pipe"]
-    ) -> SyncPipeParser: ...
+        self, name: str, is_async: Literal[False] = ...
+    ) -> SyncPipeWrapper: ...
     @overload  # noqa: E301
     def resolve(  # noqa: E704
-        self, name: str, interface: Literal["async_pipe"]
-    ) -> AsyncPipeParser: ...
-    def resolve(self, name: str, interface: Interface) -> Pipeline:  # noqa: E301
+        self, name: str, is_async: Literal[True]
+    ) -> AsyncPipeWrapper: ...
+    def resolve(self, name: str, is_async: bool = False) -> Pipe | PipeCallable:  # noqa: E301
         """
         Returns ``name``'s callable for ``interface`` and honors tier precedence.
 
@@ -209,8 +211,9 @@ class ModuleRegistry:
         definition = self._runtime.get(name) or self._entry_point_definition(name)
 
         if definition is None:
-            pipe = self._resolve_builtin(name, interface)
-        elif (pipe := definition.get_pipe(interface)) is None:
+            pipe = self._resolve_builtin(name, is_async)
+        elif (pipe := definition.get_pipe(is_async)) is None:
+            interface = "async_pipe" if is_async else "pipe"
             raise UnsupportedModuleError(f"{name!r} has no {interface!r}")
 
         return pipe

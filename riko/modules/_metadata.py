@@ -78,13 +78,30 @@ def _metadata_from_targets(
     return metadata
 
 
-def get_module_metadata(name: ModuleNameLike) -> ModuleMetadata | None:
+@overload
+def get_module_metadata(  # noqa: E704
+    name: ModuleNameLike, strict: Literal[False] = ...
+) -> ModuleMetadata | None: ...
+@overload  # noqa: E302
+def get_module_metadata(  # noqa: E704
+    name: ModuleNameLike, strict: Literal[True]
+) -> ModuleMetadata: ...
+def get_module_metadata(  # noqa: E302
+    name: ModuleNameLike, strict: bool = False
+) -> ModuleMetadata | None:
     canonical = normalize_module_name(name)
     module = import_module(f"{_PACKAGE}.{canonical}")
     pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
     targets = tuple(cast(ModuleWrapper, pipe) for pipe in pipes if callable(pipe))
     label = module.__name__
-    return _metadata_from_targets(canonical, targets, label=label, strict_naming=True)
+    metadata = _metadata_from_targets(
+        canonical, targets, label=label, strict_naming=True
+    )
+
+    if strict and metadata is None:
+        raise ValueError(f"Module {name!r} has no metadata")
+
+    return metadata
 
 
 def gen_module_catalog(name: str | None = None) -> Iterator[ModuleMetadata]:
@@ -104,11 +121,11 @@ def gen_registry_catalog() -> Iterator[ModuleMetadata]:
     the catalog is an explicit "show everything" operation. A definition whose
     callables carry no module metadata (e.g. a bare lambda) is skipped.
     """
-    interfaces = ("pipe", "async_pipe")
+    is_async = (True, False)
 
     for name in registry.catalog_names():
         definition = registry.definition(name)
-        pipes = map(definition.get_pipe, interfaces) if definition else ()
+        pipes = map(definition.get_pipe, is_async) if definition else ()
         targets = tuple(cast(ModuleWrapper, pipe) for pipe in pipes if callable(pipe))
         args = (name, targets)
 
@@ -221,7 +238,7 @@ def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
         'Fetches an RSS feed and yields feed entries.'
         >>> fetch.sync_pipe.__name__, fetch.async_pipe.__name__
         ('pipe', 'async_pipe')
-        >>> fetch.get_pipe("pipe") is fetch.sync_pipe
+        >>> fetch.get_pipe() is fetch.sync_pipe
         True
         >>> describe_module("does-not-exist")
 

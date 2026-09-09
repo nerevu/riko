@@ -215,12 +215,14 @@ split-on-trailing-comma = false
 ]
 
 [tool.pyright]
+reportUnnecessaryTypeIgnoreComment = "error"
 exclude = [
     "**/pycache",
     ".cache",
     ".claude",
     ".ruff_cache",
     ".tox/*",
+    ".venv",
     "tmp",
     "build/*",
     "dist/*",

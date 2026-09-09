@@ -10,6 +10,7 @@ Attributes:
 
 """
 
+import os
 from codecs import StreamReader
 from collections.abc import Iterable, Iterator, Mapping
 from functools import partial, wraps
@@ -24,10 +25,8 @@ from urllib.response import addinfourl
 
 try:
     import fcntl
-    from os import O_NONBLOCK
 except ImportError:
     fcntl = None
-    O_NONBLOCK = 0
 
 import mezmorize
 import pygogo as gogo
@@ -43,6 +42,8 @@ from riko.paths import get_abspath
 from riko.types._collections import BasicArg
 from riko.types._io import BinaryFileLike, FileLike, Opener, StringFileLike
 from riko.types._scalars import AnyStr
+
+O_NONBLOCK: int = getattr(os, "O_NONBLOCK", 0)
 
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 

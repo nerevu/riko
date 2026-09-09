@@ -41,7 +41,7 @@ from typing import Any, Self, cast
 
 import pygogo as gogo
 
-from riko.bado.itertools import async_iter
+from riko.bado.itertools import as_async
 from riko.cast import BasicCastType
 from riko.types._configs import TimeoutObjconf
 from riko.types._options import Defaults, Opts
@@ -65,11 +65,7 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
     def __init__(
         self, elements: AsyncIterable[T] | Iterable[T], timeout_ms: int = 0
     ) -> None:
-        if isinstance(elements, AsyncIterable):
-            self.aiter = aiter(elements)
-        else:
-            self.aiter = async_iter(elements, cooperative=True)
-
+        self.aiter = aiter(as_async(elements, cooperative=True))
         self.timeout_ns = max(timeout_ms, 0) * NS_PER_MS
         self.deadline: int | None = None
 
@@ -276,7 +272,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>>
         >>> async def main():
         ...     result = await async_pipe(paginated_api(), conf={"milliseconds": 250})
-        ...     print(len(list(result)))
+        ...     print(len([item async for item in result]))
         >>>
         >>> run(main)
         2

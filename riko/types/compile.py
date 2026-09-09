@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING, NotRequired, Required, TypedDict
 
 from .modules import EmbedRef
@@ -188,6 +188,10 @@ class PipeDag(TypedDict):
     modules: list[DagModule]
     wires: NotRequired[list[tuple[str, str]]]
 
+
+type PipelineDescriptionLike = PipelineDescription | str | tuple[str, ...]
+type PipelineDescriptions = Sequence[PipelineDescriptionLike]
+type PipelineDescriptionStream = Iterator[PipelineDescriptionLike]
 
 __all__ = [
     "DagModule",

@@ -28,7 +28,7 @@ from riko.collections import (
 from riko.exceptions import ReceiverUnavailableError
 from riko.ext.names import ModuleName, normalize_module_name
 from riko.paths import get_path
-from riko.types._guards import is_stateful_item
+from riko.types._guards import is_mapping, is_stateful_item
 from riko.types._sentinels import StreamState
 from riko.types._streams import Item
 from riko.types.modules import (
@@ -191,7 +191,7 @@ class TestSyncCollections(_CollectionTest):
 
         list(sender)
         drained.extend(receiver)
-        assert not any(map(is_stateful_item, drained))
+        assert not any(is_stateful_item(item) for item in drained if is_mapping(item))
 
     def test_send_signals_done_on_early_close(self):
         """

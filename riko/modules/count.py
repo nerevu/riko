@@ -124,7 +124,7 @@ def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
         >>> async def main():
         ...     items = ({"x": x} for x in range(5))
         ...     result = await async_pipe(items)
-        ...     print(next(result))
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         {'count': 5}
