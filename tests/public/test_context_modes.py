@@ -31,12 +31,6 @@ def test_mode_drives_describe_properties(mode, wants_input, wants_deps):
     assert context.describe_dependencies is wants_deps
 
 
-def test_legacy_describe_kwargs_are_ignored():
-    # The bool-kwarg translation is gone; describe mode comes from `mode` only.
-    assert Context(describe_input=True).mode is ExecutionMode.RUN
-    assert Context(describe_dependencies=True).describe_input is False
-
-
 def test_describe_properties_are_read_only():
     context = Context()
 

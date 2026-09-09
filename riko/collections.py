@@ -148,7 +148,7 @@ from riko.bado.itertools import (
     async_map_stream,
     async_merge,
 )
-from riko.context import Context, ExecutionMode, parse_context
+from riko.context import Context, ExecutionMode
 from riko.exceptions import PipelineStateError
 from riko.ext._resolver import pipe_resolver
 from riko.ext.names import normalize_module_name
@@ -721,13 +721,8 @@ class PyPipe(_Lifecycle):
         self.source = source
         self.parallel = parallel
         self.conf: Conf = conf or {}
-        self.context: Context = parse_context(
-            context,
-            mode=mode,
-            inputs=inputs,
-            verbose=verbose,
-            test=test,
-            submodule=submodule,
+        self.context: Context = (context or Context()).augment(
+            mode=mode, inputs=inputs, verbose=verbose, test=test, submodule=submodule
         )
         self.inputs: Inputs = self.context.inputs
         self.verbose: bool = bool(verbose)

@@ -94,28 +94,46 @@ Use **resource value** as the generic term for the value a resource definition r
 Reusable Context declarations use a narrower public category:
 
 ```python
-type ResourceDefinition[T] = ReusableResource[T] | ResourceFactory[T]
+type ResourceDefinition[T] = ReusableResource[T] | LifecycleFactory[T]
 ```
+
+The union admits an already-wrapped `ReusableResource` or a bare `LifecycleFactory` (a generator/context-manager recipe that `with_resource` normalizes into a reusable resource). A bare `ValueFactory` (an ordinary producer callable) is intentionally **excluded**: it becomes a definition only through `Resource.from_factory(...)`, which forces the cleanup decision (see "Resource factories and construction"). This is the implemented alias and is preferred over the earlier `ReusableResource[T] | ResourceFactory[T]` target, because `ResourceFactory` would fold the bare `ValueFactory` back in and lose that distinction.
 
 Conceptually:
 
 ```text
 Resource[T]
-├── ReusableResource[T]
-│   ├── _ExternalResource[T]
-│   └── _FactoryResource[T]
-└── _OwnedResource[T]       # one-shot live-owned wrapper
+├── OneShotResource[T]        # one lifecycle acquisition; not Context-storable
+│   ├── _OwnedResource[T]     #   live value + explicit cleanup (compat form)
+│   └── _LifecycleResource[T] #   generator / context-manager lifecycle
+└── ReusableResource[T]       # Context-storable definition
+    ├── _ExternalResource[T]  #   caller-owned value; never closed
+    └── _FactoryResource[T]   #   Riko-owned provider recipe
 ```
 
-`Resource` and `ReusableResource` are public typing/construction abstractions. The concrete external/factory/owned variants are private implementation types and are not normal user construction surfaces. `Resource` is the public facade:
+`Resource`, `OneShotResource`, and `ReusableResource` are public typing/construction abstractions. The concrete external/factory/owned/lifecycle variants are private implementation types and are not normal user construction surfaces. `Resource` is the public facade, with one constructor per intent:
 
-```python
-Resource(value, cleanup=...)  # one-shot live-owned compatibility form
-Resource.from_external(value)  # reusable caller-owned value
-Resource.from_factory(factory, ...)  # reusable Riko-owned provider
+| API | Accepted input | Interpretation | Parser receives | Lifecycle / cleanup | Resource type | Reusable? |
+|---|---|---|---|---|---|---|
+| `Resource(value)` | Existing resolved value | Use this existing value | `value` | Riko owns the value; uses explicit `cleanup=` when supplied, otherwise the value's native close | `OneShotResource[T]` | No |
+| `Resource.from_external(value)` | Existing caller-owned value | Borrow this existing value | `value` | Caller owns lifecycle; Riko never closes it | `ReusableResource[T]` | Yes |
+| `Resource.from_lifecycle(x)` | Generator/context-manager lifecycle, or supported lifecycle object | Enter this lifecycle | Yielded / entered value | Lifecycle defines teardown; Riko drives entry/exit | `OneShotResource[T]` | No |
+| `Resource.from_factory(f, ...)` | Value-producing callable | Call this producer | Result of `f(...)` | Riko manages the produced value's teardown; `cleanup=` is required (callable or `False`) | `ReusableResource[T]` | Yes |
+| `context.with_resource(name, definition)` | Reusable resource definition | Bind a named definition to a new `Context` | Nothing yet; resolved during execution | Opens/closes nothing at bind time; lifecycle stays as defined | `Context` holding the resource | Context-safe definitions only |
+
+The one-line mental model:
+
+```text
+Resource(value)               → use     (existing value; Riko owns it)
+Resource.from_external(value) → borrow  (existing value; caller owns it)
+Resource.from_lifecycle(x)    → enter   (a lifecycle; it defines teardown)
+Resource.from_factory(f, ...) → call    (a producer; Riko manages the result)
+context.with_resource(...)    → bind    (a definition to a new Context; resolved later)
 ```
 
-A one-shot live-owned `Resource(value, ...)` is not a `ResourceDefinition` and cannot be stored in a reusable Context. Its legitimate use is an explicitly one-shot execution-local adaptation/compatibility boundary. `Resource.from_external(value)` may wrap any actual caller-owned resource value and never closes it; independent executions using the same Context may therefore receive the same external object concurrently, and concurrency/thread safety remains the caller's responsibility. Use a factory when each execution requires an isolated instance.
+**NOTE — wrapper reusability is not input/factory reusability.** "Reusable?" describes the *wrapper*, not the Python object used to construct it. A lifecycle factory may itself be callable repeatedly, yet `Resource.from_lifecycle(...)` still yields a `OneShotResource`: that wrapper represents exactly one lifecycle acquisition and is not Context-storable. Conversely `Resource.from_factory(...)` yields a `ReusableResource` because it retains the factory *recipe* and can acquire a fresh value per execution. So the wrapper's reusability tracks "can this definition be stored in a Context and re-resolved," not "can the underlying callable be invoked more than once." (This is a resource-semantics invariant; it belongs here, not in `API_SURFACE.md`, which governs import/compatibility boundaries.)
+
+A one-shot `Resource(value, ...)`/`from_lifecycle(...)` (`OneShotResource`) is not a `ResourceDefinition` and cannot be stored in a reusable Context. Its legitimate use is an explicitly one-shot execution-local adaptation/compatibility boundary. `Resource.from_external(value)` may wrap any actual caller-owned resource value and never closes it; independent executions using the same Context may therefore receive the same external object concurrently, and concurrency/thread safety remains the caller's responsibility. Use a factory when each execution requires an isolated instance.
 
 Live external resource values are runtime/process-local. Contexts containing them have no durable serialization guarantee, and canonical workflow/resource serialization stores references/configuration rather than sockets, sessions, locks, tokens, or other live objects.
 
@@ -140,6 +158,19 @@ Arbitrary callable objects are **not** inferred to be factories merely because `
 ```python
 ctx.with_resource("client", Resource.from_factory(Client, base_url=url))
 ```
+
+**`ValueFactory` cleanup is mandatory; `LifecycleFactory` teardown is intrinsic.** The two factory shapes carry teardown differently, and `from_factory` encodes that split statically:
+
+```text
+Resource.from_factory(value_factory, cleanup=fn)     # accepted — explicit teardown callable
+Resource.from_factory(value_factory, cleanup=False)  # accepted — explicitly no teardown
+Resource.from_factory(value_factory)                 # rejected — a ValueFactory has no intrinsic teardown
+Resource.from_factory(lifecycle_factory)             # accepted — teardown lives in the generator/CM
+Resource.from_factory(lifecycle_factory, cleanup=fn) # rejected — use from_lifecycle for CM/gen semantics
+Resource(value_factory)                              # rejected statically — a producer is not a resolved value
+```
+
+An ordinary `ValueFactory` (a plain producer callable) resolves to a bare value with no inherent teardown, so Riko refuses to guess: it requires either `cleanup=<callable>` (Riko runs it at teardown) or `cleanup=False` (the produced value is deliberately not closed). A `LifecycleFactory` (generator/context-manager recipe) already defines its own teardown, so supplying `cleanup=` there is an error — reach for `Resource.from_lifecycle(...)` when you want `__enter__`/`__exit__`/post-`yield` semantics. This keeps "who tears this down" an explicit declaration rather than a runtime inference.
 
 `Resource.from_factory(factory, *args, **kwargs)` first binds its explicit arguments using normal partial-like semantics, then validates the remaining invocation contract. The only valid remaining signatures are exactly:
 
@@ -230,6 +261,8 @@ Parsers and factories receive resolved resource values through an execution-boun
 resources.db
 resources["db"]
 ```
+
+The view is a real `Mapping`, so `resources["db"]` is the canonical, always-correct accessor and attribute access (`resources.db`) is **convenience-only**. Because it is a `Mapping`, the method names `keys`, `values`, `items`, and `get` (plus dunders) are **reserved**: a resource bound to one of those names is reachable only via subscript — `resources["keys"]` returns the resource, while `resources.keys` stays the bound `Mapping` method. Attribute access is therefore defined only for binding names that do not collide with a `Mapping` member; prefer `resources[name]` whenever a name could shadow one. This is why the local alias is the identity-significant handle (below) — callers choose non-colliding aliases at the binding site.
 
 `Context.resources.db` continues to denote the immutable resource definition, not the resolved resource value.
 

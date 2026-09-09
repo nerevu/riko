@@ -7,6 +7,10 @@ v0.77.4 (Unreleased)
 New
 ~~~
 
+- A pipe may now declare ``resources`` and receive the resolved handles. Bind them with
+  ``Context.with_resource``; riko closes the resources it owns and never closes one
+  supplied by the caller.
+
 - Added ``on_receive`` to ``subscribe`` which runs the callback on each item as it
   arrives and yields nothing. It is a distinct operation from ``func`` (a map), so
   passing both raises ``TypeError``.

@@ -30,15 +30,12 @@ from riko.types._scalars import AnyStr
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from typing import Literal, Protocol, overload
+    from typing import Literal, overload
 
-    from riko.types._io import FileLike
-
-    class _Closeable(Protocol):
-        def close(self) -> None: ...  # noqa: E704
+    from riko.types._io import FileLike, SyncCloseable
 
     class Reencoder[T: AnyStr]:
-        _f: _Closeable
+        _f: SyncCloseable
         binary: bool
         join_char: T
         stream: Iterator[T]
@@ -49,7 +46,7 @@ if TYPE_CHECKING:
             fromenc: str = ...,
             toenc: str = ...,
             *,
-            owner: _Closeable | None = ...,
+            owner: SyncCloseable | None = ...,
             decode: bool = ...,
             remove_BOM: bool = ...,  # noqa: N803
         ) -> None: ...
@@ -137,7 +134,7 @@ if TYPE_CHECKING:
         fromenc: str = ...,
         toenc: str = ...,
         *,
-        owner: _Closeable | None = ...,
+        owner: SyncCloseable | None = ...,
         decode: Literal[True],
         remove_BOM: bool = ...,  # noqa: N803
     ) -> Reencoder[str]: ...
@@ -147,7 +144,7 @@ if TYPE_CHECKING:
         fromenc: str = ...,
         toenc: str = ...,
         *,
-        owner: _Closeable | None = ...,
+        owner: SyncCloseable | None = ...,
         decode: Literal[False] = ...,
         remove_BOM: bool = ...,  # noqa: N803
     ) -> Reencoder[bytes]: ...

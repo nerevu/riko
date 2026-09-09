@@ -32,7 +32,7 @@ import pygogo as gogo
 from riko._iterutils import dispatch, is_listlike
 from riko.bado.itertools import as_awaitable, async_iter, async_map
 from riko.cast import BasicCastType
-from riko.context import Context, ExecutionMode, parse_context
+from riko.context import Context, ExecutionMode
 from riko.dotdict import DotDict, is_mapping
 from riko.modules._assignment import gen_assignments, get_assignment
 from riko.modules._derive import derive_loopable, derive_subtypes
@@ -742,6 +742,9 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             count: CountValues | None = None,
             mode: ExecutionMode | None = None,
             inputs: Inputs | None = None,
+            verbose: bool | None = None,
+            test: bool | None = None,
+            submodule: bool | None = None,
             **kwargs: bool,
         ) -> ProcessorWrapperOutput:
             if is_listlike(item):
@@ -773,13 +776,15 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                     args = (input_, orig_item, assign)
                     processed = self.process(*args, emit=True, skip=True)
                 else:
-                    aync_pipe = cast(AsyncProcessorParser[T, object], pipe)
-                    context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
+                    async_pipe = cast(AsyncProcessorParser[T, object], pipe)
+                    _context = context or Context()
+                    akwargs = {"verbose": verbose, "test": test, "submodule": submodule}
+                    context = _context.augment(mode=mode, inputs=inputs, **akwargs)
                     inputs = context.inputs
                     kwargs["test"] = context.test
                     pkwargs = _call_kwargs(prepared, context, count, kwargs)
                     typed_casted = cast(Casted[T, E], casted)
-                    result = aync_pipe(
+                    result = async_pipe(
                         typed_casted.field,
                         typed_casted.extraction,
                         typed_casted.conf,
@@ -814,6 +819,9 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             count: CountValues | None = None,
             mode: ExecutionMode | None = None,
             inputs: Inputs | None = None,
+            verbose: bool | None = None,
+            test: bool | None = None,
+            submodule: bool | None = None,
             **kwargs: bool,
         ) -> ProcessorWrapperOutput:
             if is_listlike(item):
@@ -845,7 +853,9 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                     processed = self.process(*args, emit=True, skip=True)
                 else:
                     sync_pipe = cast(SyncProcessorParser[T, E], pipe)
-                    context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
+                    _context = context or Context()
+                    akwargs = {"verbose": verbose, "test": test, "submodule": submodule}
+                    context = _context.augment(mode=mode, inputs=inputs, **akwargs)
                     inputs = context.inputs
                     kwargs["test"] = context.test
                     pkwargs = _call_kwargs(prepared, context, count, kwargs)
@@ -1272,6 +1282,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             mode: ExecutionMode | None = None,
             inputs: Inputs | None = None,
             embed: AsyncProcessorWrapper | AsyncSubPipe | None = None,
+            verbose: bool | None = None,
+            test: bool | None = None,
+            submodule: bool | None = None,
             **kwargs: bool,
         ) -> AsyncOperatorWrapperOutput:
             if isinstance(items, AsyncIterable):
@@ -1297,7 +1310,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             else:
                 embedded_kwargs = None
 
-            context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
+            _context = context or Context()
+            akwargs = {"verbose": verbose, "test": test, "submodule": submodule}
+            context = _context.augment(mode=mode, inputs=inputs, **akwargs)
             inputs = context.inputs
             tuples, orig_stream, casted = self.setup(
                 prepared, input_, inputs=inputs, field=field, count=count, **kwargs
@@ -1347,6 +1362,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             mode: ExecutionMode | None = None,
             inputs: Inputs | None = None,
             embed: SyncProcessorWrapper | SyncSubPipe | None = None,
+            verbose: bool | None = None,
+            test: bool | None = None,
+            submodule: bool | None = None,
             **kwargs: bool,
         ) -> OperatorWrapperOutput:
             input_ = self.parse(items)
@@ -1360,7 +1378,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             else:
                 embedded_kwargs = None
 
-            context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
+            _context = context or Context()
+            akwargs = {"verbose": verbose, "test": test, "submodule": submodule}
+            context = _context.augment(mode=mode, inputs=inputs, **akwargs)
             inputs = context.inputs
             tuples, orig_stream, casted = self.setup(
                 prepared, input_, inputs=inputs, field=field, count=count, **kwargs
