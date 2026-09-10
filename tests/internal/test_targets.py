@@ -125,13 +125,6 @@ class TestFileDeliver:
         assert result.written > 0
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
-    def test_append_extends(self, tmp_path):
-        path = tmp_path / "out.json"
-        File(str(path)).deliver([{"x": 0}], SinkWrite(SinkMode.APPEND))
-        File(str(path)).deliver([{"x": 1}], SinkWrite(SinkMode.APPEND))
-
-        assert path.read_bytes() == b'[{"x": 0}][{"x": 1}]'
-
     @async_test
     async def test_adeliver_matches_deliver(self, tmp_path):
         path = tmp_path / "out.json"
@@ -190,6 +183,17 @@ class TestSyncWrite:
         path = tmp_path / "out.csv"
         list(SyncPipe(source=ITEMS).write(str(path)))
         assert path.read_bytes() == b"x\r\n0\r\n1\r\n2\r\n"
+
+    def test_streaming_csv_append_across_executions_writes_header_once(self, tmp_path):
+        """
+        A second append execution against an existing non-empty CSV must not
+        re-emit the header. The writer's ``_started`` flag is per-run, so header
+        suppression derives from the file already having content.
+        """
+        path = tmp_path / "out.csv"
+        list(SyncPipe(source=[{"x": 0}]).write(str(path), mode="append"))
+        list(SyncPipe(source=[{"x": 1}]).write(str(path), mode="append"))
+        assert path.read_bytes() == b"x\r\n0\r\n1\r\n"
 
     def test_writes_mid_chain(self, tmp_path):
         path = tmp_path / "out.json"

@@ -403,7 +403,7 @@ class _FileWriter:
 
     target: SinkTarget
     mode: SinkMode
-    fmt: Formats | str
+    fmt: Formats
     stream: bool
     _buffer: list[Item] = field(default_factory=list)
     _started: bool = False
@@ -427,15 +427,23 @@ class _FileWriter:
         from meza import convert as cv  # noqa: PLC0415
         from meza import io  # noqa: PLC0415
 
-        file_mode = FILE_OPEN_MODES[self.mode] if not self._started else "ab"
+        first = not self._started
+        file_mode = FILE_OPEN_MODES[self.mode] if first else "ab"
+        append_mode = self.mode == SinkMode.APPEND
+        skip_header = not first or (append_mode and self._has_content())
 
-        if self.fmt == "csv":
-            content = cv.records2csv([dict(item)], skip_header=self._started)
+        if self.fmt == Formats.CSV:
+            content = cv.records2csv([dict(item)], skip_header=skip_header)
         else:
             content = json.dumps(dict(item), default=str) + "\n"
 
         io.write(str(self._url), content, mode=file_mode)
         self._started = True
+
+    def _has_content(self) -> bool:
+        """Whether the destination file already exists and is non-empty."""
+        path = Path(str(self._url))
+        return path.exists() and path.stat().st_size > 0
 
     @property
     def _url(self) -> str | Path:
