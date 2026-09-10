@@ -264,7 +264,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> async def main():
         ...     async with get_async_temp_file() as fp:
         ...         conf = {"url": fp.name, "target": "csv"}
-        ...         stream = await async_pipe([{"x": 0}, {"x": 1}], conf=conf)
+        ...         stream = async_pipe([{"x": 0}, {"x": 1}], conf=conf)
         ...         print(await anext(stream))
         ...         print((await fp.read()).split())
         >>>

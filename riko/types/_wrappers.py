@@ -143,10 +143,14 @@ class SyncSplitterWrapper(ModuleWrapper):
 
 
 # Async
+type AsyncProcessorWrapperOutput = Awaitable[ProcessorWrapperOutput]
 type AsyncOperatorWrapperOutput = AsyncStreamOrValueStream
-type AsyncWrapperOutput = Awaitable[
-    ProcessorWrapperOutput | AsyncOperatorWrapperOutput | SplitterWrapperOutput
-]
+type AsyncSplitterWrapperOutput = Awaitable[SplitterWrapperOutput]
+type AsyncWrapperOutput = (
+    AsyncProcessorWrapperOutput
+    | AsyncOperatorWrapperOutput
+    | AsyncSplitterWrapperOutput
+)
 
 type AwaitableProcessorParser[T, E] = Callable[
     [T, E, DynamicConf], Awaitable[ProcessorParserOutput]
@@ -194,7 +198,7 @@ async def _empty_async_stream() -> AsyncOperatorWrapperOutput:
 
 
 class AsyncOperatorWrapper(ModuleWrapper):
-    async def __call__(  # noqa: E704
+    def __call__(  # noqa: E704
         self,
         items: OperatorWrapperInput | Feed | None = None,
         conf: Conf | None = None,

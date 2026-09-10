@@ -17,6 +17,7 @@ The combination tables below exercise every input to that expression.
 """
 
 from collections.abc import AsyncIterator
+from inspect import isawaitable
 
 import pytest
 
@@ -137,7 +138,7 @@ class TestAsyncGeneratorSource:
             for x in range(3):
                 yield {"x": x}
 
-        result = await timeout_async_pipe(feed(), conf={})
+        result = timeout_async_pipe(feed(), conf={})
         assert [item async for item in result] == [{"x": 0}, {"x": 1}, {"x": 2}]
 
     @async_test
@@ -154,7 +155,44 @@ class TestAsyncGeneratorSource:
             for x in range(3):
                 yield {"content": x}
 
-        result = await async_pipe(feed())
+        result = async_pipe(feed())
         expected = [{"content": 0}, {"content": 1}, {"content": 2}]
         assert [item async for item in result] == expected
         assert received["is_async"] is True
+
+
+class TestAsyncOperatorReturnsStreamDirectly:
+    """
+    A decorated async operator returns an ``AsyncIterator`` without awaiting.
+
+    The wrapper call boundary must never expose ``Awaitable[AsyncIterator]``. The
+    parser's own implementation style (sync generator vs legacy coroutine that
+    returns a completed iterable) stays behind the decorator and must not leak
+    into the outer call contract.
+    """
+
+    @async_test
+    async def test_sync_parser_operator_returns_async_iterator(self):
+        items = [{"content": "a"}, {"content": "b"}]
+
+        @operator(isasync=True)
+        def async_pipe(stream, objconf, tuples, **kwargs):
+            yield from stream
+
+        stream = async_pipe(items)
+        assert isinstance(stream, AsyncIterator)
+        assert not isawaitable(stream)
+        assert await anext(stream) == {"content": "a"}
+
+    @async_test
+    async def test_legacy_coroutine_parser_operator_returns_async_iterator(self):
+        items = [{"content": "a"}, {"content": "b"}]
+
+        @operator(isasync=True)
+        async def async_pipe(stream, objconf, tuples, **kwargs):
+            return iter(items)
+
+        stream = async_pipe(items)
+        assert isinstance(stream, AsyncIterator)
+        assert not isawaitable(stream)
+        assert [item async for item in stream] == items

@@ -28,7 +28,7 @@ class TestWritePassthrough:
     @async_test
     async def test_async_preserves_sequence(self, tmp_path):
         conf = WriteConf({"url": str(tmp_path / "out.json")})
-        result = await async_pipe(ITEMS, conf=conf)
+        result = async_pipe(ITEMS, conf=conf)
         assert [item async for item in result] == ITEMS
 
 
@@ -44,7 +44,8 @@ class TestWriteParity:
     async def test_json_parity(self, tmp_path):
         sync_path, async_path = tmp_path / "sync.json", tmp_path / "async.json"
         list(pipe(ITEMS, conf=WriteConf({"url": sync_path, "target": "json"})))
-        await async_pipe(ITEMS, conf=WriteConf({"url": async_path, "target": "json"}))
+        conf = WriteConf({"url": async_path, "target": "json"})
+        _ = [item async for item in async_pipe(ITEMS, conf=conf)]
         expected = b'[{"x": 0}, {"x": 1}, {"x": 2}]'
         assert self._read(sync_path) == expected
         assert self._read(async_path) == expected
@@ -53,7 +54,8 @@ class TestWriteParity:
     async def test_csv_parity(self, tmp_path):
         sync_path, async_path = tmp_path / "sync.csv", tmp_path / "async.csv"
         list(pipe(ITEMS, conf=WriteConf({"url": sync_path, "target": "csv"})))
-        await async_pipe(ITEMS, conf=WriteConf({"url": async_path, "target": "csv"}))
+        conf = WriteConf({"url": async_path, "target": "csv"})
+        _ = [item async for item in async_pipe(ITEMS, conf=conf)]
         sync_bytes = self._read(sync_path)
         assert sync_bytes == self._read(async_path)
         assert sync_bytes.split() == [b"x", b"0", b"1", b"2"]
@@ -73,8 +75,8 @@ class TestWriteSkips:
     @async_test
     async def test_async_bad_target_skips_but_passes_through(self, tmp_path, target):
         path = tmp_path / "out"
-        conf = WriteConf({"url": str(path), "target": target})
-        result = await async_pipe(ITEMS, conf=conf)
+        conf = WriteConf({"url": path, "target": target})
+        result = async_pipe(ITEMS, conf=conf)
         assert [item async for item in result] == ITEMS
         assert not path.exists()
 
@@ -85,7 +87,7 @@ class TestWriteSkips:
     @async_test
     async def test_async_missing_url_skips_but_passes_through(self):
         conf = cast(WriteConf, {"target": "json"})
-        result = await async_pipe(ITEMS, conf=conf)
+        result = async_pipe(ITEMS, conf=conf)
         assert [item async for item in result] == ITEMS
 
 
@@ -104,7 +106,8 @@ class TestWriteTargetFromExtension:
     @async_test
     async def test_async_csv_extension(self, tmp_path):
         path = tmp_path / "out.csv"
-        await async_pipe(ITEMS, conf=WriteConf({"url": str(path)}))
+        result = async_pipe(ITEMS, conf=WriteConf({"url": path}))
+        _ = [item async for item in result]
         assert self._read(path).split() == [b"x", b"0", b"1", b"2"]
 
     def test_explicit_target_overrides_extension(self, tmp_path):

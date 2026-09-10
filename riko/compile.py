@@ -1145,6 +1145,9 @@ def stringify_pipe(
             "last_module": module_ids[-1],
             "raw_confs": sorted(_used_raw_confs(parsed_pipe_def)),
             "use_collection": any(m["is_collection"] for m in string_modules),
+            "needs_await": any(
+                m["name"] != "output" and not m["splits"] for m in string_modules
+            ),
             "subtype": "source" if not pyinput else "transformer",
         }
     )

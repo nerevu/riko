@@ -271,7 +271,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         ...         yield {"page": page}
         >>>
         >>> async def main():
-        ...     result = await async_pipe(paginated_api(), conf={"milliseconds": 250})
+        ...     result = async_pipe(paginated_api(), conf={"milliseconds": 250})
         ...     print(len([item async for item in result]))
         >>>
         >>> run(main)

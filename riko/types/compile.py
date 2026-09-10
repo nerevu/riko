@@ -65,6 +65,7 @@ class TemplateData(TypedDict):
     last_module: str
     raw_confs: list[str]
     use_collection: bool
+    needs_await: bool
     subtype: str
 
 

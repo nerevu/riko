@@ -299,7 +299,7 @@ class TestAsyncLoop:
 
     @pytest.mark.anyio
     async def test_async_loop_matches_sync_emit(self):
-        stream = await async_loop(
+        stream = async_loop(
             iter(PARENTS),
             embed=async_tok,
             conf=TOKENIZER_CONF,
@@ -314,7 +314,7 @@ class TestAsyncLoop:
 
     @pytest.mark.anyio
     async def test_async_loop_assign_per_parent(self):
-        stream = await async_loop(
+        stream = async_loop(
             iter(PARENTS),
             embed=async_tok,
             conf=TOKENIZER_CONF,
@@ -339,7 +339,7 @@ class TestAsyncLoop:
                 consumed.append(str(parent["title"]))
                 yield parent
 
-        stream = await async_loop(
+        stream = async_loop(
             tracking(),
             embed=async_tok,
             conf=TOKENIZER_CONF,
@@ -362,7 +362,7 @@ class TestAsyncSubpipeLoop:
 
     @pytest.mark.anyio
     async def test_emit_all_flattens_per_parent(self):
-        stream = await async_loop(
+        stream = async_loop(
             iter([{"title": "ab"}, {"title": "cd"}]),
             embed=_ASYNC_SUBPIPE,
             count="all",
@@ -379,7 +379,7 @@ class TestAsyncSubpipeLoop:
 
     @pytest.mark.anyio
     async def test_assign_folds_first_onto_parent(self):
-        stream = await async_loop(
+        stream = async_loop(
             iter([{"title": "ab"}, {"title": "cd"}]),
             embed=_ASYNC_SUBPIPE,
             count="first",
@@ -409,7 +409,7 @@ class TestAsyncSubpipeLoop:
         async def _sub(item, context=None, **_):
             return child(str(item["title"]))
 
-        stream = await async_loop(
+        stream = async_loop(
             iter([{"title": "a"}, {"title": "b"}]),
             embed=mark_subpipe(_sub),
             count="first",

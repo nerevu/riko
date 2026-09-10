@@ -198,7 +198,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> async def main():
         ...     func = lambda stream: ({"y": item["x"] + 3} for item in stream)
         ...     items = ({"x": x} for x in range(5))
-        ...     result = await async_pipe(items, func=func)
+        ...     result = async_pipe(items, func=func)
         ...     print(await anext(result))
         >>>
         >>> run(main)

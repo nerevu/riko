@@ -85,6 +85,7 @@ Examples:
 from collections.abc import (
     AsyncGenerator,
     AsyncIterable,
+    Awaitable,
     Callable,
     Generator,
     Iterable,
@@ -140,7 +141,7 @@ from meza import io
 from riko._constants import DEF_CONNECTION_COUNT
 from riko._iterutils import listize
 from riko._pubsub import sync_hub
-from riko.bado._util import as_awaitable, async_return
+from riko.bado._util import as_awaitable, async_return, maybe_deferred
 from riko.bado.itertools import (
     as_async,
     async_map,
@@ -1976,12 +1977,10 @@ class AsyncPipe(PyPipe):
 
     async def _normalize_source(self) -> RikoFeed | None:
         """Normalizes the source into a lazy async iterable, preserving ``None``."""
-        source = self.source
-
-        if source is None:
+        if self.source is None:
             resolved = None
         else:
-            _resolved = await as_awaitable(source)
+            _resolved = await as_awaitable(self.source)
             resolved = aiter(as_async(_resolved))
 
         return resolved
@@ -2002,6 +2001,12 @@ class AsyncPipe(PyPipe):
     async def _stream(self) -> AsyncGenerator[RikoItem, None]:
         self._begin()
         async_pipeline = partial(self._async_pipe, **self.kwargs)
+        # The mapped/bounded branch is processor-only (``derive_loopable`` is
+        # processor-only), so its wrapper keeps the awaitable per-item contract;
+        # narrow it here rather than widening the shared operator alias.
+        mapped_pipeline = cast(
+            "Callable[[RikoItem], Awaitable[RikoStream]]", async_pipeline
+        )
         bounded = self.mapify and self.parallel
 
         try:
@@ -2013,7 +2018,7 @@ class AsyncPipe(PyPipe):
                     async_map_ordered_stream if self.ordered else async_map_stream
                 )
                 mapped = map_stream(
-                    async_pipeline, feed, limit=limit, buffer=self.prefetch
+                    mapped_pipeline, feed, limit=limit, buffer=self.prefetch
                 )
 
                 # ``aclosing`` tears the inner stream (and its task group) down in
@@ -2037,13 +2042,13 @@ class AsyncPipe(PyPipe):
                 source = await self._materialize_legacy_source(feed)
 
                 if self.mapify and source is not None:
-                    mapped = await async_map(async_pipeline, source, self.connections)
+                    mapped = await async_map(mapped_pipeline, source, self.connections)
 
                     for stream in mapped:
                         async for item in as_async(stream):
                             yield item
                 else:
-                    result = await async_pipeline(source)
+                    result = await maybe_deferred(async_pipeline, source)
 
                     async for item in as_async(result):
                         yield item
