@@ -6,6 +6,7 @@ Builds two items with ``itembuilder`` and hashes each one.
 Broader, doctested walkthroughs of riko's APIs live in ``README.rst``.
 
 Examples:
+
     Run it::
 
         run-pipe usage

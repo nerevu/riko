@@ -16,6 +16,7 @@ after the pipes that shrink the stream (``filter``, ``truncate``, ``tail``),
 not before.
 
 Examples:
+
     Basic usage::
 
         >>> from riko import get_temp_file
@@ -71,11 +72,13 @@ def _resolve_target(
     no / an unknown extension falls back to ``json``.
 
     Args:
+
         url: The destination file path (a ``str``, ``Path``, or unset).
         target: The configured export format, or ``None`` to derive one.
         funcs: The known converters, keyed by target.
 
     Returns:
+
         The resolved export target.
 
     """
@@ -96,6 +99,7 @@ async def async_parser(
     Asynchronously serializes the stream and writes it to ``objconf.url``.
 
     Args:
+
         stream: The source. Note: this shares the ``tuples`` iterator, so
             consuming it will consume ``tuples`` as well.
 
@@ -107,9 +111,11 @@ async def async_parser(
             iterator, so consuming it will consume ``stream`` as well.
 
     Returns:
+
         The original stream.
 
     Examples:
+
         >>> from itertools import repeat
         >>> from meza.fntools import Objectify
         >>> from riko import get_async_temp_file, run
@@ -157,6 +163,7 @@ def parser(
     Serializes the stream and writes it to ``objconf.url``.
 
     Args:
+
         stream: The source. Note: this shares the ``tuples`` iterator, so
             consuming it will consume ``tuples`` as well.
 
@@ -168,9 +175,11 @@ def parser(
             iterator, so consuming it will consume ``stream`` as well.
 
     Returns:
+
         The original stream.
 
     Examples:
+
         >>> from itertools import repeat
         >>> from meza.fntools import Objectify
         >>> from riko import get_temp_file
@@ -215,6 +224,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration. Must contain the key 'url'.
@@ -229,6 +239,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the output stream is assigned to. Ignored when ``emit`` is
             True (default: "write").
 
@@ -236,22 +247,25 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Notes:
+
         Nothing is written and a warning is logged when ``url`` is unset,
         ``target`` is ``'list'``/``'tuple'``, ``target`` is invalid, or the converter
         produces no content. The stream still passes through unchanged in every case.
 
     Examples:
+
         >>> from riko import get_async_temp_file, run
         >>>
         >>> async def main():
         ...     async with get_async_temp_file() as fp:
         ...         conf = {"url": fp.name, "target": "csv"}
         ...         stream = await async_pipe([{"x": 0}, {"x": 1}], conf=conf)
-        ...         print(next(stream))
+        ...         print(await anext(stream))
         ...         print((await fp.read()).split())
         >>>
         >>> run(main)
@@ -271,6 +285,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration. Must contain the key 'url'.
@@ -285,6 +300,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the output stream is assigned to. Ignored when ``emit`` is
             True (default: "write").
 
@@ -292,15 +308,18 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Notes:
+
         Nothing is written and a warning is logged when ``url`` is unset,
         ``target`` is ``'list'``/``'tuple'``, ``target`` is invalid, or the converter
         produces no content. The stream still passes through unchanged in every case.
 
     Examples:
+
         >>> from riko import get_temp_file
         >>>
         >>> with get_temp_file() as fp:

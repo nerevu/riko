@@ -7,6 +7,7 @@ Feeding a item the path ``"stanzas.verses"`` yields each verse of each stanza
 on its own. It drops the stanza and all other first level fields.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.subelement import pipe
@@ -56,17 +57,21 @@ def parser(
     Extracts the element ``path`` names from ``item``.
 
     Args:
+
         item: The entry to process.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `path` and `token_key`.
 
     Returns:
+
         The extracted flattened tokens. Or nothing when the path is absent.
 
     Raises:
+
         TypeError: If ``conf`` has no ``path`` key.
 
     Examples:
+
         >>> from riko.dotdict import DotDict
         >>> from meza.fntools import Objectify
         >>>
@@ -98,6 +103,7 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -111,6 +117,7 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the tokens are nested under. Ignored when ``emit``
             is True (default: "subelement").
 
@@ -118,19 +125,23 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<token>`` when ``emit`` is True (default)
         - ``{<assign>: <token>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<token>, ...]}`` when ``emit`` is False
           and item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``path`` key.
 
     Notes:
+
         Nested lists are flattened and ``None`` values are dropped. So tokens
         arrive as one flat stream. A path the item lacks yields nothing.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -154,6 +165,7 @@ def pipe(*args: Any, **kwargs: RikoValue) -> Stream:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -167,6 +179,7 @@ def pipe(*args: Any, **kwargs: RikoValue) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the tokens are nested under. Ignored when ``emit``
             is True (default: "subelement").
 
@@ -174,19 +187,23 @@ def pipe(*args: Any, **kwargs: RikoValue) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<token>`` when ``emit`` is True (default)
         - ``{<assign>: <token>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<token>, ...]}`` when ``emit`` is False
           and item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``path`` key.
 
     Notes:
+
         Nested lists are flattened and ``None`` values are dropped. So tokens
         arrive as one flat stream. A path the item lacks yields nothing.
 
     Examples:
+
         >>> sonnet = {
         ...     "author": "William Shakespeare",
         ...     "title": "Sonnet 21",

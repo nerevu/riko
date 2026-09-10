@@ -16,7 +16,7 @@ nerevu/riko
     Target / Format / ReadNode / WriteNode structure
     provider-neutral write/effect semantics
     Feed and Pipeline batch-mode contracts
-    Context resource definitions and execution-owned handles
+    Context resource definitions and execution-owned resource values
 
 nerevu/riko-sql
     POSTGRES/DuckDB/etc Target adapters
@@ -46,9 +46,9 @@ Configured database Targets reference declared resources/credentials rather than
 }
 ```
 
-The connection resolves to one execution-scoped adapter/handle. Passwords/tokens are never serialized
-in workflow URLs. Immutable Context contains definitions; private execution owns live connections and
-closes owned resources deterministically.
+The connection resource resolves once per execution to the configured adapter or connection value.
+Passwords/tokens are never serialized in workflow URLs. Immutable Context contains definitions;
+private execution owns live connections and closes owned resources deterministically.
 
 ## 4. Read API
 
@@ -191,8 +191,8 @@ class DbtRunner(Protocol):
     async def run(self, request: DbtRunRequest, context: Context) -> DbtRunResult: ...
 ```
 
-Context is the immutable environment input. Live dbt/database handles come from declared Resources;
-there is no public ExecutionContext.
+Context is the immutable environment input. Live dbt clients/runners and database connections come
+from declared Resources; there is no public ExecutionContext.
 
 Normalize:
 

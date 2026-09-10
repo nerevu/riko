@@ -8,6 +8,7 @@ via the Open Exchange Rates API. Live use needs an app id in the
 json file works without one.
 
 Examples:
+
     Basic usage::
 
         >>> from riko import get_path
@@ -106,16 +107,19 @@ async def async_parser(
     Asynchronously looks up the rate from ``base`` to the target currency.
 
     Args:
+
         base: The currency being exchanged from.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`, `param`, `currency`
             and `precision`.
 
     Returns:
+
         The rate, ``1`` when both currencies match, or ``Decimal("NaN")`` when
         the target is absent from the response.
 
     Examples:
+
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
@@ -160,16 +164,19 @@ def parser(
     Looks up the rate from ``base`` to the target currency.
 
     Args:
+
         base: The currency being exchanged from.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`, `param`, `currency`
             and `precision`.
 
     Returns:
+
         The rate, ``1`` when both currencies match, or ``Decimal("NaN")`` when
         the target is absent from the response.
 
     Examples:
+
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
@@ -205,6 +212,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
     Asynchronously retrieves the exchange rate for a currency pair.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -225,6 +233,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute holding the ISO code of the currency being
             exchanged *from* (default: "content").
 
@@ -235,16 +244,19 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <rate>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <rate>}`` when ``emit`` is False and no item given
         - ``<rate>`` when ``emit`` is True
 
     Notes:
+
         A currency missing from the response logs a warning and yields
         ``Decimal("NaN")`` rather than raising.
 
     Examples:
+
         >>> from riko import get_path, run
         >>>
         >>> async def main():
@@ -265,6 +277,7 @@ def pipe(*args: Any, **kwargs: object) -> Decimal:
     Retrieves the exchange rate for a currency pair.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -285,6 +298,7 @@ def pipe(*args: Any, **kwargs: object) -> Decimal:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute holding the ISO code of the currency being
             exchanged *from* (default: "content").
 
@@ -295,16 +309,19 @@ def pipe(*args: Any, **kwargs: object) -> Decimal:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <rate>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <rate>}`` when ``emit`` is False and no item given
         - ``<rate>`` when ``emit`` is True
 
     Notes:
+
         A currency missing from the response logs a warning and yields
         ``Decimal("NaN")`` rather than raising.
 
     Examples:
+
         >>> from riko import get_path
         >>>
         >>> url = get_path("quote.json")

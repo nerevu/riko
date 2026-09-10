@@ -11,6 +11,7 @@ A length past the end of the string just returns the remainder, so a start of 3
 and a length of 100 gives "DEFG".
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.substr import pipe
@@ -51,15 +52,18 @@ def parser(word: str, _: object, objconf: SubstrObjconf, **kwargs: object) -> st
     Returns the slice of ``word`` described by the configuration.
 
     Args:
+
         word: The string to slice.
         _: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `start` and `length`.
 
     Returns:
+
         The substring, or the remainder of ``word`` when ``length`` is 0 or
         runs past the end.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> item = {"content": "hello world"}
@@ -81,6 +85,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration. Each value is cast to an int, so a
@@ -94,6 +99,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to slice. Its value is cast to text first,
             so a missing field yields ``""`` (default: "content").
 
@@ -104,12 +110,14 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
             than assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <substring>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <substring>}`` when ``emit`` is False and no item given
         - ``<substring>`` when ``emit`` is True
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -133,6 +141,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration. Each value is cast to an int, so a
@@ -146,6 +155,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to slice. Its value is cast to text first,
             so a missing field yields ``""`` (default: "content").
 
@@ -156,12 +166,14 @@ def pipe(*args: Any, **kwargs: object) -> str:
             than assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <substring>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <substring>}`` when ``emit`` is False and no item given
         - ``<substring>`` when ``emit`` is True
 
     Examples:
+
         >>> conf = {"start": "3", "length": "4"}
         >>> item = {"content": "hello world"}
         >>> next(pipe(item, conf=conf))["substr"]

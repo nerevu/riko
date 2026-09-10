@@ -37,7 +37,9 @@ def emit_result(result: object) -> None:
 def load_file(name: str, location: str) -> ModuleType | None:
     if spec := spec_from_file_location(name, location):
         module = module_from_spec(spec)
-        spec.loader.exec_module(module)
+
+        if spec.loader:
+            spec.loader.exec_module(module)
     else:
         module = None
 
@@ -129,7 +131,7 @@ def run() -> None:
         async_run(runner, async_pipe, args.test, printer)
     elif main := getattr(module, "main", None):
         main(test=args.test)
-    else:
+    elif module:
         emit_result(module.pipe(test=args.test))
 
 

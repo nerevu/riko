@@ -457,8 +457,10 @@ This allows you to persist an intermediate result and continue processing.
     {'count': 3}
     b'[{"content": "a"}, {"content": "bb"}, {"content": "ccc"}]'
 
-Note that both ``export`` and ``write`` are **eager**: they serialize the complete
-source stream into memory. Don't use them on an unbounded ``stream``.
+Note that ``export`` is **eager**: it serializes the complete source stream into
+memory, so don't use it on an unbounded ``stream``. ``write`` is eager for buffered
+formats (``json``/``geojson``/…) but writes the streamable ``csv`` and ``jsonl``
+formats incrementally, one item at a time.
 
 Asynchronous pipelines
 ----------------------

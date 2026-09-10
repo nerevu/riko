@@ -14,6 +14,7 @@ whether an item must match all the rules, or if it can just match any rule.
 Lazy: items are tested and yielded one at a time.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.filter import pipe
@@ -26,12 +27,13 @@ Examples:
 Attributes:
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
+    ALLOW_INF: Whether to allow ``inf``/``-inf`` to compare numerically (default: False)
 
 """
 
 import operator as op
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from logging import Logger
@@ -42,10 +44,11 @@ from dateutil.parser import ParserError
 
 from riko._objectify import Objectify
 from riko._serialize import repr_cache
-from riko.cast import cast_date
+from riko.cast import cast_date, cast_decimal
 from riko.dotdict import DotDict
 from riko.types._guards import is_mapping
 from riko.types._options import Defaults, Opts
+from riko.types._sentinels import MISSING
 from riko.types._streams import Item, Stream
 from riko.types._wrappers import PipeTuples
 from riko.types.modules import FilterConfRule
@@ -55,27 +58,59 @@ from . import operator
 OPTS: Opts = {"listize": True, "extract": "rule"}
 DEFAULTS: Defaults = {"combine": "and", "permit": True, "stop": False}
 COMBINE_BOOLEAN = {"and": all, "or": any}
+ALLOW_INF = False
+
+
+def _numeric_operand(value: Decimal) -> bool:
+    return value.is_finite() or (ALLOW_INF and value.is_infinite())
+
+
+def _ordered[T](
+    compare: Callable[[Decimal | str, Decimal | str], bool],
+) -> Callable[[T, T], bool]:
+    """
+    Wraps an ordered comparison so it compares numerically only when *every*
+    operand is a comparable number (or numeric string), and lexicographically
+    otherwise. Coercion is all-or-nothing: a single non-numeric operand (e.g.
+    ``"abc"``) demotes the whole comparison to strings, so a mixed pair never
+    compares a ``Decimal`` against a ``str``.
+
+    A non-finite operand is a comparable number only for ``inf``/``-inf`` and only
+    when the module-level ``ALLOW_INF`` flag is enabled (default off, so those
+    tokens compare as strings). ``nan`` is never numeric — it is unordered and
+    ``Decimal`` raises when comparing it.
+    """
+
+    def wrapped(*args: T) -> bool:
+        casted = [cast_decimal(arg, MISSING) for arg in args]
+        numeric = [c for c in casted if isinstance(c, Decimal) and _numeric_operand(c)]
+        is_numeric = len(numeric) == len(args)
+        operands: Iterable[Decimal | str] = numeric if is_numeric else map(str, args)
+        return compare(*operands)
+
+    return wrapped
+
 
 SWITCH: dict[str, Callable[..., bool]] = {
     # TODO: add support for all containment semantics
     # 2 in [1, 2, 3]  or "a" in {"a": 1}
+    "after": op.gt,
+    "atleast": _ordered(op.ge),
+    "atmost": _ordered(op.le),
+    "before": op.lt,
     "contains": lambda x, y: x and y.lower() in x.lower(),
     "doesnotcontain": lambda x, y: x and y.lower() not in x.lower(),
-    "matches": lambda x, y: re.search(y, x),
     "eq": op.eq,
+    "falsy": op.not_,
+    "greater": _ordered(op.gt),
     "is": op.eq,
     "isnot": op.ne,
+    "less": _ordered(op.lt),
+    "matches": lambda x, y: re.search(y, x),
     "truthy": bool,
-    "falsy": op.not_,
-    "greater": op.gt,
-    "after": op.gt,
-    "atleast": op.ge,
-    "less": op.lt,
-    "before": op.lt,
-    "atmost": op.le,
 }
 
-NUMERIC_OPS = {"atmost", "atleast"}
+NUMERIC_OPS = {"atleast", "atmost", "greater", "less"}
 STRING_OPS = {"contains", "doesnotcontain", "matches"}
 DATE_OPS = {"after", "before"}
 PASSTHROUGH_OPS = {"truthy", "falsy", "eq", "is", "isnot"}
@@ -84,28 +119,14 @@ TRUTHINESS_OPS = {"truthy", "falsy"}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def _parse_arg_uncached[VT](arg: VT, op: str) -> str | date | Decimal | VT | None:
-    if op in PASSTHROUGH_OPS:
-        value = arg
-    elif op in STRING_OPS:
+def _parse_arg_uncached[VT](arg: VT, op: str) -> str | date | VT | None:
+    if op in STRING_OPS:
         value = str(arg)
     elif op in DATE_OPS:
         try:
             value = cast_date(arg)  # pyright: ignore[reportArgumentType]
         except (IndexError, ParserError, KeyError):
             value = None
-    elif op in NUMERIC_OPS or isinstance(arg, (int, float)):
-        if isinstance(arg, Decimal):
-            value = arg
-        elif isinstance(arg, int):
-            value = Decimal(arg)
-        elif isinstance(arg, float):
-            value = Decimal(str(arg))
-        else:
-            try:
-                value = Decimal(arg)  # pyright: ignore[reportArgumentType]
-            except (InvalidOperation, ValueError):
-                value = None
     else:
         value = arg
 
@@ -113,13 +134,11 @@ def _parse_arg_uncached[VT](arg: VT, op: str) -> str | date | Decimal | VT | Non
 
 
 @repr_cache
-def _parse_arg_cached[VT](arg: VT, op: str) -> str | date | Decimal | VT | None:
+def _parse_arg_cached[VT](arg: VT, op: str) -> str | date | VT | None:
     return _parse_arg_uncached(arg, op)
 
 
-def parse_arg[VT](
-    arg: VT, op: str, memoize: bool = False
-) -> str | date | Decimal | VT | None:
+def parse_arg[VT](arg: VT, op: str, memoize: bool = False) -> str | date | VT | None:
     func = _parse_arg_cached if memoize else _parse_arg_uncached
     return func(arg, op)
 
@@ -127,6 +146,7 @@ def parse_arg[VT](
 def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
     """
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> numeric = Objectify({"field": "x", "op": "atleast", "value": 3})
@@ -143,7 +163,7 @@ def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
     _y = rule.value
 
     if isinstance(item, Objectify):
-        _x = getattr(item, rule.field)
+        _x: object = getattr(item, rule.field)
     elif is_mapping(item):
         _x = DotDict.dictize(item).get(rule.field, **kwargs)
     else:
@@ -187,6 +207,7 @@ def parser(
     raises before any item is read.
 
     Args:
+
         _: The source. Unused; items are read from `tuples` instead.
 
         extract: The item independent rules.
@@ -196,13 +217,16 @@ def parser(
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Yields:
+
         Each item for which the combined rules match, or fail to match when
         ``permit`` is False.
 
     Raises:
+
         ValueError: If a rule names an unsupported ``op``.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>> from itertools import repeat
         >>>
@@ -257,6 +281,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Lazy: items are tested and yielded one at a time.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -283,6 +308,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "filter").
 
@@ -290,21 +316,24 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
         ValueError: If a rule names an unsupported ``op``.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
         ...     items = [{"title": "Good job!"}, {"title": "Website Developer"}]
         ...     rule = {"field": "title", "op": "contains", "value": "web"}
         ...     result = await async_pipe(items, conf={"rule": rule})
-        ...     print(next(result)["title"])
+        ...     print((await anext(result))["title"])
         >>>
         >>> run(main)
         Website Developer
@@ -321,6 +350,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Lazy: items are tested and yielded one at a time.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -347,6 +377,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "filter").
 
@@ -354,14 +385,17 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
         ValueError: If a rule names an unsupported ``op``.
 
     Examples:
+
         >>> items = [{"title": "Good job!"}, {"title": "Website Developer"}]
         >>> rule = {"field": "title", "op": "contains", "value": "web"}
         >>> next(pipe(items, conf={"rule": rule}))

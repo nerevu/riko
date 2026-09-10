@@ -39,7 +39,7 @@ def _isolate_pubsub():
 class _RecordStore:
     """A non-serializing keyed target, for the record-store ``build_write`` branch."""
 
-    def capabilities(self) -> SinkCapabilities:
+    def capabilities(self, fmt=None) -> SinkCapabilities:
         return SinkCapabilities(modes=frozenset(SinkMode), serializes=False)
 
     def deliver(self, records, write, *, fmt=None) -> SinkResult:
@@ -65,18 +65,20 @@ class TestResolveTarget:
 class TestResolveFormat:
     @pytest.mark.parametrize(
         ("url", "expected"),
-        [
-            ("out.csv", "csv"),
-            ("out.jsonl", "jsonl"),
-            ("out.txt", "json"),
-            ("out", "json"),
-        ],
+        [("out.csv", "csv"), ("out.jsonl", "jsonl"), ("out", "json")],
     )
     def test_infers_from_extension(self, url, expected):
         assert resolve_format(url, None) == expected
 
     def test_explicit_format_wins(self):
         assert resolve_format("out.csv", "json") == "json"
+
+    def test_invalid_format_raise(self):
+        with pytest.raises(ValueError, match="not a valid Formats"):
+            resolve_format("out.txt", None)
+
+        with pytest.raises(ValueError, match="not a valid Formats"):
+            resolve_format("out", "txt")
 
 
 class TestBuildWrite:
@@ -87,6 +89,22 @@ class TestBuildWrite:
     def test_file_unsupported_mode(self):
         with pytest.raises(ValueError, match="does not support the 'merge'"):
             build_write(File("out.csv"), "merge")
+
+    def test_file_append_rejected_for_whole_document_format(self):
+        """
+        A whole-document format cannot be appended to (it would concatenate two
+        documents into invalid output), so ``append`` is rejected at prepare.
+        """
+        with pytest.raises(ValueError, match="does not support the 'append'"):
+            build_write(File("out.json"), "append")
+
+        with pytest.raises(ValueError, match="does not support the 'append'"):
+            build_write(File("out.geojson"), "append")
+
+    def test_file_append_allowed_for_line_oriented_format(self):
+        for dest in ("out.csv", "out.jsonl"):
+            spec = build_write(File(dest), "append")
+            assert spec.mode is SinkMode.APPEND
 
     def test_record_store_routes_through_sink_write(self):
         spec = build_write(_RecordStore(), "merge", keys="endpoint_id")
@@ -106,13 +124,6 @@ class TestFileDeliver:
 
         assert result.written > 0
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
-
-    def test_append_extends(self, tmp_path):
-        path = tmp_path / "out.json"
-        File(str(path)).deliver([{"x": 0}], SinkWrite(SinkMode.APPEND))
-        File(str(path)).deliver([{"x": 1}], SinkWrite(SinkMode.APPEND))
-
-        assert path.read_bytes() == b'[{"x": 0}][{"x": 1}]'
 
     @async_test
     async def test_adeliver_matches_deliver(self, tmp_path):
@@ -137,6 +148,14 @@ class TestFileWriter:
     def test_keyed_mode_rejected(self):
         with pytest.raises(ValueError, match="append, replace"):
             file_writer("out.csv", mode="merge")
+
+    def test_append_rejected_for_non_appendable_format(self):
+        with pytest.raises(ValueError, match="cannot be appended to"):
+            file_writer("out.json", mode="append")
+
+    def test_append_allowed_for_line_oriented_format(self):
+        assert file_writer("out.csv", mode="append").mode is SinkMode.APPEND
+        assert file_writer("out.jsonl", mode="append").mode is SinkMode.APPEND
 
 
 class TestSyncWrite:
@@ -164,6 +183,17 @@ class TestSyncWrite:
         path = tmp_path / "out.csv"
         list(SyncPipe(source=ITEMS).write(str(path)))
         assert path.read_bytes() == b"x\r\n0\r\n1\r\n2\r\n"
+
+    def test_streaming_csv_append_across_executions_writes_header_once(self, tmp_path):
+        """
+        A second append execution against an existing non-empty CSV must not
+        re-emit the header. The writer's ``_started`` flag is per-run, so header
+        suppression derives from the file already having content.
+        """
+        path = tmp_path / "out.csv"
+        list(SyncPipe(source=[{"x": 0}]).write(str(path), mode="append"))
+        list(SyncPipe(source=[{"x": 1}]).write(str(path), mode="append"))
+        assert path.read_bytes() == b"x\r\n0\r\n1\r\n"
 
     def test_writes_mid_chain(self, tmp_path):
         path = tmp_path / "out.json"

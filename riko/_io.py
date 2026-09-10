@@ -10,6 +10,7 @@ Attributes:
 
 """
 
+import os
 from codecs import StreamReader
 from collections.abc import Iterable, Iterator, Mapping
 from functools import partial, wraps
@@ -24,10 +25,8 @@ from urllib.response import addinfourl
 
 try:
     import fcntl
-    from os import O_NONBLOCK
 except ImportError:
     fcntl = None
-    O_NONBLOCK = 0
 
 import mezmorize
 import pygogo as gogo
@@ -44,6 +43,8 @@ from riko.types._collections import BasicArg
 from riko.types._io import BinaryFileLike, FileLike, Opener, StringFileLike
 from riko.types._scalars import AnyStr
 
+O_NONBLOCK: int = getattr(os, "O_NONBLOCK", 0)
+
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 
 
@@ -52,13 +53,16 @@ def ext_from_content_type(content_type: str | None) -> str | None:
     Maps a content type to its file extension.
 
     Args:
+
         content_type: The response content type, if the source reported one.
 
     Returns:
+
         ``"xml"``/``"json"`` for the feed types, otherwise the content subtype,
         or ``None`` when no content type is available.
 
     Examples:
+
         >>> ext_from_content_type("application/json; charset=utf-8")
         'json'
         >>> ext_from_content_type("text/html")
@@ -87,9 +91,11 @@ def make_blocking(f: RawIOBase | TextIOBase) -> None:
     wait for data. A no-op where ``fcntl`` is unavailable (e.g. Windows).
 
     Args:
+
         f: The file whose descriptor is switched to blocking mode.
 
     Raises:
+
         io.UnsupportedOperation: If ``f`` has no underlying file descriptor.
 
     """
@@ -107,12 +113,15 @@ def default_user_agent(name: str = "riko") -> str:
     Formats the default user agent as ``name/version``.
 
     Args:
+
         name: The product name in the ``name/version`` string.
 
     Returns:
+
         The ``name/version`` user agent string.
 
     Examples:
+
         >>> default_user_agent("app")  # doctest: +ELLIPSIS
         'app/...'
 
@@ -125,12 +134,15 @@ def get_response_content_type(r: HTTPResponse | addinfourl | requests.Response) 
     Reads the response's ``Content-Type`` header.
 
     Args:
+
         r: The HTTP response to inspect.
 
     Returns:
+
         The lowercased content type, or ``""`` when the header is absent.
 
     Examples:
+
         >>> from types import SimpleNamespace
         >>>
         >>> r = SimpleNamespace(headers={"Content-Type": "Application/JSON"})
@@ -149,13 +161,16 @@ def get_response_encoding(
     Resolves the response's charset.
 
     Args:
+
         r: The HTTP response to inspect.
         def_encoding: The fallback used when no charset is declared.
 
     Returns:
+
         The declared charset, otherwise ``def_encoding``.
 
     Examples:
+
         >>> from types import SimpleNamespace
         >>>
         >>> ct = "text/html; charset=latin-1"
@@ -192,13 +207,16 @@ def auto_close[T](stream: Iterable[T], *files: FileLike) -> Iterator[T]:
     closed file is a harmless no-op.
 
     Args:
+
         stream: The items to yield.
         files: The files closed once iteration finishes.
 
     Yields:
+
         The elements of ``stream``.
 
     Examples:
+
         >>> from io import StringIO
         >>>
         >>> f = StringIO("hi")
@@ -242,14 +260,17 @@ def buffer(  # noqa: E302
     is auto-detected from the first chunk when not supplied.
 
     Args:
+
         f: The forward-only stream to copy.
         binary: Whether the chunks are bytes. Auto-detected when omitted.
         encoding: Encoding used to decode byte chunks while buffering.
 
     Returns:
+
         A rewound spool holding the contents of ``f``.
 
     Examples:
+
         >>> from io import StringIO
         >>>
         >>> spool = buffer(StringIO("abc"))
@@ -293,14 +314,17 @@ def seekable(
     buffered, so close it separately.
 
     Args:
+
         f: The file to rewind or copy.
         binary: Whether the chunks are bytes. Auto-detected when omitted.
         encoding: Encoding used to decode byte chunks while buffering.
 
     Returns:
+
         ``f`` itself when it rewound, otherwise a rewound spooled copy.
 
     Examples:
+
         >>> from io import StringIO
         >>>
         >>> f = StringIO("abc")
@@ -387,6 +411,7 @@ def opener(  # noqa: E302
     text, and ``encoding`` decodes byte streams.
 
     Args:
+
         url: The resource to open.
         memoize: Whether to buffer the body for re-reading.
         encoding: Encoding used to decode byte streams.
@@ -396,10 +421,12 @@ def opener(  # noqa: E302
         timeout: Per-request timeout in seconds.
 
     Returns:
+
         A ``(stream, content_type)`` pair; ``content_type`` is ``None`` when the
         source reports none.
 
     Raises:
+
         TypeError: If ``url`` is empty.
 
     """
@@ -460,12 +487,15 @@ def get_opener(memoize: bool = False, **kwargs: object) -> Opener:
     Builds a URL opener cached by call arguments.
 
     Args:
+
         memoize: Whether the returned opener buffers responses for re-reading.
 
     Returns:
+
         An opener callable; identical arguments return the cached opener.
 
     Examples:
+
         >>> get_opener.cache_clear()
         >>> o1 = get_opener()
         >>> o1 is get_opener()
@@ -500,6 +530,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
     out of a pipeline rather than aborting it.
 
     Args:
+
         url: The resource to open; empty yields an empty stream.
         memoize: Whether to buffer the body so it can be re-read.
         binary: Whether to expose bytes rather than decoded text.

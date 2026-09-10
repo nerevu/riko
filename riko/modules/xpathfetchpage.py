@@ -13,6 +13,7 @@ extension-less http url. Set ``html5`` to parse with the HTML5 parser instead
 of HTML4.
 
 Examples:
+
     Basic usage::
 
         >>> from riko import get_path
@@ -65,17 +66,21 @@ async def async_parser(
     Asynchronously reads the page and returns the nodes at ``xpath``.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`, `xpath` and `html5`.
 
     Returns:
+
         One item per matched node, or the whole document when ``xpath`` is unset.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from traceback import format_exc
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
@@ -124,17 +129,21 @@ def parser(
     Reads the page and returns the nodes at ``xpath``.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`, `xpath` and `html5`.
 
     Returns:
+
         One item per matched node, or the whole document when ``xpath`` is unset.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>> from riko import get_path
         >>>
@@ -167,6 +176,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Asynchronously fetches a web page and yields the nodes at an XPath.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -186,6 +196,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each node is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -193,15 +204,18 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<node>`` per match when ``emit`` is True (default)
         - ``{<assign>: <node>}`` per match when ``emit`` is False, no item given
         - one merged ``{Item, <assign>: [<node>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from traceback import format_exc
         >>> from riko import get_path, run
         >>>
@@ -235,6 +249,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Fetches a web page and yields the nodes at an XPath.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -254,6 +269,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each node is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -261,15 +277,18 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<node>`` per match when ``emit`` is True (default)
         - ``{<assign>: <node>}`` per match when ``emit`` is False, no item given
         - one merged ``{Item, <assign>: [<node>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>>
         >>> url = get_path("ouseful.xml")

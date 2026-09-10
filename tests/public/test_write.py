@@ -29,7 +29,7 @@ class TestWritePassthrough:
     async def test_async_preserves_sequence(self, tmp_path):
         conf = WriteConf({"url": str(tmp_path / "out.json")})
         result = await async_pipe(ITEMS, conf=conf)
-        assert list(result) == ITEMS
+        assert [item async for item in result] == ITEMS
 
 
 @skipif_issync
@@ -75,7 +75,7 @@ class TestWriteSkips:
         path = tmp_path / "out"
         conf = WriteConf({"url": str(path), "target": target})
         result = await async_pipe(ITEMS, conf=conf)
-        assert list(result) == ITEMS
+        assert [item async for item in result] == ITEMS
         assert not path.exists()
 
     def test_sync_missing_url_skips_but_passes_through(self):
@@ -86,7 +86,7 @@ class TestWriteSkips:
     async def test_async_missing_url_skips_but_passes_through(self):
         conf = cast(WriteConf, {"target": "json"})
         result = await async_pipe(ITEMS, conf=conf)
-        assert list(result) == ITEMS
+        assert [item async for item in result] == ITEMS
 
 
 class TestWriteTargetFromExtension:

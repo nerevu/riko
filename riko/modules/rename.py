@@ -8,6 +8,7 @@ new one. Useful when input data is not in RSS form and you want to emit it as
 RSS.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.rename import pipe
@@ -66,14 +67,17 @@ async def async_parser(
     Asynchronously applies each rename rule in turn to ``item``.
 
     Args:
+
         item: The entry to process.
         rules: The parsed rename rules.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The item with each rule applied.
 
     Examples:
+
         >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
@@ -100,14 +104,17 @@ def parser(
     Applies each rename rule in turn to ``item``.
 
     Args:
+
         item: The entry to process.
         rules: The parsed rename rules.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The item with each rule applied.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> item = {"content": "hello world"}
@@ -129,6 +136,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -147,6 +155,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the rewritten item is nested under. Ignored when
             ``emit`` is True (default: "rename").
 
@@ -154,17 +163,21 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
             nest it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - the rewritten ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
 
     Notes:
+
         A rule naming a field the item lacks is skipped, leaving the item
         untouched.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -188,6 +201,7 @@ def pipe(*args: Any, **kwargs: object) -> Item:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -206,6 +220,7 @@ def pipe(*args: Any, **kwargs: object) -> Item:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the rewritten item is nested under. Ignored when
             ``emit`` is True (default: "rename").
 
@@ -213,17 +228,21 @@ def pipe(*args: Any, **kwargs: object) -> Item:
             nest it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - the rewritten ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
 
     Notes:
+
         A rule naming a field the item lacks is skipped, leaving the item
         untouched.
 
     Examples:
+
         >>> rule = {"field": "content", "newval": "greeting"}
         >>> item = {"content": "hello world"}
         >>> next(pipe(item, conf={"rule": rule}))

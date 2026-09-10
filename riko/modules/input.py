@@ -32,6 +32,7 @@ Note: Relative date/time calculations reference the current UTC time. Timezones
 are not currently supported.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.input import pipe
@@ -88,6 +89,7 @@ def parser(
     ``default`` when skipping, and otherwise prompts on stdin.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `prompt`, `default`, `type`
@@ -95,9 +97,11 @@ def parser(
         skip: Whether to use ``default`` instead of prompting.
 
     Returns:
+
         The value cast to ``objconf.type``.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> inputs = {"age": "30"}
@@ -124,6 +128,7 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     Asynchronously prompts for text and casts it into another type.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -147,6 +152,7 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
         context (Context): the execution context
 
     Kwargs:
+
         inputs (dict): Values used in place of prompting, keyed by
             ``input_key``, e.g. ``{"content": "30"}``.
 
@@ -160,11 +166,13 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<value>`` when ``emit`` is True (default)
         - ``{<assign>: <value>}`` when ``emit`` is False and no item given
         - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item is given
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -185,6 +193,7 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     Prompts for text and casts it into another type.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -208,6 +217,7 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
         context (Context): the execution context
 
     Kwargs:
+
         inputs (dict): Values used in place of prompting, keyed by
             ``input_key``, e.g. ``{"content": "30"}``.
 
@@ -221,11 +231,13 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<value>`` when ``emit`` is True (default)
         - ``{<assign>: <value>}`` when ``emit`` is False and no item given
         - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item is given
 
     Examples:
+
         >>> import datetime
         >>> from datetime import datetime as dt, UTC
         >>>

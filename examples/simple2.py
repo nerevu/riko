@@ -2,6 +2,7 @@
 Builds an item, then replaces a field's value with ``strreplace``.
 
 Examples:
+
     Run it::
 
         run-pipe simple2

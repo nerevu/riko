@@ -7,6 +7,7 @@ this yields bare strings rather than records, so it is usually assigned to a
 field or fed to a pipe that builds one.
 
 Examples:
+
     Basic usage::
 
         >>> from riko import get_path
@@ -51,17 +52,21 @@ async def async_parser(
     Asynchronously reads the file into a stream of stripped lines.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url` and `encoding`.
 
     Returns:
+
         Stripped lines. The source closes when the stream is exhausted.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
@@ -87,17 +92,21 @@ def parser(
     Reads the file into a stream of stripped lines.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url` and `encoding`.
 
     Returns:
+
         Stripped lines. The source closes when the stream is exhausted.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
@@ -119,6 +128,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     Asynchronously fetches a text file and yields lines.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -129,6 +139,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each line is assigned to. Ignored when ``emit`` is
             True (default: "content").
 
@@ -136,15 +147,18 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<line>`` when ``emit`` is True (default)
         - ``{<assign>: <line>}`` when ``emit`` is False, no item given
         - one merged ``{Item, <assign>: [<line>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>>
         >>> async def main():
@@ -165,6 +179,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     Fetches a text file and yields lines.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -175,6 +190,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each line is assigned to. Ignored when ``emit`` is
             True (default: "content").
 
@@ -182,15 +198,18 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<line>`` when ``emit`` is True (default)
         - ``{<assign>: <line>}`` when ``emit`` is False, no item given
         - one merged ``{Item, <assign>: [<line>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>>
         >>> conf = {"url": get_path("lorem.txt")}

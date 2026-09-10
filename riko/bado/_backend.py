@@ -11,7 +11,9 @@ no SemVer compatibility guarantee.
 """
 
 from collections.abc import Awaitable, Callable
-from typing import Any, Protocol, Unpack
+from typing import Any, Literal, Protocol, Unpack, cast
+
+type Backends = Literal["anyio", "empty"]
 
 
 class Run(Protocol):
@@ -22,8 +24,6 @@ class Run(Protocol):
     ) -> T: ...
 
 
-run: Run | None = None
-
 try:
     import anyio
 except ImportError:
@@ -33,22 +33,30 @@ except ImportError:
     MemoryObjectSendStream: Any = None
     NamedTemporaryFile: Any = None
     Path: Any = None
-    async_get: Callable[..., Any] = lambda *_args, **_kwargs: None
-    async_json: Callable[..., Any] = lambda *_args, **_kwargs: None
-    async_read: Callable[..., Any] = lambda *_args, **_kwargs: None
-    async_partial: Callable[..., Any] = lambda *_args, **_kwargs: None
-    async_return: Callable[..., Any] = lambda *_args, **_kwargs: None
-    async_sleep: Callable[..., Any] = lambda *_args, **_kwargs: None
+    async_get: Callable[..., Any] = lambda *_, **_kw: None
+    async_json: Callable[..., Any] = lambda *_, **_kw: None
+    async_read: Callable[..., Any] = lambda *_, **_kw: None
+    async_partial: Callable[..., Any] = lambda *_, **_kw: None
+    async_return: Callable[..., Any] = lambda *_, **_kw: None
+    async_sleep: Callable[..., Any] = lambda *_, **_kw: None
+    backend: Backends = "empty"
     create_memory_object_stream: Callable[..., Any] | None = None
     create_task_group: Callable[..., Any] | None = None
     fail_after: Callable[..., Any] | None = None
-    gather_results: Callable[..., Any] = lambda *_args, **_kwargs: None
+    gather_results: Callable[..., Any] = lambda *_, **_kw: None
     lowlevel: Any = None
-    maybe_deferred: Callable[..., Any] = lambda *_args, **_kwargs: None
-    open_file: Callable[..., Any] = lambda *_args, **_kwargs: None
+    maybe_deferred: Callable[..., Any] = lambda *_, **_kw: None
+    open_file: Callable[..., Any] = lambda *_, **_kw: None
 
     async def checkpoint() -> None:
         return None
+
+    def _run[*PosArgsT, T](
+        func: Callable[[Unpack[PosArgsT]], Awaitable[T]], *args: *PosArgsT
+    ) -> T:
+        return cast(T, None)
+
+    run: Run = _run
 else:
     from anyio import (
         CapacityLimiter,
@@ -65,9 +73,10 @@ else:
     from anyio.lowlevel import checkpoint
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
-    run = anyio.run
+    backend = "anyio"
+    run: Run = anyio.run
 
-backend: str = "empty" if run is None else "anyio"
+
 issync: bool = backend == "empty"
 isasync: bool = not issync
 

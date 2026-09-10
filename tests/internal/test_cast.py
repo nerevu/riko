@@ -25,11 +25,20 @@ def tokyo(monkeypatch):
 class TestTryLocalTz:
     @pytest.mark.usefixtures("tokyo")
     def test_defaults_to_utc(self):
-        assert cast_datetime("now").utcoffset() == timedelta(0)
+        if dt := cast_datetime("now"):
+            offset = dt.utcoffset()
+        else:
+            offset = None
+
+        assert offset == timedelta(0)
 
     @pytest.mark.usefixtures("tokyo")
     def test_honors_local_tz(self):
-        offset = cast_datetime("now", try_local_tz=True).utcoffset()
+        if dt := cast_datetime("now", try_local_tz=True):
+            offset = dt.utcoffset()
+        else:
+            offset = None
+
         assert offset == timedelta(hours=9)
 
     def test_keyword_only(self):

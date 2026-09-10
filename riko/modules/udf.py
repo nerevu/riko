@@ -6,6 +6,7 @@ Applies an arbitrary (user-defined) function to each item.
 which hands the whole stream to a single call.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.udf import pipe
@@ -21,12 +22,12 @@ Attributes:
 """
 
 from collections.abc import Awaitable, Callable
-from inspect import isawaitable
 from logging import Logger
 from typing import Any
 
 import pygogo as gogo
 
+from riko.bado._util import maybe_deferred
 from riko.modules._prepare import require_arg
 from riko.types._configs import UdfObjconf
 from riko.types._options import Defaults, Opts
@@ -52,6 +53,7 @@ async def async_parser(
     Asynchronously applies ``func`` to one item.
 
     Args:
+
         item: The entry to process.
         extraction: The extracted ``field`` value. Unused.
         objconf: The pipe configuration. Unused.
@@ -59,12 +61,15 @@ async def async_parser(
             function. Required.
 
     Returns:
+
         Whatever ``func`` returns.
 
     Raises:
+
         TypeError: If ``func`` is not given.
 
     Examples:
+
         >>> from itertools import repeat
         >>> from riko import run
         >>>
@@ -77,8 +82,7 @@ async def async_parser(
 
     """
     func = require_arg(func, "func", "udf", strict=True)
-    result = func(item)
-    return await result if isawaitable(result) else result
+    return await maybe_deferred(func, item)
 
 
 def parser(
@@ -93,18 +97,22 @@ def parser(
     Applies ``func`` to one item.
 
     Args:
+
         item: The entry to process.
         extraction: The extracted ``field`` value. Unused.
         objconf: The pipe configuration. Unused.
         func: The function to apply to the item. Required.
 
     Returns:
+
         Whatever ``func`` returns.
 
     Raises:
+
         TypeError: If ``func`` is not given.
 
     Examples:
+
         >>> from itertools import repeat
         >>>
         >>> func = lambda item: {"y": item["x"] + 3}
@@ -125,11 +133,13 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
     Kwargs:
+
         func (callable): The function to apply to each item. Receives the whole item, or
             the ``field`` value when ``field`` is set. Can be either a sync or async
             function. Required.
@@ -144,15 +154,18 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
             assign it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<result>`` when ``emit`` is True (default)
         - ``{<assign>: <result>}`` when ``emit`` is False and no item given
         - merged ``{Item, <assign>: <result>}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``func`` is not given.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -176,11 +189,13 @@ def pipe(*args: Any, **kwargs: object) -> Item:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
     Kwargs:
+
         func (callable): The function to apply to each item. Receives the whole
             item, or the ``field`` value when ``field`` is set. Required.
 
@@ -194,15 +209,18 @@ def pipe(*args: Any, **kwargs: object) -> Item:
             assign it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<result>`` when ``emit`` is True (default)
         - ``{<assign>: <result>}`` when ``emit`` is False and no item given
         - merged ``{Item, <assign>: <result>}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``func`` is not given.
 
     Examples:
+
         >>> func = lambda item: {"y": item["x"] + 3}
         >>> next(pipe({"x": 0}, func=func))
         {'y': 3}

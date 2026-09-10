@@ -167,7 +167,8 @@ ignore = [
     # stylistic
     "E731",  # do not assign a lambda expression, use a def
     "E501",  # line too long
-    "D301",  #escape-sequence-in-docstring
+    "D301",  # escape-sequence-in-docstring
+    "D412",  # blank-lines-between-header-and-content
 
     # security
     "S404",
@@ -214,12 +215,14 @@ split-on-trailing-comma = false
 ]
 
 [tool.pyright]
+reportUnnecessaryTypeIgnoreComment = "error"
 exclude = [
     "**/pycache",
     ".cache",
     ".claude",
     ".ruff_cache",
     ".tox/*",
+    ".venv",
     "tmp",
     "build/*",
     "dist/*",

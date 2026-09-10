@@ -9,11 +9,12 @@ Names prefixed with ``pipe_`` or ``pipe:`` resolve as pipelines, everything
 else as a module.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.ext._resolver import pipe_resolver
         >>>
-        >>> pipe = pipe_resolver.resolve("count", "pipe")
+        >>> pipe = pipe_resolver.resolve("count")
         >>> list(pipe([{"x": 1}, {"x": 2}]))
         [{'count': 2}]
 
@@ -26,13 +27,7 @@ from typing import Literal, overload
 
 from riko.ext._pipelines import pipeline_resolver
 from riko.ext.registry import registry
-from riko.types._wrappers import (
-    AsyncPipeParser,
-    Interface,
-    Pipeline,
-    Resolver,
-    SyncPipeParser,
-)
+from riko.types._wrappers import AsyncPipeWrapper, Pipe, Resolver, SyncPipeWrapper
 
 
 class PipeResolver:
@@ -44,6 +39,7 @@ class PipeResolver:
     :class:`PipelineResolver` for composed ``pipe_*`` sub-pipelines.
 
     Notes:
+
         Neither resolver imports the compiler at module scope. The two ``riko.compile``
         imports on this path are deliberately function-local (marked
         ``noqa: PLC0415``). That is what keeps importing this module, and therefore
@@ -58,24 +54,25 @@ class PipeResolver:
 
     @overload
     def resolve(  # noqa: E704
-        self, name: str, interface: Literal["pipe"]
-    ) -> SyncPipeParser: ...
+        self, name: str, is_async: Literal[False] = ...
+    ) -> SyncPipeWrapper: ...
     @overload  # noqa: E301
     def resolve(  # noqa: E704
-        self, name: str, interface: Literal["async_pipe"]
-    ) -> AsyncPipeParser: ...
-    def resolve(self, name: str, interface: Interface) -> Pipeline:  # noqa: E301
+        self, name: str, is_async: Literal[True]
+    ) -> AsyncPipeWrapper: ...
+    def resolve(self, name: str, is_async: bool = False) -> Pipe:  # noqa: E301
         """
         Returns ``name``'s callable for ``interface``.
 
         Raises:
+
             UnsupportedModuleError: If a module name is unresolved.
             UnsupportedPipelineError: If a ``pipe_*`` name is unresolved.
 
         """
         is_pipeline = name.startswith(("pipe_", "pipe:"))
         resolver: Resolver = self._pipelines if is_pipeline else self._registry
-        return resolver.resolve(name, interface)
+        return resolver.resolve(name, is_async)
 
 
 pipe_resolver: PipeResolver = PipeResolver(registry, pipeline_resolver)

@@ -96,6 +96,7 @@ def gen_name(count: int = 2) -> Iterator[str]:
 def replacer(content: str, old: str, new: str = "_") -> str:
     """
     Examples:
+
         >>> replacer('', '')
         ''
         >>> replacer('1abc', '')
@@ -286,15 +287,18 @@ def reduce_find(word: str, rule: FindConfRule, literal: bool = False) -> str:
     reassembling it from the pattern would corrupt any non-literal ``find``.
 
     Args:
+
         word: The string to search.
         rule: The find criteria, holding `find`, `location` and `param`.
         literal: Whether to treat ``find`` as a literal rather than a regex.
 
     Returns:
+
         The extracted text, stripped. Nothing matching gives ``""``, except
         ``location="after"`` which gives the whole word.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> rule = Objectify({"find": "[aiou]", "location": "before"})

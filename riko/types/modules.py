@@ -607,7 +607,7 @@ class InputConf(TypedDict, total=False):
 
 class FetchConf(TypedDict, total=False):
     url: str
-    encoding: str = "utf-8"
+    encoding: str
 
 
 class TailConf(TypedDict):
@@ -644,39 +644,39 @@ class CountConf(TypedDict, total=False):
 
 class CsvConf(TypedDict, total=False):
     url: Required[str]
-    encoding: str = "utf-8"
+    encoding: str
     col_names: NotRequired[Sequence[str] | None]
-    delimiter: str = ","
-    quotechar: str = '"'
-    has_header: bool = True
-    skip_rows: int = 0
-    dedupe: bool = True
-    sanitize: bool = False
+    delimiter: str
+    quotechar: str
+    has_header: bool
+    skip_rows: int
+    dedupe: bool
+    sanitize: bool
 
 
 class CurrencyFormatConf(TypedDict, total=False):
-    currency: str = "USD"
+    currency: str
     locale: str
     clean: bool
 
 
 class DateFormatConf(TypedDict, total=False):
-    format: str = "%m/%d/%Y %H:%M:%S"
+    format: str
 
 
 class ExchangeRateConf(TypedDict, total=False):
     url: str
     param: dict[str, str]
-    currency: str = "USD"
-    encoding: str = "utf-8"
-    memoize: bool = True
-    precision: int = 6
+    currency: str
+    encoding: str
+    memoize: bool
+    precision: int
 
 
 class FeedAutoDiscoveryConf(TypedDict, total=False):
     url: Required[str]
-    strict: bool = True
-    sort: bool = False
+    strict: bool
+    sort: bool
 
 
 class FetchDataConf(TypedDict):
@@ -692,7 +692,7 @@ class FetchPageConf(TypedDict, total=False):
     start: NotRequired[str]
     end: NotRequired[str]
     token: NotRequired[str]
-    detag: bool = False
+    detag: bool
 
 
 class FetchSiteFeedConf(TypedDict):
@@ -700,19 +700,19 @@ class FetchSiteFeedConf(TypedDict):
 
 
 class FetchTableConf(CsvConf, total=False):
-    sanitize: bool = True
+    sanitize: bool
 
 
 class FetchTextConf(TypedDict, total=False):
     url: Required[str]
-    encoding: str = "utf-8"
+    encoding: str
 
 
 class FilterConf(TypedDict, total=False):
     rule: Required[FilterConfRule | list[FilterConfRule]]
-    combine: Literal["and", "or"] = "and"
-    permit: NotRequired[bool] = True
-    stop: NotRequired[bool] = False
+    combine: Literal["and", "or"]
+    permit: NotRequired[bool]
+    stop: NotRequired[bool]
 
 
 class GeolocateConf(TypedDict):
@@ -727,8 +727,8 @@ class JoinConf(TypedDict, total=False):
 
 class ReceiveConf(TypedDict, total=False):
     name: str
-    wait: int | float = 1
-    max_wait: int | float = 5
+    wait: int | float
+    max_wait: int | float
     max_len: int
 
 
@@ -738,7 +738,7 @@ class RefindConf(TypedDict):
 
 class RegexConf(TypedDict, total=False):
     rule: Required[RegexConfRule | list[RegexConfRule]]
-    multi: bool = False
+    multi: bool
 
 
 class RenameConf(TypedDict):
@@ -746,7 +746,7 @@ class RenameConf(TypedDict):
 
 
 class SendConf(TypedDict, total=False):
-    max_wait: int | float = 5
+    max_wait: int | float
 
 
 class SimpleMathConf(TypedDict):
@@ -757,11 +757,11 @@ class SimpleMathConf(TypedDict):
 
 
 class SlugifyConf(TypedDict, total=False):
-    separator: str = "-"
+    separator: str
 
 
 class SplitConf(TypedDict, total=False):
-    splits: int = 2
+    splits: int
 
 
 class StrconcatConf(TypedDict):
@@ -782,17 +782,17 @@ class StrTransformConf(TypedDict):
 
 class SubelementConf(TypedDict, total=False):
     path: Required[str]
-    token_key: str | None = "content"  # noqa: S105
+    token_key: str | None
 
 
 class SubstrConf(TypedDict, total=False):
-    start: int = 0
-    length: int = 0
+    start: int
+    length: int
 
 
 class SumConf(TypedDict, total=False):
-    sum_key: str = "content"
-    group_key: str | None = None
+    sum_key: str
+    group_key: str | None
 
 
 class TimeoutConf(TypedDict, total=False):
@@ -806,15 +806,15 @@ class TimeoutConf(TypedDict, total=False):
 
 
 class TokenizerConf(TypedDict, total=False):
-    delimiter: str = ","
-    dedupe: bool = False
-    sort: bool = False
-    token_key: str = "content"  # noqa: S105
+    delimiter: str
+    dedupe: bool
+    sort: bool
+    token_key: str  # noqa: S105
 
 
 class TruncateConf(TypedDict, total=False):
-    count: int = 0
-    start: int = 0
+    count: int
+    start: int
 
 
 class TypecastConf(TypedDict):
@@ -826,8 +826,8 @@ class UdfConf(TypedDict):
 
 
 class UniqConf(TypedDict, total=False):
-    uniq_key: str = "content"
-    limit: int = 1024
+    uniq_key: str
+    limit: int
 
 
 class UrlBuilderConf(TypedDict, total=False):
@@ -838,20 +838,20 @@ class UrlBuilderConf(TypedDict, total=False):
 
 
 class UrlParseConf(TypedDict, total=False):
-    parse_key: str = "content"
+    parse_key: str
 
 
 class WriteConf(TypedDict, total=False):
     url: Required[str | Path]
-    target: TargetLike | None = None
-    mode: str = "wb+"
+    target: TargetLike | None
+    mode: str
 
 
 class XpathFetchPageConf(TypedDict, total=False):
     url: Required[str]
     xpath: str
-    encoding: str = "utf-8"
-    html5: bool = False
+    encoding: str
+    html5: bool
 
 
 # General

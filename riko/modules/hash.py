@@ -6,6 +6,7 @@ The field value is cast to text before hashing, so a missing field hashes the
 empty string.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.hash import pipe
@@ -47,14 +48,17 @@ def parser(
     Returns the unsigned 32-bit hash of ``content``.
 
     Args:
+
         content: The value to hash.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The hash, wrapped to an unsigned 32-bit integer.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> item = {"content": "hello world"}
@@ -75,11 +79,13 @@ def async_pipe(*args: Any, **kwargs: object) -> int:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to hash. Its value is cast to text first,
             so a missing field hashes ``""`` (default: "content").
 
@@ -90,12 +96,14 @@ def async_pipe(*args: Any, **kwargs: object) -> int:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <hash>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <hash>}`` when ``emit`` is False and no item given
         - ``<hash>`` when ``emit`` is True
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -118,11 +126,13 @@ def pipe(*args: Any, **kwargs: object) -> int:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to hash. Its value is cast to text first,
             so a missing field hashes ``""`` (default: "content").
 
@@ -133,12 +143,14 @@ def pipe(*args: Any, **kwargs: object) -> int:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <hash>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <hash>}`` when ``emit`` is False and no item given
         - ``<hash>`` when ``emit`` is True
 
     Examples:
+
         >>> next(pipe({"content": "hello world"}))
         {'content': 'hello world', 'hash': 1921504423}
         >>> kwargs = {"field": "title", "assign": "result"}

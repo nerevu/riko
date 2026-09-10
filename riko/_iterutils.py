@@ -50,7 +50,9 @@ NON_SORTABLE = (Mapping, Sequence)
 B = TypeVar("B", Literal[True], Literal[False])
 T = TypeVar("T")
 
-noop: Callable[[T], T] = lambda item: item
+
+def noop[T](item: T) -> T:
+    return item
 
 
 class Chainable:
@@ -63,6 +65,7 @@ class Chainable:
     method's signature accepts it there, else as the second.
 
     Examples:
+
         >>> Chainable([3, 1, 2]).sorted().data
         [1, 2, 3]
 
@@ -110,12 +113,15 @@ def invert_dict[K, V](d: dict[K, V]) -> dict[V, K]:
     Swaps a dict's keys and values.
 
     Args:
+
         d: The dict to invert; its values must be hashable and unique.
 
     Returns:
+
         A new dict mapping each value back to its key.
 
     Examples:
+
         >>> invert_dict({"a": 1, "b": 2})
         {1: 'a', 2: 'b'}
 
@@ -136,14 +142,17 @@ def multi_try[T, S](
     ``default`` is returned.
 
     Args:
+
         source: The value passed to each callable.
         zipped: Pairs of ``(callable, exception_type)`` tried in order.
         default: The value returned when every attempt raises.
 
     Returns:
+
         The first successful result, or ``default`` if none succeed.
 
     Examples:
+
         >>> from itertools import repeat
         >>>
         >>> multi_try("abc", zip([int, str.upper], repeat(ValueError)))
@@ -177,11 +186,13 @@ def _resolve_uncastable(
     raising, so a heterogeneous feed still sorts.
 
     Args:
+
         value: The value that failed casting.
         msg: The warning prefix describing the failed cast.
         default: The orderable filler used for non-scalar values.
 
     Returns:
+
         The original value when it is already orderable, else ``default``.
 
     """
@@ -220,11 +231,13 @@ def _resolve_default(
     and a mapping default fall back to the empty string.
 
     Args:
+
         type_: The cast type name, or ``None`` for no casting.
         invalid_type: Whether ``type_`` has no usable typed default.
         default: The caller-supplied default, if any.
 
     Returns:
+
         An orderable default suitable as a sort-key filler.
 
     """
@@ -258,6 +271,7 @@ def def_itemgetter(
     Like operator.itemgetter but fills in missing keys with a typed default.
 
     Args:
+
         attr: The key read from each item.
         default: The value used when the key is missing or uncastable.
         type_: Optional cast type applied to the value.
@@ -265,9 +279,11 @@ def def_itemgetter(
             reduced to sortable timestamps.
 
     Returns:
+
         A key function mapping an item to a sortable value.
 
     Examples:
+
         >>> keyfunc = def_itemgetter("n", type_="int")
         >>> keyfunc({"n": 5})
         5
@@ -330,14 +346,17 @@ def group_by[T: Mapping | PrimitiveValue](
     Groups items by the stringified value of a key.
 
     Args:
+
         content: The items to group.
         attr: The key read from each item.
         default: The value used when an item lacks ``attr``.
 
     Returns:
+
         A view of ``(key, items)`` pairs, one per distinct key.
 
     Examples:
+
         >>> items = [{"k": "a"}, {"k": "b"}, {"k": "a"}]
         >>> sorted((k, len(v)) for k, v in group_by(items, "k"))
         [('a', 2), ('b', 1)]
@@ -369,13 +388,16 @@ def unique_everseen[T](  # noqa: E302
     without it, elements are yielded.
 
     Args:
+
         content: The source iterable.
         keyfunc: Optional function producing a uniqueness key per element.
 
     Yields:
+
         Each element (or its key) the first time it is seen.
 
     Examples:
+
         >>> list(unique_everseen("ABBcCaD", str.lower))
         ['a', 'b', 'c', 'd']
         >>> list(unique_everseen([1, 1, 2, 3, 2]))
@@ -404,6 +426,7 @@ def betwix[T](
     Unlike ``islice``, the bounds match on an element's value.
 
     Args:
+
         iterable: The initial sequence.
         start: The fragment to begin with (inclusive).
         stop: The fragment to finish at (exclusive).
@@ -411,9 +434,11 @@ def betwix[T](
             the start and stop fragments are on the same line).
 
     Returns:
+
         The matching elements as an iterator.
 
     Examples:
+
         >>> from io import StringIO
         >>>
         >>> list(betwix('ABCDEFG', stop='C'))
@@ -487,13 +512,16 @@ def dispatch(  # noqa: E302
            \--> item3 --> max(item3) --------> /
 
     Args:
+
         split: The items to distribute.
         funcs: One function per item, applied positionally.
 
     Returns:
+
         The result of each function, in order.
 
     Examples:
+
         >>> split = (3, 8365641317588141140, ["a", "b", "r"])
         >>> double = lambda item: item * 2
         >>> dispatch(split, double, oct, max)
@@ -539,14 +567,17 @@ def broadcast(  # noqa: E302
            \--> item --> sorted(item) -----> /
 
     Args:
+
         item: The value passed to every function.
         funcs: The functions applied to ``item``.
         kwargs: Extra keyword arguments forwarded to each function.
 
     Returns:
+
         The result of each function, in order.
 
     Examples:
+
         >>> broadcast("bar", len, hash, sorted)
         (3, -6516517828960271057, ['a', 'b', 'r'])
 
@@ -559,12 +590,15 @@ def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterable[T]:
     Combines multiple iterables into a single stream.
 
     Args:
+
         sources: The iterables to chain together.
 
     Returns:
+
         A single iterator over every element, source by source.
 
     Examples:
+
         >>> list(multiplex([[1, 2], [3, 4]]))
         [1, 2, 3, 4]
 
@@ -579,14 +613,17 @@ def select_by_id[T](
     Finds the first mapping whose id field equals a target id.
 
     Args:
+
         content: The mappings to search.
         id_: The id value to match.
         id_field: The field holding each mapping's id.
 
     Returns:
+
         The first matching mapping, or an empty dict when none match.
 
     Examples:
+
         >>> rows = [{"id": 1, "v": "a"}, {"id": 2, "v": "b"}]
         >>> select_by_id(rows, 2, "id")
         {'id': 2, 'v': 'b'}
@@ -609,12 +646,15 @@ def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
     A listlike value is any iterable that is not a mapping, primitive, or ``None``.
 
     Args:
+
         value: The object to classify.
 
     Returns:
+
         True when ``value`` maps over items, False when it is one item.
 
     Examples:
+
         >>> is_listlike([1, 2])
         True
         >>> is_listlike((1, 2))
@@ -651,17 +691,17 @@ def listize(  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
 @overload
 def listize[T](value: list[T]) -> list[T]: ...  # noqa: E704
 @overload  # noqa: E302
-def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+def listize[T](  # noqa: E704
     value: dict[str, T],
 ) -> list[dict[str, T]]: ...
 @overload  # noqa: E302
-def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+def listize[T](  # noqa: E704
     value: CaseInsensitiveDict[T],
 ) -> list[CaseInsensitiveDict[T]]: ...
 @overload
 def listize[T](value: Mapping[str, T]) -> list[Mapping[str, T]]: ...  # noqa: E704
 @overload  # noqa: E302
-def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+def listize[T](  # noqa: E704
     value: Sequence[T],
 ) -> Sequence[T]: ...
 @overload
@@ -673,12 +713,15 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
     Creates a listlike object from any value.
 
     Args:
+
         value: The object to convert.
 
     Returns:
+
         ``value`` as a listlike object (wrapped in a list, or itself).
 
     Examples:
+
         >>> listize(x for x in range(3))  # doctest: +ELLIPSIS
         <generator object <genexpr> at 0x...>
         >>> listize([x for x in range(3)])

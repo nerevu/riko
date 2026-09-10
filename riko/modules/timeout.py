@@ -12,6 +12,7 @@ collects items until the deadline, so it returns only once the timeout expires
 (bounding even an unbounded source) and holds every collected item in memory.
 
 Examples:
+
     Basic usage::
 
         >>> from itertools import count
@@ -40,7 +41,7 @@ from typing import Any, Self, cast
 
 import pygogo as gogo
 
-from riko.bado.itertools import async_iter
+from riko.bado.itertools import as_async
 from riko.cast import BasicCastType
 from riko.types._configs import TimeoutObjconf
 from riko.types._options import Defaults, Opts
@@ -64,11 +65,7 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
     def __init__(
         self, elements: AsyncIterable[T] | Iterable[T], timeout_ms: int = 0
     ) -> None:
-        if isinstance(elements, AsyncIterable):
-            self.aiter = aiter(elements)
-        else:
-            self.aiter = async_iter(elements, cooperative=True)
-
+        self.aiter = aiter(as_async(elements, cooperative=True))
         self.timeout_ns = max(timeout_ms, 0) * NS_PER_MS
         self.deadline: int | None = None
 
@@ -131,6 +128,7 @@ async def async_parser(
     Asynchronously collects items until the configured duration elapses.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming it
             will consume `tuples` as well.
 
@@ -141,12 +139,14 @@ async def async_parser(
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Returns:
+
         A sync iterator over the items collected before the deadline. Awaiting
         collects items until the timeout expires or the source ends. So an
         unbounded ``Feed`` is bounded by the deadline, and every collected item
         is held in memory. A total of 0 means no timeout.
 
     Examples:
+
         >>> from itertools import count
         >>> from riko import async_sleep, run
         >>> from meza.fntools import Objectify
@@ -179,6 +179,7 @@ def parser(
     Yields items until the configured duration elapses.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
@@ -189,10 +190,12 @@ def parser(
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Returns:
+
         A lazy iterator that stops once the deadline passes. A total of 0 means
         no timeout.
 
     Examples:
+
         >>> from time import sleep
         >>> from meza.fntools import Objectify
         >>> from itertools import count
@@ -227,6 +230,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     sum.
 
     Args:
+
         items (Items | Feed): The source stream.
 
         conf (dict): The pipe configuration. Each key is cast to an int, so a
@@ -244,6 +248,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is True
             (default: "timeout").
 
@@ -251,10 +256,12 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> from itertools import count
         >>> from riko import async_sleep, run
         >>>
@@ -265,7 +272,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>>
         >>> async def main():
         ...     result = await async_pipe(paginated_api(), conf={"milliseconds": 250})
-        ...     print(len(list(result)))
+        ...     print(len([item async for item in result]))
         >>>
         >>> run(main)
         2
@@ -284,6 +291,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     together give their sum.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration. Each key is cast to an int, so a
@@ -301,6 +309,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each item is nested under. Ignored when ``emit`` is True
             (default: "timeout").
 
@@ -308,10 +317,12 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
+
         >>> from itertools import count
         >>> from time import sleep
         >>>

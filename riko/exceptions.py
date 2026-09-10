@@ -35,6 +35,12 @@ class PipelineStateError(PipelineError):
         self.action = action
 
 
+class InvalidPipelineError(PipelineError):
+    def __init__(self, msg: str):
+        super().__init__(f"Invalid pipeline: {msg}")
+        self.msg = msg
+
+
 class PubSubError(RikoError):
     """Base class for pub/sub errors."""
 

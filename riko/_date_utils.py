@@ -52,6 +52,7 @@ def _parse_date_cached(value: str) -> dt | BaseException:
 def parse_date_string(value: str) -> dt:
     """
     Examples:
+
         >>> from datetime import datetime
         >>>
         >>> _parse_date_cached.cache_clear()
@@ -88,20 +89,42 @@ def get_local_tz(
     return _tzinfo or fallback_tzinfo
 
 
-def gen_tzinfos() -> Iterator[tuple[str, tzinfo]]:
-    # TODO: replace with tzdata
-    for zone in pytz.common_timezones:
+# Sample a winter and a summer instant so both the standard and the daylight
+# abbreviation of every zone are captured, independent of when the module is
+# imported (a bare ``dt.now()`` only sees whichever is in effect today, so an
+# import in July silently dropped every zone's standard-time name).
+_SAMPLE_INSTANTS = (dt(2020, 1, 1, 12, tzinfo=UTC), dt(2020, 7, 1, 12, tzinfo=UTC))
+
+_PREFERRED_ZONES = frozenset(
+    {
+        "UTC",
+        "America/New_York",  # Eastern
+        "America/Chicago",  # Cental
+        "America/Denver",  # Mountain
+        "America/Los_Angeles",  # Pacific
+        "America/Anchorage",  # Alaska
+        "Pacific/Honolulu",  # Hawaii
+    }
+)
+
+
+def _add_zones(*zones: str) -> Iterator[tuple[str, tzinfo]]:
+    for zone in zones:
         _tzinfo = ZoneInfo(zone)
 
-        try:
-            tzdate = dt.now(UTC).astimezone(_tzinfo)
-        except pytz.NonExistentTimeError:
-            pass
-        else:
-            tzname = tzdate.tzname()
-
-            if _tzinfo and tzname:
+        for instant in _SAMPLE_INSTANTS:
+            if tzname := instant.astimezone(_tzinfo).tzname():
                 yield tzname, _tzinfo
+
+
+def gen_tzinfos() -> Iterator[tuple[str, tzinfo]]:
+    # Cover the broad common set first, then re-add the US-preferred zones so a shared
+    # abbreviation (``CST``/``EST``/...) resolves to its US zone rather than a foreign
+    # one (e.g. Asia/Taipei).
+    # TODO: replace with tzdata
+    common = available_timezones().intersection(pytz.common_timezones)
+    yield from _add_zones(*common.difference(_PREFERRED_ZONES))
+    yield from _add_zones(*_PREFERRED_ZONES)
 
 
 TZINFOS = dict(gen_tzinfos())
@@ -127,9 +150,7 @@ def tzinfo_from_tt(
     Try to get a ZoneInfo from struct_time's tm_zone name,
     falling back to a fixed-offset timezone from tm_gmtoff.
     """
-    if not tt:
-        _tzinfo = None
-    elif tt.tm_zone and tt.tm_zone in available_timezones():
+    if tt.tm_zone and tt.tm_zone in available_timezones():
         _tzinfo = ZoneInfo(tt.tm_zone)
     elif tt.tm_zone and tt.tm_zone in TZINFOS:
         _tzinfo = TZINFOS[tt.tm_zone]
@@ -258,6 +279,7 @@ def ensure_tzinfo(  # noqa: E302
 ) -> AwareDT | AwareST | date | None:
     """
     Examples:
+
         >>> import time
         >>> from datetime import datetime
         >>>

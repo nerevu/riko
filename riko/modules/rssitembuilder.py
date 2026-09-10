@@ -8,6 +8,7 @@ RSS item from scratch, or to restructure an existing item into RSS form by
 reading its values with ``subkey``.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.rssitembuilder import pipe
@@ -72,14 +73,17 @@ def parser(
     Builds an RSS item from the configured attributes.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, supplying the RSS attributes.
 
     Returns:
+
         The RSS item, dated now unless ``pubDate`` says otherwise.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> conf = {"guid": "a1", "mediaThumbURL": "img.png", "pubDate": "today"}
@@ -98,6 +102,7 @@ def async_pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
     Asynchronously builds a single RSS item.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, supplying values.
         conf (dict): The pipe configuration. Every key is optional, and each
             value is either a literal or a ``{"subkey": ...}`` reference
@@ -120,6 +125,7 @@ def async_pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the RSS item is nested under. Ignored when ``emit``
             is True (default: "content").
 
@@ -127,15 +133,18 @@ def async_pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
             it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - the RSS item when ``emit`` is True (default)
         - ``{<assign>: <rss item>}`` when ``emit`` is False and no item given
         - merged ``{Item, <assign>: <rss item>}`` when ``emit`` is False and item
           is given
 
     Notes:
+
         A conf key with no RSS equivalent is dropped.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -156,6 +165,7 @@ def pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
     Builds a single RSS item.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, supplying values.
         conf (dict): The pipe configuration. Every key is optional, and each
             value is either a literal or a ``{"subkey": ...}`` reference
@@ -178,6 +188,7 @@ def pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the RSS item is nested under. Ignored when ``emit``
             is True (default: "content").
 
@@ -185,15 +196,18 @@ def pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
             it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - the RSS item when ``emit`` is True (default)
         - ``{<assign>: <rss item>}`` when ``emit`` is False and no item given
         - merged ``{Item, <assign>: <rss item>}`` when ``emit`` is False and item
           is given
 
     Notes:
+
         A conf key with no RSS equivalent is dropped.
 
     Examples:
+
         >>> conf = {"title": "Hi", "guid": "a1", "mediaThumbURL": "img.png"}
         >>> rss = next(pipe(conf=conf))
         >>> sorted(rss)

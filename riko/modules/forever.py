@@ -10,6 +10,7 @@ Pipes that must reach the end of the source, such as ``tail`` or ``sort``, will
 hang.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.forever import pipe
@@ -49,14 +50,17 @@ def parser(
     Returns an endless iterator of ``{"forever": True}``.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         An endless iterator, one placeholder item at a time.
 
     Examples:
+
         >>> result = parser(None, None, None)
         >>> next(result)
         {'forever': True}
@@ -74,11 +78,13 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     downstream with ``truncate`` or ``timeout``.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each placeholder is nested under. Ignored when
             ``emit`` is True (default: "content").
 
@@ -86,17 +92,20 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
             it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``{"forever": True}`` when ``emit`` is True (default)
         - ``{<assign>: {"forever": True}}`` when ``emit`` is False and no item given
         - merged ``{Item, <assign>: [...]}`` when ``emit`` is False and an item
           is given — see the note below
 
     Notes:
+
         Assigning into an existing item collects every value into one list, so
         ``emit=False`` with an input item never returns. Leave ``emit`` at its
         default, or bound the stream before assigning.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -119,11 +128,13 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     downstream with ``truncate`` or ``timeout``.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each placeholder is nested under. Ignored when
             ``emit`` is True (default: "content").
 
@@ -131,17 +142,20 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
             it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``{"forever": True}`` when ``emit`` is True (default)
         - ``{<assign>: {"forever": True}}`` when ``emit`` is False and no item given
         - merged ``{Item, <assign>: [...]}`` when ``emit`` is False and an item
           is given (see the note below)
 
     Notes:
+
         Assigning into an existing item collects every value into one list. So
         ``emit=False`` with an input item hangs indefinitely. Leave ``emit`` at its
         default, or bound the stream before assigning.
 
     Examples:
+
         >>> next(pipe())
         {'forever': True}
 

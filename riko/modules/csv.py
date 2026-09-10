@@ -6,6 +6,7 @@ The url may be local or remote; rows are read lazily and the source is closed
 when the stream is exhausted.
 
 Examples:
+
     Basic usage::
 
         >>> from riko import get_path
@@ -60,17 +61,21 @@ async def async_parser(
     Asynchronously reads the csv file into a stream of rows.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url` and the csv options.
 
     Returns:
+
         Rows keyed by column name. The source closes when the stream is exhausted.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
@@ -104,17 +109,21 @@ def parser(
     Reads the csv file into a stream of rows.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url` and the csv options.
 
     Returns:
+
         Rows keyed by column name. The source closes when the stream is exhausted.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
@@ -145,6 +154,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Asynchronously fetches a csv file and yields one item per row.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -174,6 +184,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each row is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -181,19 +192,23 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<row>`` when ``emit`` is True (default)
         - ``{<assign>: <row>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<row>, ...]}`` when ``emit`` is False and item
           is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Notes:
+
         ``has_header=False`` buffers content into memory/disk. Every other option
         streams.
 
     Examples:
+
         >>> from riko import get_path, run
         >>>
         >>> async def main():
@@ -213,6 +228,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Fetches a csv file and yields one item per row.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -242,6 +258,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each row is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -249,19 +266,23 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<row>`` when ``emit`` is True (default)
         - ``{<assign>: <row>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<row>, ...]}`` when ``emit`` is False and item
           is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Notes:
+
         ``has_header=False`` buffers content into memory/disk. Every other option
         streams.
 
     Examples:
+
         >>> from riko import get_path
         >>>
         >>> url = get_path("spreadsheet.csv")

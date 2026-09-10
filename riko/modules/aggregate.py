@@ -9,6 +9,7 @@ Adds no buffering of its own, so laziness is inherited from ``func``: a
 generator stays lazy, a list is already materialized.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.aggregate import pipe
@@ -24,13 +25,13 @@ Attributes:
 """
 
 from collections.abc import Awaitable, Callable
-from inspect import isawaitable
 from logging import Logger
 from typing import Any
 
 import pygogo as gogo
 
 from riko._iterutils import listize
+from riko.bado._util import as_awaitable
 from riko.modules._prepare import require_arg
 from riko.types._configs import AggregateObjconf
 from riko.types._options import Defaults
@@ -61,6 +62,7 @@ async def async_parser(
     passed through unchanged.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
@@ -74,12 +76,15 @@ async def async_parser(
             function. Required.
 
     Returns:
+
         The transformed stream.
 
     Raises:
+
         TypeError: If ``func`` is not given.
 
     Examples:
+
         >>> from itertools import repeat
         >>> from riko import run
         >>>
@@ -96,7 +101,7 @@ async def async_parser(
     """
     func = require_arg(func, "func", "aggregate", strict=True)
     unawaited = func(stream)
-    result = await unawaited if isawaitable(unawaited) else unawaited
+    result = await as_awaitable(unawaited)
     return iter(listize(result))
 
 
@@ -115,6 +120,7 @@ def parser(
     passed through unchanged.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
@@ -127,12 +133,15 @@ def parser(
         func: The function to apply to the stream. Required.
 
     Returns:
+
         The transformed stream.
 
     Raises:
+
         TypeError: If ``func`` is not given.
 
     Examples:
+
         >>> from itertools import repeat
         >>>
         >>> func = lambda stream: ({"y": item["x"] + 3} for item in stream)
@@ -156,11 +165,13 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     buffering, so laziness is inherited from ``func``.
 
     Args:
+
         items (Items): The source stream.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
     Kwargs:
+
         func (callable): The function to apply to the stream. A result that is
             not iterable becomes a single item stream. Can be either a sync or async
             function. Required.
@@ -172,20 +183,23 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<result>`` when ``emit`` is True (default)
         - ``{<assign>: <result>}`` when ``emit`` is False
 
     Raises:
+
         TypeError: If ``func`` is not given.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
         ...     func = lambda stream: ({"y": item["x"] + 3} for item in stream)
         ...     items = ({"x": x} for x in range(5))
         ...     result = await async_pipe(items, func=func)
-        ...     print(next(result))
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         {'y': 3}
@@ -203,11 +217,13 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     buffering, so laziness is inherited from ``func``.
 
     Args:
+
         items (Items): The source stream.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
     Kwargs:
+
         func (callable): The function to apply to the stream. A result that is
             not iterable becomes a single item stream. Required.
 
@@ -218,13 +234,16 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<result>`` when ``emit`` is True (default)
         - ``{<assign>: <result>}`` when ``emit`` is False
 
     Raises:
+
         TypeError: If ``func`` is not given.
 
     Examples:
+
         >>> items = [{"x": x} for x in range(5)]
         >>> func = lambda stream: ({"y": item["x"] + 3} for item in stream)
         >>> next(pipe(items, func=func))

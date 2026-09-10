@@ -6,6 +6,7 @@ Allows pipelines to dynamically inject pieces (stock ticker, search term, page n
 etc.) into a url.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.urlbuilder import pipe
@@ -54,17 +55,21 @@ def parser(
     Assembles a url from the configured parts.
 
     Args:
+
         _: The item. Unused.
         param: The parsed query parameters.
         objconf: The pipe configuration, containing `base`, `path` and `ext`.
 
     Returns:
+
         The url.
 
     Raises:
+
         TypeError: If ``conf`` has no ``base`` key.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> param = {"key": "s", "value": "gm"}
@@ -108,6 +113,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, supplying values.
 
         conf (dict): The pipe configuration. Every value is either a literal or
@@ -129,6 +135,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the url is assigned to. Ignored when ``emit`` is
             True (default: "content").
 
@@ -136,18 +143,22 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<url>`` when ``emit`` is True (default)
         - ``{<assign>: <url>}`` when ``emit`` is False and no item given
         - merged ``{Item, <assign>: <url>}`` when ``emit`` is False and item is
           given
 
     Raises:
+
         TypeError: If ``conf`` has no ``base`` key.
 
     Notes:
+
         A parameter without a ``key`` is skipped.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -175,6 +186,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, supplying values.
 
         conf (dict): The pipe configuration. Every value is either a literal or
@@ -196,6 +208,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the url is assigned to. Ignored when ``emit`` is
             True (default: "content").
 
@@ -203,18 +216,22 @@ def pipe(*args: Any, **kwargs: object) -> str:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<url>`` when ``emit`` is True (default)
         - ``{<assign>: <url>}`` when ``emit`` is False and no item given
         - merged ``{Item, <assign>: <url>}`` when ``emit`` is False and item is
           given
 
     Raises:
+
         TypeError: If ``conf`` has no ``base`` key.
 
     Notes:
+
         A parameter without a ``key`` is skipped.
 
     Examples:
+
         >>> base = "http://finance.yahoo.com"
         >>> path = ["rss", "headline"]
         >>> conf = {

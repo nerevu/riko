@@ -6,6 +6,7 @@ Fetches a feed and counts the words on the fetched page.
 The equivalent word-count and feed-fetching doctests live in ``README.rst``.
 
 Examples:
+
     Run it::
 
         run-pipe demo

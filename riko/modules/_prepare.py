@@ -65,6 +65,7 @@ def require_arg[T](value: T | None, name: str, pipe: str, strict: bool = False) 
     error, so this raises rather than degrading.
 
     Args:
+
         value: The supplied argument value, or ``None`` when omitted.
 
         name: The argument being validated, used in the error message.
@@ -77,12 +78,15 @@ def require_arg[T](value: T | None, name: str, pipe: str, strict: bool = False) 
             which ``0``, ``False`` or ``""`` is a real value (default: False).
 
     Returns:
+
         The value, narrowed to ``T``.
 
     Raises:
+
         TypeError: If ``value`` is ``None``, or is falsy under ``strict``.
 
     Examples:
+
         >>> require_arg(len, "func", "udf")
         <built-in function len>
         >>> require_arg(None, "func", "udf")
@@ -117,6 +121,7 @@ def require_conf[T](  # noqa: E704
     data condition and is skipped.
 
     Args:
+
         objconf: The parsed pipe configuration.
 
         key: The conf key that must be set.
@@ -129,13 +134,16 @@ def require_conf[T](  # noqa: E704
             a real value (default: False).
 
     Returns:
+
         The value bound to ``key``.
 
     Raises:
+
         TypeError: If ``key`` is absent or ``None``, or is falsy under
             ``strict``.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> require_conf(Objectify({"url": "x"}), "url", "csv")
@@ -178,15 +186,18 @@ def get_pieces_or_conf(
     back so the caller keeps access to the full conf.
 
     Args:
+
         parsed_conf: The per-item parsed conf, or ``None``.
         defaults: The module's default conf.
         opts: The decoration options (``extract``/``listize``).
         pipe: The pipe name, used in the error message.
 
     Returns:
+
         The extracted value or merged conf, paired with the merged conf.
 
     Raises:
+
         TypeError: When ``extract`` names a key absent from the merged conf.
 
     """
@@ -221,6 +232,7 @@ class PreparedModule[T, E]:
     call-site options never overwrite one another.
 
     Attributes:
+
         name: The module name.
         conf: The merged pipe configuration.
         opts: The resolved decoration/call options.
@@ -294,6 +306,7 @@ def parse_and_cast[T, E](  # noqa: E302
     or value dispatch depending on whether the input is a mapping.
 
     Args:
+
         item: The input item or value.
         opts: The resolved options.
         conf: The merged pipe configuration.
@@ -305,6 +318,7 @@ def parse_and_cast[T, E](  # noqa: E302
         **kwargs: Extra options forwarded to the parsers.
 
     Returns:
+
         An item or value dispatch pairing the original item with its cast pieces.
 
     """
@@ -336,11 +350,13 @@ def get_parsers(opts: Opts, conf: Conf, **kwargs: object) -> tuple[ParseFuncs, b
     parsed lazily per call (dynamic); otherwise it is parsed once and memoized.
 
     Args:
+
         opts: The decoration options (``ftype``/``ptype``).
         conf: The merged pipe configuration.
         **kwargs: Extra options forwarded to dynamic-conf detection.
 
     Returns:
+
         The field/conf parsers, and whether the conf is dynamic (per-item).
 
     """
@@ -381,9 +397,11 @@ def _get_caster[T](  # noqa: E302
     (pass-through) rather than raising.
 
     Args:
+
         type_: The destination cast type, or ``None`` for pass-through.
 
     Returns:
+
         A caster callable taking content and optional kwargs.
 
     """
@@ -410,10 +428,12 @@ def get_casters(opts: Opts) -> CastFuncs[ItemOrValue, object]:
     ptype disables casting for both.
 
     Args:
+
         opts: The decoration options (``ftype``/``ptype``/``extract``/
             ``listize``/``objectify``).
 
     Returns:
+
         The field, extract, and conf casters.
 
     """

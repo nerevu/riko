@@ -155,7 +155,7 @@ Exactly-once must not be claimed generically. When duplicate delivery is possibl
 side-effecting nodes rely on the common execution-derived idempotency identity and the
 transport's genuine acknowledgement/idempotency capabilities.
 
-Protocol sessions are declared `Context` resources and live as execution-owned handles.
+Protocol sessions are declared `Context` resources and are execution-owned session values.
 They are not opened per item unless the protocol genuinely requires it.
 
 ## 7. Iteration uses `loop`

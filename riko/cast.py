@@ -9,6 +9,7 @@ Dispatch is by destination type; ``CAST_SWITCH`` maps each type to its caster
 and default.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.cast import cast_value
@@ -135,13 +136,16 @@ def literal_parse(content: BasicValue | bool) -> BasicArg:
     back to the original string when it is not a valid literal.
 
     Args:
+
         content: The value to parse.
 
     Returns:
+
         The parsed literal, or ``content`` unchanged when it is not a string or
         not a valid literal.
 
     Examples:
+
         >>> literal_parse("true")
         True
         >>> literal_parse("[1, 2]")
@@ -168,12 +172,15 @@ def url_quote(url: str | int) -> str:
     Percent-encodes a URL while leaving URL-syntax characters intact.
 
     Args:
+
         url: The URL (or numeric host) to encode.
 
     Returns:
+
         The encoded URL, with the characters in ``URL_SAFE`` left unescaped.
 
     Examples:
+
         >>> url_quote("a b/c")
         'a%20b/c'
 
@@ -189,12 +196,15 @@ def cast_url(url: str | int) -> str:
     round-trips it through ``urlparse``.
 
     Args:
+
         url: The URL (or numeric host) to normalize.
 
     Returns:
+
         The normalized, encoded URL string.
 
     Examples:
+
         >>> cast_url("example.com/a b")
         'http://example.com/a%20b'
 
@@ -212,12 +222,15 @@ def lookup_street_address(_: str) -> Location:
     A fixed stub standing in for a real geocoder; the input is ignored.
 
     Args:
+
         _: Ignored; accepted for interface parity with a real geocoder.
 
     Returns:
+
         A ``Location`` with placeholder address fields.
 
     Examples:
+
         >>> lookup_street_address("1600 Pennsylvania Ave")["postal"]
         '61605'
 
@@ -244,12 +257,15 @@ def lookup_ip_address(_: str) -> IPAddress:
     A fixed stub standing in for a real geolocator; the input is ignored.
 
     Args:
+
         _: Ignored; accepted for interface parity with a real geolocator.
 
     Returns:
+
         An ``IPAddress`` location with placeholder fields.
 
     Examples:
+
         >>> lookup_ip_address("8.8.8.8")["country"]
         'United States'
 
@@ -275,14 +291,17 @@ def lookup_coordinates(
     arguments; unparseable or missing coordinates default to ``0.0``.
 
     Args:
+
         latlon: A ``"lat,lon"`` string; used when it contains a comma.
         lat: The latitude used when ``latlon`` has no comma.
         lon: The longitude used when ``latlon`` has no comma.
 
     Returns:
+
         A ``Location`` with the resolved ``lat``/``lon`` and placeholder fields.
 
     Examples:
+
         >>> lookup_coordinates("1.5, 2.5")["lat"]
         1.5
         >>> lookup_coordinates(lat=1.0, lon=2.0)["lon"]
@@ -323,13 +342,16 @@ def cast_location(
     its entry from ``LOCATIONS`` is merged in.
 
     Args:
+
         address: The address, coordinate, IP, or currency code to look up.
         loc_type: Which kind of lookup to perform.
 
     Returns:
+
         The resolved location mapping.
 
     Examples:
+
         >>> cast_location("123 Main St")["city"]
         'city'
         >>> cast_location("USD", "currency")["name"]
@@ -386,15 +408,18 @@ def cast_datetime(  # noqa: E302
     against the current time.
 
     Args:
+
         value: The date-like value or string shorthand to normalize.
         as_date: Whether to return a ``date`` rather than a ``datetime``.
         as_datedict: Whether to return a ``DateDict`` of date components.
         try_local_tz: Whether to assume the local timezone for naive values.
 
     Returns:
+
         The normalized value, or ``None`` when it cannot be parsed.
 
     Examples:
+
         >>> type(cast_datetime('now')).__name__
         'datetime'
         >>> type(cast_datetime('today')).__name__
@@ -465,9 +490,34 @@ def cast_date(value: DateLike) -> date | None:
     return cast_datetime(value, as_date=True)
 
 
-CAST_SWITCH: dict[str, PreCaster] = {
+def cast_decimal[T](value: object, default: T | None = None) -> Decimal | T:
+    """Coerces a number or numeric string to ``Decimal``; raises otherwise."""
+    result = None
+
+    try:
+        if isinstance(value, float):
+            result = Decimal(str(value))
+        elif isinstance(value, (int, str, Decimal)):
+            result = Decimal(value)
+    except (TypeError, InvalidOperation, ValueError):
+        pass
+
+    if (result is None) and (default is not None):
+        result = default
+    elif result is None:
+        raise TypeError(f"cannot coerce {value} to Decimal")
+
+    return result
+
+
+def _cast_decimal(value: str | int) -> Decimal:
+    """Coerces to a str or int to ``Decimal``."""
+    return cast_decimal(value)
+
+
+CAST_SWITCH: dict[str, PreCaster[PrimitiveValue | AnyLocation]] = {
     "float": {"default": float("nan"), "func": float},
-    "decimal": {"default": Decimal("NaN"), "func": Decimal},
+    "decimal": {"default": Decimal("NaN"), "func": _cast_decimal},
     "int": {"default": 0, "func": lambda i: int(float(i))},
     "text": {"default": "", "func": str},
     "datetime": {"default": None, "func": cast_datetime},
@@ -537,13 +587,16 @@ def cast_value[T](  # noqa: E302
     Converts content from one type to another.
 
     Args:
+
         content: The entry to convert.
         type_: The type to convert to.
 
     Returns:
+
         The converted content.
 
     Examples:
+
         >>> content = '12.25'
         >>> cast_value(content, 'float')
         12.25
@@ -612,12 +665,15 @@ def cast_pass[T](content: T, **_: object) -> T:
     A thin wrapper over ``cast_value`` with ``type_=PASS`` for use as a caster.
 
     Args:
+
         content: The value to pass through.
 
     Returns:
+
         ``content`` unchanged.
 
     Examples:
+
         >>> cast_pass(5)
         5
         >>> cast_pass("x")

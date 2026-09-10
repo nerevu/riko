@@ -6,6 +6,7 @@ Reads csv/tsv, xls(x), mdb, json, geojson, dbf, yaml, sqlite, fixed width, and
 html files. The format is taken from the url's extension.
 
 Examples:
+
     Basic usage::
 
         >>> from riko import get_path
@@ -61,17 +62,21 @@ async def async_parser(
     Asynchronously reads the table into a stream of rows.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url` and the table options.
 
     Returns:
+
         Rows keyed by column name. The source closes when the stream is exhausted.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
@@ -105,17 +110,21 @@ def parser(
     Reads the table into a stream of rows.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url` and the table options.
 
     Returns:
+
         Rows keyed by column name. The source closes when the stream is exhausted.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
@@ -145,6 +154,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Asynchronously fetches tabular data and yields rows.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -175,6 +185,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each row is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -182,15 +193,18 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<row>`` when ``emit`` is True (default)
         - ``{<assign>: <row>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<row>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>>
         >>> async def main():
@@ -210,6 +224,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Fetches tabular data and yields rows.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -240,6 +255,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each row is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -247,15 +263,18 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<row>`` when ``emit`` is True (default)
         - ``{<assign>: <row>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<row>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>>
         >>> url = get_path("spreadsheet.csv")

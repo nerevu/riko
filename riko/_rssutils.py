@@ -15,7 +15,7 @@ from requests.structures import CaseInsensitiveDict
 
 from riko._date_utils import ensure_tzinfo
 from riko.types._collections import BasicDict, RikoValue
-from riko.types._rss import ParserRSSEntry, RSSEntry
+from riko.types._rss import ExpandedRSSEntry, ParserRSSEntry, RSSEntry, YahooRSSEntry
 from riko.types._streams import Stream, StreamOrValueStream, ValueStream
 
 
@@ -40,15 +40,16 @@ def _get_entry_text(entry: ParserRSSEntry) -> str:
 
 
 def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
-    for entry in entries:
-        text = _get_entry_text(entry)
+    for raw in entries:
+        text = _get_entry_text(raw)
+        entry = cast(YahooRSSEntry, dict(raw))
         pub_date = updated_date = None
 
         if not entry.get("summary"):
-            entry["summary"] = text
+            cast(ExpandedRSSEntry, entry)["summary"] = text
 
         if not entry.get("description"):
-            entry["description"] = text
+            cast(ExpandedRSSEntry, entry)["description"] = text
 
         if "published_parsed" in entry:
             pub_date = updated_date = entry["published_parsed"]
@@ -76,9 +77,13 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
         entry["author.uri"] = entry.get("author_detail", {}).get("href")
         entry["dc:creator"] = entry.get("author")
         entry["y:id"] = entry.get("id")
-        entry["updated_parsed"] = updated_date
-        entry["published_parsed"] = entry["y:published"] = entry["pubDate"] = pub_date
+        entry["y:published"] = pub_date
         entry["y:title"] = entry.get("title")
+        cast(ExpandedRSSEntry, entry)["updated_parsed"] = updated_date
+
+        for key in ("published_parsed", "pubDate"):
+            cast(ExpandedRSSEntry, entry)[key] = pub_date
+
         yield cast(RSSEntry, entry)
 
 

@@ -177,17 +177,19 @@ def loop_embed_sync(
     stream = source
     loop = partial(_run_loop_sync, field=field, assign=assign, emit=emit, count=count)
 
-    if is_subpipe(embed):
+    if embed is None:
+        handled = False
+    elif is_subpipe(embed):
         # A sub-pipeline embed is self-contained, so it runs per parent with no
         # embedded kwargs (its own modules carry their conf).
         stream = loop(cast(SyncSubPipe, embed), None, context, source)
         looped = True
-    elif embed and embed_type and embed.loopable:
+    elif embed_type and embed.loopable:
         stream = loop(embed, embedded_kwargs, context, source)
         looped = True
     elif embed_type:
         logger.error(f"{embed.name} is not loopable and can't be embedded.")
-    elif embed and callable(embed):
+    elif callable(embed):
         logger.error("Custom embedded pipes are not currently supported.")
     elif module_name == "loop":
         logger.error("No embedded pipe provided!")
@@ -222,17 +224,19 @@ def loop_embed_async(
     stream = source
     loop = partial(_run_loop_async, field=field, assign=assign, emit=emit, count=count)
 
-    if is_subpipe(embed):
+    if embed is None:
+        handled = False
+    elif is_subpipe(embed):
         # A sub-pipeline embed is self-contained, so it runs per parent with no
         # embedded kwargs (its own modules carry their conf).
         stream = loop(cast(AsyncSubPipe, embed), None, context, source)
         looped = True
-    elif embed and embed_type and embed.loopable:
+    elif embed_type and embed.loopable:
         stream = loop(embed, embedded_kwargs, context, source)
         looped = True
     elif embed_type:
         logger.error(f"{embed.name} is not loopable and can't be embedded.")
-    elif embed and callable(embed):
+    elif callable(embed):
         logger.error("Custom embedded pipes are not currently supported.")
     elif op_module_name == "loop":
         logger.error("No embedded pipe provided!")

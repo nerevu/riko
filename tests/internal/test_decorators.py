@@ -138,7 +138,7 @@ class TestAsyncGeneratorSource:
                 yield {"x": x}
 
         result = await timeout_async_pipe(feed(), conf={})
-        assert list(result) == [{"x": 0}, {"x": 1}, {"x": 2}]
+        assert [item async for item in result] == [{"x": 0}, {"x": 1}, {"x": 2}]
 
     @async_test
     async def test_feed_delivered_lazily_to_parser(self):
@@ -155,5 +155,6 @@ class TestAsyncGeneratorSource:
                 yield {"content": x}
 
         result = await async_pipe(feed())
-        assert list(result) == [{"content": 0}, {"content": 1}, {"content": 2}]
+        expected = [{"content": 0}, {"content": 1}, {"content": 2}]
+        assert [item async for item in result] == expected
         assert received["is_async"] is True

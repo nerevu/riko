@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from ._sentinels import StreamState
 
 
+# Base Sync
 type Item = RikoDict | dict[str, RikoValue] | RSSEntry | DotDict[RikoValue]
 type ItemOrValue = Item | RikoValue
 type Items = Iterable[Item]
@@ -20,14 +21,27 @@ type Stream = Iterator[Item]
 type StreamOrValueStream = Iterator[ItemOrValue]
 type Streams = Iterator[Stream]
 
+
+class StatefulItem(TypedDict):
+    state: StreamState
+
+
+# Base Async
 type AsyncItems = AsyncIterable[Item]
 type AsyncItemsOrValues = AsyncIterable[ItemOrValue]
 type AsyncStream = AsyncIterator[Item]
 type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
-
 type Feed = AsyncItems
 type AsyncSource = Items | Feed | Awaitable[Items | Feed]
 
 
-class StatefulItem(TypedDict):
-    state: StreamState
+# Riko Sync
+type RikoItem = ItemOrValue | Stream
+type RikoItems = Iterable[RikoItem]
+type RikoStream = Iterator[RikoItem]
+
+# Riko Async
+type AsyncRikoItems = AsyncIterable[RikoItem]
+type AsyncRikoStream = AsyncIterator[RikoItem]
+type RikoFeed = AsyncRikoItems
+type AsyncRikoSource = RikoItems | RikoFeed | Awaitable[RikoItems | RikoFeed]

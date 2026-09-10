@@ -40,6 +40,7 @@ NaiveST = Annotated[struct_time, "timezone-naive"]
 def get_date(unit: str, count: int, op: Callable) -> date | dt:
     """
     Examples:
+
         >>> from datetime import datetime
         >>> from operator import add, sub
         >>> from dateutil.relativedelta import relativedelta

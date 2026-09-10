@@ -9,6 +9,7 @@ Warning:
     country. See ``riko.cast.lookup_street_address`` and friends.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.geolocate import pipe
@@ -46,6 +47,7 @@ def parser(
     Resolves ``address`` to a location of the configured type.
 
     Args:
+
         address: The value to resolve — a currency code, street address, ip
             address, or ``"lat,lon"`` pair.
 
@@ -53,12 +55,15 @@ def parser(
         objconf: The pipe configuration, containing `type`.
 
     Returns:
+
         The resolved location. Only ``type="currency"`` consults real data.
 
     Raises:
+
         KeyError: If ``type`` is not a supported lookup.
 
     Examples:
+
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
@@ -78,6 +83,7 @@ def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
     Asynchronously resolves an item field to a location.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -88,6 +94,7 @@ def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute holding the value to resolve
             (default: "content").
 
@@ -98,19 +105,23 @@ def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
             than assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <location>}`` when ``emit`` is False and
           item is given (default)
         - ``{<assign>: <location>}`` when ``emit`` is False and no item given
         - ``<location>`` when ``emit`` is True
 
     Raises:
+
         KeyError: If ``type`` is not a supported lookup.
 
     Notes:
+
         Only ``"currency"`` resolves real data; the other lookups return placeholder
         values.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -131,6 +142,7 @@ def pipe(*args: Any, **kwargs: object) -> AnyLocation:
     Resolves an item field to a location.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
@@ -141,6 +153,7 @@ def pipe(*args: Any, **kwargs: object) -> AnyLocation:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute holding the value to resolve
             (default: "content").
 
@@ -151,19 +164,23 @@ def pipe(*args: Any, **kwargs: object) -> AnyLocation:
             than assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <location>}`` when ``emit`` is False and
           item is given (default)
         - ``{<assign>: <location>}`` when ``emit`` is False and no item given
         - ``<location>`` when ``emit`` is True
 
     Raises:
+
         KeyError: If ``type`` is not a supported lookup.
 
     Notes:
+
         Only ``"currency"`` resolves real data; the other lookups return placeholder
         values.
 
     Examples:
+
         >>> conf = {"type": "currency"}
         >>> geolocate = next(pipe({"content": "INR"}, conf=conf))
         >>> geolocate["country"]

@@ -12,6 +12,7 @@ list of feeds rather than their contents, use the feedautodiscovery module,
 which reports every feed found without fetching any of them.
 
 Examples:
+
     Basic usage::
 
         >>> from riko import get_path
@@ -57,17 +58,21 @@ async def async_parser(
     Asynchronously discovers the first feed on a page and parses it.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`.
 
     Returns:
+
         Feed entries, or nothing when the page advertises no feed.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
@@ -87,7 +92,7 @@ async def async_parser(
         logger.warning(f"No feed found at {url}")
         entries = []
     else:
-        content = await async_url_read(str(first["link"]))
+        content = await async_url_read(str(first.get("link")))
         entries = parse_rss(content=content)
 
     return augment_entries(entries)
@@ -100,17 +105,21 @@ def parser(
     Discovers the first feed on a page and parses it.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`.
 
     Returns:
+
         Feed entries, or nothing when the page advertises no feed.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
@@ -127,7 +136,7 @@ def parser(
         logger.warning(f"No feed found at {url}")
         entries = []
     else:
-        entries = parse_rss(str(first["link"]))
+        entries = parse_rss(str(first.get("link")))
 
     return augment_entries(entries)
 
@@ -138,6 +147,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     Asynchronously fetches and parses the first feed found on a page.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -147,6 +157,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each entry is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -154,18 +165,22 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<entry>`` when ``emit`` is True (default)
         - ``{<assign>: <entry>}`` when ``emit`` is False, no item given
         - one merged ``{Item, <assign>: [<entry>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Notes:
+
         A page advertising no feed yields nothing and logs a warning.
 
     Examples:
+
         >>> from riko import get_path, run
         >>>
         >>> async def main():
@@ -185,6 +200,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     Fetches and parses the first feed found on a page.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -194,6 +210,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each entry is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -201,18 +218,22 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<entry>`` when ``emit`` is True (default)
         - ``{<assign>: <entry>}`` when ``emit`` is False, no item given
         - one merged ``{Item, <assign>: [<entry>, ...]}`` when ``emit`` is False and
           item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Notes:
+
         A page advertising no feed yields nothing and logs a warning.
 
     Examples:
+
         >>> from riko import get_path
         >>>
         >>> next(pipe(conf={"url": get_path("bbc.html")}))["title"]

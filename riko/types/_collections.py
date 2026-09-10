@@ -28,7 +28,7 @@ type BasicDict = (
 type BasicList = list[str] | list[bool] | list[int] | list[Decimal] | list[float]
 type BasicReturn = BasicValue | BasicDict | BasicList | tuple[BasicValue, ...]
 
-type Stringy = str | "StringyList" | "StringyDict"
+type Stringy = "str | StringyList | StringyDict"
 type StringyDict = dict[str, Stringy]
 type StringyList = list[Stringy]
 

@@ -17,6 +17,7 @@ the execution-bound view, and binding normalization. Lazy opening, ``from_factor
 dependency graphs, and cross-mode bridging remain deferred.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.resources import Resource, ResourceView
@@ -45,6 +46,7 @@ class Resource(Generic[H, C]):
     An immutable execution-resource definition.
 
     Attributes:
+
         handle: The resolved handle this resource wraps and hands to parsers.
         external: Whether the caller owns the lifecycle (Riko never closes it).
         credential: A credential reference resolved by the connector layer.
@@ -52,6 +54,7 @@ class Resource(Generic[H, C]):
         lazy: Whether opening defers until first use (validated eagerly).
 
     Examples:
+
         >>> from riko.resources import Resource
         >>>
         >>> handle = object()
@@ -60,7 +63,8 @@ class Resource(Generic[H, C]):
         True
         >>> resource.close(handle)
 
-    Note:
+    Notes:
+
         When ``cleanup`` is not given, ``C`` is ``Never`` and ``close``/``aclose``
         return ``None``. When ``cleanup`` is given, ``close``/``aclose`` return ``C``.
 
@@ -87,9 +91,11 @@ class Resource(Generic[H, C]):
         Creates a resource whose lifecycle remains owned by the caller.
 
         Args:
+
             handle: The already-resolved external handle.
 
         Returns:
+
             A resource that always resolves to ``handle`` and never closes it.
 
         """
@@ -100,6 +106,7 @@ class Resource(Generic[H, C]):
         Resolves this resource's handle.
 
         Returns:
+
             The wrapped handle.
 
         """
@@ -110,6 +117,7 @@ class Resource(Generic[H, C]):
         Resolves this resource's handle for an async parser.
 
         Returns:
+
             The wrapped handle.
 
         """
@@ -123,9 +131,11 @@ class Resource(Generic[H, C]):
         ``close()`` is invoked for its side effect and ``None`` is returned.
 
         Args:
+
             handle: The opened handle to close.
 
         Returns:
+
             The ``cleanup`` result, or ``None`` when there is no override.
 
         """
@@ -148,9 +158,11 @@ class Resource(Generic[H, C]):
         returned.
 
         Args:
+
             handle: The opened handle to close.
 
         Returns:
+
             The ``cleanup`` result, or ``None`` when there is no override.
 
         """
@@ -174,6 +186,7 @@ class ExternalResource[H](Resource[H, Never]):
     the caller owns the lifecycle.
 
     Examples:
+
         >>> from riko.resources import Resource
         >>>
         >>> class Client:
@@ -208,6 +221,7 @@ class ResourceView:
     An execution-bound view of resolved handles by local binding name.
 
     Examples:
+
         >>> from riko.resources import ResourceView
         >>>
         >>> handle = object()
@@ -318,13 +332,16 @@ def bind_resources(
     under that alias.
 
     Args:
+
         binding: The node's declared resource binding.
         resources: The Context's resource definitions, keyed by Context name.
 
     Returns:
+
         A view exposing each opened handle under its local alias.
 
     Raises:
+
         TypeError: When a binding names a resource absent from ``resources``;
             all declared bindings are required.
         NotImplementedError: When a resolved resource is owned — owned-resource
@@ -332,6 +349,7 @@ def bind_resources(
             ``external`` resource for now.
 
     Examples:
+
         >>> from riko.resources import Resource, bind_resources
         >>>
         >>> handle = object()

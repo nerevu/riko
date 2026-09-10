@@ -39,6 +39,7 @@ from riko.types._collections import (
     StringyDict,
     StringyList,
 )
+from riko.types._guards import is_mapping
 from riko.types._scalars import Hashable, HashableType
 
 if TYPE_CHECKING:
@@ -74,6 +75,7 @@ def fromdict(
 ) -> "DataclassInstance":
     """
     Examples:
+
         >>> from dataclasses import dataclass
         >>>
         >>> @dataclass
@@ -118,7 +120,7 @@ def fromdict(
 
             if val not in valid:
                 raise ValueError(f"Invalid {f.name}={val!r}, expected one of {valid}")
-        elif is_dataclass(ftype) and isinstance(ftype, type) and isinstance(val, dict):
+        elif is_dataclass(ftype) and isinstance(ftype, type) and is_mapping(val):
             val = fromdict(ftype, **val)
 
         data[f.name] = val
@@ -140,6 +142,7 @@ def _to_hashable(obj: object) -> HashableOrTuple:
     cache distinct instances onto one key.
 
     Examples:
+
         >>> _to_hashable([1, 2]) == _to_hashable((1, 2))
         False
 
@@ -222,6 +225,7 @@ def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
     cache so distinct instances never collide on a shared key.
 
     Examples:
+
         >>> calls = []
         >>> @repr_cache
         ... def tally(x):

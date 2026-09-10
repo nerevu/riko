@@ -10,6 +10,7 @@ either shape. A continent carries only ``code_2`` and ``continent``; a country
 adds ``code_3``, ``country``, and its ISO 3166 ``num``.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.locations import LOCATIONS

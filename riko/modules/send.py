@@ -9,6 +9,7 @@ This is the low-level interface. ``riko.SyncPipe.publish`` is the high-level pat
 ``SyncPipe.publish(items, "alerts")`` and as ``flow.publish("alerts")`` mid-chain.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.receive import pipe as receiver
@@ -68,6 +69,7 @@ async def async_parser(
     left waiting.
 
     Args:
+
         stream: The source, sync or async. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
@@ -79,11 +81,13 @@ async def async_parser(
         others: Receivers to push to. Required.
 
     Returns:
+
         A sync iterator over each source item, unchanged. Awaiting publishes the
         whole source, so an unbounded one never returns and a finite one is held
         in memory.
 
     Raises:
+
         TypeError: If ``others`` is not given.
         ReceiverUnavailableError: If a target never starts within ``max_wait``.
 
@@ -115,6 +119,7 @@ def parser(
     Publishes each item to every target, then yields it unchanged.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so
             consuming it will consume `tuples` as well.
 
@@ -128,12 +133,15 @@ def parser(
         ids: Mapping of receiver name to delivery id (default: None).
 
     Yields:
+
         Each source item, unchanged.
 
     Raises:
+
         TypeError: If ``others`` is not given.
 
     Examples:
+
         >>> from itertools import repeat
         >>> from riko.modules.receive import pipe as receiver
         >>>
@@ -174,6 +182,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     source is published in full before the first item is observable downstream.
 
     Args:
+
         items (Items | Feed): The source stream, sync or async.
 
         conf (dict): The pipe configuration.
@@ -184,12 +193,15 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         others (list[str]): Receiver names each item is pushed to. Required.
 
     Yields:
+
         Item, unchanged.
 
     Raises:
+
         TypeError: If ``others`` is not given.
         ReceiverUnavailableError: If a target never subscribes within ``max_wait``.
 
@@ -205,21 +217,26 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Items pass through unchanged, so this can sit mid-pipeline.
 
     Args:
+
         items (Items): The source stream.
         conf (dict): The pipe configuration. Unused on this path.
         context (Context): the execution context
 
     Kwargs:
+
         others (list[str]): Receiver names each item is pushed to. Required.
         ids (dict[str, int]): Mapping of receiver name to delivery id (default: None).
 
     Yields:
+
         Item, unchanged.
 
     Raises:
+
         TypeError: If ``others`` is not given.
 
     Examples:
+
         >>> from riko.modules.receive import pipe as receiver
         >>>
         >>> target = receiver(conf={"name": "receiver3", "wait": 0.01, "max_wait": 2})

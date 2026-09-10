@@ -3,6 +3,7 @@
 Counts the number of items in a stream.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.count import pipe
@@ -42,6 +43,7 @@ def parser(
     Counts items, optionally grouping them by a field.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
@@ -52,10 +54,12 @@ def parser(
             `stream` as well.
 
     Returns:
+
         - ``Iterator[{<group>: <count>}]`` when ``count_key`` is set
         - ``<count>`` when ``count_key`` is unset
 
     Examples:
+
         >>> from itertools import repeat
         >>>
         >>> stream = ({"x": x} for x in range(5))
@@ -89,6 +93,7 @@ def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
     Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -99,6 +104,7 @@ def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the count is assigned to. Ignored when ``count_key`` is set
             (the group keys are used instead) or ``emit`` is True (default: "count").
 
@@ -106,17 +112,19 @@ def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
             Ignored when ``count_key`` is set. Overrides ``assign`` (default: False).
 
     Yields:
+
         - ``{<group>: <count>}`` when ``count_key`` is set
         - ``{<assign>: <count>}`` when ``emit`` is False and ``count_key`` is unset
         - ``<count>`` when ``emit`` is True and ``count_key`` is unset
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
         ...     items = ({"x": x} for x in range(5))
         ...     result = await async_pipe(items)
-        ...     print(next(result))
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         {'count': 5}
@@ -133,6 +141,7 @@ def pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
     Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -143,6 +152,7 @@ def pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the count is assigned to. Ignored when ``count_key`` is set
             (the group keys are used instead) or ``emit`` is True (default: "count").
 
@@ -150,11 +160,13 @@ def pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
             Ignored when ``count_key`` is set. Overrides ``assign`` (default: False).
 
     Yields:
+
         - ``{<group>: <count>}`` when ``count_key`` is set
         - ``{<assign>: <count>}`` when ``emit`` is False and ``count_key`` is unset
         - ``<count>`` when ``emit`` is True and ``count_key`` is unset
 
     Examples:
+
         >>> stream = [{"x": x} for x in range(5)]
         >>> next(pipe(stream, emit=True))
         5

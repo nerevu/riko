@@ -23,6 +23,7 @@ from riko.ext._resolver import PipeResolver, pipe_resolver
 from riko.ext.registry import ModuleDefinition, registry, reset_registry
 from riko.modules import list_modules, regex, tokenizer
 from riko.paths import ROOT_DIR
+from riko.types._guards import is_mapping
 
 _META = {
     "type": "operator",
@@ -74,11 +75,11 @@ class _FakeEntryPoint:
 
 class TestModuleRegistry:
     def test_builtin_resolves_lazily(self, fixed_registry):
-        assert fixed_registry.resolve("tokenizer", "pipe").__name__ == "pipe"
+        assert fixed_registry.resolve("tokenizer").__name__ == "pipe"
 
     def test_missing_module_raises_unsupported(self, fixed_registry):
         with pytest.raises(UnsupportedModuleError):
-            fixed_registry.resolve(_MISSING_NAME, "pipe")
+            fixed_registry.resolve(_MISSING_NAME)
 
     def test_missing_dotted_module_raises_unsupported(self, fixed_registry):
         """
@@ -86,7 +87,7 @@ class TestModuleRegistry:
         target. The guard must still map that to UnsupportedModuleError.
         """
         with pytest.raises(UnsupportedModuleError):
-            fixed_registry.resolve("acme.nope", "pipe")
+            fixed_registry.resolve("acme.nope")
 
     def test_transitive_import_error_preserved(self, fixed_registry, monkeypatch):
         """
@@ -103,13 +104,13 @@ class TestModuleRegistry:
         monkeypatch.setattr("riko._importutils.import_module", fake_import)
 
         with pytest.raises(ModuleNotFoundError) as e:
-            fixed_registry.resolve("tokenizer", "pipe")
+            fixed_registry.resolve("tokenizer")
 
         assert not isinstance(e.value, UnsupportedModuleError)
 
     def test_runtime_registration_takes_precedence(self, fixed_registry):
         fixed_registry.register(ModuleDefinition(name="tokenizer", sync_pipe=marker))
-        assert fixed_registry.resolve("tokenizer", "pipe") is marker
+        assert fixed_registry.resolve("tokenizer") is marker
 
     def test_register_rejects_duplicate_without_replace(self, fixed_registry):
         fixed_registry.register(MOD_DEFN)
@@ -123,7 +124,7 @@ class TestModuleRegistry:
         fixed_registry.register(ModuleDefinition(name=_MISSING_NAME, sync_pipe=marker))
 
         with pytest.raises(UnsupportedModuleError):
-            fixed_registry.resolve(_MISSING_NAME, "async_pipe")
+            fixed_registry.resolve(_MISSING_NAME, True)
 
     def test_runtime_register_requires_name(self, fixed_registry):
         with pytest.raises(ValueError, match="needs a name"):
@@ -133,8 +134,8 @@ class TestModuleRegistry:
         mod = SimpleNamespace(pipe=marker, async_pipe=marker)
         fixed_registry.register(ModuleDefinition(name=_NAME, module=mod))
 
-        assert fixed_registry.resolve(_NAME, "pipe") is marker
-        assert fixed_registry.resolve(_NAME, "async_pipe") is marker
+        assert fixed_registry.resolve(_NAME) is marker
+        assert fixed_registry.resolve(_NAME, True) is marker
 
     def test_explicit_callable_overrides_module(self, fixed_registry):
         other = lambda source, **_: source
@@ -142,8 +143,8 @@ class TestModuleRegistry:
         definition = ModuleDefinition(name=_NAME, sync_pipe=marker, module=mod)
         fixed_registry.register(definition)
 
-        assert fixed_registry.resolve(_NAME, "pipe") is marker  # explicit wins
-        assert fixed_registry.resolve(_NAME, "async_pipe") is other  # from module
+        assert fixed_registry.resolve(_NAME) is marker  # explicit wins
+        assert fixed_registry.resolve(_NAME, True) is other  # from module
 
 
 class TestPublicRegister:
@@ -151,37 +152,38 @@ class TestPublicRegister:
 
     def test_register_resolves_via_facade(self, fixed_registry):
         register(MOD_DEFN)
-        assert pipe_resolver.resolve(_NAME, "pipe") is marker
-        assert registry.resolve(_NAME, "pipe") is marker
+        assert pipe_resolver.resolve(_NAME) is marker
+        assert registry.resolve(_NAME) is marker
 
     def test_register_runs_end_to_end(self, fixed_registry):
         """A registered alias of a built-in resolves and runs through SyncPipe"""
         register(ModuleDefinition(name=_NAME, module=tokenizer))
         flow = SyncPipe(_NAME, source=[{"content": "a b c"}], conf={"delimiter": " "})
-        assert [item.get("content") for item in flow] == ["a", "b", "c"]
+        expected = ["a", "b", "c"]
+        assert [item.get("content") for item in flow if is_mapping(item)] == expected
 
     def test_reset_registry_clears_registration(self, fixed_registry):
         register(MOD_DEFN)
         reset_registry()
 
         with pytest.raises(UnsupportedModuleError):
-            pipe_resolver.resolve(_NAME, "pipe")
+            pipe_resolver.resolve(_NAME)
 
 
 class TestPipeResolver:
     def test_module_resolves_via_registry(self, fixed_registry):
-        assert pipe_resolver.resolve("tokenizer", "pipe").__name__ == "pipe"
+        assert pipe_resolver.resolve("tokenizer").__name__ == "pipe"
 
     def test_non_pipeline_name_routes_to_module_registry(self, fixed_registry):
         # A plain (non ``pipe_*``) name resolves through the module registry, so a
         # miss surfaces as UnsupportedModuleError, not UnsupportedPipelineError.
         with pytest.raises(UnsupportedModuleError):
-            pipe_resolver.resolve(_MISSING_NAME, "pipe")
+            pipe_resolver.resolve(_MISSING_NAME)
 
     def test_runtime_pipe_resolution_imports_no_compiler(self, fixed_registry):
         """Resolving an ordinary module must not pull in riko.compile."""
         sys.modules.pop("riko.compile", None)
-        PipeResolver(fixed_registry, pipeline_resolver).resolve("tokenizer", "pipe")
+        PipeResolver(fixed_registry, pipeline_resolver).resolve("tokenizer")
         assert "riko.compile" not in sys.modules
 
     @pytest.mark.xfail(
@@ -196,7 +198,7 @@ class TestPipeResolver:
         """
         name = "pipe_transform"
         fixed_registry.register(ModuleDefinition(name=name, sync_pipe=marker))
-        assert pipe_resolver.resolve(name, "pipe") is marker
+        assert pipe_resolver.resolve(name) is marker
 
 
 class TestEntryPointModules:
@@ -205,14 +207,14 @@ class TestEntryPointModules:
     def test_entry_point_module_resolves(self, monkeypatch, fixed_registry):
 
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, MOD_DEFN))
-        assert fixed_registry.resolve(_NAME, "pipe") is marker
+        assert fixed_registry.resolve(_NAME) is marker
 
     def test_name_stamped_from_entry_point_key(self, monkeypatch, fixed_registry):
         """Definition omits name so the registry adopts the entry-point key"""
         defn = ModuleDefinition(sync_pipe=marker)
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, defn))
 
-        assert fixed_registry.resolve(_NAME, "pipe") is marker
+        assert fixed_registry.resolve(_NAME) is marker
         assert fixed_registry._entry_point_definition(_NAME).name == _NAME
 
     def test_name_key_mismatch_raises(self, monkeypatch, fixed_registry):
@@ -220,19 +222,19 @@ class TestEntryPointModules:
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, defn))
 
         with pytest.raises(ValueError, match="must match"):
-            fixed_registry.resolve(_NAME, "pipe")
+            fixed_registry.resolve(_NAME)
 
     def test_entry_point_via_facade(self, monkeypatch, fixed_registry):
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, MOD_DEFN))
-        assert pipe_resolver.resolve(_NAME, "pipe") is marker
+        assert pipe_resolver.resolve(_NAME) is marker
 
     def test_entry_point_may_name_a_bare_module(self, monkeypatch, fixed_registry):
         """The entry point resolves to a module, not a ModuleDefinition"""
         mod = SimpleNamespace(pipe=marker, async_pipe=marker, __doc__=_DOC)
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, mod))
 
-        assert fixed_registry.resolve(_NAME, "pipe") is marker
-        assert fixed_registry.resolve(_NAME, "async_pipe") is marker
+        assert fixed_registry.resolve(_NAME) is marker
+        assert fixed_registry.resolve(_NAME, True) is marker
 
     def test_bare_module_description_from_docstring_summary(
         self, monkeypatch, fixed_registry
@@ -249,7 +251,7 @@ class TestEntryPointModules:
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, mod))
 
         with pytest.raises(TypeError, match="expected a ModuleDefinition"):
-            fixed_registry.resolve(_NAME, "pipe")
+            fixed_registry.resolve(_NAME)
 
     def test_runtime_registration_shadows_entry_point(
         self, monkeypatch, fixed_registry
@@ -258,7 +260,7 @@ class TestEntryPointModules:
         ep_defn = ModuleDefinition(name=_NAME, sync_pipe=ep_marker)
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
         fixed_registry.register(MOD_DEFN)
-        resolved = fixed_registry.resolve(_NAME, "pipe")
+        resolved = fixed_registry.resolve(_NAME)
         assert resolved is marker
         assert resolved is not ep_marker
 
@@ -273,10 +275,10 @@ class TestEntryPointModules:
         fixed_registry.reset()
 
         with pytest.raises(UnsupportedModuleError):
-            fixed_registry.resolve(_MISSING_NAME, "pipe")
+            fixed_registry.resolve(_MISSING_NAME)
 
         with pytest.raises(UnsupportedModuleError):
-            fixed_registry.resolve(_MISSING_NAME, "pipe")
+            fixed_registry.resolve(_MISSING_NAME)
 
         assert calls["n"] == 1
 

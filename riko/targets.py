@@ -17,6 +17,7 @@ overwrite, and ``append`` as append. Files have no keys, so it builds a ``SinkWr
 directly rather than through the keyed ``sink_write`` validator.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.targets import File, resolve_target
@@ -27,24 +28,34 @@ Examples:
 """
 
 import json
-from collections.abc import Iterable
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from riko.sinks import KeyLike, SinkMode, SinkWrite, sink_write
+from riko.types._guards import is_mapping
 from riko.types._io import IOFileLikeType
 from riko.types._scalars import AnyStrType
-from riko.types._streams import Item
+from riko.types._streams import Item, RikoItems
 from riko.types._wrappers import ConversionOutput
 
 type Destination = str | Path | "SinkTarget"
 
+
+class Formats(StrEnum):
+    """How a sink reconciles incoming items with the destination."""
+
+    CSV = "csv"
+    GEOJSON = "geojson"
+    JSON = "json"
+    JSONL = "jsonl"
+    OFX = "ofx"
+    QIF = "qif"
+
+
 FILE_OPEN_MODES: dict[SinkMode, str] = {SinkMode.APPEND: "ab", SinkMode.REPLACE: "wb+"}
-STREAMABLE_FORMATS: frozenset[str] = frozenset({"csv", "jsonl"})
-_KNOWN_FORMATS: frozenset[str] = frozenset(
-    {"csv", "geojson", "json", "jsonl", "ofx", "qif"}
-)
+STREAMABLE_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +64,7 @@ class SinkResult:
     What a sink delivery did.
 
     Attributes:
+
         created: Records inserted (keyed record targets).
         updated: Records updated (keyed record targets).
         deleted: Records removed (keyed record targets).
@@ -72,6 +84,7 @@ class SinkCapabilities:
     What a sink target supports.
 
     Attributes:
+
         modes: The ``SinkMode`` values the target accepts.
         serializes: Whether the target encodes records with a format (a file),
             as opposed to sending native records (a record store).
@@ -86,18 +99,25 @@ class SinkCapabilities:
 class SinkTarget(Protocol):
     """A destination that reports its capabilities and delivers records."""
 
-    def capabilities(self) -> SinkCapabilities:
-        """Returns the modes and serialization behavior the target supports."""
+    def capabilities(self, fmt: Formats | str | None = None) -> SinkCapabilities:
+        """
+        Returns the modes and serialization behavior the target supports.
+
+        For a serializing target the supported modes depend on ``fmt``: only a
+        line-oriented format (csv/jsonl) can be appended to; a whole-document
+        format (json/geojson/…) supports ``replace`` only. Non-serializing
+        targets ignore ``fmt``.
+        """
         ...
 
     def deliver(
-        self, records: Iterable[Item], write: SinkWrite, *, fmt: str | None = None
+        self, records: RikoItems, write: SinkWrite, *, fmt: Formats | str | None = None
     ) -> SinkResult:
         """Delivers ``records`` to the destination under ``write`` semantics."""
         ...
 
     async def adeliver(
-        self, records: Iterable[Item], write: SinkWrite, *, fmt: str | None = None
+        self, records: RikoItems, write: SinkWrite, *, fmt: Formats | str | None = None
     ) -> SinkResult:
         """Asynchronously delivers ``records`` under ``write`` semantics."""
         ...
@@ -108,15 +128,19 @@ class File:
     """
     A file sink: serialize records with a ``Targets`` converter and write a path.
 
-    Supports ``append`` (open mode ``ab``) and ``replace`` (open mode ``wb+``); the
-    ``SinkMode`` maps to the file-open mode, which is no longer caller-visible.
+    Supports ``replace`` for every format and ``append`` only for a line-oriented
+    format (csv/jsonl); ``SinkMode`` maps to the file-open mode, which is no longer
+    caller-visible. Appending to a whole-document format (json/geojson) is rejected
+    at prepare rather than concatenating two documents into invalid output.
 
     Attributes:
+
         url: The destination path.
         format: The ``Targets`` converter name, or ``None`` to derive it from the
             path extension (falling back to ``json``).
 
     Examples:
+
         >>> from riko import get_temp_file
         >>> from riko.sinks import SinkMode, SinkWrite
         >>> from riko.targets import File
@@ -131,36 +155,47 @@ class File:
     url: str | Path
     format: str | None = None
 
-    def capabilities(self) -> SinkCapabilities:
-        """Returns file capabilities: ``append``/``replace``, serializing."""
+    def capabilities(self, fmt: Formats | str | None = None) -> SinkCapabilities:
+        """
+        Returns format-aware file capabilities.
+
+        A line-oriented format (csv/jsonl) supports ``append`` and ``replace``;
+        a whole-document format (json/geojson/ofx/qif) supports ``replace`` only,
+        because appending would concatenate two documents into invalid output.
+        """
+        resolved = resolve_format(self.url, fmt or self.format)
         modes = frozenset({SinkMode.APPEND, SinkMode.REPLACE})
-        return SinkCapabilities(modes=modes, serializes=True)
+        replace_only = frozenset({SinkMode.REPLACE})
+        supported = modes if resolved in STREAMABLE_FORMATS else replace_only
+        return SinkCapabilities(modes=supported, serializes=True)
 
     def _encode(
-        self, records: Iterable[Item], fmt: str | None
+        self, records: RikoItems, fmt: Formats | str | None
     ) -> ConversionOutput | None:
         """Serializes ``records`` with the resolved ``Targets`` converter."""
         from riko.collections import CONVERSION_FUNCS  # noqa: PLC0415
         from riko.modules.write import _resolve_target  # noqa: PLC0415
 
-        items = [dict(item) for item in records]
+        items = [dict(item) for item in records if is_mapping(item)]
         target = _resolve_target(self.url, fmt or self.format, *CONVERSION_FUNCS)
         convert = CONVERSION_FUNCS.get(target)
         return convert(items) if convert else None
 
     def deliver(
-        self, records: Iterable[Item], write: SinkWrite, *, fmt: str | None = None
+        self, records: RikoItems, write: SinkWrite, *, fmt: Formats | str | None = None
     ) -> SinkResult:
         """
         Serializes ``records`` and writes them to ``url``.
 
         Args:
+
             records: The records to serialize.
             write: The write spec; only ``mode`` is read (``append`` vs ``replace``).
             fmt: A ``Targets`` converter override; else ``format``, else derived
                 from the path extension.
 
         Returns:
+
             A result carrying the number of bytes written.
 
         """
@@ -174,7 +209,7 @@ class File:
         return SinkResult(written=written)
 
     async def adeliver(
-        self, records: Iterable[Item], write: SinkWrite, *, fmt: str | None = None
+        self, records: RikoItems, write: SinkWrite, *, fmt: Formats | str | None = None
     ) -> SinkResult:
         """
         Asynchronously serializes ``records`` and writes them to ``url``.
@@ -183,12 +218,14 @@ class File:
         :func:`riko.bado.io.async_write`.
 
         Args:
+
             records: The records to serialize.
             write: The write spec; only ``mode`` is read (``append`` vs ``replace``).
             fmt: A ``Targets`` converter override; else ``format``, else derived
                 from the path extension.
 
         Returns:
+
             A result carrying the number of bytes written.
 
         """
@@ -211,36 +248,44 @@ def build_write(
     *,
     keys: KeyLike | None = None,
     idempotency_key: KeyLike | None = None,
+    fmt: Formats | str | None = None,
 ) -> SinkWrite:
     """
     Validates ``mode`` against ``target``'s capabilities and builds a ``SinkWrite``.
 
-    Whether a mode is keyed is a per-target property, not a mode-global one: a
-    serializing target (a ``File``) treats every mode as an unkeyed file write and
-    forbids ``keys``/``idempotency_key``, while a record store routes through the
-    keyed :func:`riko.sinks.sink_write` validator.
+    Whether a mode is keyed is a per-target property, not a mode-global one. A
+    serializing target (e.g., ``File``) treats every mode as an unkeyed write and
+    forbids ``keys``/``idempotency_key``. A record store routes through the keyed
+    :func:`riko.sinks.sink_write` validator. For a serializing target, the valid
+    modes also depend on ``fmt``. Appending to a whole-document format (e.g., json)
+    is rejected here.
 
     Args:
+
         target: The resolved sink target.
         mode: The sink mode, as a ``SinkMode`` or its string value.
         keys: The match keys for a keyed record target.
         idempotency_key: The dedupe key for an ``append`` on a record target.
+        fmt: The serialization format used to validate the mode.
 
     Returns:
+
         The normalized, validated write specification.
 
     Raises:
+
         ValueError: When ``mode`` is unsupported by the target, or a serializing
             target is given ``keys``/``idempotency_key``.
 
     Examples:
+
         >>> from riko.targets import File, build_write
         >>>
         >>> build_write(File("out.csv"), "append")
         SinkWrite(mode=<SinkMode.APPEND: 'append'>, keys=(), idempotency_key=())
 
     """
-    caps = target.capabilities()
+    caps = target.capabilities(fmt)
     resolved = SinkMode(mode)
 
     if resolved not in caps.modes:
@@ -270,17 +315,21 @@ def resolve_target(dest: Destination, **conf: object) -> SinkTarget:
     exists, so every string is currently treated as a file path.
 
     Args:
+
         dest: A ``SinkTarget``, or a path string/``Path``.
         conf: Extra keyword configuration for a constructed ``File`` (e.g.
             ``format``).
 
     Returns:
+
         The resolved sink target.
 
     Raises:
+
         TypeError: When ``dest`` is neither a ``SinkTarget`` nor a path.
 
     Examples:
+
         >>> from riko.targets import File, resolve_target
         >>>
         >>> resolve_target("out.csv")
@@ -299,7 +348,7 @@ def resolve_target(dest: Destination, **conf: object) -> SinkTarget:
     return target
 
 
-def resolve_format(url: str | Path | None, fmt: str | None) -> str:
+def resolve_format(url: str | Path | None, fmt: Formats | str | None) -> Formats:
     """
     Resolves a serialization format from an explicit ``fmt``, else the extension.
 
@@ -307,28 +356,31 @@ def resolve_format(url: str | Path | None, fmt: str | None) -> str:
     when it names a known format; anything else falls back to ``json``.
 
     Args:
+
         url: The destination path, or ``None``.
         fmt: The explicit format, or ``None`` to derive one.
 
     Returns:
+
         The resolved format name.
 
     Examples:
+
         >>> from riko.targets import resolve_format
         >>>
         >>> resolve_format("out.jsonl", None)
-        'jsonl'
-        >>> resolve_format("out.txt", None)
-        'json'
+        <Formats.JSONL: 'jsonl'>
+        >>> resolve_format("out", None)
+        <Formats.JSON: 'json'>
 
     """
     if fmt:
         resolved = fmt
     else:
         ext = Path(str(url)).suffix.lstrip(".").lower()
-        resolved = ext if ext in _KNOWN_FORMATS else "json"
+        resolved = ext or Formats.JSON
 
-    return resolved
+    return Formats(resolved)
 
 
 @dataclass(slots=True)
@@ -341,6 +393,7 @@ class _FileWriter:
     publisher completes.
 
     Attributes:
+
         target: The resolved file target.
         mode: ``append`` or ``replace``.
         fmt: The resolved serialization format.
@@ -350,7 +403,7 @@ class _FileWriter:
 
     target: SinkTarget
     mode: SinkMode
-    fmt: str
+    fmt: Formats
     stream: bool
     _buffer: list[Item] = field(default_factory=list)
     _started: bool = False
@@ -374,15 +427,23 @@ class _FileWriter:
         from meza import convert as cv  # noqa: PLC0415
         from meza import io  # noqa: PLC0415
 
-        file_mode = FILE_OPEN_MODES[self.mode] if not self._started else "ab"
+        first = not self._started
+        file_mode = FILE_OPEN_MODES[self.mode] if first else "ab"
+        append_mode = self.mode == SinkMode.APPEND
+        skip_header = not first or (append_mode and self._has_content())
 
-        if self.fmt == "csv":
-            content = cv.records2csv([dict(item)], skip_header=self._started)
+        if self.fmt == Formats.CSV:
+            content = cv.records2csv([dict(item)], skip_header=skip_header)
         else:
             content = json.dumps(dict(item), default=str) + "\n"
 
         io.write(str(self._url), content, mode=file_mode)
         self._started = True
+
+    def _has_content(self) -> bool:
+        """Whether the destination file already exists and is non-empty."""
+        path = Path(str(self._url))
+        return path.exists() and path.stat().st_size > 0
 
     @property
     def _url(self) -> str | Path:
@@ -393,8 +454,8 @@ class _FileWriter:
 def file_writer(
     dest: Destination,
     *,
-    mode: SinkMode | str = SinkMode.APPEND,
-    fmt: str | None = None,
+    mode: SinkMode | str = SinkMode.REPLACE,
+    fmt: Formats | str | None = None,
     stream: bool | None = None,
 ) -> _FileWriter:
     """
@@ -404,6 +465,7 @@ def file_writer(
     extension) unless ``stream`` overrides it.
 
     Args:
+
         dest: A path, or a ``SinkTarget``.
         mode: ``append`` or ``replace``; the keyed record modes are rejected.
         fmt: A serialization format override, else derived from the extension.
@@ -411,12 +473,15 @@ def file_writer(
             ``None`` infers it from the format.
 
     Returns:
+
         The configured file writer.
 
     Raises:
+
         ValueError: When ``mode`` is not ``append`` or ``replace``.
 
     Examples:
+
         >>> from riko.targets import file_writer
         >>>
         >>> file_writer("out.jsonl").stream
@@ -427,12 +492,18 @@ def file_writer(
     """
     target = resolve_target(dest)
     resolved_mode = SinkMode(mode)
+    resolved_fmt = resolve_format(getattr(target, "url", None), fmt)
 
     if resolved_mode not in FILE_OPEN_MODES:
         valid = ", ".join(m.value for m in FILE_OPEN_MODES)
         raise ValueError(f"the 'write' verb supports only the {valid} modes")
+    elif resolved_mode == SinkMode.APPEND and resolved_fmt not in STREAMABLE_FORMATS:
+        valid = ", ".join(sorted(STREAMABLE_FORMATS))
+        raise ValueError(
+            f"the '{resolved_fmt}' format cannot be appended to; "
+            f"appendable formats: {valid}"
+        )
 
-    resolved_fmt = resolve_format(getattr(target, "url", None), fmt)
     streaming = stream if stream is not None else resolved_fmt in STREAMABLE_FORMATS
     return _FileWriter(target, resolved_mode, resolved_fmt, streaming)
 
@@ -442,6 +513,7 @@ __all__ = [
     "STREAMABLE_FORMATS",
     "Destination",
     "File",
+    "Formats",
     "SinkCapabilities",
     "SinkResult",
     "SinkTarget",

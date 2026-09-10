@@ -6,6 +6,7 @@ riko.bado.io
 Async file and URL reading and writing for riko pipes (anyio + httpx).
 
 Examples:
+
     Basic usage::
 
         >>> from riko import get_path, issync, run
@@ -98,17 +99,20 @@ def chunk(  # noqa: E302
     A ``chunksize`` of ``None`` yields the whole content as one chunk.
 
     Args:
+
         content: The source data to split.
         chunksize: The number of units per chunk, or ``None`` for a single chunk.
         *args: Extra positional arguments forwarded to meza.
         **kwargs: Extra keyword arguments forwarded to meza.
 
     Yields:
+
         Each chunk; a bare ``str``/``bytes`` for a file-like source (read via
         ``.read``), or a ``list`` of characters or ints for a ``str``/``bytes``
         source.
 
     Examples:
+
         >>> list(chunk("abcdef", 3))
         [['a', 'b', 'c'], ['d', 'e', 'f']]
         >>> list(chunk(b"abcdef", 3))
@@ -139,13 +143,16 @@ def _chunk_content(  # noqa: E302
     receives a whole ``str``/``bytes`` per chunk.
 
     Args:
+
         content: The source data to split.
         chunksize: The number of units per chunk, or ``None`` for a single chunk.
 
     Yields:
+
         Each chunk as a ``str`` for a text source or ``bytes`` for a binary one.
 
     Examples:
+
         >>> list(_chunk_content("abcdef", 3))
         ['abc', 'def']
         >>> list(_chunk_content(b"abcdef", 3))
@@ -186,7 +193,7 @@ class NamedTextIOWrapper(TextIOWrapper):
     content_type: str | None = None
 
     @property
-    def name(self) -> str:  # type: ignore[override]
+    def name(self) -> str:
         """The stream's filename or source URL."""
         return self._name
 
@@ -205,10 +212,12 @@ async def _read_bytes(url: str, timeout: float) -> tuple[bytes, str, str | None]
     Reads a resource as raw bytes over HTTP or from the local filesystem.
 
     Args:
+
         url: An ``http(s)`` URL or a local path, optionally ``file://``-prefixed.
         timeout: The HTTP request timeout in seconds (ignored for local reads).
 
     Returns:
+
         The content bytes, a name (the URL for HTTP, the ``file://``-stripped
         path locally), and the content type (populated only for HTTP).
 
@@ -291,16 +300,19 @@ def async_url_open(  # noqa: E302
     caller ever reads it).
 
     Args:
+
         url: An ``http(s)`` URL or a local path.
         timeout: The HTTP request timeout in seconds; ``0`` means no timeout.
         encoding: The text decoding used when ``binary`` is False.
         binary: Whether to return raw bytes rather than decoded text.
 
     Returns:
+
         A handle whose buffer is a ``BytesIO`` when ``binary`` is True, else a
         ``NamedTextIOWrapper`` carrying the source name and content type.
 
     Examples:
+
         >>> from riko import get_path, issync, run
         >>>
         >>> url = get_path("spreadsheet.csv")
@@ -336,14 +348,17 @@ async def async_url_read(
     Reads a URL or local file in full.
 
     Args:
+
         url: An ``http(s)`` URL or a local path; resolved to an absolute path.
         timeout: The HTTP request timeout in seconds; ``0`` means no timeout.
         encoding: The text decoding used for local reads.
 
     Returns:
+
         The full resource contents as text.
 
     Examples:
+
         >>> from riko import get_path, issync, run
         >>>
         >>> async def main():
@@ -380,6 +395,7 @@ async def async_write(
     :func:`meza.io.write` chunking, mode, and encoding semantics.
 
     Args:
+
         filepath: The destination path.
         content: The data to write.
         mode: The file mode; a ``"b"`` in it selects binary I/O.
@@ -387,9 +403,11 @@ async def async_write(
         chunksize: The units written per chunk, or ``None`` for a single chunk.
 
     Returns:
+
         The number of units (bytes or characters) written.
 
     Examples:
+
         >>> from io import StringIO
         >>> from riko import get_temp_file, issync, run
         >>>
@@ -430,10 +448,12 @@ def get_async_temp_file() -> NamedTemporaryFile[bytes]:
     ``async with`` needs no ``await`` on the call itself.
 
     Returns:
+
         An anyio ``NamedTemporaryFile`` context manager over a binary temp file
         that is removed when the context exits.
 
     Examples:
+
         >>> from riko import issync, run
         >>>
         >>> async def main():

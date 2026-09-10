@@ -29,6 +29,7 @@ from riko.compile import (
 from riko.context import Context, ExecutionMode
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.ext._pipelines import pipeline_resolver
+from riko.types._guards import is_mapping
 from riko.types._pipeline import AsyncPipelineDependencies, SyncPipelineDependencies
 from riko.types._streams import StatefulItem
 from riko.types._wrappers import (
@@ -145,7 +146,8 @@ def test_fetchtable_reads_sqlite_fixture(tmp_path):
 
     gc.collect()
     assert rows
-    assert rows[0]["make"] == "ford"
+    assert is_mapping(rows[0])
+    assert rows[0].get("make") == "ford"
 
 
 class TestBasics:
@@ -156,8 +158,8 @@ class TestBasics:
     ) -> ParserMaterializedOutput:
         # prefer the generated module; fall back to compiling the JSON definition
         try:
-            pipeline = resolve_module(pipe_name, "pipe")
-        except UnsupportedPipelineError:
+            pipeline = resolve_module(pipe_name)
+        except (UnsupportedPipelineError, UnsupportedModuleError):
             parsed = pipeline_resolver.load_definition(pipe_name, directory=file_path)
             stream = build_pipeline(parsed, context=self.context)
         else:
@@ -169,8 +171,8 @@ class TestBasics:
         self, pipe_name: str, file_path: Path | None = None
     ) -> ParserMaterializedOutput:
         try:
-            pipeline = resolve_module(pipe_name, "async_pipe")
-        except UnsupportedPipelineError:
+            pipeline = resolve_module(pipe_name, True)
+        except (UnsupportedPipelineError, UnsupportedModuleError):
             parsed = pipeline_resolver.load_definition(pipe_name, directory=file_path)
             items = abuild_pipeline(parsed, context=self.context)
             stream = [item async for item in items]
@@ -666,8 +668,8 @@ class TestBasics:
             msg = "expected 210 in {link} or Poroschenko: in {title}".format(**item)
             assert ("210" in item["link"]) or ("Poroschenko:" in item["title"]), msg
 
-    def test_stringtokeniser(self):
-        """Loads a pipeline containing a stringtokeniser"""
+    def test_stringtokenizer(self):
+        """Loads a pipeline containing a stringtokenizer"""
         pipe_name = "pipe_975789b47f17690a21e89b10a702bcbd"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 2, 0)

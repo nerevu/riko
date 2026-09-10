@@ -7,6 +7,7 @@ Accepts commonly formatted date, shorthands (``"today"``/``"tomorrow"``/``"yeste
 (``"next week"``, ``"last year"``, etc.).
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.datebuilder import pipe
@@ -45,17 +46,21 @@ def parser(
     Converts ``text`` into a date.
 
     Args:
+
         text: The text to convert.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The date, as a time tuple.
 
     Raises:
+
         ValueError: If ``text`` names no date the pipe recognizes.
 
     Examples:
+
         >>> item = {"content": "12/2/2014"}
         >>> parser(item["content"], None, None, stream=item).tm_year
         2014
@@ -81,10 +86,12 @@ def async_pipe(*args: Any, **kwargs: object) -> struct_time:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to convert (default: "content").
 
         assign (str): Field the date is assigned to. Ignored when ``emit`` is
@@ -94,15 +101,18 @@ def async_pipe(*args: Any, **kwargs: object) -> struct_time:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <date>}`` when ``emit`` is False and item is
           given (default)
         - ``{<assign>: <date>}`` when ``emit`` is False and no item given
         - ``<date>`` when ``emit`` is True
 
     Raises:
+
         ValueError: If the field names no date the pipe recognizes.
 
     Notes:
+
         An offset counts a unit from ``seconds`` to ``years``, signed or not.
         Sub-day units offset from the current time, the rest from today, and
         both resolve against the clock at call time.
@@ -112,6 +122,7 @@ def async_pipe(*args: Any, **kwargs: object) -> struct_time:
         missing parts from today.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -134,10 +145,12 @@ def pipe(*args: Any, **kwargs: object) -> struct_time:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to convert (default: "content").
 
         assign (str): Field the date is assigned to. Ignored when ``emit`` is
@@ -147,15 +160,18 @@ def pipe(*args: Any, **kwargs: object) -> struct_time:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <date>}`` when ``emit`` is False and item is
           given (default)
         - ``{<assign>: <date>}`` when ``emit`` is False and no item given
         - ``<date>`` when ``emit`` is True
 
     Raises:
+
         ValueError: If the field names no date the pipe recognizes.
 
     Notes:
+
         An offset counts a unit from ``seconds`` to ``years``, signed or not.
         Sub-day units offset from the current time, the rest from today, and
         both resolve against the clock at call time.
@@ -165,6 +181,7 @@ def pipe(*args: Any, **kwargs: object) -> struct_time:
         missing parts from today.
 
     Examples:
+
         >>> next(pipe({"content": "12/2/2014"}))["datebuilder"].tm_year
         2014
         >>> next(pipe({"content": "5/4/82"}, emit=True))[:3]

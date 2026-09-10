@@ -10,6 +10,7 @@ input stream, an assigned value can read an existing attribute of that stream,
 so attributes can be reassigned or used to build entirely new ones.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.itembuilder import pipe
@@ -57,14 +58,17 @@ def parser(
     ``{"desc": {"content": ...}}``.
 
     Args:
+
         _: The item. Unused; the attributes arrive already resolved.
         extraction: The resolved attributes, each with a `key` and `value`.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The built item.
 
     Examples:
+
         >>> attrs = [
         ...     {"key": "title", "value": "the title"},
         ...     {"key": "desc", "value": "the desc"}
@@ -83,6 +87,7 @@ def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
     Asynchronously builds a single item from assigned attributes.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, supplying values.
         conf (dict): The pipe configuration.
 
@@ -96,6 +101,7 @@ def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the built item is nested under. Ignored when ``emit``
             is True (default: "content").
 
@@ -103,14 +109,17 @@ def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
             it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - the built item when ``emit`` is True (default)
         - ``{<assign>: <built>}`` when ``emit`` is False and no item given
         - merged ``{Item, <assign>: <built>}`` when ``emit`` is False and item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``attrs`` key.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -134,6 +143,7 @@ def pipe(*args: Any, **kwargs: object) -> RikoDict:
     Builds a single item from assigned attributes.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, supplying values.
         conf (dict): The pipe configuration.
 
@@ -147,6 +157,7 @@ def pipe(*args: Any, **kwargs: object) -> RikoDict:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field the built item is nested under. Ignored when ``emit``
             is True (default: "content").
 
@@ -154,14 +165,17 @@ def pipe(*args: Any, **kwargs: object) -> RikoDict:
             it. Overrides ``assign`` (default: True).
 
     Yields:
+
         - the built item when ``emit`` is True (default)
         - ``{<assign>: <built>}`` when ``emit`` is False and no item given
         - merged ``{Item, <assign>: <built>}`` when ``emit`` is False and item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``attrs`` key.
 
     Examples:
+
         >>> attrs = [
         ...     {"key": "title", "value": "the title"},
         ...     {"key": "desc.content", "value": "the desc"}]

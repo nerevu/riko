@@ -84,17 +84,21 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | ~~`Reencoder.read(1)` returns one character and the remainder survives the next `read`~~ — **landed** as `tests/internal/test_io.py::test_reencode_read_honors_char_count_with_remainder`; fixed with a char/byte remainder buffer (correctness-audit R8) | internal | R8 |
 | `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
 | `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
-| ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_dates.py`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
+| ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_regressions.py::TestDates`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
 | ~~`get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics~~ — **landed** in `tests/internal/test_parsers.py`; absent `text` no longer coerced to `"None"` (correctness-audit R12) | internal | R12 |
 | ~~`listize=True` turns `0`/`False`/`""` into one-element lists~~ — **landed** as `tests/internal/test_prepare.py`; `get_pieces_or_conf` branches on the option, not truthiness (correctness-audit R13) | internal | R13 |
 | a stalled async iterator is actually interrupted by `timeout` | internal | R14 |
 | the same bytes decode identically across sync HTTP, async HTTP and async local file | functional | R15 |
 | ~~`has_header=False` closes the original source as well as the spool~~ — **landed** as `tests/internal/test_io.py::test_csv_headerless_closes_original_source` (spies the original's `close`, cross-version); fix predated this via the variadic `auto_close` (correctness-audit R16) | internal | R16 |
 
-Two rows want **characterization** tests rather than regressions, because the current
-behaviour may be intended: `filter`'s lexicographic `greater`/`less` (R19) and
-`convert_dag` on an empty module list (R17, not reproduced). Their docstrings must say
-they should be *updated, not deleted*, when the decision is made.
+Both open-question rows are now resolved. R19 (`filter`'s `greater`/`less` over strings) was
+**decided** in favour of type-aware comparison — numeric when both operands coerce to a number,
+else lexicographic — so its characterization test was *updated, not deleted*, into a regression.
+R17 (`convert_dag` on an empty module list, not reproduced) landed as a **strict-xfail tripwire** —
+the divergent empty-input handling (full-def `IndexError` vs DAG silent output-only) is a gap
+deferred to the Workflow v2 normalization boundary
+([extensibility § E3](extensibility.md#e3-canonical-workflow-v2-specification)), not accepted
+behaviour to pin.
 
 ## 3. File-by-file audit
 
@@ -287,19 +291,24 @@ the suite, forcing the marker's removal) the moment its owner lands:
   async-HTTP charset half (the `async_url_read`/`fetchpage` halves stay owned) (bado-anyio § 2c).
 - **R18** — `tests/internal/test_resolver.py::TestPipeResolver::test_runtime_registered_pipe_prefixed_module_resolves`
   (extensibility § 24).
+- **R17** — `tests/internal/test_compile.py::test_convert_dag_empty_modules_raises` asserts that
+  `convert_dag({"modules": []})` raises. It does *not* today — the terminal `output` node is appended
+  unconditionally, so an empty DAG silently yields `{_OUTPUT}` (the reported `module_ids[-1]` crash is
+  *not reproduced* on this path; only the full-pipe-def path raises, via `MALFORMED["empty"]`). A clean
+  typed rejection + one validation front-door that makes both paths reject identically is owned by the
+  **Workflow v2 spec** ([extensibility § E3](extensibility.md#e3-canonical-workflow-v2-specification) —
+  the E3.1 `normalize_workflow() -> validate` boundary; CLI surface: cli.md `riko pipeline validate`);
+  recalibrate the tripwire from `IndexError` to the spec's error when it lands.
 
-**Shipped (§ 2b characterization rows).** The two open-question rows landed as **characterization**
-tests that pin current behavior (to be *updated, not deleted*, when the behavior is decided):
+**Shipped (§ 2b open-question rows).** R19's characterization test was **updated, not deleted**, into
+a regression once the contract was decided (type-aware comparison):
 
-- **R19** — `tests/public/test_pipe_implementations.py::test_filter_greater_less_compare_strings_lexicographically`
-  pins that `filter`'s `greater`/`less` compare string values lexicographically (`"9" > "10"`) while
-  numeric values compare numerically.
-- **R17** — `tests/internal/test_compile.py::test_convert_dag_empty_modules_yields_only_output` pins
-  that an empty DAG yields just the terminal `output` node (the reported `module_ids[-1]` crash is
-  *not reproduced*), rather than raising.
+- **R19** — `tests/public/test_pipe_implementations.py::test_filter_greater_less_compare_numeric_strings_numerically`
+  asserts that `filter`'s `greater`/`less` compare numeric strings numerically (`"10" > "9"`) and fall
+  back to lexicographic comparison for non-numeric strings (correctness-audit R19, now fixed).
 
 **Remaining.** None — the § 2b regression batch is complete (local repairs fixed, owned rows guarded
-by strict-xfail tripwires, open questions pinned by characterization tests).
+by strict-xfail tripwires).
 
 ## 5b. Execution lifetime proofs (R4)
 

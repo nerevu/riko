@@ -8,6 +8,7 @@ unbounded. With a join key the comparison is a cartesian product, so cost grows
 as ``len(items) * len(other)``.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.join import pipe
@@ -62,6 +63,7 @@ def parser(
     Falls back to a natural join when neither join key is set.
 
     Args:
+
         stream: The source. Note: this shares the `tuples` iterator, so consuming it
             will consume `tuples` as well.
 
@@ -75,12 +77,15 @@ def parser(
         other: The stream to join against. Required.
 
     Returns:
+
         Merged item matches.
 
     Raises:
+
         TypeError: If ``other`` is not given.
 
     Examples:
+
         >>> from itertools import repeat
         >>> from meza.fntools import Objectify
         >>>
@@ -150,6 +155,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     unbounded. The source stream is consumed lazily.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -166,6 +172,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         other (Items): The stream to join against. Required.
 
         assign (str): Field each item is nested under. Ignored when ``emit`` is
@@ -175,24 +182,28 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - merged ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Notes:
+
         A natural join is used when neither join key is set. Items missing the
         join field never match.
 
     Raises:
+
         TypeError: If ``other`` is not given.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
         ...     items = ({"x": "foo", "sum": x} for x in range(5))
         ...     other = ({"x": "foo", "count": x + 5} for x in range(5))
         ...     result = await async_pipe(items, conf={"join_key": "x"}, other=other)
-        ...     print(next(result))
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         {'x': 'foo', 'sum': 0, 'count': 5}
@@ -210,6 +221,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     unbounded. The source stream is consumed lazily.
 
     Args:
+
         items (Items): The source stream.
 
         conf (dict): The pipe configuration.
@@ -226,6 +238,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         other (Items): The stream to join against. Required.
 
         assign (str): Field each item is nested under. Ignored when ``emit`` is
@@ -235,17 +248,21 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - merged ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Notes:
+
         A natural join is used when neither join key is set. Items missing the
         join field never match.
 
     Raises:
+
         TypeError: If ``other`` is not given.
 
     Examples:
+
         >>> items = [{"x": f"foo-{x}", "sum": x} for x in range(5)]
         >>> other = ({"y": f"foo-{x}", "count": x + 5} for x in range(5))
         >>> conf = {"join_key": "x", "other_join_key": "y"}

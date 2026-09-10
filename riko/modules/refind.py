@@ -6,6 +6,7 @@ Finds text before, after, or at a regex match.
 match to measure from, so one ``find`` covers several extractions.
 
 Examples:
+
     Basic usage::
 
         >>> from riko.modules.refind import pipe
@@ -66,14 +67,17 @@ async def async_parser(
     Each rule narrows the result of the previous one, so rules chain.
 
     Args:
+
         word: The string to search.
         rules: The parsed find rules.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The extracted stripped text, or ``""`` if nothing matches.
 
     Examples:
+
         >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
@@ -100,14 +104,17 @@ def parser(
     Each rule narrows the result of the previous one, so rules chain.
 
     Args:
+
         word: The string to search.
         rules: The parsed find rules.
         objconf: The pipe configuration. Unused.
 
     Returns:
+
         The extracted stripped text, or ``""`` if nothing matches.
 
     Examples:
+
         >>> from meza.fntools import Objectify
         >>>
         >>> item = {"content": "hello world"}
@@ -129,6 +136,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration.
 
@@ -145,6 +153,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to search (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
@@ -154,19 +163,23 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <text>}`` when ``emit`` is False and no item given
         - ``<text>`` when ``emit`` is True
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
 
     Notes:
+
         Yields ``""`` if nothing matches, except ``location="after"`` which yields
         the whole field.
 
     Examples:
+
         >>> from riko import run
         >>>
         >>> async def main():
@@ -190,6 +203,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     processor map over items?".
 
     Args:
+
         item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration.
 
@@ -206,6 +220,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
         context (Context): the execution context
 
     Kwargs:
+
         field (str): Item attribute to search (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
@@ -215,19 +230,23 @@ def pipe(*args: Any, **kwargs: object) -> str:
             assign it. Overrides ``assign`` (default: False).
 
     Yields:
+
         - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item
           is given (default)
         - ``{<assign>: <text>}`` when ``emit`` is False and no item given
         - ``<text>`` when ``emit`` is True
 
     Raises:
+
         TypeError: If ``conf`` has no ``rule`` key.
 
     Notes:
+
         Yields ``""`` if nothing matches, except ``location="after"`` which yields
         the whole field.
 
     Examples:
+
         >>> conf = {"rule": {"find": "[aiou]"}}
         >>> item = {"content": "hello world"}
         >>> next(pipe(item, conf=conf))["refind"]

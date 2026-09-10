@@ -12,7 +12,7 @@ from riko.modules._metadata import get_module_metadata
 
 
 def test_operator_metadata():
-    metadata = get_module_metadata("count")
+    metadata = get_module_metadata("count", strict=True)
     assert metadata.type == "operator"
     assert metadata.subtype == "aggregator"
     assert metadata.subtypes == {"aggregator", "composer"}
@@ -21,8 +21,8 @@ def test_operator_metadata():
 
 
 def test_processor_metadata():
-    source = get_module_metadata("fetch")
-    transformer = get_module_metadata("dateformat")
+    source = get_module_metadata("fetch", strict=True)
+    transformer = get_module_metadata("dateformat", strict=True)
 
     assert source.type == "processor"
     assert source.subtype == "source"
@@ -34,7 +34,7 @@ def test_processor_metadata():
 
 
 def test_splitter_metadata():
-    metadata = get_module_metadata("split")
+    metadata = get_module_metadata("split", strict=True)
     assert metadata.type == "splitter"
     assert metadata.subtype == "splitter"
     assert metadata.subtypes == {"splitter"}
@@ -42,15 +42,15 @@ def test_splitter_metadata():
 
 def test_loopable_metadata():
     # processors are loopable (they transform a single item) ...
-    assert get_module_metadata("dateformat").loopable
-    assert get_module_metadata("itembuilder").loopable
+    assert get_module_metadata("dateformat", strict=True).loopable
+    assert get_module_metadata("itembuilder", strict=True).loopable
 
     # ... except input, which prompts for interactive user input
-    assert not get_module_metadata("input").loopable
+    assert not get_module_metadata("input", strict=True).loopable
 
     # operators and splitters cannot be embedded in a loop
-    assert not get_module_metadata("count").loopable
-    assert not get_module_metadata("split").loopable
+    assert not get_module_metadata("count", strict=True).loopable
+    assert not get_module_metadata("split", strict=True).loopable
 
 
 def test_operator_metadata_is_derived():

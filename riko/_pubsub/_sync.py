@@ -36,6 +36,7 @@ class SyncPubSubHub:
     listening.
 
     Attributes:
+
         receivers: Live receiver generator per name.
         queues: Items awaiting each receiver, oldest first.
         ids: Registration token per name.
@@ -55,6 +56,7 @@ class SyncPubSubHub:
         Registers a primed receiver under ``name``, ready to be sent to.
 
         Args:
+
             name: Channel senders address.
 
             receiver: An already-primed receiver generator.
@@ -63,6 +65,7 @@ class SyncPubSubHub:
                 item.
 
         Notes:
+
             Re-seeding a live name replaces it and mints a new token, orphaning
             any sender still holding the old one.
 
@@ -76,10 +79,12 @@ class SyncPubSubHub:
         Pushes one item to a named receiver.
 
         Returns:
+
             The receiver's registration token, or ``None`` when no such receiver
             exists or its generator has already finished.
 
         Notes:
+
             An unknown target is logged and skipped rather than raised, so a
             sender outliving its receivers keeps going. The token lets a later
             completion signal verify it is addressing the same receiver instance
@@ -109,9 +114,11 @@ class SyncPubSubHub:
         recorded are notified.
 
         Args:
+
             ids: The name-to-token map the sender collected as it published.
 
         Notes:
+
             A name that was closed and re-registered in the meantime belongs to
             a different receiver, so it is left alone rather than told a sender
             it never heard from is done.
@@ -131,6 +138,7 @@ class SyncPubSubHub:
         one pass over it.
 
         Notes:
+
             Re-registering the same name afterwards mints a fresh token, which
             invalidates any completion signal a sender had already bound.
 
@@ -146,6 +154,7 @@ class SyncPubSubHub:
         Closes every receiver and empties the registry.
 
         Notes:
+
             The dicts are mutated rather than rebound, so a caller holding a
             reference to one of them sees the cleared state.
 

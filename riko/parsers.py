@@ -100,9 +100,9 @@ if TYPE_CHECKING:
     from lxml.etree import _ElementTree as lxmlElementTree
 
 type AnyElementTree = (
-    "nativeElementTree" | "lxmlElementTree" | "nativeElementTree[nativeElement[str]]"
+    "nativeElementTree | lxmlElementTree | nativeElementTree[nativeElement[str]]"
 )
-type AnyElement = "nativeElement" | "lxmlElement"
+type AnyElement = "nativeElement | lxmlElement"
 
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 logger.debug(f"{IS_LXML=}")
@@ -163,7 +163,7 @@ class LinkParser(HTMLParser):
     ) -> None:
         entry = dict(attrs)
         link = entry.get("href")
-        type_ = entry.get("type", "")
+        type_ = entry.get("type") or ""
         type_match = any(type_.endswith(t) for t in self.link_type)
 
         if link and not self.strict:
@@ -228,7 +228,7 @@ def parse_rss(  # noqa: E302
         source, source_name = content, "content"
 
     try:
-        parsed = rss_parser.parse(source)  # pyright: ignore[reportArgumentType]
+        parsed = rss_parser.parse(source)
     finally:
         if f:
             f.close()
@@ -258,13 +258,16 @@ def extract_namespace(tree: AnyElementTree | AnyElement) -> str | None:
     Extracts the XML namespace URI from an element's tag.
 
     Args:
+
         tree: An element whose tag may contain a Clark-notation namespace, e.g.
             ``{http://example.com/ns}root``.
 
     Returns:
+
         The namespace URI, or ``None`` if the tag has no namespace.
 
     Examples:
+
         >>> from xml.etree.ElementTree import fromstring
         >>>
         >>> tree = fromstring('<root xmlns="http://example.com/ns"/>')
@@ -294,15 +297,18 @@ def verify_pos(tree: AnyElementTree | AnyElement, pos: int, *tags: str) -> int:
     the comparison.
 
     Args:
+
         tree: The root element to inspect.
         pos: Current position in *tags*.
         *tags: Ordered tag names derived from the XPath expression.
 
     Returns:
+
         ``pos + 1`` if the local tag of *tree* equals ``tags[pos]``, otherwise *pos*
         unchanged.
 
     Examples:
+
         >>> from xml.etree.ElementTree import fromstring
         >>>
         >>> rss = fromstring('<rss/>')
@@ -352,6 +358,7 @@ def xpath(
     descendant searches start at the correct level.
 
     Args:
+
         tree: The root element to search.
 
         path: An XPath-like expression. A leading ``/`` indicates an absolute
@@ -366,9 +373,11 @@ def xpath(
         ns_prefix: Prefix token used in namespace-qualified path segments.
 
     Yields:
+
         AnyElement: Each matched element.
 
     Examples:
+
         >>> from xml.etree.ElementTree import fromstring
         >>>
         >>> xml = '<rss><channel><item>a</item><item>b</item></channel></rss>'
@@ -434,6 +443,7 @@ def xml2etree(  # noqa: E302
     guard against XXE and entity-expansion attacks.
 
     Examples:
+
         >>> from io import StringIO
         >>>
         >>> xxe = (
@@ -559,7 +569,7 @@ def any2dict(
         else:
             use_ijson = isinstance(content, RawIOBase)
 
-        if use_ijson:
+        if use_ijson and ijson:
             if path and not path.endswith(".item"):
                 prefix = f"{path}.item"
             else:
@@ -617,6 +627,7 @@ def conf_is_dynamic(conf: object, memoize: bool = False, **kwargs: object) -> bo
     Whether ``conf`` holds a ``subkey`` or sentinel needing per-item parsing.
 
     Examples:
+
         >>> _conf_is_dynamic_cached.cache_clear()
         >>> conf_is_dynamic({'type': 'text', 'value': 'hello'}, True)
         False
@@ -693,6 +704,7 @@ def parse_conf[VT](
     Static confs are memoized by default. ``memoize`` forces the choice.
 
     Examples:
+
         >>> param = {
         ...     "key": {"type": "text", "value": "q"},
         ...     "value": {"type": "text", "subkey": "title"}
@@ -748,13 +760,16 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
     Determines whether or not to skip an item.
 
     Args:
+
         item: The entry to process.
         skip_if: The skipping criteria.
 
     Returns:
+
         Whether or not to skip.
 
     Examples:
+
         >>> item = {"content": "Some content"}
         >>> get_skip(item, lambda x: x["content"] == "Some content")
         True
@@ -813,7 +828,7 @@ def get_field(
     """Returns ``item[field]``, or ``item`` itself when no field is given."""
     if field and isinstance(item, DotDict):
         value = item.get(field, **kwargs)
-    elif field and isinstance(item, dict):
+    elif field and is_mapping(item):
         value = item.get(field)
     else:
         value = item

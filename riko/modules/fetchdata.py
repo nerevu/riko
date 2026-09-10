@@ -6,6 +6,7 @@ Accesses and extracts data from XML and JSON sources on the web, which can then
 be converted into an RSS feed or merged with other data in your pipe.
 
 Examples:
+
     Basic usage::
 
         >>> from riko import get_path
@@ -56,17 +57,21 @@ async def async_parser(
     file's detected type when the url has none.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`, `path` and `html5`.
 
     Returns:
+
         Records at ``path``, or the whole document when ``path`` is empty.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
@@ -101,17 +106,21 @@ def parser(
     file's detected type when the url has none.
 
     Args:
+
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
         objconf: The pipe configuration, containing `url`, `path` and `html5`.
 
     Returns:
+
         Records at ``path``, or the whole document when ``path`` is empty.
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
@@ -139,6 +148,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Asynchronously fetches an XML or JSON source and yields its records.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -157,6 +167,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each record is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -164,15 +175,18 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<record>`` when ``emit`` is True (default)
         - ``{<assign>: <record>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<record>, ...]}`` when ``emit`` is False
           and item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path, run
         >>>
         >>> async def main():
@@ -194,6 +208,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Fetches an XML or JSON source and yields its records.
 
     Args:
+
         item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
@@ -212,6 +227,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         context (Context): the execution context
 
     Kwargs:
+
         assign (str): Field each record is nested under. Ignored when ``emit`` is
             True (default: "content").
 
@@ -219,15 +235,18 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
+
         - ``<record>`` when ``emit`` is True (default)
         - ``{<assign>: <record>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<record>, ...]}`` when ``emit`` is False
           and item is given
 
     Raises:
+
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
+
         >>> from riko import get_path
         >>>
         >>> conf = {"url": get_path("gigs.json"), "path": "value.items"}
