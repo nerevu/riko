@@ -1,27 +1,27 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.sinks
-~~~~~~~~~~
+riko.writes
+~~~~~~~~~~~
 
-Sink write-mode contract (PRIVATE).
+Write-mode contract (PRIVATE).
 
-Defines how a record sink reconciles incoming items with a destination:
+Defines how a write reconciles incoming items with a destination:
 ``append`` (add rows, deduplicated by an optional ``idempotency_key``), ``merge``
 (upsert on match ``keys``), and the destructive ``replace``/``delete`` (match on
 ``keys``, gated behind plan/apply). This is the shared vocabulary external
-provider sinks (Airtable, ...) consume so every sink behaves consistently; the
-transports themselves live outside core. It is a distinct axis from the ``write``
-module's file-open ``mode``.
+provider targets (Airtable, ...) consume so every write behaves consistently; the
+transports themselves live outside core. It is a distinct axis from the file-open
+``mode`` used by the ``write`` module.
 
 Examples:
 
     Basic usage::
 
-        >>> from riko.sinks import SinkMode, sink_write
+        >>> from riko.writes import WriteMode, write_operation
         >>>
-        >>> sink_write("merge", keys="endpoint_id")
-        SinkWrite(mode=<SinkMode.MERGE: 'merge'>, keys=('endpoint_id',), idempotency_key=())
-        >>> SinkMode.DELETE.destructive
+        >>> write_operation("merge", keys="endpoint_id")
+        WriteOperation(mode=<WriteMode.MERGE: 'merge'>, keys=('endpoint_id',), idempotency_key=())
+        >>> WriteMode.DELETE.destructive
         True
 
 """
@@ -33,8 +33,8 @@ from enum import StrEnum
 type KeyLike = str | Iterable[str]
 
 
-class SinkMode(StrEnum):
-    """How a sink reconciles incoming items with the destination."""
+class WriteMode(StrEnum):
+    """How a write reconciles incoming items with the destination."""
 
     APPEND = "append"
     MERGE = "merge"
@@ -52,14 +52,14 @@ class SinkMode(StrEnum):
         return self in _DESTRUCTIVE
 
 
-_KEYED = frozenset({SinkMode.MERGE, SinkMode.REPLACE, SinkMode.DELETE})
-_DESTRUCTIVE = frozenset({SinkMode.REPLACE, SinkMode.DELETE})
+_KEYED = frozenset({WriteMode.MERGE, WriteMode.REPLACE, WriteMode.DELETE})
+_DESTRUCTIVE = frozenset({WriteMode.REPLACE, WriteMode.DELETE})
 
 
 @dataclass(frozen=True, slots=True)
-class SinkWrite:
+class WriteOperation:
     """
-    A normalized, validated sink write specification.
+    A normalized, validated write specification.
 
     Attributes:
 
@@ -69,7 +69,7 @@ class SinkWrite:
 
     """
 
-    mode: SinkMode
+    mode: WriteMode
     keys: tuple[str, ...] = ()
     idempotency_key: tuple[str, ...] = ()
 
@@ -86,18 +86,18 @@ def _as_tuple(value: KeyLike | None) -> tuple[str, ...]:
     return result
 
 
-def sink_write(
-    mode: SinkMode | str,
+def write_operation(
+    mode: WriteMode | str,
     *,
     keys: KeyLike | None = None,
     idempotency_key: KeyLike | None = None,
-) -> SinkWrite:
+) -> WriteOperation:
     """
-    Validates and normalizes a sink write for ``mode``.
+    Validates and normalizes a write operation for ``mode``.
 
     Args:
 
-        mode: The sink mode, as a ``SinkMode`` or its string value.
+        mode: The write mode, as a ``WriteMode`` or its string value.
         keys: The match keys for a keyed mode (``merge``/``replace``/``delete``).
         idempotency_key: The dedupe key for an ``append``.
 
@@ -111,20 +111,20 @@ def sink_write(
             supplies ``idempotency_key``, or ``append`` supplies ``keys``.
 
     """
-    resolved = SinkMode(mode)
+    resolved = WriteMode(mode)
     match_keys = _as_tuple(keys)
     idem = _as_tuple(idempotency_key)
 
     if resolved.keyed and not match_keys:
-        raise ValueError(f"the '{resolved.value}' sink mode requires 'keys'")
+        raise ValueError(f"the '{resolved.value}' write mode requires 'keys'")
 
     if resolved.keyed and idem:
-        raise ValueError(f"the '{resolved.value}' sink mode forbids 'idempotency_key'")
+        raise ValueError(f"the '{resolved.value}' write mode forbids 'idempotency_key'")
 
     if not resolved.keyed and match_keys:
-        raise ValueError(f"the '{resolved.value}' sink mode forbids 'keys'")
+        raise ValueError(f"the '{resolved.value}' write mode forbids 'keys'")
 
-    return SinkWrite(resolved, match_keys, idem)
+    return WriteOperation(resolved, match_keys, idem)
 
 
-__all__ = ["KeyLike", "SinkMode", "SinkWrite", "sink_write"]
+__all__ = ["KeyLike", "WriteMode", "WriteOperation", "write_operation"]

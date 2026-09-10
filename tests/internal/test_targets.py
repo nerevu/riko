@@ -1,10 +1,11 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests the sink target adapters and the ``write``/``sink`` verbs (``riko.targets``).
+Tests the write target adapters and the ``write``/``sink`` verbs (``riko.targets``).
 
 Covers ``File`` serialization (sync + async), capability-aware ``build_write``
 validation, destination/format resolution, the format-aware ``file_writer``
-(stream vs. buffer), and the collection ``write``/``sink`` surface end to end.
+(negotiated stream vs. buffer), and the collection ``write``/``sink`` surface end
+to end.
 """
 
 from dataclasses import dataclass
@@ -13,16 +14,16 @@ import pytest
 
 from riko._pubsub import reset_pubsub
 from riko.collections import AsyncPipe, SyncPipe
-from riko.sinks import SinkMode, SinkWrite
 from riko.targets import (
     File,
-    SinkCapabilities,
-    SinkResult,
+    WriteCapabilities,
+    WriteResult,
     build_write,
     file_writer,
     resolve_format,
     resolve_target,
 )
+from riko.writes import WriteMode, WriteOperation
 from tests import async_test
 
 ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
@@ -39,13 +40,13 @@ def _isolate_pubsub():
 class _RecordStore:
     """A non-serializing keyed target, for the record-store ``build_write`` branch."""
 
-    def capabilities(self, fmt=None) -> SinkCapabilities:
-        return SinkCapabilities(modes=frozenset(SinkMode), serializes=False)
+    def capabilities(self, fmt=None) -> WriteCapabilities:
+        return WriteCapabilities(modes=frozenset(WriteMode), serializes=False)
 
-    def deliver(self, records, write, *, fmt=None) -> SinkResult:
-        return SinkResult(created=len(list(records)))
+    def deliver(self, records, write, *, fmt=None) -> WriteResult:
+        return WriteResult(created=len(list(records)))
 
-    async def adeliver(self, records, write, *, fmt=None) -> SinkResult:
+    async def adeliver(self, records, write, *, fmt=None) -> WriteResult:
         return self.deliver(records, write, fmt=fmt)
 
 
@@ -53,7 +54,7 @@ class TestResolveTarget:
     def test_path_string_becomes_file(self):
         assert resolve_target("out.csv") == File("out.csv")
 
-    def test_sink_target_passes_through(self):
+    def test_write_target_passes_through(self):
         target = File("out.json")
         assert resolve_target(target) is target
 
@@ -104,12 +105,12 @@ class TestBuildWrite:
     def test_file_append_allowed_for_line_oriented_format(self):
         for dest in ("out.csv", "out.jsonl"):
             spec = build_write(File(dest), "append")
-            assert spec.mode is SinkMode.APPEND
+            assert spec.mode is WriteMode.APPEND
 
-    def test_record_store_routes_through_sink_write(self):
+    def test_record_store_routes_through_write_operation(self):
         spec = build_write(_RecordStore(), "merge", keys="endpoint_id")
 
-        assert spec.mode is SinkMode.MERGE
+        assert spec.mode is WriteMode.MERGE
         assert spec.keys == ("endpoint_id",)
 
     def test_record_store_missing_keys_rejected(self):
@@ -120,7 +121,7 @@ class TestBuildWrite:
 class TestFileDeliver:
     def test_replace_writes_document(self, tmp_path):
         path = tmp_path / "out.json"
-        result = File(str(path)).deliver(ITEMS, SinkWrite(SinkMode.REPLACE))
+        result = File(str(path)).deliver(ITEMS, WriteOperation(WriteMode.REPLACE))
 
         assert result.written > 0
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
@@ -128,7 +129,9 @@ class TestFileDeliver:
     @async_test
     async def test_adeliver_matches_deliver(self, tmp_path):
         path = tmp_path / "out.json"
-        result = await File(str(path)).adeliver(ITEMS, SinkWrite(SinkMode.REPLACE))
+        result = await File(str(path)).adeliver(
+            ITEMS, WriteOperation(WriteMode.REPLACE)
+        )
         assert result.written > 0
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
@@ -138,12 +141,8 @@ class TestFileWriter:
         ("dest", "streams"),
         [("out.csv", True), ("out.jsonl", True), ("out.json", False), ("out", False)],
     )
-    def test_streamability_inferred_from_extension(self, dest, streams):
+    def test_streamability_negotiated_from_extension(self, dest, streams):
         assert file_writer(dest).stream is streams
-
-    @pytest.mark.parametrize("override", [True, False])
-    def test_stream_override(self, override):
-        assert file_writer("out.json", stream=override).stream is override
 
     def test_keyed_mode_rejected(self):
         with pytest.raises(ValueError, match="append, replace"):
@@ -154,8 +153,8 @@ class TestFileWriter:
             file_writer("out.json", mode="append")
 
     def test_append_allowed_for_line_oriented_format(self):
-        assert file_writer("out.csv", mode="append").mode is SinkMode.APPEND
-        assert file_writer("out.jsonl", mode="append").mode is SinkMode.APPEND
+        assert file_writer("out.csv", mode="append").mode is WriteMode.APPEND
+        assert file_writer("out.jsonl", mode="append").mode is WriteMode.APPEND
 
 
 class TestSyncWrite:
@@ -240,7 +239,7 @@ class TestSink:
         path = tmp_path / "out.json"
         result = SyncPipe(source=ITEMS).sink(str(path), mode="replace")
 
-        assert isinstance(result, SinkResult)
+        assert isinstance(result, WriteResult)
         assert result.written > 0
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 

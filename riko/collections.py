@@ -152,10 +152,9 @@ from riko.context import Context, ExecutionMode
 from riko.exceptions import PipelineStateError
 from riko.ext._resolver import pipe_resolver
 from riko.ext.names import normalize_module_name
-from riko.sinks import KeyLike, SinkMode
 from riko.targets import (
     Destination,
-    SinkResult,
+    WriteResult,
     build_write,
     file_writer,
     resolve_target,
@@ -178,6 +177,7 @@ from riko.types._wrappers import (
     SplitterWrapperOutput,
     SyncPipeWrapper,
 )
+from riko.writes import KeyLike, WriteMode
 
 type AnyPool = ThreadPoolType | CPUPoolType
 type PoolFactory = Callable[..., AnyPool]
@@ -630,14 +630,13 @@ def _write(
     dest: str | Path,
     *,
     format: str | None = None,
-    mode: SinkMode | str = SinkMode.REPLACE,
-    stream: bool | None = None,
+    mode: WriteMode | str = WriteMode.REPLACE,
     **kwargs: Any,
 ) -> "SyncPipe":
     """Desugars ``write`` to a ``send`` publisher feeding an ``on_receive`` writer."""
     from riko.modules.receive import register_receiver  # noqa: PLC0415
 
-    writer = file_writer(dest, mode=mode, fmt=format, stream=stream)
+    writer = file_writer(dest, mode=mode, fmt=format)
     channel = _write_channel()
     register_receiver(channel, on_receive=writer.receive, on_complete=writer.complete)
     return source.pipe("send", others=[channel], ids={}, **kwargs)
@@ -647,11 +646,11 @@ def _sink(
     records: RikoItems,
     dest: Destination,
     *,
-    mode: SinkMode | str,
+    mode: WriteMode | str,
     keys: KeyLike | None,
     idempotency_key: KeyLike | None,
     fmt: str | None,
-) -> SinkResult:
+) -> WriteResult:
     """Resolves ``dest``, validates the write, and delivers ``records`` to it."""
     target = resolve_target(dest)
     write = build_write(
@@ -664,11 +663,11 @@ async def _asink(
     source: AsyncIterable[RikoItem],
     dest: Destination,
     *,
-    mode: SinkMode | str,
+    mode: WriteMode | str,
     keys: KeyLike | None,
     idempotency_key: KeyLike | None,
     fmt: str | None,
-) -> SinkResult:
+) -> WriteResult:
     """Drains ``source``, resolves ``dest``, and delivers the records to it."""
     items = [item async for item in source]
     target = resolve_target(dest)
@@ -1335,8 +1334,7 @@ class SyncPipe(PyPipe):
         dest: str | Path,
         *,
         format: str | None = None,
-        mode: SinkMode | str = SinkMode.REPLACE,
-        stream: bool | None = None,
+        mode: WriteMode | str = WriteMode.REPLACE,
         **kwargs: Any,
     ) -> "SyncPipe":
         """
@@ -1347,13 +1345,14 @@ class SyncPipe(PyPipe):
         while the writer saves a copy. Use ``sink`` for a terminal write that
         reports an outcome instead of a stream.
 
-        A streamable format (``csv``/``jsonl``) is written incrementally as each
-        item flows; any other format buffers and writes one document when the
-        publisher completes, which is either full consumption or a graceful
-        ``close()``/context-manager exit. An abrupt ``terminate()`` (an exceptional
-        ``with`` exit) discards the partial buffer rather than saving it as a
-        finished document. For a write guaranteed to land, use ``sink`` — it
-        materializes and reports a ``SinkResult`` unconditionally.
+        Delivery granularity is negotiated, not caller-configured: a streamable
+        format (``csv``/``jsonl``) is written incrementally as each item flows; any
+        other format buffers and writes one document when the publisher completes,
+        which is either full consumption or a graceful ``close()``/context-manager
+        exit. An abrupt ``terminate()`` (an exceptional ``with`` exit) discards the
+        partial buffer rather than saving it as a finished document. For a write
+        guaranteed to land, use ``sink`` — it materializes and reports a
+        ``WriteResult`` unconditionally.
 
         Args:
 
@@ -1364,9 +1363,6 @@ class SyncPipe(PyPipe):
 
             mode: ``append`` or ``replace``; the keyed record modes are rejected
                 (default: ``replace``).
-
-            stream: Forces incremental (``True``) or buffered (``False``) writes;
-                (default: ``None`` which infers from the format).
 
             kwargs: Passed through to the chained publisher.
 
@@ -1387,28 +1383,28 @@ class SyncPipe(PyPipe):
             b'[{"x": 0}, {"x": 1}]'
 
         """
-        return _write(self, dest, format=format, mode=mode, stream=stream, **kwargs)
+        return _write(self, dest, format=format, mode=mode, **kwargs)
 
     def sink(
         self,
         dest: Destination,
         *,
-        mode: SinkMode | str = SinkMode.APPEND,
+        mode: WriteMode | str = WriteMode.APPEND,
         keys: KeyLike | None = None,
         idempotency_key: KeyLike | None = None,
         format: str | None = None,
-    ) -> SinkResult:
+    ) -> WriteResult:
         """
         Reconciles the stream into ``dest`` and reports the outcome (terminal sink).
 
-        Unlike ``write``, this consumes the stream and returns a ``SinkResult``
+        Unlike ``write``, this consumes the stream and returns a ``WriteResult``
         rather than a chainable pipe. A file destination serializes with ``format``
         and forbids ``keys``/``idempotency_key``; a keyed record target requires
         them per its capabilities.
 
         Args:
 
-            dest: A path, or a ``SinkTarget``.
+            dest: A path, or a ``WriteTarget``.
             mode: The reconciliation mode, validated against the target. (default: append)
             keys: The match keys for a keyed record target.
             idempotency_key: The dedupe key for an ``append`` on a record target.
@@ -1416,7 +1412,7 @@ class SyncPipe(PyPipe):
 
         Returns:
 
-            A ``SinkResult`` describing what the delivery did.
+            A ``WriteResult`` describing what the delivery did.
 
         Examples:
             >>> from riko import get_temp_file
@@ -1669,22 +1665,21 @@ class SyncCollection(PyCollection):
         dest: str | Path,
         *,
         format: str | None = None,
-        mode: SinkMode | str = SinkMode.REPLACE,
-        stream: bool | None = None,
+        mode: WriteMode | str = WriteMode.REPLACE,
         **kwargs: Any,
     ) -> "SyncPipe":
         """The collection counterpart of :meth:`SyncPipe.write`."""
-        return _write(self, dest, format=format, mode=mode, stream=stream, **kwargs)
+        return _write(self, dest, format=format, mode=mode, **kwargs)
 
     def sink(
         self,
         dest: Destination,
         *,
-        mode: SinkMode | str = SinkMode.APPEND,
+        mode: WriteMode | str = WriteMode.APPEND,
         keys: KeyLike | None = None,
         idempotency_key: KeyLike | None = None,
         format: str | None = None,
-    ) -> SinkResult:
+    ) -> WriteResult:
         """The collection counterpart of :meth:`SyncPipe.sink`."""
         return _sink(
             self,
@@ -1927,8 +1922,7 @@ class AsyncPipe(PyPipe):
         dest: str | Path,
         *,
         format: str | None = None,
-        mode: SinkMode | str = SinkMode.REPLACE,
-        stream: bool | None = None,
+        mode: WriteMode | str = WriteMode.REPLACE,
         **kwargs: Any,
     ) -> "AsyncPipe":
         """
@@ -1951,11 +1945,11 @@ class AsyncPipe(PyPipe):
         self,
         dest: Destination,
         *,
-        mode: SinkMode | str = SinkMode.APPEND,
+        mode: WriteMode | str = WriteMode.APPEND,
         keys: KeyLike | None = None,
         idempotency_key: KeyLike | None = None,
         format: str | None = None,
-    ) -> SinkResult:
+    ) -> WriteResult:
         """The async counterpart of :meth:`SyncPipe.sink`."""
         return await _asink(
             self,
@@ -2165,8 +2159,7 @@ class AsyncCollection(PyCollection):
         dest: str | Path,
         *,
         format: str | None = None,
-        mode: SinkMode | str = SinkMode.REPLACE,
-        stream: bool | None = None,
+        mode: WriteMode | str = WriteMode.REPLACE,
         **kwargs: Any,
     ) -> "AsyncPipe":
         """
@@ -2186,11 +2179,11 @@ class AsyncCollection(PyCollection):
         self,
         dest: Destination,
         *,
-        mode: SinkMode | str = SinkMode.APPEND,
+        mode: WriteMode | str = WriteMode.APPEND,
         keys: KeyLike | None = None,
         idempotency_key: KeyLike | None = None,
         format: str | None = None,
-    ) -> SinkResult:
+    ) -> WriteResult:
         """The async collection counterpart of :meth:`SyncPipe.sink`."""
         return await _asink(
             self,
