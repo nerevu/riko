@@ -4,8 +4,8 @@ Docstring-style checks (PRIVATE).
 
 Scans Python source for function docstring summaries that begin with ``Returns`` or
 ``Yields``, which the documentation standard forbids: the summary names the action,
-while the output belongs in the ``Returns:``/``Yields:`` section. Shared by the
-``manage lint --docstrings`` check and its guard test so both read one rule.
+while the output belongs in the ``Returns:``/``Yields:`` section. Backs the
+``manage lint --docstrings`` check.
 
 Examples:
 

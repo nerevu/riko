@@ -111,7 +111,7 @@ class WriteTarget(Protocol):
 
     def capabilities(self, fmt: Formats | str | None = None) -> WriteCapabilities:
         """
-        Returns the modes and serialization behavior the target supports.
+        Reports the modes and serialization behavior the target supports.
 
         For a serializing target the supported modes depend on ``fmt``: only a
         line-oriented format (csv/jsonl) can be appended to; a whole-document
@@ -175,7 +175,7 @@ class File:
 
     def capabilities(self, fmt: Formats | str | None = None) -> WriteCapabilities:
         """
-        Returns format-aware file capabilities.
+        Reports format-aware file capabilities.
 
         A line-oriented format (csv/jsonl) supports ``append`` and ``replace``;
         a whole-document format (json/geojson/ofx/qif) supports ``replace`` only,
