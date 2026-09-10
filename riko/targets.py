@@ -412,7 +412,7 @@ class _FileWriter:
 def file_writer(
     dest: Destination,
     *,
-    mode: SinkMode | str = SinkMode.APPEND,
+    mode: SinkMode | str = SinkMode.REPLACE,
     fmt: str | None = None,
     stream: bool | None = None,
 ) -> _FileWriter:
