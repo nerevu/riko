@@ -4,6 +4,42 @@ Changelog
 v0.77.4 (Unreleased)
 --------------------
 
+New
+~~~
+
+- Added ``on_receive`` to ``subscribe`` which runs the callback on each item as it
+  arrives and yields nothing. It is a distinct operation from ``func`` (a map), so
+  passing both raises ``TypeError``.
+
+Fixed
+~~~~~
+
+- ``skip_if`` now treats a missing ``text`` as a presence check on ``field`` instead of
+  matching against the string ``"None"``. An absent field skips and a ``text`` of
+  ``None`` or ``0`` no longer misfires.
+
+- ``listize`` now wraps falsy extracted values, e.g., ``0`` or ``""``, instead of
+  passing them through unwrapped.
+
+- Date fields built from a timezone-aware time now report the correct Unix
+  timestamp (``utime``); the zone offset was previously ignored.
+
+- Concurrent async fetches no longer drop a legitimate ``None`` result, so results stay
+  aligned with the requests that produced them.
+
+- An unsupported object nested inside a container argument no longer collides in the
+  conf memoization cache. Distinct instances stay distinct.
+
+- A decoded response now treats ``read(n)`` as a count of characters rather than of
+  lines, and ``readlines`` accepts ``keepends`` instead of raising ``TypeError``.
+
+- ``sort`` now orders numeric strings numerically instead of lexicographically.
+
+- Pure-Python ``feedparser``-based feeds now correctly populate ``description``.
+
+- Time-zone lookup now captures both the standard and daylight names regardless of the
+  current date and resolves ambiguous abbreviations (e.g. ``CST``) toward US zones.
+
 Dev
 ~~~
 
@@ -20,6 +56,15 @@ Dev
   files via ``git ls-files`` instead of a fixed path.
 
 - Pinned GitHub Actions steps to commit SHAs.
+
+- Cleared the outstanding type-checker errors in the I/O and re-encoding paths, and
+  dropped the ``cast`` calls that masked them.
+
+- Added memory-leak regression tests for ``csv`` and ``fetch``, and collected the fixed
+  bugs into a dedicated regression suite.
+
+- Consolidated and parametrized the test suite, and converted the async tests to
+  ``async def``.
 
 
 v0.77.3 (2026-08-31)
@@ -461,8 +506,7 @@ v0.73.0 (2026-08-05)
 --------------------
 
 Legacy removal: the ``legacy`` branch is the ``v0.72.x`` release; these are the
-changes on top of it. See the "Upgrading from the ``legacy`` branch" section of
-``docs/MIGRATION.rst`` for verified before/after behavior.
+changes on top of it.
 
 Changes
 ~~~~~~~
@@ -474,17 +518,29 @@ Changes
   treatment as a resolvable virtual module was removed.
 
 - **Removed the legacy ``Context`` describe kwargs** (``describe_input=`` /
-  ``describe_dependencies=`` and the ``_mode_from_kwargs`` translation). Pass
-  ``mode=ExecutionMode.…``; the derived read-only properties are kept.
+  ``describe_dependencies=`` and the ``_mode_from_kwargs`` translation). The old kwargs
+  now fall through ``**kwargs`` and are silently ignored, leaving
+  ``mode=ExecutionMode.RUN``. Pass ``mode=ExecutionMode.DESCRIBE_INPUTS`` /
+  ``DESCRIBE_DEPENDENCIES`` / ``DESCRIBE`` instead; the derived read-only properties
+  are kept.
 
 - **Removed ``Objconf`` entirely** (it was a deprecated factory in ``v0.72.0``).
-  Import ``DynamicConf`` from ``riko.ext.config``.
+  Import ``DynamicConf`` from the supported ``riko.ext`` surface.
 
 - Promoted ``get_path`` into the stable surface (``riko.__all__``); clean up the
   public API surface.
 
 - Completed async parity: add lazy async streams and structured pool execution;
   split ``helpers.py`` / ``utils.py`` into focused private modules.
+
+Removed
+~~~~~~~
+
+- Removed legacy top-level compatibility imports that were outside ``riko.__all__``:
+  ``Objectify`` / ``objectify`` moved to ``riko._objectify``, ``listize`` moved to
+  ``riko._iterutils``, ``get_abspath`` moved to ``riko.paths``, and ``replacer`` moved
+  to ``riko._strutils``. These homes are private/non-stable; callers should avoid
+  depending on them or keep their own compatibility copy.
 
 Bugfixes
 ~~~~~~~~
@@ -547,8 +603,15 @@ Changes
 ~~~~~~~
 
 - **Replaced Twisted with AnyIO** as the async runtime. Twisted is no longer
-  imported or importable; ``riko.bado`` now runs on AnyIO. See the
-  "Twisted replaced by AnyIO" note in ``docs/MIGRATION.rst``.
+  imported or importable; ``riko.bado`` now runs on AnyIO. Install the ``async`` extra
+  (AnyIO + httpx) to enable async processing; ``backend`` is ``"anyio"`` when it is
+  available and ``"empty"`` in a sync-only install. There is no
+  ``RIKO_ASYNC_BACKEND`` selector. Code using the old Twisted/``deferred`` API must move
+  to native ``async`` / ``await``.
+
+- Application-facing async runtime helpers are re-exported through top-level ``riko``;
+  prefer forms such as ``riko.run``, ``riko.backend``, and ``riko.isasync`` over
+  backend-specific imports.
 
 - Made the compact loop form canonical and document loop behavior.
 
@@ -600,8 +663,7 @@ Changes
 
 - **Replaced ``Objconf`` with ``DynamicConf``.** ``Objconf(...)`` becomes a
   compatibility factory (emits ``DeprecationWarning``); it is removed outright in
-  a later release. See the "``Objconf`` is removed" note in
-  ``docs/MIGRATION.rst``.
+  a later release. Extension authors should import ``DynamicConf`` from ``riko.ext``.
 
 - Completed the async lifecycle and source parity; achieve sync/async
   chaining parity.
@@ -625,23 +687,32 @@ Changes
 ~~~~~~~
 
 - **Established a three-tier public API boundary** (stable ``riko``/``riko.api``,
-  extension ``riko.ext``, private ``_*``). See the "Three-tier import surface"
-  note in ``docs/MIGRATION.rst``.
+  extension ``riko.ext``, private ``_*``).
 
-- **Added pipe/collection lifecycle** — ``SyncPipe``/``AsyncPipe``/collections
-  are now single-execution; re-iteration no longer silently re-runs and
-  chaining onto a ``CLOSED``/``FAILED`` pipe raises ``PipelineStateError``.
-  See the "Single-execution pipe lifecycle" note in ``docs/MIGRATION.rst``.
+- **Added pipe/collection lifecycle** — ``SyncPipe``/``AsyncPipe``/collections are now
+  single-execution. Re-iterating an exhausted, closed, or failed pipe yields an empty
+  stream rather than re-running it. Chaining is allowed while ``NEW`` / ``RUNNING`` /
+  ``EXHAUSTED`` but raises ``PipelineStateError`` on ``CLOSED`` / ``FAILED``. Added the
+  ``PipeState`` enum, read-only ``state`` / ``closed`` / ``exhausted`` / ``failed``
+  state, sync ``close()`` / ``terminate()``, async ``aclose()``, and context-manager
+  cleanup.
 
 - **Converted the ``Context`` describe booleans to an ``ExecutionMode`` enum**
-  (``describe_input``/``describe_dependencies`` are now read-only properties).
-  See the "ExecutionMode replaces the describe booleans" note in
-  ``docs/MIGRATION.rst``.
+  (``RUN`` / ``DESCRIBE_INPUTS`` / ``DESCRIBE_DEPENDENCIES`` / ``DESCRIBE``);
+  ``describe_input`` / ``describe_dependencies`` are now read-only properties derived
+  from ``mode``.
 
 - Maded ``OperatorReturnKind`` an enum; add inference diagnostics.
 
 - Split ``riko/modules/__init__.py`` into leaf submodules; remove shared
   mutable ``Module`` state.
+
+Removed
+~~~~~~~
+
+- Removed ``riko.bado.return_value`` entirely; use an ordinary ``return`` from async
+  functions. ``coroutine`` is not its replacement: it marks pub/sub generator pipelines
+  using ``send`` / ``receive`` and is not an async marker.
 
 Security
 ~~~~~~~~
