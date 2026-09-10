@@ -202,7 +202,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> async def main():
         ...     items = ({"x": "foo", "sum": x} for x in range(5))
         ...     other = ({"x": "foo", "count": x + 5} for x in range(5))
-        ...     result = await async_pipe(items, conf={"join_key": "x"}, other=other)
+        ...     result = async_pipe(items, conf={"join_key": "x"}, other=other)
         ...     print(await anext(result))
         >>>
         >>> run(main)

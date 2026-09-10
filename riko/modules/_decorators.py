@@ -30,7 +30,7 @@ from typing import ClassVar, Literal, cast, overload
 import pygogo as gogo
 
 from riko._iterutils import dispatch, is_listlike
-from riko.bado.itertools import as_awaitable, async_iter, async_map
+from riko.bado.itertools import as_async, as_awaitable, async_iter, async_map
 from riko.cast import BasicCastType
 from riko.context import Context, ExecutionMode
 from riko.dotdict import DotDict, is_mapping
@@ -103,6 +103,12 @@ from riko.types.compile import EmbedKwargs
 from riko.types.modules import Conf, CountValues, ModuleType
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+
+_PROCESSOR_FORBIDDEN_OPTS: frozenset[str] = frozenset({"embed"})
+_OPERATOR_FORBIDDEN_OPTS: frozenset[str] = frozenset({"skip_if"})
+_SPLITTER_FORBIDDEN_OPTS: frozenset[str] = frozenset(
+    {"pollable", "emit", "count", "skip_if", "embed"}
+)
 
 
 class Module[B: (Literal[True], Literal[False])]:
@@ -355,13 +361,6 @@ def _call_kwargs(
         pkwargs["resources"] = bind_resources(prepared.resources, context.resources)
 
     return pkwargs
-
-
-_PROCESSOR_FORBIDDEN_OPTS: frozenset[str] = frozenset({"embed"})
-_OPERATOR_FORBIDDEN_OPTS: frozenset[str] = frozenset({"skip_if"})
-_SPLITTER_FORBIDDEN_OPTS: frozenset[str] = frozenset(
-    {"pollable", "emit", "count", "skip_if", "embed"}
-)
 
 
 def _reject_foreign_opts(
@@ -1000,9 +999,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             {'content': 4}
             >>>
             >>> async def main():
-            ...     r1 = await async_pipe1(items, **kwargs)
+            ...     r1 = async_pipe1(items, **kwargs)
             ...     print(await anext(r1))
-            ...     r2 = await async_pipe2(items, **kwargs)
+            ...     r2 = async_pipe2(items, **kwargs)
             ...     print(await anext(r2))
             >>>
             >>> if issync:
@@ -1253,9 +1252,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             >>> wrapped_async_pipe2 = async_wrapper(async_pipe2)
             >>>
             >>> async def main():
-            ...     r1 = await wrapped_async_pipe1(items, **kwargs)
+            ...     r1 = wrapped_async_pipe1(items, **kwargs)
             ...     print(await anext(r1))
-            ...     r2 = await wrapped_async_pipe2(items, **kwargs)
+            ...     r2 = wrapped_async_pipe2(items, **kwargs)
             ...     print(await anext(r2))
             >>>
             >>> if issync:
@@ -1349,7 +1348,8 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
                 processed = async_iter(self.process(stream, assign, emit=emit))
 
-            return processed
+            async for item in as_async(processed):
+                yield item
 
         def sync_wrapper(
             items: OperatorWrapperInput | None = None,

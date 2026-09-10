@@ -124,7 +124,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>>
         >>> async def main():
         ...     items = ({"x": x, "mod": x % 2} for x in range(5))
-        ...     result = await async_pipe(items, conf={"uniq_key": "mod"})
+        ...     result = async_pipe(items, conf={"uniq_key": "mod"})
         ...     print([i["mod"] async for i in result])
         >>>
         >>> run(main)

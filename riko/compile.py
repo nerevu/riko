@@ -50,6 +50,7 @@ from jinja2 import Environment, PackageLoader
 
 from riko._iterutils import listize
 from riko._strutils import replacer
+from riko.bado._util import as_awaitable, maybe_deferred
 from riko.bado.itertools import as_async
 from riko.context import Context, ExecutionMode
 from riko.dotdict import DotDict
@@ -1082,11 +1083,12 @@ async def abuild_pipeline(  # noqa: E302
         _resolve_leaf_modules(parsed_pipe_def)
         module_names = gen_names(module_ids, parsed_pipe_def)
         args = (parsed_pipe_def, module_names, module_ids)
-        pipeline = await _build_pipeline(
-            *args, is_async=True, context=context, **kwargs
+        pipeline = await maybe_deferred(
+            _build_pipeline, *args, is_async=True, context=context, **kwargs
         )
+        stream = await as_awaitable(pipeline)
 
-        async for item in as_async(pipeline):
+        async for item in as_async(stream):
             yield item
     else:
         args = (parsed_pipe_def, context)
@@ -1145,6 +1147,9 @@ def stringify_pipe(
             "last_module": module_ids[-1],
             "raw_confs": sorted(_used_raw_confs(parsed_pipe_def)),
             "use_collection": any(m["is_collection"] for m in string_modules),
+            "needs_await": any(
+                m["name"] != "output" and not m["splits"] for m in string_modules
+            ),
             "subtype": "source" if not pyinput else "transformer",
         }
     )

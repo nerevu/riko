@@ -103,7 +103,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>>
         >>> async def main():
         ...     items = ({"x": x} for x in range(5))
-        ...     result = await async_pipe(items)
+        ...     result = async_pipe(items)
         ...     print(await anext(result))
         >>>
         >>> run(main)

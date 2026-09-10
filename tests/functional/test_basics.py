@@ -5,7 +5,6 @@ Note: many of these tests simply make sure the module compiles and runs.
 We need more extensive tests with stable data feeds!
 """
 
-import gc
 import sqlite3
 from collections.abc import Sequence
 from decimal import Decimal
@@ -121,7 +120,6 @@ def _check_results(
     assert compared == _check, msg
 
 
-@pytest.mark.filterwarnings("ignore::ResourceWarning")
 @pytest.mark.xfail(
     strict=True,
     reason="fetchtable opens the binary source as text via Fetch(url, encoding=...),"
@@ -139,15 +137,15 @@ def test_fetchtable_reads_sqlite_fixture(tmp_path):
     connection.commit()
     connection.close()
 
-    try:
-        rows = list(SyncPipe("fetchtable", conf={"url": str(dbpath)}))
-    except UnicodeDecodeError:
-        rows = []
+    stream = SyncPipe("fetchtable", conf={"url": str(dbpath)})
+    item = {}
 
-    gc.collect()
-    assert rows
-    assert is_mapping(rows[0])
-    assert rows[0].get("make") == "ford"
+    with pytest.raises(RuntimeError):
+        item = next(stream)
+
+    Path(dbpath).unlink(missing_ok=True)
+    assert is_mapping(item)
+    assert item.get("make") == "ford"
 
 
 class TestBasics:

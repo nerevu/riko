@@ -237,7 +237,7 @@ async def _send_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
         create_task_group() as tg,
     ):
         tg.start_soon(_drain, receive_stream)
-        stream = await async_send(_finite_source(consumed), others=["r4-lazy"])
+        stream = async_send(_finite_source(consumed), others=["r4-lazy"])
         first = await anext(stream)
         seen = len(consumed)
 
@@ -252,11 +252,12 @@ async def _send_missing_target(received: list[Item]) -> None:
         tg.start_soon(_drain, receive_stream, received)
 
         with pytest.raises(ReceiverUnavailableError):
-            await async_send(
+            async for _ in async_send(
                 _finite_source([]),
                 conf=SendConf(max_wait=0.05),
                 others=["r4-good", "r4-missing"],
-            )
+            ):
+                pass
 
 
 async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrValue]:
@@ -267,7 +268,7 @@ async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrVa
         create_task_group() as tg,
     ):
         tg.start_soon(_drain, receive_stream, received)
-        stream = await async_send(_afinite_source(consumed), others=["r4-feed"])
+        stream = async_send(_afinite_source(consumed), others=["r4-feed"])
         out = [item async for item in stream]
 
     return out
@@ -292,7 +293,8 @@ async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
         create_task_group() as tg,
     ):
         tg.start_soon(_snapshot, receive_stream)
-        await async_send(_finite_source(consumed), others=["r-recv-lazy"])
+        async for _ in async_send(_finite_source(consumed), others=["r-recv-lazy"]):
+            pass
 
     return (first, seen)
 
