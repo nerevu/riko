@@ -391,7 +391,7 @@ class _SendDispatcher:
         self, cls: "type[SyncPipe]", source: RikoItems, *names: str
     ) -> "SyncPipe":
         """
-        Returns a publisher that pushes source items to each named subscriber.
+        Builds a publisher that pushes source items to each named subscriber.
 
         Raises:
 
@@ -409,7 +409,7 @@ class _SendDispatcher:
 
     def inst_send(self, obj: "SyncPipe", *names: str) -> "SyncPipe":
         """
-        Returns a publisher that pushes a pipeline's items to each named subscriber.
+        Builds a publisher that pushes a pipeline's items to each named subscriber.
 
         Raises:
 
@@ -494,7 +494,7 @@ if OFX is not None:
 
 def list_targets() -> list[str]:
     """
-    Returns every available ``export`` target, sorted.
+    Collects every available ``export`` target, sorted.
 
     ``ofx`` and ``qif`` are present only with the ``finance`` extra installed.
 
@@ -783,7 +783,7 @@ class PyPipe(_Lifecycle):
 
     def _definitional_kwargs(self) -> dict[str, object]:
         """
-        Returns module options used to rebind a pipe template.
+        Collects module options used to rebind a pipe template.
 
         E.g., ``field``/``assign``/``emit``/…
         """
@@ -926,7 +926,7 @@ class SyncPipe(PyPipe):
 
     def _chain(self, name: ModuleNameLike, **kwargs: object) -> "SyncPipe":
         """
-        Returns the next pipe with the current runtime settings.
+        Builds the next pipe with the current runtime settings.
 
         Examples:
             >>> conf = {"key": "a", "value": "b"}
@@ -1031,7 +1031,7 @@ class SyncPipe(PyPipe):
         return primed
 
     def _prime(self, source: RikoItems) -> "SyncPipe":
-        """Returns a copy of this pipe template bound to ``source``."""
+        """Copies this pipe template, bound to ``source``."""
         self._require_usable("chain")
         skwargs = {
             "chunksize": self.chunksize,
@@ -1078,7 +1078,7 @@ class SyncPipe(PyPipe):
         **kwargs: object,
     ) -> "SyncPipe":
         """
-        Returns a subscriber bound to a named channel.
+        Builds a subscriber bound to a named channel.
 
         Registers the subscriber. A publisher may publish to ``name`` before the
         subscriber is drained and no priming call is needed. Draining is non-blocking:
@@ -1834,7 +1834,7 @@ class AsyncPipe(PyPipe):
         return primed
 
     def _prime(self, source: RikoItems) -> "AsyncPipe":
-        """Returns a copy of this pipe template bound to ``source``."""
+        """Copies this pipe template, bound to ``source``."""
         self._require_usable("chain")
         skwargs = {
             "conf": self.conf,
@@ -1890,7 +1890,7 @@ class AsyncPipe(PyPipe):
 
     async def split(self, **kwargs: object) -> SplitterWrapperOutput:
         """
-        Returns independent copies of the stream.
+        Splits the stream into independent copies.
 
         The async counterpart of :meth:`SyncPipe.split`, and equally eager: the
         source is drained so each copy can be consumed at its own pace.
@@ -1961,7 +1961,7 @@ class AsyncPipe(PyPipe):
         )
 
     def _chain(self, name: ModuleNameLike, **kwargs: object) -> "AsyncPipe":
-        """Returns the next async pipe with the current runtime settings."""
+        """Builds the next async pipe with the current runtime settings."""
         self._require_usable("chain")
         skwargs = {
             "connections": self.connections,
@@ -1975,7 +1975,7 @@ class AsyncPipe(PyPipe):
         return AsyncPipe(name, source=self, **skwargs)
 
     async def _normalize_source(self) -> RikoFeed | None:
-        """Returns the source as a lazy async iterable, preserving ``None``."""
+        """Normalizes the source into a lazy async iterable, preserving ``None``."""
         source = self.source
 
         if source is None:
@@ -2244,12 +2244,12 @@ class AsyncCollection(PyCollection):
 
 
 def get_chunksize(length: int, workers: int) -> int:
-    """Returns items per worker task, targeting four batches per worker."""
+    """Computes items per worker task, targeting four batches per worker."""
     return (length // (workers * 4)) or 1
 
 
 def get_worker_cnt(length: int, threads: bool | None = True) -> int:
-    """Returns a pool size, capped at the core count (doubled for threads)."""
+    """Computes a pool size, capped at the core count (doubled for threads)."""
     multiplier = 2 if threads else 1
     maximum = cpu_count() * multiplier
     return min(length, maximum) if length else maximum
@@ -2277,7 +2277,7 @@ def _fetch_source[T: SyncPipe | AsyncPipe](
 def fetch_source(
     args: tuple[Mapping[str, str], Conf], pipe: type[SyncPipe] = SyncPipe
 ) -> RikoStream:
-    """Returns a lazy, unstarted iterator over one collection source."""
+    """Builds a lazy, unstarted iterator over one collection source."""
     return iter(_fetch_source(args, pipe))
 
 
@@ -2285,7 +2285,7 @@ def afetch_source(
     args: tuple[Mapping[str, str], Conf], pipe: type[AsyncPipe] = AsyncPipe
 ) -> AsyncRikoStream:
     """
-    Returns a lazy, unstarted async feed for one collection source.
+    Builds a lazy, unstarted async feed for one collection source.
 
     Unlike ``afetch_source_eager``, this hands back the source's async iterator
     so ``async_merge`` can stream its records incrementally.

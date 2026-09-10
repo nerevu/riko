@@ -217,7 +217,7 @@ def cast_url(url: str | int) -> str:
 
 def lookup_street_address(_: str) -> Location:
     """
-    Returns a placeholder street-address location.
+    Builds a placeholder street-address location.
 
     A fixed stub standing in for a real geocoder; the input is ignored.
 
@@ -252,7 +252,7 @@ def lookup_street_address(_: str) -> Location:
 
 def lookup_ip_address(_: str) -> IPAddress:
     """
-    Returns a placeholder IP-address location.
+    Builds a placeholder IP-address location.
 
     A fixed stub standing in for a real geolocator; the input is ignored.
 

@@ -174,7 +174,7 @@ def parser(
     **kwargs: object,
 ) -> StreamOrValueStream | Iterator[StatefulItem]:
     """
-    Yields items as the sender pushes them.
+    Emits items as the sender pushes them.
 
     Args:
 

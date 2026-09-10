@@ -63,7 +63,7 @@ async def async_read(  # noqa: E302
 
 
 async def async_json(response: "Response") -> dict[str, Any]:
-    """Returns the parsed JSON body of ``response``."""
+    """Parses the JSON body of ``response``."""
     return response.json()
 
 

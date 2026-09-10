@@ -50,7 +50,7 @@ def parser(
     stream: Stream, splits: int, tuples: PipeTuples, **kwargs: object
 ) -> Iterator[Stream]:
     """
-    Yields ``splits`` independent copies of the source stream.
+    Splits the source into ``splits`` independent copies of the stream.
 
     Args:
 

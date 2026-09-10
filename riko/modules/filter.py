@@ -201,7 +201,7 @@ def parser(
     _: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Yields the items that match (or fail to match) every rule.
+    Filters the stream to items that match (or fail to match) every rule.
 
     Each rule's ``op`` is validated once up front, so an unsupported operation
     raises before any item is read.

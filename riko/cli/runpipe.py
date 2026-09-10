@@ -48,7 +48,7 @@ def load_file(name: str, location: str) -> ModuleType | None:
 
 def file2name(_path: str) -> str:
     """
-    Return the base module name for a file path.
+    Derives the base module name for a file path.
 
     >>> file2name("examples/demo.py")
     'demo'

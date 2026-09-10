@@ -15,7 +15,7 @@ New
   arrives and yields nothing. It is a distinct operation from ``func`` (a map), so
   passing both raises ``TypeError``.
 
-Fixed
+Fixes
 ~~~~~
 
 - ``skip_if`` now treats a missing ``text`` as a presence check on ``field`` instead of
@@ -44,8 +44,15 @@ Fixed
 - Time-zone lookup now captures both the standard and daylight names regardless of the
   current date and resolves ambiguous abbreviations (e.g. ``CST``) toward US zones.
 
+Documentation
+~~~~~~~~~~~~~
+
+- Normalized docstring summaries to lead with an action vs ``Returns``/``Yields``.
+
 Dev
 ~~~
+
+- Added ``manage lint --docstrings`` to flags summaries leading ``Returns``/``Yields``.
 
 - Added ``manage backfill`` to dispatch the release or publish workflow for an
   existing tag, with ``--dry-run`` and a ``--notes-only`` mode that replaces a

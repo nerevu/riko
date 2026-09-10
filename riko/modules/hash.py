@@ -45,7 +45,7 @@ def parser(
     content: str, extraction: object, objconf: DynamicConf, **kwargs: object
 ) -> int:
     """
-    Returns the unsigned 32-bit hash of ``content``.
+    Hashes ``content`` to an unsigned 32-bit integer.
 
     Args:
 

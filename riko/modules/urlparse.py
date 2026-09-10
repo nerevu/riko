@@ -43,7 +43,7 @@ def parser(
     url: str, extraction: object, objconf: UrlParseObjconf, **kwargs: object
 ) -> Iterator[dict[str, str]]:
     """
-    Yields one item per url component.
+    Emits one item per url component.
 
     Args:
 

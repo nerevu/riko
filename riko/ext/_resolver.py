@@ -62,7 +62,7 @@ class PipeResolver:
     ) -> AsyncPipeWrapper: ...
     def resolve(self, name: str, is_async: bool = False) -> Pipe:  # noqa: E301
         """
-        Returns ``name``'s callable for ``interface``.
+        Resolves ``name``'s callable for ``interface``.
 
         Raises:
 

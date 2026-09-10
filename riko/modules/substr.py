@@ -49,7 +49,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 def parser(word: str, _: object, objconf: SubstrObjconf, **kwargs: object) -> str:
     """
-    Returns the slice of ``word`` described by the configuration.
+    Slices ``word`` as described by the configuration.
 
     Args:
 
@@ -135,7 +135,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> str:
     """
-    Returns a substring of an item field.
+    Extracts a substring of an item field.
 
     Both iterator and iterable sources are mapped over. See the FAQ's "How does a
     processor map over items?".

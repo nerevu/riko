@@ -345,7 +345,7 @@ def xpath(
     ns_prefix: str = "ns",
 ) -> Iterator[AnyElement]:
     """
-    Yields elements matching *path* from *tree* across multiple XML backends.
+    Emits elements matching *path* from *tree* across multiple XML backends.
 
     Three backends are tried in order:
 
@@ -530,7 +530,7 @@ def any2dict(
     path: str | None = None,
 ) -> Stream:
     """
-    Yields items parsed from ``content`` (XML/HTML/JSON, mapping, or list).
+    Emits items parsed from ``content`` (XML/HTML/JSON, mapping, or list).
 
     ``path`` locates the list of items within a parsed document.
 
@@ -825,7 +825,7 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
 def get_field(
     item: ItemOrValue | None = None, field: str = "", **kwargs: ItemOrValue
 ) -> ItemOrValue:
-    """Returns ``item[field]``, or ``item`` itself when no field is given."""
+    """Extracts ``item[field]``, or ``item`` itself when no field is given."""
     if field and isinstance(item, DotDict):
         value = item.get(field, **kwargs)
     elif field and is_mapping(item):

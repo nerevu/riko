@@ -211,7 +211,7 @@ def _gen_doc(module: object) -> Iterator[str]:
 
 def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
     """
-    Returns a module's definition, or None when the name is unknown.
+    Describes a module, or reports None when the name is unknown.
 
     A built-in is described from its module rather than the registry, so its
     ``description`` comes from the docstring summary and its pipe callables are

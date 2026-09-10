@@ -203,7 +203,7 @@ def _as_named_pipe(  # noqa: E704
 def _as_named_pipe(  # noqa: E302
     module_name: str, module_id: str, is_async: bool = False
 ) -> Pipe:
-    """Returns a renamed wrapper without modifying the imported pipe."""
+    """Builds a renamed wrapper without modifying the imported pipe."""
     pipe = resolve_module(module_name, is_async)
     name = str(f"pipe_{module_id}")
     wrapper = cast(Pipe, partial(pipe))
@@ -248,7 +248,7 @@ def extract_dependencies(  # noqa: E302
     pipe_def: PipeDef | ParsedPipeDef | None = None,
     pipeline: PipelineDependencies | None = None,
 ) -> Awaitable[list[str]] | list[str]:
-    """Returns the modules used by a pipe."""
+    """Extracts the modules used by a pipe."""
     if pipe_def:
         pydeps = gen_dependencies(pipe_def)
     elif pipeline:
@@ -330,7 +330,7 @@ def extract_input(  # noqa: E302
     pipe_def: PipeDef | ParsedPipeDef | None = None,
     pipeline: PipelineDependencies | None = None,
 ) -> PyInput:
-    """Returns the inputs required by a pipe."""
+    """Extracts the inputs required by a pipe."""
     if pipe_def:
         pyinput = gen_input(pipe_def)
     elif pipeline:
@@ -347,7 +347,7 @@ def pythonise(
     replace: Sequence[str] = ("-", ":", "/", ""),
     key: str | None = None,
 ) -> str:
-    """Returns a Python-friendly id."""
+    """Builds a Python-friendly id."""
     if not isinstance(content, str):
         if key:
             resolved = DotDict(content).get(key)
@@ -425,7 +425,7 @@ def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list[str]]]:
 
 
 def gen_parented_graph[T: str | int](graph: Graph[T]) -> Iterator[tuple[T, Nodes[T]]]:
-    """Yields graph nodes, dropping any orphans."""
+    """Emits graph nodes, dropping any orphans."""
     for node, value in graph.items():
         if value or any(node in v for v in graph.values()):
             yield (node, value)

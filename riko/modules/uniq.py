@@ -44,7 +44,7 @@ def parser(
     stream: Stream, objconf: UniqObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Yields items whose ``uniq_key`` value has not been seen recently.
+    Filters the stream to items whose ``uniq_key`` value was not seen recently.
 
     Args:
 

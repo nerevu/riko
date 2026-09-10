@@ -22,13 +22,15 @@ import requests
 from click import Choice
 
 from riko._logging import exception_hook
-from riko.cli.gen_config import _CONFIGS as CONFIG_PATH
-from riko.cli.gen_config import main as gen_config_main
-from riko.cli.gen_names import _MODULE_IDS as MODULE_IDS_PATH
-from riko.cli.gen_names import _NAMES as NAMES_PATH
-from riko.cli.gen_names import main as gen_names_main
-from riko.cli.gen_pipelines import main as gen_pipelines_main
 from riko.paths import ROOT_DIR
+
+from ._docstyle import format_issue, iter_summary_issues
+from .gen_config import _CONFIGS as CONFIG_PATH
+from .gen_config import main as gen_config_main
+from .gen_names import _MODULE_IDS as MODULE_IDS_PATH
+from .gen_names import _NAMES as NAMES_PATH
+from .gen_names import main as gen_names_main
+from .gen_pipelines import main as gen_pipelines_main
 
 try:
     from docutils import nodes
@@ -233,6 +235,17 @@ def _pylint_check(parallel: bool = False) -> int:
     return call(args)
 
 
+def _docstring_check(where: str | None = "") -> int:
+    """Check that no docstring summary leads with Returns/Yields"""
+    roots = [Path(p) for p in where.split(" ")] if where else [Path("riko")]
+    issues = list(iter_summary_issues(*roots))
+
+    for issue in issues:
+        print(format_issue(issue))
+
+    return 1 if issues else 0
+
+
 def _ruff_check(where: str | None = "", unsafe_fixes: bool = False) -> int:
     """Check style and formatting with ruff"""
     if not ruff:
@@ -269,7 +282,7 @@ def _gen_doc_files(where: str | None) -> Iterator[str]:
 
 
 def _gen_yaml_files() -> Iterator[str]:
-    """Return tracked YAML files."""
+    """Collects tracked YAML files."""
     args = ["git", "ls-files", "*.yml", "*.yaml"]
     yield from check_output(args, text=True).splitlines()
 
@@ -322,7 +335,7 @@ def _render_errors(path: str, doctree: Any) -> list[str]:
 
 
 def _get_path_anchors(path: str, cache: dict[str, set[str]]) -> set[str]:
-    """Return the cached anchor set for a doc, rendering it on first use"""
+    """Resolves the cached anchor set for a doc, rendering it on first use"""
     if path not in cache:
         try:
             cache[path] = _get_doc_anchors(_render_rst(path)[1])
@@ -435,7 +448,7 @@ def _format_yaml(where: Iterable[str] = ()) -> int:
 # Release helpers
 # ---------------------------------------------------------------------------
 def _gen_changelog_entries(path: Path = CHANGELOG_PATH) -> Iterator[Entry]:
-    """Return changelog entries in document order."""
+    """Emits changelog entries in document order."""
     text = path.read_text(encoding="utf-8")
 
     for match in RELEASE_SECTION_RE.finditer(text):
@@ -445,7 +458,7 @@ def _gen_changelog_entries(path: Path = CHANGELOG_PATH) -> Iterator[Entry]:
 def _get_changelog_entry(
     version: str | None = None, path: Path = CHANGELOG_PATH
 ) -> Entry:
-    """Return a changelog version, release date, and RST body."""
+    """Selects a changelog version, release date, and RST body."""
     for entry in _gen_changelog_entries(path):
         if (version is None) or entry.version == version:
             return entry
@@ -468,7 +481,7 @@ def _validate_tag(version: str, *expected: str) -> None:
 
 
 def _gen_gh_tags(releases=False) -> Iterator[str]:
-    """Return remote tags."""
+    """Emits remote tags."""
     if not gh:
         raise RuntimeError("gh not found")
 
@@ -483,7 +496,7 @@ def _gen_gh_tags(releases=False) -> Iterator[str]:
 
 
 def _gen_pypi_tags() -> Iterator[str]:
-    """Yield versions already published to PyPI as release tags."""
+    """Emits versions already published to PyPI as release tags."""
     url = f"https://pypi.org/pypi/{PYPI_PROJECT}/json"
     r = requests.get(url, timeout=15)
 
@@ -494,7 +507,7 @@ def _gen_pypi_tags() -> Iterator[str]:
 
 
 def _gen_missing_versions(published: Iterable[str]) -> Iterator[str]:
-    """Return remote release tags absent from published."""
+    """Emits remote release tags absent from published."""
     missing = set(_gen_gh_tags()).difference(published)
     _release_key = lambda version: tuple(map(int, version.removeprefix("v").split(".")))
     yield from sorted(missing, key=_release_key)
@@ -576,6 +589,7 @@ def check():
 )
 @click.option("-a", "--actions", help="Validate GitHub Actions workflows", is_flag=True)
 @click.option("-y", "--yaml", help="Validate YAML files", is_flag=True)
+@click.option("-D", "--docstrings", help="Check docstring summary style", is_flag=True)
 @click.option(
     "-p",
     "--parallel",
@@ -593,6 +607,7 @@ def lint(
     rst=False,
     actions=False,
     yaml=False,
+    docstrings=False,
     parallel=False,
 ):
     """Check style with linters"""
@@ -608,6 +623,8 @@ def lint(
         return_code = _pylint_check(parallel)
     elif rst:
         return_code = _check_rst(_where)
+    elif docstrings:
+        return_code = _docstring_check(_where)
     elif actions:
         exts = [".yml", ".yaml"]
         _paths = (glob(str(WORKFLOW_DIR / f"*.{ext}")) for ext in exts)

@@ -21,7 +21,7 @@ from riko.types._streams import Stream, StreamOrValueStream, ValueStream
 
 def _get_entry_text(entry: ParserRSSEntry) -> str:
     """
-    Return the first non-empty text from summary, description, content, or title.
+    Selects the first non-empty text from summary, description, content, or title.
 
     ``content`` is treated as a list of mappings and only the first item's
     ``value`` is used as a fallback.

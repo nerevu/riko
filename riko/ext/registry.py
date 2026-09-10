@@ -84,7 +84,7 @@ class ModuleDefinition:
     description: str | None = None
 
     def get_pipe(self, is_async: bool = False) -> PipeCallable | Pipe | None:
-        """Returns the callable for ``interface``, or ``None`` if undefined."""
+        """Resolves the callable for ``interface``, or ``None`` if undefined."""
         kwargs = {"is_async": is_async, "builtin": False}
         loader = partial(getattr, self)
         pipe: PipeCallable | Pipe | None = (
@@ -200,7 +200,7 @@ class ModuleRegistry:
     ) -> AsyncPipeWrapper: ...
     def resolve(self, name: str, is_async: bool = False) -> Pipe | PipeCallable:  # noqa: E301
         """
-        Returns ``name``'s callable for ``interface`` and honors tier precedence.
+        Resolves ``name``'s callable for ``interface``, honoring tier precedence.
 
         Raises:
 
@@ -219,12 +219,12 @@ class ModuleRegistry:
         return pipe
 
     def registered_names(self) -> tuple[str, ...]:
-        """Returns the sorted runtime-registered names."""
+        """Collects the sorted runtime-registered names."""
         return tuple(sorted(self._runtime))
 
     def catalog_names(self) -> tuple[str, ...]:
         """
-        Returns the sorted registered and entry-point names.
+        Collects the sorted registered and entry-point names.
 
         Built-ins are excluded since the pkgutil catalog enumerates those separately.
 
@@ -232,7 +232,7 @@ class ModuleRegistry:
         return tuple(sorted({*self._runtime, *self._discover_entry_points()}))
 
     def definition(self, name: str) -> ModuleDefinition | None:
-        """Returns ``name``'s definition, or ``None`` for a built-in or unknown."""
+        """Resolves ``name``'s definition, or ``None`` for a built-in or unknown."""
         return self._runtime.get(name) or self._entry_point_definition(name)
 
     def reset(self) -> None:

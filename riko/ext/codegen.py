@@ -59,14 +59,14 @@ class NameEntry:
 
 # TODO: compare to pythonise
 def enum_member_name(name: str, *, override: str | None = None) -> str:
-    """Return a valid enum member name for a module id."""
+    """Builds a valid enum member name for a module id."""
     source = override or name
     collapsed = _MEMBER_SPLIT.sub("_", source).strip("_").upper()
     return f"_{collapsed}" if collapsed[:1].isdigit() else collapsed
 
 
 def gen_catalog_entries() -> Iterator[NameEntry]:
-    """Yield name entries from the runtime module catalog."""
+    """Emits name entries from the runtime module catalog."""
     for md in sorted(gen_module_catalog(), key=lambda md: md.name):
         yield NameEntry(name=md.name, category=derive_category(md))
 

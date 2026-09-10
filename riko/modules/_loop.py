@@ -52,7 +52,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 def _take_first(results: ItemsOrValues) -> ItemsOrValues:
     """
-    Yield only the first result, then promptly close the underlying iterator.
+    Emits only the first result, then promptly closes the underlying iterator.
 
     ``count="first"`` is already lazy (the loop stops pulling after one), but a
     child generator holding resources would otherwise linger until GC; closing it

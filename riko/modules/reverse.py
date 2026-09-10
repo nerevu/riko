@@ -41,7 +41,7 @@ def parser(
     stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Returns the stream in reverse order.
+    Reverses the stream order.
 
     Args:
 

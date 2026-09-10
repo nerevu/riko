@@ -47,7 +47,7 @@ def parser(
     _: Item, extraction: object, objconf: DynamicConf, **kwargs: object
 ) -> Iterator[dict[str, bool]]:
     """
-    Returns an endless iterator of ``{"forever": True}``.
+    Emits ``{"forever": True}`` endlessly.
 
     Args:
 
@@ -122,7 +122,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     """
-    Yields a placeholder item endlessly.
+    Emits a placeholder item endlessly.
 
     Takes no input and reads no configuration. The stream never ends, so bound it
     downstream with ``truncate`` or ``timeout``.

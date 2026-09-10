@@ -176,7 +176,7 @@ def parser(
     stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Yields items until the configured duration elapses.
+    Streams items until the configured duration elapses.
 
     Args:
 
@@ -284,7 +284,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Yields items from a stream until a certain amount of time has passed.
+    Streams items from a stream until a certain amount of time has passed.
 
     Lazy: items pass through as they arrive and the source is abandoned once the
     deadline is reached. Units are additive, so ``seconds`` and ``milliseconds``

@@ -49,7 +49,7 @@ def parser(
     stream: Stream, objconf: TailObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Yields the last ``count`` items of the stream.
+    Keeps the last ``count`` items of the stream.
 
     Args:
 
