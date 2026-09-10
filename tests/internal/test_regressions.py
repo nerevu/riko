@@ -1,6 +1,7 @@
 # vim: sw=4:ts=4:expandtab
 
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from typing import cast
 from zoneinfo import ZoneInfo
 
@@ -12,11 +13,20 @@ from riko._rssutils import augment_entries
 from riko._serialize import repr_cache
 from riko.dates import tt_to_datedict
 from riko.modules._prepare import get_pieces_or_conf
+from riko.modules.regex import pipe as regex
+from riko.modules.rename import pipe as rename
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
-from riko.parsers import any2dict, get_skip
+from riko.parsers import XML_PARSER, any2dict, get_skip
 from riko.paths import get_path
 from riko.types._rss import FeedParserRSSEntry
-from riko.types.modules import Conf, XpathFetchPageConf
+from riko.types.modules import (
+    Conf,
+    RegexConf,
+    RegexConfRule,
+    RenameConf,
+    RenameConfRule,
+    XpathFetchPageConf,
+)
 
 
 class _Opaque:
@@ -130,6 +140,36 @@ class TestParsers:
             "href": "http://www.w3.org/",
             "img": {"src": "http://www.w3.org/Icons/w3c_home", "alt": "W3C"},
         }
+
+    def test_xml_parser_does_not_resolve_entities(self):
+        """
+        The hardened ``XML_PARSER`` must not expand a defined entity (XXE guard):
+        ``resolve_entities=False`` leaves ``&xxe;`` unresolved rather than
+        substituting its declared value.
+        """
+        etree = pytest.importorskip("lxml.etree")
+        payload = b'<!DOCTYPE root [<!ENTITY xxe "SECRET">]><root>&xxe;</root>'
+        tree = etree.parse(BytesIO(payload), XML_PARSER)
+        assert tree.getroot().text != "SECRET"
+
+
+class TestModules:
+    def test_rename_skips_absent_field(self):
+        """A rename rule naming an absent field leaves the item untouched."""
+        conf = RenameConf({"rule": RenameConfRule(field="content", newval="greeting")})
+        assert next(rename({"title": "hi"}, conf=conf)) == {"title": "hi"}
+
+    def test_rename_renames_present_falsy_field(self):
+        """A present-but-falsy value is still renamed (absent ≠ present-``None``)."""
+        conf = RenameConf({"rule": RenameConfRule(field="content", newval="greeting")})
+        assert next(rename({"content": ""}, conf=conf)) == {"greeting": ""}
+
+    def test_regex_skips_absent_field(self):
+        """A regex rule naming an absent field leaves the item untouched."""
+        conf = RegexConf(
+            {"rule": RegexConfRule(field="content", match="l", replace="L")}
+        )
+        assert next(regex({"title": "hi"}, conf=conf)) == {"title": "hi"}
 
 
 class TestRSSUtils:
