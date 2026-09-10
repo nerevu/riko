@@ -39,7 +39,7 @@ def _isolate_pubsub():
 class _RecordStore:
     """A non-serializing keyed target, for the record-store ``build_write`` branch."""
 
-    def capabilities(self) -> SinkCapabilities:
+    def capabilities(self, fmt=None) -> SinkCapabilities:
         return SinkCapabilities(modes=frozenset(SinkMode), serializes=False)
 
     def deliver(self, records, write, *, fmt=None) -> SinkResult:
@@ -65,18 +65,20 @@ class TestResolveTarget:
 class TestResolveFormat:
     @pytest.mark.parametrize(
         ("url", "expected"),
-        [
-            ("out.csv", "csv"),
-            ("out.jsonl", "jsonl"),
-            ("out.txt", "json"),
-            ("out", "json"),
-        ],
+        [("out.csv", "csv"), ("out.jsonl", "jsonl"), ("out", "json")],
     )
     def test_infers_from_extension(self, url, expected):
         assert resolve_format(url, None) == expected
 
     def test_explicit_format_wins(self):
         assert resolve_format("out.csv", "json") == "json"
+
+    def test_invalid_format_raise(self):
+        with pytest.raises(ValueError, match="not a valid Formats"):
+            resolve_format("out.txt", None)
+
+        with pytest.raises(ValueError, match="not a valid Formats"):
+            resolve_format("out", "txt")
 
 
 class TestBuildWrite:
@@ -87,6 +89,22 @@ class TestBuildWrite:
     def test_file_unsupported_mode(self):
         with pytest.raises(ValueError, match="does not support the 'merge'"):
             build_write(File("out.csv"), "merge")
+
+    def test_file_append_rejected_for_whole_document_format(self):
+        """
+        A whole-document format cannot be appended to (it would concatenate two
+        documents into invalid output), so ``append`` is rejected at prepare.
+        """
+        with pytest.raises(ValueError, match="does not support the 'append'"):
+            build_write(File("out.json"), "append")
+
+        with pytest.raises(ValueError, match="does not support the 'append'"):
+            build_write(File("out.geojson"), "append")
+
+    def test_file_append_allowed_for_line_oriented_format(self):
+        for dest in ("out.csv", "out.jsonl"):
+            spec = build_write(File(dest), "append")
+            assert spec.mode is SinkMode.APPEND
 
     def test_record_store_routes_through_sink_write(self):
         spec = build_write(_RecordStore(), "merge", keys="endpoint_id")
@@ -137,6 +155,14 @@ class TestFileWriter:
     def test_keyed_mode_rejected(self):
         with pytest.raises(ValueError, match="append, replace"):
             file_writer("out.csv", mode="merge")
+
+    def test_append_rejected_for_non_appendable_format(self):
+        with pytest.raises(ValueError, match="cannot be appended to"):
+            file_writer("out.json", mode="append")
+
+    def test_append_allowed_for_line_oriented_format(self):
+        assert file_writer("out.csv", mode="append").mode is SinkMode.APPEND
+        assert file_writer("out.jsonl", mode="append").mode is SinkMode.APPEND
 
 
 class TestSyncWrite:

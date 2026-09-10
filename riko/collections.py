@@ -654,7 +654,9 @@ def _sink(
 ) -> SinkResult:
     """Resolves ``dest``, validates the write, and delivers ``records`` to it."""
     target = resolve_target(dest)
-    write = build_write(target, mode, keys=keys, idempotency_key=idempotency_key)
+    write = build_write(
+        target, mode, keys=keys, idempotency_key=idempotency_key, fmt=fmt
+    )
     return target.deliver(records, write, fmt=fmt)
 
 
@@ -670,7 +672,9 @@ async def _asink(
     """Drains ``source``, resolves ``dest``, and delivers the records to it."""
     items = [item async for item in source]
     target = resolve_target(dest)
-    write = build_write(target, mode, keys=keys, idempotency_key=idempotency_key)
+    write = build_write(
+        target, mode, keys=keys, idempotency_key=idempotency_key, fmt=fmt
+    )
     return await target.adeliver(items, write, fmt=fmt)
 
 
