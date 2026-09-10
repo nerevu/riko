@@ -40,9 +40,9 @@ def _get_entry_text(entry: ParserRSSEntry) -> str:
 
 
 def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
-    for _entry in entries:
-        text = _get_entry_text(_entry)
-        entry = cast(YahooRSSEntry, _entry)
+    for raw in entries:
+        text = _get_entry_text(raw)
+        entry = cast(YahooRSSEntry, dict(raw))
         pub_date = updated_date = None
 
         if not entry.get("summary"):
