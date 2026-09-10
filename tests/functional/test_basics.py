@@ -252,7 +252,7 @@ class TestBasics:
 
     def test_input_override(self):
         """Overrides an offline input->itembuilder pipeline via Context.inputs"""
-        self.context.inputs = {"textinput1": "IBM"}
+        self.context = self.context.augment(inputs={"textinput1": "IBM"})
         pipe_name = "pipe_1LNyRuNS3BGdkTKaAsqenA"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
@@ -592,7 +592,7 @@ class TestBasics:
 
     def test_describe_input(self):
         """Loads a pipeline but just gets the input requirements"""
-        self.context.mode = ExecutionMode.DESCRIBE_INPUTS
+        self.context = self.context.augment(mode=ExecutionMode.DESCRIBE_INPUTS)
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 6, 0)
@@ -616,7 +616,7 @@ class TestBasics:
             assert item == expected[pos]
 
     def test_describe_dependencies(self):
-        self.context.mode = ExecutionMode.DESCRIBE_DEPENDENCIES
+        self.context = self.context.augment(mode=ExecutionMode.DESCRIBE_DEPENDENCIES)
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 2, 0)
@@ -624,7 +624,7 @@ class TestBasics:
 
     def test_describe_both(self):
         """Loads a pipeline but just gets the input requirements"""
-        self.context.mode = ExecutionMode.DESCRIBE
+        self.context = self.context.augment(mode=ExecutionMode.DESCRIBE)
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)

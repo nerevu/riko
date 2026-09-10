@@ -595,3 +595,41 @@ class TestResourceEcosystem:
         context = Context().with_resource("resource", resource)
         list(pipe([{"a": 1}], context=context))
         assert captured["view"].resource is connection
+
+
+class TestResourceImmutability:
+    """
+    Resource definitions are structurally immutable. Fields cannot be reassigned
+    and definition-owned containers are read-only, but riko never recursively
+    freezes the arbitrary value a definition references. Do not reintroduce public
+    setters; the execution layer owns mutable resolved state, not the definition.
+    """
+
+    def test_external_value_fields_are_read_only(self, connection: _Connection):
+        resource = Resource.from_external(connection)
+
+        with pytest.raises(AttributeError):
+            resource.value = object()  # pyright: ignore[reportAttributeAccessIssue]
+
+        with pytest.raises(AttributeError):
+            resource.credential = "other"  # pyright: ignore[reportAttributeAccessIssue]
+
+        with pytest.raises(AttributeError):
+            resource.lazy = True  # pyright: ignore[reportAttributeAccessIssue]
+
+    def test_referenced_value_is_not_frozen(self, connection: _Connection):
+        resource = Resource.from_external(connection)
+        connection.opened = False
+        assert resource.value is connection
+
+        if isinstance(resource.value, _Connection):
+            assert resource.value.closed
+
+    def test_factory_fields_and_containers_are_read_only(self):
+        resource = Resource.from_factory(sync_gen_factory)
+
+        with pytest.raises(AttributeError):
+            resource.factory = sync_gen_factory  # pyright: ignore[reportAttributeAccessIssue]
+
+        with pytest.raises(AttributeError):
+            resource.kind = _FactoryKind.SYNC_GEN_FACTORY  # pyright: ignore[reportAttributeAccessIssue]

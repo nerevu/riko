@@ -33,7 +33,8 @@ Examples:
 
 """
 
-from collections.abc import Iterable, Iterator, Mapping
+import copyreg
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from inspect import unwrap
 from types import MappingProxyType
 from typing import Literal, Never, Self, cast, overload
@@ -68,6 +69,26 @@ from riko.types._resource import (
     _FactoryKind,
 )
 from riko.warnings import ResourceInterpretationWarning
+
+
+def _rebuild_mappingproxy(
+    items: dict[object, object],
+) -> MappingProxyType[object, object]:
+    """Rebuilds a read-only mapping from its pickled contents."""
+    return MappingProxyType(items)
+
+
+def _reduce_mappingproxy(
+    proxy: MappingProxyType[object, object],
+) -> tuple[
+    Callable[[dict[object, object]], MappingProxyType[object, object]],
+    tuple[dict[object, object]],
+]:
+    """Reduces a read-only mapping so immutable containers survive pickling."""
+    return (_rebuild_mappingproxy, (dict(proxy),))
+
+
+copyreg.pickle(MappingProxyType, _reduce_mappingproxy)
 
 VALUE_FACTORY_KINDS = {
     _FactoryKind.SYNC_CALLABLE_FACTORY,
@@ -252,9 +273,10 @@ class Resource[T]:
 
     """
 
+    __slots__ = ("_cleanup", "_credential", "_kind", "_lazy", "_value")
+
     _external: bool = False
     _reusable: bool = False
-    kind: _FactoryKind | None = None
 
     @overload
     def __new__(  # noqa: E704
@@ -352,9 +374,10 @@ class Resource[T]:
         credential: str | None = None,
         lazy: bool = False,
     ) -> None:
-        self.value = value
-        self.credential = credential
-        self.lazy = lazy
+        self._value = value
+        self._credential = credential
+        self._lazy = lazy
+        self._kind: _FactoryKind | None = None
         self._cleanup: Cleanup[T] | Literal[False] | None = cleanup
 
         if (
@@ -373,6 +396,22 @@ class Resource[T]:
             raise TypeError(msg)
 
     @property
+    def value(self) -> ResolvedValue[T]:
+        return self._value
+
+    @property
+    def credential(self) -> str | None:
+        return self._credential
+
+    @property
+    def lazy(self) -> bool:
+        return self._lazy
+
+    @property
+    def kind(self) -> _FactoryKind | None:
+        return self._kind
+
+    @property
     def external(self) -> bool:
         return self._external
 
@@ -382,7 +421,7 @@ class Resource[T]:
 
     @overload
     @classmethod
-    def from_factory(  # noqa: E704
+    def from_factory[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
         cls,
         factory: ValueFactory[T],
         *args: object,
@@ -393,7 +432,7 @@ class Resource[T]:
     ) -> "ReusableResource[T]": ...
     @overload  # noqa: E301
     @classmethod
-    def from_factory(  # noqa: E704
+    def from_factory[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
         cls,
         factory: LifecycleFactory[T],
         *args: object,
@@ -403,7 +442,7 @@ class Resource[T]:
         **kwargs: object,
     ) -> "ReusableResource[T]": ...
     @classmethod  # noqa: E301
-    def from_factory(
+    def from_factory[T](  # pyright: ignore[reportGeneralTypeIssues]
         cls,
         factory: ResourceFactory[T],
         *args: object,
@@ -421,20 +460,26 @@ class Resource[T]:
 
     @overload
     @classmethod
-    def from_external(cls, value: "Resource[T]") -> Never: ...  # noqa: E704
-    @overload
-    @classmethod
-    def from_external(cls, value: LifecycleFactory[T]) -> Never: ...  # noqa: E704
-    @overload
-    @classmethod
-    def from_external(cls, value: AnyContextManager[T]) -> Never: ...  # noqa: E704
+    def from_external[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
+        cls, value: "Resource[T]"
+    ) -> Never: ...
     @overload  # noqa: E301
     @classmethod
-    def from_external(  # noqa: E704
+    def from_external[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
+        cls, value: LifecycleFactory[T]
+    ) -> Never: ...
+    @overload  # noqa: E301
+    @classmethod
+    def from_external[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
+        cls, value: AnyContextManager[T]
+    ) -> Never: ...
+    @overload  # noqa: E301
+    @classmethod
+    def from_external[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
         cls, value: ResolvedValue[T]
     ) -> "ReusableResource[T]": ...
     @classmethod  # noqa: E301
-    def from_external(  # pyright: ignore[reportInconsistentOverload]
+    def from_external[T](  # pyright: ignore[reportInconsistentOverload,reportGeneralTypeIssues]  # noqa: E501
         cls, value: ResolvedValue[T]
     ) -> "ReusableResource[T]":
         """
@@ -452,7 +497,7 @@ class Resource[T]:
         return _ExternalResource[T](value)
 
     @classmethod
-    def from_lifecycle(
+    def from_lifecycle[T](  # pyright: ignore[reportGeneralTypeIssues]
         cls,
         factory: LifecycleFactory[T] | AnyContextManager[T],
         *,
@@ -573,15 +618,18 @@ class Resource[T]:
 class OneShotResource[T](Resource[T]):
     """A Resource that may only be used once."""
 
+    __slots__ = ()
+
 
 class ReusableResource[T](Resource[T]):
     """A Resource that may be stored in a reusable Context."""
 
+    __slots__ = ()
     _reusable: bool = True
 
 
 class _OwnedResource[T](OneShotResource[T]):
-    pass
+    __slots__ = ()
 
 
 class _LifecycleResource[T](OneShotResource[T]):
@@ -615,6 +663,8 @@ class _LifecycleResource[T](OneShotResource[T]):
 
     """
 
+    __slots__ = ("_factory",)
+
     def __init__(
         self,
         factory: LifecycleFactory[T] | AnyContextManager[T],
@@ -622,20 +672,24 @@ class _LifecycleResource[T](OneShotResource[T]):
         credential: str | None = None,
         lazy: bool = False,
     ) -> None:
-        self.factory = factory
-        self.credential = credential
-        self.lazy = lazy
+        self._factory = factory
+        self._credential = credential
+        self._lazy = lazy
         self._cleanup = None
 
         if is_sync_context_manager(factory):
-            self.kind = _FactoryKind.SYNC_CONTEXTMANAGER
-            self.value = factory
+            self._kind = _FactoryKind.SYNC_CONTEXTMANAGER
+            self._value = factory
         elif is_async_context_manager(factory):
-            self.kind = _FactoryKind.ASYNC_CONTEXTMANAGER
-            self.value = factory
+            self._kind = _FactoryKind.ASYNC_CONTEXTMANAGER
+            self._value = factory
         else:
-            self.kind = classify_factory(factory)
-            self.value = factory()
+            self._kind = classify_factory(factory)
+            self._value = factory()
+
+    @property
+    def factory(self) -> LifecycleFactory[T] | AnyContextManager[T]:
+        return self._factory
 
     def open(self) -> Never:
         raise NotImplementedError(
@@ -692,6 +746,7 @@ class _ExternalResource[T](ReusableResource[T]):
 
     """
 
+    __slots__ = ()
     _external: bool = True
 
     def close(self, value: T) -> None:
@@ -710,6 +765,8 @@ class _FactoryResource[T](ReusableResource[T]):
     ``NotImplementedError``.
     """
 
+    __slots__ = ("_args", "_factory", "_kwargs")
+
     def __init__(  # noqa: E301
         self,
         factory: ResourceFactory[T],
@@ -719,15 +776,15 @@ class _FactoryResource[T](ReusableResource[T]):
         lazy: bool = False,
         **kwargs: object,
     ) -> None:
-        self.factory = factory
-        self.kind = classify_factory(factory, lifecycle=False)
-        self.args = args
-        self.kwargs = kwargs
-        self.credential = credential
-        self.lazy = lazy
+        self._factory = factory
+        self._kind = classify_factory(factory, lifecycle=False)
+        self._args = tuple(args)
+        self._kwargs = MappingProxyType(dict(kwargs))
+        self._credential = credential
+        self._lazy = lazy
         self._cleanup = cleanup
 
-        if self.kind in VALUE_FACTORY_KINDS:
+        if self._kind in VALUE_FACTORY_KINDS:
             if cleanup is None:
                 raise TypeError("ValueFactory requires an explicit cleanup function")
         elif cleanup is not None:
@@ -745,6 +802,18 @@ class _FactoryResource[T](ReusableResource[T]):
                 ResourceInterpretationWarning,
                 stacklevel=2,
             )
+
+    @property
+    def factory(self) -> ResourceFactory[T]:
+        return self._factory
+
+    @property
+    def args(self) -> tuple[object, ...]:
+        return self._args
+
+    @property
+    def kwargs(self) -> Mapping[str, object]:
+        return self._kwargs
 
     def open(self) -> Never:
         msg = "Factory resource entry belongs to the execution layer"

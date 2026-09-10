@@ -5,6 +5,12 @@ riko.context
 
 Provides the execution context for a pipeline.
 
+An immutable definition-layer snapshot. Its fields cannot be reassigned, its
+``inputs``/``resources`` mappings are read-only containers, and every derivation
+(``augment``/``with_resource``/unpickling) constructs a fresh snapshot rather than
+mutating an existing one. Immutability is structural: riko does not recursively freeze
+arbitrary values referenced by an input or a resource.
+
 Examples:
 
     Basic usage::
@@ -14,25 +20,26 @@ Examples:
         >>> context = Context(ExecutionMode.DESCRIBE, inputs={"count": 2})
         >>> context.describe_input
         True
-        >>> context.inputs
-        {'count': 2}
+        >>> context.inputs["count"]
+        2
         >>> context = context.augment(inputs={"limit": 5})
         >>> context.describe_input
         True
-        >>> context.inputs
-        {'limit': 5}
+        >>> "count" in context.inputs
+        False
+        >>> context.inputs["limit"]
+        5
 
 """
 
-from collections.abc import Mapping
-from copy import copy
+from collections.abc import Callable, Mapping
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Literal, Self, overload
+from typing import Literal, NamedTuple, Self, overload
 
 from riko.resources import Resource, ReusableResource
 from riko.types._collections import Inputs
-from riko.types._guards import is_lifecycle_factory, is_mapping
+from riko.types._guards import is_lifecycle_factory
 from riko.types._resource import LifecycleFactory, ResourceDefinition, ReusableResources
 
 
@@ -49,20 +56,36 @@ INPUT_MODES = {ExecutionMode.DESCRIBE_INPUTS, ExecutionMode.DESCRIBE}
 DEPENDENCY_MODES = {ExecutionMode.DESCRIBE_DEPENDENCIES, ExecutionMode.DESCRIBE}
 
 
+def _immutable_mapping[K, V](value: Mapping[K, V]) -> Mapping[K, V]:
+    """Copies ``value`` into a read-only mapping detached from its source."""
+    return MappingProxyType(dict(value))
+
+
+class ContextTuple(NamedTuple):
+    mode: ExecutionMode
+    inputs: Inputs
+    verbose: bool
+    test: bool
+    submodule: bool
+    resources: ReusableResources
+
+
 class Context:
     """
-    A pipeline execution context.
+    An immutable pipeline execution context.
 
     Attributes:
 
         mode: Whether to run or describe the pipeline.
+        inputs: Read-only values that override input defaults.
         verbose: Whether to print debug output.
         test: Whether to use defaults instead of prompting.
-        inputs: Values that override input defaults.
         submodule: Whether inputs come from a parent pipeline.
-        resources: Keyed by name and populated only via ``with_resource``.
+        resources: Read-only, keyed by name, and populated only via ``with_resource``.
 
     """
+
+    __slots__ = ("_inputs", "_mode", "_resources", "_submodule", "_test", "_verbose")
 
     def __init__(
         self,
@@ -72,20 +95,61 @@ class Context:
         test: bool | None = False,
         submodule: bool | None = False,
     ) -> None:
-        self.mode: ExecutionMode = mode or ExecutionMode.RUN
-        self.verbose: bool = bool(verbose)
-        self.test: bool = bool(test)
-        self.inputs: Inputs = dict(inputs or {})
-        self.submodule: bool = bool(submodule)
-        self.resources: ReusableResources = MappingProxyType({})
+        self._mode = mode or ExecutionMode.RUN
+        self._inputs = MappingProxyType(dict(inputs or {}))
+        self._verbose = bool(verbose)
+        self._test = bool(test)
+        self._submodule = bool(submodule)
+        self._resources = MappingProxyType({})
 
-    def __getstate__(self) -> dict[str, object]:
-        return {**self.__dict__, "resources": dict(self.resources)}
+    def __reduce__(self) -> tuple[Callable[[ContextTuple], "Context"], ContextTuple]:
+        context_tuple = ContextTuple(
+            mode=self.mode,
+            inputs=dict(self.inputs),
+            verbose=self.verbose,
+            test=self.test,
+            submodule=self.submodule,
+            resources=dict(self.resources),
+        )
+        return (_restore_context, context_tuple)
 
-    def __setstate__(self, state: Mapping[str, object]) -> None:
-        raw = state.get("resources")
-        resources = raw if is_mapping(raw) else {}
-        self.__dict__.update({**state, "resources": MappingProxyType(dict(resources))})
+    @property
+    def mode(self) -> ExecutionMode:
+        return self._mode
+
+    @property
+    def inputs(self) -> Inputs:
+        return self._inputs
+
+    @property
+    def verbose(self) -> bool:
+        return self._verbose
+
+    @property
+    def test(self) -> bool:
+        return self._test
+
+    @property
+    def submodule(self) -> bool:
+        return self._submodule
+
+    @property
+    def resources(self) -> ReusableResources:
+        return self._resources
+
+    @classmethod
+    def _from_parts(cls, context_tuple: ContextTuple) -> Self:
+        resources = _immutable_mapping(context_tuple.resources)
+        inputs = _immutable_mapping(context_tuple.inputs)
+
+        context = cls.__new__(cls)
+        context._mode = context_tuple.mode
+        context._inputs = inputs
+        context._verbose = context_tuple.verbose
+        context._test = context_tuple.test
+        context._submodule = context_tuple.submodule
+        context._resources = resources
+        return context
 
     def _normalize_def[T](
         self,
@@ -115,12 +179,6 @@ class Context:
 
         return resource
 
-    def _duplicate(self) -> Self:
-        """Copies this Context with independent inputs."""
-        context = copy(self)
-        context.inputs = dict(self.inputs)
-        return context
-
     def augment(
         self,
         *,
@@ -131,20 +189,34 @@ class Context:
         submodule: bool | None = None,
     ) -> Self:
         """
-        Augments a new copy of this Context with independent inputs and resources.
+        Derives a fresh Context snapshot with the given fields overridden.
 
-        Creates a fresh ``context`` copy with modified attributes so a shared Context
-        is safe to reuse. To modify ``resources``, use ``with_resource`` instead of
-        passing a ``resources`` argument.
+        A shared Context is safe to reuse because derivation never mutates the
+        original. To modify ``resources``, use ``with_resource`` instead of passing
+        a ``resources`` argument.
+
+        Args:
+
+            mode: Replacement execution mode, or ``None`` to keep the current one.
+            inputs: Replacement input overrides, or ``None`` to keep the current ones.
+            verbose: Replacement verbose flag, or ``None`` to keep the current one.
+            test: Replacement test flag, or ``None`` to keep the current one.
+            submodule: Replacement submodule flag, or ``None`` to keep the current one.
+
+        Returns:
+
+            A new Context; the original is left unchanged.
 
         """
-        context = self._duplicate()
-        context.mode = context.mode if mode is None else mode
-        context.inputs = context.inputs if inputs is None else dict(inputs)
-        context.verbose = context.verbose if verbose is None else verbose
-        context.test = context.test if test is None else test
-        context.submodule = context.submodule if submodule is None else submodule
-        return context
+        context_tuple = ContextTuple(
+            mode=self.mode if mode is None else mode,
+            inputs=self.inputs if inputs is None else inputs,
+            verbose=self.verbose if verbose is None else verbose,
+            test=self.test if test is None else test,
+            submodule=self.submodule if submodule is None else submodule,
+            resources=self.resources,
+        )
+        return type(self)._from_parts(context_tuple)
 
     @overload
     def with_resource[T](  # noqa: E704
@@ -173,7 +245,7 @@ class Context:
         lazy: bool = False,
     ) -> Self:
         """
-        Binds a resource ``definition`` to ``name`` in a new copy of this Context.
+        Binds a resource ``definition`` to ``name`` in a new Context snapshot.
 
         The ``definition`` is either a ``ReusableResource`` or ``LifecycleFactory``. A
         factory is stored here, but only entered in the execution layer. So
@@ -197,9 +269,15 @@ class Context:
 
         """
         resource = self._normalize_def(definition, credential=credential, lazy=lazy)
-        context = self._duplicate()
-        context.resources = MappingProxyType({**context.resources, name: resource})
-        return context
+        context_tuple = ContextTuple(
+            mode=self.mode,
+            inputs=self.inputs,
+            verbose=self.verbose,
+            test=self.test,
+            submodule=self.submodule,
+            resources={**self.resources, name: resource},
+        )
+        return type(self)._from_parts(context_tuple)
 
     @property
     def describe_input(self) -> bool:
@@ -213,8 +291,14 @@ class Context:
 
     def __repr__(self) -> str:
         content = f"mode={self.mode}, verbose={self.verbose}, test={self.test}, "
-        content += f"inputs={self.inputs}, submodule={self.submodule}"
+        content += f"inputs={dict(self.inputs)}, submodule={self.submodule}"
         return f"Context({content})"
+
+
+def _restore_context(*args) -> Context:
+    """Rebuilds a pickled Context through the immutable derivation path."""
+    context_tuple = ContextTuple(*args)
+    return Context()._from_parts(context_tuple)
 
 
 __all__ = ["Context", "ExecutionMode"]

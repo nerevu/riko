@@ -15,6 +15,13 @@ New
   arrives and yields nothing. It is a distinct operation from ``func`` (a map), so
   passing both raises ``TypeError``.
 
+Changes
+~~~~~~~
+
+- ``Context`` is now a fully immutable snapshot and ``Resource`` definitions are
+  structurally immutable. Derive a changed context with ``augment``/``with_resource``
+  instead of assigning to its fields, inputs, or resources.
+
 Fixes
 ~~~~~
 
