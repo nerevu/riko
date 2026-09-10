@@ -112,24 +112,9 @@ public sink() terminal parallel to write()
 global Arrow -> Polars -> Pandas backend preference
 ```
 
-Current replacements include:
-
-- immutable Context + Resource definitions; private execution owns resolved resource values;
-- canonical Workflow v2 with explicit node/edge/port identity;
-- one execution EventSink transport;
-- object-first Publisher/Subscription and `SubscribeNode` + `PublishEdge`;
-- `Pipeline.poll(source, interval=...)` for source recurrence;
-- provider `wait_operation(...)` only for an already-started operation;
-- one `Pipeline(batch=True, batch_size=...)` batch model with capability/cost negotiation;
-- explicit `Pipeline.cache()` backed through Mezmoize;
-- one FeedState/StateStore/CAS checkpoint model;
-- `Pipeline.write()`/ActionNode effects with out-of-band results; no target public sink terminal;
-- agents reuse Pipeline + existing loop;
-- Click-native CLI extensions;
-- `with_execution(...)` for execution-wide options;
-- Python iteration (`list`, `for`, `async for`) as execution mechanism.
-
-See [gameplans/ownership.md](gameplans/ownership.md) for the owner map.
+Each superseded shape has a current replacement owned by a gameplan; the
+superseded-shape → replacement → owner map lives in
+[gameplans/ownership.md](gameplans/ownership.md).
 
 ---
 
@@ -167,30 +152,8 @@ action contracts are stable.
 The authoritative graph is
 [gameplans/implementation-sequence.md](gameplans/implementation-sequence.md).
 
-High-level order:
-
-```text
-R0   characterization + internal naming
-R1   stable errors
-R2A  canonical value encoding
-R2B  semantic identity + explicit version contract
-R3   immutable Context + Resource definitions
-R4A  public Pipeline definition + canonical Workflow v2 IR
-R4B  private SyncExecution/AsyncExecution + task group/exit stack/bridge/EventSink transport
-R5A  FeedResult / Metadata / private per-item provenance
-  ├──────────────> R7 execution-owned publish/subscribe + streaming split
-  ↓
-R5B  CacheNode runtime / Mezmoize replay
-  ↓
-R5C  WriteNode + ActionNode effects
-  ↓
-R6   StateStore / checkpoint / CAS / idempotency
-R8   single-Pipeline batch execution
-R9   additive iterative loop state
-R10  final Feed-native compatibility cleanup
-R11  adapters/providers/orchestration/MCP
-R12  external extension proof + release gate
-```
+The R0–R12 stages and their edges live there; this doc keeps only the reconciliation caveats that
+frame how the P-track relates to that graph.
 
 Feed-native module conversion occurs incrementally as its owning runtime capability lands; R10 is the
 final seam-removal/parity proof, not the start of the migration.
@@ -208,16 +171,9 @@ their own unrelated `R<n>` labels. Always qualify an R label when ambiguity is p
 This is the central cross-cutting API change and remains a release gate rather than a standalone
 P-phase.
 
-Semantic owners:
-
-- Workflow v2 definition/normalization: `gameplans/extensibility.md`;
-- execution/resource/state semantics: `gameplans/execution-semantics.md`;
-- execution event transport: `gameplans/events.md`;
-- cache/replay: `gameplans/cache.md`;
-- write/action effects: `gameplans/effects.md`;
-- callable/decorator specialization: `gameplans/callable-pipes.md`;
-- source normalization/Feed-native migration: `gameplans/feed-native-streaming.md`;
-- fan-out: `gameplans/fanout-topology.md`.
+Semantic owners for each cross-cutting piece are mapped in
+[gameplans/ownership.md](gameplans/ownership.md) and routed from ROADMAP's "Which doc for which
+info" table; this section keeps only the release-gate file map and exit tests, which it owns.
 
 ### Target file map
 
