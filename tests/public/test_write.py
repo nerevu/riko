@@ -3,7 +3,7 @@
 Behavioral tests for the ``write`` sink beyond its doctests.
 
 Covers sync/async parity, unwritable configurations (missing url, invalid or
-``list``/``tuple`` target), and the pass-through guarantee that the source
+``list``/``tuple`` fmt), and the pass-through guarantee that the source
 sequence survives unchanged.
 """
 
@@ -43,8 +43,8 @@ class TestWriteParity:
     @pytest.mark.anyio
     async def test_json_parity(self, tmp_path):
         sync_path, async_path = tmp_path / "sync.json", tmp_path / "async.json"
-        list(pipe(ITEMS, conf=WriteConf({"url": sync_path, "target": "json"})))
-        conf = WriteConf({"url": async_path, "target": "json"})
+        list(pipe(ITEMS, conf=WriteConf({"url": sync_path, "fmt": "json"})))
+        conf = WriteConf({"url": async_path, "fmt": "json"})
         _ = [item async for item in async_pipe(ITEMS, conf=conf)]
         expected = b'[{"x": 0}, {"x": 1}, {"x": 2}]'
         assert self._read(sync_path) == expected
@@ -53,8 +53,8 @@ class TestWriteParity:
     @pytest.mark.anyio
     async def test_csv_parity(self, tmp_path):
         sync_path, async_path = tmp_path / "sync.csv", tmp_path / "async.csv"
-        list(pipe(ITEMS, conf=WriteConf({"url": sync_path, "target": "csv"})))
-        conf = WriteConf({"url": async_path, "target": "csv"})
+        list(pipe(ITEMS, conf=WriteConf({"url": sync_path, "fmt": "csv"})))
+        conf = WriteConf({"url": async_path, "fmt": "csv"})
         _ = [item async for item in async_pipe(ITEMS, conf=conf)]
         sync_bytes = self._read(sync_path)
         assert sync_bytes == self._read(async_path)
@@ -64,35 +64,35 @@ class TestWriteParity:
 class TestWriteSkips:
     """Unwritable configurations degrade: nothing is written, items pass through."""
 
-    @pytest.mark.parametrize("target", ["bogus", "list", "tuple"])
-    def test_sync_bad_target_skips_but_passes_through(self, tmp_path, target):
+    @pytest.mark.parametrize("fmt", ["bogus", "list", "tuple"])
+    def test_sync_bad_target_skips_but_passes_through(self, tmp_path, fmt):
         path = tmp_path / "out"
-        conf = cast(WriteConf, {"url": path, "target": target})
+        conf = cast(WriteConf, {"url": path, "fmt": fmt})
         assert list(pipe(ITEMS, conf=conf)) == ITEMS
         assert not path.exists()
 
-    @pytest.mark.parametrize("target", ["bogus", "list", "tuple"])
+    @pytest.mark.parametrize("fmt", ["bogus", "list", "tuple"])
     @async_test
-    async def test_async_bad_target_skips_but_passes_through(self, tmp_path, target):
+    async def test_async_bad_target_skips_but_passes_through(self, tmp_path, fmt):
         path = tmp_path / "out"
-        conf = WriteConf({"url": path, "target": target})
+        conf = WriteConf({"url": path, "fmt": fmt})
         result = async_pipe(ITEMS, conf=conf)
         assert [item async for item in result] == ITEMS
         assert not path.exists()
 
     def test_sync_missing_url_skips_but_passes_through(self):
-        conf = cast(WriteConf, {"target": "json"})
+        conf = cast(WriteConf, {"fmt": "json"})
         assert list(pipe(ITEMS, conf=conf)) == ITEMS
 
     @async_test
     async def test_async_missing_url_skips_but_passes_through(self):
-        conf = cast(WriteConf, {"target": "json"})
+        conf = cast(WriteConf, {"fmt": "json"})
         result = async_pipe(ITEMS, conf=conf)
         assert [item async for item in result] == ITEMS
 
 
 class TestWriteTargetFromExtension:
-    """When ``target`` is omitted, the url extension selects the converter."""
+    """When ``fmt`` is omitted, the url extension selects the converter."""
 
     def _read(self, path):
         with open(path, mode="rb") as f:
@@ -112,10 +112,11 @@ class TestWriteTargetFromExtension:
 
     def test_explicit_target_overrides_extension(self, tmp_path):
         path = tmp_path / "out.csv"
-        list(pipe(ITEMS, conf=WriteConf({"url": path, "target": "json"})))
+        list(pipe(ITEMS, conf=WriteConf({"url": path, "fmt": "json"})))
         assert self._read(path) == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
-    def test_unknown_extension_falls_back_to_json(self, tmp_path):
+    def test_unknown_extension_fails(self, tmp_path):
         path = tmp_path / "out.dat"
         list(pipe(ITEMS, conf=WriteConf({"url": path})))
-        assert self._read(path) == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
+        assert not path.exists()
+        # TODO: catch 'dat' is not a valid Formats error log

@@ -13,8 +13,8 @@ if TYPE_CHECKING:
     from riko.cast import CastType, LocationType, SortableCastType
 
     from ._module_ids import LoopableModuleId, ModuleId
-    from ._names import TargetLike
     from ._scalars import BasicValue
+    from ._write import FmtLike
     from .compile import PipeModule
 
 
@@ -843,7 +843,7 @@ class UrlParseConf(TypedDict, total=False):
 
 class WriteConf(TypedDict, total=False):
     url: Required[str | Path]
-    target: TargetLike | None
+    fmt: FmtLike | None
     mode: str
 
 

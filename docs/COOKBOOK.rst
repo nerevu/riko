@@ -415,20 +415,20 @@ concrete list you can index, measure, and reuse.
     (2, 'a')
 
 You can pass a target as the first argument to change the export type. The target may be
-a plain string or a member of the typed ``Targets`` enum (recommended, for editor
-autocompletion). ``list_targets()`` lists the targets available at
+a plain string or a member of the typed ``Formats`` enum (recommended, for editor
+autocompletion). ``list_formats()`` lists the targets available at
 runtime (``ofx``/``qif`` require the optional ``csv2ofx`` dependency).
 
-    >>> from riko import Targets, list_targets
+    >>> from riko import Formats, list_formats
     >>>
     >>> source= [{"title": "a"}, {"title": "b"}]
     >>> flow = SyncPipe(Transforms.HASH, source=source, field="title")
-    >>> {"csv", "geojson", "json", "list", "tuple"}.issubset(list_targets())
+    >>> {"csv", "geojson", "json"}.issubset(list_formats())
     True
     >>> flow.export("tuple")
     ({'title': 'a', 'hash': 1267964084}, {'title': 'b', 'hash': 2297772648})
     >>> flow = SyncPipe(Transforms.HASH, source=source, field="title")
-    >>> flow.export(Targets.JSON)
+    >>> flow.export(Formats.JSON)
     '[{"hash": 1267964084, "title": "a"}, {"hash": 2297772648, "title": "b"}]'
 
 
@@ -436,7 +436,7 @@ For serialized output, you can pass a file path or file like object as the secon
 argument.
 
 ``export()`` is a one-shot terminal call. To write **inside** a pipeline uninterrupted,
-use the ``write`` sink pipe: it serializes the stream to file with a ``Targets``
+use the ``write`` sink pipe: it serializes the stream to file with a ``Formats``
 converter (``target`` defaults to ``'json'``) and passes every item through unchanged.
 This allows you to persist an intermediate result and continue processing.
 

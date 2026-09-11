@@ -2,8 +2,8 @@
 """
 Tests the write target adapters and the ``write``/``sink`` verbs (``riko.targets``).
 
-Covers ``File`` serialization (sync + async), capability-aware ``build_write``
-validation, destination/format resolution, the format-aware ``file_writer``
+Covers ``File`` serialization (sync + async), capability-aware ``prepare_write``
+validation, destination/format resolution, the format-aware ``prepare_write``
 (negotiated stream vs. buffer), and the collection ``write``/``sink`` surface end
 to end.
 """
@@ -18,12 +18,11 @@ from riko.targets import (
     File,
     WriteCapabilities,
     WriteResult,
-    build_write,
-    file_writer,
+    prepare_write,
     resolve_format,
     resolve_target,
 )
-from riko.writes import WriteMode, WriteOperation
+from riko.types._write import WriteMode, WriteOperation
 from tests import async_test
 
 ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
@@ -38,16 +37,10 @@ def _isolate_pubsub():
 
 @dataclass(frozen=True)
 class _RecordStore:
-    """A non-serializing keyed target, for the record-store ``build_write`` branch."""
+    """A non-serializing keyed target, for the record-store ``prepare_write`` branch."""
 
     def capabilities(self, fmt=None) -> WriteCapabilities:
         return WriteCapabilities(modes=frozenset(WriteMode), serializes=False)
-
-    def deliver(self, records, write, *, fmt=None) -> WriteResult:
-        return WriteResult(created=len(list(records)))
-
-    async def adeliver(self, records, write, *, fmt=None) -> WriteResult:
-        return self.deliver(records, write, fmt=fmt)
 
 
 class TestResolveTarget:
@@ -85,11 +78,11 @@ class TestResolveFormat:
 class TestBuildWrite:
     def test_file_forbids_keys(self):
         with pytest.raises(ValueError, match="forbids 'keys'"):
-            build_write(File("out.csv"), "append", keys="id")
+            prepare_write(File("out.csv"), "append", keys="id")
 
     def test_file_unsupported_mode(self):
         with pytest.raises(ValueError, match="does not support the 'merge'"):
-            build_write(File("out.csv"), "merge")
+            prepare_write(File("out.csv"), "merge")
 
     def test_file_append_rejected_for_whole_document_format(self):
         """
@@ -97,25 +90,25 @@ class TestBuildWrite:
         documents into invalid output), so ``append`` is rejected at prepare.
         """
         with pytest.raises(ValueError, match="does not support the 'append'"):
-            build_write(File("out.json"), "append")
+            prepare_write(File("out.json"), "append")
 
         with pytest.raises(ValueError, match="does not support the 'append'"):
-            build_write(File("out.geojson"), "append")
+            prepare_write(File("out.geojson"), "append")
 
     def test_file_append_allowed_for_line_oriented_format(self):
         for dest in ("out.csv", "out.jsonl"):
-            spec = build_write(File(dest), "append")
+            spec = prepare_write(File(dest), "append")
             assert spec.mode is WriteMode.APPEND
 
     def test_record_store_routes_through_write_operation(self):
-        spec = build_write(_RecordStore(), "merge", keys="endpoint_id")
+        spec = prepare_write(_RecordStore(), "merge", keys="endpoint_id")
 
         assert spec.mode is WriteMode.MERGE
-        assert spec.keys == ("endpoint_id",)
+        assert spec.match_key == ("endpoint_id",)
 
     def test_record_store_missing_keys_rejected(self):
         with pytest.raises(ValueError, match="requires 'keys'"):
-            build_write(_RecordStore(), "merge")
+            prepare_write(_RecordStore(), "merge")
 
 
 class TestFileDeliver:
@@ -142,19 +135,19 @@ class TestFileWriter:
         [("out.csv", True), ("out.jsonl", True), ("out.json", False), ("out", False)],
     )
     def test_streamability_negotiated_from_extension(self, dest, streams):
-        assert file_writer(dest).stream is streams
+        assert prepare_write(dest).streamable is streams
 
     def test_keyed_mode_rejected(self):
         with pytest.raises(ValueError, match="append, replace"):
-            file_writer("out.csv", mode="merge")
+            prepare_write("out.csv", mode="merge")
 
     def test_append_rejected_for_non_appendable_format(self):
         with pytest.raises(ValueError, match="cannot be appended to"):
-            file_writer("out.json", mode="append")
+            prepare_write("out.json", mode="append")
 
     def test_append_allowed_for_line_oriented_format(self):
-        assert file_writer("out.csv", mode="append").mode is WriteMode.APPEND
-        assert file_writer("out.jsonl", mode="append").mode is WriteMode.APPEND
+        assert prepare_write("out.csv", mode="append").mode is WriteMode.APPEND
+        assert prepare_write("out.jsonl", mode="append").mode is WriteMode.APPEND
 
 
 class TestSyncWrite:
@@ -245,7 +238,7 @@ class TestSink:
 
     def test_file_rejects_keys(self, tmp_path):
         with pytest.raises(ValueError, match="forbids 'keys'"):
-            SyncPipe(source=ITEMS).sink(str(tmp_path / "out.csv"), keys="x")
+            SyncPipe(source=ITEMS).sink(str(tmp_path / "out.csv"), key="x")
 
     @async_test
     async def test_async_sink(self, tmp_path):

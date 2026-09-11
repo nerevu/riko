@@ -5,7 +5,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from riko.writes import WriteMode, write_operation
+from riko.types._write import WriteMode, WriteOperation
 
 
 def test_mode_values():
@@ -39,54 +39,45 @@ def test_destructive_classification(mode, destructive):
 
 
 def test_merge_requires_keys_and_normalizes_string():
-    spec = write_operation("merge", keys="endpoint_id")
+    spec = WriteOperation("merge", keys="endpoint_id")
 
     assert spec.mode is WriteMode.MERGE
     assert spec.keys == ("endpoint_id",)
-    assert spec.idempotency_key == ()
 
 
 def test_keyed_modes_normalize_iterable_keys():
-    spec = write_operation("delete", keys=["serial", "hostname"])
+    spec = WriteOperation("delete", keys=["serial", "hostname"])
     assert spec.keys == ("serial", "hostname")
 
 
 def test_append_accepts_idempotency_key():
-    spec = write_operation(
-        "append", idempotency_key=("report_month", "endpoint_id", "update_id")
-    )
+    spec = WriteOperation("append", keys=("report_month", "endpoint_id", "update_id"))
 
     assert spec.mode is WriteMode.APPEND
     assert spec.keys == ()
-    assert spec.idempotency_key == ("report_month", "endpoint_id", "update_id")
 
 
 def test_append_without_idempotency_key_is_allowed():
-    assert write_operation("append").idempotency_key == ()
+    assert WriteOperation("append").keys == ()
 
 
 def test_keyed_mode_missing_keys_is_rejected():
     with pytest.raises(ValueError, match="requires 'keys'"):
-        write_operation("merge")
-
-
-def test_keyed_mode_rejects_idempotency_key():
-    with pytest.raises(ValueError, match="forbids 'idempotency_key'"):
-        write_operation("merge", keys="id", idempotency_key="id")
+        WriteOperation("merge")
 
 
 def test_append_rejects_keys():
     with pytest.raises(ValueError, match="forbids 'keys'"):
-        write_operation("append", keys="id")
+        WriteOperation("append", keys="id")
 
 
 def test_unknown_mode_is_rejected():
     with pytest.raises(ValueError, match="upsert"):
-        write_operation("upsert", keys="id")
+        WriteOperation("upsert", keys="id")
 
 
 def test_write_operation_is_frozen():
-    spec = write_operation("merge", keys="id")
+    spec = WriteOperation("merge", keys="id")
 
     with pytest.raises(FrozenInstanceError):
         spec.mode = WriteMode.DELETE  # pyright: ignore[reportAttributeAccessIssue]

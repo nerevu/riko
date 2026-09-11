@@ -59,7 +59,7 @@ class PreCaster[T](TypedDict):
     func: Caster[T]
 
 
-type ConversionOutput = Items | Iterable[str] | StringIO
+type ConversionOutput = Iterable[str] | StringIO
 type ConversionFunc = Callable[..., ConversionOutput]
 
 # Sync

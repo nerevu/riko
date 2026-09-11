@@ -38,58 +38,46 @@ Attributes:
 """
 
 from logging import Logger
-from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pygogo as gogo
 from meza import io
 
+from riko._formats import CONVERSION_FUNCS, resolve_format
 from riko.bado.io import async_write
 from riko.types._configs import WriteObjconf
-from riko.types._io import IOFileLikeType
-from riko.types._names import TargetLike
+from riko.types._io import IOFileLike, IOFileLikeType
 from riko.types._options import Defaults, Opts
-from riko.types._scalars import AnyStrType
-from riko.types._streams import Stream
+from riko.types._scalars import AnyStr, AnyStrType
+from riko.types._streams import Items, Stream
 from riko.types._wrappers import PipeTuples
 
 from . import operator
 
 OPTS: Opts = Opts()
-DEFAULTS: Defaults = Defaults({"target": None, "mode": "wb+"})
+DEFAULTS: Defaults = Defaults({"fmt": None, "mode": "wb+"})
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def _resolve_target(
-    url: str | Path | None, target: TargetLike | None, *funcs: TargetLike
-) -> TargetLike:
-    """
-    Resolves the export target from an explicit ``target``, else the url extension.
+def _validate(items: Items, objconf: WriteObjconf) -> AnyStr | IOFileLike | None:
+    items = list(items)
+    content = None
 
-    An explicit ``target`` wins. Otherwise the url's file extension (lowercased,
-    sans dot) is used when it names a known converter. This allows
-    ``write(conf={"url": "out.csv"})`` to select ``csv`` as the ``target``. A url with
-    no / an unknown extension falls back to ``json``.
+    try:
+        fmt = resolve_format(objconf.url, objconf.fmt)
+    except ValueError as e:
+        logger.warning(f"{e}")
+    else:
+        convert = CONVERSION_FUNCS[fmt]
 
-    Args:
+        if not objconf.url:
+            logger.warning("The url is not set, skipping writing")
+        elif (content := convert([dict(item) for item in items])) is None:
+            logger.warning(f"The {fmt} converter produced no content")
+        elif not isinstance(content, (AnyStrType, IOFileLikeType)):
+            logger.warning(f"The {fmt} converter produced unwritable content")
 
-        url: The destination file path (a ``str``, ``Path``, or unset).
-        target: The configured export format, or ``None`` to derive one.
-        funcs: The known converters, keyed by target.
-
-    Returns:
-
-        The resolved export target.
-
-    """
-    resolved = "json"
-
-    if target:
-        resolved = target
-    elif url and (ext := Path(url).suffix.lstrip(".").lower()) in funcs:
-        resolved = ext
-
-    return resolved
+    return cast(AnyStr | IOFileLike, content)
 
 
 async def async_parser(
@@ -103,8 +91,7 @@ async def async_parser(
         stream: The source. Note: this shares the ``tuples`` iterator, so
             consuming it will consume ``tuples`` as well.
 
-        objconf: The item independent configuration, containing ``url``,
-            ``target``, and ``mode``.
+        objconf: The item independent configuration: ``url``, ``fmt``, and ``mode``.
 
         tuples: Iterable of ``(item, objconf)`` pairs, where ``item`` is an
             element in the source stream. Note: this shares the ``stream``
@@ -122,7 +109,7 @@ async def async_parser(
         >>>
         >>> async def main():
         ...     async with get_async_temp_file() as fp:
-        ...         conf = {"url": fp.name, "target": "json", "mode": "wb+"}
+        ...         conf = {"url": fp.name, "fmt": "json", "mode": "wb+"}
         ...         objconf = Objectify(conf)
         ...         stream = [{"x": 0}, {"x": 1}]
         ...         tuples = zip(stream, repeat(objconf))
@@ -135,22 +122,9 @@ async def async_parser(
         b'[{"x": 0}, {"x": 1}]'
 
     """
-    from riko.collections import CONVERSION_FUNCS  # noqa: PLC0415
-
     items = list(stream)
-    target = _resolve_target(objconf.url, objconf.target, *CONVERSION_FUNCS)
 
-    if not objconf.url:
-        logger.warning("The url is not set, skipping writing")
-    elif target in {"list", "tuple"}:
-        logger.warning(f"The target {target} is not supported for writing")
-    elif (convert := CONVERSION_FUNCS.get(target)) is None:
-        logger.warning(f"The target {target} is not a known converter")
-    elif (content := convert([dict(item) for item in items])) is None:
-        logger.warning(f"The {target} converter produced no content")
-    elif not isinstance(content, (AnyStrType, IOFileLikeType)):
-        logger.warning(f"The {target} converter produced unwritable content")
-    else:
+    if content := _validate(items, objconf):
         await async_write(objconf.url, content, mode=objconf.mode)
 
     return iter(items)
@@ -167,8 +141,7 @@ def parser(
         stream: The source. Note: this shares the ``tuples`` iterator, so
             consuming it will consume ``tuples`` as well.
 
-        objconf: The item independent configuration, containing ``url``,
-            ``target``, and ``mode``.
+        objconf: The item independent configuration: ``url``, ``fmt``, and ``mode``.
 
         tuples: Iterable of ``(item, objconf)`` pairs, where ``item`` is an
             element in the source stream. Note: this shares the ``stream``
@@ -185,7 +158,7 @@ def parser(
         >>> from riko import get_temp_file
         >>>
         >>> with get_temp_file() as fp:
-        ...     objconf = Objectify({"url": fp.name, "target": "json", "mode": "wb+"})
+        ...     objconf = Objectify({"url": fp.name, "fmt": "json", "mode": "wb+"})
         ...     stream = [{"x": 0}, {"x": 1}]
         ...     tuples = zip(stream, repeat(objconf))
         ...     next(parser(stream, objconf, tuples))
@@ -194,22 +167,9 @@ def parser(
         b'[{"x": 0}, {"x": 1}]'
 
     """
-    from riko.collections import CONVERSION_FUNCS  # noqa: PLC0415
-
     items = list(stream)
-    target = _resolve_target(objconf.url, objconf.target, *CONVERSION_FUNCS)
 
-    if not objconf.url:
-        logger.warning("The url is not set, skipping writing")
-    elif target in {"list", "tuple"}:
-        logger.warning(f"The target {target} is not supported for writing")
-    elif (convert := CONVERSION_FUNCS.get(target)) is None:
-        logger.warning(f"The target {target} is not a known converter")
-    elif (content := convert([dict(item) for item in items])) is None:
-        logger.warning(f"The {target} converter produced no content")
-    elif not isinstance(content, (AnyStrType, IOFileLikeType)):
-        logger.warning(f"The {target} converter produced unwritable content")
-    else:
+    if content := _validate(items, objconf):
         io.write(objconf.url, content, mode=objconf.mode)
 
     return iter(items)
@@ -231,8 +191,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
             url (str | Path): the destination file path
 
-            target (str): the export format (default: derived from the ``url``
-                extension when recognized, else 'json')
+            fmt (str): the export format (default: derived from the ``url`` extension
+                when recognized, else 'json')
 
             mode (str): the file open mode (default: 'wb+')
 
@@ -254,7 +214,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Notes:
 
         Nothing is written and a warning is logged when ``url`` is unset,
-        ``target`` is ``'list'``/``'tuple'``, ``target`` is invalid, or the converter
+        ``fmt`` is ``'list'``/``'tuple'``, ``fmt`` is invalid, or the converter
         produces no content. The stream still passes through unchanged in every case.
 
     Examples:
@@ -263,7 +223,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>>
         >>> async def main():
         ...     async with get_async_temp_file() as fp:
-        ...         conf = {"url": fp.name, "target": "csv"}
+        ...         conf = {"url": fp.name, "fmt": "csv"}
         ...         stream = async_pipe([{"x": 0}, {"x": 1}], conf=conf)
         ...         print(await anext(stream))
         ...         print((await fp.read()).split())
@@ -292,8 +252,8 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
             url (str | Path): the destination file path
 
-            target (str): the export format (default: derived from the ``url``
-                extension when recognized, else 'json')
+            fmt (str): the export format (default: derived from the ``url`` extension
+                when recognized, else 'json')
 
             mode (str): the file open mode (default: 'wb+')
 
@@ -315,7 +275,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Notes:
 
         Nothing is written and a warning is logged when ``url`` is unset,
-        ``target`` is ``'list'``/``'tuple'``, ``target`` is invalid, or the converter
+        ``fmt`` is ``'list'``/``'tuple'``, ``fmt`` is invalid, or the converter
         produces no content. The stream still passes through unchanged in every case.
 
     Examples:
@@ -323,7 +283,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>> from riko import get_temp_file
         >>>
         >>> with get_temp_file() as fp:
-        ...     conf = {"url": fp.name, "target": "csv"}
+        ...     conf = {"url": fp.name, "fmt": "csv"}
         ...     stream = pipe([{"x": 0}, {"x": 1}], conf=conf)
         ...     next(stream)
         ...     fp.read().split()

@@ -7,6 +7,10 @@ v0.77.4 (Unreleased)
 New
 ~~~
 
+- Add ``jsonl`` file format as an export target. It serializes each item as a JSON object
+  on its own line. This ``Formats`` can also e used in the new ``write`` and ``sink``
+  methods.
+
 - A pipe may now declare ``resources`` and receive the resolved handles. Bind them with
   ``Context.with_resource``; riko closes the resources it owns and never closes one
   supplied by the caller.
@@ -17,6 +21,17 @@ New
 
 Changes
 ~~~~~~~
+
+- Renamed the ``riko.Targets`` export enum to ``riko.Formats``, since its members name
+  serialization formats; ``export``/``write`` accept the same members under the new name.
+
+- Added chainable ``write`` and terminal ``sink`` methods to ``SyncPipe`` and
+  ``SyncCollection``. They take the destination directly, e.g., ``write("out.csv")``)
+  and accept ``fmt`` (``Formats``/str, e.g., ``json``) and ``mode`` (``WriteMode``/str,
+  e.g., ``append``/``replace``). ``csv`` and ``jsonl`` formats are written
+  incrementally. Any other format buffers until completion. These methods shadow the
+  ``write`` module, so use ``pipe("write", conf={"url": ...})`` when you need the old
+  module call shape.
 
 - ``Context`` is now a fully immutable snapshot and ``Resource`` definitions are
   structurally immutable. Derive a changed context with ``augment``/``with_resource``

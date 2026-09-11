@@ -329,7 +329,7 @@ drain. A `strict` xfail in `tests/public/test_collections.py` marks the shipped 
 > **Partial.** Batch/dataframe path (Arrow/Polars/SQL) → [database-transforms.md §25](gameplans/database-transforms.md#25-conversion-and-dataframe-integration).
 
 Meza-backed export converters ship: `csv` / `json` / `geojson` / `ofx` / `qif` / `list` /
-`tuple` (`riko/collections.py`; `list_targets()` lists registered export converters). The typed
+`tuple` (`riko/collections.py`; `list_formats()` lists registered export converters). The typed
 `Targets` `StrEnum` (stable `riko` surface) is the export-format layer over that
 registry — `export(items, Targets.JSON)` or the plain string; `CONVERSION_FUNCS` is keyed by
 `Targets` members, drift-guarded by `TestExportTargets`. This is riko's terminal-output surface,

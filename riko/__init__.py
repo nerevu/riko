@@ -29,9 +29,8 @@ from riko.collections import (
     PipeState,
     SyncCollection,
     SyncPipe,
-    Targets,
     export,
-    list_targets,
+    list_formats,
 )
 from riko.compile import (
     build_pipeline,
@@ -50,6 +49,7 @@ from riko.exceptions import (
 from riko.modules import describe_module, get_module_metadata, list_modules
 from riko.modules._names import Modules, Sinks, Sources, Transforms
 from riko.paths import get_path, get_temp_file
+from riko.types._write import Formats
 
 
 def __getattr__(name: str) -> str:
@@ -67,6 +67,7 @@ __all__ = [
     "AsyncPipe",
     "Context",
     "ExecutionMode",
+    "Formats",
     "Modules",
     "PipeState",
     "PipelineStateError",
@@ -75,7 +76,6 @@ __all__ = [
     "Sources",
     "SyncCollection",
     "SyncPipe",
-    "Targets",
     "Transforms",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
@@ -100,8 +100,8 @@ __all__ = [
     "get_temp_file",
     "isasync",
     "issync",
+    "list_formats",
     "list_modules",
-    "list_targets",
     "parse_pipe_def",
     "run",
 ]

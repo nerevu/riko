@@ -96,7 +96,7 @@ from contextlib import aclosing
 from enum import StrEnum
 from functools import partial
 from io import StringIO
-from itertools import chain, count, repeat
+from itertools import chain, repeat
 from logging import Logger
 from multiprocessing import Pool as CPUPool
 from multiprocessing import cpu_count
@@ -119,7 +119,9 @@ from typing import (
 
 import pygogo as gogo
 
+from riko._formats import CONVERSION_FUNCS
 from riko._pubsub._types import ReceiveFunc
+from riko._write_session import file_write_session
 from riko.types._collections import Inputs
 from riko.types._guards import is_mapping
 from riko.types._options import SkipIf
@@ -130,12 +132,7 @@ try:
     from csv2ofx.ofx import OFX
 except ModuleNotFoundError:
     mapping = OFX = QIF = gen_data = None
-else:
-    from csv2ofx.mappings.default import mapping
-    from csv2ofx.qif import QIF
-    from csv2ofx.utils import gen_data
 
-from meza import convert as cv
 from meza import io
 
 from riko._constants import DEF_CONNECTION_COUNT
@@ -153,14 +150,8 @@ from riko.context import Context, ExecutionMode
 from riko.exceptions import PipelineStateError
 from riko.ext._resolver import pipe_resolver
 from riko.ext.names import normalize_module_name
-from riko.targets import (
-    Destination,
-    WriteResult,
-    build_write,
-    file_writer,
-    resolve_target,
-)
-from riko.types._names import ModuleNameLike, TargetLike, TargetName
+from riko.targets import Destination, WriteResult, prepare_write, resolve_target
+from riko.types._names import ModuleNameLike
 from riko.types._streams import (
     AsyncRikoSource,
     AsyncRikoStream,
@@ -174,11 +165,10 @@ from riko.types._streams import (
 )
 from riko.types._wrappers import (
     AsyncPipeWrapper,
-    ConversionFunc,
     SplitterWrapperOutput,
     SyncPipeWrapper,
 )
-from riko.writes import KeyLike, WriteMode
+from riko.types._write import ExportType, FmtLike, Formats, KeyLike, WriteMode
 
 type AnyPool = ThreadPoolType | CPUPoolType
 type PoolFactory = Callable[..., AnyPool]
@@ -188,12 +178,12 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 __all__ = [
     "AsyncCollection",
     "AsyncPipe",
+    "Formats",
     "PipeState",
     "SyncCollection",
     "SyncPipe",
-    "Targets",
     "export",
-    "list_targets",
+    "list_formats",
 ]
 
 
@@ -231,18 +221,6 @@ def _is_template(obj: object) -> TypeGuard[TemplatePipe]:
         and obj.source is None
         and obj._state is PipeState.NEW
     )
-
-
-class Targets(TargetName):
-    """A type-safe ``export`` target."""
-
-    CSV = "csv"
-    GEOJSON = "geojson"
-    JSON = "json"
-    LIST = "list"
-    OFX = "ofx"
-    QIF = "qif"
-    TUPLE = "tuple"
 
 
 class PoolScope(StrEnum):
@@ -446,64 +424,19 @@ async def _spent_aiter() -> AsyncGenerator[RikoItem, None]:
     yield  # pragma: no cover
 
 
-def records2ofx(items: RikoItems, **_: object) -> Iterable[str]:
-    """Serializes records as OFX. Registered only with the ``finance`` extra."""
-    if not (OFX and gen_data):
-        raise RuntimeError(
-            "The ofx converter is unavailable. Install riko with the 'finance' extra."
-        )
-
-    ofx = OFX(mapping)
-    groups = ofx.gen_groups(items)
-    trxns = ofx.gen_trxns(groups)
-    cleaned_trxns = ofx.clean_trxns(trxns)
-    data = gen_data(cleaned_trxns)
-    return chain(ofx.header(), ofx.gen_body(data), ofx.footer())
-
-
-def records2qif(items: RikoItems, **_: object) -> Iterable[str]:
-    """Serializes records as QIF. Registered only with the ``finance`` extra."""
-    if not (QIF and gen_data):
-        raise RuntimeError(
-            "The qif converter is unavailable. Install riko with the 'finance' extra."
-        )
-
-    qif = QIF(mapping)
-    groups = qif.gen_groups(items)
-    trxns = qif.gen_trxns(groups)
-    cleaned_trxns = qif.clean_trxns(trxns)
-    data = gen_data(cleaned_trxns)
-    return chain(qif.gen_body(data), qif.footer())
-
-
-CONVERSION_FUNCS: dict[TargetLike, ConversionFunc] = {
-    # "array": cv.records2array,
-    Targets.CSV: cv.records2csv,
-    # "dataframe": cv.records2df,
-    Targets.GEOJSON: cv.records2geojson,
-    # 'ical': cv.records2ical,
-    Targets.JSON: cv.records2json,
-    # 'kml': cv.records2kml,
-    Targets.LIST: lambda items, **_: list(items),
-    Targets.TUPLE: lambda items, **_: tuple(items),
-}
-
-if OFX is not None:
-    CONVERSION_FUNCS[Targets.OFX] = records2ofx
-    CONVERSION_FUNCS[Targets.QIF] = records2qif
-
-
-def list_targets() -> list[str]:
+def list_formats() -> list[str]:
     """
-    Collects every available ``export`` target, sorted.
+    Collects every available serialization format, sorted.
 
-    ``ofx`` and ``qif`` are present only with the ``finance`` extra installed.
+    Only serialized representations are listed; the ``list``/``tuple`` collection
+    materializations that ``export`` also accepts are not formats. ``ofx`` and
+    ``qif`` are present only with the ``finance`` extra installed.
 
     Examples:
 
-        >>> targets = list_targets()
-        >>> targets[:4]
-        ['csv', 'geojson', 'json', 'list']
+        >>> formats = list_formats()
+        >>> formats[:4]
+        ['csv', 'geojson', 'json']
 
     """
     return sorted(map(str, CONVERSION_FUNCS))
@@ -515,17 +448,17 @@ def export(items: RikoItems) -> list[Item]: ...  # noqa: E704
 def export(items: RikoItems, **kwargs: Any) -> list[Item]: ...  # noqa: E704
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: RikoItems, type_: Literal["list", Targets.LIST], **kwargs: Any
+    items: RikoItems, type_: Literal["list"], **kwargs: Any
 ) -> list[Item]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: RikoItems, type_: Literal["tuple", Targets.TUPLE], **kwargs: Any
+    items: RikoItems, type_: Literal["tuple"], **kwargs: Any
 ) -> tuple[Item]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
     items: RikoItems,
     type_: Literal[
-        "csv", "json", "geojson", Targets.CSV, Targets.JSON, Targets.GEOJSON
+        "csv", "json", "geojson", Formats.CSV, Formats.JSON, Formats.GEOJSON
     ],
     f: str,
     **kwargs: Any,
@@ -534,7 +467,7 @@ def export(  # noqa: E704
 def export(  # noqa: E704
     items: RikoItems,
     type_: Literal[
-        "csv", "json", "geojson", Targets.CSV, Targets.JSON, Targets.GEOJSON
+        "csv", "json", "geojson", Formats.CSV, Formats.JSON, Formats.GEOJSON
     ],
     f: None = ...,
     **kwargs: Any,
@@ -542,27 +475,27 @@ def export(  # noqa: E704
 @overload  # noqa: E302
 def export(  # noqa: E704
     items: RikoItems,
-    type_: Literal["ofx", "qif", Targets.OFX, Targets.QIF],
+    type_: Literal["ofx", "qif", Formats.OFX, Formats.QIF],
     f: str,
     **kwargs: Any,
 ) -> int: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
     items: RikoItems,
-    type_: Literal["ofx", "qif", Targets.OFX, Targets.QIF],
+    type_: Literal["ofx", "qif", Formats.OFX, Formats.QIF],
     f: None = ...,
     **kwargs: Any,
 ) -> Iterable[str]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: RikoItems, type_: TargetLike = ..., **kwargs: Any
+    items: RikoItems, type_: ExportType = ..., **kwargs: Any
 ) -> StringIO | Items | Iterable[str] | None: ...
 def export(  # noqa: E302
     items: RikoItems,
-    type_: TargetLike = Targets.LIST,
+    type_: ExportType = "list",
     f: str | TextIO | None = None,
     **kwargs: Any,
-) -> int | StringIO | Items | Iterable[str] | None:
+) -> int | StringIO | RikoItems | Iterable[str] | None:
     """
     Converts a stream to ``type_``, optionally writing it to ``f``.
 
@@ -571,7 +504,7 @@ def export(  # noqa: E302
         items: The stream to convert.
 
         type_: An ``export`` target. ``list``/``tuple`` return the records
-            themselves; the rest serialize.
+            themselves; a ``Formats`` value serializes.
 
         f: Destination path or file object. When given, the serialized output is
             written there and the byte count is returned instead.
@@ -597,50 +530,37 @@ def export(  # noqa: E302
         ['x', '1', '2']
 
     """
-    result = None
-
-    if converter := CONVERSION_FUNCS.get(type_):
-        if type_ in {Targets.LIST, Targets.TUPLE}:
-            records = list(items)
-        else:
-            records = [dict(item) for item in items if is_mapping(item)]
-
-        _result = converter(records, **kwargs)
-
-        if f:
-            result = cast(int, io.write(f, _result, **kwargs))
-        else:
-            result = _result
+    if type_ in {"list", "tuple"}:
+        records = list(items)
+        result: int | StringIO | RikoItems | Iterable[str] | None = (
+            tuple(records) if type_ == "tuple" else records
+        )
+    elif converter := CONVERSION_FUNCS.get(cast(Formats, type_)):
+        serializable = [dict(item) for item in items if is_mapping(item)]
+        serialized = converter(serializable, **kwargs)
+        result = cast(int, io.write(f, serialized, **kwargs)) if f else serialized
     else:
-        valid = ", ".join(CONVERSION_FUNCS)
+        valid = ", ".join([*map(str, CONVERSION_FUNCS), "list", "tuple"])
         raise ValueError(f"Invalid export type {type_!r}. Must be one of: {valid}.")
 
     return result
-
-
-_write_counter = count()
-
-
-def _write_channel() -> str:
-    """Mints a unique internal channel name for a ``write`` subscription."""
-    return f"__riko_write_{next(_write_counter)}"
 
 
 def _write(
     source: "SyncPipe | SyncCollection",
     dest: str | Path,
     *,
-    format: str | None = None,
     mode: WriteMode | str = WriteMode.REPLACE,
-    **kwargs: Any,
-) -> "SyncPipe":
+    fmt: FmtLike | None = None,
+    **kwargs: object,
+) -> RikoStream:
     """Desugars ``write`` to a ``send`` publisher feeding an ``on_receive`` writer."""
-    from riko.modules.receive import register_receiver  # noqa: PLC0415
+    prepared = prepare_write(dest, mode=mode, fmt=fmt)
 
-    writer = file_writer(dest, mode=mode, fmt=format)
-    channel = _write_channel()
-    register_receiver(channel, on_receive=writer.receive, on_complete=writer.complete)
-    return source.pipe("send", others=[channel], ids={}, **kwargs)
+    with file_write_session(prepared) as session:
+        for record in source:
+            session.write(record)
+            yield record
 
 
 def _sink(
@@ -648,16 +568,16 @@ def _sink(
     dest: Destination,
     *,
     mode: WriteMode | str,
-    keys: KeyLike | None,
-    idempotency_key: KeyLike | None,
-    fmt: str | None,
+    fmt: FmtLike | None,
+    key: KeyLike | None,
 ) -> WriteResult:
     """Resolves ``dest``, validates the write, and delivers ``records`` to it."""
-    target = resolve_target(dest)
-    write = build_write(
-        target, mode, keys=keys, idempotency_key=idempotency_key, fmt=fmt
-    )
-    return target.deliver(records, write, fmt=fmt)
+    prepared = prepare_write(dest, mode=mode, fmt=fmt, key=key)
+
+    with file_write_session(prepared) as session:
+        session.write(records)
+
+    return session.finalize()
 
 
 async def _asink(
@@ -665,17 +585,17 @@ async def _asink(
     dest: Destination,
     *,
     mode: WriteMode | str,
-    keys: KeyLike | None,
-    idempotency_key: KeyLike | None,
-    fmt: str | None,
+    fmt: FmtLike | None,
+    key: KeyLike | None,
 ) -> WriteResult:
     """Drains ``source``, resolves ``dest``, and delivers the records to it."""
     items = [item async for item in source]
     target = resolve_target(dest)
-    write = build_write(
-        target, mode, keys=keys, idempotency_key=idempotency_key, fmt=fmt
-    )
-    return await target.adeliver(items, write, fmt=fmt)
+    return target, items
+    # write = build_write(
+    #     target, mode, keys=keys, idempotency_key=idempotency_key, fmt=fmt
+    # )
+    # return await target.adeliver(items, write, fmt=fmt)
 
 
 class PyPipe(_Lifecycle):
@@ -1334,26 +1254,14 @@ class SyncPipe(PyPipe):
         self,
         dest: str | Path,
         *,
-        format: str | None = None,
         mode: WriteMode | str = WriteMode.REPLACE,
-        **kwargs: Any,
+        fmt: str | None = None,
+        **kwargs: object,
     ) -> "SyncPipe":
         """
-        Writes a copy of the stream to ``dest`` and keeps it flowing (passthrough).
+        Writes a copy of the stream to ``dest`` and passes through the chain.
 
-        Desugars to ``subscribe(on_receive=…)``: it registers a file writer on an
-        internal channel and returns a publisher that yields every item unchanged
-        while the writer saves a copy. Use ``sink`` for a terminal write that
-        reports an outcome instead of a stream.
-
-        Delivery granularity is negotiated, not caller-configured: a streamable
-        format (``csv``/``jsonl``) is written incrementally as each item flows; any
-        other format buffers and writes one document when the publisher completes,
-        which is either full consumption or a graceful ``close()``/context-manager
-        exit. An abrupt ``terminate()`` (an exceptional ``with`` exit) discards the
-        partial buffer rather than saving it as a finished document. For a write
-        guaranteed to land, use ``sink`` — it materializes and reports a
-        ``WriteResult`` unconditionally.
+        Use ``sink`` for a terminal write that reports an outcome instead of a stream.
 
         Args:
 
@@ -1362,8 +1270,7 @@ class SyncPipe(PyPipe):
             format: A serialization format, or ``None`` to derive it from the path
                 extension (default: ``json``).
 
-            mode: ``append`` or ``replace``; the keyed record modes are rejected
-                (default: ``replace``).
+            mode: File mode. ``append`` or ``replace`` (default: ``replace``).
 
             kwargs: Passed through to the chained publisher.
 
@@ -1372,6 +1279,7 @@ class SyncPipe(PyPipe):
             The publisher pipe, so writing can sit mid-chain.
 
         Examples:
+
             >>> from riko import get_temp_file
             >>> items = [{"x": 0}, {"x": 1}]
             >>>
@@ -1384,32 +1292,30 @@ class SyncPipe(PyPipe):
             b'[{"x": 0}, {"x": 1}]'
 
         """
-        return _write(self, dest, format=format, mode=mode, **kwargs)
+        items = _write(self, dest, mode=mode, fmt=fmt, **kwargs)
+        return self._prime(items)
 
     def sink(
         self,
         dest: Destination,
         *,
         mode: WriteMode | str = WriteMode.APPEND,
-        keys: KeyLike | None = None,
-        idempotency_key: KeyLike | None = None,
-        format: str | None = None,
+        fmt: str | None = None,
+        key: KeyLike | None = None,
     ) -> WriteResult:
         """
         Reconciles the stream into ``dest`` and reports the outcome (terminal sink).
 
         Unlike ``write``, this consumes the stream and returns a ``WriteResult``
         rather than a chainable pipe. A file destination serializes with ``format``
-        and forbids ``keys``/``idempotency_key``; a keyed record target requires
-        them per its capabilities.
+        and forbids ``key``; a keyed record target requires it per its capabilities.
 
         Args:
 
             dest: A path, or a ``WriteTarget``.
             mode: The reconciliation mode, validated against the target. (default: append)
             keys: The match keys for a keyed record target.
-            idempotency_key: The dedupe key for an ``append`` on a record target.
-            format: A ``Targets`` converter override for a file destination.
+            format: A ``Formats`` converter override for a file destination.
 
         Returns:
 
@@ -1424,14 +1330,7 @@ class SyncPipe(PyPipe):
             True
 
         """
-        return _sink(
-            self,
-            dest,
-            mode=mode,
-            keys=keys,
-            idempotency_key=idempotency_key,
-            fmt=format,
-        )
+        return _sink(self, dest, mode=mode, fmt=fmt, key=key)
 
 
 class PyCollection(_Lifecycle):
@@ -1665,31 +1564,24 @@ class SyncCollection(PyCollection):
         self,
         dest: str | Path,
         *,
-        format: str | None = None,
         mode: WriteMode | str = WriteMode.REPLACE,
-        **kwargs: Any,
+        fmt: str | None = None,
+        **kwargs: object,
     ) -> "SyncPipe":
         """The collection counterpart of :meth:`SyncPipe.write`."""
-        return _write(self, dest, format=format, mode=mode, **kwargs)
+        items = _write(self, dest, mode=mode, fmt=fmt, **kwargs)
+        return SyncPipe(self.name, source=items)
 
     def sink(
         self,
         dest: Destination,
         *,
         mode: WriteMode | str = WriteMode.APPEND,
-        keys: KeyLike | None = None,
-        idempotency_key: KeyLike | None = None,
-        format: str | None = None,
+        fmt: str | None = None,
+        key: KeyLike | None = None,
     ) -> WriteResult:
         """The collection counterpart of :meth:`SyncPipe.sink`."""
-        return _sink(
-            self,
-            dest,
-            mode=mode,
-            keys=keys,
-            idempotency_key=idempotency_key,
-            fmt=format,
-        )
+        return _sink(self, dest, mode=mode, fmt=fmt, key=key)
 
 
 class AsyncPipe(PyPipe):
@@ -1927,14 +1819,23 @@ class AsyncPipe(PyPipe):
         **kwargs: Any,
     ) -> "AsyncPipe":
         """
-        The async counterpart of :meth:`SyncPipe.write` (not yet implemented).
+        Writes a copy of the stream to ``dest`` and passes through the chain.
 
-        The async ``on_receive`` writer over the AnyIO ``async_hub`` is a follow-up;
-        use :meth:`sink` for a terminal async write in the meantime.
+        The async counterpart of :meth:`SyncPipe.write`. Use :meth:`sink` for a terminal
+        write that reports an outcome instead of a stream.
 
-        Raises:
+        Args:
 
-            NotImplementedError: Always, until the async writer lands.
+            dest: The destination file path.
+
+            fmt: A serialization format, or ``None`` to derive it from the path
+                extension (default: ``json``).
+
+            mode: File mode. ``append`` or ``replace`` (default: ``replace``).
+
+        Returns:
+
+            The passthrough pipe, so writing can sit mid-chain.
 
         """
         raise NotImplementedError(
@@ -1947,19 +1848,11 @@ class AsyncPipe(PyPipe):
         dest: Destination,
         *,
         mode: WriteMode | str = WriteMode.APPEND,
-        keys: KeyLike | None = None,
-        idempotency_key: KeyLike | None = None,
+        key: KeyLike | None = None,
         format: str | None = None,
     ) -> WriteResult:
         """The async counterpart of :meth:`SyncPipe.sink`."""
-        return await _asink(
-            self,
-            dest,
-            mode=mode,
-            keys=keys,
-            idempotency_key=idempotency_key,
-            fmt=format,
-        )
+        return await _asink(self, dest, mode=mode, key=key, fmt=format)
 
     def _chain(self, name: ModuleNameLike, **kwargs: object) -> "AsyncPipe":
         """Builds the next async pipe with the current runtime settings."""
@@ -2050,7 +1943,7 @@ class AsyncPipe(PyPipe):
                 else:
                     result = await maybe_deferred(async_pipeline, source)
 
-                    async for item in as_async(result):
+                    async for item in as_async(cast(RikoStream, result)):
                         yield item
         except BaseException:
             self._fail()
@@ -2168,11 +2061,23 @@ class AsyncCollection(PyCollection):
         **kwargs: Any,
     ) -> "AsyncPipe":
         """
-        The async collection counterpart of :meth:`SyncPipe.write` (not yet done).
+        Writes a copy of the stream to ``dest`` and passes through the chain.
 
-        Raises:
+        The async collection counterpart of :meth:`SyncPipe.write`.
 
-            NotImplementedError: Always, until the async writer lands.
+        Args:
+
+            dest: The destination file path.
+
+            fmt: A serialization format, or ``None`` to derive it from the path
+                extension (default: ``json``).
+
+            mode: File mode. ``append`` or ``replace`` (default: ``replace``).
+
+        Returns:
+
+            The passthrough pipe, so writing can sit mid-chain.
+
 
         """
         raise NotImplementedError(
@@ -2185,19 +2090,11 @@ class AsyncCollection(PyCollection):
         dest: Destination,
         *,
         mode: WriteMode | str = WriteMode.APPEND,
-        keys: KeyLike | None = None,
-        idempotency_key: KeyLike | None = None,
-        format: str | None = None,
+        fmt: str | None = None,
+        key: KeyLike | None = None,
     ) -> WriteResult:
         """The async collection counterpart of :meth:`SyncPipe.sink`."""
-        return await _asink(
-            self,
-            dest,
-            mode=mode,
-            keys=keys,
-            idempotency_key=idempotency_key,
-            fmt=format,
-        )
+        return await _asink(self, dest, mode=mode, fmt=fmt, key=key)
 
     async def _stream(self) -> AsyncGenerator[RikoItem, None]:
         """Fetches every source url."""

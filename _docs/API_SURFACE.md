@@ -22,7 +22,7 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 
 ```python
 >>> sorted(COLLECTIONS)
-['AsyncCollection', 'AsyncPipe', 'PipeState', 'SyncCollection', 'SyncPipe', 'Targets', 'export', 'list_targets']
+['AsyncCollection', 'AsyncPipe', 'Formats', 'PipeState', 'SyncCollection', 'SyncPipe', 'export', 'list_formats']
 ```
 
 **Compilation** — DAG/JSON compilation entry points (`riko.compile`):
