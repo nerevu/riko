@@ -26,7 +26,6 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Generator, Iterator
 from io import BytesIO, StringIO, TextIOWrapper
 from logging import Logger
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import pygogo as gogo
@@ -36,11 +35,11 @@ from typing_extensions import TypeIs
 from riko._constants import ENCODING
 from riko._io import ext_from_content_type
 from riko.paths import get_abspath
-from riko.types._io import IOFileLike
+from riko.types._io import IOFileLike, PathLike
 from riko.types._scalars import AnyStr
 
 from . import _backend
-from ._backend import open_file
+from ._backend import async_open
 from ._util import async_get, async_read
 
 if TYPE_CHECKING:
@@ -381,7 +380,7 @@ async def async_url_read(
 
 
 async def async_write(
-    filepath: str | Path,
+    filepath: PathLike,
     content: AnyStr | IOFileLike,
     mode: str = "wb+",
     encoding: str = ENCODING,
@@ -409,10 +408,10 @@ async def async_write(
     Examples:
 
         >>> from io import StringIO
-        >>> from riko import get_temp_file, issync, run
+        >>> from riko import get_async_temp_file, issync, run
         >>>
         >>> async def main():
-        ...     with get_temp_file() as fp:
+        ...     async with get_async_temp_file() as fp:
         ...         await async_write(fp.name, StringIO("Hello World"))
         ...
         ...         with open(fp.name, mode="rb") as f:
@@ -428,7 +427,7 @@ async def async_write(
     progress = 0
     binary = "b" in mode
     open_encoding = None if binary else encoding
-    opener = open_file(filepath, mode, encoding=open_encoding)
+    opener = async_open(filepath, mode, encoding=open_encoding)
 
     async with await opener as f:
         for normalized in _chunk_content(content, chunksize):

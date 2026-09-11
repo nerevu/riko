@@ -19,10 +19,10 @@ from riko.collections import (
     CONVERSION_FUNCS,
     AsyncPipe,
     Executor,
+    Formats,
     PipeState,
     SyncCollection,
     SyncPipe,
-    Targets,
     export,
 )
 from riko.exceptions import ReceiverUnavailableError
@@ -769,14 +769,14 @@ class TestModuleNameEnum:
         assert len(list(via_method)) == 1
 
 
-class TestExportTargets:
-    """``Targets`` members mirror the ``export`` converter registry."""
+class TestExportFormats:
+    """``Formats`` members mirror the ``export`` converter registry."""
 
     def test_member_and_string_export_identically(self):
         items = [{"a": 1}]
         assert (
-            export(items, Targets.JSON).getvalue() == export(items, "json").getvalue()
+            export(items, Formats.JSON).getvalue() == export(items, "json").getvalue()
         )
 
     def test_every_converter_has_a_member(self):
-        assert set(CONVERSION_FUNCS) <= set(Targets)
+        assert set(CONVERSION_FUNCS) <= set(Formats)

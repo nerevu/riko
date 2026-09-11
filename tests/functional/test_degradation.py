@@ -14,7 +14,7 @@ contract.
 
 import importlib.util
 
-from riko.collections import list_targets
+from riko.collections import list_formats
 from riko.parsers import IJSON_IS_NATIVE, IS_FASTFEEDPARSER, IS_LXML
 
 
@@ -34,7 +34,7 @@ def test_capability_flags_track_installed_libs():
 def test_finance_targets_track_csv2ofx():
     """``ofx``/``qif`` export targets appear only when the finance extra is present."""
     finance_targets = {"ofx", "qif"}
-    targets = set(list_targets())
+    targets = set(list_formats())
 
     if _installed("csv2ofx"):
         assert finance_targets <= targets

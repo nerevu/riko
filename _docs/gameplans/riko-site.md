@@ -726,7 +726,7 @@ site = "riko_site.exports.site:target"
 
 * Every legacy export returns exactly the previous type.
 * File-writing behavior remains unchanged.
-* Registered plugin targets appear in `list_targets()`.
+* Registered plugin targets appear in `list_formats()`.
 * Duplicate registration fails.
 * `replace=True` works.
 * Broken entry points report the responsible target.
@@ -1796,7 +1796,7 @@ Requirements:
 4. Adapt all existing conversion functions through compatibility wrappers.
 5. Preserve every current export signature, return type, and file-writing behavior during this registry refactor.
 6. Add lazy entry-point discovery for the `riko.export_targets` group.
-7. Preserve list_targets() behavior while including installed plugin targets.
+7. Preserve list_formats() behavior while including installed plugin targets.
 8. Require replace=True for duplicate registrations.
 9. Add characterization, regression, registry, and entry-point tests.
 10. Do not add `.pipe(callable)`.

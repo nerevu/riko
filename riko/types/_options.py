@@ -9,9 +9,9 @@ if TYPE_CHECKING:
 
     from ._collections import BasicArg, RikoDict, RikoList
     from ._dynamic_conf import DynamicConf
-    from ._names import TargetLike
     from ._scalars import PrimitiveValue
     from ._streams import Item
+    from ._write import FmtLike
     from .modules import AnyConfRule, CountValues, Skip
 
 
@@ -29,6 +29,7 @@ class Defaults(TypedDict, total=False):
     encoding: str
     input_key: str
     format: str
+    fmt: FmtLike | None
     group_key: str | None
     has_header: bool
     html5: bool
@@ -59,7 +60,6 @@ class Defaults(TypedDict, total=False):
     stop: bool
     strict: bool
     sum_key: str
-    target: TargetLike | None
     test: bool
     token_key: str
     type: str

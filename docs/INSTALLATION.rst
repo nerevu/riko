@@ -71,7 +71,7 @@ OFX/QIF export            csv2ofx             ``python -m pip install "riko[fina
   falls back to the built-in Python XML parser; without ``fastfeedparser`` it falls back
   to `feedparser`_.
 - ``finance`` enables the ``ofx`` and ``qif`` export targets; without it
-  ``list_targets()`` won't include them.
+  ``list_formats()`` won't include them.
 
 Install several groups together:
 

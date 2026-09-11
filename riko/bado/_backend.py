@@ -39,6 +39,7 @@ except ImportError:
     async_partial: Callable[..., Any] = lambda *_, **_kw: None
     async_return: Callable[..., Any] = lambda *_, **_kw: None
     async_sleep: Callable[..., Any] = lambda *_, **_kw: None
+    asyncify: Callable[..., Any] = lambda *_, **_kw: None
     backend: Backends = "empty"
     create_memory_object_stream: Callable[..., Any] | None = None
     create_task_group: Callable[..., Any] | None = None
@@ -46,7 +47,7 @@ except ImportError:
     gather_results: Callable[..., Any] = lambda *_, **_kw: None
     lowlevel: Any = None
     maybe_deferred: Callable[..., Any] = lambda *_, **_kw: None
-    open_file: Callable[..., Any] = lambda *_, **_kw: None
+    async_open: Callable[..., Any] = lambda *_, **_kw: None
 
     async def checkpoint() -> None:
         return None
@@ -67,15 +68,15 @@ else:
         create_task_group,
         fail_after,
         lowlevel,
-        open_file,
     )
+    from anyio import open_file as async_open
     from anyio import sleep as async_sleep
     from anyio.lowlevel import checkpoint
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+    from asyncer import asyncify
 
     backend = "anyio"
     run: Run = anyio.run
-
 
 issync: bool = backend == "empty"
 isasync: bool = not issync
@@ -89,10 +90,12 @@ __all__ = [
     "Semaphore",
     "async_get",
     "async_json",
+    "async_open",
     "async_partial",
     "async_read",
     "async_return",
     "async_sleep",
+    "asyncify",
     "backend",
     "checkpoint",
     "create_memory_object_stream",
@@ -103,6 +106,5 @@ __all__ = [
     "issync",
     "lowlevel",
     "maybe_deferred",
-    "open_file",
     "run",
 ]

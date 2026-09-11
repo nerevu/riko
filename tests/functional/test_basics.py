@@ -32,6 +32,7 @@ from riko.context import Context, ExecutionMode
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.ext._pipelines import pipeline_resolver
 from riko.types._guards import is_mapping
+from riko.types._io import PathLike
 from riko.types._pipeline import AsyncPipelineDependencies, SyncPipelineDependencies
 from riko.types._streams import StatefulItem
 from riko.types._wrappers import (
@@ -138,22 +139,30 @@ def _check_dates[T: datetime | struct_time | date](*dates: T | object) -> tuple[
     return cast(tuple[T, ...], dates)
 
 
+def db_conn(path: PathLike | None = None):
+    connection = sqlite3.connect(path or ":memory:")
+    connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
+    connection.execute("INSERT INTO t VALUES ('ford', 7213)")
+    connection.commit()
+
+    try:
+        yield connection
+    finally:
+        connection.close()
+
+
 @pytest.mark.xfail(
     strict=True,
     reason="fetchtable opens the binary source as text via Fetch(url, encoding=...),"
     " so a sqlite (or xlsx) fixture raises UnicodeDecodeError",
 )
-def test_fetchtable_reads_sqlite_fixture(tmp_path):
+def test_fetchtable_reads_sqlite_fixture(tmp_path, db_conn):
     """
     A binary tabular source (sqlite here; xlsx under the same defect) must be
     opened in binary mode and yield its rows.
     """
     dbpath = tmp_path / "cars.sqlite"
-    connection = sqlite3.connect(dbpath)
-    connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
-    connection.execute("INSERT INTO t VALUES ('ford', 7213)")
-    connection.commit()
-    connection.close()
+    db_conn(dbpath)
 
     stream = SyncPipe("fetchtable", conf={"url": str(dbpath)})
     item = {}
