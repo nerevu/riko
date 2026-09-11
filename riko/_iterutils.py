@@ -7,6 +7,7 @@ Functional/iterable helpers: fan-out (``dispatch``/``broadcast``), grouping,
 dedup, chainable retry binding, and sort-key construction.
 
 Attributes:
+
     SORT_FILLER: Orderable stand-in (``-inf``) for a missing sort key.
     DATELIKE_TYPES: Cast types reduced to epoch timestamps for sorting.
     INVALID_DEF_TYPES: Cast types with no usable typed default.

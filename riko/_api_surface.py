@@ -23,12 +23,12 @@ COLLECTIONS = frozenset(
     {
         "AsyncCollection",
         "AsyncPipe",
+        "Formats",
         "PipeState",
         "SyncCollection",
         "SyncPipe",
-        "Targets",
         "export",
-        "list_targets",
+        "list_formats",
     }
 )
 
