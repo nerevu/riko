@@ -84,7 +84,8 @@ async def async_parser(
         ...     url = get_path("spreadsheet.csv")
         ...     conf = {
         ...         "url": url, "sanitize": True, "skip_rows": 0,
-        ...         "encoding": ENCODING}
+        ...         "encoding": ENCODING,
+        ...     }
         ...     objconf = Objectify(conf)
         ...     result = await async_parser(None, None, objconf)
         ...     print(next(result)["mileage"])
