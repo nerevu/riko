@@ -171,8 +171,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
         >>>
         >>> async def main():
         ...     func = lambda item: {"y": item["x"] + 3}
-        ...     result = await async_pipe({"x": 0}, func=func)
-        ...     print(next(result))
+        ...     result = async_pipe({"x": 0}, func=func)
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         {'y': 3}

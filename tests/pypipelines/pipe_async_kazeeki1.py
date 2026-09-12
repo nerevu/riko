@@ -1,5 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 
+from riko.bado import as_async
 from riko.bado._backend import run
 from riko.collections import AsyncPipe
 from riko.context import Context
@@ -13,15 +14,14 @@ async def async_pipe(context: Context | None = None, **_):
         output = ["fetchdata", "rename", "regex"]
     else:
         source = AsyncPipe("fetchdata", context=context, conf=fetchdata_conf)
-        output = await source.rename(conf=rename_conf).regex(conf=regex_conf)
+        output = source.rename(conf=rename_conf).regex(conf=regex_conf)
 
-    return list(output)
+    async for item in as_async(output):
+        yield item
 
 
 async def _main():
-    pipeline = await async_pipe(context=Context())
-
-    for i in pipeline:
+    async for i in async_pipe(context=Context()):
         print(i)
 
 

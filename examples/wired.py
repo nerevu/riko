@@ -49,17 +49,14 @@ def pipe(test=False):
     return list(stream)
 
 
-async def async_pipe(test=False):
+def async_pipe(test=False):
     format_stream = AsyncPipe("input", conf=format_conf, inputs=format_in)
 
-    formatted = await AsyncPipe("input", conf=date_conf).dateformat(
+    formatted = AsyncPipe("input", conf=date_conf).dateformat(
         conf=date_fmt_conf, format=format_stream, field="content", emit=True
     )
 
-    stream = await AsyncPipe(
-        "itembuilder", conf=build_conf, formatted=formatted, test=test
-    )
-    return list(stream)
+    return AsyncPipe("itembuilder", conf=build_conf, formatted=formatted, test=test)
 
 
 def print_results(result) -> None:

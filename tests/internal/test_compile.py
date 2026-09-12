@@ -318,7 +318,7 @@ async def test_async_codegen_matches_sync():
     async_src = compile_pipe(pipe_def, "pipe_gigs", is_async=True)
     async_ns: dict = {}
     exec(async_src, async_ns)
-    async_result = [item async for item in await async_ns["async_pipe"]()]
+    async_result = [item async for item in async_ns["async_pipe"]()]
 
     sync_src = compile_pipe(pipe_def, "pipe_gigs", is_async=False)
     sync_ns: dict = {}

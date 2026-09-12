@@ -252,8 +252,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
         >>> async def main():
         ...     rule = {"field": "content", "match": match, "replace": "$2wide"}
         ...     conf = {"rule": rule, "multi": False}
-        ...     result = await async_pipe(item, conf=conf)
-        ...     print(next(result)["content"])
+        ...     result = async_pipe(item, conf=conf)
+        ...     print((await anext(result))["content"])
         >>>
         >>> run(main)
         worldwide

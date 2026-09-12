@@ -40,7 +40,7 @@ from riko.bado._backend import (
     create_memory_object_stream,
     create_task_group,
 )
-from riko.bado._util import as_awaitable
+from riko.bado._util import maybe_deferred
 from riko.types._sentinels import MISSING
 
 
@@ -237,8 +237,7 @@ def async_reduce[T, S](
 
     async def work(async_func, content, value):
         for item in content:
-            result = async_func(value, item)
-            value = await as_awaitable(result)
+            value = await maybe_deferred(async_func, value, item)
 
         return value
 

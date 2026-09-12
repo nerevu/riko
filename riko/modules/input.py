@@ -178,8 +178,8 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
         >>>
         >>> async def main():
         ...     conf = {"prompt": "How old are you?", "type": "int"}
-        ...     result = await async_pipe(conf=conf, inputs={"content": "30"})
-        ...     print(next(result))
+        ...     result = async_pipe(conf=conf, inputs={"content": "30"})
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         30

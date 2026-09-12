@@ -187,8 +187,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     result = await async_pipe(conf={"url": get_path("bbc.html")})
-        ...     print(next(result)["link"])
+        ...     result = async_pipe(conf={"url": get_path("bbc.html")})
+        ...     print((await anext(result))["link"])
         >>>
         >>> run(main)
         file://riko/data/bbci.co.uk.xml

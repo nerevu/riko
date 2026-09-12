@@ -31,8 +31,8 @@ def _async_get(content, content_type):
 
 
 async def _titles(conf):
-    items = await async_pipe(conf=conf)
-    return [cast(Item, item).get("title") for item in items]
+    stream = async_pipe(conf=conf)
+    return [cast(Item, item).get("title") async for item in stream]
 
 
 @skipif_issync

@@ -185,8 +185,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
         >>>
         >>> async def main():
         ...     conf = {"rule": {"find": "[aiou]"}}
-        ...     result = await async_pipe({"content": "hello world"}, conf=conf)
-        ...     print(next(result)["refind"])
+        ...     result = async_pipe({"content": "hello world"}, conf=conf)
+        ...     print((await anext(result))["refind"])
         >>>
         >>> run(main)
         hell

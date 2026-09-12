@@ -455,13 +455,13 @@ code block without interpreter prompts.
   breathing room and separates it from the statements around it:
 
   ```
-  >>> from riko import run
+  >>> from riko import issync, run
   >>>
   >>> async def main():
-  ...     result = await async_pipe(items)
-  ...     print(next(result))
+  ...     result = async_pipe(items)
+  ...     print(await anext(result))
   >>>
-  >>> run(main)
+  >>> print(sync_result) if issync else run(main)
   ```
 
   Those two positions only — no other empty prompts for visual spacing. A true
@@ -494,12 +494,13 @@ the async contract, not the machinery. The canonical async doctest form is:
 
 ```python
 Examples:
-    >>> from riko import run
+    >>> from riko import issync, run
     >>> async def main():
     ...     items = ({"x": x} for x in range(5))
-    ...     result = await async_pipe(items)
-    ...     print(next(result))
-    >>> run(main)
+    ...     result = async_pipe(items)
+    ...     print(await anext(result))
+    >>>
+    >>> print({"count": 5}) if issync else run(main)
     {'count': 5}
 ```
 

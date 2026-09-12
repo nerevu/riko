@@ -38,7 +38,6 @@ from collections.abc import (
 from datetime import date
 from decimal import Decimal
 from functools import partial, reduce, update_wrapper
-from inspect import isawaitable
 from itertools import pairwise
 from json import JSONEncoder, dumps
 from pathlib import Path
@@ -50,6 +49,7 @@ from jinja2 import Environment, PackageLoader
 
 from riko._iterutils import listize
 from riko._strutils import replacer
+from riko.bado._util import maybe_deferred
 from riko.bado.itertools import as_async
 from riko.context import Context, ExecutionMode
 from riko.dotdict import DotDict
@@ -228,6 +228,18 @@ def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
             yield dep
 
 
+async def drain[T: str | tuple[str, ...]](
+    source: AsyncIterator[T], uniq: bool = False
+) -> list[T]:
+    """Collects an async stream into a sorted list."""
+    if uniq:
+        result = sorted({dep async for dep in source})
+    else:
+        result = sorted([value async for value in source])
+
+    return result
+
+
 @overload
 def extract_dependencies(  # noqa: E704
     pipe_def: PipeDef | ParsedPipeDef | None = ...,
@@ -256,7 +268,12 @@ def extract_dependencies(  # noqa: E302
     else:
         raise TypeError("Must supply at least one kwarg!")
 
-    return pydeps if isawaitable(pydeps) else sorted(set(pydeps))
+    if isinstance(pydeps, AsyncIterator):
+        result = drain(pydeps, True)
+    else:
+        result = sorted(set(pydeps))
+
+    return result
 
 
 def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str, ...]]:
@@ -338,7 +355,7 @@ def extract_input(  # noqa: E302
     else:
         raise TypeError("Must supply at least one kwarg!")
 
-    return pyinput if isawaitable(pyinput) else sorted(pyinput)
+    return drain(pyinput) if isinstance(pyinput, AsyncIterator) else sorted(pyinput)
 
 
 def pythonise(
@@ -1082,9 +1099,9 @@ async def abuild_pipeline(  # noqa: E302
         _resolve_leaf_modules(parsed_pipe_def)
         module_names = gen_names(module_ids, parsed_pipe_def)
         args = (parsed_pipe_def, module_names, module_ids)
-        pipeline = await _build_pipeline(
-            *args, is_async=True, context=context, **kwargs
-        )
+        bkwargs = {**kwargs, "is_async": True}
+        built = await maybe_deferred(_build_pipeline, *args, context=context, **bkwargs)
+        pipeline = cast(AsyncStreamOrValueStream, built)
 
         async for item in as_async(pipeline):
             yield item

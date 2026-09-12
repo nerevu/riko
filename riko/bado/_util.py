@@ -67,7 +67,7 @@ async def async_json(response: "Response") -> dict[str, Any]:
     return response.json()
 
 
-async def async_return[T](value: T) -> T:
+async def async_return[T](value: T, **_: Any) -> T:
     """Wraps ``value`` in an awaitable, for uniform ``await`` call sites."""
     return value
 

@@ -9,7 +9,6 @@ from collections.abc import (
     Mapping,
 )
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
-
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 

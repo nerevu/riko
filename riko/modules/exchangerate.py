@@ -262,8 +262,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
         >>>
         >>> async def main():
         ...     url = get_path("quote.json")
-        ...     result = await async_pipe({"content": "GBP"}, conf={"url": url})
-        ...     print(next(result)["exchangerate"])
+        ...     result = async_pipe({"content": "GBP"}, conf={"url": url})
+        ...     print((await anext(result))["exchangerate"])
         >>>
         >>> run(main)
         1.275201

@@ -42,12 +42,10 @@ def pipe(test=False):
     return list(stream)
 
 
-async def async_pipe(test=False):
-    stream = await AsyncPipe("itembuilder", conf=p232_conf, test=test).strreplace(
+def async_pipe(test=False):
+    return AsyncPipe("itembuilder", conf=p232_conf, test=test).strreplace(
         conf=p421_conf, field="author", assign="author"
     )
-
-    return list(stream)
 
 
 def print_results(result) -> None:

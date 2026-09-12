@@ -16,15 +16,20 @@ The inference is ``explicit isasync`` OR ``async def`` OR name == ``async_pipe``
 The combination tables below exercise every input to that expression.
 """
 
-from collections.abc import AsyncIterator
-from inspect import isawaitable
+from collections.abc import AsyncIterator, Awaitable
+from inspect import isawaitable, iscoroutinefunction
 
 import pytest
 
 from riko.ext import operator, processor, splitter
 from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.types._streams import Item
-from riko.types._wrappers import ProcessorWrapper
+from riko.types._wrappers import (
+    AsyncProcessorWrapper,
+    AsyncSplitterWrapper,
+    AsyncSubPipe,
+    ProcessorWrapper,
+)
 from tests import async_test
 
 
@@ -76,8 +81,8 @@ class TestExplicitIsasyncRequired:
     @async_test
     async def test_explicit_lambda_runs_as_async_pipe(self):
         async_shout = processor(isasync=True)(shout)
-        result = await async_shout({"content": "hi"}, assign="content")
-        assert list(result) == [{"content": "HI"}]
+        stream = async_shout({"content": "hi"}, assign="content")
+        assert [item async for item in stream] == [{"content": "HI"}]
 
 
 class TestInvalidCombinations:
@@ -196,3 +201,38 @@ class TestAsyncOperatorReturnsStreamDirectly:
         assert isinstance(stream, AsyncIterator)
         assert not isawaitable(stream)
         assert [item async for item in stream] == items
+
+
+class TestAsyncProcessorDualProtocol:
+    """
+    A decorated async processor call is both async-iterable and awaitable.
+
+    The default path is ``async for item in async_pipe(...)`` with no outer await;
+    awaiting the same call is the advanced path that returns the whole stream. Both
+    must hold at once — the call must never collapse to a bare coroutine, which is
+    what a ``Generator``-style ``async def`` wrapper stub would produce and what
+    breaks ``async for`` under a type checker.
+    """
+
+    @async_test
+    async def test_call_is_async_iterable_without_outer_await(self):
+        async_shout = processor(isasync=True)(shout)
+        stream = async_shout({"content": "hi"}, assign="content")
+        assert isinstance(stream, AsyncIterator)
+        assert [item async for item in stream] == [{"content": "HI"}]
+
+    @async_test
+    async def test_awaiting_the_call_returns_the_whole_stream(self):
+        async_shout = processor(isasync=True)(shout)
+        result = async_shout({"content": "hi"}, assign="content")
+        assert isinstance(result, Awaitable)
+        assert list(await result) == [{"content": "HI"}]
+
+    def test_wrapper_stubs_are_not_coroutine_functions(self):
+        """
+        Reverting these stubs to ``async def`` types the call as a bare coroutine,
+        which drops ``__aiter__`` and reintroduces the ``async for`` type error.
+        """
+        assert not iscoroutinefunction(AsyncProcessorWrapper.__call__)
+        assert not iscoroutinefunction(AsyncSplitterWrapper.__call__)
+        assert not iscoroutinefunction(AsyncSubPipe.__call__)

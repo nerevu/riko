@@ -7,7 +7,7 @@ from os.path import basename, splitext
 from types import ModuleType
 
 from riko.bado._backend import run as async_run
-from riko.types._wrappers import AsyncPipeParser
+from riko.types._wrappers import AsyncPipeWrapper
 
 io_error = FileNotFoundError
 
@@ -57,9 +57,10 @@ def file2name(_path: str) -> str:
 
 
 async def runner(
-    async_pipe: AsyncPipeParser, test: bool = False, cb: Callable | None = None
+    async_pipe: AsyncPipeWrapper, test: bool = False, cb: Callable | None = None
 ) -> None:
-    result = await async_pipe(test=test)
+    stream = async_pipe(test=test)
+    result = [item async for item in stream]
     cb(result) if callable(cb) else None
 
 

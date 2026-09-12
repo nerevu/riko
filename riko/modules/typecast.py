@@ -112,8 +112,8 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({"content": "1.0"}, conf={"type": "int"})
-        ...     print(next(result)["typecast"])
+        ...     result = async_pipe({"content": "1.0"}, conf={"type": "int"})
+        ...     print((await anext(result))["typecast"])
         >>>
         >>> run(main)
         1

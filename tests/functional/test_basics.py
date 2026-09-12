@@ -31,13 +31,8 @@ from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.ext._pipelines import pipeline_resolver
 from riko.types._guards import is_mapping
 from riko.types._pipeline import AsyncPipelineDependencies, SyncPipelineDependencies
-from riko.types._streams import StatefulItem
-from riko.types._wrappers import (
-    AsyncPipeParser,
-    ParserMaterializedOutput,
-    ParserOutput,
-    SyncPipeParser,
-)
+from riko.types._streams import AsyncRikoStream, StatefulItem
+from riko.types._wrappers import ParserMaterializedOutput, ParserOutput
 from tests import TESTS_DIR, async_test
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
@@ -163,24 +158,22 @@ class TestBasics:
             parsed = pipeline_resolver.load_definition(pipe_name, directory=file_path)
             stream = build_pipeline(parsed, context=self.context)
         else:
-            stream = cast(SyncPipeParser, pipeline)(context=self.context)
+            stream = pipeline(context=self.context)
 
         return cast(ParserMaterializedOutput, list(listize(stream)))
 
-    async def _aget_pipeline(
+    def _aget_pipeline(
         self, pipe_name: str, file_path: Path | None = None
-    ) -> ParserMaterializedOutput:
+    ) -> AsyncRikoStream:
         try:
             pipeline = resolve_module(pipe_name, True)
         except (UnsupportedPipelineError, UnsupportedModuleError):
             parsed = pipeline_resolver.load_definition(pipe_name, directory=file_path)
-            items = abuild_pipeline(parsed, context=self.context)
-            stream = [item async for item in items]
+            stream = abuild_pipeline(parsed, context=self.context)
         else:
-            _stream = await cast(AsyncPipeParser, pipeline)(context=self.context)
-            stream = list(listize(_stream))
+            stream = pipeline(context=self.context)
 
-        return cast(ParserMaterializedOutput, stream)
+        return cast(AsyncRikoStream, stream)
 
     def _load(self, items: Sequence[Items], pipe_name, value=0, check=1):
         try:
@@ -287,7 +280,8 @@ class TestBasics:
     async def test_async_kazeeki1(self):
         """Loads the async kazeeki simple test fetchdata pipeline."""
         pipe_name = "pipe_async_kazeeki1"
-        items = await self._aget_pipeline(pipe_name)
+        stream = self._aget_pipeline(pipe_name)
+        items = [item async for item in stream]
         await self._aload(items, pipe_name, 5, 0)
         _assert_kazeeki(cast(dict, items[0]), KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT)
 
@@ -295,7 +289,8 @@ class TestBasics:
     async def test_async_kazeeki2(self):
         """Loads the async kazeeki simple test itembuilder pipeline."""
         pipe_name = "pipe_async_kazeeki2"
-        items = await self._aget_pipeline(pipe_name)
+        stream = self._aget_pipeline(pipe_name)
+        items = [item async for item in stream]
         await self._aload(items, pipe_name, 1, 0)
         _assert_kazeeki(cast(dict, items[0]), KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
 

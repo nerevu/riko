@@ -227,10 +227,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         ...     html_conf = {"url": html_url, "xpath": "/html/head/title"}
         ...
         ...     try:
-        ...         xml_stream = await async_pipe(conf=xml_conf)
-        ...         html_stream = await async_pipe(conf=html_conf)
-        ...         print(next(xml_stream)["guid"]["content"])
-        ...         print(next(html_stream)["content"])
+        ...         xml_stream = async_pipe(conf=xml_conf)
+        ...         html_stream = async_pipe(conf=html_conf)
+        ...         print((await anext(xml_stream))["guid"]["content"])
+        ...         print((await anext(html_stream))["content"])
         ...     except Exception as e:
         ...         logger.error(e)
         ...         logger.error(format_exc())

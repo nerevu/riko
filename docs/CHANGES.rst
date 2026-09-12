@@ -37,8 +37,16 @@ Changes
   structurally immutable. Derive a changed context with ``augment``/``with_resource``
   instead of assigning to its fields, inputs, or resources.
 
+- An async operator's ``async_pipe`` now returns an async iterator directly. Consume it
+  with ``async for``/``anext`` without awaiting the call first. Async processors and
+  splitters are unchanged.
+
 Fixes
 ~~~~~
+
+- Type checkers no longer flag ``async for item in async_pipe(...)``. The async
+  ``processor`` and ``splitter`` call result is now typed as both awaitable and
+  async-iterable, matching how it has always behaved at runtime.
 
 - ``skip_if`` now treats a missing ``text`` as a presence check on ``field`` instead of
   matching against the string ``"None"``. An absent field skips and a ``text`` of

@@ -20,7 +20,16 @@ Examples:
 
 """
 
-from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterator, Mapping
+from collections.abc import (
+    AsyncIterable,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Generator,
+    Iterable,
+    Iterator,
+    Mapping,
+)
 from functools import partial, wraps
 from inspect import iscoroutinefunction
 from itertools import chain
@@ -30,7 +39,8 @@ from typing import ClassVar, Literal, cast, overload
 import pygogo as gogo
 
 from riko._iterutils import dispatch, is_listlike
-from riko.bado.itertools import as_async, as_awaitable, async_iter, async_map
+from riko.bado._util import as_awaitable
+from riko.bado.itertools import as_async, async_iter, async_map
 from riko.cast import BasicCastType
 from riko.context import Context, ExecutionMode
 from riko.dotdict import DotDict, is_mapping
@@ -109,6 +119,43 @@ _OPERATOR_FORBIDDEN_OPTS: frozenset[str] = frozenset({"skip_if"})
 _SPLITTER_FORBIDDEN_OPTS: frozenset[str] = frozenset(
     {"pollable", "emit", "count", "skip_if", "embed"}
 )
+
+
+class _AsyncWrapperStream:
+    """
+    Dual-protocol result of an async ``processor``/``splitter`` wrapper.
+
+    Async-iterating or ``anext``-ing it consumes the wrapped parser's stream item
+    by item with no outer await (the default ``async for item in async_pipe(...)``
+    path); awaiting it runs the parser and returns the whole stream (the advanced
+    ``await async_pipe(...)`` path). The parser runs once, on first consumption.
+
+    Attributes:
+
+        make: A thunk that invokes the wrapped parser and returns its awaitable
+            stream.
+
+    """
+
+    __slots__ = ("_agen", "_make")
+
+    def __init__(
+        self, make: Callable[[], Awaitable[AsyncIterable[object] | Iterable[object]]]
+    ) -> None:
+        self._make = make
+        self._agen: AsyncIterator[object] | None = None
+
+    def __await__(self) -> Generator[object, None, object]:
+        return self._make().__await__()
+
+    def __aiter__(self) -> AsyncIterator[object]:
+        return self
+
+    async def __anext__(self) -> object:
+        if self._agen is None:
+            self._agen = aiter(as_async(await self._make()))
+
+        return await self._agen.__anext__()
 
 
 class Module[B: (Literal[True], Literal[False])]:
@@ -489,8 +536,8 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             >>> next(pipe(item, **kwargs))
             {'content': 'say "hello world" three times!'}
             >>> async def main():
-            ...     result = await async_pipe(item, **kwargs)
-            ...     print(next(result))
+            ...     result = async_pipe(item, **kwargs)
+            ...     print(await anext(result))
             >>>
             >>> if issync:
             ...     {"content": 'say "hello world" three times!'}
@@ -731,7 +778,11 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         """
         module_name = pipe.__module__.split(".")[-1]
 
-        async def async_wrapper(
+        def async_wrapper(item=None, conf=None, *args, **kwargs):
+            make = partial(_async_wrapper_impl, item, conf, *args, **kwargs)
+            return _AsyncWrapperStream(make)
+
+        async def _async_wrapper_impl(
             item: ProcessorWrapperInput | None = None,
             conf: Conf | None = None,
             context: Context | None = None,
@@ -748,7 +799,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         ) -> ProcessorWrapperOutput:
             if is_listlike(item):
                 _wrapper = partial(
-                    async_wrapper,
+                    _async_wrapper_impl,
                     conf=conf,
                     context=context,
                     assign=assign,
@@ -1608,7 +1659,11 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         """
         op_module_name = pipe.__module__.split(".")[-1]
 
-        async def async_wrapper(
+        def async_wrapper(item=None, conf=None, *args, **kwargs):
+            make = partial(_async_wrapper_impl, item, conf, *args, **kwargs)
+            return _AsyncWrapperStream(make)
+
+        async def _async_wrapper_impl(
             items: SplitterWrapperInput | None = None,
             conf: Conf | None = None,
             *,
@@ -1644,7 +1699,10 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             streams = sync_pipe(orig_stream, extraction, tuples, **kwargs)
             yield from streams
 
-        isasync = self._resolve_isasync(pipe)
-        wrapper = wraps(pipe)(async_wrapper if isasync else sync_wrapper)
+        if isasync := self._resolve_isasync(pipe):
+            wrapper = wraps(pipe)(async_wrapper)
+        else:
+            wrapper = wraps(pipe)(sync_wrapper)
+
         self._set_wrapper_metadata(wrapper, pipe, isasync)
         return cast(SplitterWrapper, wrapper)

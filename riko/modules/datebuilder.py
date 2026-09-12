@@ -127,8 +127,8 @@ def async_pipe(*args: Any, **kwargs: object) -> struct_time:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({"content": "12/2/2014"})
-        ...     print(next(result)["datebuilder"].tm_year)
+        ...     result = async_pipe({"content": "12/2/2014"})
+        ...     print((await anext(result))["datebuilder"].tm_year)
         >>>
         >>> run(main)
         2014
