@@ -171,8 +171,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     result = await async_pipe(conf={"url": get_path("feed.xml")})
-        ...     print(sorted(keys.intersection(next(result))))
+        ...     result = async_pipe(conf={"url": get_path("feed.xml")})
+        ...     item = await anext(result)
+        ...     print(sorted(keys.intersection(item)))
         >>>
         >>> run(main)
         ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']

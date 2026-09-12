@@ -142,7 +142,7 @@ from meza import io
 from riko._constants import DEF_CONNECTION_COUNT
 from riko._iterutils import listize
 from riko._pubsub import sync_hub
-from riko.bado._util import as_awaitable, async_return, maybe_deferred
+from riko.bado._util import as_awaitable, maybe_deferred
 from riko.bado.itertools import (
     as_async,
     async_map,
@@ -163,6 +163,7 @@ from riko.types._streams import (
     AsyncRikoStream,
     Item,
     Items,
+    OthersLike,
     RikoFeed,
     RikoItem,
     RikoItems,
@@ -171,6 +172,7 @@ from riko.types._streams import (
 )
 from riko.types._wrappers import (
     AsyncPipeWrapper,
+    AsyncSplitterWrapperOutput,
     SplitterWrapperOutput,
     SyncPipeWrapper,
 )
@@ -719,7 +721,7 @@ class PyPipe(_Lifecycle):
         func: Callable | None = None,
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
-        others: Iterable[str] | Iterable[RikoStream] | None = None,
+        others: OthersLike = None,
         parallel: bool = False,
         skip_if: SkipIf | None = None,
         submodule: bool | None = False,
@@ -765,7 +767,7 @@ class PyPipe(_Lifecycle):
         func: Callable | None = None,
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
-        others: Iterable[str] | Iterable[RikoStream] | None = None,
+        others: OthersLike = None,
         skip_if: SkipIf | None = None,
         **kwargs: object,
     ) -> Self:
@@ -847,7 +849,7 @@ class SyncPipe(PyPipe):
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
         ordered: bool | None = False,
-        others: Iterable[str] | Iterable[RikoStream] | None = None,
+        others: OthersLike = None,
         parallel: bool = False,
         pool: AnyPool | None = None,
         pool_scope: PoolScope = PoolScope.PIPELINE,
@@ -1708,7 +1710,7 @@ class AsyncPipe(PyPipe):
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
         ordered: bool = False,
-        others: Iterable[str] | Iterable[RikoStream] | None = None,
+        others: OthersLike = None,
         parallel: bool = False,
         prefetch: int = 0,
         skip_if: SkipIf | None = None,
@@ -1749,7 +1751,7 @@ class AsyncPipe(PyPipe):
             self.loopable: bool = getattr(self._async_pipe, "loopable")  # noqa: B009
             self.mapify: bool = self.loopable
         else:
-            self._async_pipe = lambda source, **_: async_return(source)
+            self._async_pipe = lambda source, **_: aiter(as_async(source))
             self.pollable = self.loopable = self.mapify = False
 
     def __getattr__(self, name: str) -> "AsyncPipe":
@@ -1868,15 +1870,17 @@ class AsyncPipe(PyPipe):
 
         self._close()
 
-    async def split(self, **kwargs: object) -> SplitterWrapperOutput:
+    def split(self, **kwargs: object) -> AsyncSplitterWrapperOutput:
         """
         Splits the stream into independent copies.
 
         The async counterpart of :meth:`SyncPipe.split`, and equally eager: the
-        source is drained so each copy can be consumed at its own pace.
+        source is drained so each copy can be consumed at its own pace. The result
+        is async-iterable (``sub = await anext(splits)``) without an outer await;
+        awaiting it directly returns the whole tuple of copies.
         """
-        splits = await self._chain("split", **kwargs)
-        return cast(SplitterWrapperOutput, splits)
+        splits = self._chain("split", **kwargs)
+        return cast(AsyncSplitterWrapperOutput, splits)
 
     @overload
     async def export(self) -> list[Item]: ...  # noqa: E704

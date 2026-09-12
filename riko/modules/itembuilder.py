@@ -128,8 +128,8 @@ def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
         ...         {"key": "title", "value": "the title"},
         ...         {"key": "desc.content", "value": "the desc"}]
         ...
-        ...     result = await async_pipe(conf={"attrs": attrs})
-        ...     print(next(result)["title"])
+        ...     result = async_pipe(conf={"attrs": attrs})
+        ...     print((await anext(result))["title"])
         >>>
         >>> run(main)
         the title

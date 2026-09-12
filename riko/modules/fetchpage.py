@@ -209,8 +209,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
         >>> async def main():
         ...     url, path = get_path("bbc.html"), "value.items"
         ...     conf = {"url": url, "start": "DOCTYPE ", "end": "http"}
-        ...     result = await async_pipe(conf=conf)
-        ...     print(next(result))
+        ...     result = async_pipe(conf=conf)
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "

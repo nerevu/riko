@@ -115,8 +115,8 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({"x": x} for x in range(5))
-        ...     print(next(next(result)))
+        ...     result = async_pipe({"x": x} for x in range(5))
+        ...     print(next(await anext(result)))
         >>>
         >>> run(main)
         {'x': 0}

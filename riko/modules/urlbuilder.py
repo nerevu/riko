@@ -168,8 +168,8 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         ...         "path": ["rss", "headline"],
         ...         "param": {"key": "s", "value": "gm"},
         ...     }
-        ...     result = await async_pipe(conf=conf)
-        ...     print(next(result))
+        ...     result = async_pipe(conf=conf)
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         http://finance.yahoo.com/rss/headline?s=gm

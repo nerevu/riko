@@ -193,8 +193,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> async def main():
         ...     path = "value.items"
         ...     conf = {"url": get_path("gigs.json"), "path": path}
-        ...     result = await async_pipe(conf=conf)
-        ...     print(next(result)["title"])
+        ...     result = async_pipe(conf=conf)
+        ...     print((await anext(result))["title"])
         >>>
         >>> run(main)
         Business System Analyst

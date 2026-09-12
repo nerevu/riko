@@ -124,8 +124,8 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         >>> async def main():
         ...     item = {"title": "Hello world"}
         ...     part = [{"subkey": "title", "type": "text"}, "s"]
-        ...     result = await async_pipe(item, conf={"part": part})
-        ...     print(next(result)["strconcat"])
+        ...     result = async_pipe(item, conf={"part": part})
+        ...     print((await anext(result))["strconcat"])
         >>>
         >>> run(main)
         Hello worlds

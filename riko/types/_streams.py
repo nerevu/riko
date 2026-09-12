@@ -45,3 +45,8 @@ type AsyncRikoItems = AsyncIterable[RikoItem]
 type AsyncRikoStream = AsyncIterator[RikoItem]
 type RikoFeed = AsyncRikoItems
 type AsyncRikoSource = RikoItems | RikoFeed | Awaitable[RikoItems | RikoFeed]
+
+# Operator `others` — pipe names or streams (sync or async) to merge or reference
+type OthersLike = (
+    Iterable[str] | Iterable[RikoStream] | Iterable[AsyncRikoStream] | None
+)

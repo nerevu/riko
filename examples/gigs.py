@@ -46,15 +46,13 @@ def pipe(test=False):
     return list(stream)
 
 
-async def async_pipe(test=False):
-    stream = await (
+def async_pipe(test=False):
+    return (
         AsyncPipe("fetchdata", conf=p1_conf, test=test)
         .uniq(conf=p2_conf)
         .filter(conf=p3_conf)
         .sort(conf=p4_conf)
     )
-
-    return list(stream)
 
 
 def print_results(result) -> None:

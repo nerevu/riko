@@ -108,8 +108,8 @@ def async_pipe(*args: Any, **kwargs: object) -> int:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({"content": "hello world"})
-        ...     print(next(result)["hash"])
+        ...     result = async_pipe({"content": "hello world"})
+        ...     print((await anext(result))["hash"])
         >>>
         >>> run(main)
         1921504423

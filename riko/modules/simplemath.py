@@ -155,8 +155,8 @@ def async_pipe(*args: Any, **kwargs: object) -> NumLike:
         >>>
         >>> async def main():
         ...     conf = {"op": "divide", "other": "5"}
-        ...     result = await async_pipe({"content": "10"}, conf=conf)
-        ...     print(next(result)["simplemath"])
+        ...     result = async_pipe({"content": "10"}, conf=conf)
+        ...     print((await anext(result))["simplemath"])
         >>>
         >>> run(main)
         2

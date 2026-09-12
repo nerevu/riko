@@ -99,7 +99,7 @@ if __name__ == "__main__":
     else:
 
         async def amain() -> None:
-            print(list(await AsyncPipe(name, source=source)))
+            print([item async for item in AsyncPipe(name, source=source)])
 
         register(ModuleDefinition(name=name, sync_pipe=pipe, async_pipe=async_pipe))
         run(amain)

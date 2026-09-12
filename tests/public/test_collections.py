@@ -401,7 +401,7 @@ class TestAsyncCollections(_CollectionTest):
     @pytest.mark.anyio
     async def test_stream(self, capsys):
         """Tests a asynchronous stream pipeline."""
-        stream = await (
+        stream = (
             AsyncPipe("itembuilder", conf=builder_conf)
             .tokenizer(emit=True)
             .udf(func=self.udf)
@@ -412,7 +412,7 @@ class TestAsyncCollections(_CollectionTest):
             .hash(assign="content")
         )
 
-        assert next(stream) == {"content": 396558121}
+        assert await anext(stream) == {"content": 396558121}
         assert self.runs == 9
 
     @pytest.mark.timeout(10)
@@ -506,7 +506,7 @@ class TestAsyncCollections(_CollectionTest):
     @pytest.mark.anyio
     async def test_pstream(self):
         """Tests a parallel asynchronous stream pipeline."""
-        stream = await (
+        stream = (
             AsyncPipe("itembuilder", conf=builder_conf, parallel=True)
             .tokenizer(emit=True)
             .strreplace(conf=strr_conf, assign="content")
@@ -515,7 +515,9 @@ class TestAsyncCollections(_CollectionTest):
             .udf(func=self.udf)
         )
 
-        assert next(stream) == {"content": 396558121}
+        first = await anext(stream)
+        [item async for item in stream]
+        assert first == {"content": 396558121}
         assert self.runs == 3
 
 
