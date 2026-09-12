@@ -48,6 +48,10 @@ Fixes
   ``processor`` and ``splitter`` call result is now typed as both awaitable and
   async-iterable, matching how it has always behaved at runtime.
 
+- An ``AsyncPipe`` passed as a terminal sub-source (``format``, ``formatted``, or
+  ``union``'s ``others``) is now drained before parsing, so an async pipe yields the
+  same records as its sync counterpart instead of raising a not-iterable error.
+
 - ``skip_if`` now treats a missing ``text`` as a presence check on ``field`` instead of
   matching against the string ``"None"``. An absent field skips and a ``text`` of
   ``None`` or ``0`` no longer misfires.

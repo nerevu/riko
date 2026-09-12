@@ -11,6 +11,7 @@ from importlib import import_module
 import pytest
 
 from riko.paths import ROOT_DIR
+from tests import async_test
 
 
 class TestExamples:
@@ -134,6 +135,27 @@ class TestExamples:
         length = len(pipeline)
         assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
         assert pipeline[-1] == expected
+
+    @async_test
+    @pytest.mark.parametrize(
+        "pipe_name",
+        [
+            "simple1",
+            "simple2",
+            "gigs",
+            "split",
+            "demo",
+            "wired",
+            pytest.param("kazeeki", marks=pytest.mark.timeout(150)),
+        ],
+    )
+    async def test_async_matches_sync(self, pipe_name):
+        """Each example's async_pipe yields the same records as its sync pipe."""
+        module = import_module(f"examples.{pipe_name}")
+        sync_result = list(module.pipe(test=True))
+        async_stream = module.async_pipe(test=True)
+        async_result = [item async for item in async_stream]
+        assert async_result == sync_result
 
     @pytest.mark.parametrize(
         ("pipeid", "expected"),

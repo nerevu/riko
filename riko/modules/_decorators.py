@@ -290,7 +290,6 @@ class Module[B: (Literal[True], Literal[False])]:
         conf: Conf | DynamicConf | None = None,
         *,
         assign: str | None = "",
-        emit: bool | None = None,
         **kwargs: object,
     ) -> PreparedModule[ItemOrValue, object]:
         """
@@ -305,19 +304,22 @@ class Module[B: (Literal[True], Literal[False])]:
 
             conf: The call-time configuration, merged over the module defaults.
 
-            assign: The field results are assigned to; defaults to the pipe name
+            assign: The field results are assigned to. Defaults to the pipe name
                 (or ``"content"`` for a source). Ignored when ``emit`` is true.
 
-            emit: Whether to emit results rather than assign them; defaults from
-                the parser's contract.
+            **kwargs: Extra call-time options folded into the resolved opt
 
-            **kwargs: Extra call-time options folded into the resolved opts.
+        Kwargs:
+
+            emit (bool): Whether to emit results rather than assign them. Defaults to
+                the parser's contract.
 
         Returns:
 
             The immutable ``PreparedModule`` for this call.
 
         """
+        emit = cast(bool | None, kwargs.pop("emit", None))
         def_emit = self._opts.get("emit") if emit is None else emit
         def_assign = assign or self._opts.get("assign", "")
         opts: Opts = Opts(self._opts)
@@ -408,6 +410,67 @@ def _call_kwargs(
         pkwargs["resources"] = bind_resources(prepared.resources, context.resources)
 
     return pkwargs
+
+
+@overload
+async def _materialize_terminal[T](  # noqa: E704
+    value: AsyncIterable[T],
+) -> Iterator[T]: ...
+@overload  # noqa: E302
+async def _materialize_terminal[T](  # noqa: E704
+    value: list[T] | tuple[T, ...],
+) -> list[T]: ...
+@overload
+async def _materialize_terminal[T](value: T) -> T: ...  # noqa: E704
+async def _materialize_terminal[T](value: object) -> object:  # noqa: E302
+    """
+    Drains an async terminal sub-source into a concrete sync iterator.
+
+    A terminal sub-source (an ``AsyncPipe`` passed as ``format``/``formatted`` or one
+    of ``union``'s ``others``) reaches the synchronous conf-parsing machinery, which
+    pulls it with ``next`` or ``chain``. An async iterable cannot satisfy this.
+
+    Args:
+
+        value: A call-time keyword value that may be an async stream, a list or tuple
+            of streams, or an ordinary option.
+
+    Returns:
+
+        The value with any async stream drained to an iterator; other values are
+        returned unchanged.
+
+    """
+    materialized: Iterator[T] | list[T] | T
+
+    if isinstance(value, AsyncIterable):
+        materialized = iter([item async for item in value])
+    elif isinstance(value, (list, tuple)):
+        materialized = [await _materialize_terminal(item) for item in value]
+    else:
+        materialized = cast(T, value)
+
+    return materialized
+
+
+async def _materialize_terminals(**kwargs: object) -> dict[str, object]:
+    """
+    Drains any async terminal sub-sources held in call-time keyword arguments.
+
+    The async operator and processor wrappers forward terminal sub-sources through
+    ``**kwargs`` into the synchronous conf-parsing machinery. Each async stream is
+    materialized once here so parsing consumes it like its ``SyncPipe`` counterpart.
+
+    Args:
+
+        **kwargs: The passthrough call-time options, possibly holding async streams.
+
+    Returns:
+
+        A new mapping with every async terminal sub-source drained.
+
+    """
+    return {key: await _materialize_terminal(value) for key, value in kwargs.items()}
 
 
 def _reject_foreign_opts(
@@ -580,7 +643,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         prepared: PreparedModule[T, E],
         input_: DotDict[RikoValue],
         field: str | None = None,
-        **kwargs: ItemOrValue,
+        **kwargs: object,
     ) -> tuple[ItemOrValue, Casted[T, E] | Casted[ItemOrValue, E], bool]:
         """
         Extracts and casts the input for a processor call.
@@ -795,8 +858,10 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             verbose: bool | None = None,
             test: bool | None = None,
             submodule: bool | None = None,
-            **kwargs: bool,
+            **kwargs: object,
         ) -> ProcessorWrapperOutput:
+            kwargs = await _materialize_terminals(**kwargs)
+
             if is_listlike(item):
                 _wrapper = partial(
                     _async_wrapper_impl,
@@ -872,7 +937,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             verbose: bool | None = None,
             test: bool | None = None,
             submodule: bool | None = None,
-            **kwargs: bool,
+            **kwargs: object,
         ) -> ProcessorWrapperOutput:
             if is_listlike(item):
                 _wrapper = partial(
@@ -1335,7 +1400,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             verbose: bool | None = None,
             test: bool | None = None,
             submodule: bool | None = None,
-            **kwargs: bool,
+            **kwargs: object,
         ) -> AsyncOperatorWrapperOutput:
             if isinstance(items, AsyncIterable):
                 # Async-native composers (async def async_pipe, e.g. timeout/send)
@@ -1350,6 +1415,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             else:
                 input_ = self.parse(items)
 
+            kwargs = await _materialize_terminals(**kwargs)
             prepared = self.prepare(
                 module_name, conf=conf, assign=assign, count=count, **kwargs
             )
@@ -1416,7 +1482,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             verbose: bool | None = None,
             test: bool | None = None,
             submodule: bool | None = None,
-            **kwargs: bool,
+            **kwargs: object,
         ) -> OperatorWrapperOutput:
             input_ = self.parse(items)
             prepared = self.prepare(
@@ -1669,7 +1735,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             *,
             assign: str | None = None,
             field: str | None = None,
-            **kwargs: bool,
+            **kwargs: object,
         ) -> Streams:
             input_ = self.parse(items)
             prepared = self.prepare(op_module_name, conf=conf, assign=assign, **kwargs)
@@ -1687,7 +1753,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             *,
             assign: str | None = None,
             field: str | None = None,
-            **kwargs: bool,
+            **kwargs: object,
         ) -> Streams:
             input_ = self.parse(items)
             prepared = self.prepare(op_module_name, conf=conf, assign=assign, **kwargs)
