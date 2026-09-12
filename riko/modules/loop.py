@@ -38,6 +38,7 @@ Examples:
         [{'title': 'a b c', 'first': {'content': 'a'}}]
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 

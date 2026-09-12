@@ -15,6 +15,7 @@ Examples:
         {'x': 4}
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 

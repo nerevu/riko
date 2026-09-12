@@ -17,6 +17,7 @@ Examples:
         'hello world'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 

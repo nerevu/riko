@@ -17,6 +17,7 @@ Examples:
         15
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 

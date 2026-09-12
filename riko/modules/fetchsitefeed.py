@@ -22,6 +22,7 @@ Examples:
         "EU sets out 'phased' Brexit strategy"
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 

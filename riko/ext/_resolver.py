@@ -19,6 +19,7 @@ Examples:
         [{'count': 2}]
 
 Attributes:
+
     pipe_resolver: Process-global façade over the two default resolvers.
 
 """

@@ -18,6 +18,7 @@ Examples:
         'bye world'
 
 Attributes:
+
     OPS: Replacement strategies, keyed by ``param``.
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.

@@ -22,6 +22,7 @@ Examples:
         'lo w'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 

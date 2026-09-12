@@ -20,6 +20,7 @@ Examples:
         'http://finance.yahoo.com/rss/headline?s=gm'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 

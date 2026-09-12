@@ -22,6 +22,7 @@ Examples:
         [{'x': 4}]
 
 Attributes:
+
     ENTRY_POINT_GROUP: Entry point group scanned for third-party modules.
     registry: Process-global registry backing ``register`` and pipe resolution.
 

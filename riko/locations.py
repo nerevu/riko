@@ -21,6 +21,7 @@ Examples:
         'JPN'
 
 Attributes:
+
     LOCATIONS: Continent or country name to region record mapping.
 
 """

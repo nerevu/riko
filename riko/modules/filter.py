@@ -25,6 +25,7 @@ Examples:
         {'x': 3}
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
     ALLOW_INF: Whether to allow ``inf``/``-inf`` to compare numerically (default: False)

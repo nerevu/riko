@@ -20,6 +20,7 @@ Examples:
         'worldwide'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 

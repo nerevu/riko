@@ -6,6 +6,7 @@ riko.parsers
 Parses feeds, XML/HTML documents, and pipe configurations.
 
 Attributes:
+
     XML_PARSER: Hardened lxml parser (entity, DTD, and network access
         disabled), or ``None`` when lxml is unavailable.
 

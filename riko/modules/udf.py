@@ -16,6 +16,7 @@ Examples:
         {'y': 3}
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 

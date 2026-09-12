@@ -6,6 +6,7 @@ riko._io
 Provides HTTP and file I/O helpers.
 
 Attributes:
+
     STREAMING_THRESHOLD: Response size above which content is streamed.
 
 """

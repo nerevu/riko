@@ -18,6 +18,7 @@ Examples:
         'What is Lorem Ipsum?'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 

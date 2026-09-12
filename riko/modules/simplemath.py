@@ -17,6 +17,7 @@ Examples:
         Decimal('2')
 
 Attributes:
+
     OPS: Supported operations, keyed by ``op`` name.
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
