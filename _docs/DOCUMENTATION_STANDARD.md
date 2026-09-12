@@ -22,16 +22,19 @@ Good:  count_key: Field to count by.
 Do not use `mixed:` / `Awaitable:` / `Deferred:` return labels, and do not name a
 parameter in the docstring that differs from the signature.
 
-### Exception: `pipe`/`async_pipe` keep their type labels
+### Exception: values consumed from an untyped `**kwargs` keep their type labels
 
 The rule above assumes annotations that describe the call. Every module's
 `pipe`/`async_pipe` is declared `(*args: Any, **kwargs: object)` — annotations
 that describe nothing. There the docstring is the *only* record of the contract,
 so it carries the types as well as the names.
 
-This applies **only** to the `pipe`/`async_pipe` entry points. `parser` /
-`async_parser` have real annotations (`stream: Stream, objconf: WriteObjconf,
-tuples: PipeTuples`), so they stay typeless.
+The same holds for any individual option a function pulls out of an untyped
+`**kwargs: object` (e.g. an `emit` flag read via `kwargs.pop("emit", ...)`):
+the signature annotation covers the whole bag, not that key, so document it in a
+`Kwargs:` section with its type label (`emit (bool): …`). A parameter that has
+its own real annotation stays typeless — `parser` / `async_parser`
+(`stream: Stream, objconf: WriteObjconf, tuples: PipeTuples`) carry no labels.
 
 `conf` also keeps its nesting: its keys are entries inside a dict argument, not
 parameters in their own right. Flattening them is a factual error — it tells the
