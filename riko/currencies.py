@@ -24,6 +24,7 @@ Examples:
         'unnamed'
 
 Attributes:
+
     CURRENCY_SYMBOLS: Currency symbol to ISO 4217 code mapping.
     CURRENCY_CODES: ISO 4217 code to currency record mapping.
 

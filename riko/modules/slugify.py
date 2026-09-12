@@ -15,6 +15,7 @@ Examples:
         'hello-world'
 
 Attributes:
+
     SEPARATOR: The separator used when ``conf`` supplies none.
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.

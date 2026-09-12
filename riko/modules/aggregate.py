@@ -20,6 +20,7 @@ Examples:
         {'y': 3}
 
 Attributes:
+
     DEFAULTS: Default operator configuration.
 
 """

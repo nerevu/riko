@@ -19,6 +19,7 @@ Examples:
         'Hello World'
 
 Attributes:
+
     ATTRS: The ``str`` methods ``transform`` may name.
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.

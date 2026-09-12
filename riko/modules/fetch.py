@@ -16,6 +16,7 @@ Examples:
         'Donations'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
     keys: Entry fields every parsed feed provides.

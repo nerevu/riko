@@ -32,6 +32,7 @@ Examples:
         b'[{"x": 0}, {"x": 1}]'
 
 Attributes:
+
     OPTS (Opts): The default pipe options
     DEFAULTS (Defaults): The default parser options
 
