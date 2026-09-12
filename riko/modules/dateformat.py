@@ -127,8 +127,8 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({"date": date(2015, 5, 4)})
-        ...     print(next(result)["dateformat"])
+        ...     result = async_pipe({"date": date(2015, 5, 4)})
+        ...     print((await anext(result))["dateformat"])
         >>>
         >>> run(main)
         05/04/2015 00:00:00

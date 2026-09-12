@@ -164,8 +164,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
         >>>
         >>> async def main():
         ...     conf = {"url": get_path("lorem.txt")}
-        ...     result = await async_pipe(conf=conf)
-        ...     print(next(result))
+        ...     result = async_pipe(conf=conf)
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         What is Lorem Ipsum?

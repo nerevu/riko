@@ -642,21 +642,20 @@ def pipe(test=False, parallel=False, threads=False) -> RikoItems:
     return list(odesk_pipe.union(others=others))
 
 
-async def async_pipe(test=None) -> RikoItems:
+def async_pipe(test=None) -> AsyncPipe:
     pipe = partial(AsyncPipe, "fetchdata")
     odesk_source = pipe(conf=odesk_conf)
     guru_source = pipe(conf=guru_conf)
     freelancer_source = pipe(conf=freelancer_conf)
     elance_source = pipe(conf=elance_conf)
 
-    odesk_pipe = await parse_odesk(odesk_source)
-    guru_stream = await parse_guru(guru_source)
-    elance_stream = await parse_elance(elance_source)
-    freelancer_stream = await parse_freelancer(freelancer_source)
+    odesk_pipe = parse_odesk(odesk_source)
+    guru_stream = parse_guru(guru_source)
+    elance_stream = parse_elance(elance_source)
+    freelancer_stream = parse_freelancer(freelancer_source)
 
     others = [guru_stream, freelancer_stream, elance_stream]
-    stream = await cast(AsyncPipe, odesk_pipe).union(others=others)
-    return list(stream)
+    return cast(AsyncPipe, odesk_pipe).union(others=others)
 
 
 def print_results(result) -> None:

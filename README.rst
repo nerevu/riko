@@ -477,11 +477,11 @@ To enable asynchronous processing, you must install the ``async`` extra.
     >>> #   2. filter for items with an 'a' in the title
     >>>
     >>> async def main():
-    ...     stream = await (
+    ...     stream = (
     ...         AsyncPipe(Sources.FETCH, conf=fetch_conf)           # 1
     ...             .filter(conf={'rule': filter_rule}))            # 2
     ...
-    ...     print(next(stream)['title'])
+    ...     print((await anext(stream))['title'])
     >>>
     >>> print("Donations") if issync else run(main)
     Donations

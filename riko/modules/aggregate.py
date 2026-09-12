@@ -32,7 +32,7 @@ from typing import Any
 import pygogo as gogo
 
 from riko._iterutils import listize
-from riko.bado._util import as_awaitable
+from riko.bado._util import maybe_deferred
 from riko.modules._prepare import require_arg
 from riko.types._configs import AggregateObjconf
 from riko.types._options import Defaults
@@ -101,8 +101,7 @@ async def async_parser(
 
     """
     func = require_arg(func, "func", "aggregate", strict=True)
-    unawaited = func(stream)
-    result = await as_awaitable(unawaited)
+    result = await maybe_deferred(func, stream)
     return iter(listize(result))
 
 

@@ -182,8 +182,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
         >>>
         >>> async def main():
         ...     conf = {"rule": {"find": "hello", "replace": "bye"}}
-        ...     result = await async_pipe({"content": "hello world"}, conf=conf)
-        ...     print(next(result)["strreplace"])
+        ...     result = async_pipe({"content": "hello world"}, conf=conf)
+        ...     print((await anext(result))["strreplace"])
         >>>
         >>> run(main)
         bye world

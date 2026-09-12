@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Iterable, Iterator
+from collections.abc import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Generator,
+    Iterable,
+    Iterator,
+)
 from io import StringIO
 from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, TypedDict, overload
 
@@ -143,9 +150,9 @@ class SyncSplitterWrapper(ModuleWrapper):
 
 
 # Async
-type AsyncProcessorWrapperOutput = Awaitable[ProcessorWrapperOutput]
+type AsyncProcessorWrapperOutput = AsyncStreamOrValueStream
 type AsyncOperatorWrapperOutput = AsyncStreamOrValueStream
-type AsyncSplitterWrapperOutput = Awaitable[SplitterWrapperOutput]
+type AsyncSplitterWrapperOutput = AsyncIterator[Stream]
 type AsyncWrapperOutput = (
     AsyncProcessorWrapperOutput
     | AsyncOperatorWrapperOutput
@@ -173,23 +180,38 @@ type AsyncPipeParser = Callable[..., AsyncPipeItems]
 type AsyncPipeWrapper = Callable[..., AsyncWrapperOutput]
 
 
+class AsyncWrapperStream[Y, A](Protocol):
+    """
+    Dual-protocol result of an async ``processor``/``splitter`` call.
+
+    Async-iterating it consumes the parser's stream item by item (``Y``) with no
+    outer await (the default ``async for item in async_pipe(...)`` path); awaiting it
+    runs the parser and returns the whole stream (``A``, the advanced
+    ``await async_pipe(...)`` path).
+    """
+
+    def __await__(self) -> Generator[object, None, A]: ...  # noqa: E704
+    def __aiter__(self) -> AsyncIterator[Y]: ...  # noqa: E301, E704
+    def __anext__(self) -> Awaitable[Y]: ...  # noqa: E301, E704
+
+
 class AsyncProcessorWrapper(ModuleWrapper):
-    async def __call__(  # noqa: E704
+    def __call__(  # noqa: E704
         self,
         item: ProcessorWrapperInput | None = None,
         conf: Conf | DynamicConf | None = None,
         context: Context | None = None,
         **__: object,
-    ) -> ProcessorWrapperOutput:
+    ) -> AsyncWrapperStream[ItemOrValue, ProcessorWrapperOutput]:
         _ = (item, conf, context)
-        return iter(())
+        raise NotImplementedError
 
 
 class AsyncSubPipe(ModuleWrapper):
-    async def __call__(  # noqa: E704
+    def __call__(  # noqa: E704
         self, *_: object, **__: object
-    ) -> ProcessorWrapperOutput:
-        return iter(())
+    ) -> AsyncWrapperStream[ItemOrValue, ProcessorWrapperOutput]:
+        raise NotImplementedError
 
 
 async def _empty_async_stream() -> AsyncOperatorWrapperOutput:
@@ -211,14 +233,14 @@ class AsyncOperatorWrapper(ModuleWrapper):
 
 
 class AsyncSplitterWrapper(ModuleWrapper):
-    async def __call__(  # noqa: E704
+    def __call__(  # noqa: E704
         self,
         items: SplitterWrapperInput | None = None,
         conf: Conf | None = None,
         **__: object,
-    ) -> SplitterWrapperOutput:
+    ) -> AsyncWrapperStream[Stream, SplitterWrapperOutput]:
         _ = (items, conf)
-        return iter(())
+        raise NotImplementedError
 
 
 # Both

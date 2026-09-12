@@ -123,8 +123,8 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         >>>
         >>> async def main():
         ...     conf = {"start": "3", "length": "4"}
-        ...     result = await async_pipe({"content": "hello world"}, conf=conf)
-        ...     print(next(result)["substr"])
+        ...     result = async_pipe({"content": "hello world"}, conf=conf)
+        ...     print((await anext(result))["substr"])
         >>>
         >>> run(main)
         lo w

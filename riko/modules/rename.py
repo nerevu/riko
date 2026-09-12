@@ -183,8 +183,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
         >>>
         >>> async def main():
         ...     conf = {"rule": {"field": "content", "newval": "greeting"}}
-        ...     result = await async_pipe({"content": "hello world"}, conf=conf)
-        ...     print(next(result)["greeting"])
+        ...     result = async_pipe({"content": "hello world"}, conf=conf)
+        ...     print((await anext(result))["greeting"])
         >>>
         >>> run(main)
         hello world

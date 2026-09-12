@@ -147,8 +147,8 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
         >>>
         >>> async def main():
         ...     sonnet = {"stanzas": [{"verses": ["verse1", "verse2"]}]}
-        ...     result = await async_pipe(sonnet, conf={"path": "stanzas.verses"})
-        ...     print(next(result))
+        ...     result = async_pipe(sonnet, conf={"path": "stanzas.verses"})
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         {'content': 'verse1'}
