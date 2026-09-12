@@ -19,6 +19,7 @@ Examples:
         Decimal('1.275201')
 
 Attributes:
+
     EXCHANGE_API: Default rates endpoint.
     PARAMS: Query parameters carrying the ``OPEN_EXCHANGE_RATES_ID`` app id.
     OPTS: Processor wrapper options.

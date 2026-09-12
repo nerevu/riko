@@ -21,6 +21,7 @@ Examples:
         [{'x': 1}]
 
 Attributes:
+
     pipeline_resolver: Process-global resolver. Core ships it unconfigured, since
         a bare install has no named pipelines.
 

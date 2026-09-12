@@ -7,6 +7,7 @@ rule construction and multi-pass substitution, and the shared find/extract used
 by the ``refind`` and ``strfind`` pipes.
 
 Attributes:
+
     PARAMS: Match selectors for ``first`` and ``last``.
     OPS: Handlers for each find ``location``.
 

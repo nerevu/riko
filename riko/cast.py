@@ -20,6 +20,7 @@ Examples:
         12
 
 Attributes:
+
     CAST_SWITCH: Destination type to caster and default mapping.
 
 """

@@ -14,6 +14,7 @@ Examples:
         {'content': 'Once'}
 
 Attributes:
+
     TOKEN_KEY: The field each token is assigned to when ``conf`` supplies none.
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.

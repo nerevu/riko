@@ -17,6 +17,7 @@ Examples:
         [{'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 

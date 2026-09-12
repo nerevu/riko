@@ -19,6 +19,7 @@ Examples:
         {'forever': True}
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 

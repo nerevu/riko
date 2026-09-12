@@ -13,6 +13,7 @@ Examples:
         Decimal('10')
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 

@@ -20,6 +20,7 @@ Examples:
         'CNN.com International'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 

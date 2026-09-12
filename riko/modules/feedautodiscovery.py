@@ -33,6 +33,7 @@ Examples:
         'file://riko/data/bbci.co.uk.xml'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 

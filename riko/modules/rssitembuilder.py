@@ -18,6 +18,7 @@ Examples:
         'the title'
 
 Attributes:
+
     RSS: Maps each conf key onto its RSS field, dots marking sub-levels.
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.

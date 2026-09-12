@@ -16,6 +16,7 @@ Examples:
         {'component': 'scheme', 'content': 'http'}
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 

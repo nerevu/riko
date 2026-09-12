@@ -22,6 +22,7 @@ Examples:
         {'x': 0}
 
 Attributes:
+
     OPTS: Splitter wrapper options.
     DEFAULTS: Default splitter configuration.
 
