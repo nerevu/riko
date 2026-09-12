@@ -38,15 +38,15 @@ def file2entries(f: StringFileLike | Iterator[str], parser: RSSLinkParser) -> St
 
 def doc2entries(document: "Node") -> Iterator[object]:
     for node in document.childNodes:
-        if hasattr(node, "attributes") and node.Attributes:
-            entry = node.attributes
+        if hasattr(node, "attributes") and hasattr(node, "Attributes"):
+            entry = node.attributes or {}
             alternate = entry.get("rel") == "alternate"
             rss = "rss" in str(entry.get("type") or "")
         else:
             alternate = rss = None
             entry = {}
 
-        if (alternate or rss) and "href" in entry:
+        if (alternate or rss) and entry and "href" in entry:
             entry["link"] = entry["href"]
             entry["tag"] = node.nodeName or ""
             yield entry

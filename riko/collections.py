@@ -1281,6 +1281,7 @@ class SyncPipe(PyPipe):
         Examples:
 
             >>> from riko import get_temp_file
+            >>>
             >>> items = [{"x": 0}, {"x": 1}]
             >>>
             >>> with get_temp_file() as fp:

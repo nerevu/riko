@@ -67,7 +67,7 @@ class TestResolveFormat:
     def test_explicit_format_wins(self):
         assert resolve_format("out.csv", "json") == "json"
 
-    def test_invalid_format_raise(self):
+    def test_invalid_format_raises(self):
         with pytest.raises(ValueError, match="not a valid Formats"):
             resolve_format("out.txt", None)
 

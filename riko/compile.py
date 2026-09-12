@@ -439,7 +439,7 @@ def write_file(
     data: object, path: Path | str | None, pretty: bool = False
 ) -> int | None:
     if data and path:
-        with open(str(path), "w", encoding="utf-8") as f:
+        with open(path, "w", encoding="utf-8") as f:
             if hasattr(data, "keys") and pretty:
                 kwargs = {
                     "cls": CustomEncoder,

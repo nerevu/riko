@@ -483,7 +483,7 @@ To enable asynchronous processing, you must install the ``async`` extra.
     ...
     ...     print(next(stream)['title'])
     >>>
-    >>> print('Donations') if issync else run(main)
+    >>> print("Donations") if issync else run(main)
     Donations
 
 Built-in pipes
