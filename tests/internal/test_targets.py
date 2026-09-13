@@ -388,6 +388,33 @@ class TestSessionLifecycle:
         session.teardown()
         assert path.read_bytes() == b'{"x": 1}\n'
 
+    def test_stream_then_item_rejected(self, tmp_path):
+        session = self._session(tmp_path)
+        session.write(ITEMS)
+
+        with pytest.raises(RuntimeError, match="cannot mix item and stream"):
+            session.write({"x": 0})
+
+        session.teardown()
+
+    def test_item_then_stream_rejected(self, tmp_path):
+        session = self._session(tmp_path)
+        session.write({"x": 0})
+
+        with pytest.raises(RuntimeError, match="cannot mix item and stream"):
+            session.write(ITEMS)
+
+        session.teardown()
+
+    def test_two_whole_streams_rejected(self, tmp_path):
+        session = self._session(tmp_path)
+        session.write(ITEMS)
+
+        with pytest.raises(RuntimeError, match="cannot attempt multiple stream"):
+            session.write(ITEMS)
+
+        session.teardown()
+
 
 class TestSyncWriteExecution:
     def test_passthrough_preserves_stream(self, tmp_path):
