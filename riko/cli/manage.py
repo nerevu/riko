@@ -25,6 +25,8 @@ from riko._logging import exception_hook
 from riko.paths import ROOT_DIR
 
 from ._docstyle import format_issue, iter_summary_issues
+from .gen_api_surface import _DOC as API_SURFACE_PATH
+from .gen_api_surface import main as gen_api_surface_main
 from .gen_config import _CONFIGS as CONFIG_PATH
 from .gen_config import main as gen_config_main
 from .gen_names import _MODULE_IDS as MODULE_IDS_PATH
@@ -81,6 +83,11 @@ CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
         gen_pipelines_main,
         lambda: "regenerated compiled pipe modules from their JSON definitions",
         "Error regenerating compiled pipe modules!",
+    ),
+    "api": (
+        gen_api_surface_main,
+        lambda: f"regenerated the API-surface document at {API_SURFACE_PATH}",
+        "Error regenerating the API-surface document!",
     ),
 }
 
