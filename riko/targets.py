@@ -5,22 +5,18 @@ riko.targets
 
 Write target adapters (PRIVATE).
 
-A ``WriteTarget`` is a destination the ``sink``/``write`` verbs deliver records to.
-``File`` is the one built-in target. It serializes with the ``Targets`` converters
-and writes to a path. External providers (Airtable, databases, …) supply their own
-``WriteTarget`` implementations outside core. ``resolve_target`` normalizes a
-destination argument (a path string or a target object) into a ``WriteTarget``.
+A ``WriteTarget`` is a destination that reports what it can write. ``File`` is the
+one built-in target: it serializes records with a ``Formats`` converter and writes a
+path. External providers (Airtable, databases, …) supply their own ``WriteTarget``
+implementations outside core. ``resolve_target`` normalizes a destination argument
+(a path string or a target object) into a ``WriteTarget``.
 
-The ``WriteMode`` axis differs by target: a keyed record store treats ``replace``/
-``delete`` as match-on-``keys`` operations; but a ``File`` treats ``replace`` as
-overwrite, and ``append`` as append. Files have no keys, so it builds a
-``WriteOperation`` directly rather than through the keyed ``???`` validator.
-
-Delivery granularity (item-by-item vs buffered) is **not** caller-configured: it is
-negotiated from the resolved ``(target × format)`` capabilities. A line-oriented
-format (csv/jsonl) is written incrementally; a whole-document format (json/geojson)
-buffers and writes one document. This resolved strategy is a private property of the
-writer, never a public write parameter.
+Preparation is generic over ``WriteTarget`` and validated in one place:
+``prepare_write`` resolves the target, resolves its ``(target × fmt)``
+capabilities, normalizes the keys, validates the ``(target, mode, keys)`` triple,
+and returns a ``PreparedWrite``. What a mode's keys mean — record-match identity vs.
+idempotency identity — is decided by the target's capabilities, so the caller passes
+a single unified ``keys`` and never distinguishes the two.
 
 Examples:
 
@@ -29,12 +25,7 @@ Examples:
         >>> from riko.targets import File, resolve_target
         >>>
         >>> resolve_target("out.csv")
-        File(url='out.csv', format=None)
-
-Attributes:
-
-    FILE_OPEN_MODES: Maps each file ``WriteMode`` to its file-open mode string.
-    STREAMABLE_FORMATS: The line-oriented formats written incrementally.
+        File(url='out.csv', fmt=None)
 
 """
 
@@ -42,10 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from riko._formats import resolve_format
-from riko._iterutils import listize
 from riko.types._write import (
-    APPENDABLE_FORMATS,
-    STREAMABLE_FORMATS,
     Destination,
     Formats,
     KeyLike,
@@ -57,11 +45,50 @@ from riko.types._write import (
     WriteTarget,
 )
 
+_FILE_APPEND_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
+_FILE_INCREMENTAL_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
+
 
 def normalize_keys(value: KeyLike | None) -> tuple[str, ...]:
-    """Normalizes ``value`` into a tuple of names, wrapping a bare string."""
-    empty_value: tuple[str, ...] = ()
-    return tuple(listize(empty_value if value is None else value))
+    """
+    Normalizes ``value`` into a tuple of keys, preserving caller ordering.
+
+    A bare string is wrapped; any iterable is materialized as-is.
+
+    Args:
+
+        value: One key, an iterable of keys, or ``None``.
+
+    Returns:
+
+        The keys as a tuple, empty when ``value`` is ``None``.
+
+    Raises:
+
+        ValueError: When a key is empty, or the keys contain a duplicate.
+
+    Examples:
+
+        >>> normalize_keys("id")
+        ('id',)
+        >>> normalize_keys(["a", "b"])
+        ('a', 'b')
+        >>> normalize_keys(None)
+        ()
+
+    """
+    if value is None:
+        keys: tuple[str, ...] = ()
+    else:
+        keys = (value,) if isinstance(value, str) else tuple(value)
+
+        if any(not key for key in keys):
+            raise ValueError("write keys must be non-empty strings")
+
+        if len(set(keys)) != len(keys):
+            raise ValueError(f"duplicate write keys are not allowed: {keys!r}")
+
+    return keys
 
 
 def validate_target_mode(
@@ -72,25 +99,33 @@ def validate_target_mode(
     keys: tuple[str, ...] = (),
 ) -> None:
     """
-    Validates ``mode`` against ``target``'s capabilities.
+    Validates the ``(target, mode, keys)`` triple against ``capabilities``.
+
+    A match-keyed mode requires keys; a mode outside the keyed sets forbids them; an
+    idempotent mode accepts keys but does not require them.
+
+    Args:
+
+        target: The resolved write target, named in error messages.
+        mode: The resolved write mode.
+        capabilities: The resolved ``(target × fmt)`` capabilities.
+        keys: The normalized keys.
 
     Raises:
 
-        ValueError when ``mode`` is unsupported by the target, or a non-keyed mode is
-            given ``key``/``key``.
+        ValueError: When the mode is unsupported, keys are given for an unkeyed
+            mode, or a match-keyed mode is missing keys.
 
     """
-    keyed = mode in capabilities.keyed_modes
-    match_keyed = mode in capabilities.match_keyed_modes
-    target_name = target.__class__.__name__
+    name = target.__class__.__name__
 
     if mode not in capabilities.modes:
         supported = ", ".join(sorted(m.value for m in capabilities.modes))
-        msg = f"{target_name} does not support '{mode.value}' mode; {supported=}"
-    elif keys and not keyed:
-        msg = f"{target_name} does not support {keys=} for '{mode.value}' mode"
-    elif match_keyed and not keys:
-        msg = f"{target_name} '{mode.value}' mode requires keys"
+        msg = f"{name} does not support the {mode.value!r} mode; {supported=}"
+    elif keys and mode not in capabilities.keyed_modes:
+        msg = f"{name} forbids 'keys' for the {mode.value!r} mode"
+    elif mode in capabilities.match_keyed_modes and not keys:
+        msg = f"{name} requires 'keys' for the {mode.value!r} mode"
     else:
         msg = ""
 
@@ -100,51 +135,51 @@ def validate_target_mode(
 
 def prepare_write(
     dest: Destination,
-    *,
     mode: WriteMode | str = WriteMode.REPLACE,
+    *,
     fmt: Formats | str | None = None,
-    key: KeyLike | None = None,
+    keys: KeyLike | None = None,
 ) -> PreparedWrite:
     """
-    Validates ``mode`` against ``target``' and builds a ``PreparedWrite``.
+    Resolves, validates, and binds a write into a ``PreparedWrite``.
 
-    Whether a mode is keyed is a per-target property, not a mode-global one. A
-    serializing target (e.g., ``File``) treats every mode as an unkeyed write and
-    forbids ``keys``/``key``. A record store routes through the keyed
-    :func:`riko.???` validator. For a serializing target, the
-    valid modes also depend on ``fmt``. Appending to a whole-document format (e.g.,
-    json) is rejected here.
+    The target reports its ``(target × fmt)`` capabilities; the keys are
+    normalized; the ``(target, mode, keys)`` triple is validated; and the result is a
+    fully validated, execution-ready specification.
 
     Args:
 
-        target: The resolved write target.
+        dest: A path, ``Path``, or ``WriteTarget``.
         mode: The write mode, as a ``WriteMode`` or its string value.
-        key: The dedupe key used for match_keyed or idempotent modes.
-        fmt: The serialization format used to validate the mode.
+        fmt: The serialization format override for a serializing target.
+        keys: The unified keys, interpreted per the target's capabilities.
 
     Returns:
 
-        The normalized, validated write specification.
+        The target-bound, validated write specification.
 
     Raises:
 
-        ValueError: for invalid ``mode``/``target``/``fmt`` combinations
+        ValueError: For an invalid ``(dest, mode, keys, fmt)`` combination.
 
     Examples:
 
-        >>> from riko.targets import File, build_write
+        >>> from riko.targets import File, prepare_write
         >>>
-        >>> prepare_write(File("out.csv"), "append")
-        PreparedWrite()
+        >>> prepared = prepare_write(File("out.csv"), "append")
+        >>> prepared.operation.mode
+        <WriteMode.APPEND: 'append'>
+        >>> prepared.fmt
+        <Formats.CSV: 'csv'>
 
     """
     target = resolve_target(dest)
     resolved_mode = WriteMode(mode)
     capabilities = target.capabilities(fmt)
-    keys = normalize_keys(key)
+    normalized_keys = normalize_keys(keys)
 
-    validate_target_mode(target, resolved_mode, capabilities, keys=keys)
-    operation = WriteOperation(resolved_mode, keys=keys)
+    validate_target_mode(target, resolved_mode, capabilities, keys=normalized_keys)
+    operation = WriteOperation(resolved_mode, keys=normalized_keys)
     return PreparedWrite(target, operation, capabilities)
 
 
@@ -159,7 +194,7 @@ def resolve_target(dest: Destination, **kwargs: str) -> WriteTarget:
     Args:
 
         dest: The destination location.
-        kwargs: Extra keyword configuration for a constructed ``File`` (e.g. ``format``).
+        kwargs: Extra keyword configuration for a constructed ``File``.
 
     Returns:
 
@@ -171,13 +206,10 @@ def resolve_target(dest: Destination, **kwargs: str) -> WriteTarget:
 
     Examples:
 
-        >>> from riko.targets import File, resolve_target
+        >>> from riko.targets import resolve_target
         >>>
-        >>> target = resolve_target("out.csv")
-        >>> target
-        File(url='out.csv', format=None)
-        >>> target.url
-        'out.json'
+        >>> resolve_target("out.csv")
+        File(url='out.csv', fmt=None)
 
     """
     if isinstance(dest, WriteTarget):
@@ -209,32 +241,27 @@ class File:
 
     Examples:
 
-        >>> from riko import get_temp_file
         >>> from riko.targets import File
-        >>> from riko.types._write import WriteMode, WriteOperation
         >>>
-        >>> with get_temp_file() as fp:
-        ...     op = WriteOperation(WriteMode.REPLACE)
-        ...     result = File(fp.name).deliver([{"x": 1}], op)
-        ...     result.written > 0
+        >>> File("out.jsonl").capabilities().incremental
         True
 
     """
 
     url: str | Path
-    format: str | None = None
+    fmt: str | None = None
 
     def capabilities(self, fmt: Formats | str | None = None) -> WriteCapabilities:
         """
         Reports format-aware file capabilities.
 
-        A line-oriented format (csv/jsonl) supports ``append`` and ``replace``;
-        a whole-document format (json/geojson/ofx/qif) supports ``replace`` only,
+        A line-oriented format (csv/jsonl) supports ``append`` and ``replace`` and is
+        incremental; a whole-document format supports ``replace`` only and is not,
         because appending would concatenate two documents into invalid output.
 
         Args:
 
-            fmt: The serialization format override, else ``format``, else derived
+            fmt: The serialization format override, else ``fmt``, else derived
                 from the path extension.
 
         Returns:
@@ -247,26 +274,22 @@ class File:
             >>> from riko.types._write import WriteMode
             >>>
             >>> capabilities = File("out.jsonl").capabilities()
-            >>> capabilities.serializes
-            True
-            >>> WriteMode.APPEND in capabilities.modes
-            True
+            >>> capabilities.serializes, capabilities.appendable
+            (True, True)
             >>> WriteMode.APPEND in File("out.json").capabilities().modes
             False
 
         """
-        resolved_fmt = resolve_format(self.url, fmt or self.format)
+        resolved_fmt = resolve_format(self.url, fmt or self.fmt)
         modes = {WriteMode.REPLACE}
 
-        if resolved_fmt in APPENDABLE_FORMATS:
+        if resolved_fmt in _FILE_APPEND_FORMATS:
             modes.add(WriteMode.APPEND)
 
         return WriteCapabilities(
             modes=frozenset(modes),
             fmt=resolved_fmt,
-            serializes=True,
-            streamable=resolved_fmt in STREAMABLE_FORMATS,
-            appendable=resolved_fmt in APPENDABLE_FORMATS,
+            incremental=resolved_fmt in _FILE_INCREMENTAL_FORMATS,
         )
 
 
@@ -274,7 +297,9 @@ __all__ = [
     "Destination",
     "File",
     "Formats",
+    "PreparedWrite",
     "WriteCapabilities",
+    "WriteOperation",
     "WriteResult",
     "WriteTarget",
     "normalize_keys",

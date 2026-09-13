@@ -5,9 +5,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
+from riko.types._streams import AsyncItems
+
 if TYPE_CHECKING:
     from ._io import PathLike
-    from ._streams import Item
+    from ._streams import Item, Items
 
 type KeyLike = str | Iterable[str]
 
@@ -32,75 +34,6 @@ class WriteResult:
     written: int = 0
 
 
-class WriteSession(Protocol):
-    """
-    A live, execution-owned write session.
-
-    The specification (``Target`` × ``Format`` × ``WriteOperation``) says *what* to
-    write; a ``WriteSession`` performs *how this execution* writes it — an
-    execution-scoped lifecycle of acquire, write item, finalize, and teardown. A
-    session is never constructed by the caller: it is the value yielded by the
-    :func:`write_session` lifecycle that :meth:`riko.resources.Resource.from_lifecycle`
-    wraps, so the execution layer drives entry and teardown.
-
-    Both the passthrough ``write`` verb and the terminal ``sink`` verb consume the same
-    session; terminality is a property of how the pipeline is consumed, not a second
-    session type.
-    """
-
-    def write(self, item: Item) -> None:
-        """
-        Delivers one record through this session.
-
-        Args:
-
-            item: The record to deliver, written incrementally or buffered per the
-                negotiated strategy.
-
-        """
-        ...
-
-    async def awrite(self, item: Item) -> None:
-        """
-        Asynchronously delivers one record through this session.
-
-        Args:
-
-            item: The record to deliver.
-
-        """
-        ...
-
-    def finalize(self) -> WriteResult:
-        """
-        Finalizes the session, flushing any buffered document.
-
-        Returns:
-
-            The aggregated result describing what the session wrote.
-
-        """
-        ...
-
-    def teardown(self) -> None:
-        """
-        Tears down the session, flushing any buffered document and releasing resources.
-
-        The session is no longer usable after teardown.
-
-        """
-        ...
-
-    def abort(self) -> None:
-        """
-        Aborts the session, discarding any buffered document.
-
-        The session is no longer usable after aborting.
-
-        """
-        ...
-
-
 class WriteMode(StrEnum):
     """How a write reconciles incoming items with the destination."""
 
@@ -108,14 +41,6 @@ class WriteMode(StrEnum):
     MERGE = "merge"
     REPLACE = "replace"
     DELETE = "delete"
-
-    @property
-    def destructive(self) -> bool:
-        """Whether the mode removes or overwrites records (plan/apply gated)."""
-        return self in _DESTRUCTIVE
-
-
-_DESTRUCTIVE = frozenset({WriteMode.REPLACE, WriteMode.DELETE})
 
 
 class Formats(StrEnum):
@@ -130,49 +55,56 @@ class Formats(StrEnum):
 
 
 type FmtLike = Formats | str
-STREAMABLE_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
-APPENDABLE_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
 type ExportType = FmtLike | Literal["list", "tuple"]
 
 
 @dataclass(frozen=True, slots=True)
 class WriteCapabilities:
     """
-    What a write target supports.
+    What a write target supports for a resolved ``(target × format)``.
+
+    ``incremental`` says the target can make delivery progress before the whole
+    logical input is known (a line-oriented file), rather than needing the complete
+    document first (a framed file). ``appendable`` and ``serializes`` are derived
+    facts, not stored state: appendability is exactly ``APPEND in modes``, and a
+    target serializes exactly when it resolved a format.
 
     Attributes:
 
         modes: The ``WriteMode`` values the target accepts.
-
-        serializes: Whether the target encodes records with a format (a file),
-            as opposed to sending native records (a record store).
-
-        keyed: The ``WriteMode`` values that require a match key for the target.
+        fmt: The resolved serialization format, or ``None`` for a native target.
+        incremental: Whether delivery can progress before the input is complete.
+        match_keyed_modes: Modes whose keys identify records to reconcile against.
+        idempotent_modes: Modes whose keys deduplicate an otherwise-additive write.
 
     """
 
     modes: frozenset[WriteMode]
-    fmt: Formats
-    serializes: bool = False
-    streamable: bool = False
-    appendable: bool = False
+    fmt: Formats | None = None
+    incremental: bool = False
     match_keyed_modes: frozenset[WriteMode] = frozenset()
     idempotent_modes: frozenset[WriteMode] = frozenset()
 
     @property
     def keyed_modes(self) -> frozenset[WriteMode]:
+        """The union of the match-keyed and idempotent mode sets."""
         return self.match_keyed_modes | self.idempotent_modes
 
-    def __post_init__(self):
-        fmt = self.fmt
-        modes = self.modes
+    @property
+    def appendable(self) -> bool:
+        """Whether the target accepts ``append``, derived from ``modes``."""
+        return WriteMode.APPEND in self.modes
 
+    @property
+    def serializes(self) -> bool:
+        """Whether the target encodes records with a format, derived from ``fmt``."""
+        return self.fmt is not None
+
+    def __post_init__(self) -> None:
         if difference := self.keyed_modes - self.modes:
-            msg = f"keyed_modes {difference} not present in {modes=}"
+            msg = f"keyed modes {difference!r} are not present in modes"
         elif overlap := self.match_keyed_modes & self.idempotent_modes:
             msg = f"match_keyed_modes and idempotent_modes must not overlap; {overlap=}"
-        elif WriteMode.APPEND in self.modes and not self.appendable:
-            msg = f"{fmt=} does not support append."
         else:
             msg = ""
 
@@ -183,12 +115,17 @@ class WriteCapabilities:
 @dataclass(frozen=True, slots=True)
 class WriteOperation:
     """
-    A normalized, validated write specification.
+    Normalized write intent, independent of any target.
+
+    A ``WriteOperation`` is not a fully validated write specification: whether its
+    ``mode``/``keys`` are legal depends on a target's :class:`WriteCapabilities`.
+    :class:`PreparedWrite` is the target-bound, validated object.
 
     Attributes:
 
         mode: How incoming records reconcile with the destination.
-        keys: The match keys for a keyed mode; empty otherwise.
+        keys: The keys for a keyed mode (record-match or idempotency identity,
+            per the target's capabilities); empty otherwise.
 
     """
 
@@ -198,23 +135,21 @@ class WriteOperation:
 
 @runtime_checkable
 class WriteTarget(Protocol):
-    """
-    A destination that reports its capabilities and delivers records.
-    """
+    """A destination that reports its write capabilities."""
 
     def capabilities(self, fmt: Formats | str | None = None) -> WriteCapabilities:
         """
         Reports the modes and serialization behavior the target supports.
 
-        For a serializing target the supported modes depend on ``fmt``: only a
-        line-oriented format (csv/jsonl) can be appended to; a whole-document
-        format (json/geojson/…) supports ``replace`` only. Non-serializing
-        targets ignore ``fmt``.
+        Format-dependent behavior (which modes are appendable, whether delivery is
+        incremental) is a ``target × format`` fact the target itself decides; the
+        returned :class:`WriteCapabilities` merely reports that decision. A native
+        target ignores ``fmt``.
 
         Args:
 
-            fmt: The serialization format, used to decide which modes a
-                serializing target allows; ignored by non-serializing targets.
+            fmt: The serialization format, used by a serializing target to resolve
+                its capabilities; ignored by a native target.
 
         Returns:
 
@@ -229,10 +164,75 @@ type Destination = PathLike | WriteTarget
 
 @dataclass(frozen=True, slots=True)
 class PreparedWrite:
+    """
+    A target-bound, validated write ready for execution.
+
+    Attributes:
+
+        target: The resolved write target.
+        operation: The normalized, validated write intent.
+        capabilities: The resolved ``(target × format)`` capabilities.
+
+    """
+
     target: WriteTarget
     operation: WriteOperation
     capabilities: WriteCapabilities
 
     @property
-    def fmt(self) -> Formats:
+    def fmt(self) -> Formats | None:
+        """The resolved serialization format, or ``None`` for a native target."""
         return self.capabilities.fmt
+
+
+class SyncWriteSession(Protocol):
+    """
+    A live, execution-owned synchronous write session.
+
+    A :class:`PreparedWrite` says *what* to write; a session performs *how this
+    execution* writes it, as three distinct operations plus resource teardown:
+
+    * ``finalize`` commits successful logical delivery.
+    * ``abort`` abandons the logical delivery.
+    * ``teardown`` releases runtime resources and never commits.
+
+    A session is never constructed by the caller: the execution host acquires it,
+    drives ``write``, then chooses ``finalize`` or ``abort`` before ``teardown``.
+    Both the passthrough ``write`` verb and the terminal ``sink`` verb consume the
+    same session; terminality is a property of how the pipeline is consumed, not a
+    second session type.
+    """
+
+    def write(self, value: Item | Items) -> None:  # noqa: E301
+        """
+        Delivers a record or the whole record stream through this session.
+        """
+        ...
+
+    def acquire(self) -> None:
+        """Opens the destination once for an incremental format."""
+        ...
+
+    def finalize(self) -> WriteResult:
+        """
+        Commits the delivery and reports what the session wrote.
+        """
+        ...
+
+    def abort(self) -> None:
+        """Abandons the delivery, discarding any staged, unpublished content."""
+        ...
+
+    def teardown(self) -> None:
+        """Releases runtime resources; never commits."""
+        ...
+
+
+class AsyncWriteSession(Protocol):
+    """A live, execution-owned asynchronous write session."""
+
+    async def write(self, value: Item | Items | AsyncItems) -> None: ...  # noqa: E704
+    async def aacquire(self) -> None: ...  # noqa: E704
+    async def afinalize(self) -> WriteResult: ...  # noqa: E704
+    def abort(self) -> None: ...  # noqa: E704
+    async def ateardown(self) -> None: ...  # noqa: E704

@@ -44,7 +44,7 @@ from typing import Any, cast
 import pygogo as gogo
 from meza import io
 
-from riko._formats import CONVERSION_FUNCS, resolve_format
+from riko._formats import convert_records, resolve_format
 from riko.bado.io import async_write
 from riko.types._configs import WriteObjconf
 from riko.types._io import IOFileLike, IOFileLikeType
@@ -69,11 +69,9 @@ def _validate(items: Items, objconf: WriteObjconf) -> AnyStr | IOFileLike | None
     except ValueError as e:
         logger.warning(f"{e}")
     else:
-        convert = CONVERSION_FUNCS[fmt]
-
         if not objconf.url:
             logger.warning("The url is not set, skipping writing")
-        elif (content := convert([dict(item) for item in items])) is None:
+        elif (content := convert_records(items, fmt)) is None:
             logger.warning(f"The {fmt} converter produced no content")
         elif not isinstance(content, (AnyStrType, IOFileLikeType)):
             logger.warning(f"The {fmt} converter produced unwritable content")

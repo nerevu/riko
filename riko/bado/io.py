@@ -40,7 +40,7 @@ from riko.types._io import IOFileLike
 from riko.types._scalars import AnyStr
 
 from . import _backend
-from ._backend import open_file
+from ._backend import async_open
 from ._util import async_get, async_read
 
 if TYPE_CHECKING:
@@ -409,10 +409,10 @@ async def async_write(
     Examples:
 
         >>> from io import StringIO
-        >>> from riko import get_temp_file, issync, run
+        >>> from riko import get_async_temp_file, issync, run
         >>>
         >>> async def main():
-        ...     with get_temp_file() as fp:
+        ...     async with get_async_temp_file() as fp:
         ...         await async_write(fp.name, StringIO("Hello World"))
         ...
         ...         with open(fp.name, mode="rb") as f:
@@ -428,7 +428,7 @@ async def async_write(
     progress = 0
     binary = "b" in mode
     open_encoding = None if binary else encoding
-    opener = open_file(filepath, mode, encoding=open_encoding)
+    opener = async_open(filepath, mode, encoding=open_encoding)
 
     async with await opener as f:
         for normalized in _chunk_content(content, chunksize):

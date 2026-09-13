@@ -111,4 +111,10 @@ def convert_records(
 ) -> ConversionOutput:
     """Serializes ``records`` with the resolved ``Formats`` converter."""
     items = [dict(item) for item in records if is_mapping(item)]
-    return CONVERSION_FUNCS[fmt](items, **kwargs)
+
+    try:
+        result = CONVERSION_FUNCS[fmt](items, **kwargs)
+    except StopIteration:
+        result = iter("")
+
+    return result

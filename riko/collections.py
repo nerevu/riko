@@ -84,7 +84,6 @@ Examples:
 
 from collections.abc import (
     AsyncGenerator,
-    AsyncIterable,
     Awaitable,
     Callable,
     Generator,
@@ -121,7 +120,14 @@ import pygogo as gogo
 
 from riko._formats import CONVERSION_FUNCS
 from riko._pubsub._types import ReceiveFunc
-from riko._write_session import file_write_session
+from riko._write_session import (
+    _AsyncFileWriteSession,
+    _SyncFileWriteSession,
+    async_file_write_session,
+    async_write_through,
+    file_write_session,
+    write_through,
+)
 from riko.types._collections import Inputs
 from riko.types._guards import is_mapping
 from riko.types._options import SkipIf
@@ -150,9 +156,11 @@ from riko.context import Context, ExecutionMode
 from riko.exceptions import PipelineStateError
 from riko.ext._resolver import pipe_resolver
 from riko.ext.names import normalize_module_name
-from riko.targets import Destination, WriteResult, prepare_write, resolve_target
+from riko.targets import Destination, WriteResult, prepare_write
 from riko.types._names import ModuleNameLike
 from riko.types._streams import (
+    AsyncItems,
+    AsyncRikoItems,
     AsyncRikoSource,
     AsyncRikoStream,
     Item,
@@ -438,7 +446,7 @@ def list_formats() -> list[str]:
 
         >>> formats = list_formats()
         >>> formats[:4]
-        ['csv', 'geojson', 'json']
+        ['csv', 'geojson', 'json', 'jsonl']
 
     """
     return sorted(map(str, CONVERSION_FUNCS))
@@ -548,56 +556,113 @@ def export(  # noqa: E302
     return result
 
 
+def _passthrough_pipe(
+    template: "SyncPipe | SyncCollection", source: RikoItems | None = None
+) -> "SyncPipe":
+    """
+    Builds an identity ``SyncPipe`` over ``source``, carrying only runtime context.
+
+    The passthrough host for ``write``: it preserves the template's execution
+    ``Context`` for downstream chaining but carries no module identity, so writing
+    mid-chain never re-runs the preceding module.
+    """
+    context = getattr(template, "context", None)
+    return SyncPipe(source=source, context=context)
+
+
+def _async_passthrough_pipe(
+    template: "AsyncPipe | AsyncCollection",
+    source: RikoItems | AsyncRikoItems | None = None,
+) -> "AsyncPipe":
+    """
+    Builds an identity ``SyncPipe`` over ``source``, carrying only runtime context.
+
+    The passthrough host for ``write``: it preserves the template's execution
+    ``Context`` for downstream chaining but carries no module identity, so writing
+    mid-chain never re-runs the preceding module.
+    """
+    context = getattr(template, "context", None)
+    return AsyncPipe(source=source, context=context)
+
+
 def _write(
     source: "SyncPipe | SyncCollection",
     dest: str | Path,
     *,
     mode: WriteMode | str = WriteMode.REPLACE,
     fmt: FmtLike | None = None,
-    **kwargs: object,
-) -> RikoStream:
-    """Desugars ``write`` to a ``send`` publisher feeding an ``on_receive`` writer."""
-    prepared = prepare_write(dest, mode=mode, fmt=fmt)
+) -> "SyncPipe":
+    """Writes each item to ``dest`` while passing the stream through unchanged."""
+    prepared = prepare_write(dest, mode, fmt=fmt)
+    session = _SyncFileWriteSession(prepared)
+    session.acquire()
+    pipe = _passthrough_pipe(source)
+    items = cast(Items, iter(source))
+    pipe.source = write_through(items, session, terminating=lambda: pipe._terminating)
+    return pipe
 
-    with file_write_session(prepared) as session:
-        for record in source:
-            session.write(record)
-            yield record
+
+def _awrite(
+    source: "AsyncPipe | AsyncCollection",
+    dest: str | Path,
+    *,
+    template: "AsyncPipe | AsyncCollection | None" = None,
+    mode: WriteMode | str = WriteMode.REPLACE,
+    fmt: FmtLike | None = None,
+) -> "AsyncPipe":
+    """Writes each item to ``dest`` while passing the stream through unchanged."""
+    prepared = prepare_write(dest, mode, fmt=fmt)
+    session = _AsyncFileWriteSession(prepared)
+    pipe = _async_passthrough_pipe(source)
+    items = cast(AsyncItems, aiter(source))
+    pipe.source = async_write_through(items, session)
+    return pipe
 
 
 def _sink(
-    records: RikoItems,
+    source: RikoItems,
     dest: Destination,
     *,
     mode: WriteMode | str,
     fmt: FmtLike | None,
-    key: KeyLike | None,
+    keys: KeyLike | None,
 ) -> WriteResult:
-    """Resolves ``dest``, validates the write, and delivers ``records`` to it."""
-    prepared = prepare_write(dest, mode=mode, fmt=fmt, key=key)
+    """Resolves ``dest``, validates the write, and delivers the whole stream to it."""
+    prepared = prepare_write(dest, mode, fmt=fmt, keys=keys)
 
     with file_write_session(prepared) as session:
-        session.write(records)
+        try:
+            session.write(cast(Items, source))
+        except BaseException:
+            session.abort()
+            raise
+        else:
+            result = session.finalize()
 
-    return session.finalize()
+    return result
 
 
 async def _asink(
-    source: AsyncIterable[RikoItem],
+    source: RikoItems | AsyncRikoItems,
     dest: Destination,
     *,
     mode: WriteMode | str,
     fmt: FmtLike | None,
-    key: KeyLike | None,
+    keys: KeyLike | None,
 ) -> WriteResult:
-    """Drains ``source``, resolves ``dest``, and delivers the records to it."""
-    items = [item async for item in source]
-    target = resolve_target(dest)
-    return target, items
-    # write = build_write(
-    #     target, mode, keys=keys, idempotency_key=idempotency_key, fmt=fmt
-    # )
-    # return await target.adeliver(items, write, fmt=fmt)
+    """Drains ``source`` and delivers the records through a sync file session."""
+    prepared = prepare_write(dest, mode, fmt=fmt, keys=keys)
+
+    async with async_file_write_session(prepared) as session:
+        try:
+            await session.write(cast(AsyncItems, source))
+        except BaseException:
+            session.abort()
+            raise
+        else:
+            result = await session.afinalize()
+
+    return result
 
 
 class PyPipe(_Lifecycle):
@@ -639,17 +704,20 @@ class PyPipe(_Lifecycle):
         **kwargs: object,
     ):
         self._state = PipeState.NEW
-        self.name: str = normalize_module_name(name)
-        self.source = source
-        self.parallel = parallel
+        self._terminating: bool = False
         self.conf: Conf = conf or {}
+        self.kwargs = kwargs
+        self.name: str = normalize_module_name(name)
+        self.parallel = parallel
+        self.source = source
+        self.test: bool = bool(test)
+        self.verbose: bool = bool(verbose)
+
         self.context: Context = (context or Context()).augment(
             mode=mode, inputs=inputs, verbose=verbose, test=test, submodule=submodule
         )
         self.inputs: Inputs = self.context.inputs
-        self.verbose: bool = bool(verbose)
-        self.test: bool = bool(test)
-        self.kwargs = kwargs
+
         updates = {
             "assign": assign,
             "conf": self.conf,
@@ -792,16 +860,14 @@ class SyncPipe(PyPipe):
         else:
             self.executor = Executor.INLINE
 
-        self.pool_scope: PoolScope = pool_scope
-        self.ordered = ordered
+        self._in_context: bool = False
         self._iter: RikoStream | None = None
         self._mapped: Iterable[Stream] | None = None
-        self._in_context: bool = False
-        self._terminating: bool = False
         self._terminal: bool = True
-        self.source: RikoItems = cast(RikoItems, self.source)
-
         self.map: Callable[..., Iterable[Stream]]
+        self.ordered = ordered
+        self.pool_scope: PoolScope = pool_scope
+        self.source: RikoItems = cast(RikoItems, self.source)
 
         if pool_scope not in {"pipe", "pipeline"}:
             raise ValueError("pool_scope must be either 'pipe' or 'pipeline'")
@@ -1258,7 +1324,6 @@ class SyncPipe(PyPipe):
         *,
         mode: WriteMode | str = WriteMode.REPLACE,
         fmt: str | None = None,
-        **kwargs: object,
     ) -> "SyncPipe":
         """
         Writes a copy of the stream to ``dest`` and passes through the chain.
@@ -1269,16 +1334,14 @@ class SyncPipe(PyPipe):
 
             dest: The destination file path.
 
-            format: A serialization format, or ``None`` to derive it from the path
+            fmt: A serialization format, or ``None`` to derive it from the path
                 extension (default: ``json``).
 
             mode: File mode. ``append`` or ``replace`` (default: ``replace``).
 
-            kwargs: Passed through to the chained publisher.
-
         Returns:
 
-            The publisher pipe, so writing can sit mid-chain.
+            The passthrough pipe, so writing can sit mid-chain.
 
         Examples:
 
@@ -1295,30 +1358,29 @@ class SyncPipe(PyPipe):
             b'[{"x": 0}, {"x": 1}]'
 
         """
-        items = _write(self, dest, mode=mode, fmt=fmt, **kwargs)
-        return self._prime(items)
+        return _write(self, dest, mode=mode, fmt=fmt)
 
     def sink(
         self,
         dest: Destination,
         *,
-        mode: WriteMode | str = WriteMode.APPEND,
+        mode: WriteMode | str = WriteMode.REPLACE,
         fmt: str | None = None,
-        key: KeyLike | None = None,
+        keys: KeyLike | None = None,
     ) -> WriteResult:
         """
         Reconciles the stream into ``dest`` and reports the outcome (terminal sink).
 
         Unlike ``write``, this consumes the stream and returns a ``WriteResult``
-        rather than a chainable pipe. A file destination serializes with ``format``
-        and forbids ``key``; a keyed record target requires it per its capabilities.
+        rather than a chainable pipe. A file destination serializes with ``fmt``
+        and forbids ``keys``; a keyed record target requires it per its capabilities.
 
         Args:
 
             dest: A path, or a ``WriteTarget``.
-            mode: The reconciliation mode, validated against the target. (default: append)
+            mode: The reconciliation mode, validated against the target. (default: replace)
             keys: The match keys for a keyed record target.
-            format: A ``Formats`` converter override for a file destination.
+            fmt: A ``Formats`` converter override for a file destination.
 
         Returns:
 
@@ -1333,7 +1395,7 @@ class SyncPipe(PyPipe):
             True
 
         """
-        return _sink(self, dest, mode=mode, fmt=fmt, key=key)
+        return _sink(iter(self), dest, mode=mode, fmt=fmt, keys=keys)
 
 
 class PyCollection(_Lifecycle):
@@ -1569,22 +1631,20 @@ class SyncCollection(PyCollection):
         *,
         mode: WriteMode | str = WriteMode.REPLACE,
         fmt: str | None = None,
-        **kwargs: object,
     ) -> "SyncPipe":
         """The collection counterpart of :meth:`SyncPipe.write`."""
-        items = _write(self, dest, mode=mode, fmt=fmt, **kwargs)
-        return SyncPipe(self.name, source=items)
+        return _write(self, dest, mode=mode, fmt=fmt)
 
     def sink(
         self,
         dest: Destination,
         *,
-        mode: WriteMode | str = WriteMode.APPEND,
+        mode: WriteMode | str = WriteMode.REPLACE,
         fmt: str | None = None,
-        key: KeyLike | None = None,
+        keys: KeyLike | None = None,
     ) -> WriteResult:
         """The collection counterpart of :meth:`SyncPipe.sink`."""
-        return _sink(self, dest, mode=mode, fmt=fmt, key=key)
+        return _sink(iter(self), dest, mode=mode, fmt=fmt, keys=keys)
 
 
 class AsyncPipe(PyPipe):
@@ -1819,7 +1879,7 @@ class AsyncPipe(PyPipe):
         self,
         dest: str | Path,
         *,
-        format: str | None = None,
+        fmt: str | None = None,
         mode: WriteMode | str = WriteMode.REPLACE,
         **kwargs: Any,
     ) -> "AsyncPipe":
@@ -1843,21 +1903,18 @@ class AsyncPipe(PyPipe):
             The passthrough pipe, so writing can sit mid-chain.
 
         """
-        raise NotImplementedError(
-            "async write (the on_receive pub/sub writer) is not yet implemented; "
-            "use sink() for a terminal async write, or SyncPipe.write for the writer"
-        )
+        return _awrite(self, dest, mode=mode, fmt=fmt)
 
     async def sink(
         self,
         dest: Destination,
         *,
-        mode: WriteMode | str = WriteMode.APPEND,
-        key: KeyLike | None = None,
-        format: str | None = None,
+        mode: WriteMode | str = WriteMode.REPLACE,
+        keys: KeyLike | None = None,
+        fmt: str | None = None,
     ) -> WriteResult:
         """The async counterpart of :meth:`SyncPipe.sink`."""
-        return await _asink(self, dest, mode=mode, key=key, fmt=format)
+        return await _asink(aiter(self), dest, mode=mode, keys=keys, fmt=fmt)
 
     def _chain(self, name: ModuleNameLike, **kwargs: object) -> "AsyncPipe":
         """Builds the next async pipe with the current runtime settings."""
@@ -2061,7 +2118,7 @@ class AsyncCollection(PyCollection):
         self,
         dest: str | Path,
         *,
-        format: str | None = None,
+        fmt: str | None = None,
         mode: WriteMode | str = WriteMode.REPLACE,
         **kwargs: Any,
     ) -> "AsyncPipe":
@@ -2085,21 +2142,18 @@ class AsyncCollection(PyCollection):
 
 
         """
-        raise NotImplementedError(
-            "async write (the on_receive pub/sub writer) is not yet implemented; "
-            "use sink() for a terminal async write, or SyncPipe.write for the writer"
-        )
+        return _awrite(self, dest, mode=mode, fmt=fmt)
 
     async def sink(
         self,
         dest: Destination,
         *,
-        mode: WriteMode | str = WriteMode.APPEND,
+        mode: WriteMode | str = WriteMode.REPLACE,
         fmt: str | None = None,
-        key: KeyLike | None = None,
+        keys: KeyLike | None = None,
     ) -> WriteResult:
         """The async collection counterpart of :meth:`SyncPipe.sink`."""
-        return await _asink(self, dest, mode=mode, fmt=fmt, key=key)
+        return await _asink(aiter(self), dest, mode=mode, fmt=fmt, keys=keys)
 
     async def _stream(self) -> AsyncGenerator[RikoItem, None]:
         """Fetches every source url."""

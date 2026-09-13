@@ -76,9 +76,9 @@ Which imports are public?
   ``AsyncCollection`` classes, ``Context``, ``ExecutionMode``, ``PipeState``,
   ``backend``, ``build_pipeline``, ``compile_pipe``, ``convert_dag``, ``export``,
   ``extract_dependencies``, ``get_module_metadata``, ``get_path``, ``isasync``,
-  ``issync``, ``list_modules``, ``describe_module``, ``list_targets``,
+  ``issync``, ``list_modules``, ``describe_module``, ``list_formats``,
   ``parse_pipe_def``, ``run``, the typed discovery surface (``Modules``/``Sources``/
-  ``Transforms``/``Sinks``/``Targets`` bucket enums), and the pipeline exceptions.
+  ``Transforms``/``Sinks``/``Formats`` bucket enums), and the pipeline exceptions.
 - **Extension**: ``riko.ext`` holds the symbols for authoring custom ``pipes``:
   the ``processor``/``operator``/``splitter`` decorators and the module-metadata types.
 - **Private**: all import paths outside ``riko``, ``riko.bado``, and ``riko.ext``,
@@ -94,18 +94,18 @@ Application code should import from ``riko``.
     ...     AsyncPipe,
     ...     Context,
     ...     ExecutionMode,
+    ...     Formats,
     ...     Modules,
     ...     Sinks,
     ...     Sources,
     ...     SyncCollection,
     ...     SyncPipe,
-    ...     Targets,
     ...     Transforms,
     ...     describe_module,
     ...     export,
     ...     get_path,
+    ...     list_formats,
     ...     list_modules,
-    ...     list_targets,
     ... )
 
 Extension authors should import decorators and protocols from ``riko.ext``:
@@ -305,7 +305,7 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
 
 .. code-block:: python
 
-    >>> from riko import list_modules, list_targets, Modules
+    >>> from riko import list_modules, list_formats, Modules
     >>>
     >>> list_modules()[0]
     'aggregate'
@@ -344,7 +344,7 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
     >>> # ``finance`` extra.)
     >>> list_formats()[0]
     'csv'
-    >>> len(list_formats()) >= 3
+    >>> len(list_formats()) >= 4
     True
 
 ``describe_module`` returns a ``ModuleDefinition`` (or ``None`` for an unknown name).

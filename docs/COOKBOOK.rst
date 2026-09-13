@@ -423,7 +423,7 @@ runtime (``ofx``/``qif`` require the optional ``csv2ofx`` dependency).
     >>>
     >>> source= [{"title": "a"}, {"title": "b"}]
     >>> flow = SyncPipe(Transforms.HASH, source=source, field="title")
-    >>> {"csv", "geojson", "json"}.issubset(list_formats())
+    >>> {"csv", "geojson", "json", "jsonl"}.issubset(list_formats())
     True
     >>> flow.export("tuple")
     ({'title': 'a', 'hash': 1267964084}, {'title': 'b', 'hash': 2297772648})
