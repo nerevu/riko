@@ -35,14 +35,18 @@ flow = flow.write(target, format=...)
 On success, input records continue downstream unchanged. If the write is the graph leaf, ordinary
 iteration naturally makes it terminal; if more nodes follow, chaining continues.
 
-There is no separate target public `sink()` terminal. A second verb would encode terminality and
-reconciliation as a separate surface even though both are properties of the write operation/graph
-position.
+There is no *permanent* separate public `sink()` terminal. A second permanent verb would encode
+terminality and reconciliation as a separate surface even though both are properties of the write
+operation/graph position. An interim fluent `sink()` does ship today — it drains the stream and
+returns a `WriteResult`, sharing `write()`'s session mechanism and identical write semantics (both
+default to `replace`) — as a bridge kept only until a `write()` at a graph leaf provides the same
+terminal consumption.
 
 Compatibility is intentionally asymmetric:
 
-- the unreleased `sink()` API and sink-specific public/discovery/serialization surfaces are removed
-  outright; there is no alias, deprecation period, or loader compatibility for them;
+- the interim fluent `sink()` verb and any sink-specific public/discovery surface are removed at the
+  R5C clean-break, not deprecated; there is no alias, deprecation period, or loader compatibility, and
+  it carries no persisted-workflow obligation because no serialized `SinkNode` ever existed;
 - the shipped `riko.modules.write` Python module remains only until R5C replaces it with
   `Pipeline.write()` / `WriteNode`, then is removed with no deprecated wrapper or discovery entry;
 - released v1 workflow documents that contain the legacy `write` module are migrated at the v1
@@ -138,6 +142,17 @@ input record
 
 A write may buffer internally when the destination format requires framing/atomic publication, but
 that buffering must not change the Pipeline-level pass-through contract.
+
+`WriteNode` executes through the shared write-session mechanism (`prepare_write` → `WriteSession`)
+that the fluent `write()` and `sink()` verbs already use; there is no separate effect-specific writer.
+Terminality (the interim `sink()`, returns a `WriteResult`) versus passthrough (`write`, keeps the
+stream flowing) is a consumption difference, not a distinct node family — R5C adds the canonical
+caller and retires the interim `sink()` verb, not a second implementation.
+
+The write session stays concerned with **delivery only**. Per-item provenance/lineage is not the
+session's job: once `FeedResult`/`_FeedItem` lands (R5A), execution passes the appropriate record/value
+into the write effect and maintains lineage externally, rather than teaching the session about pipeline
+provenance.
 
 Successful completion aggregates per write node and emits a `WriteResult` through `EventSink`.
 `WriteResult` is out-of-band execution information, not a replacement stream value.

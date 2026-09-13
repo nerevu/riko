@@ -298,7 +298,9 @@ the suite, forcing the marker's removal) the moment its owner lands:
   typed rejection + one validation front-door that makes both paths reject identically is owned by the
   **Workflow v2 spec** ([extensibility § E3](extensibility.md#e3-canonical-workflow-v2-specification) —
   the E3.1 `normalize_workflow() -> validate` boundary; CLI surface: cli.md `riko pipeline validate`);
-  recalibrate the tripwire from `IndexError` to the spec's error when it lands.
+  recalibrate the tripwire from `IndexError` to the spec's error when it lands. The topology both paths
+  share is now the immutable `_GraphIndex` built by `parse_pipe_def` — the structural seam that
+  front-door validates over ([E3.11](extensibility.md#e311-reuse-of-the-shipped-graph-index)).
 
 **Shipped (§ 2b open-question rows).** R19's characterization test was **updated, not deleted**, into
 a regression once the contract was decided (type-aware comparison):
@@ -336,6 +338,32 @@ Two internal drift guards accompany it:
   cheap.
 
 Both guards belong in `tests/internal/`, since they are drift guards rather than API behavior.
+
+## 5c. Write-session coverage (shipped)
+
+The write-session architecture (see [IMPLEMENTED.md § Write architecture](../IMPLEMENTED.md)) ships
+with its behavior proven across three files, laid out by the same ownership rule as § 1:
+
+- `tests/internal/test_targets.py` — the capability model: `appendable` derives from `modes`,
+  `serializes` derives from a resolved `fmt`, `keyed_modes` is the union of both keyed sets, the
+  match/idempotent sets cannot overlap and must be subsets of `modes`; `File × {CSV, JSONL, JSON}`
+  capability rows; and the key-validation matrix (match-keyed requires keys, idempotent mode accepts
+  keys-or-none, unkeyed mode rejects keys, duplicate/empty keys rejected).
+- `tests/internal/test_writes.py` — session behavior: the whole-stream converter path calls the
+  converter once (no per-record regression) while passthrough invokes the singleton adapter per item;
+  CSV header/schema/append-boundary cases; JSONL one-value-per-line with exactly one final terminator
+  and no bracket surgery; framed JSON/GeoJSON stage-then-publish-once with abort discarding the staged
+  document; the `_SessionState` transitions and misuse (write-after-finalize/abort rejected, double
+  finalize/teardown safe, teardown never commits); and the passthrough host proof that
+  `SyncPipe(...).hash().write(...)` does not run `hash` twice and `SyncCollection(...).write(...)` never
+  touches a nonexistent `self.name`.
+- `tests/public/test_write.py` — the public surface: `write()` passthrough yields each input once,
+  `sink()` returns a `WriteResult` (not a tuple) for both sync and async, and the async error text
+  carries no pub/sub language.
+
+For incremental formats these tests deliberately do **not** assert rollback of already-written bytes.
+When R4B/R5C take over session-lifetime ownership, they reuse this same contract rather than
+re-proving it.
 
 ## 6. Relationship to the P-track
 

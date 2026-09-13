@@ -39,6 +39,18 @@ R8   batch representation optimization
 R10  remaining legacy-seam cleanup and parity proof
 ```
 
+The fluent `write()`/`sink()` FILE path already delivers `csv`/`jsonl` incrementally through its
+write-session (framed formats stage and publish on finalize). That does **not** make every write path
+Feed-native: the legacy `riko.modules.write` operator remains the module-level migration seam until
+R5C removes it.
+
+The R3-adjacent slice corrected only the async **operator** call boundary (operators return an
+`AsyncIterator` directly). It deliberately did **not** begin Feed-native parser migration: no
+async-generator parser inference (`isasyncgenfunction`), no `aget_assignment()`/`aprocess()`, no lazy
+`send.async_parser`, and no aggregator/processor/splitter parser rewrites. Those remain owned by the
+phases below — ordinary transforms at R5A, `send`/`receive`/`split` at R7, and the final wrapper/parser
+seam cleanup at R10.
+
 ## 2. Per-module migration audit
 
 | Pipe | Priority | Feed-native approach | Natural owner |
@@ -128,10 +140,10 @@ ordinary records continue downstream unchanged. Incremental downstream delivery 
 later downstream side effects if a subsequent write fails, so retry/resume correctness relies on the
 common side-effect/idempotency and checkpoint/disposition rules from `execution-semantics.md`.
 
-There is no separate public `sink()` terminal in the target API. The unreleased sink-specific
-surface is removed outright; useful writer/codec mechanics are reused only behind `WriteNode`.
-Reconciliation/destructive write modes are write semantics of the Target/operation contract;
-terminality comes from graph position.
+There is no *permanent* public `sink()` terminal in the target API. The interim fluent `sink()` that
+shipped with the R3 write-session seam is removed at the R5C clean-break; useful writer/codec
+mechanics are reused only behind `WriteNode`. Reconciliation/destructive write modes are write
+semantics of the Target/operation contract; terminality comes from graph position.
 
 ## 6. Internal batching uses the single Pipeline batch contract
 

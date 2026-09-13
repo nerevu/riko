@@ -63,6 +63,27 @@ encode removed `SyncPipe`/`AsyncPipe`, `write`, `output`, or `Sinks` APIs.
 Their current home in `collections.py` is temporary. Move reusable mechanics into private execution
 modules rather than preserving `collections.py` as architecture.
 
+**Compiler graph index** is a retained foundation. `parse_pipe_def` builds one immutable
+`_GraphIndex` (`riko/types/compile.py`) that interprets a pipe's wiring exactly once — wire-level
+`edges`/`incoming`/`outgoing` (ports kept verbatim) plus node-level
+`order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs`. It replaces the old `ParsedPipeDef`
+`graph`+`wires` fields; R4A's `migrate_v1_to_v2()`/`normalize_workflow()`/`validate` build on it and
+R4B's `_ExecutionPlan` reuses its structural facts. The v1-behavior-preserving deltas it still
+carries (`_OUTPUT` as a node, verbatim ports, dropped orphans) are resolved at the R4A boundary, not
+in the index — see [extensibility § E3.11](extensibility.md#e311-reuse-of-the-shipped-graph-index).
+Keep execution concepts (resolved callables, portals, resource values, task groups) off it.
+
+The reuse seam runs *through* the compiler, not around it. Graph parsing/validation/ordering/resolution
+is kept and adapted; the legacy generator-construction tail is replaced. Concretely: `topological_sort`
+(strict for canonical workflows), `ModuleRegistry`/`PipeResolver`/`PipelineResolver`, the `_GraphIndex`,
+and the argument-binding *concepts* in `_get_input_module`/`_gen_pykwargs` all survive into R4B
+preparation. What is replaced is `_gen_steps`/`_build_pipeline`/`build_pipeline`, which today resolve,
+wire, invoke, and construct a running generator in one pass keyed off "the last topologically-sorted
+module." R4B splits that boundary one step later — preparation produces an immutable `_ExecutionPlan`
+of prepared nodes (no invocation), and a separate run step executes it against explicit `outputs`
+rather than a terminal-module assumption. `convert_dag` and `gen_parented_graph`'s orphan-dropping stay
+on the v1 authoring/migration side and do not feed canonical v2 preparation.
+
 ### Retain but reshape
 
 **Current module decorators/preparation** remain the parser invocation seam. Extend existing
@@ -81,16 +102,22 @@ subscription runtime state and canonical publish edges.
 inputs. Reuse streaming writer, codec, and adapter mechanics where they fit `WriteNode`; retaining
 those mechanics does not retain either old public abstraction.
 
-### Remove outright
+### Remove at the R5C clean-break
 
-**Unreleased `sink()`** and every sink-specific public/discovery/serialization surface are removed,
-not deprecated. There is no alias to `write()`, no compatibility enum/category, and no legacy loader
-form. It never shipped, so it carries no compatibility obligation.
+Two shipped-but-interim surfaces exist only until the write effect can take their place, then are
+removed under the pre-1.0 clean-break policy with no deprecated wrapper, alias, compatibility
+enum/category, or legacy loader form:
 
-The shipped Python `riko.modules.write` surface is different: it remains only until R5C replaces it
-with `Pipeline.write()` / `WriteNode`, then is removed under the pre-1.0 clean-break policy with no
-deprecated wrapper. Released persisted v1 workflows containing `write` are handled only by the
-bounded v1 migration boundary in R4A/extensibility.
+- the fluent **`sink()`** terminal verb. It shipped alongside the R3 write-session seam to give
+  terminal consumption — drain the stream, return a `WriteResult` — before `Pipeline.write()` /
+  `WriteNode` existed. It shares `write()`'s session mechanism and carries identical write semantics
+  (both default to `replace`); its only difference is terminality. There is no *permanent* public
+  `sink()` — terminality is a graph-position/consumption property, not a second verb — so R5C removes
+  the interim verb once a `write()` at a graph leaf provides the same terminal consumption. It keeps
+  no persisted-workflow compatibility obligation because no serialized `SinkNode` ever existed;
+- the shipped Python **`riko.modules.write`** module, removed when `Pipeline.write()` / `WriteNode`
+  lands. Released persisted v1 workflows containing `write` are handled only by the bounded v1
+  migration boundary in R4A/extensibility.
 
 ### Superseded target designs
 
@@ -104,7 +131,8 @@ Do not implement these pending-plan shapes:
 - separate `AgentGraph` / `AgentNetwork` execution system;
 - argparse-shaped CLI plugin contracts;
 - public `collect()` / `first()` execution terminals;
-- a public `sink()` terminal parallel to `write()`;
+- a *permanent* public `sink()` terminal parallel to `write()` (the interim fluent `sink()` shipped
+  with the R3 write-session seam and is removed at the R5C clean-break, see above);
 - execution knobs on `with_config()`;
 - RDP-owned generic `Checkpoint` or sequence/expansion-path identity;
 - duck-typed lifecycle discovery on arbitrary resolved resource values (`open`/`aopen`/`close`/
@@ -340,6 +368,27 @@ it and no durable serialization guarantee follows from doing so.
 P8's global built-in/entry-point registry remains the default. Context-local module definitions form
 an execution-time overlay; they do not require replacing entry-point discovery.
 
+#### R3-adjacent — write-session seam
+
+Landed beside R3, not a separate R-phase. Two foundational corrections that let later phases inherit
+the right seams without pulling their runtimes forward:
+
+- the async **operator** wrapper now returns an `AsyncIterator` directly rather than
+  `Awaitable[AsyncIterator]`; async processors/splitters keep their awaitable contract for now;
+- the fluent sync `write()`/`sink()` implementation is moved off the hidden `send`/`on_receive`
+  pub/sub channel onto a private write-session mechanism (`prepare_write` → a `WriteSession`
+  lifecycle) shared by both verbs.
+
+This establishes the seam only. R4B moves ownership of the write-session lifecycle into the private
+execution exit stack, and R5C makes `WriteNode` invoke the same preparation/session — reuse, not
+replacement. Because `write()` no longer rides a hidden `send` channel, R7 can remove send/receive
+without a write-specific compatibility path.
+
+The fluent async `write()`/`sink()` surface also landed here (an async write session drives the
+passthrough/terminal verbs), earlier than the sequence originally deferred it. R4B still owns the
+final form: it re-hosts that same session lifetime on the execution `AsyncExitStack` rather than on
+the current one-shot pipe host. The session contract does not change — only its owner.
+
 ### R4A — Public Pipeline definition and canonical Workflow v2 IR
 
 **Goal:** freeze one complete definition/serialization language before the new execution runtime
@@ -369,6 +418,16 @@ PublishEdge
 `publish` is a relationship/delivery edge, not a pass-through `PublishNode`. `split`, `branch`,
 `route`, `union`, `merge`, `join`, and `loop` remain registered module behavior represented by
 `ModuleNode`; `loop` does not gain a separate graph-node family.
+
+`WriteNode` (and `ActionNode`) carry semantic **intent only** — target, format, `mode`, and a single
+unified `keys` list. The caller supplies just one `keys` because a target's `match_keyed_modes` and
+`idempotent_modes` are disjoint, so the `(target, mode)` pair alone fixes whether keys mean
+record-match identity or idempotency/deduplication identity — there is no separate `idempotency_key`.
+They do **not** carry execution details
+(`stream`/`buffered`/`incremental`, chunk
+size, file handle, live resource, `WriteSession`); delivery granularity stays negotiated at execution
+time. R4A serializes this intent and must **not** duplicate the write-session mechanism established
+alongside R3. There is no `SinkNode` — terminality is a consumption behavior, not a node family.
 
 Canonical port grammar:
 
@@ -420,7 +479,8 @@ Deliver:
 - during 0.x, released v1 input accepted only at the migration boundary, warning on migration and
   normalizing immediately to v2; v2 emitted only;
 - released v1 `write` module nodes migrate to canonical `WriteNode` plus Target/Format structure;
-  unreleased `sink` experiments are not accepted as legacy grammar;
+  the interim fluent `sink()` never had a serialized node form, so there is no legacy `sink` grammar
+  to accept;
 - normal runtime loading becomes v2-only at 1.0; an offline pure `migrate_v1_to_v2()` utility may
   remain;
 - strict closed canonical schema: unknown structural fields, ports, references, edge types, resource
@@ -446,6 +506,53 @@ with a clear unsupported-capability error.
 **Exit:** every supported topology round-trips through canonical v2 without relying on traversal or
 JSON-array order for semantics, and the bounded v1 migration path is explicit rather than a parallel
 runtime.
+
+#### R4A slice ordering
+
+R4A is the largest single slice in this sequence and lands as ordered PRs, not one sitting. The
+contract for each slice is `extensibility.md` §E3; this ordering governs sequencing only.
+
+```text
+R4A.0  vocabulary split
+R4A.1  canonical v2 model
+R4A.2  normalize_workflow()
+R4A.3  validate()
+R4A.4  migrate_v1_to_v2()
+R4A.5  deterministic serialization + acceptance
+```
+
+- **R4A.0 — vocabulary split.** Resolve the `Targets`/`Formats` collision (E3.7): the shipped export
+  `Targets` (serialization formats) becomes `Formats`, and `Targets` is redefined as endpoint/provider
+  identities (`FILE`/`HTTP`/`S3`/`POSTGRES`/`AIRTABLE`/`INTUNE`). Introduce immutable serializable
+  `Target`/`Format` defs+refs, a `TargetRegistry` parallel to `ModuleRegistry`, and sync/async target
+  capability protocols. Files: `collections.py`, `targets.py`, `_api_surface.py`.
+- **R4A.1 — canonical v2 model.** The closed discriminated node union and edge families (E3.3/E3.4),
+  full `{node, port}` endpoints and port grammar, the `nodes`/`edges`/`outputs`/`inputs` envelope
+  (E3.2/E3.6), inputs-as-JSON-Schema, and the public immutable `Pipeline[T]`. Structural only, no
+  runtime. Files: new `riko/workflow/` package, `riko/types/_pipeline.py`.
+- **R4A.2 — `normalize_workflow()`.** Authoring sugar → strict canonical (E3.1): omitted
+  outputs→`outputs.default`, inline `Target`/`Format`→explicit, singular `resource`→`resources`,
+  omitted ids→`<name>-<occurrence>`, port aliases, inferred formats made explicit.
+  `normalize(normalize(x))` is stable. File: `riko/workflow/normalize.py`.
+- **R4A.3 — `validate()`.** Closed-schema rejection (E3.9): unknown fields/ports/families, duplicate
+  ids, missing refs, >1 StreamEdge per stream port, fan-in positions, undeclared resource slots,
+  unresolved `Target`/`Resource`/`Input` refs, contract-aware conf/params validation. Structural
+  validity is not runtime capability. File: `riko/workflow/validate.py`.
+- **R4A.4 — `migrate_v1_to_v2()`.** Pure v1→v2 (E3.1/E3.11): `_INPUT`/`_OUTPUT`/`_OTHERn`→canonical
+  ports, v1 `write` module→`WriteNode`+Target/Format, terminal `_OUTPUT` passthrough→`outputs.default`,
+  orphan handling deferred to validation rather than silent erasure. Warn during 0.x, emit v2 only;
+  the interim fluent `sink()` had no serialized node form, so there is no legacy `sink` grammar. File:
+  `riko/workflow/migrate.py`.
+- **R4A.5 — deterministic serialization + acceptance.** Byte-stable canonical serialization, full
+  round-trip of every supported topology, golden fixtures, `normalize ∘ migrate` never emitting
+  v1-only structure, and CLI (`compile-pipe`/`convert-dag`) emitting v2 only (E3.10). Files:
+  `riko/cli/`, `tests/` golden fixtures.
+
+R4A.5 is the only slice gated on R2A (the canonical value encoder): the structural slices R4A.0–R4A.4
+proceed without it, and the byte-stable serialization/golden-fixture work waits on it. R4A.0 is both
+the true unblocked head and the highest-risk decision — the `Targets`→`Formats` rename touches the
+STABLE `riko` surface (`_api_surface.py`, `tests/public/test_imports.py`) — so it is front-loaded to
+force that decision early.
 
 ### R4B — Private SyncExecution/AsyncExecution and lifetime
 
@@ -584,9 +691,9 @@ Deliver:
 - preserve only the bounded persisted-v1 `write` migration owned by R4A/extensibility.
 
 `write()` is an effect operation, not a public module and not a terminal by definition. Its graph
-position determines whether the user continues chaining. There is no public `sink()` counterpart in
-the target API, and the unreleased sink-specific surface has already been removed rather than
-migrated.
+position determines whether the user continues chaining. There is no *permanent* public `sink()`
+counterpart in the target API; the interim fluent `sink()` that shipped with the R3 write-session
+seam is removed here once `write()` at a graph leaf provides the same terminal consumption.
 
 `read()` owns acquisition plus interpretation/parsing through Target + Format. `write()` owns
 reconciliation/mutation. Provider commands that do not naturally mean data write are actions.
@@ -745,7 +852,10 @@ R10 therefore owns:
 - remaining eligible source/composer/module migrations;
 - final removal/minimization of the legacy whole-source materialization seam;
 - sync/async laziness/order/memory/side-effect timing parity audit;
-- cleanup of transitional/internal shims made obsolete by the final execution envelope;
+- cleanup of transitional/internal shims made obsolete by the final execution envelope, including
+  the async-wrapper shapes the R3-adjacent operator fix left in place: `Awaitable[Stream]` async
+  **processor** wrappers, legacy coroutine-completed iterable parsers, and obsolete async-wrapper
+  aliases (async **operators** already return an `AsyncIterator` directly);
 - proof that genuinely eager operators (`sort`, `reverse`, etc.) are the only intentional
   materialization points.
 
@@ -921,7 +1031,7 @@ The implementation reconciliation is complete when:
 8. cache replay uses the finalized Mezmoize-backed CacheNode contract and never publishes an
    incomplete fill;
 9. `write`/actions pass records through and report completion through the common EventSink; the
-   legacy Python `write` module and unreleased `sink()` surface are absent;
+   legacy Python `write` module and the interim fluent `sink()` surface are absent;
 10. StateStore is the one persistence protocol and all writes are CAS-protected;
 11. pub/sub/split lifecycle is execution-owned, bounded, and derived from canonical topology rather
     than hidden DONE/PENDING bookkeeping; legacy `send`/`receive` modules are absent and subscriber
