@@ -385,6 +385,7 @@ class _SendDispatcher:
             TypeError: If no subscriber name is given.
 
         Examples:
+
             >>> items = [{"title": "Gravity paper"}, {"title": "riko 4.0"}]
             >>> subscriber = SyncPipe.subscribe("papers")
             >>> _ = list(SyncPipe.publish(items, "papers"))
@@ -403,6 +404,7 @@ class _SendDispatcher:
             TypeError: If no subscriber name is given.
 
         Examples:
+
             >>> items = [{"title": "Gravity paper"}, {"title": "riko 4.0"}]
             >>> subscriber = SyncPipe.subscribe("papers")
             >>> _ = list(SyncPipe(source=items).publish("papers"))
@@ -944,6 +946,7 @@ class SyncPipe(PyPipe):
         Builds the next pipe with the current runtime settings.
 
         Examples:
+
             >>> conf = {"key": "a", "value": "b"}
             >>> flow = SyncPipe("itembuilder", conf=conf, inputs={"x": "1"})
             >>> chained = flow.hash()
@@ -1001,6 +1004,7 @@ class SyncPipe(PyPipe):
         Chains a module name, config pair, or pipe template using ``|``.
 
         Examples:
+
             >>> flow = SyncPipe("itembuilder")
             >>> piped = flow | "hash"
             >>> piped.name, piped.source is flow
@@ -1032,6 +1036,7 @@ class SyncPipe(PyPipe):
         Seeds a stream on the left of ``|``.
 
         Examples:
+
             >>> items = [{"x": 1}, {"x": 2}]
             >>> piped = items | SyncPipe("sort")
             >>> piped.name, list(piped.source) == items
@@ -1067,6 +1072,7 @@ class SyncPipe(PyPipe):
         Chains the next pipe by name.
 
         Examples:
+
             >>> flow = SyncPipe("itembuilder")
             >>> chained = flow.pipe("hash")
             >>> chained.name, chained.source is flow
@@ -1136,6 +1142,7 @@ class SyncPipe(PyPipe):
             TypeError: If both ``func`` and ``on_receive`` are given.
 
         Examples:
+
             >>> items = [{"title": "Gravity paper"}, {"title": "riko 4.0"}]
             >>> subscriber = SyncPipe.subscribe("inbox")
             >>>
@@ -1211,6 +1218,7 @@ class SyncPipe(PyPipe):
         Enters the pipe context and manages any owned worker pool.
 
         Examples:
+
             >>> src = [{"content": "a"}, {"content": "b"}]
             >>>
             >>> with (flow := SyncPipe("hash", source=src, parallel=True)):
@@ -1318,6 +1326,7 @@ class SyncPipe(PyPipe):
         ``publish`` for lazy fan-out over an unbounded source.
 
         Examples:
+
             >>> items = [{"x": 1}, {"x": 2}]
             >>> first, second = SyncPipe(source=items).split()
             >>> next(first), next(second)
@@ -1413,6 +1422,7 @@ class SyncPipe(PyPipe):
             A ``WriteResult`` describing what the delivery did.
 
         Examples:
+
             >>> from riko import get_temp_file
             >>> items = [{"x": 0}, {"x": 1}]
             >>>
@@ -1569,6 +1579,7 @@ class SyncCollection(PyCollection):
         Enters the collection context and manages any owned worker pool.
 
         Examples:
+
             >>> from riko import get_path
             >>>
             >>> sources = [{"url": get_path(f)} for f in ["feed.xml", "gawker.xml"]]
@@ -1630,6 +1641,7 @@ class SyncCollection(PyCollection):
         Chains the next pipe by name.
 
         Examples:
+
             >>> flow = SyncPipe("itembuilder")
             >>> chained = flow.pipe("hash")
             >>> chained.name, chained.source is flow
@@ -1771,6 +1783,7 @@ class AsyncPipe(PyPipe):
         Chains a module name, config pair, or pipe template using ``|``.
 
         Examples:
+
             >>> flow = AsyncPipe("itembuilder")
             >>> piped = flow | "hash"
             >>> piped.name, piped.source is flow
@@ -1802,6 +1815,7 @@ class AsyncPipe(PyPipe):
         Seeds a stream on the left of ``|``.
 
         Examples:
+
             >>> items = [{"x": 1}, {"x": 2}]
             >>> piped = items | AsyncPipe("sort")
             >>> piped.name, list(piped.source) == items

@@ -582,6 +582,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 a processor never reads it.
 
         Examples:
+
             >>> from riko import async_return, issync, run
             >>>
             >>> @processor()
@@ -805,6 +806,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             A pipe callable that takes an item and pipe options.
 
         Examples:
+
             >>> from riko import run, issync
             >>>
             >>> opts = {
@@ -1082,6 +1084,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 since an operator never reads it.
 
         Examples:
+
             >>> from riko import async_return, issync, run
             >>>
             >>> @operator(emit=False)
@@ -1330,6 +1333,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             A pipe callable that takes a stream and pipe options.
 
         Examples:
+
             >>> from riko import run, issync
             >>>
             >>> opts = {
@@ -1608,6 +1612,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 splitter never reads any of them.
 
         Examples:
+
             >>> @splitter(objectify=False)
             ... def pipe(stream, objconf, tuples, **kwargs):
             ...     items = list(stream)
@@ -1711,6 +1716,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             A pipe callable that takes a stream and returns multiple streams.
 
         Examples:
+
             >>> wrapper = splitter(objectify=False)
             >>>
             >>> def pipe(stream, objconf, tuples, **kwargs):
