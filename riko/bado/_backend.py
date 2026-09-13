@@ -26,8 +26,11 @@ class Run(Protocol):
 
 try:
     import anyio
+    from httpx import Response as HTTPXResponse
 except ImportError:
+    AsyncClient: Any = None
     CapacityLimiter: type | None = None
+    HTTPXResponse: Any = None
     Semaphore: type | None = None
     MemoryObjectReceiveStream: Any = None
     MemoryObjectSendStream: Any = None
@@ -74,6 +77,7 @@ else:
     from anyio.lowlevel import checkpoint
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
     from asyncer import asyncify
+    from httpx import AsyncClient
 
     backend = "anyio"
     run: Run = anyio.run
@@ -82,7 +86,9 @@ issync: bool = backend == "empty"
 isasync: bool = not issync
 
 __all__ = [
+    "AsyncClient",
     "CapacityLimiter",
+    "HTTPXResponse",
     "MemoryObjectReceiveStream",
     "MemoryObjectSendStream",
     "NamedTemporaryFile",
