@@ -14,32 +14,24 @@ from functools import partial
 from inspect import isawaitable
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
+from riko.bado._backend import AsyncClient, Path, create_task_group
 from riko.types._sentinels import MISSING
 
-try:
-    import anyio
-    import httpx
-except ImportError:
-    anyio = httpx = None
-
 if TYPE_CHECKING:
-    from httpx import Response
+    from riko.bado._backend import HTTPXResponse
 
 
-async def async_get(url: str, **kwargs: Any) -> "Response":
+async def async_get(url: str, **kwargs: Any) -> "HTTPXResponse":
     """
     Fetches ``url`` via httpx and follows redirects.
 
     A ``timeout`` of ``0`` means no timeout, which mirrors the sync backend.
 
     """
-    if not httpx:
-        raise RuntimeError("httpx is required for async_get")
-
     if kwargs.get("timeout") == 0:
         kwargs["timeout"] = None
 
-    async with httpx.AsyncClient(follow_redirects=True) as client:
+    async with AsyncClient(follow_redirects=True) as client:
         return await client.get(url, **kwargs)
 
 
@@ -55,14 +47,11 @@ async def async_read(  # noqa: E302
     url: str, binary: bool = False, encoding: str | None = None
 ) -> bytes | str:
     """Reads a local ``file://`` path as bytes or text."""
-    if not anyio:
-        raise RuntimeError("anyio is required for async_read")
-
-    path = anyio.Path(url.replace("file://", ""))
+    path = Path(url.replace("file://", ""))
     return await (path.read_bytes() if binary else path.read_text(encoding))
 
 
-async def async_json(response: "Response") -> dict[str, Any]:
+async def async_json(response: "HTTPXResponse") -> dict[str, Any]:
     """Parses the JSON body of ``response``."""
     return response.json()
 
@@ -80,16 +69,13 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
     ``MISSING``, not ``None``), so the output aligns with the inputs.
 
     """
-    if not anyio:
-        raise RuntimeError("anyio is required for gather_results")
-
     aws = list(awaitables)
     results: list[Any] = [MISSING] * len(aws)
 
     async def collect(index: int, awaitable: Awaitable[T]) -> None:
         results[index] = await awaitable
 
-    async with anyio.create_task_group() as tg:
+    async with create_task_group() as tg:
         for index, awaitable in enumerate(aws):
             tg.start_soon(collect, index, awaitable)
 
