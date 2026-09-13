@@ -26,9 +26,10 @@ Attributes:
 
 from typing import Literal, overload
 
-from riko.ext._pipelines import pipeline_resolver
-from riko.ext.registry import registry
 from riko.types._wrappers import AsyncPipeWrapper, Pipe, Resolver, SyncPipeWrapper
+
+from ._pipelines import pipeline_resolver
+from .registry import registry
 
 
 class PipeResolver:

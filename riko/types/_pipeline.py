@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from riko.types._wrappers import (
+    from ._wrappers import (
         AsyncPipeWrapper,
         AsyncWrapperOutput,
         SyncPipeWrapper,

@@ -9,10 +9,10 @@ The names in ``__all__`` are also re-exported from :mod:`riko`. Riko's private b
 facade lives in :mod:`riko.bado._backend`.
 """
 
-from riko.bado._backend import backend, isasync, issync, run
-from riko.bado._util import async_return
-from riko.bado.io import async_read, async_url_open, async_write, get_async_temp_file
-from riko.bado.itertools import as_async, async_map, async_map_stream, async_sleep
+from ._backend import backend, isasync, issync, run
+from ._util import async_return
+from .io import async_read, async_url_open, async_write, get_async_temp_file
+from .itertools import as_async, async_map, async_map_stream, async_sleep
 
 __all__ = [
     "as_async",

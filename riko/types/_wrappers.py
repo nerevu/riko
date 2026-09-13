@@ -11,7 +11,7 @@ from collections.abc import (
 from io import StringIO
 from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, TypedDict, overload
 
-from riko.types._streams import AsyncStreamOrValueStream
+from ._streams import AsyncStreamOrValueStream
 
 if TYPE_CHECKING:
     from riko.context import Context

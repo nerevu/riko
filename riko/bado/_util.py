@@ -14,11 +14,12 @@ from functools import partial
 from inspect import isawaitable
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
-from riko.bado._backend import AsyncClient, Path, create_task_group
 from riko.types._sentinels import MISSING
 
+from ._backend import AsyncClient, Path, create_task_group
+
 if TYPE_CHECKING:
-    from riko.bado._backend import HTTPXResponse
+    from ._backend import HTTPXResponse
 
 
 async def async_get(url: str, **kwargs: Any) -> "HTTPXResponse":

@@ -33,7 +33,6 @@ from riko._constants import ENCODING
 from riko._rssutils import augment_entries
 from riko.bado.io import async_url_read
 from riko.cast import SourceOpts
-from riko.modules._prepare import require_conf
 from riko.parsers import parse_rss
 from riko.types._configs import FetchObjconf
 from riko.types._options import Defaults, Opts
@@ -41,6 +40,7 @@ from riko.types._rss import RSSEntry
 from riko.types._streams import Item
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {"encoding": ENCODING}

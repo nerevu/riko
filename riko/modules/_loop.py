@@ -30,8 +30,6 @@ import pygogo as gogo
 from riko.bado._util import maybe_deferred
 from riko.bado.itertools import async_iter
 from riko.context import Context
-from riko.modules._assignment import get_subpipe
-from riko.modules._subpipe import is_subpipe
 from riko.types._streams import (
     AsyncItemsOrValues,
     AsyncStreamOrValueStream,
@@ -49,6 +47,9 @@ from riko.types._wrappers import (
 )
 from riko.types.compile import EmbedKwargs
 from riko.types.modules import CountValues
+
+from ._assignment import get_subpipe
+from ._subpipe import is_subpipe
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 

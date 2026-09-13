@@ -34,12 +34,12 @@ from riko._constants import ENCODING
 from riko._io import Fetch, auto_close
 from riko.bado.io import async_url_open
 from riko.cast import BasicCastType
-from riko.modules._prepare import require_conf
 from riko.types._configs import FetchTextObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "assign": "content"}
 DEFAULTS: Defaults = {"encoding": ENCODING}

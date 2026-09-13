@@ -20,12 +20,13 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Literal
 
-from riko.types._dynamic_conf import DynamicConf
+from ._dynamic_conf import DynamicConf
 
 if TYPE_CHECKING:
     from riko.cast import CastType, LocationType
-    from riko.types._write import FmtLike
-    from riko.types.modules import (
+
+    from ._write import FmtLike
+    from .modules import (
         FilterConfRule,
         FindConfRule,
         ParsedParam,

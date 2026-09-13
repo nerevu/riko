@@ -145,16 +145,16 @@ def _import_block(structure) -> str:
     lines += [
         f"from typing import {', '.join(typing)}",
         "",
-        "from riko.types._dynamic_conf import DynamicConf",
+        "from ._dynamic_conf import DynamicConf",
     ]
     guarded = ["", "if TYPE_CHECKING:"]
     guarded += [f"    from riko.cast import {', '.join(cast)}"] if cast else []
 
     if modules:
-        guarded += [f"    from riko.types._write import {', '.join(write)}"]
+        guarded += ["", f"    from ._write import {', '.join(write)}"]
 
     if modules:
-        guarded += ["    from riko.types.modules import ("]
+        guarded += ["    from .modules import ("]
         guarded += [f"        {name}," for name in modules]
         guarded += ["    )"]
 

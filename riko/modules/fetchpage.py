@@ -37,13 +37,13 @@ from riko._io import Fetch
 from riko._iterutils import betwix
 from riko.bado.io import async_url_read
 from riko.cast import SourceOpts
-from riko.modules._prepare import require_conf
 from riko.parsers import get_text
 from riko.types._configs import FetchPageObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING, "detag": False})
