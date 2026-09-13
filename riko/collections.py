@@ -957,30 +957,30 @@ class SyncPipe(PyPipe):
 
         """
         self._require_usable("chain")
-        next_scope = cast(PoolScope, kwargs.get("pool_scope", self.pool_scope))
+        pool_scope = cast(PoolScope, kwargs.get("pool_scope", self.pool_scope))
+
+        if self.pool_scope == pool_scope == PoolScope.PIPELINE and "pool" not in kwargs:
+            shared = self._pool_handle
+        else:
+            shared = None
 
         skwargs = {
+            "_pool_handle": shared,
             "chunksize": self.chunksize,
             "context": self.context,
             "inputs": self.inputs,
             "parallel": self.parallel,
-            "pool_scope": next_scope,
+            "pool_scope": pool_scope,
             "threads": self.threads,
             "workers": self.workers,
         }
-
-        if self.pool_scope == next_scope == PoolScope.PIPELINE and "pool" not in kwargs:
-            shared_handle = self._pool_handle
-            skwargs["_pool_handle"] = shared_handle
-        else:
-            shared_handle = None
 
         skwargs.update(kwargs)
         child = SyncPipe(name, source=self, **skwargs)
 
         # Transfer cleanup responsibility only after successful construction
         # and only when the handle was actually shared.
-        if shared_handle and child._pool_handle is shared_handle:
+        if shared is not None and child._pool_handle is shared:
             self._terminal = False
 
         return child
