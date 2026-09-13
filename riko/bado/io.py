@@ -9,14 +9,14 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import get_path, issync, run
+        >>> from riko import get_path, run
         >>> from riko.bado.io import async_url_open
         >>>
         >>> async def main():
         ...     async with async_url_open(get_path("spreadsheet.csv")) as f:
         ...         print(f.readline())
         >>>
-        >>> print("Member,Name,") if issync else run(main)
+        >>> run(main)
         Member,Name,...
 
 """
@@ -313,7 +313,7 @@ def async_url_open(  # noqa: E302
 
     Examples:
 
-        >>> from riko import get_path, issync, run
+        >>> from riko import get_path, run
         >>>
         >>> url = get_path("spreadsheet.csv")
         >>>
@@ -321,7 +321,7 @@ def async_url_open(  # noqa: E302
         ...     async with async_url_open(url) as f:
         ...         print(f.readline())
         >>>
-        >>> print("Member,Name,") if issync else run(main)
+        >>> run(main)
         Member,Name,...
 
     """
@@ -359,13 +359,13 @@ async def async_url_read(
 
     Examples:
 
-        >>> from riko import get_path, issync, run
+        >>> from riko import get_path, run
         >>>
         >>> async def main():
         ...     content = await async_url_read(get_path("spreadsheet.csv"))
         ...     print(content[:6])
         >>>
-        >>> print("Member") if issync else run(main)
+        >>> run(main)
         Member
 
     """
@@ -418,7 +418,7 @@ async def async_write(
         ...         with open(fp.name, mode="rb") as f:
         ...             print(f.read())
         >>>
-        >>> print(b"Hello World") if issync else run(main)
+        >>> run(main)
         b'Hello World'
 
     """
@@ -454,14 +454,14 @@ def get_async_temp_file() -> NamedTemporaryFile[bytes]:
 
     Examples:
 
-        >>> from riko import issync, run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     async with get_async_temp_file() as f:
         ...         await f.write(b"hi")
         ...         print(f.name is not None)
         >>>
-        >>> print(True) if issync else run(main)
+        >>> run(main)
         True
 
     """

@@ -96,14 +96,14 @@ def as_async[T](
 
     Examples:
 
-        >>> from riko import issync, run
+        >>> from riko import run
         >>>
         >>> stream = as_async([1, 2])
         >>>
         >>> async def main():
         ...     print([x async for x in stream])
         >>>
-        >>> [1, 2] if issync else run(main)
+        >>> run(main)
         [1, 2]
 
     """
@@ -134,12 +134,12 @@ async def async_iter[T](
 
     Examples:
 
-        >>> from riko import issync, run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     print([x async for x in async_iter(range(3))])
         >>>
-        >>> [0, 1, 2] if issync else run(main)
+        >>> run(main)
         [0, 1, 2]
 
     """
@@ -179,12 +179,12 @@ async def coop_reduce[T, S](  # noqa: E302 # pyright: ignore[reportInconsistentO
 
     Examples:
 
-        >>> from riko import issync, run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     print(await coop_reduce(lambda x, y: x + y, range(5)))
         >>>
-        >>> 10 if issync else run(main)
+        >>> run(main)
         10
 
     """
@@ -223,12 +223,12 @@ def async_reduce[T, S](
 
     Examples:
 
-        >>> from riko import issync, run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     print(await async_reduce(lambda x, y: x + y, range(5)))
         >>>
-        >>> 10 if issync else run(main)
+        >>> run(main)
         10
 
     """
@@ -272,7 +272,7 @@ async def async_map[T, S](
 
     Examples:
 
-        >>> from riko import issync, run
+        >>> from riko import run
         >>>
         >>> async def double(x):
         ...     return x * 2
@@ -280,7 +280,7 @@ async def async_map[T, S](
         >>> async def main():
         ...     print(await async_map(double, range(3)))
         >>>
-        >>> [0, 2, 4] if issync else run(main)
+        >>> run(main)
         [0, 2, 4]
 
     """
@@ -401,7 +401,7 @@ async def async_map_stream[T, S](
 
     Examples:
 
-        >>> from riko import issync, run
+        >>> from riko import run
         >>>
         >>> async def double(x):
         ...     return x * 2
@@ -410,7 +410,7 @@ async def async_map_stream[T, S](
         ...     stream = async_map_stream(double, range(4), limit=2)
         ...     print(sorted([result async for result in stream]))
         >>>
-        >>> [0, 2, 4, 6] if issync else run(main)
+        >>> run(main)
         [0, 2, 4, 6]
 
     """
@@ -451,7 +451,7 @@ async def async_map_ordered_stream[T, S](
 
     Examples:
 
-        >>> from riko import issync, run
+        >>> from riko import run
         >>>
         >>> async def double(x):
         ...     return x * 2
@@ -460,7 +460,7 @@ async def async_map_ordered_stream[T, S](
         ...     stream = async_map_ordered_stream(double, range(4), limit=2)
         ...     print([result async for result in stream])
         >>>
-        >>> [0, 2, 4, 6] if issync else run(main)
+        >>> run(main)
         [0, 2, 4, 6]
 
     """
@@ -513,7 +513,7 @@ async def async_merge[S](
 
     Examples:
 
-        >>> from riko import issync, run
+        >>> from riko import run
         >>>
         >>> async def feed(*items):
         ...     for item in items:
@@ -523,7 +523,7 @@ async def async_merge[S](
         ...     merged = async_merge([feed(1, 2), feed(3, 4)], limit=2)
         ...     print(sorted([record async for record in merged]))
         >>>
-        >>> [1, 2, 3, 4] if issync else run(main)
+        >>> run(main)
         [1, 2, 3, 4]
 
     """

@@ -2029,14 +2029,14 @@ class AsyncCollection(PyCollection):
 
     Examples:
 
-        >>> from riko import get_path, issync, run
+        >>> from riko import get_path, run
         >>>
         >>> sources = [{"url": get_path(f)} for f in ["feed.xml", "gawker.xml"]]
         >>>
         >>> async def main():
         ...     print(len(list(await AsyncCollection(sources))))
         >>>
-        >>> print(32) if issync else run(main)
+        >>> run(main)
         32
 
     """

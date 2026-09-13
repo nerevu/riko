@@ -78,9 +78,9 @@ def pytest_collection_modifyitems(items):
         if not hasattr(item, "dtest"):
             continue
 
-        name = item.name
+        name = item.name.lower()
 
-        if issync and ("async" in name):
+        if issync and ("async" in name or "bado" in name):
             item.add_marker(skip_async)
         elif not IS_LXML and "xpathfetchpage" in name:
             item.add_marker(skip_lxml)
