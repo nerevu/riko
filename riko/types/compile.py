@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, NotRequired, Required, TypedDict
 
 from .modules import EmbedRef
@@ -154,12 +155,87 @@ class PipeDef(TypedDict):
     terminaldata: NotRequired[list[TerminalDataEntry]]
 
 
+@dataclass(frozen=True, slots=True)
+class _Edge:
+    """
+    One directed connection between two module ports.
+
+    Ports keep their legacy identifiers verbatim (``_INPUT``/``_OTHER``/``_OUTPUT``
+    for structural wiring, or a named keyword such as ``count``/``url`` for a named
+    secondary input) so the connection's meaning is interpreted in one place rather
+    than re-derived from raw wires at every call site.
+
+    Attributes:
+
+        source: Python-safe id of the module the connection leaves.
+        target: Python-safe id of the module the connection enters.
+        source_port: Raw output-port id on ``source`` (e.g. ``_OUTPUT``).
+        target_port: Raw input-port id on ``target`` (e.g. ``_INPUT``/``count``).
+
+    """
+
+    source: str
+    target: str
+    source_port: str
+    target_port: str
+
+
+@dataclass(frozen=True, slots=True)
+class _OutputRef:
+    """
+    A canonical pipeline output to replace the legacy ``_OUTPUT`` node.
+
+    Attributes:
+
+        node: Python-safe id of the module that produces the output stream.
+        port: Canonical output-port name.
+
+    """
+
+    node: str
+    port: str
+
+
+@dataclass(frozen=True, slots=True)
+class _GraphIndex:
+    """
+    Immutable, runtime-neutral interpretation of a pipe's wiring.
+
+    Built once per parse so both the current compiler and future execution planning
+    consume the same structural facts instead of rescanning raw wires. Edge lookups
+    (``incoming``/``outgoing``) carry full port identity. The
+    ``dependencies``/``dependents`` projection carries only node-level ordering.
+
+    Attributes:
+
+        edges: Every wire connection, in listing order.
+        incoming: Connections entering each node, keyed by target id.
+        outgoing: Connections leaving each node, keyed by source id.
+        dependencies: Node ids each node must run after.
+        dependents: Node ids that must run after each node.
+        order: Node ids in topological (execution) order.
+        roots: Node ids with no dependencies, in ``order``.
+        leaves: Node ids with no dependents, in ``order``.
+        outputs: Canonical pipeline outputs, keyed by output name.
+
+    """
+
+    edges: tuple[_Edge, ...]
+    incoming: Mapping[str, tuple[_Edge, ...]]
+    outgoing: Mapping[str, tuple[_Edge, ...]]
+    dependencies: Mapping[str, frozenset[str]]
+    dependents: Mapping[str, frozenset[str]]
+    order: tuple[str, ...]
+    roots: tuple[str, ...]
+    leaves: tuple[str, ...]
+    outputs: Mapping[str, _OutputRef]
+
+
 class ParsedPipeDef(TypedDict):
     name: str
     modules: dict[str, PipeModule]
     embed: dict[str, PipeModule]
-    graph: dict[str, str | Sequence[str]]
-    wires: dict[str, Wire]
+    graph: _GraphIndex
 
 
 class PipelineDescription(TypedDict):
