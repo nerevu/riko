@@ -91,6 +91,9 @@ Documentation
 Dev
 ~~~
 
+- Added ``manage codegen -m api`` plus drift-guards to generate API content in
+  ``_docs/API_SURFACE.md``  via ``gen-api-surface``.
+
 - Added ``manage lint --docstrings`` to flags summaries leading ``Returns``/``Yields``.
 
 - Added ``manage backfill`` to dispatch the release or publish workflow for an
