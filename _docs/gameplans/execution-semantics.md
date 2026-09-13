@@ -51,9 +51,21 @@ Every private execution owns exactly three lifetime primitives. Resources, fan-o
 
 | primitive | owns | used by |
 |---|---|---|
-| exit stack (`ExitStack` / `AsyncExitStack`) | entry/exit order of every context-managed component | resources, state-store adapters, provider/MCP sessions, channel ends |
+| exit stack (`ExitStack` / `AsyncExitStack`) | entry/exit order of every context-managed component | resources, state-store adapters, provider/MCP sessions, write sessions, channel ends |
 | task group (AnyIO task group or equivalent) | lifetime and cancellation scope of every execution-spawned task | subscriptions, split/publish branches, merge workers, internal service tasks |
 | bridge (AnyIO `BlockingPortal` / worker adaptation) | crossing between sync and async execution modes | async-only components under sync execution, blocking sync work under async execution |
+
+The write-session lifecycle behind `write()`/`sink()` is one of these context-managed components: R4B owns its acquisition and teardown by entering it on the execution exit stack, exactly like any other resource. The session mechanism itself already exists (established alongside R3); R4B changes only the owner, so `WriteNode` under R5C acquires the same session without a second write-specific lifecycle stack.
+
+A write session exposes three **distinct** operations, and neither R4B execution nor R5C `WriteNode` may collapse them:
+
+| operation | meaning |
+|---|---|
+| `finalize` | commit successful logical delivery and return the `WriteResult`; idempotent (a second call returns the cached result) |
+| `abort` | abandon the logical delivery; for framed/buffered targets, discard the staged/unpublished document |
+| `teardown` | release runtime resources (close handles/staging); **never commits** |
+
+The governing invariant is **`teardown` never chooses commit semantics** — semantic completion belongs to the execution host, not to resource release. The exit-stack context manager only *acquires* the session on entry and *tears it down* on exit; it does not `finalize` in its exit path. The host maps outcomes explicitly: full exhaustion and graceful close → `finalize` (the consumed prefix), `terminate()` and any failure → `abort`, always followed by `teardown`. Abort promises no rollback of bytes/items already emitted by an incremental target (CSV/JSONL); it only discards staged content for framed targets (JSON/GeoJSON). `PreparedWrite`, `WriteCapabilities`, and the session strategy are execution-time facts and must not leak into the R4A workflow IR (see `implementation-sequence.md` R4A) — the IR carries declarative Target/Format/`WriteOperation` intent only.
 
 Two invariants govern their use.
 
@@ -235,7 +247,7 @@ Resource dependency graphs are validated completely during preparation, regardle
 
 Dependency bindings stay symbolic until preparation and resolve against the effective Context. Only directly declared resource dependencies appear in a factory/parser `ResourceView`; transitive dependencies affect lifecycle and semantic identity but are not automatically exposed. A factory may read immutable Context configuration or Context-local module definitions through `ctx`, but only `resources=` creates managed lifecycle dependency edges.
 
-Acquisition is dependency-first and teardown is dependent-first. Dependencies remain open for at least the lifetime of every dependent that uses them. Independent eager resources enter in deterministic declaration order. Every reusable resource resolves at most once per execution; concurrent first-use of one lazy resource is single-flight within that execution. Re-executing the same Pipeline produces fresh owned factory resource values while external resources resolve to their caller-supplied object.
+Acquisition is dependency-first and teardown is dependent-first. Dependencies remain open for at least the lifetime of every dependent that uses them. Independent eager resources enter in deterministic declaration order. Every reusable resource resolves at most once per execution; concurrent first-use of one lazy resource is single-flight within that execution. A failed acquisition is memoized as failed for the remainder of that execution rather than silently retried on each subsequent use; the shared single-flight waiters observe the same failure. Re-executing the same Pipeline starts a fresh execution that acquires again, producing fresh owned factory resource values while external resources resolve to their caller-supplied object.
 
 Opening/resolution is transactional with respect to established ownership. If acquisition or post-acquisition validation fails, the execution unwinds every successfully established lifecycle, including the partially acquired current resource when Riko has a valid cleanup path. Riko never invents cleanup for an arbitrary object merely because validation failed.
 

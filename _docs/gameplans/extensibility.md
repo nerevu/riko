@@ -469,6 +469,40 @@ An `OperationSpec` may reference/reuse a serialized Workflow v2 definition, but 
 not extend the workflow format with Operations as Code source-of-truth, plan/apply/verify, import,
 compatibility, deployment, or drift semantics. Those stay in `operations-as-code.md`.
 
+### E3.11 Reuse of the shipped graph index
+
+R4A does not reinterpret topology from scratch. The compiler already builds one immutable,
+runtime-neutral graph index (`_GraphIndex` in `riko/types/compile.py`, constructed once by
+`parse_pipe_def`) that both the legacy compiler and future execution planning consume: wire-level
+`edges`/`incoming`/`outgoing` carry full port identity, while node-level
+`order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs` carry scheduling facts. Topology is
+interpreted once, deterministically, and frozen. This is the structural substrate for
+`migrate_v1_to_v2()` / `normalize_workflow()` / `validate` (E3.1) and, downstream, R4B's
+`_ExecutionPlan`.
+
+Shipped: the index replaces the old `ParsedPipeDef` `graph`+`wires` fields; `_get_input_module`,
+`_gen_pykwargs`, and topological ordering read the index instead of rescanning wires; `order` uses a
+strict topological sort, so a cyclic v1 pipe is rejected up front rather than silently
+SCC-reordered.
+
+Current gap: the shipped index is deliberately behavior-preserving for v1, so it still carries three
+legacy artifacts that E3.1/E3.2/E3.4/E3.9 resolve **at the R4A boundary** rather than in the index
+itself:
+
+- `_OUTPUT` remains a real node in `order`/`leaves`; `migrate_v1_to_v2()` translates its producer
+  endpoint to top-level `outputs.default` and drops the pseudo-node (E3.2/E3.10);
+- ports are kept verbatim (`_INPUT`/`_OTHER`/`_OUTPUT` or a named kwarg) because v1 also carries
+  named target ports; the canonical `in`/`in:N`/`out`/`out:N` mapping (E3.4) is applied during
+  migration, not stored in the v1 index;
+- orphan nodes are dropped during construction (a v1 convenience); canonical construction instead
+  begins with every declared node and treats disconnection as a validation question (E3.9), never
+  silent erasure.
+
+R4B's `_ExecutionPlan` consumes the same structural facts (`order`/`edges`/`dependencies`) and adds
+execution interpretation — resolved implementations, resource bindings, sync/async policy. The index
+holds structural facts only; execution concepts (resolved callables, portals, resource values, task
+groups) never move onto it.
+
 ## E4. Observability hooks
 
 Observability extends, rather than replaces, execution semantics.
