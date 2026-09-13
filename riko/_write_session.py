@@ -44,6 +44,13 @@ class _SessionState(Enum):
     CLOSED = auto()
 
 
+class _InputShape(Enum):
+    """How a session's records arrive: repeated singletons or one whole stream."""
+
+    ITEM = auto()
+    STREAM = auto()
+
+
 def _as_text(content: str | ConversionOutput) -> str:
     """Coalesces converter output (a string, ``StringIO``, or chunks) into text."""
     if isinstance(content, StringIO):
@@ -97,9 +104,23 @@ class _FileWriteSession:
 
         self._fields: tuple[str, ...] | None = None
         self._initial_fize_size: int | None = None
+        self._input_shape: _InputShape | None = None
         self._needs_newline: bool | None = None
         self._skip_header: bool | None = None
         self._staged: ConversionOutput | str | None = None
+
+    @property
+    def input_shape(self):
+        return self._input_shape
+
+    @input_shape.setter
+    def input_shape(self, value: _InputShape):
+        if self._input_shape is None:
+            self._input_shape = value
+        elif self._input_shape is not value:
+            raise RuntimeError("cannot mix item and stream delivery")
+        elif self._input_shape is _InputShape.STREAM:
+            raise RuntimeError("cannot attempt multiple stream deliveries")
 
     def _require_open(self) -> None:
         if self._state is not _SessionState.OPEN:
@@ -254,6 +275,7 @@ class _SyncFileWriteSession(_FileWriteSession):
             self._written += self._handle.write(_as_bytes(content))
 
     def _write_items(self, items: Items) -> None:
+        self.input_shape = _InputShape.STREAM
         content = self._convert(items)
 
         if self._incremental:
@@ -262,6 +284,8 @@ class _SyncFileWriteSession(_FileWriteSession):
             self._staged = content
 
     def _write_item(self, item: Item) -> None:
+        self.input_shape = _InputShape.ITEM
+
         if self._incremental:
             content = self._convert([item], validate=True)
             self._emit(content)
@@ -461,6 +485,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             self._written += await self._ahandle.write(_as_bytes(content))
 
     async def _awrite_items(self, items: Items | AsyncItems) -> None:
+        self.input_shape = _InputShape.STREAM
         content = await self._aconvert(items)
 
         if self._incremental:
@@ -469,6 +494,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             self._staged = content
 
     async def _awrite_item(self, item: Item) -> None:
+        self.input_shape = _InputShape.ITEM
 
         if self._incremental:
             content = await self._aconvert([item], validate=True)
