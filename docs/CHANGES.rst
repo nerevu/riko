@@ -41,6 +41,10 @@ Changes
   with ``async for``/``anext`` without awaiting the call first. Async processors and
   splitters are unchanged.
 
+- The compiler now interprets a pipe's wiring into a single immutable graph index once
+  per parse instead of rescanning raw wires at each step. A cyclic pipe is rejected up
+  front rather than silently reordered.
+
 Fixes
 ~~~~~
 

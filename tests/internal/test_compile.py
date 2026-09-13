@@ -27,7 +27,14 @@ from riko.compile import (
 from riko.context import Context
 from riko.exceptions import UnsupportedModuleError
 from riko.types._streams import Item, ItemOrValue
-from riko.types.compile import DagModule, LoopModule, PipeDag, PipeDef, PipeModule
+from riko.types.compile import (
+    DagModule,
+    LoopModule,
+    PipeDag,
+    PipeDef,
+    PipeModule,
+    _GraphIndex,
+)
 from riko.types.modules import ItemBuilderRawConf, Param, TruncateRawConf
 from tests import TESTS_DIR, async_test
 
@@ -306,6 +313,39 @@ def test_convert_dag_generates_ids_when_omitted():
 
     assert module_ids == ["sw-1", "sw-2", "_OUTPUT"]
     assert edges == [("sw-1", "sw-2"), ("sw-2", "_OUTPUT")]
+
+
+def test_parse_pipe_def_replaces_wires_with_graph_index():
+    parsed = parse_pipe_def(FOREVER, "pipe_gen_forever")
+    graph = parsed["graph"]
+
+    assert "wires" not in parsed
+    assert isinstance(graph, _GraphIndex)
+    assert graph.order == ("sw_1", "sw_2", "_OUTPUT")
+    assert graph.roots == ("sw_1",)
+    assert graph.leaves == ("_OUTPUT",)
+    assert graph.dependencies["sw_2"] == frozenset({"sw_1"})
+    assert graph.dependents["sw_1"] == frozenset({"sw_2"})
+
+
+def test_graph_index_indexes_wire_ports():
+    graph = parse_pipe_def(FOREVER, "pipe_gen_forever")["graph"]
+    (edge,) = graph.incoming["sw_2"]
+
+    assert (edge.source, edge.source_port) == ("sw_1", "_OUTPUT")
+    assert (edge.target, edge.target_port) == ("sw_2", "_INPUT")
+    assert graph.outgoing["sw_1"] == graph.incoming["sw_2"]
+    assert graph.outputs["default"].node == "sw_2"
+
+
+def test_graph_index_orders_embed_before_its_loop():
+    # sw_710 is an embedded module owned by the loop sw_688; the embed relationship
+    # keeps the embed ahead of its loop even though no wire connects them.
+    stem = "pipe_1166de33b0ea6936d96808717355beaa"
+    pipe_def = loads((PIPELINE_DIR / f"{stem}.json").read_text())
+    order = parse_pipe_def(pipe_def, "x")["graph"].order
+
+    assert order.index("sw_710") < order.index("sw_688")
 
 
 @async_test

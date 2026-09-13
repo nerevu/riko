@@ -43,6 +43,7 @@ from json import JSONEncoder, dumps
 from pathlib import Path
 from pprint import PrettyPrinter
 from time import struct_time
+from types import MappingProxyType
 from typing import Any, Literal, cast, overload
 
 from jinja2 import Environment, PackageLoader
@@ -103,6 +104,9 @@ from riko.types.compile import (
     StringModule,
     TemplateData,
     Wire,
+    _Edge,
+    _GraphIndex,
+    _OutputRef,
 )
 from riko.types.modules import (
     AnyModuleRawConf,
@@ -419,11 +423,6 @@ def gen_modules(  # noqa: E302
             yield (pythonise(module["id"]), module)
 
 
-def gen_wires(pipe_def: PipeDef) -> Iterator[tuple[str, Wire]]:
-    for wire in pipe_def["wires"]:
-        yield (pythonise(wire["id"]), wire)
-
-
 def gen_graph(pipe_def: PipeDef) -> Iterator[tuple[str, str]]:
     for wire in pipe_def["wires"]:
         src_id = pythonise(wire["src"]["moduleid"])
@@ -446,10 +445,6 @@ def gen_parented_graph[T: str | int](graph: Graph[T]) -> Iterator[tuple[T, Nodes
     for node, value in graph.items():
         if value or any(node in v for v in graph.values()):
             yield (node, value)
-
-
-def get_module_id(wire: Wire, stem: str = "src", base: str = "moduleid") -> str:
-    return pythonise(wire, key=f"{stem}.{base}")
 
 
 def write_file(
@@ -681,13 +676,6 @@ def _get_pyarg(  # noqa: E302
     return _get_input_module(parsed_pipe_def, module_id, steps, **split_ids)
 
 
-def _is_default(wire: Wire, module_id: str, in_and_out: bool = False) -> bool:
-    id_match = get_module_id(wire, stem="tgt") == module_id
-    default_out = id_match and wire["src"]["id"].startswith("_OUTPUT")
-    is_input = wire["tgt"]["id"] == "_INPUT"
-    return default_out and (is_input if in_and_out else not is_input)
-
-
 @overload
 def _gen_pykwargs(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef, module_id: str, steps: None = ..., **kwargs: Any
@@ -720,14 +708,10 @@ def _gen_pykwargs(  # noqa: E302
 
     others: list[StepValue | Id] = []
 
-    # find the default input of this module
-    for wire in parsed_pipe_def["wires"].values():
-        # if the wire is to this module and it's *NOT* the default input
-        # but it *is* the default output
-        if _is_default(wire, module_id):
-            src_module_id = get_module_id(wire)
-            source = Id(src_module_id) if steps is None else steps[src_module_id]
-            pipe_id = get_module_id(wire, stem="tgt", base="id")
+    for edge in parsed_pipe_def["graph"].incoming.get(module_id, ()):
+        if edge.source_port.startswith("_OUTPUT") and edge.target_port != "_INPUT":
+            source = Id(edge.source) if steps is None else steps[edge.source]
+            pipe_id = pythonise(edge.target_port)
 
             if pipe_id.startswith("_OTHER"):
                 others.append(source)
@@ -857,11 +841,9 @@ def _get_input_module(
     if module_id in parsed_pipe_def["embed"]:
         source = "_INPUT"
     else:
-        for wire in parsed_pipe_def["wires"].values():
-            # if the wire is to this module and it's the default input and it's
-            # the default output:
-            if _is_default(wire, module_id, True):
-                src_module_id = get_module_id(wire)
+        for edge in parsed_pipe_def["graph"].incoming.get(module_id, ()):
+            if edge.source_port.startswith("_OUTPUT") and edge.target_port == "_INPUT":
+                src_module_id = edge.source
 
                 if steps is None and src_module_id in split_ids:
                     pos = split_ids[src_module_id]
@@ -921,6 +903,82 @@ def convert_dag(dag: PipeDag) -> PipeDef:
     return PipeDef({"modules": modules, "wires": full_wires})
 
 
+def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
+    """
+    Interprets a pipe's wiring into one immutable graph index.
+
+    Combines the embed relationships (a loop runs after its embedded module) with
+    the wire edges to derive a single deterministic execution order, then indexes
+    the wire connections by endpoint so downstream stages look up a node's inputs
+    and outputs without rescanning every wire.
+
+    Args:
+
+        pipe_def: JSON representation of the pipe.
+
+    Returns:
+
+        A frozen ``_GraphIndex`` describing the pipe's topology.
+
+    """
+    successors: dict[str, list[str]] = defaultdict(list, gen_embed_graph(pipe_def))
+
+    for src, tgt in gen_graph(pipe_def):
+        successors[src].append(tgt)
+
+    adjacency = dict(gen_parented_graph(successors))
+    order = tuple(topological_sort(adjacency, strict=True))
+    dependents = {
+        node: frozenset(_successors) for node, _successors in adjacency.items()
+    }
+    _dependencies: dict[str, set[str]] = {node: set() for node in adjacency}
+
+    for node, _successors in adjacency.items():
+        for successor in _successors:
+            _dependencies.setdefault(successor, set()).add(node)
+
+    dependencies = {node: frozenset(deps) for node, deps in _dependencies.items()}
+    roots = tuple(node for node in order if not dependencies.get(node))
+    leaves = tuple(node for node in order if not dependents.get(node))
+
+    edges = tuple(
+        _Edge(
+            source=pythonise(wire["src"]["moduleid"]),
+            target=pythonise(wire["tgt"]["moduleid"]),
+            source_port=wire["src"]["id"],
+            target_port=wire["tgt"]["id"],
+        )
+        for wire in pipe_def["wires"]
+    )
+
+    _incoming: dict[str, list[_Edge]] = defaultdict(list)
+    _outgoing: dict[str, list[_Edge]] = defaultdict(list)
+
+    for edge in edges:
+        _outgoing[edge.source].append(edge)
+        _incoming[edge.target].append(edge)
+
+    incoming = {node: tuple(group) for node, group in _incoming.items()}
+    outgoing = {node: tuple(group) for node, group in _outgoing.items()}
+
+    if output_edges := incoming.get("_OUTPUT", ()):
+        outputs = {"default": _OutputRef(node=output_edges[-1].source, port="out")}
+    else:
+        outputs = {}
+
+    return _GraphIndex(
+        edges=edges,
+        incoming=MappingProxyType(incoming),
+        outgoing=MappingProxyType(outgoing),
+        dependencies=MappingProxyType(dependencies),
+        dependents=MappingProxyType(dependents),
+        order=order,
+        roots=roots,
+        leaves=leaves,
+        outputs=MappingProxyType(outputs),
+    )
+
+
 def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPipeDef:
     """
     Parses pipe JSON into internal structures.
@@ -935,8 +993,7 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPip
         An internal representation of the pipe.
 
     """
-    graph = defaultdict(list, gen_embed_graph(pipe_def))
-    [graph[k].append(v) for k, v in gen_graph(pipe_def)]
+    graph = _index_pipe_def(pipe_def)
     modules = {
         key: PipeModule({**module, "conf": _lower_keys(module["conf"])})
         for key, module in gen_modules(pipe_def)
@@ -951,8 +1008,7 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPip
         "name": pythonise(pipe_name),
         "modules": modules,
         "embed": embed,
-        "graph": dict(gen_parented_graph(graph)),
-        "wires": dict(gen_wires(pipe_def)),
+        "graph": graph,
     }
 
 
@@ -1053,7 +1109,7 @@ def build_pipeline(  # noqa: E302
 
     """
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
-    module_ids = topological_sort(parsed_pipe_def["graph"])
+    module_ids = list(parsed_pipe_def["graph"].order)
 
     if context.mode is ExecutionMode.RUN:
         _resolve_leaf_modules(parsed_pipe_def)
@@ -1093,7 +1149,7 @@ async def abuild_pipeline(  # noqa: E302
 
     """
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
-    module_ids = topological_sort(parsed_pipe_def["graph"])
+    module_ids = list(parsed_pipe_def["graph"].order)
 
     if context.mode is ExecutionMode.RUN:
         _resolve_leaf_modules(parsed_pipe_def)
@@ -1122,7 +1178,7 @@ def stringify_pipe(
     **kwargs: bool,
 ) -> str:
     """Converts a pipe into a Python script, using AnyIO when ``is_async``."""
-    module_ids = topological_sort(parsed_pipe_def["graph"], strict=True)
+    module_ids = list(parsed_pipe_def["graph"].order)
     module_names = gen_names(module_ids, parsed_pipe_def)
 
     env = Environment(loader=PackageLoader("riko"), autoescape=False)  # noqa: S701
