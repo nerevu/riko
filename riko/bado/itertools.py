@@ -31,7 +31,9 @@ from functools import partial
 from typing import cast, overload
 
 from riko._constants import DEF_CONNECTION_COUNT
-from riko.bado._backend import (
+from riko.types._sentinels import MISSING
+
+from ._backend import (
     CapacityLimiter,
     MemoryObjectSendStream,
     Semaphore,
@@ -40,8 +42,7 @@ from riko.bado._backend import (
     create_memory_object_stream,
     create_task_group,
 )
-from riko.bado._util import maybe_deferred
-from riko.types._sentinels import MISSING
+from ._util import maybe_deferred
 
 
 def _cap[T, S](

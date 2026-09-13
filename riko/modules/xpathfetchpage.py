@@ -41,7 +41,6 @@ from riko._constants import ENCODING
 from riko._io import Fetch, auto_close
 from riko.bado.io import async_url_open
 from riko.cast import SourceOpts
-from riko.modules._prepare import require_conf
 from riko.parsers import any2dict
 from riko.types._configs import XpathFetchPageObjconf
 from riko.types._io import FileLike
@@ -49,6 +48,7 @@ from riko.types._options import Defaults
 from riko.types._streams import Item, Stream
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS = SourceOpts
 DEFAULTS = Defaults({"encoding": ENCODING, "html5": False})

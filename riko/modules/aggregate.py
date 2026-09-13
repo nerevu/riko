@@ -33,13 +33,13 @@ import pygogo as gogo
 
 from riko._iterutils import listize
 from riko.bado._util import maybe_deferred
-from riko.modules._prepare import require_arg
 from riko.types._configs import AggregateObjconf
 from riko.types._options import Defaults
 from riko.types._streams import Item, Items, Stream
 from riko.types._wrappers import PipeTuples
 
 from . import operator
+from ._prepare import require_arg
 
 DEFAULTS: Defaults = Defaults()
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger

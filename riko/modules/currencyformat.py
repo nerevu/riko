@@ -30,11 +30,11 @@ from babel.numbers import format_currency
 
 from riko.cast import BasicCastType
 from riko.currencies import CURRENCY_CODES
-from riko.modules._prepare import require_conf
 from riko.types._configs import CurrencyFormatObjconf
 from riko.types._options import Defaults, Opts
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}
 DEFAULTS: Defaults = {"currency": "USD", "clean": False}

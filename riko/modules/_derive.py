@@ -7,7 +7,6 @@ Provides functions for deriving module subtypes and loop behavior.
 """
 
 from riko.cast import BasicCastType
-from riko.modules._inference import gen_operator_return_kinds
 from riko.types._wrappers import ModuleParser
 from riko.types.modules import (
     ModuleSubtype,
@@ -15,6 +14,8 @@ from riko.types.modules import (
     ModuleType,
     OperatorReturnKind,
 )
+
+from ._inference import gen_operator_return_kinds
 
 
 # Keep this module independent of riko.ext. It is imported while riko.modules is still

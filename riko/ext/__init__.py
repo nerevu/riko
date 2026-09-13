@@ -9,10 +9,13 @@ This namespace contains pipe decorators, configuration helpers, module
 metadata and naming types, wrapper protocols, and registry interfaces.
 """
 
-from riko.ext.config import DynamicConf, get_conf_type
-from riko.ext.decorators import operator, processor, splitter
-from riko.ext.names import ModuleName, derive_category, normalize_module_name
-from riko.ext.protocols import (
+from riko.types._names import ModuleNameLike
+from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
+
+from .config import DynamicConf, get_conf_type
+from .decorators import operator, processor, splitter
+from .names import ModuleName, derive_category, normalize_module_name
+from .protocols import (
     AsyncOperatorWrapper,
     AsyncProcessorWrapper,
     AsyncSplitterWrapper,
@@ -21,9 +24,7 @@ from riko.ext.protocols import (
     SyncProcessorWrapper,
     SyncSplitterWrapper,
 )
-from riko.ext.registry import ModuleDefinition, ModuleRegistry, register
-from riko.types._names import ModuleNameLike
-from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
+from .registry import ModuleDefinition, ModuleRegistry, register
 
 __all__ = [
     "AsyncOperatorWrapper",

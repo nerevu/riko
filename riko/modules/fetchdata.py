@@ -34,7 +34,6 @@ from riko._io import Fetch, auto_close
 from riko._iterutils import listize
 from riko.bado.io import async_url_open
 from riko.cast import SourceOpts
-from riko.modules._prepare import require_conf
 from riko.parsers import any2dict
 from riko.types._configs import FetchDataObjconf
 from riko.types._io import FileLike
@@ -42,6 +41,7 @@ from riko.types._options import Defaults, Opts
 from riko.types._streams import Item, Stream
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING})

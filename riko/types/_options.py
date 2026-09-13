@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, TypedDict
 
 if TYPE_CHECKING:
     from riko.cast import BasicCastType
-    from riko.types._wrappers import ParserOutput
 
     from ._collections import BasicArg, RikoDict, RikoList
     from ._dynamic_conf import DynamicConf
     from ._scalars import PrimitiveValue
     from ._streams import Item
+    from ._wrappers import ParserOutput
     from ._write import FmtLike
     from .modules import AnyConfRule, CountValues, Skip
 

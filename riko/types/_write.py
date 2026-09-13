@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
-from riko.types._streams import AsyncItems
+from ._streams import AsyncItems
 
 if TYPE_CHECKING:
     from ._io import PathLike
