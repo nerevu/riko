@@ -1,8 +1,11 @@
-# Inspiration coverage gameplan
+# Inspiration coverage
+
+> Research traceability index. This document is non-authoritative; semantic ownership remains in
+> the active gameplans named below.
 
 ## 1. Purpose
 
-The `_docs/inspiration/` directory preserves earlier Nerevu projects and external design
+The `_docs/research/inspiration/` directory preserves earlier Nerevu projects and external design
 experiments. This index records which ideas are being carried forward into Riko gameplans,
 where they belong, and which implementation patterns are intentionally **not** being
 revived.
@@ -223,7 +226,7 @@ The repeated projects make several invariants worth enforcing across gameplans:
 
 ## 7. Maintenance rule
 
-When new material is added to `_docs/inspiration/`:
+When new material is added to `_docs/research/inspiration/`:
 
 1. add it to this matrix;
 2. identify the reusable semantic lesson;

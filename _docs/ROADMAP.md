@@ -166,6 +166,7 @@ The complete `§0–27` routing map:
 | Gameplan | Covers |
 |---|---|
 | [execution-semantics.md](gameplans/execution-semantics.md) | Immutable `Pipeline[T]` execution semantics; private sync/async executions and lifetime primitives; immutable Context/resources; FeedResult/provenance; identity/idempotency; StateStore/checkpoint/CAS; loop runtime; batch/retry/backpressure/timeout/merge/memory semantics. |
+| [dependency-layers.md](gameplans/dependency-layers.md) | Runtime import-layer boundaries and staged package regrouping; execution behavior remains owned by `execution-semantics.md`. |
 | [extensibility.md](gameplans/extensibility.md) | Canonical Workflow v2 normalization/serialization, node/edge/port grammar, Inputs/Targets/Formats structure, module/plugin contracts, ecosystem observability/adapters/drivers/GUI contracts. |
 | [events.md](gameplans/events.md) | Minimal execution-owned `Event`/`EventSink` transport and optional-consumer boundary. |
 | [cache.md](gameplans/cache.md) | `Pipeline.cache()` / `CacheNode` explicit replay semantics, Mezmoize integration, fill/manifest/invalidation/backend-failure behavior. |
@@ -231,7 +232,6 @@ The complete `§0–27` routing map:
 |---|---|
 | [commercialization.md](gameplans/commercialization.md) | Ecosystem commercialization strategy; no runtime/API ownership. |
 | [module-documentation.md](gameplans/module-documentation.md) | Yahoo! Pipes module reference documentation. |
-| [inspiration-coverage.md](gameplans/inspiration-coverage.md) | Traceability from prior-art ideas to active gameplans. |
 | [riko-site.md](gameplans/riko-site.md) | Framework-neutral site pipeline built on Core. |
 | [testing.md](gameplans/testing.md) | Test-suite layering/consolidation and cross-package scenario placement. |
 
