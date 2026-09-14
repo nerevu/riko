@@ -37,6 +37,11 @@ _STATUS_BANNER = re.compile(
 )
 _SECTION_ROW = re.compile(r"^\|\s*(\d+)\s*\|", re.MULTILINE)
 _GAMEPLAN_LINK = re.compile(r"gameplans/([A-Za-z0-9._-]+\.md)")
+_NON_AUTHORITATIVE_HEADER = re.compile(
+    r"\b(retired|archived)\b|research/adr notebook|prior-art research|not as a task list",
+    re.IGNORECASE,
+)
+_NON_AUTHORITATIVE_TABLE_LINK = re.compile(r"\]\((?:archive|research)/")
 _R_PHASE = re.compile(
     r"^### (?P<phase>R\d+[A-Z]?)\s+—.*?(?=^### R\d+[A-Z]?\s+—|^## |\Z)",
     re.MULTILINE | re.DOTALL,
@@ -179,13 +184,8 @@ def _read(path: Path) -> str:
 
 
 def _gameplan_paths() -> list[Path]:
-    """List top-level Markdown gameplans in stable order."""
+    """List authoritative Markdown gameplans in stable order."""
     return sorted(_GAMEPLANS.glob("*.md")) if _GAMEPLANS.exists() else []
-
-
-def _is_retired(text: str) -> bool:
-    """Identify a retired gameplan from its title line."""
-    return "retired" in text.split("\n", 1)[0].lower()
 
 
 def _version_tuple(text: str) -> tuple[int, int, int]:
@@ -208,15 +208,6 @@ def _packaged_version() -> tuple[int, int, int]:
     return _version_tuple(raw)
 
 
-def _table_rows(text: str, name: str) -> list[str]:
-    """Find ROADMAP table rows that reference one gameplan."""
-    return [
-        line
-        for line in text.splitlines()
-        if f"gameplans/{name}" in line and line.lstrip().startswith("|")
-    ]
-
-
 def _status_banner_offenders() -> list[str]:
     """Find gameplans that claim phase status locally."""
     return [
@@ -224,15 +215,25 @@ def _status_banner_offenders() -> list[str]:
     ]
 
 
-def _retired_listing_offenders() -> list[str]:
-    """Find retired gameplans listed without an explicit retired marker."""
-    roadmap = _read(_ROADMAP)
+def _authority_namespace_offenders() -> list[str]:
+    """Find non-authoritative documents left in the active gameplan namespace."""
+    offenders: list[str] = []
+
+    for path in _gameplan_paths():
+        header = "\n".join(_read(path).splitlines()[:8])
+
+        if _NON_AUTHORITATIVE_HEADER.search(header):
+            offenders.append(path.name)
+
+    return offenders
+
+
+def _non_authoritative_listing_offenders(roadmap: str) -> list[str]:
+    """Find archive or research links listed in ROADMAP tables."""
     return [
-        path.name
-        for path in _gameplan_paths()
-        if _is_retired(_read(path))
-        and _table_rows(roadmap, path.name)
-        and not any("retired" in row.lower() for row in _table_rows(roadmap, path.name))
+        line.strip()
+        for line in roadmap.splitlines()
+        if line.lstrip().startswith("|") and _NON_AUTHORITATIVE_TABLE_LINK.search(line)
     ]
 
 
@@ -272,7 +273,7 @@ def _version_claim_offenders(current: tuple[int, int, int]) -> list[str]:
 
 
 def _check_docs() -> int:
-    """Validate static internal-document consistency rules."""
+    """Validate static internal-document consistency and authority rules."""
     problems: list[str] = []
     roadmap = _read(_ROADMAP)
     counts = Counter(int(n) for n in _SECTION_ROW.findall(roadmap))
@@ -284,15 +285,25 @@ def _check_docs() -> int:
         )
 
     linked = set(_GAMEPLAN_LINK.findall(roadmap))
-    active = {path.name for path in _gameplan_paths() if not _is_retired(_read(path))}
-    missing = sorted(active - linked)
+    gameplans = {path.name for path in _gameplan_paths()}
+    missing = sorted(gameplans - linked)
+    stale = sorted(linked - gameplans)
 
     if missing:
-        problems.append(f"{_ROADMAP}: unindexed active gameplans: {missing}")
+        problems.append(f"{_ROADMAP}: unindexed authoritative gameplans: {missing}")
 
-    if offenders := _retired_listing_offenders():
+    if stale:
+        problems.append(f"{_ROADMAP}: links to missing gameplans: {stale}")
+
+    if offenders := _authority_namespace_offenders():
         problems.append(
-            f"{_ROADMAP}: retired gameplans listed without a Retired marker: {offenders}"
+            f"{_GAMEPLANS}: archive/research material must leave gameplans/: {offenders}"
+        )
+
+    if offenders := _non_authoritative_listing_offenders(roadmap):
+        problems.append(
+            f"{_ROADMAP}: archive/research documents cannot appear in authority tables: "
+            f"{offenders}"
         )
 
     if offenders := _status_banner_offenders():
