@@ -6,7 +6,7 @@ We need more extensive tests with stable data feeds!
 """
 
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from importlib import import_module
@@ -85,7 +85,7 @@ KAZEEKI2_CONTENT = (
 )
 
 
-def _assert_kazeeki(item: dict, example: dict, content: tuple[str, str]) -> None:
+def _assert_kazeeki(item: Mapping, example: Mapping, content: tuple[str, str]) -> None:
     for key, expected in example.items():
         got = item.get(key)
         assert got == expected, f"Expected {expected} for key {key}, but got {got}"
@@ -232,17 +232,19 @@ class TestBasics:
         pipe_name = "pipe_HrX5bjkv3BGEp9eSy6ky6g"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 15, 0)
-        item = cast(dict, items[0])
-        assert item["link"] == "http://sz.de/1.2104731"
+        item = items[0]
+        assert is_mapping(item)
+        assert item.get("link") == "http://sz.de/1.2104731"
 
     def test_fetchsitefeed(self):
         """Loads a pipeline containing a fetchsitefeed module"""
         pipe_name = "pipe_551507461cbcb19a828165daad5fe007"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 1)
-        item = cast(dict, items[0])
-        assert item["title"]
-        assert item["summary"]
+        item = items[0]
+        assert is_mapping(item)
+        assert item.get("title")
+        assert item.get("summary")
 
     def test_loops_1(self):
         """Loads a pipeline containing a loop"""
@@ -250,10 +252,14 @@ class TestBasics:
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
 
-        item = cast(dict, items[0])
-        assert item["info"]["login"] == "defunkt"
-        assert item["info"]["user_view_type"] == "public"
-        assert item["description"] == "public"
+        item = items[0]
+        assert is_mapping(item)
+        assert item.get("description") == "public"
+
+        info = item.get("info")
+        assert is_mapping(info)
+        assert info.get("login") == "defunkt"
+        assert info.get("user_view_type") == "public"
 
     def test_urlbuilder(self):
         """
@@ -263,8 +269,9 @@ class TestBasics:
         pipe_name = "pipe_e519dd393f943315f7e4128d19db2eac"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 63, 0)
-        item = cast(dict, items[0])
-        assert "The 6 Best Enterprise Data Modeling Tools" in item["title"]
+        item = items[0]
+        assert is_mapping(item)
+        assert "The 6 Best Enterprise Data Modeling Tools" in str(item.get("title"))
 
     def test_input_override(self):
         """Overrides an offline input->itembuilder pipeline via Context.inputs"""
@@ -279,25 +286,30 @@ class TestBasics:
         pipe_name = "pipe_gigs"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 49, 0)
-        item = cast(dict, items[-1])
-        assert item["title"] == "Educational Android App"
-        assert (
-            item["link"] == "http://www.guru.com/jobs/educational-android-app/1058980"
-        )
+        item = items[-1]
+        assert is_mapping(item)
+        assert item.get("title") == "Educational Android App"
+
+        link = item.get("link")
+        assert link == "http://www.guru.com/jobs/educational-android-app/1058980"
 
     def test_kazeeki1(self):
         """Loads the kazeeki simple test fetchdata pipeline."""
         pipe_name = "pipe_kazeeki1"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 5, 0)
-        _assert_kazeeki(cast(dict, items[0]), KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT)
+        item = items[0]
+        assert is_mapping(item)
+        _assert_kazeeki(item, KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT)
 
     def test_kazeeki2(self):
         """Loads the kazeeki simple test itembuilder pipeline."""
         pipe_name = "pipe_kazeeki2"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
-        _assert_kazeeki(cast(dict, items[0]), KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
+        item = items[0]
+        assert is_mapping(item)
+        _assert_kazeeki(item, KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
 
     @async_test
     async def test_async_kazeeki1(self):
@@ -305,7 +317,9 @@ class TestBasics:
         pipe_name = "pipe_async_kazeeki1"
         items = await self._aget_pipeline(pipe_name)
         await self._aload(items, pipe_name, 5, 0)
-        _assert_kazeeki(cast(dict, items[0]), KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT)
+        item = items[0]
+        assert is_mapping(item)
+        _assert_kazeeki(item, KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT)
 
     @async_test
     async def test_async_kazeeki2(self):
@@ -313,7 +327,9 @@ class TestBasics:
         pipe_name = "pipe_async_kazeeki2"
         items = await self._aget_pipeline(pipe_name)
         await self._aload(items, pipe_name, 1, 0)
-        _assert_kazeeki(cast(dict, items[0]), KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
+        item = items[0]
+        assert is_mapping(item)
+        _assert_kazeeki(item, KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
 
     def test_kazeeki_full(self):
         """Loads the kazeeki simple test pipeline."""
@@ -380,21 +396,24 @@ class TestBasics:
             ),
         }
 
-        item = cast(dict, items[0])
+        item = items[0]
+        assert is_mapping(item)
 
         for k, v in example.items():
             assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
 
-        assert item["summary"].startswith("<span><b>Description:</b> With this spe")
-        assert item["summary"].endswith("ancer Location:</b> Worldwide<br></span>")
+        summary = str(item.get("summary"))
+        assert summary.startswith("<span><b>Description:</b> With this spe")
+        assert summary.endswith("ancer Location:</b> Worldwide<br></span>")
 
     def test_wired_count_truncate_output(self):
         """Truncates a 15-item feed to a wired count."""
         pipe_name = "pipe_404411a8d22104920f3fc1f428f33642"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 3, 0)
-        item = cast(dict, items[0])
-        assert item["title"] == "Markitekt - Architects of Marketing"
+        item = items[0]
+        assert is_mapping(item)
+        assert item.get("title") == "Markitekt - Architects of Marketing"
 
     def test_simplest(self):
         """
@@ -404,8 +423,11 @@ class TestBasics:
         pipe_name = "pipe_2de0e4517ed76082dcddf66f7b218057"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 17, 0)
-        item = cast(dict, items[0])
-        assert item["title"].startswith("Running “Native” Data Wrangling Applicati")
+        item = items[0]
+        assert is_mapping(item)
+
+        title = str(item.get("title"))
+        assert title.startswith("Running “Native” Data Wrangling Applicati")
 
     @pytest.mark.perf
     def test_feed(self):
@@ -419,9 +441,11 @@ class TestBasics:
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 4, 0)
 
-        for i in items:
-            item = cast(dict, i)
-            assert "the" in item["summary"]
+        for item in items:
+            assert is_mapping(item)
+
+            summary = str(item.get("summary"))
+            assert "the" in summary
 
     def test_forever(self):
         """
@@ -432,8 +456,8 @@ class TestBasics:
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 3, 0)
 
-        for i in items:
-            assert cast(dict, i) == {"forever": True}
+        for item in items:
+            assert item == {"forever": True}
 
     def test_filtered_multiple_sources(self):
         """
@@ -443,8 +467,11 @@ class TestBasics:
         pipe_name = "pipe_c1cfa58f96243cea6ff50a12fc50c984"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 18, 0)
-        item = cast(dict, items[0])
-        assert item["title"].startswith("Running “Native” Data Wrangling Applicat")
+        item = items[0]
+        assert is_mapping(item)
+
+        title = str(item.get("title"))
+        assert title.startswith("Running “Native” Data Wrangling Applicat")
 
     @pytest.mark.perf
     def test_european_performance_cars(self):
@@ -474,10 +501,12 @@ class TestBasics:
             "vw",
         )
 
-        for i in items:
-            item = cast(dict, i)
-            msg = f"Expected one of {cars} in summary, but got {item['summary']}"
-            assert any(car in item["summary"].lower() for car in cars), msg
+        for item in items:
+            assert is_mapping(item)
+
+            summary = str(item.get("summary"))
+            msg = f"Expected one of {cars} in summary, but got {summary}"
+            assert any(car in summary.lower() for car in cars), msg
 
     # todo: need tests with single and mult-part key
     def test_reverse_truncate(self):
@@ -487,18 +516,23 @@ class TestBasics:
         self._load(items, pipe_name, 3, 0)
         prev_title = None
 
-        for i in items:
-            item = cast(dict, i)
-            assert not prev_title or item["title"] < prev_title
-            prev_title = item["title"]
+        for item in items:
+            assert is_mapping(item)
+
+            title = str(item.get("title"))
+            assert not prev_title or title < prev_title
+            prev_title = title
 
     def test_tail(self):
         """Loads a pipeline containing a tail"""
         pipe_name = "pipe_06c4c44316efb0f5f16e4e7fa4589ba2"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 5, 0)
-        item = cast(dict, items[0])
-        assert "American woman is being held hostage" in item["title"]
+        item = items[0]
+        assert is_mapping(item)
+
+        title = str(item.get("title"))
+        assert "American woman is being held hostage" in title
 
     def test_itembuilder(self):
         """Loads a pipeline containing an itembuilder"""
@@ -553,8 +587,9 @@ class TestBasics:
             },
         ]
 
-        for pos, i in enumerate(items):
-            item = cast(dict, i)
+        for pos, item in enumerate(items):
+            assert is_mapping(item)
+
             for k, v in expected[pos].items():
                 assert item.get(k) == v, f"expected {v=} at {pos=}, {k=}. Got\n{item=}"
 
@@ -666,9 +701,10 @@ class TestBasics:
 
         dependencies = ["input", "rssitembuilder"]
 
-        item = cast(dict, items[0])
-        assert item["inputs"] == inputs
-        assert item["dependencies"] == dependencies
+        item = items[0]
+        assert is_mapping(item)
+        assert item.get("inputs") == inputs
+        assert item.get("dependencies") == dependencies
 
     def test_union_just_other(self):
         """
@@ -687,10 +723,11 @@ class TestBasics:
         assert dates[0] > dates[-1]
         assert first.get("y:id") == "http://sz.de/1.2104394"
 
-        for i in items:
-            item = cast(dict, i)
-            msg = "expected 210 in {link} or Poroschenko: in {title}".format(**item)
-            assert ("210" in item["link"]) or ("Poroschenko:" in item["title"]), msg
+        for item in items:
+            assert is_mapping(item)
+            link, title = item.get("link"), item.get("title")
+            msg = f"expected 210 in {link} or Poroschenko: in {title}"
+            assert ("210" in str(link)) or ("Poroschenko:" in str(title)), msg
 
     def test_stringtokenizer(self):
         """Loads a pipeline containing a stringtokenizer"""
@@ -713,24 +750,31 @@ class TestBasics:
         """Loads a pipeline containing a fetchpage module (plain and within a loop)."""
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 8, 0)
-        item = cast(dict, items[2])
-        assert item["content"] == "$3.00</td>"
+        item = items[2]
+        assert is_mapping(item)
+        assert item.get("content") == "$3.00</td>"
 
     def test_split(self):
         """Loads an example pipeline containing a split module"""
         pipe_name = "pipe_QMrlL_FS3BGlpwryODY80A"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 7, 0)
-        item = cast(dict, items[0])
-        assert item["title"].startswith("[Weight] More parents think their overweight")
+        item = items[0]
+        assert is_mapping(item)
+
+        title = str(item.get("title"))
+        assert title.startswith("[Weight] More parents think their overweight")
 
     def test_simplemath_1(self):
         """Loads a pipeline containing simplemath"""
         pipe_name = "pipe_zKJifuNS3BGLRQK_GsevXg"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 6, 0)
-        item = cast(dict, items[0])
-        assert item["title"] == "Open researcher open course"
+        item = items[0]
+        assert is_mapping(item)
+
+        title = str(item.get("title"))
+        assert title == "Open researcher open course"
 
     def test_twitter_caption_search(self):
         """
@@ -740,8 +784,9 @@ class TestBasics:
         pipe_name = "pipe_eb3e27f8f1841835fdfd279cd96ff9d8"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 3, 0)
-        item = cast(dict, items[0])
-        assert item["ctime"] == "&time=00:01:41&time="
+        item = items[0]
+        assert is_mapping(item)
+        assert item.get("ctime") == "&time=00:01:41&time="
 
     def test_loop_example(self):
         """
@@ -756,9 +801,10 @@ class TestBasics:
             "WASHINGTON/ OREGON\n     AND CALIFORNIA ONLY (Severe)"
         )
 
-        item = cast(dict, items[0])
-        assert item["title"] == expected
-        assert item["pubDate"]
+        item = items[0]
+        assert is_mapping(item)
+        assert item.get("title") == expected
+        assert item.get("pubDate")
 
     def test_namespaceless_xml_input(self):
         """Loads a pipeline containing deep xml source with no namespace"""
@@ -773,9 +819,9 @@ class TestBasics:
 
         sliced = islice(items, 3)
 
-        for i in sliced:
-            item = cast(dict, i)
-            assert item["title"] in contains
+        for item in sliced:
+            assert is_mapping(item)
+            assert item.get("title") in contains
 
     def test_urlbuilder_loop(self):
         """Loads a pipeline containing a URL builder in a loop (offline)"""
@@ -787,13 +833,17 @@ class TestBasics:
             "https://example.invalid/chart?cht=qr&chs=200x200"
             "&chl=https%3A%2F%2Fexample.invalid%2Fitem%2F1"
         )
-        first = cast(dict, items[0])
-        assert first["link"] == "https://example.invalid/item/1"
-        assert first["media:content"]["url"] == chart_url
+        first = items[0]
+        assert is_mapping(first)
+        assert first.get("link") == "https://example.invalid/item/1"
+
+        content = first.get("media:content")
+        assert is_mapping(content)
+        assert content.get("url") == chart_url
         assert "cht=qr" in chart_url
         assert "chs=200x200" in chart_url
         assert "chl=https%3A%2F%2Fexample.invalid%2Fitem%2F1" in chart_url
-        assert first["description"].startswith(
+        assert str(first.get("description")).startswith(
             f'<img src="{chart_url}" alt="QRcode" /><br/>'
         )
 
@@ -808,7 +858,8 @@ class TestBasics:
         self._load(items, pipe_name, 94, 0)
         url = "i.cdn.turner.com/cnn/.e/img/3.0/global/header/intl/CNNi_Logo_new.png"
 
-        item = cast(dict, items[0])
+        item = items[0]
+        assert is_mapping(item)
         assert item == {
             "pubDate": "",
             "author": "",
