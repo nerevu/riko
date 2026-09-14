@@ -3,6 +3,8 @@
 """Documentation lint helpers for the manage CLI."""
 
 import re
+import tomllib
+from collections import Counter
 from collections.abc import Iterator
 from glob import glob
 from io import StringIO
@@ -22,6 +24,30 @@ except ImportError:
 _TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
 _LINE_ANCHOR_RE = re.compile(r"^L\d")
 _DOCS_DIR = ROOT_DIR / "docs"
+_INTERNAL_DOCS = ROOT_DIR / "_docs"
+_ROADMAP = _INTERNAL_DOCS / "ROADMAP.md"
+_TRACKER = _INTERNAL_DOCS / "PHASE_CHECKLISTS.md"
+_GAMEPLANS = _INTERNAL_DOCS / "gameplans"
+_SEQUENCE = _GAMEPLANS / "implementation-sequence.md"
+_PYPROJECT = ROOT_DIR / "pyproject.toml"
+_EXPECTED_SECTIONS = 28
+
+_STATUS_BANNER = re.compile(
+    r"^\s*>?\s*\*\*status\b\s*(?::|\*\*)", re.IGNORECASE | re.MULTILINE
+)
+_SECTION_ROW = re.compile(r"^\|\s*(\d+)\s*\|", re.MULTILINE)
+_GAMEPLAN_LINK = re.compile(r"gameplans/([A-Za-z0-9._-]+\.md)")
+_R_PHASE = re.compile(
+    r"^### (?P<phase>R\d+[A-Z]?)\s+—.*?(?=^### R\d+[A-Z]?\s+—|^## |\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+_VERSION = re.compile(r"v?(\d+)\.(\d+)\.(\d+)")
+_COMPLETION = re.compile(
+    r"\b(complete|completed|delivered|shipped|landed|done)\b", re.IGNORECASE
+)
+_TARGET = re.compile(
+    r"\b(target|targeted|planned|plan|next|prerequisite|prereq|future)\b", re.IGNORECASE
+)
 
 
 def _slugify(text: str) -> str:
@@ -140,6 +166,149 @@ def _check_rst(where: str | None = None) -> int:
         cache[path] = _get_doc_anchors(doctree)
         problems.extend(_render_errors(path, doctree))
         problems.extend(_check_links(path, text, cache))
+
+    for problem in problems:
+        print(problem)
+
+    return 1 if problems else 0
+
+
+def _read(path: Path) -> str:
+    """Read a UTF-8 document, returning empty text when it is absent."""
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def _gameplan_paths() -> list[Path]:
+    """List top-level Markdown gameplans in stable order."""
+    return sorted(_GAMEPLANS.glob("*.md")) if _GAMEPLANS.exists() else []
+
+
+def _is_retired(text: str) -> bool:
+    """Identify a retired gameplan from its title line."""
+    return "retired" in text.split("\n", 1)[0].lower()
+
+
+def _version_tuple(text: str) -> tuple[int, int, int]:
+    """Parse the first semantic version in text."""
+    match = _VERSION.search(text)
+
+    if match:
+        major, minor, patch = match.groups()
+        parsed = (int(major), int(minor), int(patch))
+    else:
+        parsed = (0, 0, 0)
+
+    return parsed
+
+
+def _packaged_version() -> tuple[int, int, int]:
+    """Read the packaged project version from pyproject.toml."""
+    data = tomllib.loads(_read(_PYPROJECT)) if _PYPROJECT.exists() else {}
+    raw = data.get("project", {}).get("version", "0.0.0")
+    return _version_tuple(raw)
+
+
+def _table_rows(text: str, name: str) -> list[str]:
+    """Find ROADMAP table rows that reference one gameplan."""
+    return [
+        line
+        for line in text.splitlines()
+        if f"gameplans/{name}" in line and line.lstrip().startswith("|")
+    ]
+
+
+def _status_banner_offenders() -> list[str]:
+    """Find gameplans that claim phase status locally."""
+    return [
+        path.name for path in _gameplan_paths() if _STATUS_BANNER.search(_read(path))
+    ]
+
+
+def _retired_listing_offenders() -> list[str]:
+    """Find retired gameplans listed without an explicit retired marker."""
+    roadmap = _read(_ROADMAP)
+    return [
+        path.name
+        for path in _gameplan_paths()
+        if _is_retired(_read(path))
+        and _table_rows(roadmap, path.name)
+        and not any("retired" in row.lower() for row in _table_rows(roadmap, path.name))
+    ]
+
+
+def _phase_closure_offenders() -> list[str]:
+    """Find R-phases whose exit omits ordered ADD/MIGRATE/DELETE closure."""
+    markers = ("- **ADD:**", "- **MIGRATE:**", "- **DELETE:**")
+    offenders: list[str] = []
+
+    for match in _R_PHASE.finditer(_read(_SEQUENCE)):
+        phase = match.group("phase")
+        body = match.group(0)
+        exit_at = body.rfind("**Exit:**")
+        closure = body[exit_at:] if exit_at >= 0 else ""
+        positions = [closure.find(marker) for marker in markers]
+
+        if (
+            exit_at < 0
+            or any(position < 0 for position in positions)
+            or positions != sorted(positions)
+        ):
+            offenders.append(phase)
+
+    return offenders
+
+
+def _version_claim_offenders(current: tuple[int, int, int]) -> list[str]:
+    """Find completion claims for versions newer than the packaged version."""
+    return [
+        line.strip()
+        for path in (_TRACKER, _ROADMAP)
+        for line in _read(path).splitlines()
+        if _VERSION.search(line)
+        and _version_tuple(line) > current
+        and _COMPLETION.search(line)
+        and not _TARGET.search(line)
+    ]
+
+
+def _check_docs() -> int:
+    """Validate static internal-document consistency rules."""
+    problems: list[str] = []
+    roadmap = _read(_ROADMAP)
+    counts = Counter(int(n) for n in _SECTION_ROW.findall(roadmap))
+    expected = Counter(range(_EXPECTED_SECTIONS))
+
+    if counts != expected:
+        problems.append(
+            f"{_ROADMAP}: section index must contain each §0-{_EXPECTED_SECTIONS - 1} once"
+        )
+
+    linked = set(_GAMEPLAN_LINK.findall(roadmap))
+    active = {path.name for path in _gameplan_paths() if not _is_retired(_read(path))}
+    missing = sorted(active - linked)
+
+    if missing:
+        problems.append(f"{_ROADMAP}: unindexed active gameplans: {missing}")
+
+    if offenders := _retired_listing_offenders():
+        problems.append(
+            f"{_ROADMAP}: retired gameplans listed without a Retired marker: {offenders}"
+        )
+
+    if offenders := _status_banner_offenders():
+        problems.append(
+            f"{_GAMEPLANS}: status banners belong only in PHASE_CHECKLISTS.md: {offenders}"
+        )
+
+    if offenders := _phase_closure_offenders():
+        problems.append(
+            f"{_SEQUENCE}: R-phase exits must contain ADD/MIGRATE/DELETE: {offenders}"
+        )
+
+    if offenders := _version_claim_offenders(_packaged_version()):
+        problems.append(
+            f"{_INTERNAL_DOCS}: completion claimed above packaged version: {offenders}"
+        )
 
     for problem in problems:
         print(problem)

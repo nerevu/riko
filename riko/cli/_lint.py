@@ -15,7 +15,7 @@ import click
 from riko.utils.paths import ROOT_DIR
 
 from ._build import _twine_check
-from ._docs import _check_rst
+from ._docs import _check_docs, _check_rst
 from ._docstyle import format_issue, iter_summary_issues
 
 _WORKFLOW_DIR = ROOT_DIR / ".github" / "workflows"
@@ -169,6 +169,7 @@ def _check_command() -> None:
 @click.option(
     "-r", "--rst", help="Validate RST rendering and internal links", is_flag=True
 )
+@click.option("--docs", help="Validate internal documentation policy", is_flag=True)
 @click.option("-a", "--actions", help="Validate GitHub Actions workflows", is_flag=True)
 @click.option("-y", "--yaml", help="Validate YAML files", is_flag=True)
 @click.option("-D", "--docstrings", help="Check docstring summary style", is_flag=True)
@@ -187,6 +188,7 @@ def _lint_command(
     verify_types: bool = False,
     dist: bool = False,
     rst: bool = False,
+    docs: bool = False,
     actions: bool = False,
     yaml: bool = False,
     docstrings: bool = False,
@@ -205,6 +207,8 @@ def _lint_command(
         return_code = _pylint_check(parallel)
     elif rst:
         return_code = _check_rst(_where)
+    elif docs:
+        return_code = _check_docs()
     elif docstrings:
         return_code = _docstring_check(_where)
     elif actions:
