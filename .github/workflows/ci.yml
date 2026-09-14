@@ -67,6 +67,9 @@ jobs:
       - name: Lint docs
         if: matrix.python-version == '3.12'
         run: uv run --no-sync manage lint --rst
+      - name: Lint architecture docs
+        if: matrix.python-version == '3.12'
+        run: uv run --no-sync manage lint --docs
       - name: Lint actions
         if: matrix.python-version == '3.12'
         run: uv run --no-sync manage lint --actions
