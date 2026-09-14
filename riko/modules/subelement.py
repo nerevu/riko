@@ -37,13 +37,13 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._rssutils import gen_items
+from riko.coercion._configs import SubelementObjconf
+from riko.coercion._sequences import gen_items
 from riko.types._collections import RikoValue
-from riko.types._configs import SubelementObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item, Stream
 
-from . import processor
+from ._decorators import processor
 from ._prepare import require_conf
 
 OPTS: Opts = {"emit": True}

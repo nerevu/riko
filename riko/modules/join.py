@@ -35,14 +35,14 @@ from typing import Any, cast
 import pygogo as gogo
 from meza.process import merge
 
-from riko.dotdict import is_mapping
-from riko.types._configs import JoinObjconf
+from riko.coercion._configs import JoinObjconf
+from riko.types._guards import is_mapping
 from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING
 from riko.types._streams import Item, Items, Stream
 from riko.types._wrappers import PipeTuples
 
-from . import operator
+from ._decorators import operator
 from ._prepare import require_arg
 
 OPTS: Opts = Opts()

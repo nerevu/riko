@@ -32,12 +32,12 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import SourceOpts
-from riko.types._dynamic_conf import DynamicConf
+from riko.coercion._dynamic_conf import DynamicConf
+from riko.coercion.cast import SourceOpts
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {}

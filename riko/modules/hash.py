@@ -27,11 +27,11 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType
-from riko.types._dynamic_conf import DynamicConf
+from riko.coercion._dynamic_conf import DynamicConf
+from riko.types._names import BasicCastType
 from riko.types._options import Defaults, Opts
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = {
     "ftype": BasicCastType.TEXT,

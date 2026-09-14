@@ -2,7 +2,7 @@
 """
 riko.cli.gen_config
 ~~~~~~~~~~~~~~~~~~~~~~
-Generator and drift guard for :mod:`riko.types._configs`.
+Generator and drift guard for :mod:`riko.coercion._configs`.
 
 The parse-time ``<Name>Objconf`` types are derived from the ``<Name>Conf`` TypedDict
 contracts in :mod:`riko.types.modules`: strip ``Required``/``NotRequired``, dereference
@@ -17,14 +17,14 @@ from __future__ import annotations
 
 import ast
 
-from riko.ext.codegen import ruff_format
-from riko.paths import PACKAGE_DIR
+from riko.base._codegen import ruff_format
+from riko.base._paths import PACKAGE_DIR
 
 _TYPES_DIR = PACKAGE_DIR / "types"
 _MODULES = _TYPES_DIR / "modules.py"
-_CONFIGS = _TYPES_DIR / "_configs.py"
-_WRITE_TYPES = {"FmtLike"}
-_CAST_TYPES = {"CastType", "LocationType"}
+_CONFIGS = PACKAGE_DIR / "coercion" / "_configs.py"
+_IOS = {"PathLike"}
+_NAMES = {"CastType", "FmtLike", "LocationType"}
 _TYPING_TYPES = {"Any", "Literal"}
 _ABC_TYPES = {"Callable", "Sequence"}
 _BUILTINS = {"str", "int", "float", "bool", "list", "dict", "tuple", "set", "None"}
@@ -36,7 +36,7 @@ Instead, edit :mod:`riko.types.modules`, then regenerate with
 ``manage codegen -m config``. ``tests/internal/test_gen_config.py`` fails if the two
 files drift.
 
-riko.types._configs
+riko.coercion._configs
 ~~~~~~~~~~~~~~~~~~~
 Parse-time ``objconf`` config types, one per module.
 
@@ -129,12 +129,12 @@ def _import_block(structure) -> str:
     referenced = _referenced_names(structure)
     abc = sorted(_ABC_TYPES & referenced)
     typing = ["TYPE_CHECKING", *sorted(_TYPING_TYPES & referenced)]
-    cast = sorted(_CAST_TYPES & referenced)
-    write = sorted(_WRITE_TYPES & referenced)
+    ios = sorted(_IOS & referenced)
+    names = sorted(_NAMES & referenced)
     modules = sorted(
         referenced
-        - _CAST_TYPES
-        - _WRITE_TYPES
+        - _IOS
+        - _NAMES
         - _TYPING_TYPES
         - _ABC_TYPES
         - _BUILTINS
@@ -148,13 +148,15 @@ def _import_block(structure) -> str:
         "from ._dynamic_conf import DynamicConf",
     ]
     guarded = ["", "if TYPE_CHECKING:"]
-    guarded += [f"    from riko.cast import {', '.join(cast)}"] if cast else []
+
+    if ios:
+        guarded += [f"    from riko.types._io import {', '.join(ios)}"]
+
+    if names:
+        guarded += [f"    from riko.types._names import {', '.join(names)}"]
 
     if modules:
-        guarded += ["", f"    from ._write import {', '.join(write)}"]
-
-    if modules:
-        guarded += ["    from .modules import ("]
+        guarded += ["    from riko.types.modules import ("]
         guarded += [f"        {name}," for name in modules]
         guarded += ["    )"]
 

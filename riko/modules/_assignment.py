@@ -15,9 +15,10 @@ from typing import Literal, cast, overload
 
 import pygogo as gogo
 
-from riko.context import Context
 from riko.dotdict import DotDict
+from riko.runtime.context import Context
 from riko.types._collections import RikoValue
+from riko.types._compile import CountValues, EmbedKwargs
 from riko.types._scalars import PrimitiveValue
 from riko.types._streams import (
     Item,
@@ -41,8 +42,6 @@ from riko.types._wrappers import (
     SyncProcessorWrapper,
     SyncSubPipe,
 )
-from riko.types.compile import EmbedKwargs
-from riko.types.modules import CountValues
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 

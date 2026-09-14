@@ -16,8 +16,8 @@ fail if the two layers drift.
 from json import loads
 from pathlib import Path
 
-from riko.compile import compile_pipe
-from riko.paths import ROOT_DIR
+from riko.base._paths import ROOT_DIR
+from riko.runtime._compile import compile_pipe
 
 PIPELINE_DIRS = (
     (ROOT_DIR / "tests" / "pipelines", ROOT_DIR / "tests" / "pypipelines"),

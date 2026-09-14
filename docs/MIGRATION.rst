@@ -28,10 +28,10 @@ Stable typing API: ``riko.types``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``riko.types`` is the supported typing surface for applications and extension
-code. Its package exports are stable. The non-underscored typing submodules
-``riko.types.modules`` and ``riko.types.compile`` are also supported import paths.
-Underscore-prefixed modules under ``riko.types`` are implementation typing
-machinery and are private. Export lists are intentionally not duplicated here.
+code. Its package exports are stable. The non-underscored typing submodule
+``riko.types.modules`` is also a supported import path. Underscore-prefixed modules
+under ``riko.types`` are implementation typing machinery and are private. Export lists
+are intentionally not duplicated here.
 
 Extension API: ``riko.ext``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

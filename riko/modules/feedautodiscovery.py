@@ -44,13 +44,13 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko import autorss
-from riko.cast import SourceOpts
-from riko.types._configs import FeedAutoDiscoveryObjconf
+from riko.coercion._configs import FeedAutoDiscoveryObjconf
+from riko.coercion.cast import SourceOpts
+from riko.rss.discovery import async_get_rss, get_rss
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item, Stream
 
-from . import processor
+from ._decorators import processor
 from ._prepare import require_conf
 
 OPTS: Opts = SourceOpts
@@ -94,7 +94,7 @@ async def async_parser(
     """
     url: str = require_conf(objconf, "url", "feedautodiscovery")
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = await autorss.async_get_rss(url, link_type=None, **rkwargs)
+    stream = await async_get_rss(url, link_type=None, **rkwargs)
     return stream
 
 
@@ -137,7 +137,7 @@ def parser(
     """
     url: str = require_conf(objconf, "url", "feedautodiscovery")
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = autorss.get_rss(url, link_type=None, **rkwargs)
+    stream = get_rss(url, link_type=None, **rkwargs)
     return stream
 
 

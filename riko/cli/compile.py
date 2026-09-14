@@ -4,7 +4,7 @@ Compile a riko JSON pipeline into a Python module.
 A full pipe definition (modules + verbose ``src``/``tgt`` wires) compiles to a
 runnable module exposing a ``pipe`` (or ``async_pipe``) entry point:
 
->>> from riko.compile import compile_pipe
+>>> from riko.runtime._compile import compile_pipe
 >>>
 >>> pipe_def = {
 ...     "modules": [
@@ -34,9 +34,9 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from json import loads
 from pathlib import Path
 
-from riko._logging import logger
-from riko.compile import compile_pipe, extract_dependencies
-from riko.types.compile import PipeDef
+from riko.base._logging import logger
+from riko.runtime._compile import compile_pipe, extract_dependencies
+from riko.types._compile import PipeDef
 
 
 def _load_pipe_def(path: str) -> tuple[PipeDef | None, str]:

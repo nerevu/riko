@@ -32,14 +32,14 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType
+from riko.coercion._configs import ItemBuilderObjconf
 from riko.dotdict import DotDict
 from riko.types._collections import RikoDict
-from riko.types._configs import ItemBuilderObjconf
+from riko.types._names import BasicCastType
 from riko.types._options import Defaults, Opts
 from riko.types.modules import ParsedParam
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "listize": True, "extract": "attrs"}
 DEFAULTS: Defaults = {}

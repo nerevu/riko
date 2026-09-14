@@ -43,9 +43,9 @@ from typing import Any
 import pygogo as gogo
 from dateutil.parser import ParserError
 
-from riko._objectify import Objectify
-from riko._serialize import repr_cache
-from riko.cast import cast_date, cast_decimal
+from riko.coercion._freeze import repr_cache
+from riko.coercion._objectify import Objectify
+from riko.coercion.cast import cast_date, cast_decimal
 from riko.dotdict import DotDict
 from riko.types._guards import is_mapping
 from riko.types._options import Defaults, Opts
@@ -54,7 +54,7 @@ from riko.types._streams import Item, Stream
 from riko.types._wrappers import PipeTuples
 from riko.types.modules import FilterConfRule
 
-from . import operator
+from ._decorators import operator
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
 DEFAULTS: Defaults = {"combine": "and", "permit": True, "stop": False}

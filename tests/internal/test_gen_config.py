@@ -9,7 +9,7 @@ import pathlib
 
 from riko.cli.gen_config import objconf_structure, render
 
-_CONFIGS = pathlib.Path("riko/types/_configs.py")
+_CONFIGS = pathlib.Path("riko/coercion/_configs.py")
 
 
 def test_configs_match_generated():

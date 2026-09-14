@@ -6,11 +6,11 @@ The import path determines the compatibility contract for an object. Implementat
 
 A name listed in a public module's `__all__` is part of Riko's supported compatibility surface. Importable names not listed in `__all__` are implementation-accessible but carry no compatibility guarantee.
 
-The examples in this document mirror the declarations in `riko._api_surface`. They are illustrative; the enforced public-boundary coverage lives in `tests/public/test_imports.py`.
+The examples in this document mirror the declarations in `riko.base._api_surface`. They are illustrative; the enforced public-boundary coverage lives in `tests/public/test_imports.py`.
 
 ## Contract declarations
 
-The API contract is declared in `riko._api_surface`. This module is private because the declarations describe the public API; they are not themselves part of it.
+The API contract is declared in `riko.base._api_surface`. This module is private because the declarations describe the public API; they are not themselves part of it.
 
 ## Stable application API
 
@@ -18,7 +18,7 @@ Application code should import stable APIs from `riko`.
 
 Breaking changes to this surface follow riko's normal SemVer policy.
 
-**Collections** — pipe/collection runtime and export helpers (`riko.collections`):
+**Collections** — pipe/collection runtime and export helpers (`riko.runtime.collections`):
 
 <!-- api-surface:collections -->
 ```python
@@ -27,7 +27,7 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 ```
 <!-- /api-surface:collections -->
 
-**Compilation** — DAG/JSON compilation entry points (`riko.compile`):
+**Compilation** — DAG/JSON compilation entry points (`riko.runtime.compile`):
 
 <!-- api-surface:compile -->
 ```python
@@ -41,7 +41,7 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 <!-- api-surface:bado -->
 ```python
 >>> sorted(BADO)
-['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_url_open', 'async_write', 'backend', 'get_async_temp_file', 'isasync', 'issync', 'run']
+['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'run']
 ```
 <!-- /api-surface:bado -->
 
@@ -50,7 +50,7 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 <!-- api-surface:modules -->
 ```python
 >>> sorted(MODULES)
-['Modules', 'Sinks', 'Sources', 'Transforms', 'describe_module', 'get_module_metadata', 'list_modules']
+['Modules', 'Sinks', 'Sources', 'Transforms', 'describe_module', 'get_module_metadata']
 ```
 <!-- /api-surface:modules -->
 
@@ -68,7 +68,7 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 <!-- api-surface:other -->
 ```python
 >>> sorted(OTHER)
-['Context', 'ExecutionMode', 'get_path', 'get_temp_file']
+['Context', 'ExecutionMode', 'get_path', 'get_temp_file', 'list_modules']
 ```
 <!-- /api-surface:other -->
 
@@ -76,7 +76,7 @@ The complete stable surface is the union of these groups:
 
 <!-- api-surface:stable-union -->
 ```python
->>> STABLE == BADO | COLLECTIONS | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS
+>>> STABLE == BADO | IO_ | COLLECTIONS | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS
 True
 ```
 <!-- /api-surface:stable-union -->
@@ -92,7 +92,7 @@ It owns riko's async helpers and provides a guarded import surface for selected 
 <!-- api-surface:bado-namespace -->
 ```python
 >>> sorted(BADO)
-['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_url_open', 'async_write', 'backend', 'get_async_temp_file', 'isasync', 'issync', 'run']
+['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'run']
 >>> BADO == set(riko.bado.__all__)
 True
 ```
@@ -146,12 +146,12 @@ These are re-exports of the same objects, not separate implementations.
 For example:
 
 ```python
->>> riko.Context is riko.context.Context
+>>> riko.Context is riko.runtime.context.Context
 True
 ```
 
 ## Contract enforcement
 
-`riko._api_surface` declares the intended surface, while each namespace's `__all__` describes what the implementation exports.
+`riko.base._api_surface` declares the intended surface, while each namespace's `__all__` describes what the implementation exports.
 
 This document illustrates the key relationships between those declarations. `tests/public/test_imports.py` provides the complete black-box coverage for importability, private-name leakage, duplicate exports, compatibility aliases, and other public-boundary invariants; a change to the declared surface that this document does not track will surface there.

@@ -32,12 +32,13 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType, CastType, cast_value
-from riko.types._configs import SimpleMathObjconf
+from riko.coercion._configs import SimpleMathObjconf
+from riko.coercion.cast import cast_value
+from riko.types._names import BasicCastType, CastType
 from riko.types._options import Defaults, Opts
 from riko.types._scalars import NumLike
 
-from . import processor
+from ._decorators import processor
 from ._prepare import require_conf
 
 OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}

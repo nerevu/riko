@@ -30,13 +30,13 @@ from typing import Any, cast
 
 import pygogo as gogo
 
+from riko.coercion._dynamic_conf import DynamicConf
 from riko.dotdict import DotDict
-from riko.types._dynamic_conf import DynamicConf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Stream
 from riko.types._wrappers import PipeTuples
 
-from . import operator
+from ._decorators import operator
 
 OPTS: Opts = Opts()
 DEFAULTS: Defaults = {}

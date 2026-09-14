@@ -14,15 +14,15 @@ mirror each other test-for-test.
 import pytest
 
 from riko.bado.itertools import async_iter
-from riko.collections import (
+from riko.base._paths import get_path
+from riko.base.exceptions import PipelineStateError
+from riko.runtime.collections import (
     AsyncCollection,
     AsyncPipe,
     PipeState,
     SyncCollection,
     SyncPipe,
 )
-from riko.exceptions import PipelineStateError
-from riko.paths import get_path
 from riko.types.modules import ItemBuilderConf
 from tests import skipif_issync
 

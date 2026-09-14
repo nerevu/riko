@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING, Any, Self, TypeGuard, TypeVar, cast, overload
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
-from riko._objectify import Objectify
-from riko._strutils import replacer
-from riko.cast import CAST_SWITCH, CastType, cast_value
+from riko.base._strutils import replacer
+from riko.coercion._objectify import Objectify
+from riko.coercion.cast import CAST_SWITCH, cast_value
 from riko.types._collections import Key, RikoList, RikoValue
 from riko.types._guards import (
     is_known_sequence,
@@ -27,6 +27,7 @@ from riko.types._guards import (
     is_type_value,
     is_value_seq,
 )
+from riko.types._names import CastType
 from riko.types._rss import RSSEntry
 from riko.types._scalars import BasicValue, PrimitiveValue
 from riko.types._sentinels import Sentinel, SentinelValue

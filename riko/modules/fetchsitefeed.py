@@ -34,17 +34,17 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko import autorss
-from riko._rssutils import augment_entries
-from riko.bado.io import async_url_read
-from riko.cast import SourceOpts
-from riko.parsers import parse_rss
-from riko.types._configs import FetchSiteFeedObjconf
+from riko.coercion._configs import FetchSiteFeedObjconf
+from riko.coercion.cast import SourceOpts
+from riko.io._async import async_url_read
+from riko.rss.discovery import async_get_rss, get_rss
+from riko.rss.entries import augment_entries
+from riko.rss.parsing import parse_rss
 from riko.types._options import Defaults, Opts
 from riko.types._rss import RSSEntry
 from riko.types._streams import Item
 
-from . import processor
+from ._decorators import processor
 from ._prepare import require_conf
 
 OPTS: Opts = SourceOpts
@@ -87,7 +87,7 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchsitefeed")
-    rss = await autorss.async_get_rss(url)
+    rss = await async_get_rss(url)
 
     if (first := next(rss, None)) is None:
         logger.warning(f"No feed found at {url}")
@@ -131,7 +131,7 @@ def parser(
 
     """
     url: str = require_conf(objconf, "url", "fetchsitefeed")
-    rss = autorss.get_rss(url)
+    rss = get_rss(url)
 
     if (first := next(rss, None)) is None:
         logger.warning(f"No feed found at {url}")

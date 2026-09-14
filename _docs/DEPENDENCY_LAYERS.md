@@ -52,10 +52,10 @@ layer at runtime"); only rule 4 is a genuine exception.
 
 | # | Rule | Formal form | Scope |
 |---|---|---|---|
-| 1 | types ⇏ collections | no `riko.types.*` imports `riko.collections` (and `riko.compile`, `riko._write_session`) | runtime module-scope |
+| 1 | types ⇏ collections | no `riko.types.*` imports `riko.runtime.collections` (and `riko.runtime.compile`, `riko.runtime._write_session`) | runtime module-scope |
 | 2 | definition ⇏ execution | no `{context, resources, targets, write-model}` imports `{collections, compile, _write_session}` | runtime module-scope **and** local |
 | 3 | `modules._derive` stays leaf | `modules._derive` imports only `{types.*, cast, modules._inference}` (+ stdlib); same shape for `_date_utils` (allowlist `{types}`) | any riko import |
-| 4 | ext resolver ⇏ compile at module scope | `{ext._resolver, ext._pipelines}` reference `riko.compile` **only** function-locally | forbids module-scope; requires local |
+| 4 | ext resolver ⇏ compile at module scope | `{ext._resolver, ext._pipelines}` reference `riko.runtime.compile` **only** function-locally | forbids module-scope; requires local |
 | 5 | new runtime ⇏ compatibility modules | `{resources, targets, _write_session, context, write-model}` ⇏ `{collections}` | runtime module-scope |
 
 Rule 5 needs a concrete compatibility set to be enforceable: `collections.py` is
@@ -73,8 +73,8 @@ Collapsed, the whole set is:
 >    only via function-local imports.
 >
 > `cli/` is exempt from rule 1: it is the application entry point, above every
-> layer, and is the one place a module-scope `import riko.compile` /
-> `import riko.collections` is legitimate.
+> layer, and is the one place a module-scope `import riko.runtime.compile` /
+> `import riko.runtime.collections` is legitimate.
 
 ## Folder regrouping
 
@@ -132,7 +132,7 @@ Import direction after the move (every arrow points *down*):
 runtime._write_session ─┐
 runtime.collections ────┼──> definition ──> types ──> values/bado ──> leaf
 runtime.compile ────────┘                     ^
-                              definition.write ┘  (write model, was types/_write)
+                             definition.write ┘  (write model, was types/_write)
 ```
 
 `definition/__init__.py` gives the layer one import surface:
@@ -155,10 +155,10 @@ riko/types/_write.py       -> riko/definition/write.py
 ```
 
 ```text
-from riko.context import Context        ->  from riko.definition.context import Context
-from riko.resources import ...          ->  from riko.definition.resources import ...
-from riko.targets import Formats        ->  from riko.definition.targets import Formats
-from riko.types._write import WriteMode ->  from riko.definition.write import WriteMode
+from riko.definitions.context import Context        ->  from riko.definition.context import Context
+from riko.definitions.resources import ...          ->  from riko.definition.resources import ...
+from riko.definitions.targets import Formats        ->  from riko.definition.targets import Formats
+from riko.definitions.write import WriteMode ->  from riko.definition.write import WriteMode
 ```
 
 Boundary constraints the extraction must preserve:

@@ -27,26 +27,21 @@ from json import JSONDecodeError, load, loads
 from logging import Logger
 from time import struct_time
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Union, cast, overload
-from urllib.error import URLError
-from xml.sax import SAXParseException  # noqa: S406
+from typing import TYPE_CHECKING, Any, Union, cast
 
 import feedparser
 import pygogo as gogo
-from requests.structures import CaseInsensitiveDict
 
-from riko._io import STREAMING_THRESHOLD, Fetch
-from riko._iterutils import listize
-from riko._rssutils import truncate_content
-from riko._serialize import repr_cache
-from riko.dotdict import DotDict, is_sentinel, is_type_value
-from riko.types._collections import BasicArg, RikoDict, RikoValue, Stringy, StringyDict
-from riko.types._guards import is_mapping
+from riko.base._constants import STREAMING_THRESHOLD
+from riko.coercion._freeze import repr_cache
+from riko.coercion._sequences import listize
+from riko.types._collections import RikoDict, RikoValue, Stringy, StringyDict
+from riko.types._guards import is_mapping, is_sentinel, is_type_value
 from riko.types._io import FileLike
 from riko.types._options import SkipIf
-from riko.types._rss import ParserRSSEntry
-from riko.types._scalars import AnyStr
 from riko.types._streams import Item, ItemOrValue, Stream
+
+from .dotdict import DotDict
 
 try:
     from lxml import etree, html
@@ -190,68 +185,6 @@ def get_text(html: str, convert_charrefs: bool = False) -> str:
 
     parser.feed(html)
     return parser.data.getvalue()
-
-
-# The overloads are so I can call parse_rss(**kwargs) with Pyright complaining.
-# https://stackoverflow.com/q/79673094
-@overload
-def parse_rss(  # noqa: E704
-    url: str, *, content: None = ..., **kwargs: BasicArg
-) -> list[ParserRSSEntry]: ...
-@overload  # noqa: E302
-def parse_rss(  # noqa: E704
-    *, content: AnyStr, **kwargs: BasicArg
-) -> list[ParserRSSEntry]: ...
-@overload
-def parse_rss(**kwargs: Any) -> list[ParserRSSEntry]: ...  # noqa: E704
-def parse_rss(  # noqa: E302
-    url: BasicArg = "", *, content: AnyStr | None = None, **kwargs: BasicArg
-) -> list[ParserRSSEntry]:
-    """Fetches (or reads) and parses an RSS/Atom feed into its entries."""
-    f = None
-
-    if content is None:
-        source_name = str(url)
-
-        try:
-            f = Fetch(source_name, binary=True, **kwargs)
-        except URLError:
-            source, source_name = source_name, "content"
-        else:
-            if f.file and IS_FASTFEEDPARSER:
-                # fastfeedparser.parse takes str/bytes only (no file-like input)
-                source = f.read()
-            elif f.file:
-                source = f.file  # feedparser reads the file object directly
-            else:
-                source = b""
-    else:
-        source, source_name = content, "content"
-
-    try:
-        parsed = rss_parser.parse(source)
-    finally:
-        if f:
-            f.close()
-
-    bozo = parsed.get("bozo")
-    entry_count = len(parsed.entries)
-
-    if bozo is False and not entry_count:
-        logger.warning(f"Parsed {source_name} successfully but no entries were found.")
-    elif (bozo is False) or (entry_count > 3):
-        pass
-    elif bozo_exception := parsed.get("bozo_exception"):
-        if isinstance(bozo_exception, SAXParseException):
-            msg = bozo_exception.getMessage()
-            logger.warning(f"Error parsing {source_name}: {msg}")
-        else:
-            msg = str(bozo_exception)
-            logger.error(f"Error parsing {source_name}: {msg}")
-
-        logger.warning(f"Content: {truncate_content(source)}")
-
-    return cast(list[ParserRSSEntry], parsed.entries)
 
 
 def extract_namespace(tree: AnyElementTree | AnyElement) -> str | None:
@@ -540,7 +473,7 @@ def any2dict(
 
     if isinstance(content, DotDict):
         yield content.asdict()
-    elif isinstance(content, (dict, CaseInsensitiveDict, Mapping)):
+    elif is_mapping(content):
         yield content
     elif isinstance(content, list):
         for item in content:

@@ -13,7 +13,7 @@ from typing import cast
 
 import pytest
 
-from riko.context import Context, ExecutionMode
+from riko.runtime.context import Context, ExecutionMode
 
 MODES = [
     (ExecutionMode.RUN, False, False),

@@ -27,11 +27,11 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType
-from riko.types._configs import TokenizerObjconf
+from riko.coercion._configs import TokenizerObjconf
+from riko.types._names import BasicCastType
 from riko.types._options import Defaults, Opts
 
-from . import processor
+from ._decorators import processor
 
 TOKEN_KEY = "content"  # noqa: S105
 

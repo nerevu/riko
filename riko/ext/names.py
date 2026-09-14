@@ -8,18 +8,12 @@ Provides module-name normalization and discovery categories.
 
 from typing import TYPE_CHECKING, overload
 
-from riko.types._names import ModuleName
+from riko.types._names import ModuleName, normalize_module_name
 
 if TYPE_CHECKING:
-    from riko.types._names import ModuleNameLike
     from riko.types.modules import ModuleCategory, ModuleMetadata
 
 SINK_NAMES: frozenset[str] = frozenset({"output", "write"})
-
-
-def normalize_module_name(name: "ModuleNameLike | None") -> str:
-    """Normalizes a module name to its canonical string."""
-    return name.value if isinstance(name, ModuleName) else name or ""
 
 
 @overload
@@ -50,3 +44,6 @@ def derive_category(  # noqa: E302
         result = "transform"
 
     return result
+
+
+__all__ = ["SINK_NAMES", "ModuleName", "derive_category", "normalize_module_name"]

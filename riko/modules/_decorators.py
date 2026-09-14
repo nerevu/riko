@@ -38,16 +38,19 @@ from typing import ClassVar, Literal, cast, overload
 
 import pygogo as gogo
 
-from riko._iterutils import dispatch, is_listlike
 from riko.bado._util import as_awaitable
 from riko.bado.itertools import as_async, async_iter, async_map
-from riko.cast import BasicCastType
-from riko.context import Context, ExecutionMode
-from riko.dotdict import DotDict, is_mapping
+from riko.base._iterutils import dispatch
+from riko.coercion._dynamic_conf import DynamicConf
+from riko.coercion._sequences import is_listlike
+from riko.definitions._resources import bind_resources, coerce_binding
+from riko.dotdict import DotDict
 from riko.parsers import get_field, get_skip
-from riko.resources import bind_resources, coerce_binding
+from riko.runtime.context import Context, ExecutionMode
 from riko.types._collections import Inputs, RikoValue
-from riko.types._dynamic_conf import DynamicConf
+from riko.types._compile import CountValues, EmbedKwargs
+from riko.types._guards import is_mapping
+from riko.types._names import BasicCastType
 from riko.types._options import Casted, Defaults, ItemDispatch, Opts
 from riko.types._scalars import PrimitiveValue
 from riko.types._streams import (
@@ -99,8 +102,7 @@ from riko.types._wrappers import (
     SyncSplitterWrapper,
     SyncSubPipe,
 )
-from riko.types.compile import EmbedKwargs
-from riko.types.modules import Conf, CountValues, ModuleType
+from riko.types.modules import Conf, ModuleType
 
 from ._assignment import gen_assignments, get_assignment
 from ._derive import derive_loopable, derive_subtypes

@@ -15,14 +15,14 @@ from typing import cast
 
 import pytest
 
-from riko.context import Context
-from riko.modules._subpipe import mark_subpipe
 from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.strconcat import pipe as strconcat
 from riko.modules.tokenizer import async_pipe as async_tok
 from riko.modules.tokenizer import pipe as tokenizer
+from riko.runtime._subpipe import mark_subpipe
+from riko.runtime.context import Context
 from riko.types._streams import AsyncStream, Item, Stream
 from riko.types._wrappers import OperatorWrapperOutput
 from riko.types.modules import (

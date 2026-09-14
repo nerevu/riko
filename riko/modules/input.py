@@ -56,14 +56,15 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko.cast import CastType, SourceOpts, cast_value
+from riko.coercion._configs import InputObjconf
+from riko.coercion.cast import SourceOpts, cast_value
 from riko.types._collections import Inputs
-from riko.types._configs import InputObjconf
+from riko.types._names import CastType
 from riko.types._options import Defaults, Opts
 from riko.types._scalars import PrimitiveValue
 from riko.types._streams import Item
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {

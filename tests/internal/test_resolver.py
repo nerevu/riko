@@ -8,10 +8,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from riko.collections import SyncPipe
-from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.base._paths import ROOT_DIR
+from riko.base.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.definitions.modules import ModuleDefinition
 from riko.ext import register
-from riko.ext._pipelines import (
+from riko.ext.codegen import list_modules
+from riko.ext.registry import reset_registry
+from riko.modules import regex, tokenizer
+from riko.runtime._pipelines import (
     CompositeStore,
     DirectoryStore,
     MappingStore,
@@ -19,10 +23,9 @@ from riko.ext._pipelines import (
     PipelineResolver,
     pipeline_resolver,
 )
-from riko.ext._resolver import PipeResolver, pipe_resolver
-from riko.ext.registry import ModuleDefinition, registry, reset_registry
-from riko.modules import list_modules, regex, tokenizer
-from riko.paths import ROOT_DIR
+from riko.runtime._registry import registry
+from riko.runtime._resolver import PipeResolver, pipe_resolver
+from riko.runtime.collections import SyncPipe
 from riko.types._guards import is_mapping
 
 _META = {
@@ -52,7 +55,7 @@ MOD_DEFN = ModuleDefinition(name=_NAME, sync_pipe=marker)
 
 def _patch_entry_points(monkeypatch, *eps):
     ep_func = lambda group: list(eps) if group == "riko.modules" else []
-    monkeypatch.setattr("riko.ext.registry.entry_points", ep_func)
+    monkeypatch.setattr("riko.runtime._registry.entry_points", ep_func)
     registry.reset()  # invalidate the cache memoized by the fixture's pre-test reset
 
 
@@ -101,7 +104,7 @@ class TestModuleRegistry:
 
             return __import__(name, *args, **kwargs)
 
-        monkeypatch.setattr("riko._importutils.import_module", fake_import)
+        monkeypatch.setattr("riko.base._imports.import_module", fake_import)
 
         with pytest.raises(ModuleNotFoundError) as e:
             fixed_registry.resolve("tokenizer")
@@ -181,10 +184,10 @@ class TestPipeResolver:
             pipe_resolver.resolve(_MISSING_NAME)
 
     def test_runtime_pipe_resolution_imports_no_compiler(self, fixed_registry):
-        """Resolving an ordinary module must not pull in riko.compile."""
-        sys.modules.pop("riko.compile", None)
+        """Resolving an ordinary module must not pull in riko.runtime._compile."""
+        sys.modules.pop("riko.runtime._compile", None)
         PipeResolver(fixed_registry, pipeline_resolver).resolve("tokenizer")
-        assert "riko.compile" not in sys.modules
+        assert "riko.runtime._compile" not in sys.modules
 
     @pytest.mark.xfail(
         strict=True,
@@ -271,7 +274,7 @@ class TestEntryPointModules:
             calls["n"] += 1
             return []
 
-        monkeypatch.setattr("riko.ext.registry.entry_points", counting)
+        monkeypatch.setattr("riko.runtime._registry.entry_points", counting)
         fixed_registry.reset()
 
         with pytest.raises(UnsupportedModuleError):

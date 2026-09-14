@@ -6,7 +6,7 @@ riko.modules._derive
 Provides functions for deriving module subtypes and loop behavior.
 """
 
-from riko.cast import BasicCastType
+from riko.types._names import BasicCastType
 from riko.types._wrappers import ModuleParser
 from riko.types.modules import (
     ModuleSubtype,

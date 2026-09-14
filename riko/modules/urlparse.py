@@ -29,11 +29,11 @@ from urllib.parse import urlparse
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType
-from riko.types._configs import UrlParseObjconf
+from riko.coercion._configs import UrlParseObjconf
+from riko.types._names import BasicCastType
 from riko.types._options import Defaults, Opts
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {"parse_key": "content"}

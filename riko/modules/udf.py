@@ -29,11 +29,11 @@ from typing import Any
 import pygogo as gogo
 
 from riko.bado._util import maybe_deferred
-from riko.types._configs import UdfObjconf
+from riko.coercion._configs import UdfObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item
 
-from . import processor
+from ._decorators import processor
 from ._prepare import require_arg
 
 OPTS: Opts = {"listize": True, "emit": True}

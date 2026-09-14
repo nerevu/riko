@@ -28,12 +28,13 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType, cast_datetime
-from riko.types._dynamic_conf import DynamicConf
+from riko.coercion._dynamic_conf import DynamicConf
+from riko.coercion.cast import cast_datetime
+from riko.types._names import BasicCastType
 from riko.types._options import Defaults, Opts
 from riko.types._scalars import DateLikeType
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = {"ptype": BasicCastType.NONE, "field": "content"}
 DEFAULTS: Defaults = {}

@@ -4,15 +4,15 @@ from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Literal, NamedTuple, TypedDict
 
 if TYPE_CHECKING:
-    from riko.cast import BasicCastType
+    from riko.coercion._dynamic_conf import DynamicConf
 
     from ._collections import BasicArg, RikoDict, RikoList
-    from ._dynamic_conf import DynamicConf
+    from ._compile import CountValues
+    from ._names import BasicCastType, FmtLike
     from ._scalars import PrimitiveValue
     from ._streams import Item
     from ._wrappers import ParserOutput
-    from ._write import FmtLike
-    from .modules import AnyConfRule, CountValues, Skip
+    from .modules import AnyConfRule, Skip
 
 
 class Defaults(TypedDict, total=False):

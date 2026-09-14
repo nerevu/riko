@@ -12,7 +12,7 @@ Examples:
 from collections.abc import Mapping
 from pprint import pprint
 
-from riko.collections import AsyncPipe, SyncPipe
+from riko.runtime.collections import AsyncPipe, SyncPipe
 from riko.types.modules import ItemBuilderConf, RegexRawConf, RegexRawRule
 
 p1_conf = ItemBuilderConf(

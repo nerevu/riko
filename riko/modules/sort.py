@@ -29,15 +29,15 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._iterutils import def_itemgetter
 from riko.bado.itertools import async_reduce
-from riko.cast import SortableCastType
+from riko.types._names import SortableCastType
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Stream
 from riko.types._wrappers import PipeTuples
 from riko.types.modules import SortConfRule
 
-from . import operator
+from ._decorators import operator
+from ._iterutils import def_itemgetter
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
 sort_type = SortableCastType.TEXT

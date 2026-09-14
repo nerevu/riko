@@ -1,30 +1,23 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from re import Pattern, RegexFlag
-from typing import TYPE_CHECKING, Literal, NewType, NotRequired, Required, TypedDict
+from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict
 
-from riko.types._io import PathLike
+from ._compile import EmbedRef
+from ._io import PathLike
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
-    from riko.cast import CastType, LocationType, SortableCastType
-
-    from ._module_ids import LoopableModuleId, ModuleId
+    from ._compile import PipeModule
+    from ._names import CastType, FmtLike, LocationType, SortableCastType
     from ._scalars import BasicValue
-    from ._write import FmtLike
-    from .compile import PipeModule
 
 
 # Shared
-type Nodes[T: (str | int)] = Sequence[T]
-type Graph[T: (str | int)] = Mapping[T, Nodes[T]]
-type NodeList[T: (str | int)] = list[T]
-type SCC[T: (str | int)] = list[tuple[T, ...]]
-
 type ModuleType = Literal["operator", "processor", "splitter"]
 type ModuleCategory = Literal["sink", "source", "transform"]
 type ModuleClass = Literal["Sinks", "Sources", "Transforms"]
@@ -71,11 +64,6 @@ class ModuleMetadata:
 
     def supports(self, subtype: ModuleSubtype) -> bool:
         return subtype in self.subtypes
-
-
-PipeId = NewType("PipeId", str)
-
-CountValues = Literal["first", "all"]
 
 
 class ConfArg(TypedDict):
@@ -485,16 +473,6 @@ type AnyModuleRawConf = (
     | UrlParseRawConf
     | XpathFetchPageRawConf
 )
-
-
-class EmbedRef(TypedDict):
-    id: str
-    type: ModuleId | PipeId | Literal["output"]
-
-
-class LoopableEmbedRef(TypedDict):
-    id: str
-    type: LoopableModuleId | PipeId
 
 
 class EmbeddedModule(EmbedRef, total=False):

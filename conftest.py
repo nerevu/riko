@@ -3,11 +3,11 @@ from doctest import ELLIPSIS
 
 import pytest
 
-from riko._pubsub import reset_pubsub
 from riko.bado._backend import issync
-from riko.ext._pipelines import DirectoryStore, PackageStore, pipeline_resolver
+from riko.base._paths import ROOT_DIR
 from riko.parsers import IS_LXML
-from riko.paths import ROOT_DIR
+from riko.runtime._pipelines import DirectoryStore, PackageStore, pipeline_resolver
+from riko.runtime._pubsub import reset_pubsub
 
 try:
     from sybil import Sybil
@@ -17,13 +17,13 @@ except ImportError:
 else:
     from importlib import import_module
 
-    import riko._api_surface as surface
+    import riko.base._api_surface as surface
 
     def _seed_api_surface(namespace: dict) -> None:
         import riko  # noqa: PLC0415
 
         import_module("riko.bado")
-        import_module("riko.context")
+        import_module("riko.runtime.context")
 
         names = dir(surface)
         namespace["riko"] = riko
@@ -39,7 +39,7 @@ PIPELINE_DIR = ROOT_DIR / "tests" / "pipelines"
 
 # The core compiler ships no named-pipeline locations; the suite supplies its
 # own generated-package store + JSON-definition directory (formerly hardcoded as
-# ``tests.pypipelines`` / ``tests/pipelines`` inside ``riko.compile``).
+# ``tests.pypipelines`` / ``tests/pipelines`` inside ``riko.runtime._compile``).
 store = PackageStore("tests.pypipelines")
 pipeline_resolver.configure(store=store, definitions=DirectoryStore(PIPELINE_DIR))
 

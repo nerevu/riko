@@ -37,17 +37,17 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko._constants import ENCODING
-from riko._io import Fetch, auto_close
-from riko.bado.io import async_url_open
-from riko.cast import SourceOpts
+from riko.base._constants import ENCODING
+from riko.coercion._configs import XpathFetchPageObjconf
+from riko.coercion.cast import SourceOpts
+from riko.io._async import async_url_open
+from riko.io._sync import Fetch, auto_close
 from riko.parsers import any2dict
-from riko.types._configs import XpathFetchPageObjconf
 from riko.types._io import FileLike
 from riko.types._options import Defaults
 from riko.types._streams import Item, Stream
 
-from . import processor
+from ._decorators import processor
 from ._prepare import require_conf
 
 OPTS = SourceOpts

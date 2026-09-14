@@ -13,7 +13,7 @@ Examples:
 
 """
 
-from riko.collections import SyncPipe
+from riko.runtime.collections import SyncPipe
 from riko.types.modules import ItemBuilderConf, ParsedParam
 
 attrs = [

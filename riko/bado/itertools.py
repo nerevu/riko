@@ -30,7 +30,7 @@ from collections.abc import AsyncGenerator, AsyncIterable, Awaitable, Callable, 
 from functools import partial
 from typing import cast, overload
 
-from riko._constants import DEF_CONNECTION_COUNT
+from riko.base._constants import DEF_CONNECTION_COUNT
 from riko.types._sentinels import MISSING
 
 from ._backend import (

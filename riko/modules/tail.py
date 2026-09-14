@@ -32,13 +32,13 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType
-from riko.types._configs import TailObjconf
+from riko.coercion._configs import TailObjconf
+from riko.types._names import BasicCastType
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Stream
 from riko.types._wrappers import PipeTuples
 
-from . import operator
+from ._decorators import operator
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
 DEFAULTS = Defaults({})

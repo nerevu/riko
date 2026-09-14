@@ -46,18 +46,18 @@ from typing import Any, cast
 import pygogo as gogo
 from meza.fntools import dfilter
 
-from riko._pubsub import async_hub, coroutine, sync_hub
-from riko._pubsub._types import ReceiveFunc, Receiver
-from riko._strutils import gen_name
-from riko.cast import BasicCastType
-from riko.types._configs import ReceiveObjconf
+from riko.base._strutils import gen_name
+from riko.coercion._configs import ReceiveObjconf
+from riko.runtime._pubsub import async_hub, coroutine, sync_hub
+from riko.runtime._pubsub._types import ReceiveFunc, Receiver
 from riko.types._guards import is_missing_type, is_stateful_item
+from riko.types._names import BasicCastType
 from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING, StreamState
 from riko.types._streams import Item, StatefulItem, Stream, StreamOrValueStream
 from riko.types._wrappers import PipeTuples
 
-from . import operator
+from ._decorators import operator
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "pollable": True}
 DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5, "max_len": 256}
