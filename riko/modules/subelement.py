@@ -25,6 +25,7 @@ Examples:
         {'content': 'st1v1'}
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 
@@ -36,14 +37,14 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._rssutils import gen_items
-from riko.modules._prepare import require_conf
 from riko.types._collections import RikoValue
 from riko.types._configs import SubelementObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item, Stream
+from riko.utils._rssutils import gen_items
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = {"emit": True}
 DEFAULTS: Defaults = {"token_key": "content"}
@@ -146,8 +147,8 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
         >>>
         >>> async def main():
         ...     sonnet = {"stanzas": [{"verses": ["verse1", "verse2"]}]}
-        ...     result = await async_pipe(sonnet, conf={"path": "stanzas.verses"})
-        ...     print(next(result))
+        ...     result = async_pipe(sonnet, conf={"path": "stanzas.verses"})
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         {'content': 'verse1'}

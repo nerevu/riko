@@ -23,6 +23,7 @@ Examples:
         'world'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 
@@ -35,12 +36,12 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._strutils import reduce_find
 from riko.bado.itertools import coop_reduce
 from riko.cast import BasicCastType
 from riko.types._configs import RefindObjconf
 from riko.types._options import Defaults, Opts
 from riko.types.modules import FindConfRule
+from riko.utils._strutils import reduce_find
 
 from . import processor
 
@@ -184,8 +185,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
         >>>
         >>> async def main():
         ...     conf = {"rule": {"find": "[aiou]"}}
-        ...     result = await async_pipe({"content": "hello world"}, conf=conf)
-        ...     print(next(result)["refind"])
+        ...     result = async_pipe({"content": "hello world"}, conf=conf)
+        ...     print((await anext(result))["refind"])
         >>>
         >>> run(main)
         hell

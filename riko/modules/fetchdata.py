@@ -17,6 +17,7 @@ Examples:
         'Business System Analyst'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 
@@ -28,19 +29,19 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko._constants import ENCODING
 from riko._io import Fetch, auto_close
-from riko._iterutils import listize
 from riko.bado.io import async_url_open
+from riko.base._constants import ENCODING
 from riko.cast import SourceOpts
-from riko.modules._prepare import require_conf
 from riko.parsers import any2dict
 from riko.types._configs import FetchDataObjconf
 from riko.types._io import FileLike
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item, Stream
+from riko.utils._iterutils import listize
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING})
@@ -192,8 +193,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> async def main():
         ...     path = "value.items"
         ...     conf = {"url": get_path("gigs.json"), "path": path}
-        ...     result = await async_pipe(conf=conf)
-        ...     print(next(result)["title"])
+        ...     result = async_pipe(conf=conf)
+        ...     print((await anext(result))["title"])
         >>>
         >>> run(main)
         Business System Analyst

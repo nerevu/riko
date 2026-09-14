@@ -20,6 +20,7 @@ Examples:
         {'x': 3}
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -49,7 +50,7 @@ def parser(
     stream: Stream, objconf: TailObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Yields the last ``count`` items of the stream.
+    Keeps the last ``count`` items of the stream.
 
     Args:
 
@@ -121,7 +122,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>>
         >>> async def main():
         ...     items = ({"x": x} for x in range(5))
-        ...     result = await async_pipe(items, conf={"count": 2})
+        ...     result = async_pipe(items, conf={"count": 2})
         ...     print(await anext(result))
         >>>
         >>> run(main)

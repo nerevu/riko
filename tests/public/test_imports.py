@@ -16,14 +16,14 @@ import pytest
 
 import riko
 import riko.bado
-import riko.collections
-import riko.compile
-import riko.exceptions
+import riko.base.exceptions
 import riko.ext
 import riko.modules
 import riko.modules._names
+import riko.runtime.collections
+import riko.runtime.compile
 import riko.types
-from riko._api_surface import (
+from riko.base._api_surface import (
     BADO,
     COLLECTIONS,
     COMPILE,
@@ -37,25 +37,25 @@ from riko._api_surface import (
 
 SURFACE_MODULES = (
     riko.bado,
-    riko.collections,
-    riko.compile,
+    riko.runtime.collections,
+    riko.runtime.compile,
     riko.ext,
     riko.modules,
-    riko.exceptions,
+    riko.base.exceptions,
     riko,
     riko.types,
 )
 PARTIAL_SURFACES = (
     (riko.modules.__all__ + riko.modules._names.__all__, MODULES),
-    (riko.exceptions.__all__, ROOT_EXCEPTIONS),
+    (riko.base.exceptions.__all__, ROOT_EXCEPTIONS),
 )
 CONF_TYPES = riko.types.modules.__all__
 
 
 EQUAL_SURFACES = (
     (riko.bado, BADO),
-    (riko.collections, COLLECTIONS),
-    (riko.compile, COMPILE),
+    (riko.runtime.collections, COLLECTIONS),
+    (riko.runtime.compile, COMPILE),
     (riko.ext, EXTENSION),
     (riko, STABLE),
     (riko.types, TYPES),
@@ -106,7 +106,7 @@ def test_bado_reexports_are_same_object(name):
 
 @pytest.mark.parametrize("name", sorted(ROOT_EXCEPTIONS))
 def test_exception_reexports_are_same_object(name):
-    assert getattr(riko, name) is getattr(riko.exceptions, name)
+    assert getattr(riko, name) is getattr(riko.base.exceptions, name)
 
 
 @pytest.mark.parametrize("module", SURFACE_MODULES)

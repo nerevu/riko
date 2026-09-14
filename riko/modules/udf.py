@@ -16,6 +16,7 @@ Examples:
         {'y': 3}
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 
@@ -28,12 +29,12 @@ from typing import Any
 import pygogo as gogo
 
 from riko.bado._util import maybe_deferred
-from riko.modules._prepare import require_arg
 from riko.types._configs import UdfObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item
 
 from . import processor
+from ._prepare import require_arg
 
 OPTS: Opts = {"listize": True, "emit": True}
 DEFAULTS: Defaults = {}
@@ -170,8 +171,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
         >>>
         >>> async def main():
         ...     func = lambda item: {"y": item["x"] + 3}
-        ...     result = await async_pipe({"x": 0}, func=func)
-        ...     print(next(result))
+        ...     result = async_pipe({"x": 0}, func=func)
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         {'y': 3}

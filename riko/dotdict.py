@@ -15,9 +15,8 @@ from typing import TYPE_CHECKING, Any, Self, TypeGuard, TypeVar, cast, overload
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
-from riko._objectify import Objectify
-from riko._strutils import replacer
 from riko.cast import CAST_SWITCH, CastType, cast_value
+from riko.patched._objectify import Objectify
 from riko.types._collections import Key, RikoList, RikoValue
 from riko.types._guards import (
     is_known_sequence,
@@ -32,6 +31,7 @@ from riko.types._scalars import BasicValue, PrimitiveValue
 from riko.types._sentinels import Sentinel, SentinelValue
 from riko.types._streams import Item, Stream
 from riko.types.modules import ConfArg
+from riko.utils._strutils import replacer
 
 if TYPE_CHECKING:
     from _typeshed import SupportsKeysAndGetItem
@@ -618,6 +618,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         level, including nested plain-dict values.
 
         Examples:
+
             >>> r = DotDict({'author': 'bar', 'title': 'foo'})
             >>> r.delete('author')
             >>> r.asdict()

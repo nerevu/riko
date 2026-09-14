@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.paths
+riko.utils.paths
 ~~~~~~~~~~
 File/URL path resolution: locating bundled data files (``get_path``) and
 normalizing file/http URLs to absolute form (``get_abspath``).
@@ -11,7 +11,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import IO, Literal, overload
 
-PACKAGE_DIR = Path(__file__).parent.absolute()
+PACKAGE_DIR = Path(__file__).parent.parent.absolute()
 ROOT_DIR = PACKAGE_DIR.parent
 
 

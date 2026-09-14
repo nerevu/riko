@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko._rssutils
+riko.utils._rssutils
 ~~~~~~~~~~
 RSS/feed entry helpers: entry-text extraction, RSS enrichment, item generation,
 and content truncation.
@@ -13,15 +13,16 @@ from typing import cast, overload
 
 from requests.structures import CaseInsensitiveDict
 
-from riko._date_utils import ensure_tzinfo
 from riko.types._collections import BasicDict, RikoValue
 from riko.types._rss import ExpandedRSSEntry, ParserRSSEntry, RSSEntry, YahooRSSEntry
 from riko.types._streams import Stream, StreamOrValueStream, ValueStream
 
+from ._dateutils import date_to_tt, ensure_tzinfo
+
 
 def _get_entry_text(entry: ParserRSSEntry) -> str:
     """
-    Return the first non-empty text from summary, description, content, or title.
+    Selects the first non-empty text from summary, description, content, or title.
 
     ``content`` is treated as a list of mappings and only the first item's
     ``value`` is used as a fallback.
@@ -60,7 +61,7 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
             pub_date = ensure_tzinfo(pub_date)
 
             if isinstance(pub_date, dt):
-                pub_date = pub_date.timetuple()
+                pub_date = date_to_tt(pub_date)
 
         if "updated_parsed" in entry:
             updated_date = entry["updated_parsed"]
@@ -71,7 +72,7 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
             updated_date = ensure_tzinfo(updated_date)
 
             if isinstance(updated_date, dt):
-                updated_date = updated_date.timetuple()
+                updated_date = date_to_tt(updated_date)
 
         entry["author.name"] = entry.get("author_detail", {}).get("name")
         entry["author.uri"] = entry.get("author_detail", {}).get("href")

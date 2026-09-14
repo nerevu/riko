@@ -8,7 +8,7 @@ input test-flag scoping. Exact metadata derivation lives in
 import pytest
 
 from riko.cast import CastType
-from riko.context import Context
+from riko.definitions.context import Context
 from riko.modules import describe_module, list_modules
 from riko.modules.input import pipe as input_pipe
 from riko.types.modules import InputConf
@@ -62,7 +62,7 @@ def test_describe_module_reraises_nested_dependency_error(monkeypatch):
     def boom(target):
         raise ModuleNotFoundError("No module named 'phantom_dep'", name="phantom_dep")
 
-    monkeypatch.setattr("riko._importutils.import_module", boom)
+    monkeypatch.setattr("riko.utils._importutils.import_module", boom)
 
     with pytest.raises(ModuleNotFoundError, match="phantom_dep"):
         describe_module("hash")

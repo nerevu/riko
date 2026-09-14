@@ -5,8 +5,8 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.compile import build_pipeline, compile_pipe
-        >>> from riko.compile import convert_dag, parse_pipe_def
+        >>> from riko.runtime.compile import build_pipeline, compile_pipe
+        >>> from riko.runtime.compile import convert_dag, parse_pipe_def
         >>>
         >>> dag = {
         ...     "modules": [
@@ -38,26 +38,23 @@ from collections.abc import (
 from datetime import date
 from decimal import Decimal
 from functools import partial, reduce, update_wrapper
-from inspect import isawaitable
 from itertools import pairwise
 from json import JSONEncoder, dumps
 from pathlib import Path
 from pprint import PrettyPrinter
 from time import struct_time
+from types import MappingProxyType
 from typing import Any, Literal, cast, overload
 
 from jinja2 import Environment, PackageLoader
 
-from riko._iterutils import listize
-from riko._strutils import replacer
+from riko.bado._util import maybe_deferred
 from riko.bado.itertools import as_async
-from riko.context import Context, ExecutionMode
+from riko.base.exceptions import InvalidPipelineError
+from riko.definitions.context import Context, ExecutionMode
 from riko.dotdict import DotDict
-from riko.exceptions import InvalidPipelineError
 from riko.ext._resolver import pipe_resolver
 from riko.ext.codegen import ruff_format
-from riko.pprint2 import Id, PyKwargValue, repr_arg, repr_args
-from riko.topsort import topological_sort
 from riko.types._collections import Inputs
 from riko.types._guards import is_loop_module, is_mapping
 from riko.types._pipeline import (
@@ -103,6 +100,9 @@ from riko.types.compile import (
     StringModule,
     TemplateData,
     Wire,
+    _Edge,
+    _GraphIndex,
+    _OutputRef,
 )
 from riko.types.modules import (
     AnyModuleRawConf,
@@ -114,6 +114,11 @@ from riko.types.modules import (
     Nodes,
     Value,
 )
+from riko.utils._iterutils import listize
+from riko.utils._strutils import replacer
+
+from .pprint2 import Id, PyKwargValue, repr_arg, repr_args
+from .topsort import topological_sort
 
 _RAW_CONFS = {
     "count": "CountRawConf",
@@ -203,7 +208,7 @@ def _as_named_pipe(  # noqa: E704
 def _as_named_pipe(  # noqa: E302
     module_name: str, module_id: str, is_async: bool = False
 ) -> Pipe:
-    """Returns a renamed wrapper without modifying the imported pipe."""
+    """Builds a renamed wrapper without modifying the imported pipe."""
     pipe = resolve_module(module_name, is_async)
     name = str(f"pipe_{module_id}")
     wrapper = cast(Pipe, partial(pipe))
@@ -228,6 +233,18 @@ def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
             yield dep
 
 
+async def drain[T: str | tuple[str, ...]](
+    source: AsyncIterator[T], uniq: bool = False
+) -> list[T]:
+    """Collects an async stream into a sorted list."""
+    if uniq:
+        result = sorted({dep async for dep in source})
+    else:
+        result = sorted([value async for value in source])
+
+    return result
+
+
 @overload
 def extract_dependencies(  # noqa: E704
     pipe_def: PipeDef | ParsedPipeDef | None = ...,
@@ -248,7 +265,7 @@ def extract_dependencies(  # noqa: E302
     pipe_def: PipeDef | ParsedPipeDef | None = None,
     pipeline: PipelineDependencies | None = None,
 ) -> Awaitable[list[str]] | list[str]:
-    """Returns the modules used by a pipe."""
+    """Extracts the modules used by a pipe."""
     if pipe_def:
         pydeps = gen_dependencies(pipe_def)
     elif pipeline:
@@ -256,7 +273,12 @@ def extract_dependencies(  # noqa: E302
     else:
         raise TypeError("Must supply at least one kwarg!")
 
-    return pydeps if isawaitable(pydeps) else sorted(set(pydeps))
+    if isinstance(pydeps, AsyncIterator):
+        result = drain(pydeps, True)
+    else:
+        result = sorted(set(pydeps))
+
+    return result
 
 
 def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str, ...]]:
@@ -330,7 +352,7 @@ def extract_input(  # noqa: E302
     pipe_def: PipeDef | ParsedPipeDef | None = None,
     pipeline: PipelineDependencies | None = None,
 ) -> PyInput:
-    """Returns the inputs required by a pipe."""
+    """Extracts the inputs required by a pipe."""
     if pipe_def:
         pyinput = gen_input(pipe_def)
     elif pipeline:
@@ -338,7 +360,7 @@ def extract_input(  # noqa: E302
     else:
         raise TypeError("Must supply at least one kwarg!")
 
-    return pyinput if isawaitable(pyinput) else sorted(pyinput)
+    return drain(pyinput) if isinstance(pyinput, AsyncIterator) else sorted(pyinput)
 
 
 def pythonise(
@@ -347,7 +369,7 @@ def pythonise(
     replace: Sequence[str] = ("-", ":", "/", ""),
     key: str | None = None,
 ) -> str:
-    """Returns a Python-friendly id."""
+    """Builds a Python-friendly id."""
     if not isinstance(content, str):
         if key:
             resolved = DotDict(content).get(key)
@@ -402,11 +424,6 @@ def gen_modules(  # noqa: E302
             yield (pythonise(module["id"]), module)
 
 
-def gen_wires(pipe_def: PipeDef) -> Iterator[tuple[str, Wire]]:
-    for wire in pipe_def["wires"]:
-        yield (pythonise(wire["id"]), wire)
-
-
 def gen_graph(pipe_def: PipeDef) -> Iterator[tuple[str, str]]:
     for wire in pipe_def["wires"]:
         src_id = pythonise(wire["src"]["moduleid"])
@@ -425,21 +442,17 @@ def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list[str]]]:
 
 
 def gen_parented_graph[T: str | int](graph: Graph[T]) -> Iterator[tuple[T, Nodes[T]]]:
-    """Yields graph nodes, dropping any orphans."""
+    """Emits graph nodes, dropping any orphans."""
     for node, value in graph.items():
         if value or any(node in v for v in graph.values()):
             yield (node, value)
-
-
-def get_module_id(wire: Wire, stem: str = "src", base: str = "moduleid") -> str:
-    return pythonise(wire, key=f"{stem}.{base}")
 
 
 def write_file(
     data: object, path: Path | str | None, pretty: bool = False
 ) -> int | None:
     if data and path:
-        with open(str(path), "w", encoding="utf-8") as f:
+        with open(path, "w", encoding="utf-8") as f:
             if hasattr(data, "keys") and pretty:
                 kwargs = {
                     "cls": CustomEncoder,
@@ -664,13 +677,6 @@ def _get_pyarg(  # noqa: E302
     return _get_input_module(parsed_pipe_def, module_id, steps, **split_ids)
 
 
-def _is_default(wire: Wire, module_id: str, in_and_out: bool = False) -> bool:
-    id_match = get_module_id(wire, stem="tgt") == module_id
-    default_out = id_match and wire["src"]["id"].startswith("_OUTPUT")
-    is_input = wire["tgt"]["id"] == "_INPUT"
-    return default_out and (is_input if in_and_out else not is_input)
-
-
 @overload
 def _gen_pykwargs(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef, module_id: str, steps: None = ..., **kwargs: Any
@@ -703,14 +709,10 @@ def _gen_pykwargs(  # noqa: E302
 
     others: list[StepValue | Id] = []
 
-    # find the default input of this module
-    for wire in parsed_pipe_def["wires"].values():
-        # if the wire is to this module and it's *NOT* the default input
-        # but it *is* the default output
-        if _is_default(wire, module_id):
-            src_module_id = get_module_id(wire)
-            source = Id(src_module_id) if steps is None else steps[src_module_id]
-            pipe_id = get_module_id(wire, stem="tgt", base="id")
+    for edge in parsed_pipe_def["graph"].incoming.get(module_id, ()):
+        if edge.source_port.startswith("_OUTPUT") and edge.target_port != "_INPUT":
+            source = Id(edge.source) if steps is None else steps[edge.source]
+            pipe_id = pythonise(edge.target_port)
 
             if pipe_id.startswith("_OTHER"):
                 others.append(source)
@@ -760,7 +762,7 @@ def resolve_module(module_name: str, is_async: bool = False) -> Pipe:  # noqa: E
         >>> resolve_module("does_not_exist")
         Traceback (most recent call last):
             ...
-        riko.exceptions.UnsupportedModuleError: Unsupported riko module: does_not_exist
+        riko.base.exceptions.UnsupportedModuleError: Unsupported riko module: does_not_exist
 
     Leaf-module resolution (incl. preserving a transitive ``ModuleNotFoundError``
     raised *inside* a valid module) lives in ``ModuleRegistry`` now; see
@@ -840,11 +842,9 @@ def _get_input_module(
     if module_id in parsed_pipe_def["embed"]:
         source = "_INPUT"
     else:
-        for wire in parsed_pipe_def["wires"].values():
-            # if the wire is to this module and it's the default input and it's
-            # the default output:
-            if _is_default(wire, module_id, True):
-                src_module_id = get_module_id(wire)
+        for edge in parsed_pipe_def["graph"].incoming.get(module_id, ()):
+            if edge.source_port.startswith("_OUTPUT") and edge.target_port == "_INPUT":
+                src_module_id = edge.source
 
                 if steps is None and src_module_id in split_ids:
                     pos = split_ids[src_module_id]
@@ -904,6 +904,82 @@ def convert_dag(dag: PipeDag) -> PipeDef:
     return PipeDef({"modules": modules, "wires": full_wires})
 
 
+def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
+    """
+    Interprets a pipe's wiring into one immutable graph index.
+
+    Combines the embed relationships (a loop runs after its embedded module) with
+    the wire edges to derive a single deterministic execution order, then indexes
+    the wire connections by endpoint so downstream stages look up a node's inputs
+    and outputs without rescanning every wire.
+
+    Args:
+
+        pipe_def: JSON representation of the pipe.
+
+    Returns:
+
+        A frozen ``_GraphIndex`` describing the pipe's topology.
+
+    """
+    successors: dict[str, list[str]] = defaultdict(list, gen_embed_graph(pipe_def))
+
+    for src, tgt in gen_graph(pipe_def):
+        successors[src].append(tgt)
+
+    adjacency = dict(gen_parented_graph(successors))
+    order = tuple(topological_sort(adjacency, strict=True))
+    dependents = {
+        node: frozenset(_successors) for node, _successors in adjacency.items()
+    }
+    _dependencies: dict[str, set[str]] = {node: set() for node in adjacency}
+
+    for node, _successors in adjacency.items():
+        for successor in _successors:
+            _dependencies.setdefault(successor, set()).add(node)
+
+    dependencies = {node: frozenset(deps) for node, deps in _dependencies.items()}
+    roots = tuple(node for node in order if not dependencies.get(node))
+    leaves = tuple(node for node in order if not dependents.get(node))
+
+    edges = tuple(
+        _Edge(
+            source=pythonise(wire["src"]["moduleid"]),
+            target=pythonise(wire["tgt"]["moduleid"]),
+            source_port=wire["src"]["id"],
+            target_port=wire["tgt"]["id"],
+        )
+        for wire in pipe_def["wires"]
+    )
+
+    _incoming: dict[str, list[_Edge]] = defaultdict(list)
+    _outgoing: dict[str, list[_Edge]] = defaultdict(list)
+
+    for edge in edges:
+        _outgoing[edge.source].append(edge)
+        _incoming[edge.target].append(edge)
+
+    incoming = {node: tuple(group) for node, group in _incoming.items()}
+    outgoing = {node: tuple(group) for node, group in _outgoing.items()}
+
+    if output_edges := incoming.get("_OUTPUT", ()):
+        outputs = {"default": _OutputRef(node=output_edges[-1].source, port="out")}
+    else:
+        outputs = {}
+
+    return _GraphIndex(
+        edges=edges,
+        incoming=MappingProxyType(incoming),
+        outgoing=MappingProxyType(outgoing),
+        dependencies=MappingProxyType(dependencies),
+        dependents=MappingProxyType(dependents),
+        order=order,
+        roots=roots,
+        leaves=leaves,
+        outputs=MappingProxyType(outputs),
+    )
+
+
 def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPipeDef:
     """
     Parses pipe JSON into internal structures.
@@ -918,8 +994,7 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPip
         An internal representation of the pipe.
 
     """
-    graph = defaultdict(list, gen_embed_graph(pipe_def))
-    [graph[k].append(v) for k, v in gen_graph(pipe_def)]
+    graph = _index_pipe_def(pipe_def)
     modules = {
         key: PipeModule({**module, "conf": _lower_keys(module["conf"])})
         for key, module in gen_modules(pipe_def)
@@ -934,8 +1009,7 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPip
         "name": pythonise(pipe_name),
         "modules": modules,
         "embed": embed,
-        "graph": dict(gen_parented_graph(graph)),
-        "wires": dict(gen_wires(pipe_def)),
+        "graph": graph,
     }
 
 
@@ -1036,7 +1110,7 @@ def build_pipeline(  # noqa: E302
 
     """
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
-    module_ids = topological_sort(parsed_pipe_def["graph"])
+    module_ids = list(parsed_pipe_def["graph"].order)
 
     if context.mode is ExecutionMode.RUN:
         _resolve_leaf_modules(parsed_pipe_def)
@@ -1076,17 +1150,17 @@ async def abuild_pipeline(  # noqa: E302
 
     """
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
-    module_ids = topological_sort(parsed_pipe_def["graph"])
+    module_ids = list(parsed_pipe_def["graph"].order)
 
     if context.mode is ExecutionMode.RUN:
         _resolve_leaf_modules(parsed_pipe_def)
         module_names = gen_names(module_ids, parsed_pipe_def)
         args = (parsed_pipe_def, module_names, module_ids)
-        pipeline = await _build_pipeline(
-            *args, is_async=True, context=context, **kwargs
-        )
+        bkwargs = {**kwargs, "is_async": True}
+        built = await maybe_deferred(_build_pipeline, *args, context=context, **bkwargs)
+        stream = cast(AsyncStreamOrValueStream, built)
 
-        async for item in as_async(pipeline):
+        async for item in as_async(stream):
             yield item
     else:
         args = (parsed_pipe_def, context)
@@ -1105,7 +1179,7 @@ def stringify_pipe(
     **kwargs: bool,
 ) -> str:
     """Converts a pipe into a Python script, using AnyIO when ``is_async``."""
-    module_ids = topological_sort(parsed_pipe_def["graph"], strict=True)
+    module_ids = list(parsed_pipe_def["graph"].order)
     module_names = gen_names(module_ids, parsed_pipe_def)
 
     env = Environment(loader=PackageLoader("riko"), autoescape=False)  # noqa: S701
@@ -1145,6 +1219,9 @@ def stringify_pipe(
             "last_module": module_ids[-1],
             "raw_confs": sorted(_used_raw_confs(parsed_pipe_def)),
             "use_collection": any(m["is_collection"] for m in string_modules),
+            "needs_await": any(
+                m["name"] != "output" and not m["splits"] for m in string_modules
+            ),
             "subtype": "source" if not pyinput else "transformer",
         }
     )

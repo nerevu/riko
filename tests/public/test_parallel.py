@@ -15,10 +15,10 @@ contract: same results as sequential, order control, and non-materialization.
 
 import pytest
 
-from riko.collections import AsyncCollection, AsyncPipe
-from riko.paths import get_path
+from riko.runtime.collections import AsyncCollection, AsyncPipe
 from riko.types._guards import is_mapping
 from riko.types.modules import ItemBuilderConf
+from riko.utils.paths import get_path
 from tests import skipif_issync
 
 pytestmark = pytest.mark.slow

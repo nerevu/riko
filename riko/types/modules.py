@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
 from re import Pattern, RegexFlag
 from typing import TYPE_CHECKING, Literal, NewType, NotRequired, Required, TypedDict
+
+from riko.types._io import PathLike
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
     from riko.cast import CastType, LocationType, SortableCastType
 
     from ._module_ids import LoopableModuleId, ModuleId
-    from ._names import TargetLike
+    from ._names import FmtLike
     from ._scalars import BasicValue
     from .compile import PipeModule
 
@@ -842,8 +843,8 @@ class UrlParseConf(TypedDict, total=False):
 
 
 class WriteConf(TypedDict, total=False):
-    url: Required[str | Path]
-    target: TargetLike | None
+    url: Required[PathLike]
+    fmt: FmtLike | None
     mode: str
 
 

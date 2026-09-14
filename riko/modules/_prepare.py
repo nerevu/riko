@@ -15,8 +15,6 @@ from typing import cast, overload
 
 import pygogo as gogo
 
-from riko._iterutils import broadcast, dispatch, listize
-from riko._objectify import objectify
 from riko.cast import (
     CAST_SWITCH,
     BasicCastType,
@@ -25,9 +23,10 @@ from riko.cast import (
     cast_pass,
     cast_value,
 )
+from riko.definitions.resources import ResourcesLike
 from riko.dotdict import DotDict, is_mapping
 from riko.parsers import conf_is_dynamic, get_field, parse_conf
-from riko.resources import ResourcesLike
+from riko.patched._objectify import objectify
 from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
 from riko.types._dynamic_conf import DynamicConf
 from riko.types._locations import AnyLocation
@@ -49,6 +48,7 @@ from riko.types._wrappers import (
     SyncConfCastFunc,
 )
 from riko.types.modules import AnyModuleConf, Conf
+from riko.utils._iterutils import broadcast, dispatch, listize
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -114,7 +114,7 @@ def require_conf[T](  # noqa: E704
     objconf: DynamicConf, key: str, pipe: str, strict: bool = False
 ) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
     """
-    Returns a required conf value, or reports which one is unusable.
+    Resolves a required conf value, or reports which one is unusable.
 
     A missing conf key is a call-site programming error, so this raises rather
     than degrading — unlike an absent *field* on an item, which is a runtime

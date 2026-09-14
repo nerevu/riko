@@ -1,12 +1,13 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko._iterutils
+riko.utils._iterutils
 ~~~~~~~~~~~~~~~
 
 Functional/iterable helpers: fan-out (``dispatch``/``broadcast``), grouping,
 dedup, chainable retry binding, and sort-key construction.
 
 Attributes:
+
     SORT_FILLER: Orderable stand-in (``-inf``) for a missing sort key.
     DATELIKE_TYPES: Cast types reduced to epoch timestamps for sorting.
     INVALID_DEF_TYPES: Cast types with no usable typed default.
@@ -34,10 +35,10 @@ from typing import Any, Literal, TypeGuard, TypeVar, cast, overload
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
-from riko._date_utils import date_to_datetime, ensure_tzinfo
 from riko.cast import CAST_SWITCH, CastType, cast_value
 from riko.types._scalars import PrimitiveValue, PrimitiveValueType, SortableValue
 from riko.types._streams import Item
+from riko.utils._dateutils import date_to_datetime, ensure_tzinfo
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 SORT_FILLER = float("-inf")

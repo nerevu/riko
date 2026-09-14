@@ -12,7 +12,7 @@ Examples:
 from collections.abc import Mapping
 from pprint import pprint
 
-from riko.collections import AsyncPipe, SyncPipe
+from riko.runtime.collections import AsyncPipe, SyncPipe
 from riko.types.modules import ItemBuilderConf, RegexRawConf, RegexRawRule
 
 p1_conf = ItemBuilderConf(
@@ -37,10 +37,8 @@ def pipe(test=False):
     return list(stream)
 
 
-async def async_pipe(test=False):
-    stream = await AsyncPipe("itembuilder", conf=p1_conf, test=test).regex(conf=p2_conf)
-
-    return list(stream)
+def async_pipe(test=False):
+    return AsyncPipe("itembuilder", conf=p1_conf, test=test).regex(conf=p2_conf)
 
 
 def print_results(result) -> None:

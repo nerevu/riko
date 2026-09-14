@@ -18,7 +18,7 @@ SINK_NAMES: frozenset[str] = frozenset({"output", "write"})
 
 
 def normalize_module_name(name: "ModuleNameLike | None") -> str:
-    """Returns the canonical string module name."""
+    """Normalizes a module name to its canonical string."""
     return name.value if isinstance(name, ModuleName) else name or ""
 
 
@@ -34,7 +34,7 @@ def derive_category(  # noqa: E302
     metadata: "ModuleMetadata", *, provider: str = "riko", override: str | None = None
 ) -> "ModuleCategory | str":
     """
-    Returns the user-facing discovery category for a module.
+    Derives the user-facing discovery category for a module.
 
     Categories are based on data-flow role, not the runtime module type.
     """

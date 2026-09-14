@@ -47,12 +47,12 @@ def async_pipe(*args: Any, **kwargs: Any) -> Stream:
 
     Examples:
 
-        >>> from riko import issync, run
+        >>> from riko import run
         >>>
         >>> async def main():
-        ...     print(await anext(await async_pipe(iter([{"content": "hi"}]))))
+        ...     print(await anext(async_pipe(iter([{"content": "hi"}]))))
         >>>
-        >>> print({"content": "HI"}) if issync else run(main)
+        >>> run(main)
         {'content': 'HI'}
 
     Notes:
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     else:
 
         async def amain() -> None:
-            print(list(await AsyncPipe(name, source=source)))
+            print([item async for item in AsyncPipe(name, source=source)])
 
         register(ModuleDefinition(name=name, sync_pipe=pipe, async_pipe=async_pipe))
         run(amain)

@@ -20,6 +20,7 @@ Examples:
         12
 
 Attributes:
+
     CAST_SWITCH: Destination type to caster and default mapping.
 
 """
@@ -40,21 +41,21 @@ from urllib.parse import quote, urlparse
 
 import pygogo as gogo
 
-from riko._date_utils import (
+from riko.base.currencies import CURRENCY_CODES
+from riko.base.locations import LOCATIONS
+from riko.types._collections import BasicArg
+from riko.types._locations import AnyLocation, IPAddress, Location
+from riko.types._options import Opts
+from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
+from riko.types._wrappers import PreCaster
+from riko.utils._dateutils import (
     date_to_tt,
     ensure_tzinfo,
     get_local_tz,
     parse_date_string,
     tt_to_datetime,
 )
-from riko.currencies import CURRENCY_CODES
-from riko.dates import get_date, tt_to_datedict
-from riko.locations import LOCATIONS
-from riko.types._collections import BasicArg
-from riko.types._locations import AnyLocation, IPAddress, Location
-from riko.types._options import Opts
-from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
-from riko.types._wrappers import PreCaster
+from riko.utils.dates import get_date, tt_to_datedict
 
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 MATH_WORDS = {"seconds", "minutes", "hours", "days", "weeks", "months", "years"}
@@ -217,7 +218,7 @@ def cast_url(url: str | int) -> str:
 
 def lookup_street_address(_: str) -> Location:
     """
-    Returns a placeholder street-address location.
+    Builds a placeholder street-address location.
 
     A fixed stub standing in for a real geocoder; the input is ignored.
 
@@ -252,7 +253,7 @@ def lookup_street_address(_: str) -> Location:
 
 def lookup_ip_address(_: str) -> IPAddress:
     """
-    Returns a placeholder IP-address location.
+    Builds a placeholder IP-address location.
 
     A fixed stub standing in for a real geolocator; the input is ignored.
 

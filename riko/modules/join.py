@@ -22,6 +22,7 @@ Examples:
         24
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -35,7 +36,6 @@ import pygogo as gogo
 from meza.process import merge
 
 from riko.dotdict import is_mapping
-from riko.modules._prepare import require_arg
 from riko.types._configs import JoinObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING
@@ -43,6 +43,7 @@ from riko.types._streams import Item, Items, Stream
 from riko.types._wrappers import PipeTuples
 
 from . import operator
+from ._prepare import require_arg
 
 OPTS: Opts = Opts()
 DEFAULTS: Defaults = {"join_key": None, "lower": False}
@@ -202,7 +203,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> async def main():
         ...     items = ({"x": "foo", "sum": x} for x in range(5))
         ...     other = ({"x": "foo", "count": x + 5} for x in range(5))
-        ...     result = await async_pipe(items, conf={"join_key": "x"}, other=other)
+        ...     result = async_pipe(items, conf={"join_key": "x"}, other=other)
         ...     print(await anext(result))
         >>>
         >>> run(main)

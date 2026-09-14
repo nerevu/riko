@@ -25,7 +25,9 @@ Planned** (nothing ships yet). Find any `§N` via the [ROADMAP §-index](ROADMAP
 - [23. AnyIO runtime (shipped)](#23-anyio-runtime-shipped)
 - [24. Module discovery (shipped)](#24-module-discovery-shipped)
 - [Subscription lifecycle — `subscribe` / `publish` (F5a, partial)](#subscription-lifecycle--subscribe--publish-f5a-partial)
+- [Compiler graph index (shipped)](#compiler-graph-index-shipped)
 - [25. Conversion — export converters (shipped)](#25-conversion--export-converters-shipped)
+- [Write architecture — `write()` / `sink()` sessions (shipped)](#write-architecture--write--sink-sessions-shipped)
 
 ---
 
@@ -238,11 +240,13 @@ is the module id, for `SyncPipe(...)`/`|` chaining): don't confuse them. In part
 `SINK_NAMES` (`{"output","write"}`) is the *criterion*, not the
 membership: a module is a `Sink` iff its name is in that set. The one built-in match is `write`
 (`riko/modules/write.py`) — a pass-through operator that serializes the stream to `conf['url']` via a
-`Targets` converter and yields items unchanged (`Modules.WRITE`/`Sinks.WRITE`). It is **not lazy** —
+`Formats` converter and yields items unchanged (`Modules.WRITE`/`Sinks.WRITE`). It is **not lazy** —
 serializing needs the whole stream, so `parser`/`async_parser` do `items = list(stream)` and the
 pass-through replays that list (contract §2/§3 streaming does not hold through a `write`). `output` stays
 unmatched (compiler-local passthrough node, not a `riko/modules/*.py` pipe). `write` is the
-in-pipeline counterpart of the one-shot `Targets`/`export` surface (see §25). `riko.ext.codegen` generates the byte-stable
+in-pipeline counterpart of the one-shot `Formats`/`export` surface (see §25); it is distinct from the
+fluent `write()`/`sink()` verbs and their write-session architecture (see § Write architecture), and
+is the module removed at the R5C clean-break once `Pipeline.write()` / `WriteNode` lands. `riko.ext.codegen` generates the byte-stable
 `riko/modules/_names.py`: the flat `Modules` namespace (every pipe, aliasing bucket members so
 `Modules.FILTER is Transforms.FILTER`) + `Sources`/`Transforms`/`Sinks` bucket enums (member
 `.value` = canonical id; collisions raise). Regenerate with `gen-names`/`manage codegen` (drift guard
@@ -278,6 +282,26 @@ async). Tests: `tests/internal/test_decorators.py`.
 be a `str` or `ModuleName` member anywhere, normalized to its canonical string at the boundary. The
 generated `Modules` tree (P9A) shipped — `pipe | Transforms.FILTER` resolves identically to
 `pipe.filter()`; see §24.
+
+## Compiler graph index (shipped)
+
+`parse_pipe_def` interprets a pipe's wiring into one immutable `_GraphIndex`
+(`riko/types/compile.py`) in place of the former `ParsedPipeDef` `graph`+`wires` mappings.
+Wire-level `edges`/`incoming`/`outgoing` keep full port identity (ports verbatim — `_INPUT`/`_OTHER`/
+`_OUTPUT` or a named kwarg); node-level `order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs`
+carry scheduling facts, with the embed→loop relationship folded into `order`. It is built once,
+deterministically, and frozen (`MappingProxyType`/tuples/`frozenset`). Consumers — `_get_input_module`,
+`_gen_pykwargs`, and `build_pipeline`/`abuild_pipeline`/`stringify_pipe` ordering — read the index
+rather than rescanning wires; `order` uses a strict topological sort, so a cyclic pipe is rejected up
+front instead of silently SCC-reordered. Generated output stays byte-identical (drift guards
+`test_codegen_matches_expected_file` / `test_example_pipes`); the index structure is pinned by
+`tests/internal/test_compile.py` (`test_parse_pipe_def_replaces_wires_with_graph_index`,
+`test_graph_index_indexes_wire_ports`, `test_graph_index_orders_embed_before_its_loop`).
+
+> **Foundation for R4A/R4B.** The v1-behavior-preserving deltas the index still carries — `_OUTPUT`
+> as a node, verbatim ports, dropped orphans — are resolved at the Workflow v2 boundary, not in the
+> index. Execution concepts never move onto it. See
+> [extensibility § E3.11](gameplans/extensibility.md#e311-reuse-of-the-shipped-graph-index).
 
 ## Subscription lifecycle — `subscribe` / `publish` (F5a, partial)
 
@@ -328,11 +352,91 @@ drain. A `strict` xfail in `tests/public/test_collections.py` marks the shipped 
 
 > **Partial.** Batch/dataframe path (Arrow/Polars/SQL) → [database-transforms.md §25](gameplans/database-transforms.md#25-conversion-and-dataframe-integration).
 
-Meza-backed export converters ship: `csv` / `json` / `geojson` / `ofx` / `qif` / `list` /
-`tuple` (`riko/collections.py`; `list_targets()` lists registered export converters). The typed
-`Targets` `StrEnum` (stable `riko` surface) is the export-format layer over that
-registry — `export(items, Targets.JSON)` or the plain string; `CONVERSION_FUNCS` is keyed by
-`Targets` members, drift-guarded by `TestExportTargets`. This is riko's terminal-output surface,
-distinct from the discovery tree's `Sinks` bucket (sink *pipes*, empty for built-ins — see §24).
-Meza owns conversion work. The Batch/dataframe path (Arrow/Narwhals/Polars/SQL execution
-representations selected by capability) is deferred.
+Meza-backed export converters ship as the typed `Formats` `StrEnum` (stable `riko` surface, renamed
+from the earlier `Targets`): `csv` / `geojson` / `json` / `jsonl` / `ofx` / `qif` — serialized
+representations only. `CONVERSION_FUNCS` (`riko/_formats.py`) is keyed by `Formats` members (`jsonl`
+maps to meza's `records2json(newline=True)`, not bracket-stripped JSON); `list_formats()` lists
+exactly these serialization formats. `export(items, Formats.JSON)` (or the plain string) serializes;
+the `list` / `tuple` collection materializations are accepted only by `export()`
+(`ExportType = Formats | Literal["list", "tuple"]`), never by `Formats` or `list_formats()`, because
+they are not serialized representations. Drift-guarded by `TestExportFormats`. This is riko's
+terminal-output surface, distinct from the discovery tree's `Sinks` bucket (sink *pipes*, empty for
+built-ins — see §24) and reused by the write-session architecture (see § Write architecture), which
+serializes the same `Formats` at a destination. Meza owns conversion work. The Batch/dataframe path
+(Arrow/Narwhals/Polars/SQL execution representations selected by capability) is deferred.
+
+## Write architecture — `write()` / `sink()` sessions (shipped)
+
+> **Partial.** Sync and async write sessions both ship now with the compatibility pipe runtime; R4B moves
+> their lifetime ownership onto the `SyncExecution` / `AsyncExecution` exit stacks and adds explicit
+> execution-outcome propagation (including terminate/cancellation → abort), R5C adds the executable
+> `WriteNode` caller, and R11 adds provider-native targets/sessions →
+> [execution-semantics.md](gameplans/execution-semantics.md),
+> [effects.md](gameplans/effects.md), [implementation-sequence.md](gameplans/implementation-sequence.md).
+
+The fluent `write()`/`sink()` verbs ride a private write-session mechanism (no hidden `send`/`on_receive`
+pub/sub). Four durable layers:
+
+- **declarative** — `WriteOperation` (frozen `mode` + unified `keys`), `WriteTarget` (a destination
+  that *reports write capabilities*, it does not itself deliver records), and `Formats`
+  (`riko/types/_write.py`).
+- **prepared** — `PreparedWrite` (target + normalized operation + resolved `WriteCapabilities`) is the
+  validated object; `WriteOperation` on its own is unvalidated intent. `WriteCapabilities` stores only
+  independent facts (`modes`, `fmt`, `incremental`, `match_keyed_modes`, `idempotent_modes`);
+  `appendable`/`serializes`/`keyed_modes` are **derived** properties. `prepare_write` +
+  `validate_target_mode` + local `normalize_keys` live in `riko/targets.py` (`normalize_keys` is a
+  dedicated helper, *not* a widened `_iterutils.listize`).
+- **runtime** — the `SyncWriteSession` protocol (`write(Item | Items)` / `finalize` / `abort` /
+  `teardown`) and the `_FileWriteSession` state machine (`_SessionState` OPEN/FINALIZED/ABORTED/CLOSED,
+  acquire-once) in `riko/_write_session.py`. `finalize` commits (idempotent), `abort` abandons,
+  `teardown` **never commits**; the `file_write_session` CM only acquires + tears down.
+- **surface** — `write()` is passthrough (yields each item unchanged via an identity `_passthrough_pipe`
+  host — no `_prime()`, so a preceding module never re-runs); `sink()` is the interim terminal verb
+  returning a `WriteResult` (passes the whole stream to one converter call). Both default to
+  `WriteMode.REPLACE`. The legacy `_write_through` adapter maps full-exhaust/graceful-close → `finalize`,
+  terminate/failure → `abort`.
+
+Invariants worth stating:
+
+- **keys are unified** — the caller supplies a single `keys` list because a target's `match_keyed_modes`
+  and `idempotent_modes` are disjoint (`match_keyed_modes & idempotent_modes == ∅`, enforced in
+  `__post_init__`), so `(target, mode)` alone fixes whether keys mean record-match identity or
+  idempotency/dedup identity. There is no separate `idempotency_key`.
+- **incremental is a `target × format` capability**, not a global format trait — `File` owns private
+  `_FILE_APPEND_FORMATS` / `_FILE_INCREMENTAL_FORMATS`; there are no global `APPENDABLE_FORMATS` /
+  `STREAMABLE_FORMATS`. `appendability` derives from `WriteMode.APPEND in modes`.
+- **converters own framing, the session owns the destination boundary** — CSV/JSONL converters keep
+  their own row/record terminators (no bracket-stripping; JSONL uses `records2json(newline=True)` +
+  one final terminator), and the session only repairs an existing append file's missing newline via a
+  **binary** tail check.
+- `abort` promises no rollback for incremental targets (CSV/JSONL); it only discards staged content for
+  framed targets (JSON/GeoJSON). An empty append never mutates the destination.
+- `sink()` is **interim**: it is removed at the R5C clean-break once `write()` at a graph leaf provides
+  the same terminal consumption — the durable public verbs are `read()` / `write()` (terminality is a
+  graph-position property, not a verb).
+- **async** — fluent `AsyncPipe.write()` passthrough and `AsyncPipe.sink()` both ship now, riding the
+  `_AsyncFileWriteSession` / `async_file_write_session` path (the `AsyncWriteSession` protocol mirrors the
+  sync `write` / `finalize` / `abort` / `teardown` surface). No pub/sub language remains in the error text.
+- **runtime-only** — `PreparedWrite`, `WriteCapabilities`, and session strategy are execution-time facts
+  and never serialize into the R4A workflow IR.
+
+The layering the compatibility runtime hosts today, and where R4B moves it:
+
+```
+now
+AsyncPipe
+   ↓ compatibility host
+AsyncWriteSession
+   ├── write
+   ├── finalize
+   ├── abort
+   └── teardown
+
+R4B
+AsyncExecution
+   ├── owns session via AsyncExitStack
+   ├── exhaustion       → finalize
+   ├── graceful close   → finalize
+   ├── failure          → abort
+   └── terminate/cancel → abort
+```

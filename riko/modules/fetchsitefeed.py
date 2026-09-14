@@ -22,6 +22,7 @@ Examples:
         "EU sets out 'phased' Brexit strategy"
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 
@@ -34,17 +35,17 @@ from typing import Any
 import pygogo as gogo
 
 from riko import autorss
-from riko._rssutils import augment_entries
 from riko.bado.io import async_url_read
 from riko.cast import SourceOpts
-from riko.modules._prepare import require_conf
 from riko.parsers import parse_rss
 from riko.types._configs import FetchSiteFeedObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._rss import RSSEntry
 from riko.types._streams import Item
+from riko.utils._rssutils import augment_entries
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {}
@@ -184,8 +185,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     result = await async_pipe(conf={"url": get_path("bbc.html")})
-        ...     print(next(result)["title"])
+        ...     result = async_pipe(conf={"url": get_path("bbc.html")})
+        ...     print((await anext(result))["title"])
         >>>
         >>> run(main)
         EU sets out 'phased' Brexit strategy

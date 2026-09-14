@@ -8,7 +8,6 @@ assigned onto the item.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Iterator
-from copy import copy
 from functools import partial
 from itertools import chain, islice
 from logging import Logger
@@ -16,7 +15,7 @@ from typing import Literal, cast, overload
 
 import pygogo as gogo
 
-from riko.context import Context
+from riko.definitions.context import Context
 from riko.dotdict import DotDict
 from riko.types._collections import RikoValue
 from riko.types._scalars import PrimitiveValue
@@ -87,8 +86,7 @@ def get_subpipe(  # noqa: E302
     else:
         kwargs = {}
 
-    embed_context = copy(context)
-    embed_context.submodule = True
+    embed_context = context.augment(submodule=True)
     return partial(embed, **kwargs, context=embed_context)
 
 

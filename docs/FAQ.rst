@@ -76,9 +76,9 @@ Which imports are public?
   ``AsyncCollection`` classes, ``Context``, ``ExecutionMode``, ``PipeState``,
   ``backend``, ``build_pipeline``, ``compile_pipe``, ``convert_dag``, ``export``,
   ``extract_dependencies``, ``get_module_metadata``, ``get_path``, ``isasync``,
-  ``issync``, ``list_modules``, ``describe_module``, ``list_targets``,
+  ``issync``, ``list_modules``, ``describe_module``, ``list_formats``,
   ``parse_pipe_def``, ``run``, the typed discovery surface (``Modules``/``Sources``/
-  ``Transforms``/``Sinks``/``Targets`` bucket enums), and the pipeline exceptions.
+  ``Transforms``/``Sinks``/``Formats`` bucket enums), and the pipeline exceptions.
 - **Extension**: ``riko.ext`` holds the symbols for authoring custom ``pipes``:
   the ``processor``/``operator``/``splitter`` decorators and the module-metadata types.
 - **Private**: all import paths outside ``riko``, ``riko.bado``, and ``riko.ext``,
@@ -94,18 +94,18 @@ Application code should import from ``riko``.
     ...     AsyncPipe,
     ...     Context,
     ...     ExecutionMode,
+    ...     Formats,
     ...     Modules,
     ...     Sinks,
     ...     Sources,
     ...     SyncCollection,
     ...     SyncPipe,
-    ...     Targets,
     ...     Transforms,
     ...     describe_module,
     ...     export,
     ...     get_path,
+    ...     list_formats,
     ...     list_modules,
-    ...     list_targets,
     ... )
 
 Extension authors should import decorators and protocols from ``riko.ext``:
@@ -305,7 +305,7 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
 
 .. code-block:: python
 
-    >>> from riko import list_modules, list_targets, Modules
+    >>> from riko import list_modules, list_formats, Modules
     >>>
     >>> list_modules()[0]
     'aggregate'
@@ -342,9 +342,9 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
     ('aggregate', 'operator', 'composer')
     >>> # Available export targets ('ofx'/'qif' only available once installing the
     >>> # ``finance`` extra.)
-    >>> list_targets()[0]
+    >>> list_formats()[0]
     'csv'
-    >>> len(list_targets()) >= 5
+    >>> len(list_formats()) >= 4
     True
 
 ``describe_module`` returns a ``ModuleDefinition`` (or ``None`` for an unknown name).
@@ -382,12 +382,12 @@ Typed module discovery
 For editor autocompletion and static checks, ``riko`` ships a generated, typed discovery
 surface. ``Modules`` is a flat namespace aliasing **every** built-in ``pipe`` (each
 member *is* the corresponding bucket member, so ``Modules.FILTER is Transforms.FILTER``),
-while ``Sources``/``Transforms``/``Sinks``/``Targets`` are ``StrEnum`` subclasses that
+while ``Sources``/``Transforms``/``Sinks``/``Formats`` are ``StrEnum`` subclasses that
 group by data-flow role. Every bucket member is interchangeable with a module name.
 
 .. code-block:: python
 
-    >>> from riko import Modules, Sources, Transforms, Sinks, Targets
+    >>> from riko import Modules, Sources, Transforms, Sinks, Formats
     >>>
     >>> Sources.FETCH.value
     'fetch'
@@ -405,7 +405,7 @@ Notes:
 - ``Sinks`` classifies *sink pipes* (data-flow role ``output``/``write``). The one
   built-in is ``write``, which serializes the stream to a file and passes items through
   the remaining pipeline.
-- ``write`` takes a ``target`` option which can be a string or ``Targets`` enum. See
+- ``write`` takes a ``target`` option which can be a string or ``Formats`` enum. See
   `exporting results`_ for examples.
 
 What do processor, operator, and splitter mean?
@@ -517,7 +517,7 @@ Extra        Packages                      Capability
 ===========  ============================  ======================================
 
 From a checkout, install an ``extra`` with a quoted, editable command such as
-``python -m pip install -e ".[async]"``. Use ``list_targets()`` to discover the export
+``python -m pip install -e ".[async]"``. Use ``list_formats()`` to discover the export
 targets available in the active environment.
 
 How do synchronous and asynchronous pipelines differ?

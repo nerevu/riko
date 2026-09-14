@@ -25,6 +25,7 @@ Examples:
         {'x': 3}
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
     ALLOW_INF: Whether to allow ``inf``/``-inf`` to compare numerically (default: False)
@@ -42,16 +43,16 @@ from typing import Any
 import pygogo as gogo
 from dateutil.parser import ParserError
 
-from riko._objectify import Objectify
-from riko._serialize import repr_cache
 from riko.cast import cast_date, cast_decimal
 from riko.dotdict import DotDict
+from riko.patched._objectify import Objectify
 from riko.types._guards import is_mapping
 from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING
 from riko.types._streams import Item, Stream
 from riko.types._wrappers import PipeTuples
 from riko.types.modules import FilterConfRule
+from riko.utils._serialize import repr_cache
 
 from . import operator
 
@@ -201,7 +202,7 @@ def parser(
     _: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Yields the items that match (or fail to match) every rule.
+    Filters the stream to items that match (or fail to match) every rule.
 
     Each rule's ``op`` is validated once up front, so an unsupported operation
     raises before any item is read.
@@ -332,7 +333,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> async def main():
         ...     items = [{"title": "Good job!"}, {"title": "Website Developer"}]
         ...     rule = {"field": "title", "op": "contains", "value": "web"}
-        ...     result = await async_pipe(items, conf={"rule": rule})
+        ...     result = async_pipe(items, conf={"rule": rule})
         ...     print((await anext(result))["title"])
         >>>
         >>> run(main)

@@ -19,15 +19,17 @@ Examples:
         [{'count': 2}]
 
 Attributes:
+
     pipe_resolver: Process-global façade over the two default resolvers.
 
 """
 
 from typing import Literal, overload
 
-from riko.ext._pipelines import pipeline_resolver
-from riko.ext.registry import registry
 from riko.types._wrappers import AsyncPipeWrapper, Pipe, Resolver, SyncPipeWrapper
+
+from ._pipelines import pipeline_resolver
+from .registry import registry
 
 
 class PipeResolver:
@@ -40,10 +42,10 @@ class PipeResolver:
 
     Notes:
 
-        Neither resolver imports the compiler at module scope. The two ``riko.compile``
+        Neither resolver imports the compiler at module scope. The two ``riko.runtime.compile``
         imports on this path are deliberately function-local (marked
         ``noqa: PLC0415``). That is what keeps importing this module, and therefore
-        ``riko.collections``, from pulling in ``riko.compile``. Hoisting them to
+        ``riko.runtime.collections``, from pulling in ``riko.runtime.compile``. Hoisting them to
         the top would reintroduce that cycle, and no test guards it.
 
     """
@@ -62,7 +64,7 @@ class PipeResolver:
     ) -> AsyncPipeWrapper: ...
     def resolve(self, name: str, is_async: bool = False) -> Pipe:  # noqa: E301
         """
-        Returns ``name``'s callable for ``interface``.
+        Resolves ``name``'s callable for ``interface``.
 
         Raises:
 

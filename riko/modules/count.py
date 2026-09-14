@@ -13,6 +13,7 @@ Examples:
         5
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -24,10 +25,10 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._iterutils import group_by
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Stream
 from riko.types._wrappers import PipeTuples
+from riko.utils._iterutils import group_by
 
 from . import operator
 
@@ -123,7 +124,7 @@ def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
         >>>
         >>> async def main():
         ...     items = ({"x": x} for x in range(5))
-        ...     result = await async_pipe(items)
+        ...     result = async_pipe(items)
         ...     print(await anext(result))
         >>>
         >>> run(main)

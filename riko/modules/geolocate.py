@@ -18,6 +18,7 @@ Examples:
         'United Kingdom'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 
@@ -126,8 +127,8 @@ def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
         >>>
         >>> async def main():
         ...     conf = {"type": "currency"}
-        ...     result = await async_pipe({"content": "GBP"}, conf=conf)
-        ...     print(next(result)["country"])
+        ...     result = async_pipe({"content": "GBP"}, conf=conf)
+        ...     print((await anext(result))["country"])
         >>>
         >>> run(main)
         United Kingdom

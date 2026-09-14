@@ -15,9 +15,9 @@ Examples:
 
 from typing import cast
 
-from riko.collections import AsyncPipe, SyncPipe
-from riko.paths import get_path
+from riko.runtime.collections import AsyncPipe, SyncPipe
 from riko.types.modules import FetchPageConf, StrReplaceConf, StrReplaceConfRule
+from riko.utils.paths import get_path
 
 replace_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="\n", replace=" ")})
 health = get_path("health.xml")
@@ -37,25 +37,26 @@ def pipe(test=False):
         .count()
     )
 
-    return (s1, s2)
+    return [next(s1), next(s2)]
 
 
 async def async_pipe(test=False):
-    s1 = await AsyncPipe("fetch", test=test, conf={"url": health})
-    s2 = await (
+    s1 = AsyncPipe("fetch", test=test, conf={"url": health})
+    s2 = (
         AsyncPipe("fetchpage", test=test, conf=fetch_conf)
         .strreplace(conf=replace_conf, assign="content")
         .tokenizer(conf={"delimiter": " "}, emit=True)
         .count()
     )
 
-    return (s1, s2)
+    yield await anext(s1)
+    yield await anext(s2)
 
 
 def print_results(result) -> None:
     feed, count = result
-    print(cast(dict, next(feed))["title"])
-    print(cast(dict, next(count))["count"])
+    print(cast(dict, feed)["title"])
+    print(cast(dict, count)["count"])
 
 
 def main(*, test: bool = False) -> None:

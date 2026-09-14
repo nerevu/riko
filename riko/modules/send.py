@@ -28,6 +28,7 @@ Examples:
         {'x': 0}
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -40,13 +41,13 @@ import pygogo as gogo
 
 from riko._pubsub import async_hub, sync_hub
 from riko.bado.itertools import as_async
-from riko.modules._prepare import require_arg
 from riko.types._configs import SendObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Feed, Stream
 from riko.types._wrappers import PipeTuples
 
 from . import operator
+from ._prepare import require_arg
 
 OPTS: Opts = {"pollable": True, "emit": True}
 DEFAULTS: Defaults = {"max_wait": 5}

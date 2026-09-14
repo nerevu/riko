@@ -3,13 +3,17 @@
 Provides function pretty printing
 """
 
+from __future__ import annotations
+
 from collections.abc import Mapping
 from functools import total_ordering
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
-from riko.context import Context
 from riko.types._pipeline import StepValue
 from riko.types.modules import AnyModuleRawConf, CountValues, RawConfValues, Value
+
+if TYPE_CHECKING:
+    from riko.definitions.context import Context
 
 
 def cmp(a: object, b: object) -> int:

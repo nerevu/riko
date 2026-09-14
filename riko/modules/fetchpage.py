@@ -20,6 +20,7 @@ Examples:
         'CNN.com International'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 
@@ -31,18 +32,18 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._constants import ENCODING
 from riko._io import Fetch
-from riko._iterutils import betwix
 from riko.bado.io import async_url_read
+from riko.base._constants import ENCODING
 from riko.cast import SourceOpts
-from riko.modules._prepare import require_conf
 from riko.parsers import get_text
 from riko.types._configs import FetchPageObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item
+from riko.utils._iterutils import betwix
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING, "detag": False})
@@ -208,8 +209,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
         >>> async def main():
         ...     url, path = get_path("bbc.html"), "value.items"
         ...     conf = {"url": url, "start": "DOCTYPE ", "end": "http"}
-        ...     result = await async_pipe(conf=conf)
-        ...     print(next(result))
+        ...     result = async_pipe(conf=conf)
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "

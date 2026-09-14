@@ -14,13 +14,13 @@ from importlib import import_module
 from pkgutil import iter_modules as iter_package_modules
 from typing import Literal, cast, overload
 
-from riko._importutils import import_or_else
-from riko._iterutils import broadcast
 from riko.ext.names import derive_category, normalize_module_name
 from riko.ext.registry import ModuleDefinition, registry
 from riko.types._names import ModuleNameLike
 from riko.types._wrappers import ModuleWrapper
 from riko.types.modules import ModuleCategory, ModuleMetadata, ModuleSubtype, ModuleType
+from riko.utils._importutils import import_or_else
+from riko.utils._iterutils import broadcast
 
 _PACKAGE = "riko.modules"
 
@@ -211,7 +211,7 @@ def _gen_doc(module: object) -> Iterator[str]:
 
 def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
     """
-    Returns a module's definition, or None when the name is unknown.
+    Describes a module, or reports None when the name is unknown.
 
     A built-in is described from its module rather than the registry, so its
     ``description`` comes from the docstring summary and its pipe callables are

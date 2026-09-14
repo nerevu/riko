@@ -28,6 +28,7 @@ Examples:
         2
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -176,7 +177,7 @@ def parser(
     stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Yields items until the configured duration elapses.
+    Streams items until the configured duration elapses.
 
     Args:
 
@@ -271,7 +272,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         ...         yield {"page": page}
         >>>
         >>> async def main():
-        ...     result = await async_pipe(paginated_api(), conf={"milliseconds": 250})
+        ...     result = async_pipe(paginated_api(), conf={"milliseconds": 250})
         ...     print(len([item async for item in result]))
         >>>
         >>> run(main)
@@ -284,7 +285,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Yields items from a stream until a certain amount of time has passed.
+    Streams items from a stream until a certain amount of time has passed.
 
     Lazy: items pass through as they arrive and the source is abandoned once the
     deadline is reached. Units are additive, so ``seconds`` and ``milliseconds``

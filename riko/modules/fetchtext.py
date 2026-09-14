@@ -18,6 +18,7 @@ Examples:
         'What is Lorem Ipsum?'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 
@@ -29,16 +30,16 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._constants import ENCODING
 from riko._io import Fetch, auto_close
 from riko.bado.io import async_url_open
+from riko.base._constants import ENCODING
 from riko.cast import BasicCastType
-from riko.modules._prepare import require_conf
 from riko.types._configs import FetchTextObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "assign": "content"}
 DEFAULTS: Defaults = {"encoding": ENCODING}
@@ -163,8 +164,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
         >>>
         >>> async def main():
         ...     conf = {"url": get_path("lorem.txt")}
-        ...     result = await async_pipe(conf=conf)
-        ...     print(next(result))
+        ...     result = async_pipe(conf=conf)
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         What is Lorem Ipsum?

@@ -40,7 +40,7 @@ uv pip install -e .  # alongside riko
 ```
 
 ```python
-from riko.collections import SyncPipe
+from riko.runtime.collections import SyncPipe
 
 next(SyncPipe("example.shout", source=[{"content": "hi"}]))
 # {"content": "HI"}

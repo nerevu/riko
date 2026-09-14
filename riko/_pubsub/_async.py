@@ -27,7 +27,7 @@ from riko.bado._backend import (
     create_memory_object_stream,
     fail_after,
 )
-from riko.exceptions import DuplicateReceiverError, ReceiverUnavailableError
+from riko.base.exceptions import DuplicateReceiverError, ReceiverUnavailableError
 from riko.types._streams import Item
 
 

@@ -55,6 +55,7 @@ perf = [
 
 async = [
     "anyio>=4.0.0",
+    "asyncer>=0.0.18",
     "httpx>=0.27.0",
 ]
 
@@ -97,6 +98,7 @@ convert-dag = "riko.cli.convert_dag:run"
 gen-config = "riko.cli.gen_config:main"
 gen-names = "riko.cli.gen_names:main"
 gen-pipelines = "riko.cli.gen_pipelines:main"
+gen-api-surface = "riko.cli.gen_api_surface:main"
 
 [tool.uv]
 # Rebuild the local `riko` install when any source file changes, not just when
@@ -327,6 +329,7 @@ commands = [
     ["python", "-m", "riko.cli.manage", "lint", "--rst"],
     ["python", "-m", "riko.cli.manage", "lint", "--actions"],
     ["python", "-m", "riko.cli.manage", "lint", "--yaml"],
+    ["python", "-m", "riko.cli.manage", "lint", "--docstrings"],
 ]
 
 [tool.uv.build-backend]

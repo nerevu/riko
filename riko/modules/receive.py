@@ -31,6 +31,7 @@ Examples:
         {'x': 0}
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -47,7 +48,6 @@ from meza.fntools import dfilter
 
 from riko._pubsub import async_hub, coroutine, sync_hub
 from riko._pubsub._types import ReceiveFunc, Receiver
-from riko._strutils import gen_name
 from riko.cast import BasicCastType
 from riko.types._configs import ReceiveObjconf
 from riko.types._guards import is_missing_type, is_stateful_item
@@ -55,6 +55,7 @@ from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING, StreamState
 from riko.types._streams import Item, StatefulItem, Stream, StreamOrValueStream
 from riko.types._wrappers import PipeTuples
+from riko.utils._strutils import gen_name
 
 from . import operator
 
@@ -174,7 +175,7 @@ def parser(
     **kwargs: object,
 ) -> StreamOrValueStream | Iterator[StatefulItem]:
     """
-    Yields items as the sender pushes them.
+    Emits items as the sender pushes them.
 
     Args:
 

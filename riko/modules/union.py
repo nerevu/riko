@@ -17,6 +17,7 @@ Examples:
         15
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -119,7 +120,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         ...     items = ({"x": x} for x in range(5))
         ...     other1 = ({"x": x + 5} for x in range(5))
         ...     other2 = ({"x": x + 10} for x in range(5))
-        ...     result = await async_pipe(items, others=[other1, other2])
+        ...     result = async_pipe(items, others=[other1, other2])
         ...     print(len([item async for item in result]))
         >>>
         >>> run(main)

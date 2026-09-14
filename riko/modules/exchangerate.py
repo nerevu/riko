@@ -19,6 +19,7 @@ Examples:
         Decimal('1.275201')
 
 Attributes:
+
     EXCHANGE_API: Default rates endpoint.
     PARAMS: Query parameters carrying the ``OPEN_EXCHANGE_RATES_ID`` app id.
     OPTS: Processor wrapper options.
@@ -35,10 +36,10 @@ from typing import Any, TypedDict, cast
 
 import pygogo as gogo
 
-from riko._constants import ENCODING
 from riko._io import Fetch
 from riko.bado._util import async_json
 from riko.bado.io import async_get, async_url_read
+from riko.base._constants import ENCODING
 from riko.cast import BasicCastType
 from riko.types._configs import ExchangeRateObjconf
 from riko.types._options import Defaults, Opts
@@ -261,8 +262,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
         >>>
         >>> async def main():
         ...     url = get_path("quote.json")
-        ...     result = await async_pipe({"content": "GBP"}, conf={"url": url})
-        ...     print(next(result)["exchangerate"])
+        ...     result = async_pipe({"content": "GBP"}, conf={"url": url})
+        ...     print((await anext(result))["exchangerate"])
         >>>
         >>> run(main)
         1.275201

@@ -13,6 +13,7 @@ Examples:
         Decimal('10')
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -25,11 +26,11 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._iterutils import group_by
 from riko.types._configs import SumObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Stream
 from riko.types._wrappers import PipeTuples
+from riko.utils._iterutils import group_by
 
 from . import operator
 
@@ -142,7 +143,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Dec
         >>>
         >>> async def main():
         ...     items = ({"content": x} for x in range(5))
-        ...     result = await async_pipe(items)
+        ...     result = async_pipe(items)
         ...     print((await anext(result))["sum"])
         >>>
         >>> run(main)

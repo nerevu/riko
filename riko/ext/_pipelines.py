@@ -21,6 +21,7 @@ Examples:
         [{'x': 1}]
 
 Attributes:
+
     pipeline_resolver: Process-global resolver. Core ships it unconfigured, since
         a bare install has no named pipelines.
 
@@ -33,17 +34,17 @@ from pathlib import Path
 from types import ModuleType
 from typing import Literal, Protocol, cast, overload
 
-from riko._importutils import import_or_else, resolve_interface
-from riko.exceptions import UnsupportedPipelineError
+from riko.base.exceptions import UnsupportedPipelineError
 from riko.modules._subpipe import is_subpipe, mark_subpipe
 from riko.types._wrappers import AsyncPipeWrapper, Pipe, SyncPipeWrapper
 from riko.types.compile import ParsedPipeDef
 from riko.types.modules import ModuleSubtype
+from riko.utils._importutils import import_or_else, resolve_interface
 
 
 def _as_subpipe(pipe: Pipe) -> Pipe:
     """
-    Returns a sub-pipe-marked wrapper around ``pipe``.
+    Builds a sub-pipe-marked wrapper around ``pipe``.
 
     The marker goes on a fresh ``partial`` because the module callable is shared
     with anyone importing the generated pipe directly; marking it in place
@@ -120,7 +121,7 @@ class DirectoryStore:
         self._directory = directory
 
     def load(self, name: str) -> ParsedPipeDef | None:
-        from riko.compile import parse_pipe_def  # noqa: PLC0415
+        from riko.runtime.compile import parse_pipe_def  # noqa: PLC0415
 
         try:
             pipe_def = loads((self._directory / f"{name}.json").read_text())
@@ -171,7 +172,7 @@ class PipelineResolver:
         self._definitions = definitions
 
     def load(self, name: str) -> ModuleType | None:
-        """Returns the generated pipe module for ``name``, or ``None``."""
+        """Loads the generated pipe module for ``name``, or ``None``."""
         return self._store.load(name) if self._store is not None else None
 
     @overload
@@ -192,7 +193,7 @@ class PipelineResolver:
                 has no ``interface`` callable.
 
         """
-        from riko.compile import pythonise  # noqa: PLC0415
+        from riko.runtime.compile import pythonise  # noqa: PLC0415
 
         kwargs = {"is_async": is_async, "builtin": False}
         pipe = resolve_interface(pythonise(name), loader=self.load, **kwargs)

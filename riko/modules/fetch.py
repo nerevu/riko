@@ -16,6 +16,7 @@ Examples:
         'Donations'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
     keys: Entry fields every parsed feed provides.
@@ -28,18 +29,18 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._constants import ENCODING
-from riko._rssutils import augment_entries
 from riko.bado.io import async_url_read
+from riko.base._constants import ENCODING
 from riko.cast import SourceOpts
-from riko.modules._prepare import require_conf
 from riko.parsers import parse_rss
 from riko.types._configs import FetchObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._rss import RSSEntry
 from riko.types._streams import Item
+from riko.utils._rssutils import augment_entries
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {"encoding": ENCODING}
@@ -170,8 +171,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     result = await async_pipe(conf={"url": get_path("feed.xml")})
-        ...     print(sorted(keys.intersection(next(result))))
+        ...     result = async_pipe(conf={"url": get_path("feed.xml")})
+        ...     item = await anext(result)
+        ...     print(sorted(keys.intersection(item)))
         >>>
         >>> run(main)
         ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']

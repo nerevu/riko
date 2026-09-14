@@ -20,6 +20,7 @@ Examples:
         {'y': 3}
 
 Attributes:
+
     DEFAULTS: Default operator configuration.
 
 """
@@ -30,15 +31,15 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._iterutils import listize
-from riko.bado._util import as_awaitable
-from riko.modules._prepare import require_arg
+from riko.bado._util import maybe_deferred
 from riko.types._configs import AggregateObjconf
 from riko.types._options import Defaults
 from riko.types._streams import Item, Items, Stream
 from riko.types._wrappers import PipeTuples
+from riko.utils._iterutils import listize
 
 from . import operator
+from ._prepare import require_arg
 
 DEFAULTS: Defaults = Defaults()
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
@@ -100,8 +101,7 @@ async def async_parser(
 
     """
     func = require_arg(func, "func", "aggregate", strict=True)
-    unawaited = func(stream)
-    result = await as_awaitable(unawaited)
+    result = await maybe_deferred(func, stream)
     return iter(listize(result))
 
 
@@ -198,7 +198,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> async def main():
         ...     func = lambda stream: ({"y": item["x"] + 3} for item in stream)
         ...     items = ({"x": x} for x in range(5))
-        ...     result = await async_pipe(items, func=func)
+        ...     result = async_pipe(items, func=func)
         ...     print(await anext(result))
         >>>
         >>> run(main)

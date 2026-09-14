@@ -16,6 +16,7 @@ Examples:
         {'component': 'scheme', 'content': 'http'}
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 
@@ -43,7 +44,7 @@ def parser(
     url: str, extraction: object, objconf: UrlParseObjconf, **kwargs: object
 ) -> Iterator[dict[str, str]]:
     """
-    Yields one item per url component.
+    Emits one item per url component.
 
     Args:
 
@@ -112,8 +113,8 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({"content": "http://yahoo.com"})
-        ...     print(next(result))
+        ...     result = async_pipe({"content": "http://yahoo.com"})
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         {'component': 'scheme', 'content': 'http'}

@@ -6,6 +6,7 @@ riko._io
 Provides HTTP and file I/O helpers.
 
 Attributes:
+
     STREAMING_THRESHOLD: Response size above which content is streamed.
 
 """
@@ -33,15 +34,15 @@ import pygogo as gogo
 import requests
 from mezmorize.utils import get_cache_type
 
-from riko._constants import ENCODING, STREAMING_THRESHOLD
 from riko._metadata import __version__
-from riko._reencode import reencode
-from riko._rssutils import truncate_content
-from riko._serialize import repr_cache
-from riko.paths import get_abspath
+from riko.base._constants import ENCODING, STREAMING_THRESHOLD
+from riko.patched._reencode import reencode
 from riko.types._collections import BasicArg
 from riko.types._io import BinaryFileLike, FileLike, Opener, StringFileLike
 from riko.types._scalars import AnyStr
+from riko.utils._rssutils import truncate_content
+from riko.utils._serialize import repr_cache
+from riko.utils.paths import get_abspath
 
 O_NONBLOCK: int = getattr(os, "O_NONBLOCK", 0)
 

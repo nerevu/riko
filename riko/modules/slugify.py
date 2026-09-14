@@ -15,6 +15,7 @@ Examples:
         'hello-world'
 
 Attributes:
+
     SEPARATOR: The separator used when ``conf`` supplies none.
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
@@ -115,8 +116,8 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({"content": "hello world"})
-        ...     print(next(result)["slugify"])
+        ...     result = async_pipe({"content": "hello world"})
+        ...     print((await anext(result))["slugify"])
         >>>
         >>> run(main)
         hello-world
