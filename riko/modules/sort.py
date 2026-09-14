@@ -29,13 +29,13 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._iterutils import def_itemgetter
 from riko.bado.itertools import async_reduce
 from riko.cast import SortableCastType
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Stream
 from riko.types._wrappers import PipeTuples
 from riko.types.modules import SortConfRule
+from riko.utils._iterutils import def_itemgetter
 
 from . import operator
 

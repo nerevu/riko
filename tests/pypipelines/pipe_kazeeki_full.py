@@ -2,10 +2,8 @@
 
 from pprint import pprint
 
-from riko._strutils import make_regex_rule
-from riko.collections import SyncPipe
-from riko.context import Context
-from riko.paths import get_path
+from riko.definitions.context import Context
+from riko.runtime.collections import SyncPipe
 from riko.types._options import SkipIf
 from riko.types.modules import (
     CurrencyFormatConf,
@@ -24,6 +22,8 @@ from riko.types.modules import (
     SubstrConf,
     TokenizerConf,
 )
+from riko.utils._strutils import make_regex_rule
+from riko.utils.paths import get_path
 
 DEF_CUR_CODE = "USD"
 

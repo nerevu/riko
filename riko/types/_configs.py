@@ -25,7 +25,7 @@ from ._dynamic_conf import DynamicConf
 if TYPE_CHECKING:
     from riko.cast import CastType, LocationType
 
-    from ._write import FmtLike
+    from ._names import FmtLike
     from .modules import (
         FilterConfRule,
         FindConfRule,

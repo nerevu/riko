@@ -33,8 +33,6 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko._iterutils import group_by
-from riko._strutils import get_regex_rule, multi_substitute, substitute
 from riko.bado.itertools import async_reduce, coop_reduce
 from riko.dotdict import DotDict
 from riko.types._collections import RikoValue
@@ -43,6 +41,8 @@ from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING
 from riko.types._streams import Item
 from riko.types.modules import RegexConfRule, RegexRule
+from riko.utils._iterutils import group_by
+from riko.utils._strutils import get_regex_rule, multi_substitute, substitute
 
 from . import processor
 

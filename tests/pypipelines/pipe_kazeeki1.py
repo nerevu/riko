@@ -1,7 +1,7 @@
 # vim: sw=4:ts=4:expandtab
 
-from riko.collections import SyncPipe
-from riko.context import Context
+from riko.definitions.context import Context
+from riko.runtime.collections import SyncPipe
 from tests.pypipelines._pipe_kazeeki import fetchdata_conf, regex_conf, rename_conf
 
 

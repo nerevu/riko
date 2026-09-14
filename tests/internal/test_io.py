@@ -14,11 +14,11 @@ import pytest
 from requests import Response
 
 from riko._io import Fetch
-from riko._reencode import Reencoder, reencode
 from riko.bado.io import async_url_open
 from riko.modules import csv
-from riko.paths import get_path
+from riko.patched._reencode import Reencoder, reencode
 from riko.types._configs import CsvObjconf
+from riko.utils.paths import get_path
 from tests import async_test
 from tests._loopback import loopback_url
 

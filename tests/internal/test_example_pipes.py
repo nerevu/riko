@@ -16,8 +16,8 @@ from json import loads
 
 import pytest
 
-from riko.compile import compile_pipe
-from riko.paths import ROOT_DIR
+from riko.runtime.compile import compile_pipe
+from riko.utils.paths import ROOT_DIR
 
 PIPELINE_DIR = ROOT_DIR / "examples" / "pipelines"
 PYPIPELINE_DIR = ROOT_DIR / "examples" / "pypipelines"

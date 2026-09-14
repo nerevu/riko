@@ -5,8 +5,8 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.compile import build_pipeline, compile_pipe
-        >>> from riko.compile import convert_dag, parse_pipe_def
+        >>> from riko.runtime.compile import build_pipeline, compile_pipe
+        >>> from riko.runtime.compile import convert_dag, parse_pipe_def
         >>>
         >>> dag = {
         ...     "modules": [
@@ -48,17 +48,13 @@ from typing import Any, Literal, cast, overload
 
 from jinja2 import Environment, PackageLoader
 
-from riko._iterutils import listize
-from riko._strutils import replacer
 from riko.bado._util import maybe_deferred
 from riko.bado.itertools import as_async
-from riko.context import Context, ExecutionMode
+from riko.base.exceptions import InvalidPipelineError
+from riko.definitions.context import Context, ExecutionMode
 from riko.dotdict import DotDict
-from riko.exceptions import InvalidPipelineError
 from riko.ext._resolver import pipe_resolver
 from riko.ext.codegen import ruff_format
-from riko.pprint2 import Id, PyKwargValue, repr_arg, repr_args
-from riko.topsort import topological_sort
 from riko.types._collections import Inputs
 from riko.types._guards import is_loop_module, is_mapping
 from riko.types._pipeline import (
@@ -118,6 +114,11 @@ from riko.types.modules import (
     Nodes,
     Value,
 )
+from riko.utils._iterutils import listize
+from riko.utils._strutils import replacer
+
+from .pprint2 import Id, PyKwargValue, repr_arg, repr_args
+from .topsort import topological_sort
 
 _RAW_CONFS = {
     "count": "CountRawConf",
@@ -761,7 +762,7 @@ def resolve_module(module_name: str, is_async: bool = False) -> Pipe:  # noqa: E
         >>> resolve_module("does_not_exist")
         Traceback (most recent call last):
             ...
-        riko.exceptions.UnsupportedModuleError: Unsupported riko module: does_not_exist
+        riko.base.exceptions.UnsupportedModuleError: Unsupported riko module: does_not_exist
 
     Leaf-module resolution (incl. preserving a transitive ``ModuleNotFoundError``
     raised *inside* a valid module) lives in ``ModuleRegistry`` now; see

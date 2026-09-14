@@ -18,12 +18,12 @@ from __future__ import annotations
 import ast
 
 from riko.ext.codegen import ruff_format
-from riko.paths import PACKAGE_DIR
+from riko.utils.paths import PACKAGE_DIR
 
 _TYPES_DIR = PACKAGE_DIR / "types"
 _MODULES = _TYPES_DIR / "modules.py"
 _CONFIGS = _TYPES_DIR / "_configs.py"
-_WRITE_TYPES = {"FmtLike"}
+_NAMES = {"FmtLike"}
 _CAST_TYPES = {"CastType", "LocationType"}
 _TYPING_TYPES = {"Any", "Literal"}
 _ABC_TYPES = {"Callable", "Sequence"}
@@ -130,11 +130,11 @@ def _import_block(structure) -> str:
     abc = sorted(_ABC_TYPES & referenced)
     typing = ["TYPE_CHECKING", *sorted(_TYPING_TYPES & referenced)]
     cast = sorted(_CAST_TYPES & referenced)
-    write = sorted(_WRITE_TYPES & referenced)
+    names = sorted(_NAMES & referenced)
     modules = sorted(
         referenced
         - _CAST_TYPES
-        - _WRITE_TYPES
+        - _NAMES
         - _TYPING_TYPES
         - _ABC_TYPES
         - _BUILTINS
@@ -151,7 +151,7 @@ def _import_block(structure) -> str:
     guarded += [f"    from riko.cast import {', '.join(cast)}"] if cast else []
 
     if modules:
-        guarded += ["", f"    from ._write import {', '.join(write)}"]
+        guarded += ["", f"    from ._names import {', '.join(names)}"]
 
     if modules:
         guarded += ["    from .modules import ("]

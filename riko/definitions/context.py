@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.context
+riko.definitions.context
 ~~~~~~~~~~~~
 
 Provides the execution context for a pipeline.
@@ -15,7 +15,7 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.context import Context, ExecutionMode
+        >>> from riko.definitions.context import Context, ExecutionMode
         >>>
         >>> context = Context(ExecutionMode.DESCRIBE, inputs={"count": 2})
         >>> context.describe_input
@@ -37,10 +37,12 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Literal, NamedTuple, Self, overload
 
-from riko.resources import Resource, ReusableResource
 from riko.types._collections import Inputs
 from riko.types._guards import is_lifecycle_factory
-from riko.types._resource import LifecycleFactory, ResourceDefinition, ReusableResources
+from riko.types._resource import LifecycleFactory
+
+from ._types import ResourceDefinition, ReusableResources
+from .resources import Resource, ReusableResource
 
 
 class ExecutionMode(StrEnum):

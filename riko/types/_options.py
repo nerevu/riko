@@ -8,10 +8,10 @@ if TYPE_CHECKING:
 
     from ._collections import BasicArg, RikoDict, RikoList
     from ._dynamic_conf import DynamicConf
+    from ._names import FmtLike
     from ._scalars import PrimitiveValue
     from ._streams import Item
     from ._wrappers import ParserOutput
-    from ._write import FmtLike
     from .modules import AnyConfRule, CountValues, Skip
 
 

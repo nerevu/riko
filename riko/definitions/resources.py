@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.resources
+riko.definitions.resources
 ~~~~~~~~~~~~~~
 
 Execution resources for a pipeline (PRIVATE).
@@ -20,7 +20,7 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.resources import Resource, ResourceView
+        >>> from riko.definitions.resources import Resource, ResourceView
         >>>
         >>> resource = Resource.from_external(object())
         >>> resource.external
@@ -41,6 +41,7 @@ from typing import Literal, Never, Self, cast, overload
 from warnings import warn
 
 from riko.bado._util import maybe_deferred
+from riko.base.warnings import ResourceInterpretationWarning
 from riko.types._guards import (
     is_async_callable,
     is_async_closeable,
@@ -60,15 +61,12 @@ from riko.types._resource import (
     AnyContextManager,
     Cleanup,
     LifecycleFactory,
-    ResolvedValue,
     ResourceFactory,
-    ResourcesLike,
-    ReusableResources,
     ValueFactory,
-    Values,
     _FactoryKind,
 )
-from riko.warnings import ResourceInterpretationWarning
+
+from ._types import ResolvedValue, ResourcesLike, ReusableResources, Values
 
 
 def _rebuild_mappingproxy(
@@ -121,7 +119,7 @@ def classify_factory[T](
     Examples:
 
         >>> from contextlib import contextmanager
-        >>> from riko.resources import _FactoryKind, classify_factory
+        >>> from riko.definitions.resources import _FactoryKind, classify_factory
         >>>
         >>> def db(ctx):
         ...     yield object()
@@ -175,7 +173,7 @@ def normalize_resources(resources: ResourcesLike) -> Mapping[str, str]:
 
     Examples:
 
-        >>> from riko.resources import normalize_resources
+        >>> from riko.definitions.resources import normalize_resources
         >>>
         >>> normalize_resources(["db", "cache"])
         mappingproxy({'db': 'db', 'cache': 'cache'})
@@ -211,7 +209,7 @@ def coerce_binding(raw: object) -> ResourcesLike | None:
 
     Examples:
 
-        >>> from riko.resources import coerce_binding
+        >>> from riko.definitions.resources import coerce_binding
         >>>
         >>> coerce_binding("client")
         'client'
@@ -248,7 +246,7 @@ class Resource[T]:
 
     Examples:
 
-        >>> from riko.resources import Resource
+        >>> from riko.definitions.resources import Resource
         >>>
         >>> class _Connection:
         ...    def __init__(self):
@@ -526,7 +524,7 @@ class Resource[T]:
 
         Examples:
 
-            >>> from riko.resources import OneShotResource, Resource, _FactoryKind
+            >>> from riko.definitions.resources import OneShotResource, Resource, _FactoryKind
             >>>
             >>> def db():
             ...     yield object()
@@ -648,7 +646,7 @@ class _LifecycleResource[T](OneShotResource[T]):
 
     Examples:
 
-        >>> from riko.resources import _LifecycleResource, _FactoryKind
+        >>> from riko.definitions.resources import _LifecycleResource, _FactoryKind
         >>>
         >>> def db():
         ...     yield object()
@@ -725,7 +723,7 @@ class _ExternalResource[T](ReusableResource[T]):
 
     Examples:
 
-        >>> from riko.resources import Resource
+        >>> from riko.definitions.resources import Resource
         >>>
         >>> class Client:
         ...     closed = False
@@ -758,7 +756,7 @@ class _ExternalResource[T](ReusableResource[T]):
 
 class _FactoryResource[T](ReusableResource[T]):
     """
-    Constructed by :meth:`riko.context.Context.with_resource` when given a generator
+    Constructed by :meth:`riko.definitions.context.Context.with_resource` when given a generator
     function or context manager rather than a resource value. ``with_resource`` stores
     the factory, but does **not** enter into it. Entering (setup / ``yield`` / teardown)
     belongs to the execution layer. So ``open``/``aopen``/``close``/``aclose`` raise
@@ -846,7 +844,7 @@ class ResourceView(Mapping[str, object]):
 
     Examples:
 
-        >>> from riko.resources import ResourceView
+        >>> from riko.definitions.resources import ResourceView
         >>>
         >>> value = object()
         >>> view = ResourceView({"db": value})
@@ -919,7 +917,7 @@ def bind_resources(
 
     Examples:
 
-        >>> from riko.resources import Resource, bind_resources
+        >>> from riko.definitions.resources import Resource, bind_resources
         >>>
         >>> value = object()
         >>> resources = {"primary": Resource.from_external(value)}

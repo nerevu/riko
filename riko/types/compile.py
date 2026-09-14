@@ -251,7 +251,7 @@ class DagModule(TypedDict):
 
 class PipeDag(TypedDict):
     """
-    Bare-bones DAG expanded by ``riko.compile.convert_dag``.
+    Bare-bones DAG expanded by ``riko.runtime.compile.convert_dag``.
 
     ``wires`` is optional (omit for a linear chain in module listing order) and
     holds ``(source_id, target_id)`` pairs. A module ``id`` is also optional and

@@ -32,11 +32,11 @@ import pygogo as gogo
 from meza.fntools import chunk as _chunk
 from typing_extensions import TypeIs
 
-from riko._constants import ENCODING
 from riko._io import ext_from_content_type
-from riko.paths import get_abspath
+from riko.base._constants import ENCODING
 from riko.types._io import IOFileLike, PathLike
 from riko.types._scalars import AnyStr
+from riko.utils.paths import get_abspath
 
 from . import _backend
 from ._backend import async_open

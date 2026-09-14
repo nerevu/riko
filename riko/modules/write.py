@@ -44,7 +44,6 @@ from typing import Any, cast
 import pygogo as gogo
 from meza import io
 
-from riko._formats import convert_records, resolve_format
 from riko.bado.io import async_write
 from riko.types._configs import WriteObjconf
 from riko.types._io import IOFileLike, IOFileLikeType
@@ -52,6 +51,7 @@ from riko.types._options import Defaults, Opts
 from riko.types._scalars import AnyStr, AnyStrType
 from riko.types._streams import Items, Stream
 from riko.types._wrappers import PipeTuples
+from riko.utils._formats import convert_records, resolve_format
 
 from . import operator
 

@@ -2,8 +2,8 @@
 
 from riko.bado import as_async
 from riko.bado._backend import run
-from riko.collections import AsyncPipe
-from riko.context import Context
+from riko.definitions.context import Context
+from riko.runtime.collections import AsyncPipe
 from tests.pypipelines._pipe_kazeeki import itembuilder_conf, regex_conf, rename_conf
 
 

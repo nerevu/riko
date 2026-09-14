@@ -15,7 +15,7 @@ from typing import cast
 
 import pytest
 
-from riko.context import Context
+from riko.definitions.context import Context
 from riko.modules._subpipe import mark_subpipe
 from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop

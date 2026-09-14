@@ -43,16 +43,16 @@ from typing import Any
 import pygogo as gogo
 from dateutil.parser import ParserError
 
-from riko._objectify import Objectify
-from riko._serialize import repr_cache
 from riko.cast import cast_date, cast_decimal
 from riko.dotdict import DotDict
+from riko.patched._objectify import Objectify
 from riko.types._guards import is_mapping
 from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING
 from riko.types._streams import Item, Stream
 from riko.types._wrappers import PipeTuples
 from riko.types.modules import FilterConfRule
+from riko.utils._serialize import repr_cache
 
 from . import operator
 

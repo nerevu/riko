@@ -14,8 +14,8 @@ if TYPE_CHECKING:
     from riko.cast import CastType, LocationType, SortableCastType
 
     from ._module_ids import LoopableModuleId, ModuleId
+    from ._names import FmtLike
     from ._scalars import BasicValue
-    from ._write import FmtLike
     from .compile import PipeModule
 
 

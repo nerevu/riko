@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Tests the execution-resource foundation (``riko.resources`` + Context wiring)."""
+"""Tests the execution-resource foundation (``riko.definitions.resources`` + Context wiring)."""
 
 from contextlib import (
     AbstractAsyncContextManager,
@@ -12,9 +12,9 @@ from typing import cast
 
 import pytest
 
-from riko.context import Context
-from riko.modules import operator
-from riko.resources import (
+from riko.definitions._types import ResourceValue
+from riko.definitions.context import Context
+from riko.definitions.resources import (
     OneShotResource,
     Resource,
     ReusableResource,
@@ -22,9 +22,10 @@ from riko.resources import (
     bind_resources,
     classify_factory,
 )
+from riko.modules import operator
 from riko.types._guards import is_context_manager
 from riko.types._io import CloseableType
-from riko.types._resource import LifecycleFactory, ResourceValue, ValueFactory
+from riko.types._resource import LifecycleFactory, ValueFactory
 from riko.types._streams import Stream
 from tests import async_test
 

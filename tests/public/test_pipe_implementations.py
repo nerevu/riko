@@ -10,8 +10,8 @@ import pytest
 
 from riko._pubsub import async_hub
 from riko.bado._backend import create_task_group
+from riko.base.exceptions import ReceiverUnavailableError
 from riko.cast import SortableCastType
-from riko.exceptions import ReceiverUnavailableError
 from riko.modules.aggregate import pipe as aggregate_pipe
 from riko.modules.filter import pipe as filter_pipe
 from riko.modules.join import pipe as join_pipe

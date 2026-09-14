@@ -15,7 +15,7 @@ from typing import Literal, cast, overload
 
 import pygogo as gogo
 
-from riko.context import Context
+from riko.definitions.context import Context
 from riko.dotdict import DotDict
 from riko.types._collections import RikoValue
 from riko.types._scalars import PrimitiveValue

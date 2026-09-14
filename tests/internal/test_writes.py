@@ -1,11 +1,12 @@
 # vim: sw=4:ts=4:expandtab
-"""Tests the declarative write model (``riko.types._write``)."""
+"""Tests the declarative write model (``riko.definitions.write``)."""
 
 from dataclasses import FrozenInstanceError
 
 import pytest
 
-from riko.types._write import Formats, WriteCapabilities, WriteMode, WriteOperation
+from riko.definitions.write import WriteCapabilities, WriteMode, WriteOperation
+from riko.types._names import Formats
 
 
 def test_mode_values():

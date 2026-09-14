@@ -22,9 +22,9 @@ from riko.ext.codegen import (
 from riko.ext.names import derive_category
 from riko.modules import list_modules
 from riko.modules._metadata import gen_module_catalog
-from riko.paths import PACKAGE_DIR
 from riko.types._module_ids import LoopableModuleId, ModuleId
 from riko.types.modules import ModuleCategory
+from riko.utils.paths import PACKAGE_DIR
 
 _NAMES = PACKAGE_DIR / "modules" / "_names.py"
 _MODULE_IDS = PACKAGE_DIR / "types" / "_module_ids.py"

@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko._rssutils
+riko.utils._rssutils
 ~~~~~~~~~~
 RSS/feed entry helpers: entry-text extraction, RSS enrichment, item generation,
 and content truncation.
@@ -13,10 +13,11 @@ from typing import cast, overload
 
 from requests.structures import CaseInsensitiveDict
 
-from riko._date_utils import date_to_tt, ensure_tzinfo
 from riko.types._collections import BasicDict, RikoValue
 from riko.types._rss import ExpandedRSSEntry, ParserRSSEntry, RSSEntry, YahooRSSEntry
 from riko.types._streams import Stream, StreamOrValueStream, ValueStream
+
+from ._dateutils import date_to_tt, ensure_tzinfo
 
 
 def _get_entry_text(entry: ParserRSSEntry) -> str:

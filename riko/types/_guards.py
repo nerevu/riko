@@ -23,8 +23,8 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs
 
-from riko._objectify import Objectify
-from riko._strutils import replacer
+from riko.patched._objectify import Objectify
+from riko.utils._strutils import replacer
 
 from ._io import AsyncCloseable, SyncCloseable
 from ._scalars import BasicValueType

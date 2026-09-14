@@ -8,7 +8,7 @@ Provides hand-maintained base types for generated module configurations.
 
 from typing import Any
 
-from riko._objectify import Objectify
+from riko.patched._objectify import Objectify
 
 
 class DynamicConf(Objectify[Any]):

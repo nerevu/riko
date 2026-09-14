@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
-from ._streams import AsyncItems
-
-if TYPE_CHECKING:
-    from ._io import PathLike
-    from ._streams import Item, Items
-
-type KeyLike = str | Iterable[str]
+from riko.types._io import PathLike
+from riko.types._names import FmtLike, Formats
+from riko.types._streams import AsyncItems, Item, Items
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,18 +38,6 @@ class WriteMode(StrEnum):
     DELETE = "delete"
 
 
-class Formats(StrEnum):
-    """How a write serializes records to a destination."""
-
-    CSV = "csv"
-    GEOJSON = "geojson"
-    JSON = "json"
-    JSONL = "jsonl"
-    OFX = "ofx"
-    QIF = "qif"
-
-
-type FmtLike = Formats | str
 type ExportType = FmtLike | Literal["list", "tuple"]
 
 

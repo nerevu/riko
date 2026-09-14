@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko._reencode
+riko.patched._reencode
 ~~~~~~~~~~~~~~
 A corrected ``Reencoder`` (over meza's ``Reencoder``) plus a ``reencode``
 factory. This whole module is meant to be ported wholesale into meza, after
@@ -30,7 +30,7 @@ from meza.io import IterStringIO as _IterStringIO
 from meza.io import Reencoder as _Reencoder
 from meza.io import groupby_line
 
-from riko._constants import ENCODING
+from riko.base._constants import ENCODING
 from riko.types._scalars import AnyStr
 
 if TYPE_CHECKING:

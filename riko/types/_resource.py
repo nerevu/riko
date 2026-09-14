@@ -1,19 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import (
-    AsyncGenerator,
-    Awaitable,
-    Callable,
-    Generator,
-    Iterable,
-    Mapping,
-)
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from riko.resources import Closeable, ReusableResource
 
 
 class _FactoryKind(StrEnum):
@@ -49,12 +38,5 @@ type AnyContextManager[T] = AbstractContextManager[T] | AbstractAsyncContextMana
 type ContextManagerFactory[T] = Callable[..., AnyContextManager[T]]
 type LifecycleFactory[T] = GeneratorFactory[T] | ContextManagerFactory[T]
 type ResourceFactory[T] = LifecycleFactory[T] | ValueFactory[T]
-type ResolvedValue[T] = T | Closeable
-type ResourceValue[T] = ResolvedValue | AnyContextManager[T]
 type LifecycleValue[T] = AnyContextManager[T]
 type Cleanup[T] = Callable[[T], Awaitable[None] | None]
-type ResourceDefinition[T] = ReusableResource[T] | LifecycleFactory[T]
-type Resources = Mapping[str, ResourceDefinition[Any]]
-type ReusableResources = Mapping[str, ReusableResource[Any]]
-type Values = Mapping[str, Any | Closeable]
-type ResourcesLike = str | Iterable[str] | Mapping[str, str]

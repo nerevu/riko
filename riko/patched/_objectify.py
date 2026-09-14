@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko._objectify
+riko.patched._objectify
 ~~~~~~~~~~~~~~~
 A corrected ``Objectify`` (over meza's ``Objectify``) plus an ``objectify`` factory.
 It fixes:

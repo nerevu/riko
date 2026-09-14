@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.targets
+riko.definitions.targets
 ~~~~~~~~~~~~
 
 Write target adapters (PRIVATE).
@@ -22,7 +22,7 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.targets import File, resolve_target
+        >>> from riko.definitions.targets import File, resolve_target
         >>>
         >>> resolve_target("out.csv")
         File(url='out.csv', fmt=None)
@@ -31,13 +31,13 @@ Examples:
 
 from dataclasses import dataclass
 
-from riko._formats import resolve_format
 from riko.types._io import PathLike, PathLikeType
-from riko.types._write import (
+from riko.types._names import Formats, KeyLike
+from riko.utils._formats import resolve_format
+
+from .write import (
     Destination,
     FmtLike,
-    Formats,
-    KeyLike,
     PreparedWrite,
     WriteCapabilities,
     WriteMode,
@@ -165,7 +165,7 @@ def prepare_write(
 
     Examples:
 
-        >>> from riko.targets import File, prepare_write
+        >>> from riko.definitions.targets import File, prepare_write
         >>>
         >>> prepared = prepare_write(File("out.csv"), "append")
         >>> prepared.operation.mode
@@ -207,7 +207,7 @@ def resolve_target(dest: Destination, **kwargs: str) -> WriteTarget:
 
     Examples:
 
-        >>> from riko.targets import resolve_target
+        >>> from riko.definitions.targets import resolve_target
         >>>
         >>> resolve_target("out.csv")
         File(url='out.csv', fmt=None)
@@ -242,7 +242,7 @@ class File:
 
     Examples:
 
-        >>> from riko.targets import File
+        >>> from riko.definitions.targets import File
         >>>
         >>> File("out.jsonl").capabilities().incremental
         True
@@ -271,8 +271,8 @@ class File:
 
         Examples:
 
-            >>> from riko.targets import File
-            >>> from riko.types._write import WriteMode
+            >>> from riko.definitions.targets import File
+            >>> from riko.definitions.write import WriteMode
             >>>
             >>> capabilities = File("out.jsonl").capabilities()
             >>> capabilities.serializes, capabilities.appendable

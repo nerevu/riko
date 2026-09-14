@@ -29,7 +29,7 @@ import pygogo as gogo
 
 from riko.bado._util import maybe_deferred
 from riko.bado.itertools import async_iter
-from riko.context import Context
+from riko.definitions.context import Context
 from riko.types._streams import (
     AsyncItemsOrValues,
     AsyncStreamOrValueStream,

@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko._strutils
+riko.utils._strutils
 ~~~~~~~~~~~~~~
 String helpers: identifier/key sanitization (``replacer``, ``slugify``), regex
 rule construction and multi-pass substitution, and the shared find/extract used

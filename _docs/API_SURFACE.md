@@ -146,7 +146,7 @@ These are re-exports of the same objects, not separate implementations.
 For example:
 
 ```python
->>> riko.Context is riko.context.Context
+>>> riko.Context is riko.definitions.context.Context
 True
 ```
 

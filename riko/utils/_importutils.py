@@ -7,7 +7,7 @@ from collections.abc import Callable
 from importlib import import_module
 from types import ModuleType
 
-from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.base.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.types._wrappers import Interface, Pipe
 
 type Loader = Callable[[str], ModuleType | None]

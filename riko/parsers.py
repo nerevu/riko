@@ -35,10 +35,8 @@ import feedparser
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
-from riko._io import STREAMING_THRESHOLD, Fetch
-from riko._iterutils import listize
-from riko._rssutils import truncate_content
-from riko._serialize import repr_cache
+from riko._io import Fetch
+from riko.base._constants import STREAMING_THRESHOLD
 from riko.dotdict import DotDict, is_sentinel, is_type_value
 from riko.types._collections import BasicArg, RikoDict, RikoValue, Stringy, StringyDict
 from riko.types._guards import is_mapping
@@ -47,6 +45,9 @@ from riko.types._options import SkipIf
 from riko.types._rss import ParserRSSEntry
 from riko.types._scalars import AnyStr
 from riko.types._streams import Item, ItemOrValue, Stream
+from riko.utils._iterutils import listize
+from riko.utils._rssutils import truncate_content
+from riko.utils._serialize import repr_cache
 
 try:
     from lxml import etree, html

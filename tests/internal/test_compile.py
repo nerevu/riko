@@ -14,7 +14,9 @@ from keyword import iskeyword
 
 import pytest
 
-from riko.compile import (
+from riko.base.exceptions import UnsupportedModuleError
+from riko.definitions.context import Context
+from riko.runtime.compile import (
     build_pipeline,
     compile_pipe,
     convert_dag,
@@ -24,8 +26,6 @@ from riko.compile import (
     resolve_module,
     stringify_pipe,
 )
-from riko.context import Context
-from riko.exceptions import UnsupportedModuleError
 from riko.types._streams import Item, ItemOrValue
 from riko.types.compile import (
     DagModule,

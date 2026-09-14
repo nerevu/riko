@@ -42,10 +42,10 @@ class PipeResolver:
 
     Notes:
 
-        Neither resolver imports the compiler at module scope. The two ``riko.compile``
+        Neither resolver imports the compiler at module scope. The two ``riko.runtime.compile``
         imports on this path are deliberately function-local (marked
         ``noqa: PLC0415``). That is what keeps importing this module, and therefore
-        ``riko.collections``, from pulling in ``riko.compile``. Hoisting them to
+        ``riko.runtime.collections``, from pulling in ``riko.runtime.compile``. Hoisting them to
         the top would reintroduce that cycle, and no test guards it.
 
     """

@@ -34,8 +34,7 @@ from functools import partial
 from importlib.metadata import EntryPoint, entry_points
 from typing import Literal, overload
 
-from riko._importutils import resolve_interface
-from riko.exceptions import UnsupportedModuleError
+from riko.base.exceptions import UnsupportedModuleError
 from riko.types._wrappers import (
     AsyncPipeCallable,
     AsyncPipeWrapper,
@@ -44,6 +43,7 @@ from riko.types._wrappers import (
     SyncPipeCallable,
     SyncPipeWrapper,
 )
+from riko.utils._importutils import resolve_interface
 
 ENTRY_POINT_GROUP = "riko.modules"
 

@@ -7,28 +7,27 @@ from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO
 
-from riko._constants import ENCODING
-from riko._formats import convert_records
-from riko._reencode import IterStringIO, Reencoder, reencode
 from riko.bado import _backend
 from riko.bado._backend import async_open, asyncify
 from riko.bado.itertools import as_async
-from riko.resources import OneShotResource, Resource
-from riko.targets import File, prepare_write
-from riko.types._guards import is_mapping
-from riko.types._streams import AsyncItems, Item, Items, Stream
-from riko.types._wrappers import ConversionOutput
-from riko.types._write import (
+from riko.base._constants import ENCODING
+from riko.definitions.resources import OneShotResource, Resource
+from riko.definitions.targets import File, prepare_write
+from riko.definitions.write import (
     AsyncWriteSession,
     Destination,
     FmtLike,
-    Formats,
-    KeyLike,
     PreparedWrite,
     SyncWriteSession,
     WriteMode,
     WriteResult,
 )
+from riko.patched._reencode import IterStringIO, Reencoder, reencode
+from riko.types._guards import is_mapping
+from riko.types._names import Formats, KeyLike
+from riko.types._streams import AsyncItems, Item, Items, Stream
+from riko.types._wrappers import ConversionOutput
+from riko.utils._formats import convert_records
 
 if TYPE_CHECKING:
     from _typeshed import OpenBinaryMode
@@ -168,7 +167,7 @@ class _SyncFileWriteSession(_FileWriteSession):
     Examples:
 
         >>> from riko import get_temp_file
-        >>> from riko.targets import prepare_write
+        >>> from riko.definitions.targets import prepare_write
         >>>
         >>> with get_temp_file() as fp:
         ...     prepared = prepare_write(fp.name, fmt="jsonl")
@@ -243,7 +242,7 @@ class _SyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_temp_file
-            >>> from riko.targets import prepare_write
+            >>> from riko.definitions.targets import prepare_write
             >>>
             >>> with get_temp_file() as fp:
             ...     prepare = prepare_write(fp.name, fmt="csv")
@@ -306,7 +305,7 @@ class _SyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_temp_file
-            >>> from riko.targets import prepare_write
+            >>> from riko.definitions.targets import prepare_write
             >>>
             >>> with get_temp_file() as fp:
             ...     prepare = prepare_write(fp.name, fmt="jsonl")
@@ -358,7 +357,7 @@ class _SyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_temp_file
-            >>> from riko.targets import prepare_write
+            >>> from riko.definitions.targets import prepare_write
             >>>
             >>> with get_temp_file() as fp:
             ...     session = _SyncFileWriteSession(prepare_write(fp.name))
@@ -388,7 +387,7 @@ class _SyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_temp_file
-            >>> from riko.targets import prepare_write
+            >>> from riko.definitions.targets import prepare_write
             >>>
             >>> with get_temp_file() as fp:
             ...     prepare = prepare_write(fp.name, fmt="csv")
@@ -516,7 +515,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_async_temp_file, issync, run
-            >>> from riko.targets import prepare_write
+            >>> from riko.definitions.targets import prepare_write
             >>>
             >>> async def main():
             ...     async with get_async_temp_file() as fp:
@@ -575,7 +574,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_async_temp_file, issync, run
-            >>> from riko.targets import prepare_write
+            >>> from riko.definitions.targets import prepare_write
             >>>
             >>> async def main():
             ...     async with get_async_temp_file() as fp:
@@ -629,7 +628,7 @@ def file_write_session(prepared: PreparedWrite) -> Generator[SyncWriteSession]:
     Examples:
 
         >>> from riko import get_temp_file
-        >>> from riko.targets import prepare_write
+        >>> from riko.definitions.targets import prepare_write
         >>>
         >>> with get_temp_file() as fp:
         ...     prepared = prepare_write(fp.name)
@@ -680,7 +679,7 @@ def mint_write_resource(
 
     Examples:
 
-        >>> from riko.resources import OneShotResource
+        >>> from riko.definitions.resources import OneShotResource
         >>>
         >>> resource = mint_write_resource("report.csv")
         >>> isinstance(resource, OneShotResource)

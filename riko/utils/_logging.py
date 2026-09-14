@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko._logging
+riko.utils._logging
 ~~~~~~~~~~~~~
 Colorized logging formatter, verbosity parsing, a ``log`` helper, and the
 ``exception_hook`` used by the dev CLI (pdb on error when ``debug``).

@@ -5,7 +5,7 @@ A DAG lists ``modules`` and, optionally, ``wires`` as ``[source, target]``
 pairs. With no ``wires`` the modules are chained linearly in listing order, and
 a missing ``id`` defaults to ``sw-{n}``:
 
->>> from riko.compile import convert_dag
+>>> from riko.runtime.compile import convert_dag
 >>>
 >>> dag = {
 ...     "modules": [
@@ -28,7 +28,7 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from json import dumps, loads
 from pathlib import Path
 
-from riko.compile import convert_dag
+from riko.runtime.compile import convert_dag
 
 
 def run() -> None:

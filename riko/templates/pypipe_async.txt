@@ -7,9 +7,6 @@ from riko.bado import as_async, run
 {%- if needs_await %}
 from riko.bado._util import as_awaitable
 {%- endif %}
-{%- if use_collection %}
-from riko.collections import AsyncCollection
-{%- endif %}
 from riko.modules._subpipe import mark_subpipe
 {%- for module in uniq_modules %}
 {%- if module.is_sub_pipe %}
@@ -18,6 +15,9 @@ from riko.pypipelines.{{ module.name }} import async_pipe as {{ module.alias }}
 from riko.modules.{{ module.name }} import async_pipe as {{ module.alias }}
 {%- endif %}
 {%- endfor %}
+{%- if use_collection %}
+from riko.runtime.collections import AsyncCollection
+{%- endif %}
 {%- if raw_confs %}
 from riko.types.modules import (
 {%- for raw_conf in raw_confs %}

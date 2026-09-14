@@ -28,8 +28,8 @@ from typing import Any, cast
 import pygogo as gogo
 from babel.numbers import format_currency
 
+from riko.base.currencies import CURRENCY_CODES
 from riko.cast import BasicCastType
-from riko.currencies import CURRENCY_CODES
 from riko.types._configs import CurrencyFormatObjconf
 from riko.types._options import Defaults, Opts
 

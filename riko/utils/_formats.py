@@ -7,9 +7,9 @@ from meza import convert as cv
 
 from riko.types._guards import is_mapping
 from riko.types._io import PathLike
+from riko.types._names import FmtLike, Formats
 from riko.types._streams import RikoItems
 from riko.types._wrappers import ConversionFunc, ConversionOutput
-from riko.types._write import FmtLike, Formats
 
 try:
     from csv2ofx.ofx import OFX

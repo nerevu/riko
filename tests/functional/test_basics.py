@@ -18,24 +18,24 @@ from typing import cast
 
 import pytest
 
-from riko._date_utils import get_tzname
-from riko._iterutils import listize
-from riko._rssutils import truncate_content
-from riko.collections import SyncPipe
-from riko.compile import (
+from riko.base.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.definitions.context import Context, ExecutionMode
+from riko.ext._pipelines import pipeline_resolver
+from riko.runtime.collections import SyncPipe
+from riko.runtime.compile import (
     abuild_pipeline,
     build_pipeline,
     extract_dependencies,
     resolve_module,
 )
-from riko.context import Context, ExecutionMode
-from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
-from riko.ext._pipelines import pipeline_resolver
 from riko.types._guards import is_mapping
 from riko.types._io import PathLike
 from riko.types._pipeline import AsyncPipelineDependencies, SyncPipelineDependencies
 from riko.types._streams import AsyncRikoStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput
+from riko.utils._dateutils import get_tzname
+from riko.utils._iterutils import listize
+from riko.utils._rssutils import truncate_content
 from tests import TESTS_DIR, async_test
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}

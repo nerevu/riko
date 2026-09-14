@@ -34,12 +34,12 @@ from urllib.parse import urlencode, urljoin
 
 import pygogo as gogo
 
-from riko._strutils import INVALID_FILECHAR_PATTERN
 from riko.cast import BasicCastType
 from riko.types._configs import UrlBuilderObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item
 from riko.types.modules import ObjconfParam
+from riko.utils._strutils import INVALID_FILECHAR_PATTERN
 
 from . import processor
 from ._prepare import require_conf

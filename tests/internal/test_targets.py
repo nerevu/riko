@@ -5,23 +5,15 @@ Tests the write targets, sessions, and the ``write``/``sink`` verbs.
 Covers ``File`` capability resolution, key normalization, ``prepare_write``
 validation, the native whole-stream vs. temporary singleton converter paths, the
 csv/jsonl/framed serialization contracts, the session lifecycle state machine, and
-the passthrough execution host (``riko.targets``/``riko._write_session``).
+the passthrough execution host (``riko.definitions.targets``/``riko.runtime._write_session``).
 """
 
 from dataclasses import dataclass
 
 import pytest
 
-from riko import _write_session, get_path
-from riko._write_session import (
-    _SessionState,
-    _SyncFileWriteSession,
-    file_write_session,
-    mint_write_resource,
-)
-from riko.collections import AsyncPipe, SyncCollection, SyncPipe
-from riko.resources import OneShotResource, _FactoryKind
-from riko.targets import (
+from riko.definitions.resources import OneShotResource, _FactoryKind
+from riko.definitions.targets import (
     File,
     WriteCapabilities,
     WriteResult,
@@ -31,7 +23,16 @@ from riko.targets import (
     resolve_target,
     validate_target_mode,
 )
-from riko.types._write import WriteMode
+from riko.definitions.write import WriteMode
+from riko.runtime import _write_session
+from riko.runtime._write_session import (
+    _SessionState,
+    _SyncFileWriteSession,
+    file_write_session,
+    mint_write_resource,
+)
+from riko.runtime.collections import AsyncPipe, SyncCollection, SyncPipe
+from riko.utils.paths import get_path
 from tests import skipif_issync
 
 ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]

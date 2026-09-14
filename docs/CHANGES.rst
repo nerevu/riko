@@ -22,7 +22,7 @@ New
 Changes
 ~~~~~~~
 
-- Renamed the ``riko.Targets`` export enum to ``riko.Formats``, since its members name
+- Renamed the ``riko.definitions.targets`` export enum to ``riko.Formats``, since its members name
   serialization formats; ``export``/``write`` accept the same members under the new name.
 
 - Added chainable ``write`` and terminal ``sink`` methods to ``SyncPipe`` and
@@ -247,7 +247,7 @@ New
 - Added ``BasicCastType.DATETIME``, so a pipe's ``ftype``/``ptype`` can preserve the
   time of day rather than truncating to a date.
 
-- Added a typed ``riko.Targets`` ``StrEnum`` for ``export``/``write`` formats (``csv``,
+- Added a typed ``riko.definitions.targets`` ``StrEnum`` for ``export``/``write`` formats (``csv``,
   ``geojson``, ``json``, ``list``, ``tuple``, plus ``ofx``/``qif`` with the
   ``finance`` extra).
 
@@ -533,7 +533,7 @@ New
 Changes
 ~~~~~~~
 
-- Renamed ``riko.compile.compile`` to ``riko.compile.compile_pipe`` so it no longer
+- Renamed ``riko.runtime.compile.compile`` to ``riko.runtime.compile.compile_pipe`` so it no longer
   shadows the builtin ``compile``.
 - Added ``manage lint --rst`` to render every RST document and validate its
   internal links; run it under ``tox -e lint`` and in CI.
@@ -591,7 +591,7 @@ Removed
 
 - Removed legacy top-level compatibility imports that were outside ``riko.__all__``:
   ``Objectify`` / ``objectify`` moved to ``riko._objectify``, ``listize`` moved to
-  ``riko._iterutils``, ``get_abspath`` moved to ``riko.paths``, and ``replacer`` moved
+  ``riko.utils._iterutils``, ``get_abspath`` moved to ``riko.paths``, and ``replacer`` moved
   to ``riko._strutils``. These homes are private/non-stable; callers should avoid
   depending on them or keep their own compatibility copy.
 

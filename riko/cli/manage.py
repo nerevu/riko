@@ -21,8 +21,8 @@ import click
 import requests
 from click import Choice
 
-from riko._logging import exception_hook
-from riko.paths import ROOT_DIR
+from riko.utils._logging import exception_hook
+from riko.utils.paths import ROOT_DIR
 
 from ._docstyle import format_issue, iter_summary_issues
 from .gen_api_surface import _DOC as API_SURFACE_PATH

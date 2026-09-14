@@ -29,9 +29,9 @@ from typing import Any, cast
 import pygogo as gogo
 from meza.io import read_csv
 
-from riko._constants import ENCODING
 from riko._io import Fetch, auto_close, seekable
 from riko.bado.io import async_url_open
+from riko.base._constants import ENCODING
 from riko.cast import SourceOpts
 from riko.types._configs import CsvObjconf
 from riko.types._options import Defaults, Opts
