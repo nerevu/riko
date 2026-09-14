@@ -67,12 +67,15 @@ jobs:
       - name: Lint docs
         if: matrix.python-version == '3.12'
         run: uv run --no-sync manage lint --rst
-      - name: Lint yaml
-        if: matrix.python-version == '3.12'
-        run: uv run --no-sync manage lint --yaml
       - name: Lint actions
         if: matrix.python-version == '3.12'
         run: uv run --no-sync manage lint --actions
+      - name: Lint yaml
+        if: matrix.python-version == '3.12'
+        run: uv run --no-sync manage lint --yaml
+      - name: Lint docstrings
+        if: matrix.python-version == '3.12'
+        run: uv run --no-sync manage lint --docstrings
       - name: Check types
         run: uv run --no-sync manage lint --check-types
       - name: Verify types

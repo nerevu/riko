@@ -329,6 +329,7 @@ commands = [
     ["python", "-m", "riko.cli.manage", "lint", "--rst"],
     ["python", "-m", "riko.cli.manage", "lint", "--actions"],
     ["python", "-m", "riko.cli.manage", "lint", "--yaml"],
+    ["python", "-m", "riko.cli.manage", "lint", "--docstrings"],
 ]
 
 [tool.uv.build-backend]
