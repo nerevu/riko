@@ -12,6 +12,7 @@ from riko.utils._logging import exception_hook
 
 from ._build import BUILD_COMMAND, CLEAN_COMMAND, PUBLISH_COMMAND, RELEASE_COMMAND
 from ._codegen import CODEGEN_COMMAND
+from ._imports import IMPORTS_COMMAND
 from ._lint import CHECK_COMMAND, LINT_COMMAND, PRETTIFY_COMMAND
 from ._release import BACKFILL_COMMAND, MISSING_COMMAND, RELEASE_NOTES_COMMAND
 from ._test import TEST_COMMAND
@@ -66,6 +67,7 @@ for _command in (
     CHECK_COMMAND,
     CLEAN_COMMAND,
     CODEGEN_COMMAND,
+    IMPORTS_COMMAND,
     LINT_COMMAND,
     MISSING_COMMAND,
     PRETTIFY_COMMAND,
