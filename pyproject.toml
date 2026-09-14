@@ -325,11 +325,8 @@ description = "run linter"
 runner = "uv-venv-lock-runner"
 dependency_groups = ["lint"]
 commands = [
-    ["python", "-m", "riko.cli.manage", "lint"],
-    ["python", "-m", "riko.cli.manage", "lint", "--rst"],
-    ["python", "-m", "riko.cli.manage", "lint", "--actions"],
-    ["python", "-m", "riko.cli.manage", "lint", "--yaml"],
-    ["python", "-m", "riko.cli.manage", "lint", "--docstrings"],
+    ["python", "-m", "riko.cli.manage", "lint", "--all"],
+    ["python", "-m", "riko.cli.manage", "lint", "imports", "--all"],
 ]
 
 [tool.uv.build-backend]

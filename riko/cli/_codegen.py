@@ -5,16 +5,15 @@
 from collections.abc import Callable
 
 import click
-from click import Choice
 
-from .gen_api_surface import _DOC as API_SURFACE_PATH
-from .gen_api_surface import main as gen_api_surface_main
-from .gen_config import _CONFIGS as CONFIG_PATH
-from .gen_config import main as gen_config_main
-from .gen_names import _MODULE_IDS as MODULE_IDS_PATH
-from .gen_names import _NAMES as NAMES_PATH
-from .gen_names import main as gen_names_main
-from .gen_pipelines import main as gen_pipelines_main
+from ._gen_api_surface import _DOC as API_SURFACE_PATH
+from ._gen_api_surface import main as gen_api_surface_main
+from ._gen_config import _CONFIGS as CONFIG_PATH
+from ._gen_config import main as gen_config_main
+from ._gen_names import _MODULE_IDS as MODULE_IDS_PATH
+from ._gen_names import _NAMES as NAMES_PATH
+from ._gen_names import main as gen_names_main
+from ._gen_pipelines import main as gen_pipelines_main
 
 _CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
     "config": (
@@ -41,21 +40,42 @@ _CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
 
 
 @click.command(name="codegen")
-@click.option(
-    "-m",
-    "--mode",
-    help="Which file to generate",
-    type=Choice(list(_CODEGEN), case_sensitive=False),
-    default="config",
-)
-def _codegen_command(mode: str = "config") -> None:
-    """Regenerate config, module-name, or compiled-pipe files."""
-    runner, summary, error = _CODEGEN[mode]
+@click.option("--config", help="Regenerate configuration types", is_flag=True)
+@click.option("--names", help="Regenerate module-name catalogs", is_flag=True)
+@click.option("--pipes", help="Regenerate compiled pipeline fixtures", is_flag=True)
+@click.option("--api", help="Regenerate the API-surface document", is_flag=True)
+@click.option("--all", "all_", help="Run every generator", is_flag=True)
+def _codegen_command(
+    config: bool = False,
+    names: bool = False,
+    pipes: bool = False,
+    api: bool = False,
+    all_: bool = False,
+) -> None:
+    """Regenerate generated project artifacts."""
+    selected = (
+        tuple(_CODEGEN)
+        if all_
+        else tuple(
+            name
+            for name, enabled in (
+                ("config", config),
+                ("names", names),
+                ("pipes", pipes),
+                ("api", api),
+            )
+            if enabled
+        )
+    )
+    selected = selected or ("config",)
 
-    if runner():
-        raise RuntimeError(error)
+    for name in selected:
+        runner, summary, error = _CODEGEN[name]
 
-    print(f"Successfully {summary()}.")
+        if runner():
+            raise RuntimeError(error)
+
+        print(f"Successfully {summary()}.")
 
 
 CODEGEN_COMMAND = _codegen_command

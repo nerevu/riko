@@ -12,7 +12,7 @@ import re
 import pytest
 
 from riko.base import _api_surface
-from riko.cli.gen_api_surface import _BLOCK, _DOC, generate_api_surface
+from riko.cli._gen_api_surface import _BLOCK, _DOC, generate_api_surface
 
 _GROUP_KEYS = (
     "collections",

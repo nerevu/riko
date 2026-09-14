@@ -7,7 +7,7 @@ Run ``manage codegen -m config`` to update generated configs.
 
 import pathlib
 
-from riko.cli.gen_config import objconf_structure, render
+from riko.cli._gen_config import objconf_structure, render
 
 _CONFIGS = pathlib.Path("riko/coercion/_configs.py")
 

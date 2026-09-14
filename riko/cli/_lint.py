@@ -12,11 +12,12 @@ from sys import exit
 
 import click
 
-from riko.base._paths import ROOT_DIR
+from riko.base._paths import PACKAGE_DIR, ROOT_DIR
 
 from ._build import _twine_check
 from ._docs import _check_docs, _check_rst
 from ._docstyle import format_issue, iter_summary_issues
+from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
 
 _WORKFLOW_DIR = ROOT_DIR / ".github" / "workflows"
 
@@ -158,8 +159,7 @@ def _check_command() -> None:
     exit(_check_staged())
 
 
-@click.command(name="lint")
-@click.argument("paths", nargs=-1)
+@click.group(name="lint", invoke_without_command=True)
 @click.option("-w", "--where", help="Modules to check (repeatable)", multiple=True)
 @click.option("-F", "--unsafe-fixes", help="View unsafe fixes", is_flag=True)
 @click.option("-t", "--check-types", help="Check with pyright", is_flag=True)
@@ -173,14 +173,16 @@ def _check_command() -> None:
 @click.option("-a", "--actions", help="Validate GitHub Actions workflows", is_flag=True)
 @click.option("-y", "--yaml", help="Validate YAML files", is_flag=True)
 @click.option("-D", "--docstrings", help="Check docstring summary style", is_flag=True)
+@click.option("--all", "all_", help="Run every standard lint check", is_flag=True)
 @click.option(
     "-p",
     "--parallel",
     help="Run linter in parallel in multiple processes",
     is_flag=True,
 )
+@click.pass_context
 def _lint_command(
-    paths: tuple[str, ...] = (),
+    ctx: click.Context,
     where: tuple[str, ...] = (),
     unsafe_fixes: bool = False,
     strict: bool = False,
@@ -192,35 +194,67 @@ def _lint_command(
     actions: bool = False,
     yaml: bool = False,
     docstrings: bool = False,
+    all_: bool = False,
     parallel: bool = False,
 ) -> None:
-    """Check style with linters."""
-    _where = " ".join([*where, *paths])
+    """Check style, documentation, and internal contracts."""
+    if ctx.invoked_subcommand is None:
+        _where = " ".join(where)
+        has_selector = any(
+            (
+                strict,
+                check_types,
+                verify_types,
+                dist,
+                rst,
+                docs,
+                actions,
+                yaml,
+                docstrings,
+                all_,
+            )
+        )
+        return_codes: list[int] = []
 
-    if dist:
-        return_code = _twine_check()
-    elif check_types:
-        return_code = _check_types(_where)
-    elif verify_types:
-        return_code = _verify_types(_where)
-    elif strict:
-        return_code = _pylint_check(parallel)
-    elif rst:
-        return_code = _check_rst(_where)
-    elif docs:
-        return_code = _check_docs()
-    elif docstrings:
-        return_code = _docstring_check(_where)
-    elif actions:
-        exts = [".yml", ".yaml"]
-        _paths = (glob(str(_WORKFLOW_DIR / f"*.{ext}")) for ext in exts)
-        return_code = _check_actions(chain.from_iterable(_paths))
-    elif yaml:
-        return_code = _check_yaml(_where)
-    else:
-        return_code = _ruff_check(_where, unsafe_fixes)
+        if all_ or not has_selector:
+            return_codes.append(_ruff_check(_where, unsafe_fixes))
 
-    exit(return_code)
+        if rst or all_:
+            return_codes.append(_check_rst(_where))
+
+        if docs or all_:
+            return_codes.append(_check_docs())
+
+        if docstrings or all_:
+            return_codes.append(_docstring_check(_where))
+
+        if actions or all_:
+            exts = ["yml", "yaml"]
+            paths = (glob(str(_WORKFLOW_DIR / f"*.{ext}")) for ext in exts)
+            return_codes.append(_check_actions(*chain.from_iterable(paths)))
+
+        if yaml or all_:
+            return_codes.append(_check_yaml(*where))
+
+        if all_:
+            return_codes.append(run_import_checks(PACKAGE_DIR, *_IMPORT_CHECKS))
+
+        if dist:
+            return_codes.append(_twine_check())
+
+        if check_types:
+            return_codes.append(_check_types(_where))
+
+        if verify_types:
+            return_codes.append(_verify_types(_where))
+
+        if strict:
+            return_codes.append(_pylint_check(parallel))
+
+        exit(max(return_codes, default=0))
+
+
+_lint_command.add_command(IMPORTS_COMMAND)
 
 
 @click.command(name="prettify")
