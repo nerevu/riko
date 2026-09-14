@@ -7,15 +7,18 @@ We need more extensive tests with stable data feeds!
 
 import sqlite3
 from collections.abc import Sequence
+from datetime import date, datetime
 from decimal import Decimal
 from importlib import import_module
 from itertools import islice
 from json import loads
 from pathlib import Path
+from time import struct_time
 from typing import cast
 
 import pytest
 
+from riko._date_utils import get_tzname
 from riko._iterutils import listize
 from riko._rssutils import truncate_content
 from riko.collections import SyncPipe
@@ -118,6 +121,21 @@ def _check_results(
         msg += f"{len(items)} items. First item is {truncate_content(first)}"
 
     assert compared == _check, msg
+
+
+def _check_dates[T: datetime | struct_time | date](*dates: T | object) -> tuple[T, ...]:
+    for _class in (datetime, struct_time, date):
+        if all(isinstance(_date, _class) for _date in dates):
+            if _class is datetime or _class is struct_time:
+                for _date in dates:
+                    assert get_tzname(cast(datetime, _date))
+
+            break
+    else:
+        msg = f"Expected all dates to be of the same type, but got {dates}"
+        raise AssertionError(msg)
+
+    return cast(tuple[T, ...], dates)
 
 
 @pytest.mark.xfail(
@@ -434,8 +452,12 @@ class TestBasics:
         pipe_name = "pipe_8NMkiTW32xGvMbDKruymrA"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 36, 0)
-        first, last = cast(dict, items[0]), cast(dict, items[-1])
-        assert first["pubDate"] > last["pubDate"]
+        first, last = items[0], items[-1]
+        assert is_mapping(first)
+        assert is_mapping(last)
+
+        dates = _check_dates(first.get("pubDate"), last.get("pubDate"))
+        assert dates[0] > dates[-1]
 
         cars = (
             "amg",
@@ -657,9 +679,13 @@ class TestBasics:
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 24, 0)
 
-        first, last = cast(dict, items[0]), cast(dict, items[-1])
-        assert first["pubDate"] > last["pubDate"]
-        assert first["y:id"] == "http://sz.de/1.2104394"
+        first, last = items[0], items[-1]
+        assert is_mapping(first)
+        assert is_mapping(last)
+
+        dates = _check_dates(first.get("pubDate"), last.get("pubDate"))
+        assert dates[0] > dates[-1]
+        assert first.get("y:id") == "http://sz.de/1.2104394"
 
         for i in items:
             item = cast(dict, i)

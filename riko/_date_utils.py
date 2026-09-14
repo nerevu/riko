@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from datetime import UTC, date, timedelta, timezone, tzinfo
 from datetime import datetime as dt
 from functools import cache
-from time import strptime, struct_time
+from time import struct_time
 from typing import Annotated, Literal, cast, overload
 from zoneinfo import ZoneInfo, available_timezones
 
@@ -150,9 +150,7 @@ def tzinfo_from_tt(
     Try to get a ZoneInfo from struct_time's tm_zone name,
     falling back to a fixed-offset timezone from tm_gmtoff.
     """
-    if tt.tm_zone and tt.tm_zone in available_timezones():
-        _tzinfo = ZoneInfo(tt.tm_zone)
-    elif tt.tm_zone and tt.tm_zone in TZINFOS:
+    if tt.tm_zone and tt.tm_zone in TZINFOS:
         _tzinfo = TZINFOS[tt.tm_zone]
     elif tt.tm_gmtoff is not None:
         _tzinfo = timezone(timedelta(seconds=tt.tm_gmtoff), name=tt.tm_zone or "")
@@ -187,9 +185,8 @@ def date_to_datetime(  # noqa: E302
     try_local_tz: bool | None = True,
     fallback_tzinfo: tzinfo = UTC,
 ) -> AwareDT | None:
-    _tzinfo = get_local_tz(try_local_tz, fallback_tzinfo)
-
     if content:
+        _tzinfo = get_local_tz(try_local_tz, fallback_tzinfo)
         _date = dt(content.year, content.month, content.day, tzinfo=_tzinfo)
     else:
         _date = None
@@ -237,15 +234,14 @@ def date_to_tt(  # noqa: E302
     tzname = get_tzname(content)
 
     if isinstance(content, dt) and tzname:
-        formatted = content.isoformat()
-        sformat = "%Y-%m-%dT%H:%M:%S%z"
-        tt = strptime(formatted[:19] + formatted[-6:], sformat)
-    elif isinstance(content, dt):
-        sformat = "%Y-%m-%dT%H:%M:%S"
-        tt = strptime(content.isoformat()[:19], sformat)
+        if utcoffset := content.utcoffset():
+            tm_gmtoff = int(utcoffset.total_seconds())
+        else:
+            tm_gmtoff = 0
+
+        tt = struct_time(content.timetuple() + (tzname, tm_gmtoff))
     elif content:
-        sformat = "%Y-%m-%d"
-        tt = strptime(content.isoformat(), sformat)
+        tt = content.timetuple()
     else:
         tt = None
 

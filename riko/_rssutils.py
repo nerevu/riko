@@ -13,7 +13,7 @@ from typing import cast, overload
 
 from requests.structures import CaseInsensitiveDict
 
-from riko._date_utils import ensure_tzinfo
+from riko._date_utils import date_to_tt, ensure_tzinfo
 from riko.types._collections import BasicDict, RikoValue
 from riko.types._rss import ExpandedRSSEntry, ParserRSSEntry, RSSEntry, YahooRSSEntry
 from riko.types._streams import Stream, StreamOrValueStream, ValueStream
@@ -60,7 +60,7 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
             pub_date = ensure_tzinfo(pub_date)
 
             if isinstance(pub_date, dt):
-                pub_date = pub_date.timetuple()
+                pub_date = date_to_tt(pub_date)
 
         if "updated_parsed" in entry:
             updated_date = entry["updated_parsed"]
@@ -71,7 +71,7 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
             updated_date = ensure_tzinfo(updated_date)
 
             if isinstance(updated_date, dt):
-                updated_date = updated_date.timetuple()
+                updated_date = date_to_tt(updated_date)
 
         entry["author.name"] = entry.get("author_detail", {}).get("name")
         entry["author.uri"] = entry.get("author_detail", {}).get("href")
