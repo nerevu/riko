@@ -429,14 +429,14 @@ def gen_graph(pipe_def: PipeDef) -> Iterator[tuple[str, str]]:
         yield (src_id, tgt_id)
 
 
-def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list[str]]]:
+def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, Nodes[str]]]:
     for module in listize(pipe_def["modules"]):
         module_id = pythonise(module["id"])
-        yield (module_id, [])
+        yield (module_id, set())
 
         # make the loop dependent on its embedded module
         if is_loop_module(module):
-            yield (pythonise(module["embed"]["id"]), [module_id])
+            yield (pythonise(module["embed"]["id"]), {module_id})
 
 
 def gen_parented_graph[T: str | int](graph: Graph[T]) -> Iterator[tuple[T, Nodes[T]]]:
@@ -920,10 +920,10 @@ def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
         A frozen ``_GraphIndex`` describing the pipe's topology.
 
     """
-    successors: dict[str, list[str]] = defaultdict(list, gen_embed_graph(pipe_def))
+    successors: Graph[str] = defaultdict(set, gen_embed_graph(pipe_def))
 
     for src, tgt in gen_graph(pipe_def):
-        successors[src].append(tgt)
+        successors[src].add(tgt)
 
     adjacency = dict(gen_parented_graph(successors))
     order = tuple(topological_sort(adjacency, strict=True))

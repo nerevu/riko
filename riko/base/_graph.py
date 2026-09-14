@@ -6,16 +6,19 @@ by Paul Harrison
 Public domain, do with it as you will
 """
 
-from collections.abc import Callable, Collection, Hashable, Iterable, Mapping
+from collections.abc import Callable, Hashable, Iterable, Mapping
 from graphlib import CycleError, TopologicalSorter
+from types import MappingProxyType
 from typing import Literal, overload
 
 import networkx as nx
 
-type Nodes[T: Hashable] = Collection[T]
+type Nodes[T: Hashable] = set[T]
 type Graph[T: Hashable] = Mapping[T, Nodes[T]]
 type NodeList[T: Hashable] = list[T]
 type SCC[T: Hashable] = list[tuple[T, ...]]
+type FrozenGraph[T: Hashable] = MappingProxyType[T, frozenset[T]]
+type AnyGraph[T] = Graph[T] | FrozenGraph[T]
 
 
 def scc_sort[T: Hashable](graph: Graph[T], reverse: bool | None = False) -> SCC[T]:
@@ -194,3 +197,11 @@ def edges_to_graph[T](edges: Iterable[tuple[T, T]]) -> Graph[T]:
         graph[source].add(target)
 
     return graph
+
+
+def freeze_graph[T: Hashable](graph: Graph[T]) -> FrozenGraph[T]:
+    return MappingProxyType({k: frozenset(v) for k, v in graph.items()})
+
+
+def descendants(*_):
+    pass
