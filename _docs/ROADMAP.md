@@ -209,7 +209,6 @@ The complete `§0–27` routing map:
 | Gameplan | Covers |
 |---|---|
 | [ai-inference.md](gameplans/ai-inference.md) | Provider-neutral inference and embedding/retrieval adapters. |
-| [ai-inference-research.md](gameplans/ai-inference-research.md) | Research/ADR rationale for AI inference. |
 | [agents.md](gameplans/agents.md) | Agent-oriented workflows built from ordinary Pipeline, loop, pub/sub, StateStore, and provider/tool effects; no AgentGraph. |
 | [agent-scenarios.md](gameplans/agent-scenarios.md) | Deterministic/policy-aware scenario/evaluation layer. |
 | [mcp.md](gameplans/mcp.md) | Client-first capability discovery/catalog/execution, OpenAPI/APIs.guru, resources, policy/artifacts/telemetry. |
@@ -235,13 +234,6 @@ The complete `§0–27` routing map:
 | [inspiration-coverage.md](gameplans/inspiration-coverage.md) | Traceability from prior-art ideas to active gameplans. |
 | [riko-site.md](gameplans/riko-site.md) | Framework-neutral site pipeline built on Core. |
 | [testing.md](gameplans/testing.md) | Test-suite layering/consolidation and cross-package scenario placement. |
-
-### Retired redirects
-
-| Gameplan | Covers |
-|---|---|
-| [productionizing.md](gameplans/productionizing.md) | Retired redirect into active owners. |
-| [repo-refinement.md](gameplans/repo-refinement.md) | Retired redirect into active owners. |
 
 Implementation status remains authoritative only in
 [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md). P-track phase history/file maps/exit tests remain in
