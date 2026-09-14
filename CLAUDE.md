@@ -9,7 +9,7 @@ detail lives in `_docs/`:
 - `_docs/KEY_PATHS.md` — per-file detail + the file-local "don't-revert" invariants
 - `_docs/INTERNALS.md` — codegen rules, discovery/export surfaces, tooling gotchas
 - `_docs/DOCUMENTATION_STANDARD.md` — **read before writing docstrings/doctests**
-- `_docs/PHASE_CHECKLISTS.md` — live status (start here); `_docs/ROADMAP.md` — gameplan index
+- `_docs/PHASE_CHECKLISTS.md` — live status (start here); `_docs/ROADMAP.md` — authority/router index
 
 ## Key Paths
 
@@ -29,7 +29,7 @@ invariants live in `_docs/KEY_PATHS.md`.
 | `riko/_api_surface.py` | **private** declaration of the STABLE/EXTENSION/TYPES/PRIVATE import contract |
 | `riko/resources.py` | **PRIVATE** immutable `Resource`/`Context` resource contract (external resources only) |
 | `riko/targets.py` + `riko/types/_write.py` + `riko/_write_session.py` | **PRIVATE** write stack — declarative model (`WriteMode`/`Formats`/`WriteCapabilities`/`PreparedWrite`), `prepare_write` target validation, lazily-acquired file sessions executing the `write`/`sink` verbs |
-| `riko/cli/` | CLI entry points (`compile-pipe`/`convert-dag`/`gen-config`/`gen-names`/`gen-api-surface`/`manage`) |
+| `riko/cli/` | CLI entry points (`compile-pipe`/`convert-dag`/`gen-config`/`gen-names`/`gen-api-surface`/`manage`); `manage.py` only composes commands, with build/lint/docs/test/codegen/release helpers in private sibling modules |
 | `riko/types/` | parse-time config types — **generated** `<Name>Objconf` (`gen-config`) + `_module_ids` (`gen-names`); hand-maintained `DynamicConf` base |
 | `riko/ext/` | `ModuleName`/`normalize_module_name`/`derive_category`/`SINK_NAMES`; codegen helpers + shared `ruff_format` |
 | `riko/transform.py` | column transformation helpers (shelved) |
@@ -45,9 +45,11 @@ invariants live in `_docs/KEY_PATHS.md`.
 | `_docs/IMPLEMENTED.md` | as-built companion + single source for build-completeness; each topic tagged **Implemented**/**Partial** with remaining work linked to its owning doc. Absent ⇒ Planned |
 | `_docs/PHASE_CHECKLISTS.md` | **the P-track** — authoritative phase tracker (P1–P14) + per-phase detail and done-phase summaries. Live P-track status lives only here |
 | `_docs/MILESTONES.md` | P-track history companion — retained file maps and exit-test references; not the forward implementation sequence or semantic owner |
-| `_docs/ROADMAP.md` | routing index for shipped contracts, active gameplan owners, P-track status/history, and the forward implementation sequence |
+| `_docs/ROADMAP.md` | routing-only authority index for shipped contracts, active gameplan owners, status/history docs, and the forward implementation sequence |
 | `_docs/gameplans/implementation-sequence.md` | authoritative forward implementation dependency order; orders owner contracts but does not redefine them |
-| `_docs/gameplans/` | detailed target/implementation plans (index = ROADMAP's Gameplans grouped tables). `productionizing.md` and `repo-refinement.md` are retired redirect stubs |
+| `_docs/gameplans/` | active target/implementation plans only; one semantic owner per concept, indexed by ROADMAP |
+| `_docs/research/` | prior-art/rationale/ADR notebooks; context only, never authoritative |
+| `_docs/archive/` | superseded historical plans; history only, never authoritative |
 | `_docs/DOCUMENTATION_STANDARD.md` | authoritative docstring/doctest/`__init__.py` standard |
 | `_docs/API_SURFACE.md` | **spec** — the three-tier import contract (STABLE `riko`, EXTENSION `riko.ext`, PRIVATE); its name lists are **generated** from `riko/_api_surface.py` (`gen-api-surface`) |
 | `docs/CHANGES.rst` | changelog; git tags = milestones (2026 refinement work = `v0.67.0`–`v0.72.0`). Entries are **1–2 lines, no code blocks, no implementation detail** — house style in `_docs/INTERNALS.md` § Tooling |
@@ -97,9 +99,9 @@ across modules) belong in the short list below:
 - **uv** — prefix all `uv` commands with `--active` to use the currently active venv vs the default `.venv` folder
 - **Python 3.12+** — `requires-python = ">=3.12"`; use PEP 695 type params (`def f[T](...)`), `X | Y` unions, etc.
 - **Doctests are tests** — `pytest --doctest-modules` runs all `>>>` blocks in source; keep them passing. `testpaths` = `tests`/`riko`/`examples`/`README.rst`/`docs`, so `examples/*.py` are import- and doctest-collected too; don't duplicate README doctests into `examples/usage.py`/`demo.py` (their flows are covered by `README.rst` + `tests/functional/test_examples.py`)
-- **`manage`** = `riko.cli.manage:manager` click entry point; `run-pipe`, `benchmark`, `compile-pipe`, `convert-dag`, `gen-config`, `gen-names`, `gen-pipelines`, `gen-api-surface` also in `[project.scripts]`. It **collides with mezmorize's `manage`** — use `python -m riko.cli.manage` if it breaks (`_docs/INTERNALS.md`)
+- **`manage`** = `riko.cli.manage:manager` click entry point; `manage.py` is the thin command composer and private `_build`/`_lint`/`_docs`/`_test`/`_codegen`/`_release` modules own implementation by reason to change. `run-pipe`, `benchmark`, `compile-pipe`, `convert-dag`, `gen-config`, `gen-names`, `gen-pipelines`, `gen-api-surface` also live in `[project.scripts]`. It **collides with mezmorize's `manage`** — use `python -m riko.cli.manage` if it breaks (`_docs/INTERNALS.md`)
 - **Generated files are never hand-edited** — `riko/types/configs.py` (`gen-config`), `riko/modules/_names.py` + `riko/types/_module_ids.py` (`gen-names`), and the name lists in `_docs/API_SURFACE.md` (`gen-api-surface` / `manage codegen -m api`, rendered from `riko/_api_surface.py` between `<!-- api-surface:KEY -->` markers — surrounding prose stays hand-written); byte-drift guards in `tests/internal/`. Details: `_docs/INTERNALS.md` § Codegen. The `tests/pypipelines/pipe_*.py` + `examples/pypipelines/pipe_*.py` compiled pipes are also generated — from sibling `pipelines/pipe_*.json` via `compile-pipe`; regenerate both trees at once with `gen-pipelines` (`manage codegen -m pipes`), drift-guarded by `test_compile.py::test_codegen_matches_expected_file` (tests) + `test_example_pipes.py` (examples). To recreate a JSON for a compiled pipe see `_docs/COMPILING_EXAMPLE_PIPES.md`
-- **Docs stay consistent by test** — `tests/internal/test_docs_consistency.py` guards the `_docs/` model (all hard asserts): complete `§0–27` index, every active gameplan indexed in `ROADMAP.md`, retired gameplans flagged, no completion claim above the `pyproject.toml` version, and no `**Status:**` banners in gameplans (phase status lives only in `PHASE_CHECKLISTS.md` — gameplans use `Current gap:`/`Shipped:`/`Scope:`/`Dependencies:` instead)
-- **Don't cite transient scratch docs from stable docs** — the lowercase, **untracked** top-level `_docs/*.md` (`polish.md`, `autopilot.md`, `reddit.md`, `reporting.md`, `scripting.md`) are throwaway scratch; stable docs (UPPERCASE `_docs/*.md` like `INTERNALS.md`/`RUNTIME_CONTRACT.md`/`DEPENDENCY_LAYERS.md`, plus `CLAUDE.md`) must not reference them — inline the idea self-contained so nothing breaks when the scratch doc is deleted. This does **not** cover `_docs/gameplans/*.md` (also lowercase but committed and ROADMAP-indexed — those links are required)
+- **Docs stay consistent by lint** — `manage lint --docs` guards the `_docs/` model: complete `§0–27` index, active gameplan indexing, version/completion consistency, phase-status ownership, and R-phase `ADD`/`MIGRATE`/`DELETE` closure. Documentation-authority namespaces are also static policy and belong in this linter, not pytest.
+- **Don't cite transient scratch docs from stable docs** — the lowercase, **untracked** top-level `_docs/*.md` (`polish.md`, `autopilot.md`, `reddit.md`, `reporting.md`, `scripting.md`) are throwaway scratch; stable docs (UPPERCASE `_docs/*.md` like `INTERNALS.md`/`RUNTIME_CONTRACT.md`/`DEPENDENCY_LAYERS.md`, plus `CLAUDE.md`) must not reference them — inline the idea self-contained so nothing breaks when the scratch doc is deleted. Active `_docs/gameplans/*.md` are committed authoritative plans and ROADMAP-indexed; `_docs/research/` and `_docs/archive/` are committed but non-authoritative and never satisfy active ownership.
 - **Module catalog + discovery enums are derived** — `list_modules()`/`describe_module()` read decorator-set metadata via `pkgutil`; `Modules`/`Sources`/`Transforms`/`Sinks` and `Formats` are re-exported from the **stable `riko`** surface (import cycle), not `riko.modules`. `Formats` (serialization/export formats) ≠ `Sinks` (sink pipes). Details: `_docs/INTERNALS.md`
 - **`meza` pinned to git**; **`mezmorize`** memoizes `riko/_io.py::get_opener`. Removal of that legacy cache is not assigned to the reconciled RDP roadmap.
