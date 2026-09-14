@@ -23,8 +23,7 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs
 
-from riko._objectify import Objectify
-from riko._strutils import replacer
+from riko.base._strutils import replacer
 
 from ._io import AsyncCloseable, SyncCloseable
 from ._scalars import BasicValueType
@@ -32,6 +31,7 @@ from ._sentinels import MISSING, SentinelValue, StreamState
 
 if TYPE_CHECKING:
     from ._collections import BasicList
+    from ._compiler import LoopModule, PipeModule
     from ._io import Closeable
     from ._resource import (
         AnyContextManager,
@@ -43,7 +43,6 @@ if TYPE_CHECKING:
     from ._scalars import BasicValue
     from ._sentinels import MissingType, Sentinel
     from ._streams import Item, StatefulItem
-    from .compile import LoopModule, PipeModule
     from .modules import ConfArg
 
 
@@ -130,7 +129,7 @@ def is_mapping[D, VT](val: Mapping[D, VT] | object) -> TypeIs[Mapping[D, VT]]:
     failure = False
 
     # Delay calling isinstance(val, Mapping) as much as possible
-    if not (success := isinstance(val, (dict, CaseInsensitiveDict, Objectify))):
+    if not (success := isinstance(val, (dict, CaseInsensitiveDict))):
         failure = isinstance(val, (str, int, float))
 
     return success or (False if failure else isinstance(val, Mapping))

@@ -10,7 +10,7 @@ from importlib import import_module
 
 import pytest
 
-from riko.paths import ROOT_DIR
+from riko.base._paths import ROOT_DIR
 from tests import async_test
 
 

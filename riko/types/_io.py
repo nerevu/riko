@@ -8,8 +8,8 @@ from tempfile import SpooledTemporaryFile
 from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from riko._io import Fetch
-    from riko.bado.io import NamedTextIOWrapper
+    from riko.io._async import NamedTextIOWrapper
+    from riko.io._sync import Fetch
 
 
 type IOFileLike = BytesIO | StringIO

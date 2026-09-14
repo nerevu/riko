@@ -29,11 +29,11 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.types._configs import StrconcatObjconf
+from riko.coercion._configs import StrconcatObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = {"listize": True, "extract": "part"}
 DEFAULTS: Defaults = {}

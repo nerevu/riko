@@ -3,7 +3,7 @@
 Tests the generated API-surface reference document.
 
 The name lists in ``_docs/API_SURFACE.md`` are rendered from the private
-``riko._api_surface`` contract declaration. The document must stay in sync with
+``riko.base._api_surface`` contract declaration. The document must stay in sync with
 that single source, and every declared surface must appear in it.
 """
 
@@ -11,7 +11,7 @@ import re
 
 import pytest
 
-from riko import _api_surface
+from riko.base import _api_surface
 from riko.cli.gen_api_surface import _BLOCK, _DOC, generate_api_surface
 
 _GROUP_KEYS = (

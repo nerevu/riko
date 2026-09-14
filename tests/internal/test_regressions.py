@@ -7,17 +7,18 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from riko._date_utils import TZINFOS, date_to_tt, parse_date_string
-from riko._io import Fetch
-from riko._rssutils import augment_entries
-from riko._serialize import repr_cache
-from riko.dates import tt_to_datedict
+from riko.base._dateutils import TZINFOS
+from riko.base._paths import get_path
+from riko.coercion._dates import date_to_tt, parse_date_string, tt_to_datedict
+from riko.coercion._freeze import repr_cache
+from riko.io._sync import Fetch
 from riko.modules._prepare import get_pieces_or_conf
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
-from riko.parsers import XML_PARSER, any2dict, get_skip
-from riko.paths import get_path
+from riko.parsing.config import get_skip
+from riko.parsing.documents import XML_PARSER, any2dict
+from riko.rss.entries import augment_entries
 from riko.types._rss import FeedParserRSSEntry
 from riko.types.modules import (
     Conf,
@@ -194,7 +195,7 @@ class TestRSSUtils:
         ],
     )
     def test_augment_entries_fallbacks(self, entry, expected):
-        """Feed-entry augmentation fallbacks (``riko._rssutils.augment_entries``)."""
+        """Feed-entry augmentation fallbacks (``riko.utils._rssutils.augment_entries``)."""
         item = next(augment_entries([FeedParserRSSEntry(entry)]))
         assert item.get("summary") == expected
         assert item.get("description") == expected

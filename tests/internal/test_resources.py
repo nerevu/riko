@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Tests the execution-resource foundation (``riko.resources`` + Context wiring)."""
+"""Tests the execution-resource foundation (``riko.runtime._resources`` + Context wiring)."""
 
 from contextlib import (
     AbstractAsyncContextManager,
@@ -12,19 +12,20 @@ from typing import cast
 
 import pytest
 
-from riko.context import Context
+from riko.definitions._resource_types import ResourceValue
+from riko.definitions._resources import bind_resources
 from riko.modules import operator
-from riko.resources import (
+from riko.runtime._resources import (
+    FactoryKind,
     OneShotResource,
     Resource,
     ReusableResource,
-    _FactoryKind,
-    bind_resources,
     classify_factory,
 )
+from riko.runtime.context import Context
 from riko.types._guards import is_context_manager
 from riko.types._io import CloseableType
-from riko.types._resource import LifecycleFactory, ResourceValue, ValueFactory
+from riko.types._resource import LifecycleFactory, ValueFactory
 from riko.types._streams import Stream
 from tests import async_test
 
@@ -167,7 +168,7 @@ def _test_metadata(
     *,
     external: bool,
     reusable: bool,
-    classification: _FactoryKind | None = None,
+    classification: FactoryKind | None = None,
 ):
     assert isinstance(resource, typ)
     assert resource.external == external
@@ -209,14 +210,14 @@ class TestLifecyleFactory:
     @pytest.mark.parametrize(
         ("factory", "classification"),
         [
-            (sync_gen_factory, _FactoryKind.SYNC_GEN_FACTORY),
-            (async_gen_factory, _FactoryKind.ASYNC_GEN_FACTORY),
-            (sync_cm_factory, _FactoryKind.SYNC_CM_FACTORY),
-            (async_cm_factory, _FactoryKind.ASYNC_CM_FACTORY),
+            (sync_gen_factory, FactoryKind.SYNC_GEN_FACTORY),
+            (async_gen_factory, FactoryKind.ASYNC_GEN_FACTORY),
+            (sync_cm_factory, FactoryKind.SYNC_CM_FACTORY),
+            (async_cm_factory, FactoryKind.ASYNC_CM_FACTORY),
         ],
     )
     def test_resource_metadata[T](
-        self, factory: LifecycleFactory[T], classification: _FactoryKind
+        self, factory: LifecycleFactory[T], classification: FactoryKind
     ):
         assert classify_factory(factory) is classification
         test_metadata = partial(_test_metadata, classification=classification)
@@ -291,17 +292,17 @@ class TestValueFactory:
             (
                 sync_callable_factory,
                 close_connection,
-                _FactoryKind.SYNC_CALLABLE_FACTORY,
+                FactoryKind.SYNC_CALLABLE_FACTORY,
             ),
             (
                 async_callable_factory,
                 close_async_connection,
-                _FactoryKind.ASYNC_CALLABLE_FACTORY,
+                FactoryKind.ASYNC_CALLABLE_FACTORY,
             ),
         ],
     )
     def test_resource_metadata[T](
-        self, factory: ValueFactory[T], cleanup, classification: _FactoryKind
+        self, factory: ValueFactory[T], cleanup, classification: FactoryKind
     ):
         assert classify_factory(factory, lifecycle=False) is classification
         test_metadata = partial(_test_metadata, typ=ReusableResource, reusable=True)
@@ -632,4 +633,4 @@ class TestResourceImmutability:
             resource.factory = sync_gen_factory  # pyright: ignore[reportAttributeAccessIssue]
 
         with pytest.raises(AttributeError):
-            resource.kind = _FactoryKind.SYNC_GEN_FACTORY  # pyright: ignore[reportAttributeAccessIssue]
+            resource.kind = FactoryKind.SYNC_GEN_FACTORY  # pyright: ignore[reportAttributeAccessIssue]

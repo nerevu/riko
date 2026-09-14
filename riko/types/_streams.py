@@ -4,7 +4,7 @@ from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Iterable, I
 from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
-    from riko.dotdict import DotDict
+    from riko.parsing._dotdict import DotDict
 
     from ._collections import RikoDict, RikoValue
     from ._rss import RSSEntry

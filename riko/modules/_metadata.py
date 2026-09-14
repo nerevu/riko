@@ -7,20 +7,22 @@ inferred from each pipe's implementation contract (return kind, ftype) rather
 than declared, and the catalog is discovered from the package at runtime.
 """
 
-import builtins
+from __future__ import annotations
+
 from collections.abc import Iterator
-from functools import partial
 from importlib import import_module
 from pkgutil import iter_modules as iter_package_modules
-from typing import Literal, cast, overload
+from typing import TYPE_CHECKING, Literal, cast, overload
 
-from riko._importutils import import_or_else
-from riko._iterutils import broadcast
-from riko.ext.names import derive_category, normalize_module_name
-from riko.ext.registry import ModuleDefinition, registry
-from riko.types._names import ModuleNameLike
+from riko.base._imports import import_or_else
+from riko.coercion._dataclass import normalize_module_name
+from riko.definitions.modules import ModuleDefinition
+from riko.runtime._registry import registry
 from riko.types._wrappers import ModuleWrapper
-from riko.types.modules import ModuleCategory, ModuleMetadata, ModuleSubtype, ModuleType
+from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
+
+if TYPE_CHECKING:
+    from riko.types._enums import ModuleNameLike
 
 _PACKAGE = "riko.modules"
 
@@ -138,70 +140,6 @@ def gen_registry_catalog() -> Iterator[ModuleMetadata]:
 
         if metadata:
             yield metadata
-
-
-def _matches_subtype(
-    module: ModuleMetadata, subtype: ModuleSubtype | str | None, *, primary: bool
-) -> bool:
-    if subtype is None:
-        matched = True
-    elif primary:
-        matched = module.subtype == subtype
-    else:
-        matched = subtype in module.subtypes
-
-    return matched
-
-
-@overload
-def list_modules(  # noqa: E704
-    *,
-    type: ModuleType | str | None = ...,  # noqa: A002
-    subtype: ModuleSubtype | str | None = ...,
-    category: ModuleCategory | str | None = ...,
-    primary: bool = ...,
-    loopable: bool | None = ...,
-    show_metadata: Literal[False] = ...,
-) -> list[str]: ...
-@overload  # noqa: E302
-def list_modules(  # noqa: E704
-    *,
-    type: ModuleType | str | None = None,  # noqa: A002
-    subtype: ModuleSubtype | str | None = None,
-    category: ModuleCategory | str | None = ...,
-    primary: bool = ...,
-    loopable: bool | None = ...,
-    show_metadata: Literal[True],
-) -> list[ModuleMetadata]: ...
-def list_modules(  # noqa: E302
-    *,
-    type: ModuleType | str | None = None,  # noqa: A002
-    subtype: ModuleSubtype | str | None = None,
-    category: ModuleCategory | str | None = None,
-    primary: bool = False,
-    loopable: bool | None = None,
-    show_metadata: bool = False,
-) -> list[str] | list[ModuleMetadata]:
-    if type and subtype:
-        raise ValueError("type and subtype cannot be combined")
-    elif primary and not subtype:
-        raise ValueError("primary=True requires subtype")
-
-    subtype_match = partial(_matches_subtype, subtype=subtype, primary=primary)
-    type_match = lambda module: type is None or module.type == type
-    loop_match = lambda module: loopable is None or module.loopable is loopable
-    user_match = lambda module: category is None or derive_category(module) == category
-    matches = subtype_match, type_match, loop_match, user_match
-    match = lambda module: all(broadcast(module, *matches))
-
-    # built-ins first, then registry (runtime + entry-point) modules shadow them
-    catalog = {metadata.name: metadata for metadata in gen_module_catalog()}
-    catalog.update((metadata.name, metadata) for metadata in gen_registry_catalog())
-
-    # dynamic filter pipe import shadows the builtin filter
-    filtered = builtins.filter(match, catalog.values())
-    modules = sorted(filtered, key=lambda module: module.name)
-    return modules if show_metadata else [module.name for module in modules]
 
 
 def _gen_doc(module: object) -> Iterator[str]:

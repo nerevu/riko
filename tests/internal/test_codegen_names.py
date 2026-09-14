@@ -12,17 +12,17 @@ from typing import get_args
 
 import pytest
 
+from riko.base._paths import PACKAGE_DIR
+from riko.ext._names import derive_category
 from riko.ext.codegen import (
     NameEntry,
     enum_member_name,
     gen_catalog_entries,
     generate_module_ids,
     generate_module_names,
+    list_modules,
 )
-from riko.ext.names import derive_category
-from riko.modules import list_modules
 from riko.modules._metadata import gen_module_catalog
-from riko.paths import PACKAGE_DIR
 from riko.types._module_ids import LoopableModuleId, ModuleId
 from riko.types.modules import ModuleCategory
 

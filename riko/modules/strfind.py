@@ -36,14 +36,14 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._strutils import reduce_find
 from riko.bado.itertools import coop_reduce
-from riko.cast import BasicCastType
-from riko.types._configs import StrfindObjconf
+from riko.base._strutils import reduce_find
+from riko.coercion._configs import StrfindObjconf
+from riko.types._enums import BasicCastType
 from riko.types._options import Defaults, Opts
 from riko.types.modules import FindConfRule
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = {
     "ftype": BasicCastType.TEXT,

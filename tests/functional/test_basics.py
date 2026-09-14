@@ -18,19 +18,19 @@ from typing import cast
 
 import pytest
 
-from riko._date_utils import get_tzname
-from riko._iterutils import listize
-from riko._rssutils import truncate_content
-from riko.collections import SyncPipe
-from riko.compile import (
+from riko.base._dateutils import get_tzname
+from riko.base._strutils import truncate_content
+from riko.base.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.coercion._sequences import listize
+from riko.runtime._compile import (
     abuild_pipeline,
     build_pipeline,
     extract_dependencies,
     resolve_module,
 )
-from riko.context import Context, ExecutionMode
-from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
-from riko.ext._pipelines import pipeline_resolver
+from riko.runtime._pipelines import pipeline_resolver
+from riko.runtime.collections import SyncPipe
+from riko.runtime.context import Context, ExecutionMode
 from riko.types._guards import is_mapping
 from riko.types._io import PathLike
 from riko.types._pipeline import AsyncPipelineDependencies, SyncPipelineDependencies

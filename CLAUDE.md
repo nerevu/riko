@@ -78,7 +78,7 @@ across modules) belong in the short list below:
 - **Immutable prepare** — `Module.prepare()` returns a frozen `PreparedModule` with no cache, so call-site options never leak across items or concurrent invocations.
 - **Immutable definition layer** — `Context`/`Resource` definitions are frozen snapshots; derive with `augment`/`with_resource`/`from_*`, never assign to a field or mutate an `inputs`/`resources`/`kwargs` mapping. Immutability is structural, **not** recursive: the arbitrary value a resource references (an external client, factory arg) stays mutable. Run-time state that must change lives in the private execution layer, never back on a definition.
 - **Foreign-option guard raises at import** — a decorator handed another decorator's option (`_reject_foreign_opts` in `_decorators.py`) raises `TypeError`; it's a decoration-time author mistake, not a runtime condition.
-- **No module-scope compiler import in `riko/ext/`** — the two `riko.compile` imports are function-local (`noqa: PLC0415`); hoisting either reintroduces the `riko.collections` import cycle, and no test guards it.
+- **No module-scope compiler import in `riko/ext/`** — the two `riko.runtime.compile` imports are function-local (`noqa: PLC0415`); hoisting either reintroduces the `riko.runtime.collections` import cycle, and no test guards it.
 - **Pool/pipe lifecycle** — `_owns_pool` gates who closes a pool (borrowed pools stay open); pipes are one-shot; only chaining onto a CLOSED/FAILED pipe raises; `terminate()` on exceptional exit discards buffered/partial output.
 
 ## Coding Style

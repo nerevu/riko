@@ -9,9 +9,9 @@ other compiled python pipe.
 
 ## The pieces
 
-- **`riko.compile.compile_pipe(pipe_def, name)`** turns a JSON `PipeDef` into the
+- **`riko.runtime.compile.compile_pipe(pipe_def, name)`** turns a JSON `PipeDef` into the
   module source string (this is what `compile-pipe` calls).
-- **`riko.compile.build_pipeline(parse_pipe_def(pipe_def, name))`** runs the same
+- **`riko.runtime.compile.build_pipeline(parse_pipe_def(pipe_def, name))`** runs the same
   definition in-process, returning the stream — use it to check behavior while
   iterating, without writing a file.
 - Reference definitions live in `tests/pipelines/*.json` with their expected

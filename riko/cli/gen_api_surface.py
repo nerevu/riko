@@ -4,14 +4,14 @@ riko.cli.gen_api_surface
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Provides functions for generating the API-surface reference document from the
-private ``riko._api_surface`` contract declaration.
+private ``riko.base._api_surface`` contract declaration.
 """
 
 import re
 from collections.abc import Iterable
 
-from riko import _api_surface
-from riko.paths import ROOT_DIR
+from riko.base import _api_surface
+from riko.base._paths import ROOT_DIR
 
 _DOC = ROOT_DIR / "_docs" / "API_SURFACE.md"
 _BLOCK = re.compile(
@@ -32,7 +32,7 @@ def _sorted_repr(names: Iterable[str]) -> str:
 
 def _render_block(key: str) -> str:
     if key == "stable-union":
-        expr = "BADO | COLLECTIONS | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS"
+        expr = "BADO | IO_ | COLLECTIONS | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS"
         lines = [f">>> STABLE == {expr}", "True"]
     elif key == "stable-disjoint":
         lines = [">>> STABLE.isdisjoint(EXTENSION)", "True"]

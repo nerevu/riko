@@ -1,0 +1,72 @@
+# vim: sw=4:ts=4:expandtab
+"""
+riko.runtime._resolver
+~~~~~~~~~~~~~~~~~~
+
+Provides pipe resolution for modules and named pipelines.
+
+Names prefixed with ``pipe_`` or ``pipe:`` resolve as pipelines, everything
+else as a module.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko.runtime._resolver import pipe_resolver
+        >>>
+        >>> pipe = pipe_resolver.resolve("count")
+        >>> list(pipe([{"x": 1}, {"x": 2}]))
+        [{'count': 2}]
+
+Attributes:
+
+    pipe_resolver: Process-global façade over the two default resolvers.
+
+"""
+
+from typing import Literal, overload
+
+from riko.types._wrappers import AsyncPipeWrapper, Pipe, Resolver, SyncPipeWrapper
+
+from ._pipelines import pipeline_resolver
+from ._registry import registry
+
+
+class PipeResolver:
+    """
+    Dispatches a pipe name to whichever of the two resolvers owns it.
+
+    Both sides share a ``resolve(name, interface)`` shape. The dispatch is a single
+    symmetric branch: :class:`ModuleRegistry` for leaf modules,
+    :class:`PipelineResolver` for composed ``pipe_*`` sub-pipelines.
+
+    """
+
+    def __init__(self, registry: Resolver, pipelines: Resolver) -> None:
+        self._registry = registry
+        self._pipelines = pipelines
+
+    @overload
+    def resolve(  # noqa: E704
+        self, name: str, is_async: Literal[False] = ...
+    ) -> SyncPipeWrapper: ...
+    @overload  # noqa: E301
+    def resolve(  # noqa: E704
+        self, name: str, is_async: Literal[True]
+    ) -> AsyncPipeWrapper: ...
+    def resolve(self, name: str, is_async: bool = False) -> Pipe:  # noqa: E301
+        """
+        Resolves ``name``'s callable for ``interface``.
+
+        Raises:
+
+            UnsupportedModuleError: If a module name is unresolved.
+            UnsupportedPipelineError: If a ``pipe_*`` name is unresolved.
+
+        """
+        is_pipeline = name.startswith(("pipe_", "pipe:"))
+        resolver: Resolver = self._pipelines if is_pipeline else self._registry
+        return resolver.resolve(name, is_async)
+
+
+pipe_resolver: PipeResolver = PipeResolver(registry, pipeline_resolver)

@@ -29,18 +29,18 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko._constants import ENCODING
-from riko._io import Fetch, auto_close
-from riko._iterutils import listize
-from riko.bado.io import async_url_open
-from riko.cast import SourceOpts
-from riko.parsers import any2dict
-from riko.types._configs import FetchDataObjconf
+from riko.base._constants import ENCODING
+from riko.coercion._configs import FetchDataObjconf
+from riko.coercion._sequences import listize
+from riko.coercion.cast import SourceOpts
+from riko.io._async import async_url_open
+from riko.io._sync import Fetch, auto_close
+from riko.parsing.documents import any2dict
 from riko.types._io import FileLike
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item, Stream
 
-from . import processor
+from ._decorators import processor
 from ._prepare import require_conf
 
 OPTS: Opts = SourceOpts

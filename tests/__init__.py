@@ -13,7 +13,7 @@ from typing import Protocol, overload
 import pytest
 
 from riko.bado._backend import issync, run
-from riko.collections import AsyncPipe, SyncPipe
+from riko.runtime.collections import AsyncPipe, SyncPipe
 
 TESTS_DIR = Path(__file__).parent.absolute()
 

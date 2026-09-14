@@ -26,13 +26,13 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._iterutils import group_by
-from riko.types._configs import SumObjconf
+from riko.coercion._configs import SumObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Stream
 from riko.types._wrappers import PipeTuples
 
-from . import operator
+from ._decorators import operator
+from ._iterutils import group_by
 
 OPTS: Opts = Opts()
 DEFAULTS: Defaults = {"sum_key": "content", "group_key": None}

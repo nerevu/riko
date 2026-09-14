@@ -16,14 +16,14 @@ import pytest
 
 import riko
 import riko.bado
-import riko.collections
-import riko.compile
-import riko.exceptions
+import riko.base.exceptions
 import riko.ext
 import riko.modules
 import riko.modules._names
+import riko.runtime._compile
+import riko.runtime.collections
 import riko.types
-from riko._api_surface import (
+from riko.base._api_surface import (
     BADO,
     COLLECTIONS,
     COMPILE,
@@ -37,42 +37,45 @@ from riko._api_surface import (
 
 SURFACE_MODULES = (
     riko.bado,
-    riko.collections,
-    riko.compile,
+    riko.runtime.collections,
+    riko.runtime._compile,
     riko.ext,
     riko.modules,
-    riko.exceptions,
+    riko.base.exceptions,
     riko,
     riko.types,
 )
 PARTIAL_SURFACES = (
     (riko.modules.__all__ + riko.modules._names.__all__, MODULES),
-    (riko.exceptions.__all__, ROOT_EXCEPTIONS),
+    (riko.base.exceptions.__all__, ROOT_EXCEPTIONS),
 )
 CONF_TYPES = riko.types.modules.__all__
 
 
 EQUAL_SURFACES = (
     (riko.bado, BADO),
-    (riko.collections, COLLECTIONS),
-    (riko.compile, COMPILE),
+    (riko.runtime.collections, COLLECTIONS),
+    (riko.runtime._compile, COMPILE),
     (riko.ext, EXTENSION),
     (riko, STABLE),
     (riko.types, TYPES),
 )
 
 
+def id_func(val):
+    if hasattr(val, "__name__"):
+        return val.__name__
+    else:
+        return "vs-set"
+
+
 @pytest.mark.smoke
-@pytest.mark.parametrize(
-    ("module", "surface"), EQUAL_SURFACES, ids=lambda m: getattr(m, "__name__", m)
-)
+@pytest.mark.parametrize(("module", "surface"), EQUAL_SURFACES, ids=id_func)
 def test_equal_surface_matches_expected(module, surface):
-    assert set(module.__all__) == surface
+    assert sorted(set(module.__all__)) == sorted(surface)
 
 
-@pytest.mark.parametrize(
-    ("names", "surface"), PARTIAL_SURFACES, ids=lambda m: getattr(m, "__name__", m)
-)
+@pytest.mark.parametrize(("names", "surface"), PARTIAL_SURFACES, ids=id_func)
 def test_partial_surface_matches_expected(names, surface):
     assert surface.issubset(names)
     assert not any(name.startswith("_") for name in names)
@@ -106,7 +109,7 @@ def test_bado_reexports_are_same_object(name):
 
 @pytest.mark.parametrize("name", sorted(ROOT_EXCEPTIONS))
 def test_exception_reexports_are_same_object(name):
-    assert getattr(riko, name) is getattr(riko.exceptions, name)
+    assert getattr(riko, name) is getattr(riko.base.exceptions, name)
 
 
 @pytest.mark.parametrize("module", SURFACE_MODULES)
@@ -137,7 +140,8 @@ def test_no_leaked_public_functions(name, val):
 
 
 def test_stable_and_extension_do_not_intersect():
-    assert STABLE.isdisjoint(EXTENSION)
+    common = STABLE & EXTENSION
+    assert not common, f"Stable and extension surfaces intersect: {common}"
 
 
 @pytest.mark.parametrize("module", SURFACE_MODULES)

@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests riko._io's HTTP openers against a real local server.
+Tests riko.io._sync's HTTP openers against a real local server.
 
 The streamed and memoized branches only diverge once bytes actually cross a
 socket, so a fixture file cannot exercise them: the streamed text branch reads
@@ -13,12 +13,12 @@ from unittest.mock import Mock, patch
 import pytest
 from requests import Response
 
-from riko._io import Fetch
-from riko._reencode import Reencoder, reencode
-from riko.bado.io import async_url_open
+from riko.base._paths import get_path
+from riko.coercion._configs import CsvObjconf
+from riko.io._async import async_url_open
+from riko.io._reencode import Reencoder, reencode
+from riko.io._sync import Fetch
 from riko.modules import csv
-from riko.paths import get_path
-from riko.types._configs import CsvObjconf
 from tests import async_test
 from tests._loopback import loopback_url
 
@@ -169,8 +169,8 @@ class TestLoopbackServer:
         target = "http://example.com/feed.xml"
 
         with (
-            patch("riko._io.requests.get", return_value=response) as mock_requests,
-            patch("riko._io.urlopen") as mock_urlopen,
+            patch("riko.io._sync.requests.get", return_value=response) as mock_requests,
+            patch("riko.io._sync.urlopen") as mock_urlopen,
         ):
             Fetch(target, binary=True)
 

@@ -43,13 +43,13 @@ from typing import Any, Self, cast
 import pygogo as gogo
 
 from riko.bado.itertools import as_async
-from riko.cast import BasicCastType
-from riko.types._configs import TimeoutObjconf
+from riko.coercion._configs import TimeoutObjconf
+from riko.types._enums import BasicCastType
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Feed, Stream
 from riko.types._wrappers import PipeTuples
 
-from . import operator
+from ._decorators import operator
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
 DEFAULTS: Defaults = {}

@@ -59,7 +59,7 @@ e.g. the source is listed after the operator it feeds
 Expansion rules (``convert_dag``)
 ---------------------------------
 
-``riko.compile.convert_dag(dag)`` returns a full pipe definition:
+``riko.runtime.compile.convert_dag(dag)`` returns a full pipe definition:
 
 1. Modules missing an ``id`` are assigned ``sw-{n}`` in 1-based listing order.
 2. When ``wires`` is omitted or empty, consecutive modules are wired in listing order.
