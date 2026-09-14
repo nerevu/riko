@@ -10,6 +10,8 @@ from glob import glob
 from io import StringIO
 from os.path import basename, dirname, exists, isdir, join
 from pathlib import Path
+from shutil import which
+from subprocess import run
 from typing import Any
 
 from riko.base._paths import ROOT_DIR
@@ -31,12 +33,32 @@ _GAMEPLANS = _INTERNAL_DOCS / "gameplans"
 _SEQUENCE = _GAMEPLANS / "implementation-sequence.md"
 _PYPROJECT = ROOT_DIR / "pyproject.toml"
 _EXPECTED_SECTIONS = 28
+_ROOT_MARKDOWN = frozenset(
+    {
+        "API_SURFACE.md",
+        "DOCUMENTATION_STANDARD.md",
+        "IMPLEMENTED.md",
+        "INTERNALS.md",
+        "KEY_PATHS.md",
+        "MILESTONES.md",
+        "PHASE_CHECKLISTS.md",
+        "ROADMAP.md",
+        "RUNTIME_CONTRACT.md",
+    }
+)
+_LEGACY_INSPIRATION = _INTERNAL_DOCS / "inspiration"
+_GIT: str | None = which("git")
 
 _STATUS_BANNER = re.compile(
     r"^\s*>?\s*\*\*status\b\s*(?::|\*\*)", re.IGNORECASE | re.MULTILINE
 )
 _SECTION_ROW = re.compile(r"^\|\s*(\d+)\s*\|", re.MULTILINE)
 _GAMEPLAN_LINK = re.compile(r"gameplans/([A-Za-z0-9._-]+\.md)")
+_NON_AUTHORITATIVE_HEADER = re.compile(
+    r"\b(retired|archived)\b|research/adr notebook|prior-art research|not as a task list",
+    re.IGNORECASE,
+)
+_NON_AUTHORITATIVE_TABLE_LINK = re.compile(r"\]\((?:archive|research)/")
 _R_PHASE = re.compile(
     r"^### (?P<phase>R\d+[A-Z]?)\s+—.*?(?=^### R\d+[A-Z]?\s+—|^## |\Z)",
     re.MULTILINE | re.DOTALL,
@@ -178,14 +200,36 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
+def _tracked_docs() -> set[Path]:
+    """List internal Markdown documents tracked by git."""
+    if not _GIT:
+        raise RuntimeError("git not found")
+
+    result = run(
+        [_GIT, "ls-files", "*.md"],
+        cwd=_INTERNAL_DOCS,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return {_INTERNAL_DOCS / line for line in result.stdout.splitlines()}
+
+
 def _gameplan_paths() -> list[Path]:
-    """List top-level Markdown gameplans in stable order."""
-    return sorted(_GAMEPLANS.glob("*.md")) if _GAMEPLANS.exists() else []
+    """List authoritative Markdown gameplans tracked by git in stable order."""
+    tracked = _tracked_docs()
+    globbed = _GAMEPLANS.glob("*.md") if _GAMEPLANS.exists() else []
+    return sorted(path for path in globbed if path in tracked)
 
 
-def _is_retired(text: str) -> bool:
-    """Identify a retired gameplan from its title line."""
-    return "retired" in text.split("\n", 1)[0].lower()
+def _root_markdown_offenders() -> list[str]:
+    """Find tracked root Markdown documents outside the authority allowlist."""
+    tracked = _tracked_docs()
+    return sorted(
+        path.name
+        for path in _INTERNAL_DOCS.glob("*.md")
+        if path in tracked and path.name not in _ROOT_MARKDOWN
+    )
 
 
 def _version_tuple(text: str) -> tuple[int, int, int]:
@@ -208,15 +252,6 @@ def _packaged_version() -> tuple[int, int, int]:
     return _version_tuple(raw)
 
 
-def _table_rows(text: str, name: str) -> list[str]:
-    """Find ROADMAP table rows that reference one gameplan."""
-    return [
-        line
-        for line in text.splitlines()
-        if f"gameplans/{name}" in line and line.lstrip().startswith("|")
-    ]
-
-
 def _status_banner_offenders() -> list[str]:
     """Find gameplans that claim phase status locally."""
     return [
@@ -224,15 +259,25 @@ def _status_banner_offenders() -> list[str]:
     ]
 
 
-def _retired_listing_offenders() -> list[str]:
-    """Find retired gameplans listed without an explicit retired marker."""
-    roadmap = _read(_ROADMAP)
+def _authority_namespace_offenders() -> list[str]:
+    """Find non-authoritative documents left in the active gameplan namespace."""
+    offenders: list[str] = []
+
+    for path in _gameplan_paths():
+        header = "\n".join(_read(path).splitlines()[:8])
+
+        if _NON_AUTHORITATIVE_HEADER.search(header):
+            offenders.append(path.name)
+
+    return offenders
+
+
+def _non_authoritative_listing_offenders(roadmap: str) -> list[str]:
+    """Find archive or research links listed in ROADMAP tables."""
     return [
-        path.name
-        for path in _gameplan_paths()
-        if _is_retired(_read(path))
-        and _table_rows(roadmap, path.name)
-        and not any("retired" in row.lower() for row in _table_rows(roadmap, path.name))
+        line.strip()
+        for line in roadmap.splitlines()
+        if line.lstrip().startswith("|") and _NON_AUTHORITATIVE_TABLE_LINK.search(line)
     ]
 
 
@@ -272,7 +317,7 @@ def _version_claim_offenders(current: tuple[int, int, int]) -> list[str]:
 
 
 def _check_docs() -> int:
-    """Validate static internal-document consistency rules."""
+    """Validate static internal-document consistency and authority rules."""
     problems: list[str] = []
     roadmap = _read(_ROADMAP)
     counts = Counter(int(n) for n in _SECTION_ROW.findall(roadmap))
@@ -284,15 +329,35 @@ def _check_docs() -> int:
         )
 
     linked = set(_GAMEPLAN_LINK.findall(roadmap))
-    active = {path.name for path in _gameplan_paths() if not _is_retired(_read(path))}
-    missing = sorted(active - linked)
+    gameplans = {path.name for path in _gameplan_paths()}
+    missing = sorted(gameplans - linked)
+    stale = sorted(linked - gameplans)
 
     if missing:
-        problems.append(f"{_ROADMAP}: unindexed active gameplans: {missing}")
+        problems.append(f"{_ROADMAP}: unindexed authoritative gameplans: {missing}")
 
-    if offenders := _retired_listing_offenders():
+    if stale:
+        problems.append(f"{_ROADMAP}: links to missing gameplans: {stale}")
+
+    if offenders := _root_markdown_offenders():
         problems.append(
-            f"{_ROADMAP}: retired gameplans listed without a Retired marker: {offenders}"
+            f"{_INTERNAL_DOCS}: root Markdown docs require explicit authority: {offenders}"
+        )
+
+    if _LEGACY_INSPIRATION.exists():
+        problems.append(
+            f"{_LEGACY_INSPIRATION}: prior-art material belongs under research/inspiration/"
+        )
+
+    if offenders := _authority_namespace_offenders():
+        problems.append(
+            f"{_GAMEPLANS}: archive/research material must leave gameplans/: {offenders}"
+        )
+
+    if offenders := _non_authoritative_listing_offenders(roadmap):
+        problems.append(
+            f"{_ROADMAP}: archive/research documents cannot appear in authority tables: "
+            f"{offenders}"
         )
 
     if offenders := _status_banner_offenders():
