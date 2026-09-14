@@ -6,6 +6,7 @@ Long-form detail extracted from `CLAUDE.md` (which keeps the terse index plus th
 ## Index
 
 - [Codegen & generated files](#codegen--generated-files)
+- [Compiled pipeline fixtures](#compiled-pipeline-fixtures)
 - [Discovery enums & export targets](#discovery-enums--export-targets)
 - [Tooling & environment notes](#tooling--environment-notes)
 
@@ -26,6 +27,23 @@ writes its artifact and returns an int status.
 - **Module catalog is derived, not declared** — `list_modules()`/`list_modules(show_metadata=True)` (in `riko/modules/_metadata.py`, re-exported from `riko/modules/__init__.py`) discover pipes via `pkgutil` and read `ModuleMetadata` off the decorator-set wrapper attrs (`type`, `subtype`, `supported_subtypes`, `pollable`). Subtype is derived from decorator type + `ftype`/`emit` + return annotation (see `_derive_subtypes`); there are no `__aggregators__`/`__sources__` dunders. `type`/`subtype` filters are mutually exclusive; `primary=True` matches only the default subtype. `list_formats()` (in `collections.py`) lists registered export converters.
 - **Bare-bones DAG** — `convert_dag(dag)` in `riko/compile.py` expands a minimal DAG (`modules` + *optional* `[src, tgt]` wire pairs, opaque `conf`) into a full `PipeDef`: chains modules linearly when `wires` is omitted, auto-assigns `sw-{n}` ids when absent, appends the terminal `output` node, and wires every sink to `_OUTPUT`. Type is `PipeDag`/`DagModule` in `riko/types/compile.py`; fixture `tests/dags/pipe_forever.json`; see `docs/DAG_FORMAT.rst`.
 - **`compile.compile(pipe_def, pipe_name)`** — one-call wrapper over `parse_pipe_def` + `stringify_pipe` (JSON pipe def → Python source); parallels `convert-dag` and backs the `compile-pipe` CLI (the CLI is `compile-pipe`, not `compile`). Shadows the builtin only inside `riko/compile.py`, which doesn't use it.
+
+## Compiled pipeline fixtures
+
+The `tests/pypipelines/pipe_*.py` and `examples/pypipelines/pipe_*.py` modules are generated from
+sibling `pipelines/pipe_*.json` definitions. Regenerate both trees with `gen-pipelines` (or
+`manage codegen -m pipes`), or regenerate one example with
+`compile-pipe examples/pipelines/pipe_<name>.json -o examples/pypipelines/pipe_<name>.py`.
+`tests/internal/test_compile.py::test_codegen_matches_expected_file` guards the test fixtures and
+`tests/internal/test_example_pipes.py` guards the examples.
+
+When a historical generated module has no JSON source, reconstruct the definition from its module
+calls rather than treating generated Python as authoritative: map each call to a module record,
+keep per-call options such as `field`/`assign` as plain module-level values, reproduce the wire order,
+and iterate against `build_pipeline`/`compile-pipe` until behavior and generated output agree. Current
+fixtures still use the legacy v1 terminal `_OUTPUT` representation; Workflow v2 migration owns its
+future removal. The detailed reverse-engineering notes and historical gotchas are preserved in
+[archive/compiling-example-pipes.md](archive/compiling-example-pipes.md), not as an active contract.
 
 ## Discovery enums & export targets
 
