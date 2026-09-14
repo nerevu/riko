@@ -31,6 +31,20 @@ _GAMEPLANS = _INTERNAL_DOCS / "gameplans"
 _SEQUENCE = _GAMEPLANS / "implementation-sequence.md"
 _PYPROJECT = ROOT_DIR / "pyproject.toml"
 _EXPECTED_SECTIONS = 28
+_ROOT_MARKDOWN = frozenset(
+    {
+        "API_SURFACE.md",
+        "DOCUMENTATION_STANDARD.md",
+        "IMPLEMENTED.md",
+        "INTERNALS.md",
+        "KEY_PATHS.md",
+        "MILESTONES.md",
+        "PHASE_CHECKLISTS.md",
+        "ROADMAP.md",
+        "RUNTIME_CONTRACT.md",
+    }
+)
+_LEGACY_INSPIRATION = _INTERNAL_DOCS / "inspiration"
 
 _STATUS_BANNER = re.compile(
     r"^\s*>?\s*\*\*status\b\s*(?::|\*\*)", re.IGNORECASE | re.MULTILINE
@@ -188,6 +202,15 @@ def _gameplan_paths() -> list[Path]:
     return sorted(_GAMEPLANS.glob("*.md")) if _GAMEPLANS.exists() else []
 
 
+def _root_markdown_offenders() -> list[str]:
+    """Find root Markdown documents outside the explicit authority allowlist."""
+    return sorted(
+        path.name
+        for path in _INTERNAL_DOCS.glob("*.md")
+        if path.name not in _ROOT_MARKDOWN
+    )
+
+
 def _version_tuple(text: str) -> tuple[int, int, int]:
     """Parse the first semantic version in text."""
     match = _VERSION.search(text)
@@ -294,6 +317,16 @@ def _check_docs() -> int:
 
     if stale:
         problems.append(f"{_ROADMAP}: links to missing gameplans: {stale}")
+
+    if offenders := _root_markdown_offenders():
+        problems.append(
+            f"{_INTERNAL_DOCS}: root Markdown docs require explicit authority: {offenders}"
+        )
+
+    if _LEGACY_INSPIRATION.exists():
+        problems.append(
+            f"{_LEGACY_INSPIRATION}: prior-art material belongs under research/inspiration/"
+        )
 
     if offenders := _authority_namespace_offenders():
         problems.append(
