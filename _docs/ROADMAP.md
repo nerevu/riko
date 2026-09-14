@@ -8,6 +8,9 @@ authoritative specs. The shipped runtime contract lives in
 in [MILESTONES.md](MILESTONES.md), while forward implementation dependency order lives in
 [implementation-sequence.md](gameplans/implementation-sequence.md).
 
+R-phase completion in the forward sequence follows explicit **ADD → MIGRATE → DELETE** exit
+criteria; `implementation-sequence.md` owns that phase-closure rule.
+
 Planned/end-state architecture is owned by matching gameplans, not by the shipped runtime contract.
 The core target is deliberately split by responsibility:
 
