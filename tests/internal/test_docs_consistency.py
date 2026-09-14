@@ -4,7 +4,8 @@ Tests documentation-consistency invariants.
 
 Guards the ``_docs/`` model against the drift catalogued in the doc review: a
 complete ``§0-27`` index, every active gameplan indexed, retired gameplans kept
-out of the active listing, phase status confined to ``PHASE_CHECKLISTS.md``, and
+out of the active listing, phase status confined to ``PHASE_CHECKLISTS.md``,
+R-phase exits carrying ``ADD``/``MIGRATE``/``DELETE`` closure criteria, and
 completion claims not outrunning the packaged version. All checks are hard
 asserts; the ownership-boundary and version cleanups that made the last two pass
 have landed.
@@ -20,6 +21,7 @@ _DOCS = _REPO / "_docs"
 _ROADMAP = _DOCS / "ROADMAP.md"
 _TRACKER = _DOCS / "PHASE_CHECKLISTS.md"
 _GAMEPLANS = _DOCS / "gameplans"
+_SEQUENCE = _GAMEPLANS / "implementation-sequence.md"
 _PYPROJECT = _REPO / "pyproject.toml"
 
 _EXPECTED_SECTIONS = 28
@@ -29,6 +31,10 @@ _STATUS_BANNER = re.compile(
 )
 _SECTION_ROW = re.compile(r"^\|\s*(\d+)\s*\|", re.MULTILINE)
 _GAMEPLAN_LINK = re.compile(r"gameplans/([A-Za-z0-9._-]+\.md)")
+_R_PHASE = re.compile(
+    r"^### (?P<phase>R\d+[A-Z]?)\s+—.*?(?=^### R\d+[A-Z]?\s+—|^## |\Z)",
+    re.MULTILINE | re.DOTALL,
+)
 _VERSION = re.compile(r"v?(\d+)\.(\d+)\.(\d+)")
 _COMPLETION = re.compile(
     r"\b(complete|completed|delivered|shipped|landed|done)\b", re.IGNORECASE
@@ -93,6 +99,22 @@ def _retired_listing_offenders():
     return offenders
 
 
+def _phase_closure_offenders():
+    markers = ("- **ADD:**", "- **MIGRATE:**", "- **DELETE:**")
+    offenders = []
+    for match in _R_PHASE.finditer(_read(_SEQUENCE)):
+        phase = match.group("phase")
+        body = match.group(0)
+        exit_at = body.rfind("**Exit:**")
+        closure = body[exit_at:] if exit_at >= 0 else ""
+        positions = [closure.find(marker) for marker in markers]
+        if exit_at < 0 or any(position < 0 for position in positions):
+            offenders.append(phase)
+        elif positions != sorted(positions):
+            offenders.append(phase)
+    return offenders
+
+
 def _version_claim_offenders(current):
     offenders = [
         line.strip()
@@ -127,6 +149,11 @@ def test_retired_gameplans_are_marked_retired():
 def test_no_status_banner_in_gameplans():
     offenders = _status_banner_offenders()
     assert not offenders, f"status banners belong only in the tracker: {offenders}"
+
+
+def test_r_phases_close_add_migrate_delete():
+    offenders = _phase_closure_offenders()
+    assert not offenders, f"R-phase exits must contain ADD/MIGRATE/DELETE: {offenders}"
 
 
 def test_no_completion_claim_above_packaged_version():
