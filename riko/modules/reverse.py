@@ -15,6 +15,7 @@ Examples:
         {'x': 4}
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -41,7 +42,7 @@ def parser(
     stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Returns the stream in reverse order.
+    Reverses the stream order.
 
     Args:
 
@@ -103,7 +104,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>>
         >>> async def main():
         ...     items = ({"x": x} for x in range(5))
-        ...     result = await async_pipe(items)
+        ...     result = async_pipe(items)
         ...     print(await anext(result))
         >>>
         >>> run(main)

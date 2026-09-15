@@ -618,6 +618,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         level, including nested plain-dict values.
 
         Examples:
+
             >>> r = DotDict({'author': 'bar', 'title': 'foo'})
             >>> r.delete('author')
             >>> r.asdict()

@@ -31,6 +31,7 @@ Examples:
         {'x': 0}
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -174,7 +175,7 @@ def parser(
     **kwargs: object,
 ) -> StreamOrValueStream | Iterator[StatefulItem]:
     """
-    Yields items as the sender pushes them.
+    Emits items as the sender pushes them.
 
     Args:
 

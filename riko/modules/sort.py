@@ -16,6 +16,7 @@ Examples:
         {'content': 'a'}
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -185,7 +186,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>>
         >>> async def main():
         ...     items = [{"rank": "b"}, {"rank": "a"}, {"rank": "c"}]
-        ...     result = await async_pipe(items, conf={"rule": {"field": "rank"}})
+        ...     result = async_pipe(items, conf={"rule": {"field": "rank"}})
         ...     print(await anext(result))
         >>>
         >>> run(main)

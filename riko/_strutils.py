@@ -7,6 +7,7 @@ rule construction and multi-pass substitution, and the shared find/extract used
 by the ``refind`` and ``strfind`` pipes.
 
 Attributes:
+
     PARAMS: Match selectors for ``first`` and ``last``.
     OPS: Handlers for each find ``location``.
 
@@ -281,7 +282,7 @@ OPS: dict[str, Callable[[str, re.Match[str]], str]] = {
 
 def reduce_find(word: str, rule: FindConfRule, literal: bool = False) -> str:
     """
-    Returns the text around the match ``rule`` selects.
+    Extracts the text around the match ``rule`` selects.
 
     Slicing is by match position, so the original text is preserved exactly —
     reassembling it from the pattern would corrupt any non-literal ``find``.

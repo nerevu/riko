@@ -37,10 +37,8 @@ def pipe(test=False):
     return list(stream)
 
 
-async def async_pipe(test=False):
-    stream = await AsyncPipe("itembuilder", conf=p1_conf, test=test).regex(conf=p2_conf)
-
-    return list(stream)
+def async_pipe(test=False):
+    return AsyncPipe("itembuilder", conf=p1_conf, test=test).regex(conf=p2_conf)
 
 
 def print_results(result) -> None:

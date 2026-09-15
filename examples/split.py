@@ -37,19 +37,16 @@ def pipe(test=True):
 
 async def async_pipe(test=True):
     kwargs = {"field": "content", "emit": True}
-    date_source, year_source = await AsyncPipe(
-        "input", conf=date_conf, inputs=date_in, test=test
-    ).split()
+    streams = AsyncPipe("input", conf=date_conf, inputs=date_in, test=test).split()
+    date_source = await anext(streams)
+    year_source = await anext(streams)
 
-    date_stream = await AsyncPipe(
-        "dateformat", source=date_source, conf=long_conf, **kwargs
-    )
+    date_stream = AsyncPipe("dateformat", source=date_source, conf=long_conf, **kwargs)
 
-    year_stream = await AsyncPipe(
-        "dateformat", source=year_source, conf=year_conf, **kwargs
-    )
-    year = next(year_stream)
-    return [{"date": next(date_stream), "year": int(cast(str, year))}]
+    year_stream = AsyncPipe("dateformat", source=year_source, conf=year_conf, **kwargs)
+    year = await anext(year_stream)
+    date = await anext(date_stream)
+    yield {"date": date, "year": int(cast(str, year))}
 
 
 def print_results(result) -> None:

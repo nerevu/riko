@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from riko.types._wrappers import (
+    from ._wrappers import (
         AsyncPipeWrapper,
         AsyncWrapperOutput,
         SyncPipeWrapper,
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 # dependencies
 type SyncPipelineDependencies = Callable[..., list[str]]
-type AsyncPipelineDependencies = Callable[..., Awaitable[list[str]]]
+type AsyncPipelineDependencies = Callable[..., AsyncIterator[str]]
 type PipelineDependencies = SyncPipelineDependencies | AsyncPipelineDependencies
 
 # generated/executable steps
@@ -31,5 +31,5 @@ type Steps = dict[str, SyncStepValue | AsyncStepValue]
 
 # generated Python input
 type SyncPyInput = list[str | tuple[str, ...]]
-type AsyncPyInput = Awaitable[list[str]]
+type AsyncPyInput = Awaitable[SyncPyInput]
 type PyInput = SyncPyInput | AsyncPyInput

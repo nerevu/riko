@@ -22,6 +22,7 @@ Examples:
         {'x': 0}
 
 Attributes:
+
     OPTS: Splitter wrapper options.
     DEFAULTS: Default splitter configuration.
 
@@ -50,7 +51,7 @@ def parser(
     stream: Stream, splits: int, tuples: PipeTuples, **kwargs: object
 ) -> Iterator[Stream]:
     """
-    Yields ``splits`` independent copies of the source stream.
+    Splits the source into ``splits`` independent copies of the stream.
 
     Args:
 
@@ -114,8 +115,8 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({"x": x} for x in range(5))
-        ...     print(next(next(result)))
+        ...     result = async_pipe({"x": x} for x in range(5))
+        ...     print(next(await anext(result)))
         >>>
         >>> run(main)
         {'x': 0}

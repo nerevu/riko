@@ -19,6 +19,7 @@ Examples:
         'Hello World'
 
 Attributes:
+
     ATTRS: The ``str`` methods ``transform`` may name.
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
@@ -215,8 +216,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> str | int:
         >>>
         >>> async def main():
         ...     conf = {"rule": {"transform": "title"}}
-        ...     result = await async_pipe({"content": "hello world"}, conf=conf)
-        ...     print(next(result)["strtransform"])
+        ...     result = async_pipe({"content": "hello world"}, conf=conf)
+        ...     print((await anext(result))["strtransform"])
         >>>
         >>> run(main)
         Hello World

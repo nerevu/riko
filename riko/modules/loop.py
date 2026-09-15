@@ -38,6 +38,7 @@ Examples:
         [{'title': 'a b c', 'first': {'content': 'a'}}]
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -64,7 +65,7 @@ def parser(
     stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Returns the source unchanged.
+    Passes the source through unchanged.
 
     The looping happens around this parser, not inside it: ``embed`` is run per
     item and its results folded back before the stream reaches a consumer.

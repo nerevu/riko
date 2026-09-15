@@ -19,10 +19,10 @@ from riko.collections import (
     CONVERSION_FUNCS,
     AsyncPipe,
     Executor,
+    Formats,
     PipeState,
     SyncCollection,
     SyncPipe,
-    Targets,
     export,
 )
 from riko.exceptions import ReceiverUnavailableError
@@ -401,7 +401,7 @@ class TestAsyncCollections(_CollectionTest):
     @pytest.mark.anyio
     async def test_stream(self, capsys):
         """Tests a asynchronous stream pipeline."""
-        stream = await (
+        stream = (
             AsyncPipe("itembuilder", conf=builder_conf)
             .tokenizer(emit=True)
             .udf(func=self.udf)
@@ -412,7 +412,7 @@ class TestAsyncCollections(_CollectionTest):
             .hash(assign="content")
         )
 
-        assert next(stream) == {"content": 396558121}
+        assert await anext(stream) == {"content": 396558121}
         assert self.runs == 9
 
     @pytest.mark.timeout(10)
@@ -506,7 +506,7 @@ class TestAsyncCollections(_CollectionTest):
     @pytest.mark.anyio
     async def test_pstream(self):
         """Tests a parallel asynchronous stream pipeline."""
-        stream = await (
+        stream = (
             AsyncPipe("itembuilder", conf=builder_conf, parallel=True)
             .tokenizer(emit=True)
             .strreplace(conf=strr_conf, assign="content")
@@ -515,7 +515,9 @@ class TestAsyncCollections(_CollectionTest):
             .udf(func=self.udf)
         )
 
-        assert next(stream) == {"content": 396558121}
+        first = await anext(stream)
+        [item async for item in stream]
+        assert first == {"content": 396558121}
         assert self.runs == 3
 
 
@@ -769,14 +771,14 @@ class TestModuleNameEnum:
         assert len(list(via_method)) == 1
 
 
-class TestExportTargets:
-    """``Targets`` members mirror the ``export`` converter registry."""
+class TestExportFormats:
+    """``Formats`` members mirror the ``export`` converter registry."""
 
     def test_member_and_string_export_identically(self):
         items = [{"a": 1}]
         assert (
-            export(items, Targets.JSON).getvalue() == export(items, "json").getvalue()
+            export(items, Formats.JSON).getvalue() == export(items, "json").getvalue()
         )
 
     def test_every_converter_has_a_member(self):
-        assert set(CONVERSION_FUNCS) <= set(Targets)
+        assert set(CONVERSION_FUNCS) <= set(Formats)

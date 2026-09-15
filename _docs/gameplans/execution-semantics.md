@@ -51,9 +51,21 @@ Every private execution owns exactly three lifetime primitives. Resources, fan-o
 
 | primitive | owns | used by |
 |---|---|---|
-| exit stack (`ExitStack` / `AsyncExitStack`) | entry/exit order of every context-managed component | resources, state-store adapters, provider/MCP sessions, channel ends |
+| exit stack (`ExitStack` / `AsyncExitStack`) | entry/exit order of every context-managed component | resources, state-store adapters, provider/MCP sessions, write sessions, channel ends |
 | task group (AnyIO task group or equivalent) | lifetime and cancellation scope of every execution-spawned task | subscriptions, split/publish branches, merge workers, internal service tasks |
 | bridge (AnyIO `BlockingPortal` / worker adaptation) | crossing between sync and async execution modes | async-only components under sync execution, blocking sync work under async execution |
+
+The write-session lifecycle behind `write()`/`sink()` is one of these context-managed components: R4B owns its acquisition and teardown by entering it on the execution exit stack, exactly like any other resource. The session mechanism itself already exists (established alongside R3); R4B changes only the owner, so `WriteNode` under R5C acquires the same session without a second write-specific lifecycle stack.
+
+A write session exposes three **distinct** operations, and neither R4B execution nor R5C `WriteNode` may collapse them:
+
+| operation | meaning |
+|---|---|
+| `finalize` | commit successful logical delivery and return the `WriteResult`; idempotent (a second call returns the cached result) |
+| `abort` | abandon the logical delivery; for framed/buffered targets, discard the staged/unpublished document |
+| `teardown` | release runtime resources (close handles/staging); **never commits** |
+
+The governing invariant is **`teardown` never chooses commit semantics** — semantic completion belongs to the execution host, not to resource release. The exit-stack context manager only *acquires* the session on entry and *tears it down* on exit; it does not `finalize` in its exit path. The host maps outcomes explicitly: full exhaustion and graceful close → `finalize` (the consumed prefix), `terminate()` and any failure → `abort`, always followed by `teardown`. Abort promises no rollback of bytes/items already emitted by an incremental target (CSV/JSONL); it only discards staged content for framed targets (JSON/GeoJSON). `PreparedWrite`, `WriteCapabilities`, and the session strategy are execution-time facts and must not leak into the R4A workflow IR (see `implementation-sequence.md` R4A) — the IR carries declarative Target/Format/`WriteOperation` intent only.
 
 Two invariants govern their use.
 
@@ -85,6 +97,8 @@ ctx3 = ctx2.with_resource(...)
 
 `with_module()` and `with_resource()` derive a child Context. A child may shadow an inherited module/resource binding; duplicate declarations within one normalization scope remain invalid. Built-ins remain static/global defaults, while Context-local module definitions may shadow them. Resource dependency names are late-bound against the effective Context during preparation, so a child resource override propagates through dependents without rebuilding those definitions.
 
+**Immutability is a whole-definition invariant, and current enforcement is shallow.** "Immutable" here means: derive a new Context/resource rather than mutating an existing one, so a definition already shared across executions or child Contexts never changes underfoot. That invariant is not yet fully enforced at runtime — today `context.mode`, `context.verbose`, and the `context.inputs` dict are writable in place (only `context.resources` is a read-only `mappingproxy`), and `Resource` fields (`factory`/`lazy`/`credential`/`cleanup`) can still be reassigned after the resource is stored in multiple derived Contexts. Treat any such mutation as a defect regardless of enforcement; hardening (freeze-after-construction / read-only field access) is a tracked follow-up, and no code should rely on post-construction mutation of a Context or `Resource` that has escaped its constructor. The internal derive/clone path is the sole sanctioned writer, and only before the new definition is handed out.
+
 ### Resource definition taxonomy
 
 `Resource[T]` is the broad public resource wrapper. `T` is deliberately unconstrained: the resolved resource value may be any Python value, including `None` or a callable object. Riko must therefore use a private sentinel for unresolved/missing state rather than overloading `None`. A resource value is not required to implement `close()` or `aclose()` merely to satisfy the `Resource` type.
@@ -94,28 +108,46 @@ Use **resource value** as the generic term for the value a resource definition r
 Reusable Context declarations use a narrower public category:
 
 ```python
-type ResourceDefinition[T] = ReusableResource[T] | ResourceFactory[T]
+type ResourceDefinition[T] = ReusableResource[T] | LifecycleFactory[T]
 ```
+
+The union admits an already-wrapped `ReusableResource` or a bare `LifecycleFactory` (a generator/context-manager recipe that `with_resource` normalizes into a reusable resource). A bare `ValueFactory` (an ordinary producer callable) is intentionally **excluded**: it becomes a definition only through `Resource.from_factory(...)`, which forces the cleanup decision (see "Resource factories and construction"). This is the implemented alias and is preferred over the earlier `ReusableResource[T] | ResourceFactory[T]` target, because `ResourceFactory` would fold the bare `ValueFactory` back in and lose that distinction.
 
 Conceptually:
 
 ```text
 Resource[T]
-├── ReusableResource[T]
-│   ├── _ExternalResource[T]
-│   └── _FactoryResource[T]
-└── _OwnedResource[T]       # one-shot live-owned wrapper
+├── OneShotResource[T]        # one lifecycle acquisition; not Context-storable
+│   ├── _OwnedResource[T]     #   live value + explicit cleanup (compat form)
+│   └── _LifecycleResource[T] #   generator / context-manager lifecycle
+└── ReusableResource[T]       # Context-storable definition
+    ├── _ExternalResource[T]  #   caller-owned value; never closed
+    └── _FactoryResource[T]   #   Riko-owned provider recipe
 ```
 
-`Resource` and `ReusableResource` are public typing/construction abstractions. The concrete external/factory/owned variants are private implementation types and are not normal user construction surfaces. `Resource` is the public facade:
+`Resource`, `OneShotResource`, and `ReusableResource` are public typing/construction abstractions. The concrete external/factory/owned/lifecycle variants are private implementation types and are not normal user construction surfaces. `Resource` is the public facade, with one constructor per intent:
 
-```python
-Resource(value, cleanup=...)  # one-shot live-owned compatibility form
-Resource.from_external(value)  # reusable caller-owned value
-Resource.from_factory(factory, ...)  # reusable Riko-owned provider
+| API | Accepted input | Interpretation | Parser receives | Lifecycle / cleanup | Resource type | Reusable? |
+|---|---|---|---|---|---|---|
+| `Resource(value)` | Existing resolved value | Use this existing value | `value` | Riko owns the value; uses explicit `cleanup=` when supplied, otherwise the value's native close | `OneShotResource[T]` | No |
+| `Resource.from_external(value)` | Existing caller-owned value | Borrow this existing value | `value` | Caller owns lifecycle; Riko never closes it | `ReusableResource[T]` | Yes |
+| `Resource.from_lifecycle(x)` | Generator/context-manager lifecycle, or supported lifecycle object | Enter this lifecycle | Yielded / entered value | Lifecycle defines teardown; Riko drives entry/exit | `OneShotResource[T]` | No |
+| `Resource.from_factory(f, ...)` | Value-producing callable | Call this producer | Result of `f(...)` | Riko manages the produced value's teardown; `cleanup=` is required (callable or `False`) | `ReusableResource[T]` | Yes |
+| `context.with_resource(name, definition)` | Reusable resource definition | Bind a named definition to a new `Context` | Nothing yet; resolved during execution | Opens/closes nothing at bind time; lifecycle stays as defined | `Context` holding the resource | Context-safe definitions only |
+
+The one-line mental model:
+
+```text
+Resource(value)               → use     (existing value; Riko owns it)
+Resource.from_external(value) → borrow  (existing value; caller owns it)
+Resource.from_lifecycle(x)    → enter   (a lifecycle; it defines teardown)
+Resource.from_factory(f, ...) → call    (a producer; Riko manages the result)
+context.with_resource(...)    → bind    (a definition to a new Context; resolved later)
 ```
 
-A one-shot live-owned `Resource(value, ...)` is not a `ResourceDefinition` and cannot be stored in a reusable Context. Its legitimate use is an explicitly one-shot execution-local adaptation/compatibility boundary. `Resource.from_external(value)` may wrap any actual caller-owned resource value and never closes it; independent executions using the same Context may therefore receive the same external object concurrently, and concurrency/thread safety remains the caller's responsibility. Use a factory when each execution requires an isolated instance.
+**NOTE — wrapper reusability is not input/factory reusability.** "Reusable?" describes the *wrapper*, not the Python object used to construct it. A lifecycle factory may itself be callable repeatedly, yet `Resource.from_lifecycle(...)` still yields a `OneShotResource`: that wrapper represents exactly one lifecycle acquisition and is not Context-storable. Conversely `Resource.from_factory(...)` yields a `ReusableResource` because it retains the factory *recipe* and can acquire a fresh value per execution. So the wrapper's reusability tracks "can this definition be stored in a Context and re-resolved," not "can the underlying callable be invoked more than once." (This is a resource-semantics invariant; it belongs here, not in `API_SURFACE.md`, which governs import/compatibility boundaries.)
+
+A one-shot `Resource(value, ...)`/`from_lifecycle(...)` (`OneShotResource`) is not a `ResourceDefinition` and cannot be stored in a reusable Context. Its legitimate use is an explicitly one-shot execution-local adaptation/compatibility boundary. `Resource.from_external(value)` may wrap any actual caller-owned resource value and never closes it; independent executions using the same Context may therefore receive the same external object concurrently, and concurrency/thread safety remains the caller's responsibility. Use a factory when each execution requires an isolated instance.
 
 Live external resource values are runtime/process-local. Contexts containing them have no durable serialization guarantee, and canonical workflow/resource serialization stores references/configuration rather than sockets, sessions, locks, tokens, or other live objects.
 
@@ -140,6 +172,19 @@ Arbitrary callable objects are **not** inferred to be factories merely because `
 ```python
 ctx.with_resource("client", Resource.from_factory(Client, base_url=url))
 ```
+
+**`ValueFactory` cleanup is mandatory; `LifecycleFactory` teardown is intrinsic.** The two factory shapes carry teardown differently, and `from_factory` encodes that split statically:
+
+```text
+Resource.from_factory(value_factory, cleanup=fn)     # accepted — explicit teardown callable
+Resource.from_factory(value_factory, cleanup=False)  # accepted — explicitly no teardown
+Resource.from_factory(value_factory)                 # rejected — a ValueFactory has no intrinsic teardown
+Resource.from_factory(lifecycle_factory)             # accepted — teardown lives in the generator/CM
+Resource.from_factory(lifecycle_factory, cleanup=fn) # rejected — use from_lifecycle for CM/gen semantics
+Resource(value_factory)                              # rejected statically — a producer is not a resolved value
+```
+
+An ordinary `ValueFactory` (a plain producer callable) resolves to a bare value with no inherent teardown, so Riko refuses to guess: it requires either `cleanup=<callable>` (Riko runs it at teardown) or `cleanup=False` (the produced value is deliberately not closed). A `LifecycleFactory` (generator/context-manager recipe) already defines its own teardown, so supplying `cleanup=` there is an error — reach for `Resource.from_lifecycle(...)` when you want `__enter__`/`__exit__`/post-`yield` semantics. This keeps "who tears this down" an explicit declaration rather than a runtime inference.
 
 `Resource.from_factory(factory, *args, **kwargs)` first binds its explicit arguments using normal partial-like semantics, then validates the remaining invocation contract. The only valid remaining signatures are exactly:
 
@@ -202,7 +247,7 @@ Resource dependency graphs are validated completely during preparation, regardle
 
 Dependency bindings stay symbolic until preparation and resolve against the effective Context. Only directly declared resource dependencies appear in a factory/parser `ResourceView`; transitive dependencies affect lifecycle and semantic identity but are not automatically exposed. A factory may read immutable Context configuration or Context-local module definitions through `ctx`, but only `resources=` creates managed lifecycle dependency edges.
 
-Acquisition is dependency-first and teardown is dependent-first. Dependencies remain open for at least the lifetime of every dependent that uses them. Independent eager resources enter in deterministic declaration order. Every reusable resource resolves at most once per execution; concurrent first-use of one lazy resource is single-flight within that execution. Re-executing the same Pipeline produces fresh owned factory resource values while external resources resolve to their caller-supplied object.
+Acquisition is dependency-first and teardown is dependent-first. Dependencies remain open for at least the lifetime of every dependent that uses them. Independent eager resources enter in deterministic declaration order. Every reusable resource resolves at most once per execution; concurrent first-use of one lazy resource is single-flight within that execution. A failed acquisition is memoized as failed for the remainder of that execution rather than silently retried on each subsequent use; the shared single-flight waiters observe the same failure. Re-executing the same Pipeline starts a fresh execution that acquires again, producing fresh owned factory resource values while external resources resolve to their caller-supplied object.
 
 Opening/resolution is transactional with respect to established ownership. If acquisition or post-acquisition validation fails, the execution unwinds every successfully established lifecycle, including the partially acquired current resource when Riko has a valid cleanup path. Riko never invents cleanup for an arbitrary object merely because validation failed.
 
@@ -230,6 +275,8 @@ Parsers and factories receive resolved resource values through an execution-boun
 resources.db
 resources["db"]
 ```
+
+The view is a real `Mapping`, so `resources["db"]` is the canonical, always-correct accessor and attribute access (`resources.db`) is **convenience-only**. Because it is a `Mapping`, the method names `keys`, `values`, `items`, and `get` (plus dunders) are **reserved**: a resource bound to one of those names is reachable only via subscript — `resources["keys"]` returns the resource, while `resources.keys` stays the bound `Mapping` method. Attribute access is therefore defined only for binding names that do not collide with a `Mapping` member; prefer `resources[name]` whenever a name could shadow one. This is why the local alias is the identity-significant handle (below) — callers choose non-colliding aliases at the binding site.
 
 `Context.resources.db` continues to denote the immutable resource definition, not the resolved resource value.
 

@@ -20,17 +20,18 @@ letting ``count="first"`` stop after the first result without materializing the
 rest.
 """
 
+from collections.abc import AsyncGenerator, Generator
 from functools import partial
 from logging import Logger
 from typing import Literal, cast, overload
 
 import pygogo as gogo
 
+from riko.bado._util import maybe_deferred
 from riko.bado.itertools import async_iter
 from riko.context import Context
-from riko.modules._assignment import get_subpipe
-from riko.modules._subpipe import is_subpipe
 from riko.types._streams import (
+    AsyncItemsOrValues,
     AsyncStreamOrValueStream,
     Item,
     Items,
@@ -47,12 +48,15 @@ from riko.types._wrappers import (
 from riko.types.compile import EmbedKwargs
 from riko.types.modules import CountValues
 
+from ._assignment import get_subpipe
+from ._subpipe import is_subpipe
+
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def _take_first(results: ItemsOrValues) -> ItemsOrValues:
     """
-    Yield only the first result, then promptly close the underlying iterator.
+    Emits only the first result, then promptly closes the underlying iterator.
 
     ``count="first"`` is already lazy (the loop stops pulling after one), but a
     child generator holding resources would otherwise linger until GC; closing it
@@ -65,14 +69,30 @@ def _take_first(results: ItemsOrValues) -> ItemsOrValues:
             yield item
             break
     finally:
-        close = getattr(iterator, "close", None)
+        if isinstance(iterator, Generator):
+            iterator.close()
 
-        if callable(close):
-            close()
+
+async def _atake_first(results: AsyncItemsOrValues) -> AsyncItemsOrValues:
+    iterator = aiter(results)
+
+    try:
+        async for item in iterator:
+            yield item
+            break
+    finally:
+        if isinstance(iterator, AsyncGenerator):
+            await iterator.aclose()
 
 
 def _take(results: ItemsOrValues, count: CountValues | None = "all") -> ItemsOrValues:
     return _take_first(results) if count == "first" else results
+
+
+def _atake(
+    results: AsyncItemsOrValues, count: CountValues | None = "all"
+) -> AsyncItemsOrValues:
+    return _atake_first(results) if count == "first" else results
 
 
 @overload
@@ -112,6 +132,19 @@ def _fold_parent(  # noqa: E302
         yield parent
 
 
+async def _afold_parent(
+    parent: Item, results: AsyncItemsOrValues, assign: str, emit: bool
+) -> AsyncItemsOrValues:
+    yielded = False
+
+    async for value in results:
+        yielded = True
+        yield value if emit else cast(Item, {**parent, assign: value})
+
+    if not (yielded or emit):
+        yield parent
+
+
 def _run_loop_sync(
     embed: SyncProcessorWrapper | SyncSubPipe,
     embedded_kwargs: EmbedKwargs | None,
@@ -144,9 +177,10 @@ async def _run_loop_async(
     embedder = get_subpipe(embed, context, embedded_kwargs, field=field)
 
     async for parent in async_iter(source):
-        results = _take(await embedder(parent), count)
+        items = await maybe_deferred(embedder, parent)
+        results = _atake(async_iter(items), count)
 
-        for value in _fold_parent(parent, results, assign or "", bool(emit)):
+        async for value in _afold_parent(parent, results, assign or "", bool(emit)):
             yield value
 
 

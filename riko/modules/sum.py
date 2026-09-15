@@ -13,6 +13,7 @@ Examples:
         Decimal('10')
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -142,7 +143,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Dec
         >>>
         >>> async def main():
         ...     items = ({"content": x} for x in range(5))
-        ...     result = await async_pipe(items)
+        ...     result = async_pipe(items)
         ...     print((await anext(result))["sum"])
         >>>
         >>> run(main)

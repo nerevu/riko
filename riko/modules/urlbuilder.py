@@ -20,6 +20,7 @@ Examples:
         'http://finance.yahoo.com/rss/headline?s=gm'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 
@@ -35,13 +36,13 @@ import pygogo as gogo
 
 from riko._strutils import INVALID_FILECHAR_PATTERN
 from riko.cast import BasicCastType
-from riko.modules._prepare import require_conf
 from riko.types._configs import UrlBuilderObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item
 from riko.types.modules import ObjconfParam
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "extract": "param", "listize": True}
 DEFAULTS: Defaults = {"param": {}}
@@ -167,8 +168,8 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         ...         "path": ["rss", "headline"],
         ...         "param": {"key": "s", "value": "gm"},
         ...     }
-        ...     result = await async_pipe(conf=conf)
-        ...     print(next(result))
+        ...     result = async_pipe(conf=conf)
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         http://finance.yahoo.com/rss/headline?s=gm

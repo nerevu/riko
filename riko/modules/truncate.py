@@ -19,6 +19,7 @@ Examples:
         4
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -48,7 +49,7 @@ def parser(
     stream: Stream, objconf: TruncateObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Returns the ``count`` items beginning at ``start``.
+    Keeps the ``count`` items beginning at ``start``.
 
     Args:
 
@@ -123,7 +124,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>>
         >>> async def main():
         ...     items = ({"x": x} for x in range(5))
-        ...     result = await async_pipe(items, conf={"count": 4})
+        ...     result = async_pipe(items, conf={"count": 4})
         ...     print(len([item async for item in result]))
         >>>
         >>> run(main)
@@ -136,7 +137,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Returns a specified number of items from a stream.
+    Keeps a specified number of items from a stream.
 
     Lazy: the source is read only until ``count`` items have been yielded.
 

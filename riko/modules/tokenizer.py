@@ -14,6 +14,7 @@ Examples:
         {'content': 'Once'}
 
 Attributes:
+
     TOKEN_KEY: The field each token is assigned to when ``conf`` supplies none.
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
@@ -133,8 +134,8 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({"content": "Once,twice,thrice"})
-        ...     print(next(result))
+        ...     result = async_pipe({"content": "Once,twice,thrice"})
+        ...     print(await anext(result))
         >>>
         >>> run(main)
         {'content': 'Once'}

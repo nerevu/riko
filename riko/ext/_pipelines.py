@@ -21,6 +21,7 @@ Examples:
         [{'x': 1}]
 
 Attributes:
+
     pipeline_resolver: Process-global resolver. Core ships it unconfigured, since
         a bare install has no named pipelines.
 
@@ -43,7 +44,7 @@ from riko.types.modules import ModuleSubtype
 
 def _as_subpipe(pipe: Pipe) -> Pipe:
     """
-    Returns a sub-pipe-marked wrapper around ``pipe``.
+    Builds a sub-pipe-marked wrapper around ``pipe``.
 
     The marker goes on a fresh ``partial`` because the module callable is shared
     with anyone importing the generated pipe directly; marking it in place
@@ -171,7 +172,7 @@ class PipelineResolver:
         self._definitions = definitions
 
     def load(self, name: str) -> ModuleType | None:
-        """Returns the generated pipe module for ``name``, or ``None``."""
+        """Loads the generated pipe module for ``name``, or ``None``."""
         return self._store.load(name) if self._store is not None else None
 
     @overload

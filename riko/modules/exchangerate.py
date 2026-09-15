@@ -19,6 +19,7 @@ Examples:
         Decimal('1.275201')
 
 Attributes:
+
     EXCHANGE_API: Default rates endpoint.
     PARAMS: Query parameters carrying the ``OPEN_EXCHANGE_RATES_ID`` app id.
     OPTS: Processor wrapper options.
@@ -261,8 +262,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
         >>>
         >>> async def main():
         ...     url = get_path("quote.json")
-        ...     result = await async_pipe({"content": "GBP"}, conf={"url": url})
-        ...     print(next(result)["exchangerate"])
+        ...     result = async_pipe({"content": "GBP"}, conf={"url": url})
+        ...     print((await anext(result))["exchangerate"])
         >>>
         >>> run(main)
         1.275201

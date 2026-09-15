@@ -15,6 +15,7 @@ Examples:
         1921504423
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 
@@ -45,7 +46,7 @@ def parser(
     content: str, extraction: object, objconf: DynamicConf, **kwargs: object
 ) -> int:
     """
-    Returns the unsigned 32-bit hash of ``content``.
+    Hashes ``content`` to an unsigned 32-bit integer.
 
     Args:
 
@@ -107,8 +108,8 @@ def async_pipe(*args: Any, **kwargs: object) -> int:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({"content": "hello world"})
-        ...     print(next(result)["hash"])
+        ...     result = async_pipe({"content": "hello world"})
+        ...     print((await anext(result))["hash"])
         >>>
         >>> run(main)
         1921504423

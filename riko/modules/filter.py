@@ -25,6 +25,7 @@ Examples:
         {'x': 3}
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
     ALLOW_INF: Whether to allow ``inf``/``-inf`` to compare numerically (default: False)
@@ -201,7 +202,7 @@ def parser(
     _: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Yields the items that match (or fail to match) every rule.
+    Filters the stream to items that match (or fail to match) every rule.
 
     Each rule's ``op`` is validated once up front, so an unsupported operation
     raises before any item is read.
@@ -332,7 +333,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> async def main():
         ...     items = [{"title": "Good job!"}, {"title": "Website Developer"}]
         ...     rule = {"field": "title", "op": "contains", "value": "web"}
-        ...     result = await async_pipe(items, conf={"rule": rule})
+        ...     result = async_pipe(items, conf={"rule": rule})
         ...     print((await anext(result))["title"])
         >>>
         >>> run(main)

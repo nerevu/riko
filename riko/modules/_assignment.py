@@ -8,7 +8,6 @@ assigned onto the item.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Iterator
-from copy import copy
 from functools import partial
 from itertools import chain, islice
 from logging import Logger
@@ -87,8 +86,7 @@ def get_subpipe(  # noqa: E302
     else:
         kwargs = {}
 
-    embed_context = copy(context)
-    embed_context.submodule = True
+    embed_context = context.augment(submodule=True)
     return partial(embed, **kwargs, context=embed_context)
 
 

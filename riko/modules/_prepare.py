@@ -114,7 +114,7 @@ def require_conf[T](  # noqa: E704
     objconf: DynamicConf, key: str, pipe: str, strict: bool = False
 ) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
     """
-    Returns a required conf value, or reports which one is unusable.
+    Resolves a required conf value, or reports which one is unusable.
 
     A missing conf key is a call-site programming error, so this raises rather
     than degrading — unlike an absent *field* on an item, which is a runtime

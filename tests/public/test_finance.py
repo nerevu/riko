@@ -9,7 +9,8 @@ when it is absent (see the collection hook in ``conftest.py``).
 
 import pytest
 
-from riko.collections import Targets, export, list_targets
+from riko.collections import export, list_formats
+from riko.types._write import Formats
 
 pytestmark = pytest.mark.finance
 
@@ -35,20 +36,20 @@ TRANSACTIONS = [
 
 def test_finance_targets_registered():
     """The finance extra registers the ``ofx``/``qif`` export targets."""
-    targets = list_targets()
+    targets = list_formats()
     assert "ofx" in targets
     assert "qif" in targets
 
 
 def test_export_ofx_serializes_transactions():
-    """``export(..., Targets.OFX)`` emits an OFX document, one txn per record."""
-    ofx = "".join(export(TRANSACTIONS, Targets.OFX))
+    """``export(..., Formats.OFX)`` emits an OFX document, one txn per record."""
+    ofx = "".join(export(TRANSACTIONS, Formats.OFX))
     assert "<OFX>" in ofx
     assert ofx.count("<STMTTRN>") == len(TRANSACTIONS)
 
 
 def test_export_qif_serializes_transactions():
-    """``export(..., Targets.QIF)`` emits a QIF document for the transactions."""
-    qif = "".join(export(TRANSACTIONS, Targets.QIF))
+    """``export(..., Formats.QIF)`` emits a QIF document for the transactions."""
+    qif = "".join(export(TRANSACTIONS, Formats.QIF))
     assert qif.startswith("!Account")
     assert "Checking" in qif

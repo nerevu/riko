@@ -19,15 +19,17 @@ Examples:
         [{'count': 2}]
 
 Attributes:
+
     pipe_resolver: Process-global façade over the two default resolvers.
 
 """
 
 from typing import Literal, overload
 
-from riko.ext._pipelines import pipeline_resolver
-from riko.ext.registry import registry
 from riko.types._wrappers import AsyncPipeWrapper, Pipe, Resolver, SyncPipeWrapper
+
+from ._pipelines import pipeline_resolver
+from .registry import registry
 
 
 class PipeResolver:
@@ -62,7 +64,7 @@ class PipeResolver:
     ) -> AsyncPipeWrapper: ...
     def resolve(self, name: str, is_async: bool = False) -> Pipe:  # noqa: E301
         """
-        Returns ``name``'s callable for ``interface``.
+        Resolves ``name``'s callable for ``interface``.
 
         Raises:
 

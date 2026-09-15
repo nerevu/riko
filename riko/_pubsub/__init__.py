@@ -41,7 +41,7 @@ def coroutine(
     registry_name: str | None = None, maxlen: int | None = None
 ) -> Callable[[Callable[..., Receiver]], Callable[..., Receiver]]:
     """
-    Returns a decorator that registers a generator as a sync receiver.
+    Builds a decorator that registers a generator as a sync receiver.
 
     Calling the decorated function primes the generator to its first ``yield`` and
     registers it with ``sync_hub``. It is ready to be pushed to before the caller does

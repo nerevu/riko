@@ -20,52 +20,66 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 
 **Collections** — pipe/collection runtime and export helpers (`riko.collections`):
 
+<!-- api-surface:collections -->
 ```python
 >>> sorted(COLLECTIONS)
-['AsyncCollection', 'AsyncPipe', 'PipeState', 'SyncCollection', 'SyncPipe', 'Targets', 'export', 'list_targets']
+['AsyncCollection', 'AsyncPipe', 'Formats', 'PipeState', 'SyncCollection', 'SyncPipe', 'export', 'list_formats']
 ```
+<!-- /api-surface:collections -->
 
 **Compilation** — DAG/JSON compilation entry points (`riko.compile`):
 
+<!-- api-surface:compile -->
 ```python
 >>> sorted(COMPILE)
 ['build_pipeline', 'compile_pipe', 'convert_dag', 'extract_dependencies', 'parse_pipe_def']
 ```
+<!-- /api-surface:compile -->
 
 **Async runtime** — async helpers promoted from `riko.bado` (see [Async runtime namespace](#async-runtime-namespace)):
 
+<!-- api-surface:bado -->
 ```python
 >>> sorted(BADO)
 ['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_url_open', 'async_write', 'backend', 'get_async_temp_file', 'isasync', 'issync', 'run']
 ```
+<!-- /api-surface:bado -->
 
 **Module discovery** — discovery enums and catalog helpers (`riko.modules`):
 
+<!-- api-surface:modules -->
 ```python
 >>> sorted(MODULES)
 ['Modules', 'Sinks', 'Sources', 'Transforms', 'describe_module', 'get_module_metadata', 'list_modules']
 ```
+<!-- /api-surface:modules -->
 
 **Root exceptions** — the `RikoError` hierarchy promoted onto the surface (`riko.exceptions`):
 
+<!-- api-surface:root-exceptions -->
 ```python
 >>> sorted(ROOT_EXCEPTIONS)
 ['PipelineStateError', 'RikoError', 'UnsupportedModuleError', 'UnsupportedPipelineError']
 ```
+<!-- /api-surface:root-exceptions -->
 
 **Other** — execution context and filesystem-path helpers:
 
+<!-- api-surface:other -->
 ```python
 >>> sorted(OTHER)
 ['Context', 'ExecutionMode', 'get_path', 'get_temp_file']
 ```
+<!-- /api-surface:other -->
 
 The complete stable surface is the union of these groups:
 
+<!-- api-surface:stable-union -->
 ```python
 >>> STABLE == BADO | COLLECTIONS | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS
 True
 ```
+<!-- /api-surface:stable-union -->
 
 ## Async runtime namespace
 
@@ -75,12 +89,14 @@ It owns riko's async helpers and provides a guarded import surface for selected 
 
 `BADO` is specifically the subset promoted into the stable application API:
 
+<!-- api-surface:bado-namespace -->
 ```python
 >>> sorted(BADO)
 ['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'async_url_open', 'async_write', 'backend', 'get_async_temp_file', 'isasync', 'issync', 'run']
 >>> BADO == set(riko.bado.__all__)
 True
 ```
+<!-- /api-surface:bado-namespace -->
 
 Promoted Bado names resolve to the same objects through all three supported paths:
 
@@ -97,17 +113,21 @@ Lower-level helpers may also remain available from submodules such as `riko.bado
 
 This surface is SemVer-guaranteed but is intended for extension and integration authors rather than ordinary application code.
 
+<!-- api-surface:extension -->
 ```python
 >>> sorted(EXTENSION)
 ['AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'DynamicConf', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'derive_category', 'get_conf_type', 'normalize_module_name', 'operator', 'processor', 'register', 'splitter']
 ```
+<!-- /api-surface:extension -->
 
 The stable application and extension surfaces are separate contracts:
 
+<!-- api-surface:stable-disjoint -->
 ```python
 >>> STABLE.isdisjoint(EXTENSION)
 True
 ```
+<!-- /api-surface:stable-disjoint -->
 
 ## Private implementation
 

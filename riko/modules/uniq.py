@@ -17,6 +17,7 @@ Examples:
         [{'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
 
 Attributes:
+
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
 
@@ -44,7 +45,7 @@ def parser(
     stream: Stream, objconf: UniqObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Yields items whose ``uniq_key`` value has not been seen recently.
+    Filters the stream to items whose ``uniq_key`` value was not seen recently.
 
     Args:
 
@@ -124,7 +125,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>>
         >>> async def main():
         ...     items = ({"x": x, "mod": x % 2} for x in range(5))
-        ...     result = await async_pipe(items, conf={"uniq_key": "mod"})
+        ...     result = async_pipe(items, conf={"uniq_key": "mod"})
         ...     print([i["mod"] async for i in result])
         >>>
         >>> run(main)

@@ -7,12 +7,55 @@ v0.77.4 (Unreleased)
 New
 ~~~
 
+- Add ``jsonl`` file format as an export target. It serializes each item as a JSON object
+  on its own line. This ``Formats`` can also e used in the new ``write`` and ``sink``
+  methods.
+
+- A pipe may now declare ``resources`` and receive the resolved handles. Bind them with
+  ``Context.with_resource``; riko closes the resources it owns and never closes one
+  supplied by the caller.
+
 - Added ``on_receive`` to ``subscribe`` which runs the callback on each item as it
   arrives and yields nothing. It is a distinct operation from ``func`` (a map), so
   passing both raises ``TypeError``.
 
-Fixed
+Changes
+~~~~~~~
+
+- Renamed the ``riko.Targets`` export enum to ``riko.Formats``, since its members name
+  serialization formats; ``export``/``write`` accept the same members under the new name.
+
+- Added chainable ``write`` and terminal ``sink`` methods to ``SyncPipe`` and
+  ``SyncCollection``. They take the destination directly, e.g., ``write("out.csv")``)
+  and accept ``fmt`` (``Formats``/str, e.g., ``json``) and ``mode`` (``WriteMode``/str,
+  e.g., ``append``/``replace``). ``csv`` and ``jsonl`` formats are written
+  incrementally. Any other format buffers until completion. A chainable ``write`` opens
+  its destination lazily only once the resulting stream is consumed. These methods
+  shadow the ``write`` module, so use ``pipe("write", conf={"url": ...})`` when you need
+  the old module call shape.
+
+- ``Context`` is now a fully immutable snapshot and ``Resource`` definitions are
+  structurally immutable. Derive a changed context with ``augment``/``with_resource``
+  instead of assigning to its fields, inputs, or resources.
+
+- An async operator's ``async_pipe`` now returns an async iterator directly. Consume it
+  with ``async for``/``anext`` without awaiting the call first. Async processors and
+  splitters are unchanged.
+
+- The compiler now interprets a pipe's wiring into a single immutable graph index once
+  per parse instead of rescanning raw wires at each step. A cyclic pipe is rejected up
+  front rather than silently reordered.
+
+Fixes
 ~~~~~
+
+- Type checkers no longer flag ``async for item in async_pipe(...)``. The async
+  ``processor`` and ``splitter`` call result is now typed as both awaitable and
+  async-iterable, matching how it has always behaved at runtime.
+
+- An ``AsyncPipe`` passed as a terminal sub-source (``format``, ``formatted``, or
+  ``union``'s ``others``) is now drained before parsing, so an async pipe yields the
+  same records as its sync counterpart instead of raising a not-iterable error.
 
 - ``skip_if`` now treats a missing ``text`` as a presence check on ``field`` instead of
   matching against the string ``"None"``. An absent field skips and a ``text`` of
@@ -40,8 +83,18 @@ Fixed
 - Time-zone lookup now captures both the standard and daylight names regardless of the
   current date and resolves ambiguous abbreviations (e.g. ``CST``) toward US zones.
 
+Documentation
+~~~~~~~~~~~~~
+
+- Normalized docstring summaries to lead with an action vs ``Returns``/``Yields``.
+
 Dev
 ~~~
+
+- Added ``manage codegen -m api`` plus drift-guards to generate API content in
+  ``_docs/API_SURFACE.md``  via ``gen-api-surface``.
+
+- Added ``manage lint --docstrings`` to flags summaries leading ``Returns``/``Yields``.
 
 - Added ``manage backfill`` to dispatch the release or publish workflow for an
   existing tag, with ``--dry-run`` and a ``--notes-only`` mode that replaces a
@@ -123,7 +176,7 @@ New
 
 - Entry point extensions can now directly name a module in place of a ModuleDefinition
 
-Fixed
+Fixes
 ~~~~~
 
 - Async pubsub and spool example no longer leak memory
@@ -246,7 +299,7 @@ Changes
 - ``riko.ext.resolver`` and ``riko.ext.pipelines`` are now explicitly private under
   ``riko.ext._resolver`` and ``riko.ext._pipelines``.
 
-Fixed
+Fixes
 ~~~~~
 
 - Async operators now accept a ``Feed`` (async-iterable) source instead of raising
@@ -428,8 +481,8 @@ Changes
   permissions and skip re-uploading existing PyPI artifacts.
 - Added ``pygments`` to the dev dependencies (RST linting).
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Verified ``xpath`` strips XML namespaces (#20); move content
   re-encoding into ``riko/_reencode.py`` and simplify the parsers.
@@ -444,6 +497,18 @@ New
   ``riko`` API, so async pipes and doctests import their helpers (and
   ``run``) from ``riko`` rather than ``riko.bado``.
 
+Fixes
+~~~~~
+
+- ``manage test`` now correctly reads the ``cov`` flag (not ``cover``), so
+  ``--cov=riko`` coverage works.
+
+- Added ``riko.ext.ModuleName``, a deliberately empty ``StrEnum`` base for typed
+  module-name discovery, plus ``normalize_module_name`` and the
+  ``ModuleNameLike = str | ModuleName`` alias. Any user-defined ``ModuleName``
+  subclass member (e.g. ``class MyModules(ModuleName)``) is now accepted anywhere a
+  module name is (e.g., ``SyncPipe(MyModules.FETCH)``)
+
 Documentation
 ~~~~~~~~~~~~~
 
@@ -454,18 +519,6 @@ Documentation
 - Relocated internal planning docs (``ROADMAP`` and the gameplans) out of
   the user-facing ``docs/`` tree; streamline a Cookbook example and
   backfill the changelog.
-
-Bugfixes
-~~~~~~~~
-
-- ``manage test`` now correctly reads the ``cov`` flag (not ``cover``), so
-  ``--cov=riko`` coverage works.
-
-- Added ``riko.ext.ModuleName``, a deliberately empty ``StrEnum`` base for typed
-  module-name discovery, plus ``normalize_module_name`` and the
-  ``ModuleNameLike = str | ModuleName`` alias. Any user-defined ``ModuleName``
-  subclass member (e.g. ``class MyModules(ModuleName)``) is now accepted anywhere a
-  module name is (e.g., ``SyncPipe(MyModules.FETCH)``)
 
 v0.74.0 (2026-08-06)
 --------------------
@@ -542,8 +595,8 @@ Removed
   to ``riko._strutils``. These homes are private/non-stable; callers should avoid
   depending on them or keep their own compatibility copy.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Unified the HTTP backend regardless of params.
 
@@ -564,16 +617,16 @@ Changes
 
 - Added a GitHub publishing workflow.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Added missing README links and a lint option.
 
 v0.72.1 (2026-08-05)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Stopped masking legitimate module import errors.
 
@@ -620,8 +673,8 @@ Changes
 
 - Made ``issync``/``isasync`` public; rename CLIs.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Failed ``SyncCollection`` on exception instead of on close.
 
@@ -635,8 +688,8 @@ Changes
 
 - Droped PyPy support and update documentation.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Made date parsing deterministic.
 
@@ -720,8 +773,8 @@ Security
 - Hardened XML parsing against XXE/entity-expansion (disable entity
   resolution, DTD loading, and network access under lxml).
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Corrected date arithmetic; apply stable sorts in reverse rule order; stop
   equating both-missing values on joins.
@@ -760,8 +813,8 @@ Performance
 v0.68.1 (2026-07-13)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed remaining lint errors; correct the ijson version spec.
 
@@ -782,8 +835,8 @@ Changes
 
 - Migrated the test suite to pytest; deprecate Python 2.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Returned ``unique_everseen`` elements; improve RSS pub/upd and field/value
   parsing.
@@ -797,8 +850,8 @@ Changes
 - Bumped minimum supported version to Python 3.7; add black and a prettify
   command.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Properly added setup requirements; clean up docblocks.
 
@@ -810,8 +863,8 @@ Changes
 
 - Made ``skip_if`` searching case insensitive.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Removed an unused import.
 
@@ -823,24 +876,24 @@ New
 
 - Added a user-defined operator.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed typos.
 
 v0.64.3 (2020-08-13)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Actually pass request params through to the fetcher.
 
 v0.64.2 (2020-08-13)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Properly resolve keyword arguments.
 
@@ -852,8 +905,8 @@ Changes
 
 - Loosen the ``pytz`` requirement.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Properly pass request params.
 
@@ -866,8 +919,8 @@ Changes
 - Use a ``LocalProxy`` to return the URL opener, return the content type with
   the response, remove the ``r`` attribute, and make ``ext`` a property.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Get ``fetch`` memoization working.
 
@@ -879,8 +932,8 @@ Changes
 
 - Allow skips to contain a callable.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Properly compare integers; use the correct pipe names.
 
@@ -895,8 +948,8 @@ Changes
 v0.62.1 (2020-07-30)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Update the language identifier.
 
@@ -908,8 +961,8 @@ Documentation
 v0.62.0 (2020-07-29)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Added tests and generalize the cast fix so casting no longer crashes.
 
@@ -921,16 +974,16 @@ Bugfixes
 v0.61.4 (2020-07-29)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Correctly set the license.
 
 v0.61.3 (2020-07-29)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Update requirements; correct lint errors.
 
@@ -942,8 +995,8 @@ Changes
 
 - Set the flake8 max line length equal to black; upgrade ``meza`` and twine.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Added a default user agent for ``urlopen`` HTTP requests.
 
@@ -960,8 +1013,8 @@ Changes
 
 - Upgrade ``mezmorize``.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Get the twine upload working.
 
@@ -973,8 +1026,8 @@ Changes
 
 - Removed Python 2 support; upgrade dependencies.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Catch ``StopIteration`` exceptions.
 
@@ -986,32 +1039,32 @@ Documentation
 v0.60.4 (2018-09-13)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Corrected a syntax error.
 
 v0.60.3 (2018-09-12)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Use the correct URL params.
 
 v0.60.2 (2018-08-18)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Use a new exchange rate data source.
 
 v0.60.1 (2018-08-18)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Don't crash on JSON parse errors; fix Python 2 import errors.
 
@@ -1026,8 +1079,8 @@ New
 v0.59.1 (2018-05-19)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed boolean type casting.
 
@@ -1039,16 +1092,16 @@ New
 
 - Added a ``name`` attribute to ``async_url_open``.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Upgrade conflicting requirements.
 
 v0.58.0 (2018-05-18)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Ignore currency pairs with no price; convert requirements to lists.
 
@@ -1060,32 +1113,32 @@ Changes
 
 - Upgrade ``mezmorize`` to move the memoize logic into it.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Upgrade ``mezmorize`` to fix Heroku detection; fix the manager's test command.
 
 v0.56.3 (2017-08-18)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Initialize the ``ext`` property.
 
 v0.56.2 (2017-08-18)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Upgrade ``mezmorize``.
 
 v0.56.1 (2017-08-18)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Parse URLs without file extensions.
 
@@ -1114,8 +1167,8 @@ Changes
 v0.54.1 (2017-08-17)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Upgrade ``mezmorize`` and correctly set keyword arguments.
 
@@ -1146,16 +1199,16 @@ Changes
 v0.52.2 (2017-08-11)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed ``pgrep`` to work on Heroku instances.
 
 v0.52.1 (2017-08-09)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed a lint error.
 
@@ -1167,8 +1220,8 @@ New
 
 - Added more cache types.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed a bug when the new month isn't in 1..12; use ``Clock`` to manage
   ``FakeReactor`` timing (closes #37).
@@ -1209,8 +1262,8 @@ Changes
 v0.49.2 (2017-04-12)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Don't consume the stream in ``PipeCollections``; prevent a
   ``UnicodeEncodeError``; fix the URL fetcher.
@@ -1220,8 +1273,8 @@ Bugfixes
 v0.49.1 (2017-04-09)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed spacing.
 
@@ -1233,8 +1286,8 @@ New
 
 - Added RSS caching.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed caching.
 
@@ -1247,8 +1300,8 @@ Changes
 - Populate pipe collections with ``conf``; add caching and rename the ``sleep``
   config; add a URL fetcher and move the cast functions.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Account for empty dates.
 
@@ -1260,16 +1313,16 @@ New
 
 - Added currency symbol unicode values.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Catch ``TypeError`` exceptions.
 
 v0.46.1 (2017-04-04)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Correctly parse dates.
 
@@ -1284,8 +1337,8 @@ Changes
 v0.45.1 (2017-04-04)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed a syntax error; cast parts to strings before joining; use the correct
   import; don't convert input to text.
@@ -1314,8 +1367,8 @@ Changes
 v0.43.1 (2017-03-24)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed Python 2 tests; remove a duplicate key.
 
@@ -1342,8 +1395,8 @@ New
 - Allow items to be type-cast when sorting; add a ``get_skip`` dict ``re.search``
   option; add an option to always return multiple items.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Handle the changed Yahoo API format; catch ``IndexError`` when casting to a
   date; decode the raw stream response.
@@ -1364,8 +1417,8 @@ Changes
   compress the collection module to a single file; use the microdom parser to
   find RSS links.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Don't block stderr during nosetests; convert decoded values to strings; strip
   whitespace from tokens; don't try to convert args when skipping.
@@ -1373,8 +1426,8 @@ Bugfixes
 v0.40.1 (2017-03-16)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Reduce function complexities; downgrade ``pygogo`` to match ``meza``'s; close
   ``meza`` files when done with CSV; fix xpath in the PyPy environment (no lxml).
@@ -1414,8 +1467,8 @@ Changes
 
 - Added more logging.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Use ``cElementTree`` when available; initialize ``self.entry`` as an iterator.
 
@@ -1435,8 +1488,8 @@ New
 
 - Added the ``join`` pipe; add the ``sum`` pipe.
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Correctly parse the XML path.
 
@@ -1448,16 +1501,16 @@ Documentation
 v0.35.3 (2016-07-26)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Install Python 2 requirements under Python 2 (fixes #3).
 
 v0.35.2 (2016-07-25)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Update ``meza`` to fix a ``pygogo`` version conflict; store downloaded packages
   in the wheel dir; fix prefix generation.
@@ -1470,8 +1523,8 @@ Documentation
 v0.35.1 (2016-07-22)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed makefile lint command. [Reuben Cummings]
 
@@ -1487,8 +1540,8 @@ New
 
 - Added grouping ability to count pipe. [Reuben Cummings]
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed processor metadata. [Reuben Cummings]
 
@@ -1511,8 +1564,8 @@ Changes
 
 - Renamed modules/functions, and update docs. [Reuben Cummings]
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Force getElementsByTagName to return child. [Reuben Cummings]
 
@@ -1543,8 +1596,8 @@ Changes
   - Renamed request function
   - Made benchmarks.py a script and add to tests
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed pypy test errors. [Reuben Cummings]
 
@@ -1567,16 +1620,16 @@ New
 v0.30.2 (2016-06-16)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Added missing optional dependency. [Reuben Cummings]
 
 v0.30.1 (2016-06-16)
 --------------------
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed failed test runner. [Reuben Cummings]
 
@@ -1590,8 +1643,8 @@ New
 
 - Try loading workflow from curdir first. [Reuben Cummings]
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed remaining pypy errors. [Reuben Cummings]
 
@@ -1614,8 +1667,8 @@ Changes
 
 - Split now returns tier of feeds. [Reuben Cummings]
 
-Bugfixes
-~~~~~~~~
+Fixes
+~~~~~
 
 - Fixed test mode for input pipe. [Reuben Cummings]
 

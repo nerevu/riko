@@ -17,6 +17,7 @@ Examples:
         '7213'
 
 Attributes:
+
     OPTS: Processor wrapper options.
     DEFAULTS: Default processor configuration.
 
@@ -32,12 +33,12 @@ from riko._constants import ENCODING
 from riko._io import Fetch, auto_close, seekable
 from riko.bado.io import async_url_open
 from riko.cast import SourceOpts
-from riko.modules._prepare import require_conf
 from riko.types._configs import CsvObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item, Stream
 
 from . import processor
+from ._prepare import require_conf
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {
@@ -83,7 +84,8 @@ async def async_parser(
         ...     url = get_path("spreadsheet.csv")
         ...     conf = {
         ...         "url": url, "sanitize": True, "skip_rows": 0,
-        ...         "encoding": ENCODING}
+        ...         "encoding": ENCODING,
+        ...     }
         ...     objconf = Objectify(conf)
         ...     result = await async_parser(None, None, objconf)
         ...     print(next(result)["mileage"])
@@ -212,8 +214,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     result = await async_pipe(conf={"url": get_path("spreadsheet.csv")})
-        ...     print(next(result)["mileage"])
+        ...     result = async_pipe(conf={"url": get_path("spreadsheet.csv")})
+        ...     print((await anext(result))["mileage"])
         >>>
         >>> run(main)
         7213
