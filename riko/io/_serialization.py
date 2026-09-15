@@ -78,5 +78,9 @@ def convert_records(
         result = CONVERSION_FUNCS[fmt](items, **kwargs)
     except StopIteration:
         result = iter("")
+    except KeyError as e:
+        valid = ", ".join([*map(str, CONVERSION_FUNCS), "list", "tuple"])
+        msg = f"Unsupported export format: {fmt}. Must be one of: {valid}."
+        raise ValueError(msg) from e
 
     return result

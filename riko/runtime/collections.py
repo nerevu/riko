@@ -119,9 +119,8 @@ import pygogo as gogo
 
 from riko.coercion._dataclass import normalize_module_name
 from riko.definitions._write import WriteResult
-from riko.io._serialization import CONVERSION_FUNCS
+from riko.io._serialization import CONVERSION_FUNCS, convert_records
 from riko.types._collections import Inputs
-from riko.types._guards import is_mapping
 from riko.types._io import PathLike
 from riko.types._options import SkipIf
 from riko.types._scalars import AnyStrType, BasicValue
@@ -545,17 +544,13 @@ def export(  # noqa: E302
 
     """
     if type_ in {"list", "tuple"}:
-        records = list(items)
-        result: int | StringIO | RikoItems | Iterable[str] | None = (
-            tuple(records) if type_ == "tuple" else records
+        result: int | ConversionOutput | RikoItems | None = (
+            tuple(items) if type_ == "tuple" else list(items)
         )
-    elif converter := CONVERSION_FUNCS.get(cast(Formats, type_)):
-        serializable = [dict(item) for item in items if is_mapping(item)]
-        serialized = converter(serializable, **kwargs)
-        result = cast(int, io.write(f, serialized, **kwargs)) if f else serialized
     else:
-        valid = ", ".join([*map(str, CONVERSION_FUNCS), "list", "tuple"])
-        raise ValueError(f"Invalid export type {type_!r}. Must be one of: {valid}.")
+        fmt = cast(Formats, type_)
+        serialized = convert_records(items, fmt, **kwargs)
+        result = cast(int, io.write(f, serialized, **kwargs)) if f else serialized
 
     return result
 
