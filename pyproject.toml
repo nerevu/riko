@@ -159,7 +159,7 @@ ignore = [
     "D107",  # undocumented-public-init
     "D401",  # non-imperative-mood
     "D417",  # undocumented-param
-    "D104",  #undocumented-public-package
+    "D104",  # undocumented-public-package
 
     # misc
     "T201",  # print

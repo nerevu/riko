@@ -376,7 +376,7 @@ async def async_url_read(
 
 
 async def async_write(
-    filepath: PathLike,
+    dest: PathLike,
     content: AnyStr | IOFileLike,
     mode: str = "wb+",
     encoding: str = ENCODING,
@@ -391,7 +391,7 @@ async def async_write(
 
     Args:
 
-        filepath: The destination path.
+        dest: The destination path.
         content: The data to write.
         mode: The file mode; a ``"b"`` in it selects binary I/O.
         encoding: The text encoding used when ``mode`` is not binary.
@@ -423,7 +423,7 @@ async def async_write(
     progress = 0
     binary = "b" in mode
     open_encoding = None if binary else encoding
-    opener = async_open(filepath, mode, encoding=open_encoding)
+    opener = async_open(dest, mode, encoding=open_encoding)
 
     async with await opener as f:
         for normalized in _chunk_content(content, chunksize):

@@ -135,8 +135,8 @@ def _check_dates[T: datetime | struct_time | date](*dates: T | object) -> tuple[
     return cast(tuple[T, ...], dates)
 
 
-def db_conn(path: PathLike | None = None):
-    connection = sqlite3.connect(path or ":memory:")
+def db_conn(dest: PathLike | None = None):
+    connection = sqlite3.connect(dest or ":memory:")
     connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
     connection.execute("INSERT INTO t VALUES ('ford', 7213)")
     connection.commit()
