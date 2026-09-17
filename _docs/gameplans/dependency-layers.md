@@ -1,184 +1,202 @@
 # Dependency Layers
 
-Riko's leaf modules (`_derive.py`, `_date_utils.py`) were carved out to break
-import cycles. That is a signal that **dependency direction** is a real design
-axis here, not an accident. This doc names the layers, states the boundary rules
-they imply, and sketches the folder regrouping that turns those rules from
-hand-maintained symbol lists into "no upward import between packages".
+Riko's source tree is grouped by dependency direction. The package layout and the
+static import-contract linter now express the same architecture; this document is
+the human-readable contract for that hierarchy.
 
-The rule idea is twofold: encode a few dependency-boundary checks (a small
-AST/import test, not an architecture framework), and treat `collections.py` as a
-shrinking compatibility facade that new execution features do not land in.
+The executable source of truth is `riko/cli/_lint_import_architecture.py`. The AST
+scanner that classifies imports lives in `riko/cli/_import_graph.py`, and the CLI
+surface is `manage lint imports`.
+
+## Layer DAG
+
+An arrow points from a layer to the layers it may depend on. The compact form printed
+by `manage lint imports --architecture` is:
+
+```text
+base < types < {bado | coercion | definitions} < io < parsing < rss
+        {bado | definitions} < execution
+        {execution | parsing} < runtime
+        {rss | runtime} < modules < api < cli
+```
+
+The declaration behind that rendering is:
+
+```text
+base        -> <none>
+types       -> base
+coercion    -> types
+bado        -> types
+definitions -> types
+io          -> coercion, bado, definitions
+parsing     -> io
+rss         -> parsing
+execution   -> bado, definitions
+runtime     -> execution, parsing
+modules     -> runtime, rss
+api         -> modules
+cli         -> api
+```
+
+A layer may also import any transitive dependency reachable through that DAG. The
+DAG is deliberately not flattened into one linear stack: `bado`, `coercion`, and
+`definitions` are peers, while `execution` forms a separate branch that rejoins at
+`runtime`.
+
+## Package mapping
+
+| Source path | Layer | Role |
+|---|---|---|
+| `riko/base/` | `base` | low-level constants, paths, logging, string/iterator/date helpers, exceptions, API declarations |
+| `riko/_package.py` | `base` | package metadata kept below the public facade |
+| `riko/types/` | `types` | type contracts, config TypedDicts, stream/resource/compiler types, enums |
+| `riko/coercion/` | `coercion` | casting, dynamic config/objectification, freezing, graph helpers |
+| `riko/bado/` | `bado` | async backend selection, async itertools, async utilities |
+| `riko/definitions/` | `definitions` | immutable/declarative module, resource, target, and write contracts |
+| `riko/io/` | `io` | sync/async I/O, serialization, re-encoding |
+| `riko/parsing/` | `parsing` | config parsing, `DotDict`, HTML/XML/document parsing |
+| `riko/rss/` | `rss` | feed discovery, entry normalization, RSS/Atom parsing |
+| `riko/runtime/context.py` | `execution` | execution context definition and resource binding surface |
+| `riko/runtime/_resources.py` | `execution` | concrete one-shot/reusable resource lifecycle implementations |
+| remaining `riko/runtime/` | `runtime` | collections, compiler, pipelines, resolver/registry, pub/sub, write sessions |
+| `riko/modules/` | `modules` | built-in pipe implementations and module metadata/decorator internals |
+| `riko/ext/` | `modules` | supported extension-author facade and codegen helpers; same dependency layer as modules |
+| `riko/__init__.py` | `api` | stable application facade |
+| `riko/cli/` | `cli` | commands, generators, documentation checks, import-contract linters |
+
+Every Python module under `riko` must classify into one of these layers. An
+unclassified module is an architecture failure rather than an implicit new tier.
+
+## Definition versus execution
+
+The folder split deliberately separates immutable declarations from mutable runtime
+state:
+
+- `riko/definitions/` contains descriptions of what a module/resource/write is.
+- `riko/runtime/context.py` and `riko/runtime/_resources.py` are the `execution`
+  sublayer: they own execution-facing resource/context behavior.
+- the rest of `riko/runtime/` orchestrates streams, compilation, resolution,
+  pub/sub, and write sessions around those contracts.
+
+The `execution` label therefore cuts across two files physically housed under
+`runtime/`. This exception is explicit in `_EXACT_LAYERS`; do not infer a module's
+layer from its first package component when those exact mappings apply.
 
 ## Import kinds
 
-Every boundary rule below is about *runtime* dependency direction, so it must
-distinguish three kinds of import:
+The architecture scanner classifies static imports without importing the package:
 
-- **runtime module-scope** — a top-level `import` / `from` that executes on
-  import. This is what creates cycles, and what the rules police.
-- **`if TYPE_CHECKING:`** — type-only, never executed at runtime. Exempt.
-- **function-local** — a deferred import inside a function body. Exempt, and for
-  the ext resolver it is *required* (it is the cycle-breaker).
+- **module-scope runtime imports** are recorded in `observed dependencies` and must
+  point to an allowed layer in the DAG.
+- **`if TYPE_CHECKING:` imports** are recorded in `typing or local-only
+  dependencies` and do not fail the layer-direction rule.
+- **function-local imports** are also recorded in `typing or local-only
+  dependencies` and do not fail the layer-direction rule. They remain useful as
+  deliberate cycle breakers, but they still show up in the report for review.
 
-This distinction is load-bearing today: `types/_wrappers.py` and
-`types/_resource.py` reference `context`/`resources` **only** under
-`TYPE_CHECKING`, so there is no runtime cycle between the type layer and the
-definition layer even though a naive scan reports edges in both directions.
+The scanner is intentionally static. Imports assembled dynamically from strings or
+loaded through plugin/entry-point mechanisms are not represented by the observed
+AST graph.
 
-## The layers
+## Same-layer imports
 
-Bottom imports nothing above it. Derived from the current runtime import graph.
+The layer rule is supplemented by a package-structure rule: a non-`__init__`
+module may not runtime-import a **public** module in its own layer. Same-layer
+implementation dependencies should point at underscore-private modules, while
+package `__init__` files may compose the layer's supported facade.
+
+This is why a same-layer refactor often pairs a public facade with private
+implementation modules instead of growing a web of public sibling imports.
+
+## Other import contracts
+
+Architecture direction is only one of three import checks:
+
+- `--canonical` rejects internal imports through re-export facades when the defining
+  module is the canonical source.
+- `--relative` requires sibling imports inside a package to use relative syntax.
+- `--architecture` validates classification, the layer DAG, and same-layer public
+  imports.
+
+`manage lint imports` defaults to `--canonical`. The selectors are additive:
 
 ```text
-leaf utils   _constants _formats _strutils _iterutils _importutils _logging
-             _objectify _io _rssutils _serialize _reencode paths warnings
-             pprint2 topsort exceptions currencies locations _date_utils
-values       cast  dates  dotdict                    (coercion cluster)
-bado         async backend (its own package; leaf, imported everywhere)
-types        types/*  — parse-time config + wrappers
-definition   context  resources  targets  (write model)
-parse        parsers
-runtime      _write_session  compile  collections   (collections = facade, top)
-plugins      modules  ext
-app          __init__ (facade)  cli
+manage lint imports --relative --architecture
+manage lint imports --all
 ```
 
-## The rules
+`manage lint --all` includes all three import-contract checks along with the normal
+standard lint suite, so CI enforces the hierarchy rather than merely documenting
+it.
 
-All five currently hold at runtime; these are guardrails against inversion, not
-fixes. Rules 1, 2, 3, and 5 are the *same* rule ("do not import from a higher
-layer at runtime"); only rule 4 is a genuine exception.
+## Reading the architecture report
 
-| # | Rule | Formal form | Scope |
-|---|---|---|---|
-| 1 | types ⇏ collections | no `riko.types.*` imports `riko.runtime.collections` (and `riko.runtime.compile`, `riko.runtime._write_session`) | runtime module-scope |
-| 2 | definition ⇏ execution | no `{context, resources, targets, write-model}` imports `{collections, compile, _write_session}` | runtime module-scope **and** local |
-| 3 | `modules._derive` stays leaf | `modules._derive` imports only `{types.*, cast, modules._inference}` (+ stdlib); same shape for `_date_utils` (allowlist `{types}`) | any riko import |
-| 4 | ext resolver ⇏ compile at module scope | `{ext._resolver, ext._pipelines}` reference `riko.runtime.compile` **only** function-locally | forbids module-scope; requires local |
-| 5 | new runtime ⇏ compatibility modules | `{resources, targets, _write_session, context, write-model}` ⇏ `{collections}` | runtime module-scope |
+`manage lint imports --architecture` renders three distinct things:
 
-Rule 5 needs a concrete compatibility set to be enforceable: `collections.py` is
-the shrinking compatibility facade. So rule 5
-reads "the write and resource runtime never imports the facade" — the correct
-direction is `collections -> _write_session`, which the graph already shows —
-plus the monotonic corollary: **new execution features land in runtime siblings,
-never in `collections.py`.**
+1. `layers` — the declared allowed DAG.
+2. `observed dependencies` — the reduced runtime module-scope dependency frontier
+   found in the source tree.
+3. `typing or local-only dependencies` — type-only and deferred static edges that
+   are visible for review but exempt from the runtime-direction failure rule.
 
-Collapsed, the whole set is:
+The observed rendering is a compact frontier, not an exhaustive list of every
+import edge. A higher dependency can subsume lower transitive dependencies in the
+printed report.
 
+## Change rules
+
+When moving or adding source files:
 > 1. A module may not import (at runtime, module scope) from a package above it
 >    in `leaf < values/bado < types < definition < parse < runtime < plugins < app`.
 > 2. Exception: `ext/_resolver` and `ext/_pipelines` reach `runtime.compile`
->    only via function-local imports.
+>    only via function-local imports; `runtime.collections` reaches
+>    `modules.receive` (`register_receiver`) the same way (see below).
 >
 > `cli/` is exempt from rule 1: it is the application entry point, above every
 > layer, and is the one place a module-scope `import riko.runtime.compile` /
 > `import riko.runtime.collections` is legitimate.
 
+## The `runtime -> modules.receive` deferred edge
+
+`SyncPipe.subscribe`/`AsyncPipe.subscribe` in `runtime.collections` reach
+`register_receiver` in `modules.receive` through a **function-local** import
+(`noqa: PLC0415`) — an upward `runtime -> plugins` edge that the layer order
+forbids at module scope. Like rule 4's exception it is harmless because it is
+deferred: it never executes on import, so it creates no cycle.
+
+Longer term this edge can disappear entirely. `register_receiver` is mostly
+pub/sub registration machinery built directly on `sync_hub` and `coroutine`,
+both already in `runtime._pubsub`. Split the low-level receiver-registration
+primitive down into `runtime._pubsub` and leave only the receive-module-specific
+callback/config adaptation in `modules.receive`. Then both call sites point
+*down*:
+
+```text
+runtime.collections -> runtime._pubsub
+modules.receive     -> runtime._pubsub
+```
+
+and the `runtime -> modules` edge is gone.
+
+Do this only if `runtime._pubsub` is where that primitive genuinely belongs —
+not to appease the boundary check. The check should model the architecture you
+actually want; it should not force code movement for a technically harmless
+deferred import. Until then, the edge stays function-local, on the same
+exemption rule 4 relies on.
+
 ## Folder regrouping
 
-Today the layers are correct but invisible: `context.py`, `resources.py`,
-`targets.py` (definition) sit in the same flat top-level directory as
-`collections.py`, `compile.py`, `_write_session.py` (execution). Grouping by
-layer makes each rule a package edge instead of a symbol set. Highest payoff
-first:
+1. Put the implementation in the lowest layer that owns its responsibility.
+2. Update `_PREFIX_LAYERS` or `_EXACT_LAYERS` only when a genuinely new mapping is
+   needed; do not make an exception merely to silence an upward import.
+3. Prefer moving a shared contract downward over importing a higher runtime layer
+   from a lower package.
+4. Keep definition objects immutable; execution-owned mutable state stays in the
+   execution/runtime side of the boundary.
+5. Run `manage lint imports --all` after package moves. Run `manage lint --all`
+   before merging so the same contracts CI sees are exercised locally.
 
-- **A. Extract `riko/definition/`** (`context`, `resources`, `targets`, and the
-  write model). Rule 2 becomes "`definition/` must not import `runtime/`" — one
-  package edge instead of two symbol sets.
-- **B. Move the write model out of `types/_write.py` into `definition/`.** It is
-  the write *model* (`WriteMode`/`Formats`/`WriteCapabilities`/`PreparedWrite`),
-  a definition, not a parse-time config type. This is why "new runtime" and
-  "definition" partially overlap `types` today; after the move `types/` is purely
-  parse-time config + wrappers, tightening rule 1.
-- **C. Drop the `types -> context`/`types -> resources` `TYPE_CHECKING`
-  back-edges** by consolidating the Context/Resource structural type contracts
-  down in `types/` (they already partly live in `types/_resource.py`) and having
-  `definition/` import *down* from `types/` only. Then `types/` has zero upward
-  references — the strongest form of rules 1 and 3.
-- **D. Formalize a leaf tier** instead of special-casing `_derive`/`_date_utils`,
-  so "leaf" is a location rather than a per-file promise.
-- **E. Group execution into `riko/runtime/`** (`collections`, `compile`,
-  `_write_session`), giving rule 5's corollary an obvious home and making
-  `collections.py`'s facade status visible as "the top module of `runtime/`".
-- **F. Leave `cli/` at the top**, exempt from rule 1.
-
-Adopt incrementally. **A + B** carry the most rule-collapsing value with the
-least churn; **C**, **D**, **E** can follow.
-
-## Sketch: the `definition/` extraction (moves A + B)
-
-Target tree:
-
-```text
-riko/
-    types/                 parse-time config + wrappers only (no write model)
-        ...
-        # _write.py leaves this package
-    definition/
-        __init__.py        re-exports the definition surface
-        context.py         (was riko/context.py)
-        resources.py       (was riko/resources.py)
-        targets.py         (was riko/targets.py)
-        write.py           (was riko/types/_write.py)
-    runtime/               (move E, later) collections / compile / _write_session
-    ...
-```
-
-Import direction after the move (every arrow points *down*):
-
-```text
-runtime._write_session ─┐
-runtime.collections ────┼──> definition ──> types ──> values/bado ──> leaf
-runtime.compile ────────┘                     ^
-                             definition.write ┘  (write model, was types/_write)
-```
-
-`definition/__init__.py` gives the layer one import surface:
-
-```python
-from riko.definition.context import Context
-from riko.definition.resources import Closeable, ReusableResource
-from riko.definition.targets import Formats
-from riko.definition.write import PreparedWrite, WriteCapabilities, WriteMode
-```
-
-Call-site changes are mechanical rename-imports; the module *bodies* do not move
-between layers:
-
-```text
-riko/context.py            -> riko/definition/context.py
-riko/resources.py          -> riko/definition/resources.py
-riko/targets.py            -> riko/definition/targets.py
-riko/types/_write.py       -> riko/definition/write.py
-```
-
-```text
-from riko.definitions.context import Context        ->  from riko.definition.context import Context
-from riko.definitions.resources import ...          ->  from riko.definition.resources import ...
-from riko.definitions.targets import Formats        ->  from riko.definition.targets import Formats
-from riko.definitions.write import WriteMode ->  from riko.definition.write import WriteMode
-```
-
-Boundary constraints the extraction must preserve:
-
-- `definition/` imports **down** into `types/`, `values`, `bado`, and leaf only —
-  never `runtime` (`collections`/`compile`/`_write_session`) (rule 2).
-- `runtime._write_session` keeps importing `definition.resources` /
-  `definition.write` (correct direction); `definition.write` must not import back
-  into `runtime` (rule 5).
-- The `Formats` export enum stays a definition (a declaration), separate from the
-  `Sinks` discovery bucket and from the `runtime` write execution that consumes it.
-- The stable `riko` facade re-exports (`Context`, `Formats`, and the P9A
-  discovery enums) are unchanged for users; only internal import paths move.
-
-## Relationship to existing invariants
-
-- **CLAUDE.md cross-cutting invariants** already forbid a module-scope compiler
-  import in `riko/ext/` (rule 4) and describe the immutable definition layer
-  (`Context`/`Resource` frozen snapshots) — this doc names the *direction* those
-  live in.
-- **The compatibility-facade rule** — the monotonic "no new execution in
-  `collections.py`" constraint is rule 5's corollary; grouping execution under
-  `runtime/` (move E) gives new features an unambiguous home away from the facade.
+The old flat top-level layout and its proposed `definition/`/`runtime/` regrouping
+are historical. The current `base/`, `types/`, `coercion/`, `bado/`,
+`definitions/`, `io/`, `parsing/`, `rss/`, `runtime/`, `modules/`, and `cli/`
+packages are the architecture now.

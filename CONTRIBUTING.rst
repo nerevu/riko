@@ -65,6 +65,11 @@ The test matrix covers all three supported CPython versions. Using one version
 locally is sufficient for normal development; run ``tox`` before requesting
 review when a change could be version-specific.
 
+The complete ``manage lint --all`` suite also invokes ``actionlint``,
+``shellcheck``, and ``yamlfmt`` for workflow and YAML checks. CI installs those
+tools automatically; install them locally if you want to run the complete lint
+bundle before pushing.
+
 Fork and clone
 ^^^^^^^^^^^^^^
 
@@ -104,36 +109,131 @@ needed. Verify the environment:
     uv run python -c "import riko; print(riko.__version__)"
     uv run manage help
 
+``manage`` is the preferred contributor interface for repository maintenance
+commands. Run ``uv run manage help`` to list commands and ``uv run manage
+<command> --help`` for command-specific options.
+
+Manage command reference
+------------------------
+
+The common development commands are:
+
+``manage test``
+    Run pytest. Paths may be passed positionally or with repeatable ``--where``;
+    use ``--no-cov`` for faster focused runs and ``--tox`` for the tox runner.
+
+``manage prettify``
+    Sort imports, apply Ruff fixes, and format Python. Use ``--where`` to limit
+    the scope and ``--yaml`` when formatting YAML instead.
+
+``manage check``
+    Run Ruff checks against staged Python files. This is a fast pre-commit check,
+    not a replacement for the full lint suite.
+
+``manage lint``
+    Run Ruff lint plus ``ruff format --check`` by default. Standard checks may be
+    selected additively with ``--rst``, ``--docs``, ``--actions``, ``--yaml``, and
+    ``--docstrings``. ``manage lint --all`` runs all standard checks, including
+    all import-contract checks. Type completeness, strict pylint, and distribution
+    checks remain explicit via ``--check-types``, ``--verify-types``, ``--strict``,
+    and ``--dist``.
+
+``manage lint imports``
+    Check internal import contracts. With no selector it runs the canonical-import
+    check. Use ``--canonical``, ``--relative``, and ``--architecture`` additively,
+    or ``--all`` for all three.
+
+``manage codegen``
+    Regenerate derived repository artifacts. With no selector it regenerates
+    configuration types. Use ``--config``, ``--names``, ``--pipes``, and ``--api``
+    additively, or ``--all`` for every generator.
+
 Daily development workflow
 --------------------------
 
-Run a focused test while developing:
+Use the narrowest feedback loop while implementing a change. Run a focused test
+for the behavior you are changing:
 
 .. code-block:: bash
 
-    uv run manage test --no-cov --where tests/public/test_collections.py
+    uv run manage test --no-cov tests/public/test_collections.py
 
 Run documentation doctests directly when changing user-facing examples:
 
 .. code-block:: bash
 
-    uv run manage test --no-cov --where "README.rst docs/COOKBOOK.rst docs/FAQ.rst"
+    uv run manage test --no-cov README.rst docs/COOKBOOK.rst docs/FAQ.rst
 
-Before opening a pull request, run the same core checks used by CI:
-
-.. code-block:: bash
-
-    uv run manage test --no-cov
-    uv run manage lint
-    uv run manage lint --check-types
-    uv run manage lint --verify-types
-
-Run the complete supported-version matrix with ``tox`` when the change affects
-packaging, dependencies, typing, async behavior, or interpreter-specific code:
+If the change modifies generator inputs, regenerate the affected artifacts before
+formatting or testing them. Selectors are additive, so regenerate only what the
+change owns:
 
 .. code-block:: bash
 
-    uvx tox run
+    uv run manage codegen --config --names
+
+Use ``manage codegen --all`` when a change spans several generated surfaces or
+when doing an explicit full regeneration pass.
+
+Preferred validation sequence
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Before requesting review, use this order. It keeps generated files current before
+formatting, proves the changed behavior with a narrow test first, then widens to
+the repository-wide checks:
+
+1. Regenerate any affected artifacts.
+
+   .. code-block:: bash
+
+       uv run manage codegen --config
+
+   Choose the relevant ``--config``, ``--names``, ``--pipes``, and ``--api``
+   selectors, or use ``--all`` when appropriate. Skip this step when no generated
+   input changed.
+
+2. Format the changed code (and YAML, when applicable).
+
+   .. code-block:: bash
+
+       uv run manage prettify
+       uv run manage prettify --yaml
+
+3. Run focused tests for the behavior being changed.
+
+   .. code-block:: bash
+
+       uv run manage test --no-cov tests/path/to/test_file.py
+
+4. Run the complete local test suite.
+
+   .. code-block:: bash
+
+       uv run manage test --no-cov
+
+5. Run the standard repository lint bundle.
+
+   .. code-block:: bash
+
+       uv run manage lint --all
+
+6. Run both type-checking passes explicitly.
+
+   .. code-block:: bash
+
+       uv run manage lint --check-types
+       uv run manage lint --verify-types
+
+7. Run the supported-version matrix when the change affects packaging,
+   dependencies, typing, async behavior, or interpreter-specific code.
+
+   .. code-block:: bash
+
+       uvx tox run
+
+Steps 4--6 match the core test/lint/type checks used by CI. ``manage lint --all``
+intentionally does not include the type checks, strict pylint, or distribution
+checks, so keep the two pyright commands explicit.
 
 Pre-commit hooks are optional but useful:
 
@@ -190,20 +290,36 @@ A built-in module change commonly requires work in several places:
 1. Update the implementation under ``riko/modules/``.
 2. Update the corresponding ``<Name>Conf`` ``TypedDict`` contract in
    ``riko/types/modules.py``.
-3. Regenerate (and reformat) the parse-time ``objconf`` types in
-   ``riko/types/configs.py`` from that contract with a single command:
+3. Regenerate the parse-time ``objconf`` types in
+   ``riko/coercion/_configs.py`` from that contract:
 
    .. code-block:: bash
 
-       uv run gen-config
+       uv run manage codegen --config
 
-4. Add or update sync and async tests where both execution paths exist.
-5. Add deterministic examples to the module docstring or cookbook.
-6. Update the FAQ catalog when adding, removing, or materially changing a
+4. If the module catalog changed (for example, a built-in was added or removed),
+   regenerate the discovery names and module ids too:
+
+   .. code-block:: bash
+
+       uv run manage codegen --names
+
+   The selectors are additive, so a new module normally uses one command:
+
+   .. code-block:: bash
+
+       uv run manage codegen --config --names
+
+5. Add or update sync and async tests where both execution paths exist.
+6. Add deterministic examples to the module docstring or cookbook.
+7. Update the FAQ catalog when adding, removing, or materially changing a
    built-in module.
+8. Run the preferred validation sequence above.
 
 The configuration drift guard (``tests/internal/test_gen_config.py``) fails when
-the contracts and ``riko/types/configs.py`` fall out of sync.
+the ``<Name>Conf`` contracts and ``riko/coercion/_configs.py`` fall out of sync.
+Generated discovery names and ids have their own drift guards under
+``tests/internal/``.
 
 Pull request checklist
 ----------------------
@@ -213,9 +329,9 @@ Before requesting review, confirm that:
 - the pull request has one clear purpose;
 - the description explains the problem, approach, and user-visible effect;
 - tests cover the change and pass locally;
-- linting, formatting, and type checks pass;
+- ``manage lint --all`` and both pyright passes succeed;
 - documentation is updated for user-visible behavior;
-- generated configuration files are current;
+- all affected generated artifacts are current;
 - no secrets, local paths, build artifacts, or unrelated edits are included; and
 - the pull request targets the branch agreed in the issue or discussion.
 

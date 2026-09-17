@@ -64,7 +64,7 @@ error/disposition callbacks and sinks. **Riko Connect** is not started.
 
 > **Implemented.** Minor: removing legacy async-chaining materialization → [execution-semantics.md](gameplans/execution-semantics.md).
 
-The core item and stream types exist as described, in `riko/types/general.py`:
+The core item and stream types exist as described, in `riko/types/_streams.py`:
 
 ```python
 type Item = RikoDict | dict[str, RikoValue] | RSSEntry | DotDict[RikoValue]
@@ -236,7 +236,7 @@ is the module id, for `SyncPipe(...)`/`|` chaining): don't confuse them. In part
 `category="Sinks"` (the bucket class name) returns `[]` — the value is `"sink"`, lowercase singular.
 (The codegen maps the three category strings to the plural bucket **class** names via `_CATEGORY_CLASS`
 = `{"source": "Sources", "transform": "Transforms", "sink": "Sinks"}`.)
-`derive_category` (`riko/ext/names.py`) buckets each module by **data-flow capability only**.
+`derive_category` (`riko/ext/_names.py`) buckets each module by **data-flow capability only**.
 `SINK_NAMES` (`{"output","write"}`) is the *criterion*, not the
 membership: a module is a `Sink` iff its name is in that set. The one built-in match is `write`
 (`riko/modules/write.py`) — a pass-through operator that serializes the stream to `conf['url']` via a
@@ -255,13 +255,13 @@ is the module removed at the R5C clean-break once `Pipeline.write()` / `WriteNod
 ## Module registry & pipe resolution (P8, shipped)
 
 The runtime→compiler resolution coupling is inverted behind three **compiler-free** layers sharing
-one overloaded `resolve(name, interface)` contract (`riko/types/general.py::Resolver`):
+one overloaded `resolve(name, interface)` contract (`riko/types/_wrappers.py::Resolver`):
 `ModuleRegistry` (`riko/ext/registry.py`; built-ins lazy per name, runtime `register`/`reset`, entry
 points under `[project.entry-points."riko.modules"]`; precedence runtime → entry-point → built-in),
-`PipelineResolver` + injectable `ModuleStore`/`DirectoryStore` (`riko/ext/_pipelines.py`; core ships
-no locations), and the `PipeResolver` façade (`riko/ext/_resolver.py`) doing one symmetric dispatch.
-`riko/collections.py` resolves through the façade; `compile.resolve_module` delegates to it.
-Generated pipelines expose a stable `pipe`/`async_pipe` entry, so a sub-pipeline resolves exactly
+`PipelineResolver` + injectable `ModuleStore`/`DirectoryStore` (`riko/runtime/_pipelines.py`; core ships
+no locations), and the `PipeResolver` façade (`riko/runtime/_resolver.py`) doing one symmetric dispatch.
+`riko/runtime/collections.py` resolves through the façade; `riko.runtime._compile.resolve_module`
+delegates to it. Generated pipelines expose a stable `pipe`/`async_pipe` entry, so a sub-pipeline resolves exactly
 like a built-in. External packages add modules with **no core edit** (`examples/riko-example-ext/`).
 P9A discoverability (generated `Modules` tree, `list_modules`/`describe_module`) shipped — see
 §24 above. Remaining P9 (non-P9A): the installed-env aggregate `riko.generated.Modules` + `.pyi`
@@ -278,7 +278,7 @@ async). Tests: `tests/internal/test_decorators.py`.
 
 **Fluent surface (P9, partial — shipped):** value-taking chaining — `pipe | "name"`,
 `pipe | ("name", conf)`, `pipe | SyncPipe(...)`, `items | SyncPipe(...)`, and `.pipe()`/`.async_pipe()`
-— plus the `ModuleName` `StrEnum` base and `normalize_module_name` (`riko/ext/names.py`); a name may
+— plus the `ModuleName` `StrEnum` base and `normalize_module_name` (`riko/ext/_names.py`); a name may
 be a `str` or `ModuleName` member anywhere, normalized to its canonical string at the boundary. The
 generated `Modules` tree (P9A) shipped — `pipe | Transforms.FILTER` resolves identically to
 `pipe.filter()`; see §24.
@@ -286,7 +286,7 @@ generated `Modules` tree (P9A) shipped — `pipe | Transforms.FILTER` resolves i
 ## Compiler graph index (shipped)
 
 `parse_pipe_def` interprets a pipe's wiring into one immutable `_GraphIndex`
-(`riko/types/compile.py`) in place of the former `ParsedPipeDef` `graph`+`wires` mappings.
+(`riko/types/_compiler.py`) in place of the former `ParsedPipeDef` `graph`+`wires` mappings.
 Wire-level `edges`/`incoming`/`outgoing` keep full port identity (ports verbatim — `_INPUT`/`_OTHER`/
 `_OUTPUT` or a named kwarg); node-level `order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs`
 carry scheduling facts, with the embed→loop relationship folded into `order`. It is built once,
@@ -306,8 +306,8 @@ front instead of silently SCC-reordered. Generated output stays byte-identical (
 ## Subscription lifecycle — `subscribe` / `publish` (F5a, partial)
 
 > **Partial.** The shipped compatibility behavior and the revised MVP/F5 staging boundary are
-> documented in [fanout-topology.md §14](gameplans/fanout-topology.md#14-relationship-to-current-send--receive),
-> especially [§14.1](gameplans/fanout-topology.md#141-revised-compatibility-mvp-boundary).
+documented in [fanout-topology.md §14](gameplans/fanout-topology.md#14-relationship-to-current-send--receive),
+especially [§14.1](gameplans/fanout-topology.md#141-revised-compatibility-mvp-boundary).
 
 `SyncPipe` ships a subscribe/publish pair that hides the pub/sub hub from callers:
 `SyncPipe.subscribe(name, func=…, wait=…, maxlen=…)` registers eagerly via
@@ -354,7 +354,7 @@ drain. A `strict` xfail in `tests/public/test_collections.py` marks the shipped 
 
 Meza-backed export converters ship as the typed `Formats` `StrEnum` (stable `riko` surface, renamed
 from the earlier `Targets`): `csv` / `geojson` / `json` / `jsonl` / `ofx` / `qif` — serialized
-representations only. `CONVERSION_FUNCS` (`riko/_formats.py`) is keyed by `Formats` members (`jsonl`
+representations only. `CONVERSION_FUNCS` (`riko/io/_serialization.py`) is keyed by `Formats` members (`jsonl`
 maps to meza's `records2json(newline=True)`, not bracket-stripped JSON); `list_formats()` lists
 exactly these serialization formats. `export(items, Formats.JSON)` (or the plain string) serializes;
 the `list` / `tuple` collection materializations are accepted only by `export()`
@@ -368,27 +368,27 @@ serializes the same `Formats` at a destination. Meza owns conversion work. The B
 ## Write architecture — `write()` / `sink()` sessions (shipped)
 
 > **Partial.** Sync and async write sessions both ship now with the compatibility pipe runtime; R4B moves
-> their lifetime ownership onto the `SyncExecution` / `AsyncExecution` exit stacks and adds explicit
-> execution-outcome propagation (including terminate/cancellation → abort), R5C adds the executable
-> `WriteNode` caller, and R11 adds provider-native targets/sessions →
-> [execution-semantics.md](gameplans/execution-semantics.md),
-> [effects.md](gameplans/effects.md), [implementation-sequence.md](gameplans/implementation-sequence.md).
+their lifetime ownership onto the `SyncExecution` / `AsyncExecution` exit stacks and adds explicit
+execution-outcome propagation (including terminate/cancellation → abort), R5C adds the executable
+`WriteNode` caller, and R11 adds provider-native targets/sessions →
+[execution-semantics.md](gameplans/execution-semantics.md),
+[effects.md](gameplans/effects.md), [implementation-sequence.md](gameplans/implementation-sequence.md).
 
 The fluent `write()`/`sink()` verbs ride a private write-session mechanism (no hidden `send`/`on_receive`
 pub/sub). Four durable layers:
 
 - **declarative** — `WriteOperation` (frozen `mode` + unified `keys`), `WriteTarget` (a destination
   that *reports write capabilities*, it does not itself deliver records), and `Formats`
-  (`riko/types/_write.py`).
+  (`riko/definitions/_write.py`).
 - **prepared** — `PreparedWrite` (target + normalized operation + resolved `WriteCapabilities`) is the
   validated object; `WriteOperation` on its own is unvalidated intent. `WriteCapabilities` stores only
   independent facts (`modes`, `fmt`, `incremental`, `match_keyed_modes`, `idempotent_modes`);
   `appendable`/`serializes`/`keyed_modes` are **derived** properties. `prepare_write` +
-  `validate_target_mode` + local `normalize_keys` live in `riko/targets.py` (`normalize_keys` is a
+  `validate_target_mode` + local `normalize_keys` live in `riko/definitions/_targets.py` (`normalize_keys` is a
   dedicated helper, *not* a widened `_iterutils.listize`).
 - **runtime** — the `SyncWriteSession` protocol (`write(Item | Items)` / `finalize` / `abort` /
   `teardown`) and the `_FileWriteSession` state machine (`_SessionState` OPEN/FINALIZED/ABORTED/CLOSED,
-  acquire-once) in `riko/_write_session.py`. `finalize` commits (idempotent), `abort` abandons,
+  acquire-once) in `riko/runtime/_write_session.py`. `finalize` commits (idempotent), `abort` abandons,
   `teardown` **never commits**; the `file_write_session` CM only acquires + tears down.
 - **surface** — `write()` is passthrough (yields each item unchanged via an identity `_passthrough_pipe`
   host — no `_prime()`, so a preceding module never re-runs); `sink()` is the interim terminal verb
