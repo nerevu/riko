@@ -26,23 +26,28 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 import re
 from collections.abc import Mapping, Sequence
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode, urljoin
 
 import pygogo as gogo
 
 from riko.base._strutils import INVALID_FILECHAR_PATTERN
-from riko.coercion._configs import UrlBuilderObjconf
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Item
-from riko.types.modules import ObjconfParam
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import UrlBuilderObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item
+    from riko.types.modules import ObjconfParam
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "extract": "param", "listize": True}
 DEFAULTS: Defaults = {"param": {}}

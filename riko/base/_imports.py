@@ -1,7 +1,12 @@
 """Optional-import helpers that distinguish missing targets from broken imports."""
 
+from __future__ import annotations
+
 from importlib import import_module
-from types import ModuleType
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 
 def import_or_else(target: str) -> ModuleType | None:

@@ -10,11 +10,17 @@ Lifecycle/close/split/export parity lives in ``test_pipe_lifecycle.py`` and
 ``test_context_modes.py``. This file locks *data-output* equivalence.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from riko.runtime.collections import AsyncPipe, SyncPipe
 from riko.types._guards import is_mapping
-from riko.types._streams import RikoItem
 from riko.types.modules import ItemBuilderConf, StrReplaceConf, StrReplaceConfRule
 from tests import PipeBuilder, aresolve, skipif_issync
+
+if TYPE_CHECKING:
+    from riko.types._streams import RikoItem
 
 BUILDER_CONF = ItemBuilderConf({"attrs": {"key": "content", "value": "a,bb,ccc"}})
 STRR_CONF = StrReplaceConf({"rule": StrReplaceConfRule(find="c", replace="C")})

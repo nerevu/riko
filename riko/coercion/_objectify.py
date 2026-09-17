@@ -14,6 +14,8 @@ It fixes:
 
 """
 
+from __future__ import annotations
+
 from collections.abc import Iterator, Mapping, Sequence
 from time import struct_time
 from typing import TYPE_CHECKING, Any, TypeVar, overload
@@ -21,13 +23,12 @@ from typing import TYPE_CHECKING, Any, TypeVar, overload
 from meza.fntools import Objectify as _Objectify
 from requests.structures import CaseInsensitiveDict
 
-from riko.types._streams import ItemOrValue
-from riko.types._wrappers import ArgCaster
-
 _VT = TypeVar("_VT")
 
 
 if TYPE_CHECKING:
+    from riko.types._streams import ItemOrValue
+    from riko.types._wrappers import ArgCaster
 
     class Objectify(Mapping[str, _VT]):
         """

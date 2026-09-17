@@ -2,17 +2,18 @@
 
 """Documentation lint helpers for the manage CLI."""
 
+from __future__ import annotations
+
 import re
 import tomllib
 from collections import Counter
-from collections.abc import Iterator
 from glob import glob
 from io import StringIO
 from os.path import basename, dirname, exists, isdir, join
 from pathlib import Path
 from shutil import which
 from subprocess import run
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from riko.base._paths import ROOT_DIR
 
@@ -24,6 +25,10 @@ try:
 except ImportError:
     publish_doctree = None
     nodes = None
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 _TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
 _LINE_ANCHOR_RE = re.compile(r"^L\d")

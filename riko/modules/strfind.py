@@ -29,21 +29,26 @@ Attributes:
 
 """
 
-from collections.abc import Sequence
+from __future__ import annotations
+
 from functools import reduce
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.bado.itertools import coop_reduce
 from riko.base._strutils import reduce_find
-from riko.coercion._configs import StrfindObjconf
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types.modules import FindConfRule
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from logging import Logger
+
+    from riko.coercion._configs import StrfindObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types.modules import FindConfRule
 
 OPTS: Opts = {
     "ftype": BasicCastType.TEXT,

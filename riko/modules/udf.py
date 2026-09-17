@@ -22,19 +22,24 @@ Attributes:
 
 """
 
-from collections.abc import Awaitable, Callable
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.bado._util import maybe_deferred
-from riko.coercion._configs import UdfObjconf
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Item
 
 from ._decorators import processor
 from ._prepare import require_arg
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+    from logging import Logger
+
+    from riko.coercion._configs import UdfObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item
 
 OPTS: Opts = {"listize": True, "emit": True}
 DEFAULTS: Defaults = {}

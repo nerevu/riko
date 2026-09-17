@@ -1,5 +1,7 @@
 """Sequence normalization and fluent application helpers."""
 
+from __future__ import annotations
+
 import builtins
 import itertools
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -7,14 +9,16 @@ from functools import partial
 from inspect import signature
 from itertools import repeat
 from time import struct_time
-from typing import Any, TypeGuard, cast, overload
+from typing import TYPE_CHECKING, Any, Self, TypeGuard, cast, overload
 
 from requests.structures import CaseInsensitiveDict
 
 from riko.base._iterutils import multi_try
-from riko.types._collections import BasicDict, RikoValue
 from riko.types._scalars import PrimitiveValueType
-from riko.types._streams import Item, Stream, StreamOrValueStream, ValueStream
+
+if TYPE_CHECKING:
+    from riko.types._collections import BasicDict, RikoValue
+    from riko.types._streams import Item, Stream, StreamOrValueStream, ValueStream
 
 
 def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
@@ -165,7 +169,7 @@ def gen_items(  # noqa: E302
 
     """
     if isinstance(content, (struct_time, dict, CaseInsensitiveDict)):
-        yield {key: cast(BasicDict, content)} if key else content
+        yield {key: cast("BasicDict", content)} if key else content
     elif isinstance(content, (list, tuple)):
         for value in content:
             yield from gen_items(value, key)
@@ -198,13 +202,14 @@ class Chainable:
         self.method = method
         self.list = listize(data)
 
-    def __getattr__(self, name: str) -> "Chainable":
+    def __getattr__(self, name: str) -> Self:
         funcs = (partial(getattr, x) for x in [self.data, builtins, itertools])
         zipped = zip(funcs, repeat(AttributeError))
         method = multi_try(name, zipped, default=None)
-        return Chainable(self.data, method)
+        result = Chainable(self.data, method)
+        return cast("Self", result)
 
-    def __call__(self, *args: Any, **kwargs: object) -> "Chainable":
+    def __call__(self, *args: Any, **kwargs: object) -> Self:
         method = self.method
 
         if method is None:
@@ -223,4 +228,4 @@ class Chainable:
             else:
                 result = Chainable(method(args[0], self.data, **kwargs))
 
-        return result
+        return cast("Self", result)

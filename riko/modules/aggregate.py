@@ -25,21 +25,26 @@ Attributes:
 
 """
 
-from collections.abc import Awaitable, Callable
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.bado._util import maybe_deferred
-from riko.coercion._configs import AggregateObjconf
 from riko.coercion._sequences import listize
 from riko.types._options import Defaults
 from riko.types._streams import Item, Items, Stream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import operator
 from ._prepare import require_arg
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+    from logging import Logger
+
+    from riko.coercion._configs import AggregateObjconf
+    from riko.types._wrappers import PipeTuples
 
 DEFAULTS: Defaults = Defaults()
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger

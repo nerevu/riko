@@ -3,12 +3,21 @@
 RSS/feed entry helpers for text extraction, enrichment, and content truncation.
 """
 
+from __future__ import annotations
+
 from collections.abc import Iterable, Iterator, Mapping
 from datetime import datetime as dt
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from riko.coercion._dates import date_to_tt, ensure_tzinfo
-from riko.types._rss import ExpandedRSSEntry, ParserRSSEntry, RSSEntry, YahooRSSEntry
+
+if TYPE_CHECKING:
+    from riko.types._rss import (
+        ExpandedRSSEntry,
+        ParserRSSEntry,
+        RSSEntry,
+        YahooRSSEntry,
+    )
 
 
 def _get_entry_text(entry: ParserRSSEntry) -> str:
@@ -34,14 +43,14 @@ def _get_entry_text(entry: ParserRSSEntry) -> str:
 def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
     for raw in entries:
         text = _get_entry_text(raw)
-        entry = cast(YahooRSSEntry, dict(raw))
+        entry = cast("YahooRSSEntry", dict(raw))
         pub_date = updated_date = None
 
         if not entry.get("summary"):
-            cast(ExpandedRSSEntry, entry)["summary"] = text
+            cast("ExpandedRSSEntry", entry)["summary"] = text
 
         if not entry.get("description"):
-            cast(ExpandedRSSEntry, entry)["description"] = text
+            cast("ExpandedRSSEntry", entry)["description"] = text
 
         if "published_parsed" in entry:
             pub_date = updated_date = entry["published_parsed"]
@@ -71,9 +80,9 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
         entry["y:id"] = entry.get("id")
         entry["y:published"] = pub_date
         entry["y:title"] = entry.get("title")
-        cast(ExpandedRSSEntry, entry)["updated_parsed"] = updated_date
+        cast("ExpandedRSSEntry", entry)["updated_parsed"] = updated_date
 
         for key in ("published_parsed", "pubDate"):
-            cast(ExpandedRSSEntry, entry)[key] = pub_date
+            cast("ExpandedRSSEntry", entry)[key] = pub_date
 
-        yield cast(RSSEntry, entry)
+        yield cast("RSSEntry", entry)

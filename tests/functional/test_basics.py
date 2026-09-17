@@ -6,8 +6,9 @@ composition, wiring, runtime context, or historical pipeline behavior not owned 
 strongly by module doctests or focused test suites.
 """
 
+from __future__ import annotations
+
 import sqlite3
-from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from importlib import import_module
@@ -15,7 +16,7 @@ from itertools import islice
 from json import loads
 from pathlib import Path
 from time import struct_time
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -33,11 +34,15 @@ from riko.runtime._pipelines import pipeline_resolver
 from riko.runtime.collections import SyncPipe
 from riko.runtime.context import Context, ExecutionMode
 from riko.types._guards import is_mapping
-from riko.types._io import PathLike
-from riko.types._pipeline import AsyncPipelineDependencies, SyncPipelineDependencies
 from riko.types._streams import AsyncRikoStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput
 from tests import TESTS_DIR, async_test
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from riko.types._io import PathLike
+    from riko.types._pipeline import AsyncPipelineDependencies, SyncPipelineDependencies
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
@@ -125,14 +130,14 @@ def _check_dates[T: datetime | struct_time | date](*dates: T | object) -> tuple[
         if all(isinstance(_date, _class) for _date in dates):
             if _class is datetime or _class is struct_time:
                 for _date in dates:
-                    assert get_tzname(cast(datetime, _date))
+                    assert get_tzname(cast("datetime", _date))
 
             break
     else:
         msg = f"Expected all dates to be of the same type, but got {dates}"
         raise AssertionError(msg)
 
-    return cast(tuple[T, ...], dates)
+    return cast("tuple[T, ...]", dates)
 
 
 def db_conn(dest: PathLike | None = None):
@@ -186,7 +191,7 @@ class TestBasics:
         else:
             stream = pipeline(context=self.context)
 
-        return cast(ParserMaterializedOutput, list(listize(stream)))
+        return cast("ParserMaterializedOutput", list(listize(stream)))
 
     def _aget_pipeline(
         self, pipe_name: str, file_path: Path | None = None
@@ -199,7 +204,7 @@ class TestBasics:
         else:
             stream = pipeline(context=self.context)
 
-        return cast(AsyncRikoStream, stream)
+        return cast("AsyncRikoStream", stream)
 
     def _load(self, items: Sequence[Items], pipe_name, value=0, check=1):
         try:

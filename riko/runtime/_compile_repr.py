@@ -63,7 +63,8 @@ def repr_arg(
         value = repr(arg)
     elif isinstance(arg, (dict, Mapping)):
         joined = ", ".join(
-            f"{repr_arg(k)}: {repr_arg(cast(RawConfValues, v))}" for k, v in arg.items()
+            f"{repr_arg(k)}: {repr_arg(cast('RawConfValues', v))}"
+            for k, v in arg.items()
         )
         value = f"{{{joined}}}"
     else:

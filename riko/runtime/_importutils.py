@@ -3,12 +3,17 @@
 Resolves sync or async pipe interfaces from importable modules.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from types import ModuleType
+from typing import TYPE_CHECKING
 
 from riko.base._imports import import_or_else
 from riko.base.exceptions import UnsupportedModuleError, UnsupportedPipelineError
-from riko.types._wrappers import Interface, Pipe
+
+if TYPE_CHECKING:
+    from riko.types._wrappers import Interface, Pipe
 
 type Loader = Callable[[str], ModuleType | None]
 

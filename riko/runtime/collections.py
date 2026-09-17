@@ -82,21 +82,14 @@ Examples:
 
 """
 
-from collections.abc import (
-    AsyncGenerator,
-    Awaitable,
-    Callable,
-    Generator,
-    Iterable,
-    Iterator,
-    Mapping,
-)
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping
 from contextlib import aclosing
 from enum import StrEnum
 from functools import partial
 from io import StringIO
 from itertools import chain, repeat
-from logging import Logger
 from multiprocessing import Pool as CPUPool
 from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
@@ -104,6 +97,7 @@ from multiprocessing.pool import Pool as CPUPoolType
 from multiprocessing.pool import ThreadPool as ThreadPoolType
 from operator import length_hint
 from typing import (
+    TYPE_CHECKING,
     Any,
     Literal,
     Never,
@@ -116,30 +110,6 @@ from typing import (
 )
 
 import pygogo as gogo
-
-from riko.coercion._dataclass import normalize_module_name
-from riko.definitions._write import WriteResult
-from riko.io._serialization import CONVERSION_FUNCS, convert_records
-from riko.types._collections import Inputs
-from riko.types._io import PathLike
-from riko.types._options import SkipIf
-from riko.types._scalars import AnyStrType, BasicValue
-from riko.types.modules import Conf, ReceiveConf
-
-from ._pubsub._types import ReceiveFunc
-from ._resolver import pipe_resolver
-from ._write_session import (
-    async_file_write_session,
-    async_write_through,
-    file_write_session,
-    write_through,
-)
-
-try:
-    from csv2ofx.ofx import OFX
-except ModuleNotFoundError:
-    mapping = OFX = QIF = gen_data = None
-
 from meza import io
 
 from riko.bado._util import as_awaitable, maybe_deferred
@@ -152,35 +122,55 @@ from riko.bado.itertools import (
 )
 from riko.base._constants import DEF_CONNECTION_COUNT
 from riko.base.exceptions import PipelineStateError
+from riko.coercion._dataclass import normalize_module_name
 from riko.coercion._sequences import listize
 from riko.definitions._targets import prepare_write
-from riko.definitions._write import Destination, ExportType, WriteMode
+from riko.definitions._write import Destination, ExportType, WriteMode, WriteResult
+from riko.io._serialization import CONVERSION_FUNCS, convert_records
 from riko.types._enums import ExecutionMode, FmtLike, Formats, KeyLike, ModuleNameLike
-from riko.types._streams import (
-    AsyncItems,
-    AsyncRikoItems,
-    AsyncRikoSource,
-    AsyncRikoStream,
-    Item,
-    Items,
-    OthersLike,
-    RikoFeed,
-    RikoItem,
-    RikoItems,
-    RikoStream,
-    Stream,
-)
-from riko.types._wrappers import (
-    AsyncPipeWrapper,
-    AsyncSplitterWrapperOutput,
-    ConversionOutput,
-    SplitterWrapperOutput,
-    SyncPipeWrapper,
-)
+from riko.types._scalars import AnyStrType, BasicValue
+from riko.types.modules import Conf, ReceiveConf
 
 from ._pubsub import sync_hub
+from ._resolver import pipe_resolver
+from ._write_session import (
+    async_file_write_session,
+    async_write_through,
+    file_write_session,
+    write_through,
+)
 from .context import Context
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Awaitable, Callable, Generator, Iterator
+    from logging import Logger
+
+    from riko.types._collections import Inputs
+    from riko.types._io import PathLike
+    from riko.types._options import SkipIf
+    from riko.types._streams import (
+        AsyncItems,
+        AsyncRikoItems,
+        AsyncRikoSource,
+        AsyncRikoStream,
+        Item,
+        Items,
+        OthersLike,
+        RikoFeed,
+        RikoItem,
+        RikoItems,
+        RikoStream,
+        Stream,
+    )
+    from riko.types._wrappers import (
+        AsyncPipeWrapper,
+        AsyncSplitterWrapperOutput,
+        ConversionOutput,
+        SplitterWrapperOutput,
+        SyncPipeWrapper,
+    )
+
+    from ._pubsub._types import ReceiveFunc
 type AnyPool = ThreadPoolType | CPUPoolType
 type PoolFactory = Callable[..., AnyPool]
 
@@ -366,8 +356,8 @@ class _SendDispatcher:
     """
 
     def __get__(
-        self, obj: "SyncPipe | None", cls: "type[SyncPipe] | None" = None
-    ) -> "partial[SyncPipe]":
+        self, obj: SyncPipe | None, cls: type[SyncPipe] | None = None
+    ) -> partial[SyncPipe]:
         if cls is not None and obj is None:
             method = partial(self.cls_send, cls)
         elif obj is None:
@@ -377,9 +367,7 @@ class _SendDispatcher:
 
         return method
 
-    def cls_send(
-        self, cls: "type[SyncPipe]", source: RikoItems, *names: str
-    ) -> "SyncPipe":
+    def cls_send(self, cls: type[SyncPipe], source: RikoItems, *names: str) -> SyncPipe:
         """
         Builds a publisher that pushes source items to each named subscriber.
 
@@ -398,7 +386,7 @@ class _SendDispatcher:
         """
         return cls("send", source, others=list(names))
 
-    def inst_send(self, obj: "SyncPipe", *names: str) -> "SyncPipe":
+    def inst_send(self, obj: SyncPipe, *names: str) -> SyncPipe:
         """
         Builds a publisher that pushes a pipeline's items to each named subscriber.
 
@@ -548,16 +536,16 @@ def export(  # noqa: E302
             tuple(items) if type_ == "tuple" else list(items)
         )
     else:
-        fmt = cast(Formats, type_)
+        fmt = cast("Formats", type_)
         serialized = convert_records(items, fmt, **kwargs)
-        result = cast(int, io.write(f, serialized, **kwargs)) if f else serialized
+        result = cast("int", io.write(f, serialized, **kwargs)) if f else serialized
 
     return result
 
 
 def _passthrough_pipe(
-    template: "SyncPipe | SyncCollection", source: RikoItems | None = None
-) -> "SyncPipe":
+    template: SyncPipe | SyncCollection, source: RikoItems | None = None
+) -> SyncPipe:
     """
     Builds an identity ``SyncPipe`` over ``source`` with the template's runtime.
 
@@ -596,9 +584,9 @@ def _passthrough_pipe(
 
 
 def _async_passthrough_pipe(
-    template: "AsyncPipe | AsyncCollection",
+    template: AsyncPipe | AsyncCollection,
     source: RikoItems | AsyncRikoItems | None = None,
-) -> "AsyncPipe":
+) -> AsyncPipe:
     """
     Builds an identity ``AsyncPipe`` over ``source`` with the template's runtime.
 
@@ -617,31 +605,31 @@ def _async_passthrough_pipe(
 
 
 def _write(
-    source: "SyncPipe | SyncCollection",
+    source: SyncPipe | SyncCollection,
     dest: PathLike,
     *,
     mode: WriteMode | str = WriteMode.REPLACE,
     fmt: FmtLike | None = None,
-) -> "SyncPipe":
+) -> SyncPipe:
     """Writes each item to ``dest`` while passing the stream through unchanged."""
     prepared = prepare_write(dest, mode, fmt=fmt)
     pipe = _passthrough_pipe(source)
-    items = cast(Items, iter(source))
+    items = cast("Items", iter(source))
     pipe.source = write_through(items, prepared, terminating=lambda: pipe._terminating)
     return pipe
 
 
 def _awrite(
-    source: "AsyncPipe | AsyncCollection",
+    source: AsyncPipe | AsyncCollection,
     dest: PathLike,
     *,
     mode: WriteMode | str = WriteMode.REPLACE,
     fmt: FmtLike | None = None,
-) -> "AsyncPipe":
+) -> AsyncPipe:
     """Writes each item to ``dest`` while passing the stream through unchanged."""
     prepared = prepare_write(dest, mode, fmt=fmt)
     pipe = _async_passthrough_pipe(source)
-    items = cast(AsyncItems, aiter(source))
+    items = cast("AsyncItems", aiter(source))
     pipe.source = async_write_through(items, prepared)
     return pipe
 
@@ -659,7 +647,7 @@ def _sink(
 
     with file_write_session(prepared) as session:
         try:
-            session.write(cast(Items, source))
+            session.write(cast("Items", source))
         except BaseException:
             session.abort()
             raise
@@ -682,7 +670,7 @@ async def _asink(
 
     async with async_file_write_session(prepared) as session:
         try:
-            await session.write(cast(AsyncItems, source))
+            await session.write(cast("AsyncItems", source))
         except BaseException:
             session.abort()
             raise
@@ -796,7 +784,7 @@ class PyPipe(_Lifecycle):
 
     def _notify_subscribers(self) -> None:
         if self.name == "send":
-            ids = cast(dict[str, int], self.kwargs.get("ids", {}))
+            ids = cast("dict[str, int]", self.kwargs.get("ids", {}))
             sync_hub.notify_complete(ids)
 
     def _definitional_kwargs(self) -> dict[str, object]:
@@ -894,7 +882,7 @@ class SyncPipe(PyPipe):
         self.map: Callable[..., Iterable[Stream]]
         self.ordered = ordered
         self.pool_scope: PoolScope = pool_scope
-        self.source: RikoItems = cast(RikoItems, self.source)
+        self.source: RikoItems = cast("RikoItems", self.source)
 
         if pool_scope not in {"pipe", "pipeline"}:
             raise ValueError("pool_scope must be either 'pipe' or 'pipeline'")
@@ -940,7 +928,7 @@ class SyncPipe(PyPipe):
         """The live worker pool, or ``None`` when inline or already released."""
         return self._pool_handle.pool if self._pool_handle else None
 
-    def _chain(self, name: ModuleNameLike, **kwargs: object) -> "SyncPipe":
+    def _chain(self, name: ModuleNameLike, **kwargs: object) -> SyncPipe:
         """
         Builds the next pipe with the current runtime settings.
 
@@ -956,7 +944,7 @@ class SyncPipe(PyPipe):
 
         """
         self._require_usable("chain")
-        pool_scope = cast(PoolScope, kwargs.get("pool_scope", self.pool_scope))
+        pool_scope = cast("PoolScope", kwargs.get("pool_scope", self.pool_scope))
 
         if self.pool_scope == pool_scope == PoolScope.PIPELINE and "pool" not in kwargs:
             shared = self._pool_handle
@@ -984,7 +972,7 @@ class SyncPipe(PyPipe):
 
         return child
 
-    def __getattr__(self, name: str) -> "SyncPipe":
+    def __getattr__(self, name: str) -> SyncPipe:
         """
         Chains any module by attribute, so ``.sort()`` runs the sort pipe.
 
@@ -998,7 +986,7 @@ class SyncPipe(PyPipe):
 
         return self._chain(name)
 
-    def __or__(self, other: object) -> "SyncPipe":
+    def __or__(self, other: object) -> SyncPipe:
         """
         Chains a module name, config pair, or pipe template using ``|``.
 
@@ -1030,7 +1018,7 @@ class SyncPipe(PyPipe):
 
         return chained
 
-    def __ror__(self, other: object) -> "SyncPipe":
+    def __ror__(self, other: object) -> SyncPipe:
         """
         Seeds a stream on the left of ``|``.
 
@@ -1049,7 +1037,7 @@ class SyncPipe(PyPipe):
 
         return primed
 
-    def _prime(self, source: RikoItems) -> "SyncPipe":
+    def _prime(self, source: RikoItems) -> SyncPipe:
         """Copies this pipe template, bound to ``source``."""
         self._require_usable("chain")
         skwargs = {
@@ -1066,7 +1054,7 @@ class SyncPipe(PyPipe):
         skwargs.update(self._definitional_kwargs())
         return SyncPipe(self.name, source=source, **skwargs)
 
-    def pipe(self, name: ModuleNameLike, **kwargs: Any) -> "SyncPipe":
+    def pipe(self, name: ModuleNameLike, **kwargs: Any) -> SyncPipe:
         """
         Chains the next pipe by name.
 
@@ -1096,7 +1084,7 @@ class SyncPipe(PyPipe):
         *,
         on_receive: Callable[[RikoItem], object] | None = None,
         **kwargs: object,
-    ) -> "SyncPipe":
+    ) -> SyncPipe:
         """
         Builds a subscriber bound to a named channel.
 
@@ -1333,7 +1321,7 @@ class SyncPipe(PyPipe):
 
         """
         splits = self._chain("split", **kwargs)
-        return cast(SplitterWrapperOutput, splits)
+        return cast("SplitterWrapperOutput", splits)
 
     @overload
     def export(self) -> list[Item]: ...  # noqa: E704
@@ -1358,7 +1346,7 @@ class SyncPipe(PyPipe):
         *,
         mode: WriteMode | str = WriteMode.REPLACE,
         fmt: FmtLike | None = None,
-    ) -> "SyncPipe":
+    ) -> SyncPipe:
         """
         Writes a copy of the stream to ``dest`` and passes through the chain.
 
@@ -1462,7 +1450,7 @@ class PyCollection(_Lifecycle):
     ):
         self._state = PipeState.NEW
         self.parallel: bool = parallel
-        self.conf: Conf = conf or cast(Conf, {})
+        self.conf: Conf = conf or cast("Conf", {})
         self.sources: Iterable[Mapping[str, str]] = sources
         self.length: int = length_hint(self.sources)
         self.workers: int = workers or get_worker_cnt(self.length)
@@ -1635,7 +1623,7 @@ class SyncCollection(PyCollection):
             if not self._in_context:
                 self._release_pool()
 
-    def pipe(self, name: ModuleNameLike | None = None, **kwargs: Any) -> "SyncPipe":
+    def pipe(self, name: ModuleNameLike | None = None, **kwargs: Any) -> SyncPipe:
         """
         Chains the next pipe by name.
 
@@ -1668,7 +1656,7 @@ class SyncCollection(PyCollection):
         *,
         mode: WriteMode | str = WriteMode.REPLACE,
         fmt: FmtLike | None = None,
-    ) -> "SyncPipe":
+    ) -> SyncPipe:
         """The collection counterpart of :meth:`SyncPipe.write`."""
         return _write(self, dest, mode=mode, fmt=fmt)
 
@@ -1765,7 +1753,7 @@ class AsyncPipe(PyPipe):
             self._async_pipe = lambda source, **_: aiter(as_async(source))
             self.pollable = self.loopable = self.mapify = False
 
-    def __getattr__(self, name: str) -> "AsyncPipe":
+    def __getattr__(self, name: str) -> AsyncPipe:
         """
         Chains any module by attribute, so ``.sort()`` runs the sort pipe.
 
@@ -1777,7 +1765,7 @@ class AsyncPipe(PyPipe):
 
         return self._chain(name)
 
-    def __or__(self, other: object) -> "AsyncPipe":
+    def __or__(self, other: object) -> AsyncPipe:
         """
         Chains a module name, config pair, or pipe template using ``|``.
 
@@ -1809,7 +1797,7 @@ class AsyncPipe(PyPipe):
 
         return chained
 
-    def __ror__(self, other: object) -> "AsyncPipe":
+    def __ror__(self, other: object) -> AsyncPipe:
         """
         Seeds a stream on the left of ``|``.
 
@@ -1828,7 +1816,7 @@ class AsyncPipe(PyPipe):
 
         return primed
 
-    def _prime(self, source: RikoItems) -> "AsyncPipe":
+    def _prime(self, source: RikoItems) -> AsyncPipe:
         """Copies this pipe template, bound to ``source``."""
         self._require_usable("chain")
         skwargs = {
@@ -1843,7 +1831,7 @@ class AsyncPipe(PyPipe):
         skwargs.update(self._definitional_kwargs())
         return AsyncPipe(self.name, source=source, **skwargs)
 
-    def async_pipe(self, name: ModuleNameLike, **kwargs: Any) -> "AsyncPipe":
+    def async_pipe(self, name: ModuleNameLike, **kwargs: Any) -> AsyncPipe:
         """Chains the next pipe by name."""
         return self._chain(name, **kwargs)
 
@@ -1893,7 +1881,7 @@ class AsyncPipe(PyPipe):
         awaiting it directly returns the whole tuple of copies.
         """
         splits = self._chain("split", **kwargs)
-        return cast(AsyncSplitterWrapperOutput, splits)
+        return cast("AsyncSplitterWrapperOutput", splits)
 
     @overload
     async def export(self) -> list[Item]: ...  # noqa: E704
@@ -1920,7 +1908,7 @@ class AsyncPipe(PyPipe):
         *,
         fmt: FmtLike | None = None,
         mode: WriteMode | str = WriteMode.REPLACE,
-    ) -> "AsyncPipe":
+    ) -> AsyncPipe:
         """
         Writes a copy of the stream to ``dest`` and passes through the chain.
 
@@ -1954,7 +1942,7 @@ class AsyncPipe(PyPipe):
         """The async counterpart of :meth:`SyncPipe.sink`."""
         return await _asink(aiter(self), dest, mode=mode, keys=keys, fmt=fmt)
 
-    def _chain(self, name: ModuleNameLike, **kwargs: object) -> "AsyncPipe":
+    def _chain(self, name: ModuleNameLike, **kwargs: object) -> AsyncPipe:
         """Builds the next async pipe with the current runtime settings."""
         self._require_usable("chain")
         skwargs = {
@@ -2136,7 +2124,7 @@ class AsyncCollection(PyCollection):
 
     def async_pipe(
         self, name: ModuleNameLike | None = None, **kwargs: Any
-    ) -> "AsyncPipe":
+    ) -> AsyncPipe:
         """Chains the next pipe by name."""
         return AsyncPipe(name, source=self, **kwargs)
 
@@ -2159,7 +2147,7 @@ class AsyncCollection(PyCollection):
         *,
         fmt: FmtLike | None = None,
         mode: WriteMode | str = WriteMode.REPLACE,
-    ) -> "AsyncPipe":
+    ) -> AsyncPipe:
         """
         Writes a copy of the stream to ``dest`` and passes through the chain.
 
@@ -2270,7 +2258,7 @@ def _fetch_source[T: SyncPipe | AsyncPipe](
     source, _conf = args
     conf = {**_conf, **source}
     pipe_name = str(source.get("type", "fetch"))
-    return pipe(pipe_name, conf=cast(Conf, conf))
+    return pipe(pipe_name, conf=cast("Conf", conf))
 
 
 def fetch_source(

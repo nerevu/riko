@@ -1,12 +1,14 @@
 # vim: sw=4:ts=4:expandtab
 
+from __future__ import annotations
+
 from pprint import pprint
+from typing import TYPE_CHECKING
 
 from riko.base._paths import get_path
 from riko.coercion._dataclass import make_regex_rule
 from riko.runtime.collections import SyncPipe
 from riko.runtime.context import Context
-from riko.types._options import SkipIf
 from riko.types.modules import (
     CurrencyFormatConf,
     CurrencyFormatRawConf,
@@ -24,6 +26,9 @@ from riko.types.modules import (
     SubstrConf,
     TokenizerConf,
 )
+
+if TYPE_CHECKING:
+    from riko.types._options import SkipIf
 
 DEF_CUR_CODE = "USD"
 

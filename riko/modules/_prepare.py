@@ -8,23 +8,19 @@ conf merging/extraction, and the parser/caster construction that turns opts and
 conf into the callables a wrapper applies to each item.
 """
 
-from collections.abc import Callable
+from __future__ import annotations
+
 from dataclasses import dataclass
 from functools import partial
-from typing import cast, overload
+from typing import TYPE_CHECKING, cast, overload
 
 import pygogo as gogo
 
 from riko.base._iterutils import broadcast, dispatch
-from riko.base._locations import AnyLocation
-from riko.coercion._dynamic_conf import DynamicConf
 from riko.coercion._objectify import objectify
 from riko.coercion._sequences import listize
 from riko.coercion.cast import CAST_SWITCH, cast_none, cast_pass, cast_value
-from riko.definitions._resource_types import ResourcesLike
-from riko.parsing._dotdict import DotDict
 from riko.parsing.config import conf_is_dynamic, get_field, parse_conf
-from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
 from riko.types._enums import BasicCastType, CastType
 from riko.types._guards import is_mapping
 from riko.types._options import (
@@ -35,8 +31,6 @@ from riko.types._options import (
     Opts,
     ValueDispatch,
 )
-from riko.types._scalars import PrimitiveValue
-from riko.types._streams import Item, ItemOrValue
 from riko.types._wrappers import (
     ArgCaster,
     CastFuncs,
@@ -44,7 +38,18 @@ from riko.types._wrappers import (
     ParserOutput,
     SyncConfCastFunc,
 )
-from riko.types.modules import AnyModuleConf, Conf
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from riko.base._locations import AnyLocation
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.definitions._resource_types import ResourcesLike
+    from riko.parsing._dotdict import DotDict
+    from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
+    from riko.types._scalars import PrimitiveValue
+    from riko.types._streams import Item, ItemOrValue
+    from riko.types.modules import AnyModuleConf, Conf
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -164,7 +169,7 @@ def require_conf[T](  # noqa: E704
     if (value is None) or (strict and not value):
         raise TypeError(f"the {pipe!r} pipe requires the {key!r} conf key")
 
-    return cast(T, value)
+    return cast("T", value)
 
 
 def get_pieces_or_conf(
@@ -198,9 +203,9 @@ def get_pieces_or_conf(
 
     """
     if is_mapping(parsed_conf):
-        merged_conf = cast(AnyModuleConf, {**defaults, **parsed_conf})
+        merged_conf = cast("AnyModuleConf", {**defaults, **parsed_conf})
     else:
-        merged_conf = cast(AnyModuleConf, defaults)
+        merged_conf = cast("AnyModuleConf", defaults)
 
     if extract := opts.get("extract"):
         try:
@@ -209,7 +214,7 @@ def get_pieces_or_conf(
             label = f"the {pipe!r} pipe" if pipe else "this pipe"
             raise TypeError(f"{label} requires the {extract!r} conf key") from None
         else:
-            pieces = cast(BasicReturn, pieces)
+            pieces = cast("BasicReturn", pieces)
 
         pieces_or_conf = listize(pieces) if opts.get("listize") else pieces
     else:
@@ -455,5 +460,5 @@ def get_casters(opts: Opts) -> CastFuncs[ItemOrValue, object]:
         extract_caster = value_caster
         _conf_caster = cast_pass
 
-    conf_caster = cast(SyncConfCastFunc, _conf_caster)
+    conf_caster = cast("SyncConfCastFunc", _conf_caster)
     return CastFuncs(field_caster, extract_caster, conf_caster)

@@ -7,6 +7,8 @@ Covers sync/async parity, unwritable configurations (missing dest, invalid or
 sequence survives unchanged.
 """
 
+from __future__ import annotations
+
 from typing import cast
 
 import pytest
@@ -67,7 +69,7 @@ class TestWriteSkips:
     @pytest.mark.parametrize("fmt", ["bogus", "list", "tuple"])
     def test_sync_bad_target_skips_but_passes_through(self, tmp_path, fmt):
         path = tmp_path / "out"
-        conf = cast(WriteConf, {"dest": path, "fmt": fmt})
+        conf = cast("WriteConf", {"dest": path, "fmt": fmt})
         assert list(pipe(ITEMS, conf=conf)) == ITEMS
         assert not path.exists()
 
@@ -81,12 +83,12 @@ class TestWriteSkips:
         assert not path.exists()
 
     def test_sync_missing_dest_skips_but_passes_through(self):
-        conf = cast(WriteConf, {"fmt": "json"})
+        conf = cast("WriteConf", {"fmt": "json"})
         assert list(pipe(ITEMS, conf=conf)) == ITEMS
 
     @async_test
     async def test_async_missing_dest_skips_but_passes_through(self):
-        conf = cast(WriteConf, {"fmt": "json"})
+        conf = cast("WriteConf", {"fmt": "json"})
         result = async_pipe(ITEMS, conf=conf)
         assert [item async for item in result] == ITEMS
 

@@ -32,7 +32,7 @@ def pipe(test=True):
     date_stream = SyncPipe("dateformat", source=date_source, conf=long_conf, **kwargs)
     year_stream = SyncPipe("dateformat", source=year_source, conf=year_conf, **kwargs)
     year = next(year_stream)
-    return [{"date": next(date_stream), "year": int(cast(str, year))}]
+    return [{"date": next(date_stream), "year": int(cast("str", year))}]
 
 
 async def async_pipe(test=True):
@@ -46,7 +46,7 @@ async def async_pipe(test=True):
     year_stream = AsyncPipe("dateformat", source=year_source, conf=year_conf, **kwargs)
     year = await anext(year_stream)
     date = await anext(date_stream)
-    yield {"date": date, "year": int(cast(str, year))}
+    yield {"date": date, "year": int(cast("str", year))}
 
 
 def print_results(result) -> None:

@@ -2,7 +2,9 @@
 
 """Code-generation command composition for the manage CLI."""
 
-from collections.abc import Callable
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import click
 
@@ -14,6 +16,9 @@ from ._gen_names import _MODULE_IDS as MODULE_IDS_PATH
 from ._gen_names import _NAMES as NAMES_PATH
 from ._gen_names import main as gen_names_main
 from ._gen_pipelines import main as gen_pipelines_main
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
     "config": (

@@ -51,20 +51,25 @@ Attributes:
 
 """
 
-from logging import Logger
-from typing import Any, cast
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 
-from riko.coercion._configs import InputObjconf
 from riko.coercion.cast import SourceOpts, cast_value
-from riko.types._collections import Inputs
 from riko.types._enums import CastType
-from riko.types._options import Defaults, Opts
-from riko.types._scalars import PrimitiveValue
-from riko.types._streams import Item
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import InputObjconf
+    from riko.types._collections import Inputs
+    from riko.types._options import Defaults, Opts
+    from riko.types._scalars import PrimitiveValue
+    from riko.types._streams import Item
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {
@@ -113,7 +118,7 @@ def parser(
         30
 
     """
-    if inputs := cast(Inputs | None, kwargs.get("inputs")):
+    if inputs := cast("Inputs | None", kwargs.get("inputs")):
         value = inputs.get(objconf.input_key, objconf.default)
     elif objconf.test or skip or kwargs.get("test"):
         value = objconf.default

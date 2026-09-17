@@ -14,6 +14,8 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, is_dataclass
@@ -22,15 +24,16 @@ from typing import TYPE_CHECKING, cast
 
 from riko.coercion._freeze import repr_cache
 from riko.coercion._sequences import listize
-from riko.types._collections import RikoValue
 from riko.types._guards import is_mapping, is_sentinel, is_type_value
-from riko.types._options import SkipIf
-from riko.types._streams import Item, ItemOrValue
 
 from ._dotdict import DotDict
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
+
+    from riko.types._collections import RikoValue
+    from riko.types._options import SkipIf
+    from riko.types._streams import Item, ItemOrValue
 
 
 SKIP_SWITCH: dict[str, Callable[[str, str], bool]] = {
@@ -109,23 +112,23 @@ def _parse_conf_uncached[VT](
     if isinstance(dd_conf, DotDict):
         if subkey := dd_conf.get("subkey"):
             dd_item = DotDict.dictize(item) if item else DotDict()
-            parsed = dd_item.get(cast(str, subkey), **kwargs)
+            parsed = dd_item.get(cast("str", subkey), **kwargs)
         elif is_sentinel(dd_conf, **kwargs) or is_type_value(dd_conf):
             # parsed = next(gen_dict(dd_conf, key=None, default_key=None, **kwargs))
-            parsed = cast(DotDict[VT], dd_conf).get()
+            parsed = cast("DotDict[VT]", dd_conf).get()
         else:
             _parsed = {
                 k: _parse_conf_uncached(item, v, **kwargs)
                 for k, v in dd_conf.asdict(key=None, **kwargs).items()
             }
-            parsed = cast(VT, _parsed)
+            parsed = cast("VT", _parsed)
     elif isinstance(dd_conf, (str, struct_time)):
         parsed = dd_conf
     elif isinstance(dd_conf, (list, tuple)):
         _parsed = [_parse_conf_uncached(item, c, **kwargs) for c in dd_conf]
-        parsed = cast(VT, _parsed)
+        parsed = cast("VT", _parsed)
     elif dd_conf is not None:
-        parsed = cast(VT, dd_conf)
+        parsed = cast("VT", dd_conf)
 
     return parsed
 
@@ -312,7 +315,7 @@ def get_field(
 
     """
     if field and isinstance(item, DotDict):
-        value = item.get(field, **cast(dict[str, RikoValue], kwargs))
+        value = item.get(field, **cast("dict[str, RikoValue]", kwargs))
     elif field and is_mapping(item):
         value = item.get(field)
     else:

@@ -3,8 +3,10 @@
 Tests pipe implementations.
 """
 
+from __future__ import annotations
+
 from itertools import count
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -20,7 +22,6 @@ from riko.modules.sort import pipe as sort_pipe
 from riko.modules.udf import pipe as udf_pipe
 from riko.runtime._pubsub import async_hub
 from riko.types._enums import SortableCastType
-from riko.types._streams import Feed, Item, ItemOrValue, Stream
 from riko.types.modules import (
     FilterConf,
     FilterConfRule,
@@ -30,6 +31,9 @@ from riko.types.modules import (
     SortConfRule,
 )
 from tests import async_test
+
+if TYPE_CHECKING:
+    from riko.types._streams import Feed, Item, ItemOrValue, Stream
 
 
 def _values(stream: Any, key: str) -> list[Any]:

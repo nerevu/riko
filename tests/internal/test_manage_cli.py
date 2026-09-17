@@ -1,11 +1,16 @@
-from collections.abc import Callable
-from pathlib import Path
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import pytest
 from click.testing import CliRunner
 
 from riko.cli import _codegen, _import_commands, _lint
 from riko.cli.manage import manager
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 
 
 def _record(calls: list[str], name: str, code: int = 0) -> Callable[[], int]:

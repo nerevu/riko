@@ -31,24 +31,29 @@ Attributes:
 
 """
 
-from logging import Logger
+from __future__ import annotations
+
 from os.path import splitext
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 
 from riko.base._constants import ENCODING
-from riko.coercion._configs import XpathFetchPageObjconf
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close
 from riko.parsing.documents import any2dict
-from riko.types._io import FileLike
 from riko.types._options import Defaults
-from riko.types._streams import Item, Stream
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import XpathFetchPageObjconf
+    from riko.types._io import FileLike
+    from riko.types._streams import Item, Stream
 
 OPTS = SourceOpts
 DEFAULTS = Defaults({"encoding": ENCODING, "html5": False})
@@ -167,7 +172,7 @@ def parser(
         ext = "html"
 
     with Fetch(url, encoding=objconf.encoding) as f:
-        content = cast(FileLike, f)
+        content = cast("FileLike", f)
         yield from any2dict(content, ext, objconf.html5, path=objconf.xpath)
 
 

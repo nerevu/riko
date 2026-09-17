@@ -34,20 +34,25 @@ Attributes:
 
 """
 
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.bado.itertools import as_async
-from riko.coercion._configs import SendObjconf
 from riko.runtime._pubsub import async_hub, sync_hub
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Feed, Stream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import operator
 from ._prepare import require_arg
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import SendObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Feed, Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"pollable": True, "emit": True}
 DEFAULTS: Defaults = {"max_wait": 5}

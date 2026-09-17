@@ -29,14 +29,19 @@ names the pipe ``anonymous``, so the compiler composes in a shell pipeline::
     convert-dag flow.dag | compile-pipe - -o flow.py
 """
 
+from __future__ import annotations
+
 import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
 from json import loads
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from riko.base._logging import logger
 from riko.runtime._compile import compile_pipe, extract_dependencies
-from riko.types._compiler import PipeDef
+
+if TYPE_CHECKING:
+    from riko.types._compiler import PipeDef
 
 
 def _load_pipe_def(path: str) -> tuple[PipeDef | None, str]:

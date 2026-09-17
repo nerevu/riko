@@ -1,8 +1,13 @@
-from pathlib import Path
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from riko.cli._lint_canonical_imports import _iter_issues as canonical_issues
 from riko.cli._lint_import_architecture import generate_report, render_architecture
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # TODO: add tests for:
 # descendants, keyed topsort, frozen graph.

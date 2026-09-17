@@ -25,19 +25,24 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
+from __future__ import annotations
+
 from itertools import repeat, takewhile
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._dynamic_conf import DynamicConf
 from riko.coercion.cast import SourceOpts
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Item
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from logging import Logger
+
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {}

@@ -21,8 +21,8 @@ Attributes:
 
 """
 
-from logging import Logger
-from types import ModuleType
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any, cast, overload
 from urllib.error import URLError
 from xml.sax import SAXParseException  # noqa: S406
@@ -32,9 +32,9 @@ import pygogo as gogo
 
 from riko.base._strutils import truncate_content
 from riko.io._sync import Fetch
-from riko.types._collections import BasicArg
-from riko.types._rss import ParserRSSEntry
-from riko.types._scalars import AnyStr
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 try:
     from lxml import etree
@@ -73,16 +73,21 @@ else:
     IJSON_IS_NATIVE = getattr(ijson, "backend", "python") != "python"
 
 if TYPE_CHECKING:
+    from logging import Logger
     from xml.etree.ElementTree import Element as nativeElement
     from xml.etree.ElementTree import ElementTree as nativeElementTree
 
     from lxml.etree import _Element as lxmlElement
     from lxml.etree import _ElementTree as lxmlElementTree
 
+    from riko.types._collections import BasicArg
+    from riko.types._rss import ParserRSSEntry
+    from riko.types._scalars import AnyStr
+
 type AnyElementTree = (
-    "nativeElementTree | lxmlElementTree | nativeElementTree[nativeElement[str]]"
+    nativeElementTree | lxmlElementTree | nativeElementTree[nativeElement[str]]
 )
-type AnyElement = "nativeElement | lxmlElement"
+type AnyElement = nativeElement | lxmlElement
 
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 logger.debug(f"{IS_LXML=}")
@@ -171,4 +176,4 @@ def parse_rss(  # noqa: E302
 
         logger.warning(f"Content: {truncate_content(source)}")
 
-    return cast(list[ParserRSSEntry], parsed.entries)
+    return cast("list[ParserRSSEntry]", parsed.entries)

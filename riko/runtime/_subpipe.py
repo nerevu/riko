@@ -8,11 +8,15 @@ it takes ``(item, context)``, returns a stream, and any pipe is loopable. The me
 is therefore declared here rather than inferred.
 """
 
-from collections.abc import Awaitable, Callable
-from typing import cast, overload
+from __future__ import annotations
 
-from riko.types._wrappers import AsyncSubPipe, SubPipe, SyncSubPipe
-from riko.types.modules import ModuleSubtype
+from typing import TYPE_CHECKING, cast, overload
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from riko.types._wrappers import AsyncSubPipe, SubPipe, SyncSubPipe
+    from riko.types.modules import ModuleSubtype
 
 SUBPIPE_TYPE = "pipe"
 
@@ -40,7 +44,7 @@ def mark_subpipe(  # noqa: E302
     setattr(pipe, "subtypes", {subtype})  # noqa: B010
     setattr(pipe, "loopable", loopable)  # noqa: B010
     setattr(pipe, "pollable", False)  # noqa: B010
-    return cast(SubPipe, pipe)
+    return cast("SubPipe", pipe)
 
 
 def is_subpipe(pipe: object) -> bool:

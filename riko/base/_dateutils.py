@@ -13,14 +13,19 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
+from __future__ import annotations
+
 from datetime import UTC, date, timedelta, timezone, tzinfo
 from datetime import datetime as dt
 from time import struct_time
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 from zoneinfo import ZoneInfo, available_timezones
 
 import pytz
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
 
 TIMEOUT = 60 * 60 * 1
 HALF_DAY = 60 * 60 * 12

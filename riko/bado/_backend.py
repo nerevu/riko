@@ -10,8 +10,12 @@ than importing those dependencies directly. This module is private and carries
 no SemVer compatibility guarantee.
 """
 
-from collections.abc import Awaitable, Callable
-from typing import Any, Literal, Protocol, Unpack, cast
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Literal, Protocol, Unpack, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 type Backends = Literal["anyio", "empty"]
 
@@ -58,7 +62,7 @@ except ImportError:
     def _run[*PosArgsT, T](
         func: Callable[[Unpack[PosArgsT]], Awaitable[T]], *args: *PosArgsT
     ) -> T:
-        return cast(T, None)
+        return cast("T", None)
 
     run: Run = _run
 else:

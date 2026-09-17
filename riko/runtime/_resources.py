@@ -1,11 +1,11 @@
-from collections.abc import Mapping
+from __future__ import annotations
+
 from types import MappingProxyType
-from typing import Literal, Never, Self, cast, overload
+from typing import TYPE_CHECKING, Literal, Never, Self, cast, overload
 from warnings import warn
 
 from riko.bado._util import maybe_deferred
 from riko.base.warnings import ResourceInterpretationWarning
-from riko.definitions._resource_types import ResolvedValue
 from riko.definitions._resources import VALUE_FACTORY_KINDS, classify_factory
 from riko.types._guards import (
     is_async_closeable,
@@ -15,7 +15,6 @@ from riko.types._guards import (
     is_lifecycle_factory,
     is_sync_context_manager,
 )
-from riko.types._io import Closeable, SyncCloseable
 from riko.types._resource import (
     AnyContextManager,
     Cleanup,
@@ -24,6 +23,12 @@ from riko.types._resource import (
     ResourceFactory,
     ValueFactory,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from riko.definitions._resource_types import ResolvedValue
+    from riko.types._io import Closeable, SyncCloseable
 
 
 class Resource[T]:
@@ -78,7 +83,7 @@ class Resource[T]:
         cleanup: Cleanup[T] | None = ...,
         credential: str | None = ...,
         lazy: bool = ...,
-    ) -> "OneShotResource[T]": ...
+    ) -> OneShotResource[T]: ...
     @overload  # noqa: E301
     def __new__(  # noqa: E704
         cls,  # _FactoryResource
@@ -88,7 +93,7 @@ class Resource[T]:
         credential: str | None = ...,
         lazy: bool = ...,
         **kwargs: object,
-    ) -> "ReusableResource[T]": ...
+    ) -> ReusableResource[T]: ...
     @overload  # noqa: E301
     def __new__(  # noqa: E704
         cls,  # _OwnedResource
@@ -97,7 +102,7 @@ class Resource[T]:
         cleanup: Cleanup[T] | Literal[False],
         credential: str | None = ...,
         lazy: bool = ...,
-    ) -> "OneShotResource[T]": ...
+    ) -> OneShotResource[T]: ...
     @overload  # noqa: E301
     def __new__(  # noqa: E704
         cls,  # _LifecycleResource
@@ -105,21 +110,21 @@ class Resource[T]:
         *,
         credential: str | None = ...,
         lazy: bool = ...,
-    ) -> "OneShotResource[T]": ...
+    ) -> OneShotResource[T]: ...
     @overload  # noqa: E301
     def __new__(  # noqa: E704
         cls,  # _ExternalResource
         value: ResolvedValue[T],
-    ) -> "ReusableResource[T]": ...
+    ) -> ReusableResource[T]: ...
     def __new__(  # noqa: E301
         cls, *_: object, **_kw: object
-    ) -> "OneShotResource[T] | ReusableResource[T]":
+    ) -> OneShotResource[T] | ReusableResource[T]:
         cls_ = _OwnedResource if cls is Resource else cls
 
         if cls_ in {_OwnedResource, _LifecycleResource}:
-            obj = cast(OneShotResource, object.__new__(cls_))
+            obj = cast("OneShotResource", object.__new__(cls_))
         else:
-            obj = cast(ReusableResource, object.__new__(cls_))
+            obj = cast("ReusableResource", object.__new__(cls_))
 
         return obj
 
@@ -221,7 +226,7 @@ class Resource[T]:
         credential: str | None = ...,
         lazy: bool = ...,
         **kwargs: object,
-    ) -> "ReusableResource[T]": ...
+    ) -> ReusableResource[T]: ...
     @overload  # noqa: E301
     @classmethod
     def from_factory[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
@@ -232,7 +237,7 @@ class Resource[T]:
         credential: str | None = ...,
         lazy: bool = ...,
         **kwargs: object,
-    ) -> "ReusableResource[T]": ...
+    ) -> ReusableResource[T]: ...
     @classmethod  # noqa: E301
     def from_factory[T](  # pyright: ignore[reportGeneralTypeIssues]
         cls,
@@ -242,7 +247,7 @@ class Resource[T]:
         credential: str | None = None,
         lazy: bool = False,
         **kwargs: object,
-    ) -> "ReusableResource[T]":
+    ) -> ReusableResource[T]:
         """
         The alternate form of ``Context.with_resource(name, factory)``
         """
@@ -253,7 +258,7 @@ class Resource[T]:
     @overload
     @classmethod
     def from_external[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
-        cls, value: "Resource[T]"
+        cls, value: Resource[T]
     ) -> Never: ...
     @overload  # noqa: E301
     @classmethod
@@ -269,11 +274,11 @@ class Resource[T]:
     @classmethod
     def from_external[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
         cls, value: ResolvedValue[T]
-    ) -> "ReusableResource[T]": ...
+    ) -> ReusableResource[T]: ...
     @classmethod  # noqa: E301
     def from_external[T](  # pyright: ignore[reportInconsistentOverload,reportGeneralTypeIssues]  # noqa: E501
         cls, value: ResolvedValue[T]
-    ) -> "ReusableResource[T]":
+    ) -> ReusableResource[T]:
         """
         Creates a resource whose lifecycle remains owned by the caller.
 
@@ -295,7 +300,7 @@ class Resource[T]:
         *,
         credential: str | None = None,
         lazy: bool = False,
-    ) -> "OneShotResource[T]":
+    ) -> OneShotResource[T]:
         """
         Creates an owned resource from a generator/context-manager definition.
 
@@ -377,7 +382,7 @@ class Resource[T]:
         if self._cleanup is False:
             pass
         elif self._cleanup is None:
-            cast(SyncCloseable, value).close()
+            cast("SyncCloseable", value).close()
         else:
             self._cleanup(value)
 
@@ -404,7 +409,7 @@ class Resource[T]:
         elif is_async_closeable(value):
             await value.aclose()
         else:
-            cast(SyncCloseable, value).close()
+            cast("SyncCloseable", value).close()
 
 
 class OneShotResource[T](Resource[T]):

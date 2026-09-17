@@ -29,17 +29,22 @@ Examples:
 
 """
 
-from collections.abc import Callable, Mapping
-from types import MappingProxyType
-from typing import Literal, NamedTuple, Self, overload
+from __future__ import annotations
 
-from riko.definitions._resource_types import ResourceDefinition, ReusableResources
-from riko.types._collections import Inputs
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Literal, NamedTuple, Self, overload
+
 from riko.types._enums import ExecutionMode
 from riko.types._guards import is_lifecycle_factory
-from riko.types._resource import LifecycleFactory
 
 from ._resources import Resource, ReusableResource
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
+    from riko.definitions._resource_types import ResourceDefinition, ReusableResources
+    from riko.types._collections import Inputs
+    from riko.types._resource import LifecycleFactory
 
 INPUT_MODES = {ExecutionMode.DESCRIBE_INPUTS, ExecutionMode.DESCRIBE}
 DEPENDENCY_MODES = {ExecutionMode.DESCRIBE_DEPENDENCIES, ExecutionMode.DESCRIBE}
@@ -91,7 +96,7 @@ class Context:
         self._submodule = bool(submodule)
         self._resources = MappingProxyType({})
 
-    def __reduce__(self) -> tuple[Callable[[ContextTuple], "Context"], ContextTuple]:
+    def __reduce__(self) -> tuple[Callable[[ContextTuple], Context], ContextTuple]:
         context_tuple = ContextTuple(
             mode=self.mode,
             inputs=dict(self.inputs),

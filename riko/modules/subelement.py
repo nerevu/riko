@@ -31,20 +31,25 @@ Attributes:
 
 """
 
-from collections.abc import Sequence
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._configs import SubelementObjconf
 from riko.coercion._sequences import gen_items
-from riko.types._collections import RikoValue
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Item, Stream
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from logging import Logger
+
+    from riko.coercion._configs import SubelementObjconf
+    from riko.types._collections import RikoValue
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item, Stream
 
 OPTS: Opts = {"emit": True}
 DEFAULTS: Defaults = {"token_key": "content"}

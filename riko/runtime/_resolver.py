@@ -11,12 +11,15 @@ Attributes:
 
 """
 
-from typing import Literal, overload
+from __future__ import annotations
 
-from riko.types._wrappers import AsyncPipeWrapper, Pipe, Resolver, SyncPipeWrapper
+from typing import TYPE_CHECKING, Literal, overload
 
 from ._pipelines import pipeline_resolver
 from ._registry import registry
+
+if TYPE_CHECKING:
+    from riko.types._wrappers import AsyncPipeWrapper, Pipe, Resolver, SyncPipeWrapper
 
 
 class PipeResolver:

@@ -1,5 +1,10 @@
+from __future__ import annotations
+
 from importlib import metadata
-from importlib.metadata import PackageMetadata
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from importlib.metadata import PackageMetadata
 
 # https://github.com/astral-sh/uv/issues/7533#issuecomment-2472804995
 _meta: PackageMetadata = metadata.metadata("riko")

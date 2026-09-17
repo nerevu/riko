@@ -2,13 +2,15 @@
 
 """Lint and formatting helpers for the manage CLI."""
 
+from __future__ import annotations
+
 import shutil
-from collections.abc import Iterable
 from glob import glob
 from itertools import chain
 from pathlib import Path
 from subprocess import CalledProcessError, call, check_call, check_output
 from sys import exit
+from typing import TYPE_CHECKING
 
 import click
 
@@ -18,6 +20,9 @@ from ._build import _twine_check
 from ._docs import _check_docs, _check_rst
 from ._docstyle import format_issue, iter_summary_issues
 from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 _WORKFLOW_DIR = ROOT_DIR / ".github" / "workflows"
 

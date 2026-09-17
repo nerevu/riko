@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 from riko.types._enums import FmtLike, Formats
 from riko.types._io import PathLike
-from riko.types._streams import AsyncItems, Item, Items
+
+if TYPE_CHECKING:
+    from riko.types._streams import AsyncItems, Item, Items
 
 
 @dataclass(frozen=True, slots=True)

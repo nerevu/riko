@@ -1,13 +1,19 @@
+from __future__ import annotations
+
 import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
 from collections.abc import Callable, Iterable, Mapping
 from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
 from os.path import basename, splitext
-from types import ModuleType
+from typing import TYPE_CHECKING
 
 from riko.bado._backend import run as async_run
-from riko.types._wrappers import AsyncPipeWrapper
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    from riko.types._wrappers import AsyncPipeWrapper
 
 io_error = FileNotFoundError
 

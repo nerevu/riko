@@ -34,22 +34,27 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 from collections.abc import AsyncIterable, AsyncIterator, Generator, Iterable, Iterator
 from datetime import timedelta
-from logging import Logger
 from time import monotonic_ns
-from typing import Any, Self, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import pygogo as gogo
 
 from riko.bado.itertools import as_async
-from riko.coercion._configs import TimeoutObjconf
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Feed, Stream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import operator
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import TimeoutObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Feed, Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
 DEFAULTS: Defaults = {}
@@ -168,7 +173,7 @@ async def async_parser(
         2
 
     """
-    td_kwargs = cast(dict[str, int], {k: objconf[k] for k in objconf if k})
+    td_kwargs = cast("dict[str, int]", {k: objconf[k] for k in objconf if k})
     time_ms = timedelta(**td_kwargs) // timedelta(milliseconds=1)
     return await AsyncTimeoutIterator(stream, time_ms)
 
@@ -213,7 +218,7 @@ def parser(
 
     """
     # objconf only parses on __getitem__
-    td_kwargs = cast(dict[str, int], {k: objconf[k] for k in objconf if k})
+    td_kwargs = cast("dict[str, int]", {k: objconf[k] for k in objconf if k})
     time_ms = timedelta(**td_kwargs) // timedelta(milliseconds=1)
     return TimeoutIterator(stream, time_ms)
 

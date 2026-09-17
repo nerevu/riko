@@ -16,11 +16,11 @@ import re
 import sys
 from dataclasses import fields, is_dataclass
 from types import UnionType
-from typing import TYPE_CHECKING, Literal, Union, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Literal, Union, get_args, get_origin
 
 import riko.types._enums as names_module
 import riko.types._scalars as scalars_module
-from riko.types._collections import RikoValue, StringyDict, StringyList
+from riko.base._typing import resolve_type_hints
 from riko.types._enums import ModuleName
 from riko.types._guards import is_mapping
 from riko.types.modules import RegexConfRule, RegexRule
@@ -28,6 +28,7 @@ from riko.types.modules import RegexConfRule, RegexRule
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
+    from riko.types._collections import RikoValue, StringyDict, StringyList
     from riko.types._enums import ModuleNameLike
 
     from ._dynamic_conf import DynamicConf
@@ -86,8 +87,9 @@ def fromdict(
     caller = sys._getframe(1)
     callerns = {**caller.f_globals, **caller.f_locals}
     module = sys.modules[cls.__module__]
-    localns = {**callerns, **vars(module), **vars(names_module), **vars(scalars_module)}
-    hints = get_type_hints(cls, localns=localns, include_extras=True)
+    hints = resolve_type_hints(
+        cls, callerns, module, names_module, scalars_module, include_extras=True
+    )
 
     for f in fields(cls):
         if f.name not in data:

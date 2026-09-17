@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import itertools as it
 import re
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from operator import itemgetter
 from random import choice
 from typing import TYPE_CHECKING, cast
@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING, cast
 from requests.structures import CaseInsensitiveDict
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Iterator
+
     from riko.types._scalars import BasicValue
     from riko.types.modules import FindConfRule, RegexRule
 
@@ -294,4 +296,4 @@ def truncate_content[T](content: T | object, length: int = 20) -> T:
     else:
         truncated = content
 
-    return cast(T, truncated)
+    return cast("T", truncated)

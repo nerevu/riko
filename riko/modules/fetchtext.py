@@ -24,22 +24,27 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.base._constants import ENCODING
-from riko.coercion._configs import FetchTextObjconf
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Item
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from logging import Logger
+
+    from riko.coercion._configs import FetchTextObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "assign": "content"}
 DEFAULTS: Defaults = {"encoding": ENCODING}

@@ -27,15 +27,19 @@ Examples:
 
 """
 
-from typing import Any, cast
+from __future__ import annotations
 
-from riko.coercion._dynamic_conf import DynamicConf
+from typing import TYPE_CHECKING, Any, cast
+
 from riko.ext import operator
-from riko.types import Item, PipeTuples, Stream
+
+if TYPE_CHECKING:
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.types import Item, PipeTuples, Stream
 
 
 def _shout(item: Item) -> Item:
-    return cast(Item, {**item, "content": str(item.get("content", "")).upper()})
+    return cast("Item", {**item, "content": str(item.get("content", "")).upper()})
 
 
 def parser(

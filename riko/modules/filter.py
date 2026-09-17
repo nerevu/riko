@@ -32,13 +32,12 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 import operator as op
 import re
-from collections.abc import Callable, Iterable, Sequence
-from datetime import date
 from decimal import Decimal, InvalidOperation
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 from dateutil.parser import ParserError
@@ -48,13 +47,19 @@ from riko.coercion._objectify import Objectify
 from riko.coercion.cast import cast_date, cast_decimal
 from riko.parsing._dotdict import DotDict
 from riko.types._guards import is_mapping
-from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING
-from riko.types._streams import Item, Stream
-from riko.types._wrappers import PipeTuples
-from riko.types.modules import FilterConfRule
 
 from ._decorators import operator
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Sequence
+    from datetime import date
+    from logging import Logger
+
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item, Stream
+    from riko.types._wrappers import PipeTuples
+    from riko.types.modules import FilterConfRule
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
 DEFAULTS: Defaults = {"combine": "and", "permit": True, "stop": False}

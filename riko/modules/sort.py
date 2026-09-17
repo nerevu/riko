@@ -22,22 +22,27 @@ Attributes:
 
 """
 
-from collections.abc import Sequence
+from __future__ import annotations
+
 from functools import reduce
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.bado.itertools import async_reduce
 from riko.types._enums import SortableCastType
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Stream
-from riko.types._wrappers import PipeTuples
 from riko.types.modules import SortConfRule
 
 from ._decorators import operator
 from ._iterutils import def_itemgetter
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from logging import Logger
+
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
 sort_type = SortableCastType.TEXT

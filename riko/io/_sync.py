@@ -11,18 +11,15 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 import os
-from codecs import StreamReader
-from collections.abc import Iterable, Iterator, Mapping
 from functools import partial, wraps
-from http.client import HTTPResponse
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
-from logging import Logger
 from tempfile import SpooledTemporaryFile
-from typing import Literal, cast, overload
+from typing import TYPE_CHECKING, Literal, cast, overload
 from urllib.error import URLError
 from urllib.request import Request, urlopen
-from urllib.response import addinfourl
 
 from riko.coercion._freeze import repr_cache
 
@@ -40,11 +37,19 @@ from riko._package import __version__
 from riko.base._constants import ENCODING, STREAMING_THRESHOLD
 from riko.base._paths import get_abspath
 from riko.base._strutils import truncate_content
-from riko.types._collections import BasicArg
-from riko.types._io import BinaryFileLike, FileLike, Opener, StringFileLike
-from riko.types._scalars import AnyStr
 
 from ._reencode import reencode
+
+if TYPE_CHECKING:
+    from codecs import StreamReader
+    from collections.abc import Iterable, Iterator, Mapping
+    from http.client import HTTPResponse
+    from logging import Logger
+    from urllib.response import addinfourl
+
+    from riko.types._collections import BasicArg
+    from riko.types._io import BinaryFileLike, FileLike, Opener, StringFileLike
+    from riko.types._scalars import AnyStr
 
 O_NONBLOCK: int = getattr(os, "O_NONBLOCK", 0)
 
@@ -297,10 +302,10 @@ def buffer(  # noqa: E302
     )
 
     if first is not None:
-        spool.write(cast(bytes, first).decode(encoding) if decode else first)
+        spool.write(cast("bytes", first).decode(encoding) if decode else first)
 
     for chunk in chunks:
-        spool.write(cast(bytes, chunk).decode(encoding) if decode else chunk)
+        spool.write(cast("bytes", chunk).decode(encoding) if decode else chunk)
 
     spool.seek(0)
     return spool
@@ -449,19 +454,19 @@ def opener(  # noqa: E302
             response = BytesIO(r.content)
             r.close()
         elif binary:
-            response = cast(RawIOBase, r.raw)
+            response = cast("RawIOBase", r.raw)
         elif memoize:
             response = StringIO(r.text)
             r.close()
         else:
             encoding = r.encoding or encoding
             reencoded = reencode(r.raw, encoding, decode=True, owner=r)
-            response = cast(StreamReader, reencoded)
+            response = cast("StreamReader", reencoded)
     else:
         req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
 
         if (r := urlopen(req, timeout=timeout)) and binary:  # noqa: S310
-            response = buffer(r, binary=True) if memoize else cast(RawIOBase, r)
+            response = buffer(r, binary=True) if memoize else cast("RawIOBase", r)
         elif r:
             encoding = get_response_encoding(r, encoding)
 
@@ -474,9 +479,9 @@ def opener(  # noqa: E302
                 response = buffer(r, binary=False)
             elif encoding:
                 reencoded = reencode(r.fp, encoding, decode=True, owner=r)
-                response = cast(StreamReader, reencoded)
+                response = cast("StreamReader", reencoded)
             else:
-                response = cast(TextIOBase, r)
+                response = cast("TextIOBase", r)
         else:
             response = BytesIO() if binary else StringIO()
 
@@ -546,7 +551,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
 
     @overload
     def __init__(  # noqa: E704
-        self: "Fetch[Literal[True]]",
+        self: Fetch[Literal[True]],
         url: str = ...,
         *,
         binary: Literal[True],
@@ -554,7 +559,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
     ) -> None: ...
     @overload  # noqa: E301
     def __init__(  # noqa: E704
-        self: "Fetch[Literal[False]]",
+        self: Fetch[Literal[False]],
         url: str = ...,
         *,
         binary: Literal[False] = ...,
@@ -595,16 +600,16 @@ class Fetch[B: (Literal[True], Literal[False])]:
             self.file.close()
             self.file = None
 
-    def __enter__(self) -> "Fetch[B]":
+    def __enter__(self) -> Fetch[B]:
         return self
 
     def __exit__(self, *_: object) -> None:
         self.close()
 
     @overload
-    def __iter__(self: "Fetch[Literal[True]]") -> Iterator[bytes]: ...  # noqa: E704
+    def __iter__(self: Fetch[Literal[True]]) -> Iterator[bytes]: ...  # noqa: E704
     @overload
-    def __iter__(self: "Fetch[Literal[False]]") -> Iterator[str]: ...  # noqa: E704
+    def __iter__(self: Fetch[Literal[False]]) -> Iterator[str]: ...  # noqa: E704
     def __iter__(self) -> Iterator[bytes | str]:  # noqa: E301
         if self.file:
             result = iter(self.file)
@@ -616,9 +621,9 @@ class Fetch[B: (Literal[True], Literal[False])]:
         return result
 
     @overload
-    def __next__(self: "Fetch[Literal[True]]") -> bytes: ...  # noqa: E704
+    def __next__(self: Fetch[Literal[True]]) -> bytes: ...  # noqa: E704
     @overload
-    def __next__(self: "Fetch[Literal[False]]") -> str: ...  # noqa: E704
+    def __next__(self: Fetch[Literal[False]]) -> str: ...  # noqa: E704
     def __next__(self) -> bytes | str:  # noqa: E301
         if self.file:
             return next(self.file)
@@ -626,9 +631,9 @@ class Fetch[B: (Literal[True], Literal[False])]:
         raise StopIteration
 
     @overload
-    def read(self: "Fetch[Literal[True]]", size: int = ...) -> bytes: ...  # noqa: E704
+    def read(self: Fetch[Literal[True]], size: int = ...) -> bytes: ...  # noqa: E704
     @overload
-    def read(self: "Fetch[Literal[False]]", size: int = ...) -> str: ...  # noqa: E704
+    def read(self: Fetch[Literal[False]], size: int = ...) -> str: ...  # noqa: E704
     def read(self, size: int = -1) -> bytes | str:  # noqa: E301
         if self.file:
             result = self.file.read(size)

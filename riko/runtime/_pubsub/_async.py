@@ -15,11 +15,13 @@ AnyIO objects are created lazily inside these operations, so the hub instance is
 safe to construct at import time even when the async extra is absent.
 """
 
+from __future__ import annotations
+
 import itertools as it
-from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from riko.bado._backend import (
     MemoryObjectReceiveStream,
@@ -28,7 +30,11 @@ from riko.bado._backend import (
     fail_after,
 )
 from riko.base.exceptions import DuplicateReceiverError, ReceiverUnavailableError
-from riko.types._streams import Item
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Iterable
+
+    from riko.types._streams import Item
 
 
 class SubscriptionState(StrEnum):

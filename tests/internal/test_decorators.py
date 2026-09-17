@@ -16,15 +16,16 @@ The inference is ``explicit isasync`` OR ``async def`` OR name == ``async_pipe``
 The combination tables below exercise every input to that expression.
 """
 
+from __future__ import annotations
+
 from collections.abc import AsyncIterator, Awaitable
 from inspect import isawaitable, iscoroutinefunction
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from riko.ext import operator, processor, splitter
 from riko.modules.timeout import async_pipe as timeout_async_pipe
-from riko.types._streams import Item
 from riko.types._wrappers import (
     AsyncProcessorWrapper,
     AsyncSplitterWrapper,
@@ -32,6 +33,9 @@ from riko.types._wrappers import (
     ProcessorWrapper,
 )
 from tests import async_test
+
+if TYPE_CHECKING:
+    from riko.types._streams import Item
 
 
 def _create_wrapper(name: str, *, iscoro: bool, isasync: bool) -> ProcessorWrapper:
@@ -83,7 +87,7 @@ class TestExplicitIsasyncRequired:
     async def test_explicit_lambda_runs_as_async_pipe(self):
         async_shout = processor(isasync=True)(
             lambda item, *args, **kwargs: str(
-                cast(Item, item).get("content", "")
+                cast("Item", item).get("content", "")
             ).upper()
         )
         stream = async_shout({"content": "hi"}, assign="content")

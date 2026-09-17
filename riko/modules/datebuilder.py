@@ -22,19 +22,24 @@ Attributes:
 
 """
 
-from logging import Logger
-from time import struct_time
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._dynamic_conf import DynamicConf
 from riko.coercion.cast import cast_datetime
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
 from riko.types._scalars import DateLikeType
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from logging import Logger
+    from time import struct_time
+
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.types._options import Defaults, Opts
 
 OPTS: Opts = {"ptype": BasicCastType.NONE, "field": "content"}
 DEFAULTS: Defaults = {}

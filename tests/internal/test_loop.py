@@ -11,7 +11,9 @@ Every stream uses at least two parent items — a single parent cannot expose th
 global-vs-per-parent ``count`` gap.
 """
 
-from typing import cast
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -22,9 +24,6 @@ from riko.modules.strconcat import pipe as strconcat
 from riko.modules.tokenizer import async_pipe as async_tok
 from riko.modules.tokenizer import pipe as tokenizer
 from riko.runtime._subpipe import mark_subpipe
-from riko.runtime.context import Context
-from riko.types._streams import AsyncStream, Item, Stream
-from riko.types._wrappers import OperatorWrapperOutput
 from riko.types.modules import (
     RegexRawConf,
     RegexRawRule,
@@ -32,6 +31,11 @@ from riko.types.modules import (
     TokenizerRawConf,
 )
 from tests import skipif_issync
+
+if TYPE_CHECKING:
+    from riko.runtime.context import Context
+    from riko.types._streams import AsyncStream, Item, Stream
+    from riko.types._wrappers import OperatorWrapperOutput
 
 PARENTS = [{"title": "a b"}, {"title": "c d"}]
 TOKENIZER_CONF = TokenizerRawConf({"delimiter": {"type": "text", "value": " "}})
@@ -319,7 +323,7 @@ class TestAsyncLoop:
             emit=True,
         )
 
-        first = await anext(cast(AsyncStream, stream))
+        first = await anext(cast("AsyncStream", stream))
         assert first == {"content": "a"}
         assert list(consumed) == ["a b"]
 

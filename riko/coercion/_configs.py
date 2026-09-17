@@ -15,12 +15,13 @@ defaults come from each ``riko.modules`` module ``DEFAULTS``.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Literal
 
 from ._dynamic_conf import DynamicConf
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
     from riko.types._enums import CastType, FmtLike, LocationType
     from riko.types._io import PathLike
     from riko.types.modules import (

@@ -120,7 +120,7 @@ class TestParsers:
                 "status",
             ]
 
-            assert sorted(cast(dict, result.get("info"))) == [
+            assert sorted(cast("dict", result.get("info"))) == [
                 "area",
                 "category",
                 "certainty",
@@ -207,6 +207,6 @@ class TestPrepare:
     )
     def test_listize_wraps_falsy_extracted_value(self, value, expected):
         """A falsy (but non-None) extracted value is still list-wrapped."""
-        conf = cast(Conf, {"n": value})
+        conf = cast("Conf", {"n": value})
         pieces, _ = get_pieces_or_conf(conf, {}, {"extract": "n", "listize": True})
         assert pieces == expected

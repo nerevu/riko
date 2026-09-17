@@ -9,10 +9,13 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 import copyreg
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from inspect import unwrap
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
 from riko.types._guards import (
     is_async_callable,
@@ -22,10 +25,12 @@ from riko.types._guards import (
     is_sync_cm_factory,
     is_sync_gen_factory,
 )
-from riko.types._io import Closeable
 from riko.types._resource import FactoryKind, ResourceFactory
 
 from ._resource_types import ResourcesLike, ReusableResources, Values
+
+if TYPE_CHECKING:
+    from riko.types._io import Closeable
 
 
 def _rebuild_mappingproxy(

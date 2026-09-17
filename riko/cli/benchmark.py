@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Awaitable, Callable, Iterator
 from functools import partial
 from itertools import chain
@@ -5,6 +7,7 @@ from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 from time import sleep, time
 from timeit import repeat
+from typing import TYPE_CHECKING
 
 from riko.bado._backend import async_sleep, isasync
 from riko.bado._backend import run as async_run
@@ -21,13 +24,15 @@ from riko.runtime.collections import (
     get_worker_cnt,
 )
 from riko.types._rss import RSSEntry
-from riko.types._streams import Items, RikoItem, RikoStream
-from riko.types._wrappers import (
-    AsyncPipeParser,
-    ParserMaterializedOutput,
-    ProcessorWrapperOutput,
-)
 from riko.types.modules import FetchConf
+
+if TYPE_CHECKING:
+    from riko.types._streams import Items, RikoItem, RikoStream
+    from riko.types._wrappers import (
+        AsyncPipeParser,
+        ParserMaterializedOutput,
+        ProcessorWrapperOutput,
+    )
 
 NUMBER = 1
 LOOPS = 1

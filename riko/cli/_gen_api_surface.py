@@ -7,11 +7,16 @@ Provides functions for generating the API-surface reference document from the
 private ``riko.base._api_surface`` contract declaration.
 """
 
+from __future__ import annotations
+
 import re
-from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 from riko.base import _api_surface
 from riko.base._paths import ROOT_DIR
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 _DOC = ROOT_DIR / "_docs" / "API_SURFACE.md"
 _BLOCK = re.compile(

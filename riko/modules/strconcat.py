@@ -23,17 +23,21 @@ Attributes:
 
 """
 
-from collections.abc import Sequence
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._configs import StrconcatObjconf
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Item
-
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from logging import Logger
+
+    from riko.coercion._configs import StrconcatObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item
 
 OPTS: Opts = {"listize": True, "extract": "part"}
 DEFAULTS: Defaults = {}

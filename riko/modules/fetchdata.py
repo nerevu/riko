@@ -23,25 +23,30 @@ Attributes:
 
 """
 
-from logging import Logger
+from __future__ import annotations
+
 from os.path import splitext
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 
 from riko.base._constants import ENCODING
-from riko.coercion._configs import FetchDataObjconf
 from riko.coercion._sequences import listize
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close
 from riko.parsing.documents import any2dict
-from riko.types._io import FileLike
 from riko.types._options import Defaults, Opts
-from riko.types._streams import Item, Stream
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import FetchDataObjconf
+    from riko.types._io import FileLike
+    from riko.types._streams import Item, Stream
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING})
@@ -134,12 +139,12 @@ def parser(
     """
     url: str = require_conf(objconf, "url", "fetchdata")
     ext = splitext(url)[1].lstrip(".")
-    paths = cast(list[str], listize(objconf.path))
+    paths = cast("list[str]", listize(objconf.path))
     path = ".".join(paths)
 
     with Fetch(url, encoding=objconf.encoding, binary=(ext == "json")) as f:
         ext = ext or f.ext
-        content = cast(FileLike, f)
+        content = cast("FileLike", f)
         yield from any2dict(content, ext, objconf.html5, path=path)
 
 
