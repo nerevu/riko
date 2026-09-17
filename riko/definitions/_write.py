@@ -189,9 +189,7 @@ class SyncWriteSession(Protocol):
     """
 
     def write(self, value: Item | Items) -> None:  # noqa: E301
-        """
-        Delivers a record or the whole record stream through this session.
-        """
+        """Delivers a record or the whole record stream through this session."""
         ...
 
     def acquire(self) -> None:
@@ -199,9 +197,7 @@ class SyncWriteSession(Protocol):
         ...
 
     def finalize(self) -> WriteResult:
-        """
-        Commits the delivery and reports what the session wrote.
-        """
+        """Commits the delivery and reports what the session wrote."""
         ...
 
     def abort(self) -> None:

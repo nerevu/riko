@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.ext.codegen
-~~~~~~~~~~~~~~~~
 Provides functions for generating typed module names and module id aliases.
 
 Generated output is sorted and deterministic. Name collisions require an explicit

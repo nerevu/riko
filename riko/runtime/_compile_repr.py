@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides function pretty printing
-"""
+"""Provides function pretty printing."""
 
 from __future__ import annotations
 
@@ -23,7 +21,7 @@ def cmp(a: object, b: object) -> int:
 
 @total_ordering
 class Id:
-    """An object that is not quoted as literal by repr"""
+    """An object that is not quoted as literal by repr."""
 
     def __init__(self, name: object) -> None:
         self.name = name
@@ -53,7 +51,7 @@ def repr_arg(
     arg: PyKwargValue | RawConfValues | Id | Value | dict[str, str] | None,
 ) -> str:
     """
-    Formats a function argument prettily but as working code
+    Formats a function argument prettily but as working code.
 
     unicode encodable as ascii is formatted as str
     """
@@ -74,7 +72,5 @@ def repr_arg(
 
 
 def repr_args(*args: dict[str, str]) -> str:
-    """
-    Formats a list of function arguments prettily but as working code
-    """
+    """Formats a list of function arguments prettily but as working code."""
     return f"[{', '.join(map(repr_arg, args))}]"

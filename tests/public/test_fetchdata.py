@@ -81,10 +81,7 @@ class TestExtensionlessFetchdata:
     )
     @pytest.mark.anyio
     async def test_query_string_does_not_defeat_extension(self, monkeypatch):
-        """
-        A URL carrying both an extension and a query string must still detect
-        its format from the extension alone.
-        """
+        """Detect URL formats from extensions even when queries are present."""
         monkeypatch.setattr(
             "riko.io._async.async_get", _async_get(JSON, "application/json")
         )

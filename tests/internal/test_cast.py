@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Tests cast_datetime's try_local_tz: UTC by default, local zone when opted in.
-"""
+"""Tests cast_datetime's try_local_tz: UTC by default, local zone when opted in."""
 
 import time
 from datetime import timedelta

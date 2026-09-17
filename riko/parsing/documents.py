@@ -360,8 +360,9 @@ def xml2etree(  # noqa: E302
     f: str | FileLike, xml: bool = True, html5: bool = False
 ) -> AnyElementTree:
     """
-    Parses XML/HTML into an ElementTree. External XML is parsed with a hardened
-    policy: entity resolution, DTD loading, and network access are disabled to
+    Parse XML or HTML into an ``ElementTree``.
+
+    External XML disables entity resolution, DTD loading, and network access to
     guard against XXE and entity-expansion attacks.
 
     Examples:
@@ -532,6 +533,7 @@ def text2entity(text: str) -> str:
 def entity2text(entitydef: str) -> str:
     """
     Converts an HTML entity reference into unicode.
+
     http://stackoverflow.com/a/58125/408556
     """
     if entitydef.startswith("&#x"):

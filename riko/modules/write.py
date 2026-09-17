@@ -183,8 +183,7 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that asynchronously writes a stream to a file and passes the
-    source items through unchanged.
+    Write an async stream to a file and pass its items through unchanged.
 
     Not lazy: materializes the source and cannot be used on an unbounded stream.
 
@@ -244,8 +243,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that writes a stream to a file and passes the source items
-    through unchanged.
+    Write a stream to a file and pass its items through unchanged.
 
     Not lazy: materializes the source and cannot be used on an unbounded stream.
 

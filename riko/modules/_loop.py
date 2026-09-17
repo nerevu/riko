@@ -1,10 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules._loop
-~~~~~~~~~~~~~~~~~~
-Loop-specific execution, extracted from the generic operator decorator. Owns
-embedded-target validation, child-context creation (via ``_get_subpipe``), and
-the per-parent fold of an embedded processor over the source stream.
+Implement loop-specific execution outside the generic operator decorator.
+
+This module owns embedded-target validation, child-context creation through
+``_get_subpipe``, and per-parent folding over the source stream.
 
 The loop runs the embed once per parent and folds its results back against *that
 parent* — ``count`` reduces per parent, ``emit`` yields the child results, and
@@ -250,11 +249,12 @@ def loop_embed_async(
     count: CountValues | None = None,
 ) -> tuple[bool, bool, AsyncStreamOrValueStream | Stream]:
     """
-    Lazy-async counterpart of ``loop_embed_sync``: constructs (without advancing)
-    a sequential per-parent async loop generator that yields results as the
-    consumer pulls. Unlike the eager path this neither materializes the source
-    nor runs the embeds concurrently — ordering, backpressure, and early exit on
-    ``count="first"`` fall out of sequential iteration.
+    Build the lazy async counterpart to ``loop_embed_sync``.
+
+    It returns a sequential per-parent async generator without advancing the source.
+    It does not materialize the source or run embeds concurrently, so ordering,
+    backpressure, and early exit on ``count="first"`` follow from sequential
+    iteration.
     """
     embed_type = embed.type if embed else None
     handled = True

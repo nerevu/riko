@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Tests for the P8 module registry + pipe-resolution façade (slice 1).
-"""
+"""Tests for the P8 module registry + pipe-resolution façade (slice 1)."""
 
 import sys
 from types import SimpleNamespace
@@ -86,17 +84,15 @@ class TestModuleRegistry:
 
     def test_missing_dotted_module_raises_unsupported(self, fixed_registry):
         """
-        A dotted name fails to import at its missing parent package, not the full
-        target. The guard must still map that to UnsupportedModuleError.
+        Map missing parents in dotted names to ``UnsupportedModuleError``.
+
+        The import fails at the missing parent rather than the full target.
         """
         with pytest.raises(UnsupportedModuleError):
             fixed_registry.resolve("acme.nope")
 
     def test_transitive_import_error_preserved(self, fixed_registry, monkeypatch):
-        """
-        A missing dep *inside* a real module surfaces as ModuleNotFoundError,
-        not UnsupportedModuleError.
-        """
+        """Preserve ``ModuleNotFoundError`` for missing internal dependencies."""
 
         def fake_import(name, *args, **kwargs):
             if name == "riko.modules.tokenizer":
@@ -159,7 +155,7 @@ class TestPublicRegister:
         assert registry.resolve(_NAME) is marker
 
     def test_register_runs_end_to_end(self, fixed_registry):
-        """A registered alias of a built-in resolves and runs through SyncPipe"""
+        """A registered alias of a built-in resolves and runs through SyncPipe."""
         register(ModuleDefinition(name=_NAME, module=tokenizer))
         flow = SyncPipe(_NAME, source=[{"content": "a b c"}], conf={"delimiter": " "})
         expected = ["a", "b", "c"]
@@ -196,8 +192,10 @@ class TestPipeResolver:
     )
     def test_runtime_registered_pipe_prefixed_module_resolves(self, fixed_registry):
         """
-        A runtime registration whose name begins with ``pipe_`` should win over
-        the pipeline-name routing and resolve to the registered callable.
+        Prefer runtime registrations whose names start with ``pipe_``.
+
+        These registrations must resolve to the registered callable rather than
+        pipeline-name routing.
         """
         name = "pipe_transform"
         fixed_registry.register(ModuleDefinition(name=name, sync_pipe=marker))
@@ -205,7 +203,7 @@ class TestPipeResolver:
 
 
 class TestEntryPointModules:
-    """an external package supplies modules via entry points"""
+    """an external package supplies modules via entry points."""
 
     def test_entry_point_module_resolves(self, monkeypatch, fixed_registry):
 
@@ -213,7 +211,7 @@ class TestEntryPointModules:
         assert fixed_registry.resolve(_NAME) is marker
 
     def test_name_stamped_from_entry_point_key(self, monkeypatch, fixed_registry):
-        """Definition omits name so the registry adopts the entry-point key"""
+        """Definition omits name so the registry adopts the entry-point key."""
         defn = ModuleDefinition(sync_pipe=marker)
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, defn))
 
@@ -232,7 +230,7 @@ class TestEntryPointModules:
         assert pipe_resolver.resolve(_NAME) is marker
 
     def test_entry_point_may_name_a_bare_module(self, monkeypatch, fixed_registry):
-        """The entry point resolves to a module, not a ModuleDefinition"""
+        """The entry point resolves to a module, not a ModuleDefinition."""
         mod = SimpleNamespace(pipe=marker, async_pipe=marker, __doc__=_DOC)
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, mod))
 
@@ -288,7 +286,7 @@ class TestEntryPointModules:
 
 class TestPipelineResolver:
     def test_core_default_has_no_named_pipelines(self):
-        """A bare (unconfigured) resolver finds no pipe_* module and no definition"""
+        """A bare (unconfigured) resolver finds no pipe_* module and no definition."""
         resolver = PipelineResolver()
         assert resolver.load("pipe_x") is None
 
@@ -335,7 +333,7 @@ class TestCatalog:
         assert "tokenizer" in list_modules()  # built-ins still present
 
     def test_bare_callable_skipped_in_catalog(self, fixed_registry):
-        """Resolvable but carries no metadata"""
+        """Resolvable but carries no metadata."""
         fixed_registry.register(MOD_DEFN)
 
         assert _NAME not in list_modules()

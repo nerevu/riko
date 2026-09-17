@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides functions for generating module names and ids from the runtime catalog.
-"""
+"""Provides functions for generating module names and ids from the runtime catalog."""
 
 from riko.base._paths import PACKAGE_DIR
 from riko.ext.codegen import (

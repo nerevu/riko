@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.io._sync
-~~~~~~~~
-
 Provides HTTP and file I/O helpers.
 
 Attributes:

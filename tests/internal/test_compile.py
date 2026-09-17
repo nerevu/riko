@@ -356,8 +356,9 @@ def test_graph_index_orders_embed_before_its_loop():
 @async_test
 async def test_async_codegen_matches_sync():
     """
-    ``compile(is_async=True)`` emits a runnable anyio pipeline whose output
-    matches the sync compilation.
+    Ensure async compilation matches sync pipeline output.
+
+    The async path emits a runnable AnyIO pipeline.
     """
     pipe_def = loads((PIPELINE_DIR / "pipe_gigs.json").read_text())
     async_src = compile_pipe(pipe_def, "pipe_gigs", is_async=True)
@@ -374,9 +375,11 @@ async def test_async_codegen_matches_sync():
 
 class TestCompactLoopConsumption:
     """
-    The compiler consumes a compact loop (top-level ``embed`` ref, ``conf`` =
-    the embed's conf, bare top-level ``count``/``emit``/``assign``/``field``)
-    directly — no legacy ``conf.embed.value`` nesting required.
+    Compile the compact loop representation directly.
+
+    The top-level ``embed`` references the submodule, ``conf`` holds its config, and
+    ``count``, ``emit``, ``assign``, and ``field`` remain at the top level. No
+    legacy ``conf.embed.value`` nesting is required.
     """
 
     def test_compact_processor_loop_emit(self):
@@ -419,8 +422,9 @@ class TestCompactLoopConsumption:
 
 class TestNecessaryLoopFixtures:
     """
-    Loops that cannot collapse to a direct node — the two cases that stay a
-    compact loop, each backed by a JSON fixture.
+    Keep non-collapsible loops in compact-loop form.
+
+    These two cases remain compact loops backed by JSON fixtures.
     """
 
     def test_subpipe_loop_via_top_level_embed(self):

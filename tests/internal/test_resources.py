@@ -492,7 +492,7 @@ class TestResourceEcosystem:
             bind_resources("connection", {})
 
     def test_bind_resources_validates_all_names_before_opening(self):
-        """Name validation must complete before resource acquisition"""
+        """Name validation must complete before resource acquisition."""
         opened: list[str] = []
 
         class _Spy:
@@ -541,10 +541,11 @@ class TestResourceEcosystem:
 
 class TestResourceImmutability:
     """
-    Resource definitions are structurally immutable. Fields cannot be reassigned
-    and definition-owned containers are read-only, but riko never recursively
-    freezes the arbitrary value a definition references. Do not reintroduce public
-    setters; the execution layer owns mutable resolved state, not the definition.
+    Keep resource definitions structurally immutable.
+
+    Fields cannot be reassigned and definition-owned containers are read-only, but
+    Riko does not recursively freeze arbitrary referenced values. Do not restore
+    public setters; mutable resolved state belongs to the execution layer.
     """
 
     def test_external_value_fields_are_read_only(self, connection: _Connection):

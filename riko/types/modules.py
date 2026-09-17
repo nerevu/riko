@@ -478,9 +478,11 @@ type AnyModuleRawConf = (
 
 class EmbeddedModule(EmbedRef, total=False):
     """
-    A loop's embedded submodule hoisted to a standalone ``{id, type, conf}``
-    descriptor for code generation. Built by ``compile.gen_modules(embedded=True)``
-    from the loop's compact top-level ``embed`` plus its ``conf``.
+    Describe a loop's embedded submodule for code generation.
+
+    The descriptor is ``{id, type, conf}`` and comes from
+    ``compile.gen_modules(embedded=True)`` using the loop's top-level ``embed`` and
+    ``conf``.
     """
 
     conf: Required[AnyModuleRawConf]

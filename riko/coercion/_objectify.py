@@ -1,9 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.coercion._objectify
-~~~~~~~~~~~~~~~
-A corrected ``Objectify`` (over meza's ``Objectify``) plus an ``objectify`` factory.
-It fixes:
+Provide a corrected ``Objectify`` and ``objectify`` factory.
+
+Compared with meza's ``Objectify``, it fixes:
 
 * casing: meza keys on the raw attribute names, so ``kw.KEY`` and ``kw.key``
   diverge; here every key is lowercased at construction, so mixed-case input is
@@ -11,7 +10,6 @@ It fixes:
 * the ``Mapping`` contract: meza's class is a bare object with no ``__len__``;
   here it subclasses ``Mapping`` and adds ``__len__``, so ``len()`` and the
   mapping ABC work.
-
 """
 
 from __future__ import annotations

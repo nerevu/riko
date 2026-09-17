@@ -1,10 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-tests
-~~~~~
-
-Provides application unit tests
-"""
+"""Provides application unit tests."""
 
 from __future__ import annotations
 

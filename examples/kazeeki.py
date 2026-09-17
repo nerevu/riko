@@ -1,8 +1,7 @@
 # vim: sw=4:ts=4:expandtab
 
 """
-Aggregates freelance jobs from several JSON feeds, normalizes their fields, and
-converts budgets to a common currency.
+Aggregate freelance jobs from several feeds and normalize their budgets.
 
 The feeds are odesk, guru, elance, and freelancer.
 

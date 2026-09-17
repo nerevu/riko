@@ -1,12 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-riko.modules._prepare
-~~~~~~~~~~~~~~~~~~~~~~
-
-Module preparation and per-item dispatch: the frozen ``PreparedModule`` record,
-conf merging/extraction, and the parser/caster construction that turns opts and
-conf into the callables a wrapper applies to each item.
-"""
+"""Prepare modules for per-item dispatch."""
 
 from __future__ import annotations
 

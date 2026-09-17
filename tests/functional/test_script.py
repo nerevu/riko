@@ -1,8 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 
-"""
-Tests riko runpipe CLI functionality.
-"""
+"""Tests riko runpipe CLI functionality."""
 
 import builtins
 import subprocess

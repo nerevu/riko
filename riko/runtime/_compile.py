@@ -747,17 +747,18 @@ def resolve_module(  # noqa: E704
 ) -> Pipe: ...
 def resolve_module(module_name: str, is_async: bool = False) -> Pipe:  # noqa: E302
     """
-    Resolves a leaf module or generated ``pipe_*`` sub-pipe to its callable.
-    JSON pipeline *definitions* are a separate concern — see
+    Resolve a leaf module or generated sub-pipe to its callable.
+
+    JSON pipeline definitions are separate; see
     ``pipeline_resolver.load_definition``.
 
     Examples:
 
         >>> resolve_module("filter")
-        <function pipe at ...>
+        <function pipe at...>
         >>> resolve_module("does_not_exist")
         Traceback (most recent call last):
-            ...
+           ...
         riko.base.exceptions.UnsupportedModuleError: Unsupported riko module: does_not_exist
 
     Leaf-module resolution (incl. preserving a transitive ``ModuleNotFoundError``

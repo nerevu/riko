@@ -208,8 +208,10 @@ def _is_pipe_spec(obj: object) -> TypeGuard[tuple[str, Conf]]:
 
 def _is_source(obj: object) -> TypeGuard[Items]:
     """
-    A stream of items on the left of ``|`` — any iterable that isn't a bare
-    string/bytes or a single ``Mapping`` item.
+    Represent items on the left of ``|`` as a stream.
+
+    This accepts any iterable except bare strings, bytes, or a single ``Mapping``
+    item.
     """
     return isinstance(obj, Iterable) and not isinstance(obj, (AnyStrType, Mapping))
 

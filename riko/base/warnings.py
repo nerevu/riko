@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides riko specific warnings
-"""
+"""Provides riko specific warnings."""
 
 
 class RikoWarning(UserWarning):

@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides example pipeline tests.
-"""
+"""Provides example pipeline tests."""
 
 import subprocess
 import sys

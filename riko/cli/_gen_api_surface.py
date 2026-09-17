@@ -1,11 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-riko.cli.gen_api_surface
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Provides functions for generating the API-surface reference document from the
-private ``riko.base._api_surface`` contract declaration.
-"""
+"""Generate the API-surface reference from the private contract declaration."""
 
 from __future__ import annotations
 

@@ -71,7 +71,7 @@ async def runner(
 
 
 def run() -> None:
-    """CLI runner"""
+    """CLI runner."""
     parser = ArgumentParser(
         description="description: Runs a riko pipe",
         prog="run-pipe",

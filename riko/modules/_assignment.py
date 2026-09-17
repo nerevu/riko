@@ -1,11 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-riko.modules._assignment
-~~~~~~~~~~~~~~~~~~~~~~~~~
-Assignment machinery: sub-pipe binding for embedded modules and the logic that
-decides whether a parser result is a single value or a stream and how it is
-assigned onto the item.
-"""
+"""Handle sub-pipe binding and item assignment."""
 
 from __future__ import annotations
 

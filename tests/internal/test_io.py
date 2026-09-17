@@ -25,8 +25,10 @@ from tests._loopback import loopback_url
 
 def test_csv_headerless_closes_original_source(monkeypatch):
     """
-    ``has_header=False`` buffers through ``seekable`` (a spooled copy) and leaves the
-    original fetch open. ``auto_close`` must still close it, not just the spool.
+    Ensure ``auto_close`` closes the original fetch after header buffering.
+
+    With ``has_header=False``, ``seekable`` uses a spooled copy while leaving the
+    original fetch open.
     """
     closed: list[bool] = []
     real_fetch = csv.Fetch
@@ -60,8 +62,9 @@ def test_csv_headerless_closes_original_source(monkeypatch):
 @async_test
 async def test_async_url_open_honors_content_type_charset():
     """
-    The async opener must decode using the declared response charset (what the sync
-    ``Fetch`` path already does).
+    Decode async responses using their declared charset.
+
+    This matches the existing sync ``Fetch`` behavior.
     """
     body = "café ünïcode".encode("iso-8859-1")
 
@@ -151,10 +154,7 @@ class TestLoopbackServer:
             assert f.read() == self.PAYLOAD
 
     def test_unified_http_backend(self):
-        """
-        A params-less http URL routes through the requests backend rather than the
-        urllib opener.
-        """
+        """Route parameterless HTTP URLs through the requests backend."""
         response = Mock()
         response.headers = {"Content-Type": "application/rss+xml"}
         target = "http://example.com/feed.xml"

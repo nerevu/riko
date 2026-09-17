@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Dataclass construction and hashable round-tripping for repr-based memoization.
-"""
+"""Dataclass construction and hashable round-tripping for repr-based memoization."""
 
 from __future__ import annotations
 
@@ -57,9 +55,10 @@ def _has_unsupported(values: Iterable[HashableOrTuple]) -> bool:
 
 def _to_hashable(obj: object) -> HashableOrTuple:
     """
-    A nested unsupported value propagates upward so the whole container hashes to
-    ``_UNSUPPORTED``. Otherwise a shallow membership check at the call site would
-    cache distinct instances onto one key.
+    Propagate unsupported nested values to the whole container.
+
+    This prevents shallow cache-key checks from collapsing distinct instances onto
+    one key.
 
     Examples:
 
@@ -141,8 +140,10 @@ def _from_hashable(
 
 def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
     """
-    Memoize *fn* on repr-hashable args. Unsupported (unhashable) args bypass the
-    cache so distinct instances never collide on a shared key.
+    Memoize *fn* only for supported argument keys.
+
+    Unsupported or unhashable arguments bypass the cache so distinct instances
+    cannot collide on a shared key.
 
     Examples:
 

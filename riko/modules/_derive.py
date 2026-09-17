@@ -1,10 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-riko.modules._derive
-~~~~~~~~~~~~~~~~~~~~~
-
-Provides functions for deriving module subtypes and loop behavior.
-"""
+"""Provides functions for deriving module subtypes and loop behavior."""
 
 from __future__ import annotations
 

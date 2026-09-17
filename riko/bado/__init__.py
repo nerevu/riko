@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.bado
-~~~~~~~~~
-
 Stable, SemVer-guaranteed async API for Riko.
 
 The names in ``__all__`` are also re-exported from :mod:`riko`. Riko's private backend

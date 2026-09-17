@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.bado.itertools
-~~~~~~~~~~~~~~~~~~~~
-
 Concurrency helpers for the async runtime.
 
 These map an async function over an iterable, merge async feeds, adapt sync

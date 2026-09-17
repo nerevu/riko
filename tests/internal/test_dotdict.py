@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Tests DotDict deletion: root, nested, deep, case variation, and missing paths.
-"""
+"""Tests DotDict deletion: root, nested, deep, case variation, and missing paths."""
 
 import pytest
 

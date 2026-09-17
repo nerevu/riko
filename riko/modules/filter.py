@@ -75,11 +75,11 @@ def _ordered[T](
     compare: Callable[[Decimal | str, Decimal | str], bool],
 ) -> Callable[[T, T], bool]:
     """
-    Wraps an ordered comparison so it compares numerically only when *every*
-    operand is a comparable number (or numeric string), and lexicographically
-    otherwise. Coercion is all-or-nothing: a single non-numeric operand (e.g.
-    ``"abc"``) demotes the whole comparison to strings, so a mixed pair never
-    compares a ``Decimal`` against a ``str``.
+    Compare operands numerically only when all are numeric.
+
+    Otherwise comparison is lexicographic. A single non-numeric operand, such as
+    ``"abc"``, demotes the whole comparison to strings and avoids comparing
+    ``Decimal`` with ``str``.
 
     A non-finite operand is a comparable number only for ``inf``/``-inf`` and only
     when the module-level ``ALLOW_INF`` flag is enabled (default off, so those
@@ -151,6 +151,8 @@ def parse_arg[VT](arg: VT, op: str, memoize: bool = False) -> str | date | VT | 
 
 def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
     """
+    Evaluates a single rule against an item.
+
     Examples:
 
         >>> from meza.fntools import Objectify

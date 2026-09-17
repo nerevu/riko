@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.base.locations
-~~~~~~~~~~~~~~
-
 Provides location lookup dictionaries.
 
 ``LOCATIONS`` is keyed by continent *and* by country, so a lookup may return
