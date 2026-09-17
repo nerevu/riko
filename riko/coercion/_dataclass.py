@@ -1,13 +1,5 @@
 """
 Dataclass and rule coercion helpers used by module configuration.
-
-Examples:
-
-    >>> from riko.ext import normalize_module_name
-    >>>
-    >>> normalize_module_name("fetch")
-    'fetch'
-
 """
 
 from __future__ import annotations
@@ -21,7 +13,6 @@ from typing import TYPE_CHECKING, Literal, Union, get_args, get_origin
 import riko.types._enums as names_module
 import riko.types._scalars as scalars_module
 from riko.base._typing import resolve_type_hints
-from riko.types._enums import ModuleName
 from riko.types._guards import is_mapping
 from riko.types.modules import RegexConfRule, RegexRule
 
@@ -29,7 +20,6 @@ if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
     from riko.types._collections import RikoValue, StringyDict, StringyList
-    from riko.types._enums import ModuleNameLike
 
     from ._dynamic_conf import DynamicConf
 
@@ -119,7 +109,7 @@ def fromdict(
     return cls(**data)
 
 
-def make_regex_rule(
+def make_regex_conf_rule(
     f: str, m: str, r: str, seriesmatch: bool = True, default: str | None = None
 ) -> RegexConfRule:
     """
@@ -139,7 +129,7 @@ def make_regex_rule(
 
     Examples:
 
-        >>> rule = make_regex_rule("title", "foo", "bar")
+        >>> rule = make_regex_conf_rule("title", "foo", "bar")
         >>> rule.field, rule.match, rule.replace, rule.seriesmatch
         ('title', 'foo', 'bar', True)
 
@@ -149,7 +139,7 @@ def make_regex_rule(
     )
 
 
-def get_regex_rule(
+def resolve_regex_rule(
     rule: DynamicConf | RegexConfRule, recompile: bool = False
 ) -> RegexRule:
     """
@@ -167,10 +157,11 @@ def get_regex_rule(
 
     Examples:
 
-        >>> rule = get_regex_rule(make_regex_rule("title", "foo", "bar"))
+        >>> rule = resolve_regex_rule(make_regex_conf_rule("title", "foo", "bar"))
         >>> rule["field"], rule["match"], rule["replace"], rule["series"]
         ('title', 'foo', 'bar', True)
-        >>> compiled = get_regex_rule(make_regex_rule("title", "foo", "bar"), True)
+        >>> conf_rule = make_regex_conf_rule("title", "foo", "bar")
+        >>> compiled = resolve_regex_rule(conf_rule, True)
         >>> compiled["match"].pattern
         'foo'
 
@@ -207,26 +198,3 @@ def get_regex_rule(
     }
 
     return RegexRule(**nrule)
-
-
-def normalize_module_name(name: ModuleNameLike | None) -> str:
-    """
-    Normalizes a module name to its canonical string value.
-
-    Args:
-
-        name: String or ``ModuleName`` value, or ``None``.
-
-    Returns:
-
-        The underlying module-name string, or an empty string for ``None``.
-
-    Examples:
-
-        >>> normalize_module_name("fetch")
-        'fetch'
-        >>> normalize_module_name(None)
-        ''
-
-    """
-    return name.value if isinstance(name, ModuleName) else name or ""

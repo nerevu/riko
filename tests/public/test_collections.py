@@ -17,7 +17,7 @@ from riko.bado._util import gather_results
 from riko.base._iterutils import noop
 from riko.base._paths import get_path
 from riko.base.exceptions import ReceiverUnavailableError
-from riko.coercion._dataclass import normalize_module_name
+from riko.definitions.modules import resolve_module_name
 from riko.runtime._pubsub import async_hub, sync_hub
 from riko.runtime.collections import (
     CONVERSION_FUNCS,
@@ -754,10 +754,10 @@ class TestAsyncPipeChaining:
 class TestModuleNameEnum:
     """A ``ModuleName`` enum is accepted anywhere a name string is."""
 
-    def test_normalize_module_name(self):
-        assert normalize_module_name(_Mod.HASH) == "hash"
-        assert normalize_module_name("hash") == "hash"
-        assert normalize_module_name(None) == ""
+    def test_resolve_module_name(self):
+        assert resolve_module_name(_Mod.HASH) == "hash"
+        assert resolve_module_name("hash") == "hash"
+        assert resolve_module_name(None) == ""
 
     def test_constructor_stores_plain_string(self):
         pipe = SyncPipe(_Mod.HASH, source=SRC)

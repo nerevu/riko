@@ -100,7 +100,7 @@ EXTENSION = frozenset(
         "SyncSplitterWrapper",
         "derive_category",
         "get_conf_type",
-        "normalize_module_name",
+        "resolve_module_name",
         "operator",
         "processor",
         "register",

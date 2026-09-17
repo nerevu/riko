@@ -167,7 +167,7 @@ def _chunk_content(  # noqa: E302
         yield from chunk(content, chunksize)
 
 
-def _coerce_chunk(raw: AnyStr, binary: bool, encoding: str) -> AnyStr:
+def _resolve_chunk(raw: AnyStr, binary: bool, encoding: str) -> AnyStr:
     if isinstance(raw, str):
         result: AnyStr = raw.encode(encoding) if binary else raw
     else:
@@ -428,7 +428,7 @@ async def async_write(
 
     async with await opener as f:
         for normalized in _chunk_content(content, chunksize):
-            data = _coerce_chunk(normalized, binary, encoding)
+            data = _resolve_chunk(normalized, binary, encoding)
             await f.write(data)  # pyright: ignore[reportArgumentType]
             progress += len(data)
 

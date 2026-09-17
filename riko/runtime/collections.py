@@ -122,10 +122,10 @@ from riko.bado.itertools import (
 )
 from riko.base._constants import DEF_CONNECTION_COUNT
 from riko.base.exceptions import PipelineStateError
-from riko.coercion._dataclass import normalize_module_name
 from riko.coercion._sequences import listize
 from riko.definitions._targets import prepare_write
 from riko.definitions._write import Destination, ExportType, WriteMode, WriteResult
+from riko.definitions.modules import resolve_module_name
 from riko.io._serialization import CONVERSION_FUNCS, convert_records
 from riko.types._enums import ExecutionMode, FmtLike, Formats, KeyLike, ModuleNameLike
 from riko.types._scalars import AnyStrType, BasicValue
@@ -722,7 +722,7 @@ class PyPipe(_Lifecycle):
         self._terminating: bool = False
         self.conf: Conf = conf or {}
         self.kwargs = kwargs
-        self.name: str = normalize_module_name(name)
+        self.name: str = resolve_module_name(name)
         self.parallel = parallel
         self.source = source
         self.test: bool = bool(test)
@@ -1956,8 +1956,8 @@ class AsyncPipe(PyPipe):
         skwargs.update(kwargs)
         return AsyncPipe(name, source=self, **skwargs)
 
-    async def _normalize_source(self) -> RikoFeed | None:
-        """Normalizes the source into a lazy async iterable, preserving ``None``."""
+    async def _resolve_source(self) -> RikoFeed | None:
+        """Normalizes the source into a lazy async iterable."""
         if self.source is None:
             resolved = None
         else:
@@ -1991,7 +1991,7 @@ class AsyncPipe(PyPipe):
         bounded = self.mapify and self.parallel
 
         try:
-            feed = await self._normalize_source()
+            feed = await self._resolve_source()
 
             if bounded and feed is not None:
                 limit = self.connections

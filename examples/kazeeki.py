@@ -43,7 +43,7 @@ from riko.types.modules import (
 if TYPE_CHECKING:
     from riko.types._streams import RikoItems
 
-# from riko.utils import make_regex_rule
+# from riko.utils import make_regex_conf_rule
 
 BR = FindConfRule(find="<br>")
 DEF_CUR_CODE = "USD"
@@ -158,7 +158,7 @@ def add_budget[T: SyncPipe | AsyncPipe](
     cur_rule = FindConfRule(find=r"\b[A-Z]{3}\b", location="at")
     sym_rule = FindConfRule(find=f"[{codes}]", location="at")
 
-    # make_regex_rule('k:budget_raw', r'[(),.\s]', ''),
+    # make_regex_conf_rule('k:budget_raw', r'[(),.\s]', ''),
     invalid_budgets = [
         StrReplaceConfRule(find="Less than", replace="0-"),
         StrReplaceConfRule(find="Under", replace="0-"),

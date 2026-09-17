@@ -229,7 +229,7 @@ to shrink the suite — they cover contracts hard to catch elsewhere.
 - `public/test_collections.py` deduped: the sync/async copies of
   `test_pipes_use_loopability_for_mapping` folded into one `_ENGINES`-parametrized parity test,
   and the redundant `test_enum_and_string_resolve_identically` dropped (equivalence is already
-  proven by `test_normalize_module_name` + `test_constructor_stores_plain_string`).
+  proven by `test_resolve_module_name` + `test_constructor_stores_plain_string`).
 - `internal/test_resolver.py`: dropped the facade-level `test_register_requires_name` (the
   registry-level `test_runtime_register_requires_name` already owns the `"needs a name"`
   validation; the facade just forwards, and its delegation is covered by

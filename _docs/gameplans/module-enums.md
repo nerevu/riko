@@ -1,7 +1,7 @@
 # Module registry & enum discoverability gameplan
 
 > **Shipped (P9A.1–P9A.6; targeted for release v0.76.0):** the
-> `ModuleName` base + `normalize_module_name`, `derive_category` taxonomy, the
+> `ModuleName` base + `resolve_module_name`, `derive_category` taxonomy, the
 > `riko.ext.codegen` generator + committed `riko/modules/_names.py` (the flat `Modules`
 > namespace + `Sources`/`Transforms`/`Sinks` buckets), value-taking `|`/`.pipe()` chaining,
 > `list_modules`/`describe_module` introspection, and the `gen-names` CLI + drift guard. The
