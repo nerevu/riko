@@ -1,8 +1,9 @@
 """
-Tests basic pipeline module usage
+Tests basic pipeline module usage.
 
-Note: many of these tests simply make sure the module compiles and runs.
-We need more extensive tests with stable data feeds!
+These are integration tests for compiled/generated pipelines. Keep cases that exercise
+composition, wiring, runtime context, or historical pipeline behavior not owned more
+strongly by module doctests or focused test suites.
 """
 
 import sqlite3
@@ -282,18 +283,6 @@ class TestBasics:
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
         assert items == [{"symbol": "IBM"}]
-
-    def test_gigs(self):
-        """Loads the gigs pipeline backed by a cached fetchdata source"""
-        pipe_name = "pipe_gigs"
-        items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 49, 0)
-        item = items[-1]
-        assert is_mapping(item)
-        assert item.get("title") == "Educational Android App"
-
-        link = item.get("link")
-        assert link == "http://www.guru.com/jobs/educational-android-app/1058980"
 
     def test_kazeeki1(self):
         """Loads the kazeeki simple test fetchdata pipeline."""
