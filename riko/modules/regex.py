@@ -35,7 +35,7 @@ import pygogo as gogo
 
 from riko.bado.itertools import async_reduce, coop_reduce
 from riko.base._strutils import multi_substitute, substitute
-from riko.coercion._dataclass import get_regex_rule
+from riko.coercion._dataclass import resolve_regex_rule
 from riko.parsing._dotdict import DotDict
 from riko.types._sentinels import MISSING
 
@@ -117,7 +117,7 @@ async def async_parser(
         result = DotDict({**item, **rewritten})
         return cast("DotDict[RikoValue]", result)
 
-    regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
+    regex_rules = [resolve_regex_rule(r, recompile=recompile) for r in rules]
     grouped = group_by(regex_rules, "field")
     field_rules = [g[1] for g in grouped]
     return await async_reduce(reducer, field_rules, item)
@@ -179,7 +179,7 @@ def parser(
         result = DotDict({**item, **rewritten})
         return cast("DotDict[RikoValue]", result)
 
-    regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
+    regex_rules = [resolve_regex_rule(r, recompile=recompile) for r in rules]
     grouped = group_by(regex_rules, "field")
     field_rules = [g[1] for g in grouped]
     return reduce(reducer, field_rules, item)

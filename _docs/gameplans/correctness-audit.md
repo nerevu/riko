@@ -84,7 +84,7 @@ Config keys and parameters that exist in types, defaults, and docs but no code r
 * **Detect:** for each key in `riko/types/modules.py`, grep for `objconf.<key>`,
   `rule.<key>`, `conf["<key>"]`, `kwargs.get("<key>")`. Then round-trip the other way:
   call the pipe *without* each documented-optional key. Grep the whole repo, not just
-  `riko/` — `make_regex_rule` looked dead until `tests/pypipelines/` turned up ~50
+  `riko/` — `make_regex_conf_rule` looked dead until `tests/pypipelines/` turned up ~50
   callers.
 * **Fix:** delete — but see **C9** first.
 
@@ -247,7 +247,7 @@ by execution mode.
 |---|---|---|
 | Cast & coercion | `cast.py`, `_iterutils.py`, `dates.py`, `_date_utils.py` | **C4** above all — this layer decides what a missing value becomes, so its defaults propagate everywhere. **C2** in every guard. |
 | Types & config | `types/*.py` | **C3** exhaustively, then **C9** before deleting. Doc-hint defaults (`= 5`) that disagree with the module's real `DEFAULTS`. |
-| Parsing & IO | `parsers.py`, `_io.py`, `_rssutils.py`, `_strutils.py`, `autorss.py`, `_reencode.py` | **C5** (lxml, requests, feedparser), **C4** on malformed input. Note `_strutils.make_regex_rule` is *not* dead — it has ~50 callers in the hand-written `tests/pypipelines/*kazeeki*.py`, which is itself worth a look: those import a **private** module, so `_strutils` is effectively part of the pipeline-authoring surface. |
+| Parsing & IO | `parsers.py`, `_io.py`, `_rssutils.py`, `_strutils.py`, `autorss.py`, `_reencode.py` | **C5** (lxml, requests, feedparser), **C4** on malformed input. Note `_strutils.make_regex_conf_rule` is *not* dead — it has ~50 callers in the hand-written `tests/pypipelines/*kazeeki*.py`, which is itself worth a look: those import a **private** module, so `_strutils` is effectively part of the pipeline-authoring surface. |
 | Core runtime | `collections.py`, `_decorators.py` (already partly covered), `context.py`, `dotdict.py`, `_objectify.py` | **C7** against `RUNTIME_CONTRACT.md`, **C2** in the assignment/lifecycle guards. |
 | Async | `bado/*.py`, `_pubsub/*.py` | **C6** against AnyIO (owned by [bado-anyio-alignment.md](bado-anyio-alignment.md)), sync/async behavioural parity. |
 | Extension & CLI | `ext/*.py`, `cli/*.py`, `compile.py`, `topsort.py` | **C3**, **C7**. Known: `describe_module` shipped with three always-`None` fields because nothing exercised them. |

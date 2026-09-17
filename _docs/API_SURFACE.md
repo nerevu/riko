@@ -137,7 +137,7 @@ authors rather than ordinary application code.
 <!-- api-surface:extension -->
 ```python
 >>> sorted(EXTENSION)
-['AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'DynamicConf', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'derive_category', 'get_conf_type', 'normalize_module_name', 'operator', 'processor', 'register', 'splitter']
+['AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'DynamicConf', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'derive_category', 'get_conf_type', 'operator', 'processor', 'register_module', 'resolve_module_name', 'splitter']
 ```
 <!-- /api-surface:extension -->
 

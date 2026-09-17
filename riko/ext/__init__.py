@@ -9,9 +9,8 @@ This namespace contains pipe decorators, configuration helpers, module
 metadata and naming types, wrapper protocols, and registry interfaces.
 """
 
-from riko.coercion._dataclass import normalize_module_name
 from riko.coercion._dynamic_conf import DynamicConf
-from riko.definitions.modules import ModuleDefinition
+from riko.definitions.modules import ModuleDefinition, resolve_module_name
 from riko.modules._decorators import operator, processor, splitter
 from riko.runtime._registry import ModuleRegistry, register
 from riko.types._enums import ModuleName, ModuleNameLike
@@ -47,9 +46,9 @@ __all__ = [
     "SyncSplitterWrapper",
     "derive_category",
     "get_conf_type",
-    "normalize_module_name",
     "operator",
     "processor",
     "register",
+    "resolve_module_name",
     "splitter",
 ]

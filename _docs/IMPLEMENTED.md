@@ -278,7 +278,7 @@ async). Tests: `tests/internal/test_decorators.py`.
 
 **Fluent surface (P9, partial — shipped):** value-taking chaining — `pipe | "name"`,
 `pipe | ("name", conf)`, `pipe | SyncPipe(...)`, `items | SyncPipe(...)`, and `.pipe()`/`.async_pipe()`
-— plus the `ModuleName` `StrEnum` base and `normalize_module_name` (`riko/ext/_names.py`); a name may
+— plus the `ModuleName` `StrEnum` base and `resolve_module_name` (`riko/ext/_names.py`); a name may
 be a `str` or `ModuleName` member anywhere, normalized to its canonical string at the boundary. The
 generated `Modules` tree (P9A) shipped — `pipe | Transforms.FILTER` resolves identically to
 `pipe.filter()`; see §24.
@@ -384,7 +384,7 @@ pub/sub). Four durable layers:
   validated object; `WriteOperation` on its own is unvalidated intent. `WriteCapabilities` stores only
   independent facts (`modes`, `fmt`, `incremental`, `match_keyed_modes`, `idempotent_modes`);
   `appendable`/`serializes`/`keyed_modes` are **derived** properties. `prepare_write` +
-  `validate_target_mode` + local `normalize_keys` live in `riko/definitions/_targets.py` (`normalize_keys` is a
+  `validate_target_mode` + local `resolve_keys` live in `riko/definitions/_targets.py` (`resolve_keys` is a
   dedicated helper, *not* a widened `_iterutils.listize`).
 - **runtime** — the `SyncWriteSession` protocol (`write(Item | Items)` / `finalize` / `abort` /
   `teardown`) and the `_FileWriteSession` state machine (`_SessionState` OPEN/FINALIZED/ABORTED/CLOSED,

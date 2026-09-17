@@ -46,7 +46,7 @@ def _module_summary(module: object) -> str | None:
     return next((line.strip() for line in lines if line.strip()), None)
 
 
-def _coerce_definition(obj: object) -> ModuleDefinition | None:
+def _resolve_definition(obj: object) -> ModuleDefinition | None:
     """Passes a ``ModuleDefinition`` through, and wraps a bare pipe-exposing module."""
     if isinstance(obj, ModuleDefinition):
         definition = obj
@@ -104,7 +104,7 @@ class ModuleRegistry:
         if name not in self._loaded and (ep := self._discover_entry_points().get(name)):
             loaded = ep.load()
             obj = loaded() if callable(loaded) else loaded
-            definition: ModuleDefinition | None = _coerce_definition(obj)
+            definition: ModuleDefinition | None = _resolve_definition(obj)
 
             if definition is None:
                 raise TypeError(

@@ -145,7 +145,7 @@ class Context:
         context._resources = resources
         return context
 
-    def _normalize_def[T](
+    def _resolve_def[T](
         self,
         definition: ResourceDefinition[T],
         *,
@@ -262,7 +262,7 @@ class Context:
                 belong on a ``LifecycleFactory``).
 
         """
-        resource = self._normalize_def(definition, credential=credential, lazy=lazy)
+        resource = self._resolve_def(definition, credential=credential, lazy=lazy)
         context_tuple = ContextTuple(
             mode=self.mode,
             inputs=self.inputs,

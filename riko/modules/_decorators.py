@@ -34,7 +34,7 @@ from riko.bado._util import as_awaitable
 from riko.bado.itertools import as_async, async_iter, async_map
 from riko.base._iterutils import dispatch
 from riko.coercion._sequences import is_listlike
-from riko.definitions._resources import bind_resources, coerce_binding
+from riko.definitions._resources import bind_resources, resolve_binding
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
 from riko.runtime.context import Context
@@ -376,7 +376,7 @@ class Module[B: (Literal[True], Literal[False])]:
             emit=_emit,
             is_source=is_source,
             static_casted=static_casted,
-            resources=coerce_binding(opts.get("resources")),
+            resources=resolve_binding(opts.get("resources")),
         )
 
 

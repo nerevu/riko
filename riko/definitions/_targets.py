@@ -47,9 +47,9 @@ _FILE_APPEND_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL
 _FILE_INCREMENTAL_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
 
 
-def normalize_keys(value: KeyLike | None) -> tuple[str, ...]:
+def resolve_keys(value: KeyLike | None) -> tuple[str, ...]:
     """
-    Normalizes ``value`` into a tuple of keys, preserving caller ordering.
+    Normalizes ``value`` into a tuple of keys.
 
     A bare string is wrapped; any iterable is materialized as-is.
 
@@ -67,11 +67,11 @@ def normalize_keys(value: KeyLike | None) -> tuple[str, ...]:
 
     Examples:
 
-        >>> normalize_keys("id")
+        >>> resolve_keys("id")
         ('id',)
-        >>> normalize_keys(["a", "b"])
+        >>> resolve_keys(["a", "b"])
         ('a', 'b')
-        >>> normalize_keys(None)
+        >>> resolve_keys(None)
         ()
 
     """
@@ -174,7 +174,7 @@ def prepare_write(
     target = resolve_target(dest)
     resolved_mode = WriteMode(mode)
     capabilities = target.capabilities(fmt)
-    normalized_keys = normalize_keys(keys)
+    normalized_keys = resolve_keys(keys)
 
     validate_target_mode(target, resolved_mode, capabilities, keys=normalized_keys)
     operation = WriteOperation(resolved_mode, keys=normalized_keys)
@@ -339,9 +339,9 @@ __all__ = [
     "WriteOperation",
     "WriteResult",
     "WriteTarget",
-    "normalize_keys",
     "prepare_write",
     "resolve_format",
+    "resolve_keys",
     "resolve_target",
     "validate_target_mode",
 ]

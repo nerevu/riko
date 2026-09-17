@@ -18,6 +18,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from riko.types._enums import ModuleName, ModuleNameLike
+
 if TYPE_CHECKING:
     from riko.types._wrappers import (
         AsyncPipeCallable,
@@ -108,3 +110,26 @@ class ModuleDefinition:
             pipe = getattr(self.module, interface, None)
 
         return pipe
+
+
+def resolve_module_name(name: ModuleNameLike | None) -> str:
+    """
+    Normalizes a module name to its canonical string value.
+
+    Args:
+
+        name: String or ``ModuleName`` value, or ``None``.
+
+    Returns:
+
+        The underlying module-name string, or an empty string for ``None``.
+
+    Examples:
+
+        >>> resolve_module_name("fetch")
+        'fetch'
+        >>> resolve_module_name(None)
+        ''
+
+    """
+    return name.value if isinstance(name, ModuleName) else name or ""

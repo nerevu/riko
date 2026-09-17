@@ -17,9 +17,9 @@ from riko.definitions._targets import (
     File,
     WriteCapabilities,
     WriteResult,
-    normalize_keys,
     prepare_write,
     resolve_format,
+    resolve_keys,
     resolve_target,
     validate_target_mode,
 )
@@ -72,11 +72,11 @@ class TestResolveFormat:
 class TestNormalizeKeys:
     def test_empty_key_rejected(self):
         with pytest.raises(ValueError, match="non-empty"):
-            normalize_keys(["id", ""])
+            resolve_keys(["id", ""])
 
     def test_duplicate_keys_rejected(self):
         with pytest.raises(ValueError, match="duplicate"):
-            normalize_keys(["id", "id"])
+            resolve_keys(["id", "id"])
 
 
 class TestFileCapabilities:
