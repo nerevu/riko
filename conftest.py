@@ -1,5 +1,4 @@
 import importlib.util
-from doctest import ELLIPSIS
 
 import pytest
 
@@ -8,32 +7,6 @@ from riko.base._paths import ROOT_DIR
 from riko.parsing.documents import IS_LXML
 from riko.runtime._pipelines import DirectoryStore, PackageStore, pipeline_resolver
 from riko.runtime._pubsub import reset_pubsub
-
-try:
-    from sybil import Sybil
-    from sybil.parsers.markdown import PythonCodeBlockParser
-except ImportError:
-    pass
-else:
-    from importlib import import_module
-
-    import riko.base._api_surface as surface
-
-    def _seed_api_surface(namespace: dict) -> None:
-        import riko  # noqa: PLC0415
-
-        import_module("riko.bado")
-        import_module("riko.runtime.context")
-
-        names = dir(surface)
-        namespace["riko"] = riko
-        namespace.update({n: getattr(surface, n) for n in names if n.isupper()})
-
-    parser = PythonCodeBlockParser(doctest_optionflags=ELLIPSIS)
-    pytest_collect_file = Sybil(
-        parsers=[parser], patterns=["API_SURFACE.md"], setup=_seed_api_surface
-    ).pytest()
-
 
 PIPELINE_DIR = ROOT_DIR / "tests" / "pipelines"
 

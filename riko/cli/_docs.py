@@ -16,6 +16,8 @@ from typing import Any
 
 from riko.base._paths import ROOT_DIR
 
+from ._gen_api_surface import _BLOCK, _DOC, generate_api_surface
+
 try:
     from docutils import nodes
     from docutils.core import publish_doctree
@@ -47,6 +49,17 @@ _ROOT_MARKDOWN = frozenset(
     }
 )
 _LEGACY_INSPIRATION = _INTERNAL_DOCS / "inspiration"
+_API_SURFACE_GROUPS = frozenset(
+    {
+        "collections",
+        "compile",
+        "bado",
+        "modules",
+        "root-exceptions",
+        "other",
+        "extension",
+    }
+)
 _GIT: str | None = which("git")
 
 _STATUS_BANNER = re.compile(
@@ -303,6 +316,26 @@ def _phase_closure_offenders() -> list[str]:
     return offenders
 
 
+def _api_surface_offenders() -> list[str]:
+    """Find API-surface blocks that drift from the contract declaration."""
+    text = _read(_DOC)
+    offenders: list[str] = []
+
+    if not text:
+        offenders.append("document is missing")
+    else:
+        present = {match["key"] for match in _BLOCK.finditer(text)}
+        missing = sorted(_API_SURFACE_GROUPS - present)
+
+        if missing:
+            offenders.append(f"missing generated blocks: {missing}")
+
+        if generate_api_surface(text) != text:
+            offenders.append("generated blocks are stale; run `manage codegen --api`")
+
+    return offenders
+
+
 def _version_claim_offenders(current: tuple[int, int, int]) -> list[str]:
     """Find completion claims for versions newer than the packaged version."""
     return [
@@ -374,6 +407,9 @@ def _check_docs() -> int:
         problems.append(
             f"{_INTERNAL_DOCS}: completion claimed above packaged version: {offenders}"
         )
+
+    if offenders := _api_surface_offenders():
+        problems.append(f"{_DOC}: {'; '.join(offenders)}")
 
     for problem in problems:
         print(problem)
