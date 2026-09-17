@@ -79,8 +79,10 @@ class TestIsasyncInferenceValid:
 
 class TestExplicitIsasyncRequired:
     """
-    A sync callable that is the async interface but isn't named ``async_pipe``
-    (a lambda). This is the only case ``isasync=True`` is required.
+    Require ``isasync=True`` for an unusually named async-interface callable.
+
+    This covers a sync callable, such as a lambda, used as the async interface
+    without the name ``async_pipe``.
     """
 
     @async_test
@@ -232,8 +234,10 @@ class TestAsyncProcessorDualProtocol:
 
     def test_wrapper_stubs_are_not_coroutine_functions(self):
         """
-        Reverting these stubs to ``async def`` types the call as a bare coroutine,
-        which drops ``__aiter__`` and reintroduces the ``async for`` type error.
+        Keep these stubs synchronous for async-iterator typing.
+
+        Changing them to ``async def`` makes the call a bare coroutine, drops
+        ``__aiter__``, and restores the ``async for`` type error.
         """
         assert not iscoroutinefunction(AsyncProcessorWrapper.__call__)
         assert not iscoroutinefunction(AsyncSplitterWrapper.__call__)

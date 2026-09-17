@@ -32,7 +32,7 @@ from riko.runtime._compile import convert_dag
 
 
 def run() -> None:
-    """CLI DAG converter"""
+    """CLI DAG converter."""
     parser = ArgumentParser(
         description="description: Converts a bare-bones riko DAG into a JSON pipeline",
         prog="convert-dag",

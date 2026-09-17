@@ -1,10 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.base._strutils
-~~~~~~~~~~~~~~
-String helpers: identifier/key sanitization (``replacer``, ``slugify``), regex
-rule construction and multi-pass substitution, and the shared find/extract used
-by the ``refind`` and ``strfind`` pipes.
+Provide string sanitization, substitution, and extraction helpers.
 
 Attributes:
 
@@ -102,6 +98,11 @@ def gen_name(count: int = 2) -> Iterator[str]:
 
 def replacer(content: str, old: str, new: str = "_") -> str:
     """
+    Replaces ``old`` with ``new`` in ``content``.
+
+    Additionally prepends ``content`` with ``new`` if ``content`` starts with a number
+    or non-ASCII character.
+
     Examples:
 
         >>> replacer('', '')
@@ -124,9 +125,9 @@ def replacer(content: str, old: str, new: str = "_") -> str:
 
 def multi_substitute(word: str, rules: Sequence[RegexRule]) -> str:
     """
-    Apply multiple regex rules to 'word'
-    http://code.activestate.com/recipes/
-    576710-multi-regex-single-pass-replace-of-multiple-regexe/
+    Applies multiple regex rules to 'word'.
+
+    http://code.activestate.com/recipes/576710-multi-regex-single-pass-replace-of-multiple-regexe/
     """
     flags = rules[0]["flags"]
 

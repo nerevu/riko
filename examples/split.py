@@ -1,6 +1,5 @@
 """
-Splits one date ``input`` into two streams and formats each differently with
-``dateformat`` (long form and year).
+Split one date input into long-form and year streams.
 
 Examples:
 

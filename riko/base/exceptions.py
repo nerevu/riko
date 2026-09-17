@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides riko specific exceptions
-"""
+"""Provides riko specific exceptions."""
 
 
 class RikoError(Exception):

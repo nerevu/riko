@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Tests pipe implementations.
-"""
+"""Tests pipe implementations."""
 
 from __future__ import annotations
 
@@ -64,9 +62,7 @@ def _counting_source(consumed: list[int]) -> Any:
     ],
 )
 def test_sort_fillers_stay_orderable(dir_, type_, vals: list[str]):
-    """
-    A missing or unparseable numeric field must not poison the sort with NaN.
-    """
+    """A missing or unparseable numeric field must not poison the sort with NaN."""
     rule = SortConfRule(field="n", dir=dir_, type=type_)
     conf = SortConf(rule=rule)
 
@@ -85,9 +81,7 @@ def test_sort_fillers_stay_orderable(dir_, type_, vals: list[str]):
 
 
 def test_keyed_join_does_not_materialize_its_primary():
-    """
-    ``other`` is the replayed side, so an unbounded primary must still emit.
-    """
+    """``other`` is the replayed side, so an unbounded primary must still emit."""
     consumed: list[int] = []
     other = [{"x": "bar", "c": 4}, {"x": "foo", "c": 5}]
     conf = JoinConf(join_key="x")
@@ -100,9 +94,7 @@ def test_keyed_join_does_not_materialize_its_primary():
 
 
 def test_natural_join_does_not_materialize_its_primary():
-    """
-    The keyless natural join is lazy in its primary stream too.
-    """
+    """The keyless natural join is lazy in its primary stream too."""
     consumed: list[int] = []
     joined = join_pipe(_counting_source(consumed), other=[{"c": 5}])
 
@@ -112,10 +104,10 @@ def test_natural_join_does_not_materialize_its_primary():
 
 def test_filter_greater_less_compare_numeric_strings_numerically():
     """
-    ``greater``/``less`` compare numerically when both operands are numeric or
-    numeric strings. ``"10" greater "9"`` is True even though ``"10"`` sorts
-    lexicographically before ``"9"``. Non-numeric strings fall back to lexicographic
-    comparison.
+    Compare numeric operands numerically and other operands lexically.
+
+    Numeric strings such as ``"10"`` and ``"9"`` use numeric ordering; non-numeric
+    strings use lexicographic ordering.
     """
     numeric_strings = [{"x": "9"}, {"x": "10"}]
     string_rule = FilterConfRule(field="x", op="greater", value="9")
@@ -135,10 +127,10 @@ def test_filter_greater_less_compare_numeric_strings_numerically():
 
 def test_filter_ordered_coercion_is_all_or_nothing():
     """
-    Numeric coercion is all-or-nothing. A mixed numeric/text pair compares
-    lexicographically instead of raising ``TypeError`` from a ``Decimal`` vs
-    ``str`` comparison, and a non-finite operand (``inf``/``nan``) is demoted to a
-    string rather than compared as an infinity/NaN.
+    Fall back to lexical comparison when numeric coercion is incomplete.
+
+    Mixed numeric/text pairs avoid ``Decimal``-versus-``str`` errors. Non-finite
+    values such as ``inf`` and ``nan`` are also compared as strings.
     """
     mixed = [{"x": "10"}, {"x": "apple"}]
     conf = FilterConf({"rule": FilterConfRule(field="x", op="greater", value="banana")})
@@ -150,10 +142,7 @@ def test_filter_ordered_coercion_is_all_or_nothing():
 
 
 def test_filter_allow_inf_flag(monkeypatch):
-    """
-    ``inf``/``-inf`` are well-ordered, so the opt-in ``ALLOW_INF`` flag (default
-    False) compares them numerically.
-    """
+    """Compare infinities numerically when ``ALLOW_INF`` is enabled."""
     items = [{"x": "-inf"}]
     conf = FilterConf({"rule": FilterConfRule(field="x", op="less", value="-5")})
 
@@ -177,9 +166,7 @@ def test_filter_allow_inf_flag(monkeypatch):
     ],
 )
 def test_omitting_an_operand_raises(pipe: Any, operand: str):
-    """
-    An omitted operand is a call-site error, so ``require_arg`` names it.
-    """
+    """An omitted operand is a call-site error, so ``require_arg`` names it."""
     with pytest.raises(TypeError, match=f"requires the {operand!r} keyword"):
         list(pipe([{"x": 0}]))
 
@@ -194,9 +181,7 @@ def test_omitting_an_operand_raises(pipe: Any, operand: str):
     ],
 )
 def test_passing_an_empty_operand_raises(pipe: Any, operand: str, value: object):
-    """
-    An empty operand is a call-site error, so ``require_arg`` names it.
-    """
+    """An empty operand is a call-site error, so ``require_arg`` names it."""
     kwargs = {operand: value}
 
     with pytest.raises(TypeError, match=f"requires the {operand!r} keyword"):
@@ -204,9 +189,7 @@ def test_passing_an_empty_operand_raises(pipe: Any, operand: str, value: object)
 
 
 def test_send_populates_ids_when_given():
-    """
-    The explicit ``ids`` parameter records each target's delivery id.
-    """
+    """The explicit ``ids`` parameter records each target's delivery id."""
     receiver = receive_pipe(conf={"name": "id-target", "wait": 0.01, "max_wait": 2})
     next(receiver)
     ids: dict[str, int] = {}
@@ -307,10 +290,7 @@ async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
 @pytest.mark.xfail(reason="lazy async fan-out is not yet implemented", strict=True)
 @async_test
 async def test_async_send_does_not_buffer_its_source():
-    """
-    Async ``send`` collects sent items and only returns after complete. So an unbounded
-    source never returns.
-    """
+    """Keep unbounded async sends from returning before completion."""
     consumed: list[int] = []
     first, seen = await _send_first(consumed)
 
@@ -354,11 +334,11 @@ async def test_async_send_accepts_a_feed_source():
 @async_test
 async def test_async_receive_does_not_materialize():
     """
-    The zero-buffer rendezvous channel hands each published item to the
-    subscriber before ``send`` pulls the next one. A subscriber observes its first
-    item while the source is barely read. It never waits for the whole source to
-    materialize. (The eager bound is on ``send``'s own passthrough return; see
-    ``test_async_send_does_not_buffer_its_source``.)
+    Deliver each item before pulling the next one from the source.
+
+    The zero-buffer channel lets subscribers observe items without materializing the
+    source. ``send`` still eagerly collects its own passthrough return; see
+    ``test_async_send_does_not_buffer_its_source``.
     """
     consumed: list[int] = []
     first, seen = await _receive_first(consumed)

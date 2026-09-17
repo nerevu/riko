@@ -1,9 +1,10 @@
 # vim: sw=4:ts=4:expandtab
 """
-Sync/async parity: the differences between ``SyncPipe`` and ``AsyncPipe`` are execution
-mechanics, not observable pipeline semantics. Each test builds the *same* pipeline spec
-on both engines and asserts identical output: chaining, assignment, emit, aggregators,
-one-shot re-iteration, and chain-after-partial-run.
+Test observable parity between sync and async pipelines.
+
+Each test builds the same pipeline specification on both engines and compares output
+across chaining, assignment, emit, aggregators, one-shot re-iteration, and continuation
+after partial consumption.
 
 Lifecycle/close/split/export parity lives in ``test_pipe_lifecycle.py`` and
 ``test_collections.py`` (mirrored sync/async classes); mode propagation in
@@ -29,9 +30,7 @@ STRR_CONF = StrReplaceConf({"rule": StrReplaceConfRule(find="c", replace="C")})
 def _both[P: (SyncPipe, AsyncPipe), T](
     build: PipeBuilder,
 ) -> tuple[list[RikoItem], list[RikoItem]]:
-    """
-    Run *build* on both engines; return ``(sync_result, async_result)``.
-    """
+    """Run *build* on both engines; return ``(sync_result, async_result)``."""
     sync_result = list(build(SyncPipe))
     async_result = aresolve(build(AsyncPipe))
     return sync_result, async_result

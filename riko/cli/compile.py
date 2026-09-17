@@ -63,7 +63,7 @@ def _load_pipe_def(path: str) -> tuple[PipeDef | None, str]:
 
 
 def run() -> None:
-    """CLI compiler"""
+    """CLI compiler."""
     parser = ArgumentParser(
         description="description: Compiles a riko JSON pipeline into a Python module",
         prog="compile",

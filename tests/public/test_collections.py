@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides pipeline collection tests.
-"""
+"""Provides pipeline collection tests."""
 
 from __future__ import annotations
 
@@ -73,10 +71,10 @@ def _run_on[T](
     pipe: type[SyncPipe | AsyncPipe], build: PipeBuilder, extract: Callable[..., T]
 ) -> T:
     """
-    Build a pipeline on *pipe*, resolve it, and return ``extract`` applied to
-    the result. ``build(pipe)`` yields the terminal chain object; on the async
-    engine that object is awaited before ``extract`` runs, so a single spec drives
-    both engines.
+    Build one pipeline specification for either execution engine.
+
+    ``build(pipe)`` returns the terminal chain object. The async engine awaits it
+    before applying ``extract``, allowing one specification to drive both engines.
     """
     if pipe is SyncPipe:
         result = extract(build(pipe))
@@ -179,10 +177,10 @@ class TestSyncCollections(_CollectionTest):
     )
     def test_lifecycle_markers_do_not_leak_into_user_data(self):
         """
-        A drained subscription must yield only user items, never ``StreamState``
-        bookkeeping. Today ``receive`` surfaces ``{"state": StreamState.PENDING}``
-        (and ``DONE`` on close) into the public stream, so the received values
-        are not exactly the sent items.
+        Keep lifecycle markers out of drained subscription data.
+
+        The current receiver surfaces ``StreamState.PENDING`` and ``DONE``
+        markers, so received values are not yet exactly the sent items.
         """
         receiver = SyncPipe("receive", conf={"name": "leakcheck", **recv_conf})
         drained = [next(receiver)]
@@ -199,9 +197,10 @@ class TestSyncCollections(_CollectionTest):
 
     def test_send_signals_done_on_early_close(self):
         """
-        A sender abandoned before it exhausts still signals DONE to the
-        receiver it bound to, so the receiver terminates promptly rather than
-        blocking until its ``max_wait`` elapses.
+        Signal receiver completion when a sender closes early.
+
+        The receiver should terminate promptly instead of waiting for its
+        ``max_wait`` timeout.
 
         The receiver uses a 30s ``max_wait``; terminating within a handful of
         polls proves it stopped because of the DONE delivered on close, not a
@@ -233,8 +232,9 @@ class TestSyncCollections(_CollectionTest):
 
     def test_send_done_respects_channel_identity(self):
         """
-        A sender's DONE is addressed to the exact receiver instance it bound
-        to (by minted token), not merely to the channel name.
+        Address DONE to the exact receiver instance.
+
+        Use the minted token, not merely the channel name.
 
         The sender binds to two receivers. ``keep`` is left in place; ``r`` is
         replaced by a new receiver under the same name (a fresh token) before
@@ -268,9 +268,11 @@ class TestSyncCollections(_CollectionTest):
 
     def test_subscribe_registers_without_priming(self):
         """
-        ``subscribe`` registers the channel on construction, so a sender may
-        publish before the receiver is ever iterated. The low-level
-        ``SyncPipe("receive", ...)`` path still registers on first ``next()``.
+        Register ``subscribe`` channels at construction time.
+
+        A sender may then publish before the receiver is iterated. The low-level
+        ``SyncPipe("receive", ...)`` path still registers on the first
+        ``next()``.
         """
         subscribed = SyncPipe.subscribe("eager")
         raw = SyncPipe("receive", conf={"name": "lazy", **recv_conf})
@@ -285,8 +287,7 @@ class TestSyncCollections(_CollectionTest):
 
     def test_subscribe_idle_drain_is_non_blocking(self):
         """
-        Draining a receiver whose sender has not run yields nothing straight
-        away rather than polling until ``max_wait``.
+        Drain idle sync receivers without waiting for ``max_wait``.
 
         The sync backend has no producer/consumer concurrency — ``send`` pushes
         only when the sender pipe is advanced, on this same thread — so a
@@ -304,10 +305,7 @@ class TestSyncCollections(_CollectionTest):
             list(SyncPipe.publish([{"title": "orphan"}]))
 
     def test_subscribe_rejects_func_and_on_receive_together(self):
-        """
-        ``func`` maps and ``on_receive`` sinks, so passing both is a call-site
-        error rather than one silently winning.
-        """
+        """Reject simultaneous ``func`` and ``on_receive`` callbacks."""
         with pytest.raises(TypeError, match="either 'func' or 'on_receive'"):
             SyncPipe.subscribe("both", func=lambda x: x, on_receive=lambda x: None)
 
@@ -316,8 +314,7 @@ class TestSyncCollections(_CollectionTest):
     )
     def test_idle_drain_ends_the_pass_not_the_subscription(self):
         """
-        Draining a receiver before its sender runs must leave the channel
-        registered, so a later publish still lands and a fresh drain sees it.
+        Keep an idle drain from unregistering the subscription.
 
         Today ``receive.parser`` calls ``close(name)`` on idle expiry as well as
         on DONE, and ``SyncPubSubHub.close`` drops the receiver, queue, and id
@@ -423,15 +420,16 @@ class TestAsyncCollections(_CollectionTest):
     @pytest.mark.anyio
     async def test_pubsub(self):
         """
-        Two concurrent async receivers each collect every item a sender pushes,
-        and the sender's own output is unchanged (passthrough).
+        Deliver each async publication to every concurrent receiver.
+
+        The sender's own output remains unchanged.
 
         Each receiver has its own AnyIO rendezvous channel; publish and subscribe
         converge on the same named slot, so startup needs no delay and completion
         is channel closure (nothing coordinates startup or DONE by hand). If
         completion regressed the receivers would block forever, so the timeout
-        marker makes that a failure rather than a hang. Delivery is materialized
-        (P7.2): each receiver returns its whole batch once the sender completes.
+        marker makes that a failure rather than a hang. Each receiver returns its
+        whole batch once the sender completes.
         """
         names = ["receiver1", "receiver2"]
         receivers = [
@@ -494,10 +492,7 @@ class TestAsyncCollections(_CollectionTest):
     @pytest.mark.timeout(10)
     @pytest.mark.anyio
     async def test_pubsub_missing_receiver_times_out(self):
-        """
-        A publish to a name that is never subscribed fails fast, bounded by
-        ``max_wait``, rather than dropping data or hanging.
-        """
+        """Ensure publishing to an unsubscribed name times out."""
         sender = (
             AsyncPipe("itembuilder", conf=builder_conf)
             .tokenizer(emit=True)

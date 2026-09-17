@@ -147,12 +147,6 @@ extend-select = [
 ]
 
 ignore = [
-    # temp
-    "D200",  # unnecessary-multiline-docstring
-    "D205",  # missing-blank-line-after-summary
-    "D400",  # missing-trailing-period
-    "D415",  # missing-terminal-punctuation
-
     # docs
     "D100",  # Missing docstring in public module
     "D101",  # undocumented-public-class

@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko
-~~~~
-
 Public entry point for riko.
 
 Application code imports stable APIs from ``riko``. Extension

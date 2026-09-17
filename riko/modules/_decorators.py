@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules._decorators
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
 Provides decorators for creating processor, operator, and splitter pipes.
 
 Examples:

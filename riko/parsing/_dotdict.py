@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides a class for creating case insensitive dicts with dot notation access
-"""
+"""Provides a class for creating case insensitive dicts with dot notation access."""
 
 from __future__ import annotations
 
@@ -212,16 +210,21 @@ def gen_dict[VT](  # noqa: E302
     tuple[str, VT | None] | VT | list[VT | None] | dict[str, VT | None] | None
 ]:
     """
-    >>> r = DotDict({'a': {'value': 'bar'}})
-    >>> r
-    {'a': {'value': 'bar'}}
-    >>> dict(gen_dict(r))
-    {'a': {'value': 'bar'}}
-    >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
-    >>> r
-    {'a': 'baz'}
-    >>> dict(gen_dict(r))
-    {'a': 'baz'}
+    Generates a data tuple.
+
+    Examples:
+
+        >>> r = DotDict({'a': {'value': 'bar'}})
+        >>> r
+        {'a': {'value': 'bar'}}
+        >>> dict(gen_dict(r))
+        {'a': {'value': 'bar'}}
+        >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
+        >>> r
+        {'a': 'baz'}
+        >>> dict(gen_dict(r))
+        {'a': 'baz'}
+
     """
     if key:
         keys = parse_key(key)
@@ -272,7 +275,7 @@ def gen_dict[VT](  # noqa: E302
 #
 class DotDict[VT](CaseInsensitiveDict[VT]):
     """
-    A dictionary whose keys can be accessed using dot notation
+    A dictionary whose keys can be accessed using dot notation.
 
     Examples:
 
@@ -400,15 +403,20 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         **kwargs: VT,
     ) -> VT | D | Any:
         """
-        >>> dd = DotDict()
-        >>> dd._parse_value([10, 20], 1, 'missing')
-        20
-        >>> dd._parse_value([10, 20], 5, 'missing')
-        'missing'
-        >>> dd._parse_value([{'b': 1}, {'b': 2}], 'b', 'missing')
-        [1, 2]
-        >>> dd._parse_value([{'b': 1}, {'b': 2}], 'z', 'missing')
-        'missing'
+        Parse value helper.
+
+        Examples:
+
+            >>> dd = DotDict()
+            >>> dd._parse_value([10, 20], 1, 'missing')
+            20
+            >>> dd._parse_value([10, 20], 5, 'missing')
+            'missing'
+            >>> dd._parse_value([{'b': 1}, {'b': 2}], 'b', 'missing')
+            [1, 2]
+            >>> dd._parse_value([{'b': 1}, {'b': 2}], 'z', 'missing')
+            'missing'
+
         """
         parsed = default
         msg = f"Ignoring unsupported key {key} to access {{0}} value {{1}}."
@@ -454,11 +462,16 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     def __getitem__(self, key: Key) -> VT:
         """
-        >>> r = DotDict({'key': 'bar'})
-        >>> r['key']
-        'bar'
-        >>> r['KEY']
-        'bar'
+        __getitem__.
+
+        Examples:
+
+            >>> r = DotDict({'key': 'bar'})
+            >>> r['key']
+            'bar'
+            >>> r['KEY']
+            'bar'
+
         """
         keys = parse_key(key)
         value = raw_get(self, keys[0])
@@ -482,19 +495,24 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     def __setitem__(self, key: str, value: VT) -> None:
         """
-        >>> r = DotDict({'author': 'bar'})
-        >>> r
-        {'author': 'bar'}
-        >>> r['author.name'] = 'bar'
-        >>> r
-        {'author': {'name': 'bar'}}
-        >>> r['author.url'] = 'example.com'
-        >>> r
-        {'author': {'name': 'bar', 'url': 'example.com'}}
-        >>> c = DotDict({'count': 0})
-        >>> c['count.total'] = 1
-        >>> c
-        {'count': {'total': 1}}
+        __setitem__.
+
+        Examples:
+
+            >>> r = DotDict({'author': 'bar'})
+            >>> r
+            {'author': 'bar'}
+            >>> r['author.name'] = 'bar'
+            >>> r
+            {'author': {'name': 'bar'}}
+            >>> r['author.url'] = 'example.com'
+            >>> r
+            {'author': {'name': 'bar', 'url': 'example.com'}}
+            >>> c = DotDict({'count': 0})
+            >>> c['count.total'] = 1
+            >>> c
+            {'count': {'total': 1}}
+
         """
 
         def reducer(item: Self, key: str) -> Self:
@@ -526,11 +544,16 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     def __or__[V](self, other: Mapping[str, V]) -> Self:
         """
-        >>> r = DotDict({'key': 'bar'})
-        >>> r | {'key': 'baz'}
-        {'key': 'baz'}
-        >>> r | DotDict({'key': 'baz'})
-        {'key': 'baz'}
+        __or__.
+
+        Examples:
+
+            >>> r = DotDict({'key': 'bar'})
+            >>> r | {'key': 'baz'}
+            {'key': 'baz'}
+            >>> r | DotDict({'key': 'baz'})
+            {'key': 'baz'}
+
         """
         dd = self.copy()
         dd.update(other)
@@ -554,44 +577,49 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         self, key: Key | None = None, default: D | None = None, **kwargs: VT
     ) -> Self | VT | D | Item | dict[str, VT] | PrimitiveValue:
         """
-        >>> r = DotDict({'key': 'bar'})
-        >>> r.get('key')
-        'bar'
-        >>> r.get('KEY')
-        'bar'
-        >>> r.get('KEY')
-        'bar'
-        >>> r.get('baz')
-        >>> r = DotDict({"terminal": "attrs_1", "type": "text"})
-        >>> r.get()
-        {'terminal': 'attrs_1', 'type': 'text'}
-        >>> r.get(attrs_1=iter(['baz']))
-        'baz'
-        >>> r.get(attrs_1=iter([{'content': 'baz'}]))
-        {'content': 'baz'}
-        >>> r.get('subkey')
-        >>> attrs = {
-        ...     "value": {"terminal": "attrs_1", "type": "text"},
-        ...     "key": {"type": "text", "value": "title"},
-        ... }
-        >>> r = DotDict({'attrs': attrs})
-        >>> r.get('attrs')
-        {'value': {'terminal': 'attrs_1', 'type': 'text'}, 'key': 'title'}
-        >>> r.get('attrs.key')
-        'title'
-        >>> r.get('attrs.value')
-        {'terminal': 'attrs_1', 'type': 'text'}
-        >>> r.get('subkey')
-        >>> r.get('attrs.value', attrs_1=iter([{'content': 'baz'}]))
-        {'content': 'baz'}
-        >>> r.get('attrs.value.content', attrs_1=iter([{'content': 'baz'}]))
-        'baz'
-        >>> r.get('attrs.value.foo', attrs_1=iter([{'content': 'baz'}]))
-        >>> r = DotDict({'stanzas': {'verses': ['verse1', 'verse2']}})
-        >>> r.get('stanzas.verses')
-        ['verse1', 'verse2']
-        >>> r.get('stanzas.verses.1')
-        'verse2'
+        Retrieves a value from a DotDict.
+
+        Examples:
+
+            >>> r = DotDict({'key': 'bar'})
+            >>> r.get('key')
+            'bar'
+            >>> r.get('KEY')
+            'bar'
+            >>> r.get('KEY')
+            'bar'
+            >>> r.get('baz')
+            >>> r = DotDict({"terminal": "attrs_1", "type": "text"})
+            >>> r.get()
+            {'terminal': 'attrs_1', 'type': 'text'}
+            >>> r.get(attrs_1=iter(['baz']))
+            'baz'
+            >>> r.get(attrs_1=iter([{'content': 'baz'}]))
+            {'content': 'baz'}
+            >>> r.get('subkey')
+            >>> attrs = {
+            ...     "value": {"terminal": "attrs_1", "type": "text"},
+            ...     "key": {"type": "text", "value": "title"},
+            ... }
+            >>> r = DotDict({'attrs': attrs})
+            >>> r.get('attrs')
+            {'value': {'terminal': 'attrs_1', 'type': 'text'}, 'key': 'title'}
+            >>> r.get('attrs.key')
+            'title'
+            >>> r.get('attrs.value')
+            {'terminal': 'attrs_1', 'type': 'text'}
+            >>> r.get('subkey')
+            >>> r.get('attrs.value', attrs_1=iter([{'content': 'baz'}]))
+            {'content': 'baz'}
+            >>> r.get('attrs.value.content', attrs_1=iter([{'content': 'baz'}]))
+            'baz'
+            >>> r.get('attrs.value.foo', attrs_1=iter([{'content': 'baz'}]))
+            >>> r = DotDict({'stanzas': {'verses': ['verse1', 'verse2']}})
+            >>> r.get('stanzas.verses')
+            ['verse1', 'verse2']
+            >>> r.get('stanzas.verses.1')
+            'verse2'
+
         """
         keys = parse_key(key)
         item = self
@@ -617,8 +645,9 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     def delete(self, key: str) -> None:
         """
-        Delete a root or nested key. Matching is case-insensitive at every
-        level, including nested plain-dict values.
+        Deletes a root or nested key.
+
+        Matching is case-insensitive at every level, including nested plain-dict values.
 
         Examples:
 
@@ -684,15 +713,22 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         **kwargs: VT,
     ):
         """
-        >>> r = DotDict({'author': 'bar'})
-        >>> r
-        {'author': 'bar'}
-        >>> r.update({'author.name': 'bar', 'author.url': 'example.com'})
-        >>> r
-        {'author': {'name': 'bar', 'url': 'example.com'}}
-        >>> r = DotDict({'author.name': 'bar', 'author.url': 'example.com'})
-        >>> r
-        {'author': {'name': 'bar', 'url': 'example.com'}}
+        Updates the DotDict with new data.
+
+        Supports dot notation for nested keys.
+
+        Examples:
+
+            >>> r = DotDict({'author': 'bar'})
+            >>> r
+            {'author': 'bar'}
+            >>> r.update({'author.name': 'bar', 'author.url': 'example.com'})
+            >>> r
+            {'author': {'name': 'bar', 'url': 'example.com'}}
+            >>> r = DotDict({'author.name': 'bar', 'author.url': 'example.com'})
+            >>> r
+            {'author': {'name': 'bar', 'url': 'example.com'}}
+
         """
         if is_mapping(data):
             data = cast("Mapping[str, VT]", data)
@@ -726,16 +762,21 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     def asdict(self, key: Key | None = None, **kwargs: VT) -> dict[str, VT | None]:
         """
-        >>> r = DotDict({'a': {'value': 'bar'}})
-        >>> r
-        {'a': {'value': 'bar'}}
-        >>> r.asdict()
-        {'a': {'value': 'bar'}}
-        >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
-        >>> r
-        {'a': 'baz'}
-        >>> r.asdict()
-        {'a': 'baz'}
+        Formats a DotDict as a standard dictionary.
+
+        Examples:
+
+            >>> r = DotDict({'a': {'value': 'bar'}})
+            >>> r
+            {'a': {'value': 'bar'}}
+            >>> r.asdict()
+            {'a': {'value': 'bar'}}
+            >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
+            >>> r
+            {'a': 'baz'}
+            >>> r.asdict()
+            {'a': 'baz'}
+
         """
         items = gen_dict(self, key=key, default_key="self", **kwargs)
         return dict(items)

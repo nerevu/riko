@@ -52,6 +52,8 @@ def _parse_date_cached(value: str) -> dt | BaseException:
 
 def parse_date_string(value: str) -> dt:
     """
+    Parses a date string into a datetime object.
+
     Examples:
 
         >>> from datetime import datetime
@@ -210,6 +212,8 @@ def ensure_tzinfo(  # noqa: E302
     fallback_tzinfo: tzinfo = UTC,
 ) -> AwareDT | AwareST | date | None:
     """
+    Ensures that a datetime or struct_time object has timezone information.
+
     Examples:
 
         >>> import time
@@ -249,6 +253,8 @@ def ensure_tzinfo(  # noqa: E302
 
 def get_date(unit: str, count: int, op: Callable) -> date | dt:
     """
+    Converts a unit of time into a date or datetime object.
+
     Examples:
 
         >>> from datetime import datetime

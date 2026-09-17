@@ -37,8 +37,9 @@ class _Opaque:
 class TestDates:
     def test_utime_honors_aware_offset(self):
         """
-        An aware ``+03:00`` struct_time must yield the epoch of that instant, not the
-        epoch of the same wall-clock read as UTC.
+        Convert aware ``+03:00`` times to the represented instant.
+
+        Do not reinterpret the same wall-clock time as UTC.
         """
         tz = timezone(timedelta(hours=3))
         aware = datetime(2020, 6, 15, 9, 0, 0, tzinfo=tz)
@@ -49,26 +50,27 @@ class TestDates:
 
     def test_ambiguous_cst_resolves_to_us_central(self):
         """
-        ``CST`` is shared by US Central, China, and Cuba. The abbreviation map
-        must resolve it US-centrically (UTC-6), not to whichever zone happened
-        to sort last (Asia/Taipei, UTC+8).
+        Resolve ``CST`` to US Central time.
+
+        The abbreviation is also used by China and Cuba, but the map is
+        intentionally US-centric at UTC-6 rather than whichever zone sorts last.
         """
         parsed = parse_date_string("1 Feb 2015 12:00:00 CST")
         assert parsed.utcoffset() == timedelta(hours=-6)
 
     def test_tzinfos_capture_both_standard_and_daylight_names(self):
         """
-        The abbreviation map is built at import; sampling only ``now()`` dropped
-        whichever of a zone's standard/daylight names was out of season. Both
-        must be present and stably point at US Eastern regardless of import date.
+        Preserve both standard and daylight timezone abbreviations.
+
+        The map is built at import time, so sampling only ``now()`` can miss the
+        out-of-season name. Both names must stably map to US Eastern regardless
+        of import date.
         """
         assert str(TZINFOS["EST"]) == "America/New_York"
         assert str(TZINFOS["EDT"]) == "America/New_York"
 
     def test_non_us_abbreviation_resolves(self):
-        """
-        Abbreviations outside ``_PREFERRED_ZONES`` (e.g. ``JST``) must be present.
-        """
+        """Abbreviations outside ``_PREFERRED_ZONES`` (e.g. ``JST``) must be present."""
         assert TZINFOS["JST"] == ZoneInfo("Asia/Tokyo")
 
         parsed = parse_date_string("1 Feb 2015 12:00:00 JST")
@@ -78,8 +80,9 @@ class TestDates:
 class TestSerialize:
     def test_nested_unsupported_bypasses_cache_and_reaches_fn(self):
         """
-        An unsupported object nested in a container arg must bypass the cache, so
-        distinct instances neither collide nor get replaced by the sentinel.
+        Bypass caching when a container holds an unsupported object.
+
+        Distinct instances must neither collide nor be replaced by the sentinel.
         """
         calls = []
 
@@ -99,9 +102,7 @@ class TestSerialize:
 
 class TestParsers:
     def test_get_skip_field_only_follows_presence_not_absent_text(self):
-        """
-        A truthy value is not skipped even when it reads like "no value".
-        """
+        """A truthy value is not skipped even when it reads like "no value"."""
         assert get_skip({"content": "none available"}, {"field": "content"}) is False
 
     def test_any2dict_strips_xhtml_namespace_from_keys(self):
@@ -144,9 +145,10 @@ class TestParsers:
 
     def test_xml_parser_does_not_resolve_entities(self):
         """
-        The hardened ``XML_PARSER`` must not expand a defined entity (XXE guard):
-        ``resolve_entities=False`` leaves ``&xxe;`` unresolved rather than
-        substituting its declared value.
+        Prevent ``XML_PARSER`` from expanding defined entities.
+
+        With ``resolve_entities=False``, the XXE guard leaves ``&xxe;``
+        unresolved instead of substituting its declared value.
         """
         etree = pytest.importorskip("lxml.etree")
         payload = b'<!DOCTYPE root [<!ENTITY xxe "SECRET">]><root>&xxe;</root>'

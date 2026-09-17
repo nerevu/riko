@@ -1,11 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-riko.modules._metadata
-~~~~~~~~~~~~~~~~~~~~~~~
-Module type/subtype derivation and the derived module catalog. Metadata is
-inferred from each pipe's implementation contract (return kind, ftype) rather
-than declared, and the catalog is discovered from the package at runtime.
-"""
+"""Derive module metadata and build the module catalog."""
 
 from __future__ import annotations
 
@@ -118,10 +112,11 @@ def gen_module_catalog(name: str | None = None) -> Iterator[ModuleMetadata]:
 
 def gen_registry_catalog() -> Iterator[ModuleMetadata]:
     """
-    Metadata for runtime-registered + entry-point modules (the extension
-    surface). Deriving it forces each entry-point extension to import. Listing
-    the catalog is an explicit "show everything" operation. A definition whose
-    callables carry no module metadata (e.g. a bare lambda) is skipped.
+    Build metadata for registered and entry-point modules.
+
+    Derivation imports each entry-point extension. Listing the catalog is an
+    explicit show-everything operation. Definitions whose callables lack module
+    metadata, such as bare lambdas, are skipped.
     """
     is_async = (True, False)
 

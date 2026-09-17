@@ -159,8 +159,9 @@ def db_conn(dest: PathLike | None = None):
 )
 def test_fetchtable_reads_sqlite_fixture(tmp_path, db_conn):
     """
-    A binary tabular source (sqlite here; xlsx under the same defect) must be
-    opened in binary mode and yield its rows.
+    Ensure binary tabular sources open in binary mode and yield rows.
+
+    SQLite covers the defect here; XLSX follows the same path.
     """
     dbpath = tmp_path / "cars.sqlite"
     db_conn(dbpath)
@@ -177,7 +178,7 @@ def test_fetchtable_reads_sqlite_fixture(tmp_path, db_conn):
 
 
 class TestBasics:
-    """Test a few sample pipelines"""
+    """Test a few sample pipelines."""
 
     def _get_pipeline(
         self, pipe_name: str, file_path: Path | None = None
@@ -229,14 +230,11 @@ class TestBasics:
         _check_results(pydeps, items, pipe_name, value=value, check=check)
 
     def setup_method(self):
-        """Compile common subpipe"""
+        """Compile common subpipe."""
         self.context = Context(test=True)
 
     def test_feeddiscovery(self):
-        """
-        Loads a pipeline containing a feed auto-discovery module plus
-        fetch-feed in a loop with emit all.
-        """
+        """Load feed discovery with fetch-feed inside an emit-all loop."""
         pipe_name = "pipe_HrX5bjkv3BGEp9eSy6ky6g"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 15, 0)
@@ -245,7 +243,7 @@ class TestBasics:
         assert item.get("link") == "http://sz.de/1.2104731"
 
     def test_fetchsitefeed(self):
-        """Loads a pipeline containing a fetchsitefeed module"""
+        """Loads a pipeline containing a fetchsitefeed module."""
         pipe_name = "pipe_551507461cbcb19a828165daad5fe007"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 1)
@@ -255,7 +253,7 @@ class TestBasics:
         assert item.get("summary")
 
     def test_loops_1(self):
-        """Loads a pipeline containing a loop"""
+        """Loads a pipeline containing a loop."""
         pipe_name = "pipe_125e9fe8bb5f84526d21bebfec3ad116"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
@@ -270,10 +268,7 @@ class TestBasics:
         assert info.get("user_view_type") == "public"
 
     def test_urlbuilder(self):
-        """
-        Loads the RTW URL Builder test pipeline and compiles and executes it
-        to check the results
-        """
+        """Loads the RTW URL Builder test pipeline."""
         pipe_name = "pipe_e519dd393f943315f7e4128d19db2eac"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 63, 0)
@@ -282,7 +277,7 @@ class TestBasics:
         assert "The 6 Best Enterprise Data Modeling Tools" in str(item.get("title"))
 
     def test_input_override(self):
-        """Overrides an offline input->itembuilder pipeline via Context.inputs"""
+        """Overrides an offline input->itembuilder pipeline via Context.inputs."""
         self.context = self.context.augment(inputs={"textinput1": "IBM"})
         pipe_name = "pipe_1LNyRuNS3BGdkTKaAsqenA"
         items = self._get_pipeline(pipe_name)
@@ -414,10 +409,7 @@ class TestBasics:
         assert item.get("title") == "Markitekt - Architects of Marketing"
 
     def test_simplest(self):
-        """
-        Loads the RTW simple test pipeline and compiles and executes it to
-        check the results
-        """
+        """Loads the RTW simple test pipeline."""
         pipe_name = "pipe_2de0e4517ed76082dcddf66f7b218057"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 17, 0)
@@ -430,8 +422,7 @@ class TestBasics:
     @pytest.mark.perf
     def test_feed(self):
         """
-        Loads a simple test pipeline and compiles and executes it to check
-        the results
+        Loads a simple test pipeline.
 
         TODO: have these tests iterate over a number of test pipelines
         """
@@ -446,10 +437,7 @@ class TestBasics:
             assert "the" in summary
 
     def test_forever(self):
-        """
-        Loads a pipeline that uses the forever driver source, bounded by
-        truncate, and checks it emits the expected driver items.
-        """
+        """Loads a pipeline that uses forever driver source, bounded by truncate."""
         pipe_name = "pipe_forever"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 3, 0)
@@ -459,8 +447,9 @@ class TestBasics:
 
     def test_filtered_multiple_sources(self):
         """
-        Loads the filter multiple sources pipeline and compiles and executes it to check
-        the results. Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057
+        Loads a pipeline that filters multiple sources pipelines.
+
+        Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057.
         """
         pipe_name = "pipe_c1cfa58f96243cea6ff50a12fc50c984"
         items = self._get_pipeline(pipe_name)
@@ -473,7 +462,7 @@ class TestBasics:
 
     @pytest.mark.perf
     def test_european_performance_cars(self):
-        """Loads a pipeline containing a sort"""
+        """Loads a pipeline containing a sort."""
         pipe_name = "pipe_8NMkiTW32xGvMbDKruymrA"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 36, 0)
@@ -508,7 +497,7 @@ class TestBasics:
 
     # todo: need tests with single and mult-part key
     def test_reverse_truncate(self):
-        """Loads a pipeline containing a reverse and truncate"""
+        """Loads a pipeline containing a reverse and truncate."""
         pipe_name = "pipe_58a53262da5a095fe7a0d6d905cc4db6"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 3, 0)
@@ -522,7 +511,7 @@ class TestBasics:
             prev_title = title
 
     def test_tail(self):
-        """Loads a pipeline containing a tail"""
+        """Loads a pipeline containing a tail."""
         pipe_name = "pipe_06c4c44316efb0f5f16e4e7fa4589ba2"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 5, 0)
@@ -533,7 +522,7 @@ class TestBasics:
         assert "American woman is being held hostage" in title
 
     def test_itembuilder(self):
-        """Loads a pipeline containing an itembuilder"""
+        """Loads a pipeline containing an itembuilder."""
         pipe_name = "pipe_b96287458de001ad62a637095df33ad5"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 2, 0)
@@ -551,7 +540,7 @@ class TestBasics:
             assert item == expected[pos]
 
     def test_rssitembuilder(self):
-        """Loads a pipeline containing an rssitembuilder"""
+        """Loads a pipeline containing an rssitembuilder."""
         pipe_name = "pipe_1166de33b0ea6936d96808717355beaa"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 3, 0)
@@ -592,7 +581,7 @@ class TestBasics:
                 assert item.get(k) == v, f"expected {v=} at {pos=}, {k=}. Got\n{item=}"
 
     def test_csv(self):
-        """Loads a pipeline containing a csv source"""
+        """Loads a pipeline containing a csv source."""
         pipe_name = "pipe_UuvYtuMe3hGDsmRgPm7D0g"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
@@ -644,7 +633,7 @@ class TestBasics:
             assert item == expected
 
     def test_describe_input(self):
-        """Loads a pipeline but just gets the input requirements"""
+        """Loads a pipeline but just gets the input requirements."""
         self.context = self.context.augment(mode=ExecutionMode.DESCRIBE_INPUTS)
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
         items = self._get_pipeline(pipe_name)
@@ -676,7 +665,7 @@ class TestBasics:
         assert items == ["input", "rssitembuilder"]
 
     def test_describe_both(self):
-        """Loads a pipeline but just gets the input requirements"""
+        """Loads a pipeline but just gets the input requirements."""
         self.context = self.context.augment(mode=ExecutionMode.DESCRIBE)
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
         items = self._get_pipeline(pipe_name)
@@ -706,8 +695,9 @@ class TestBasics:
 
     def test_union_just_other(self):
         """
-        Loads a pipeline containing a union with the first input unconnected
-        Also tests for empty source string and reference to 'y:id.value'
+        Loads a pipeline containing a union with the first input unconnected.
+
+        Also tests for empty source string and reference to 'y:id.value'.
         """
         pipe_name = "pipe_6e30c269a69baf92cd420900b0645f88"
         items = self._get_pipeline(pipe_name)
@@ -728,7 +718,7 @@ class TestBasics:
             assert ("210" in str(link)) or ("Poroschenko:" in str(title)), msg
 
     def test_stringtokenizer(self):
-        """Loads a pipeline containing a stringtokenizer"""
+        """Loads a pipeline containing a stringtokenizer."""
         pipe_name = "pipe_975789b47f17690a21e89b10a702bcbd"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 2, 0)
@@ -753,7 +743,7 @@ class TestBasics:
         assert item.get("content") == "$3.00</td>"
 
     def test_split(self):
-        """Loads an example pipeline containing a split module"""
+        """Loads an example pipeline containing a split module."""
         pipe_name = "pipe_QMrlL_FS3BGlpwryODY80A"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 7, 0)
@@ -764,7 +754,7 @@ class TestBasics:
         assert title.startswith("[Weight] More parents think their overweight")
 
     def test_simplemath_1(self):
-        """Loads a pipeline containing simplemath"""
+        """Loads a pipeline containing simplemath."""
         pipe_name = "pipe_zKJifuNS3BGLRQK_GsevXg"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 6, 0)
@@ -775,10 +765,7 @@ class TestBasics:
         assert title == "Open researcher open course"
 
     def test_twitter_caption_search(self):
-        """
-        Loads the Twitter Caption Search pipeline and compiles and
-        executes it to check the results
-        """
+        """Compile and run the Twitter Caption Search pipeline."""
         pipe_name = "pipe_eb3e27f8f1841835fdfd279cd96ff9d8"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 3, 0)
@@ -787,10 +774,7 @@ class TestBasics:
         assert item.get("ctime") == "&time=00:01:41&time="
 
     def test_loop_example(self):
-        """
-        Loads the loop example pipeline and compiles and executes it to
-        check the results
-        """
+        """Loads the loop example pipeline."""
         pipe_name = "pipe_dAI_R_FS3BG6fTKsAsqenA"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
@@ -805,7 +789,7 @@ class TestBasics:
         assert item.get("pubDate")
 
     def test_namespaceless_xml_input(self):
-        """Loads a pipeline containing deep xml source with no namespace"""
+        """Loads a pipeline containing deep xml source with no namespace."""
         pipe_name = "pipe_402e244d09a4146cd80421c6628eb6d9"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 5, 1)
@@ -822,7 +806,7 @@ class TestBasics:
             assert item.get("title") in contains
 
     def test_urlbuilder_loop(self):
-        """Loads a pipeline containing a URL builder in a loop (offline)"""
+        """Loads a pipeline containing a URL builder in a loop (offline)."""
         pipe_name = "pipe_e65397e116d7754da0dd23425f1f0af1"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 2, 0)
@@ -847,9 +831,7 @@ class TestBasics:
 
     @pytest.mark.perf
     def test_createrss(self):
-        """
-        Loads a pipeline containing rssitembuilder
-        """
+        """Loads a pipeline containing rssitembuilder."""
         pipe_name = "pipe_a08134746e30a6dd3a7cb3c0cf098692"
 
         items = self._get_pipeline(pipe_name)
@@ -879,9 +861,10 @@ class TestBasics:
     #######################
     def test_locationbuilder_reports_unsupported_module(self):
         """
-        Loads a pipeline containing a locationbuilder, sub-module, passes
-        input parameters. Also tests json fetch with nested list, assigns
-        part of loop result, and regexes multi-part reference.
+        Exercise nested loops, inputs, assignments, and references.
+
+        The pipeline covers a location builder, submodule inputs, nested JSON
+        lists, partial loop assignment, and multi-part-reference regexes.
         """
         pipe_name = "pipe_b3d43c00f9e1145ff522fb71ea743e99"
 

@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Resolves sync or async pipe interfaces from importable modules.
-"""
+"""Resolves sync or async pipe interfaces from importable modules."""
 
 from __future__ import annotations
 

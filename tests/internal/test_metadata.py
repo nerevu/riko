@@ -1,7 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-Derived module metadata: ``get_module_metadata`` classification and the
-``@operator`` return-shape subtype inference.
+Test derived module metadata and return-shape inference.
+
+This covers ``get_module_metadata`` classification and ``@operator`` inference.
 """
 
 from __future__ import annotations

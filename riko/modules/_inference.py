@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules._inference
-~~~~~~~~~~~~~~~~~~~~~~~~
-
 Provides return-kind inference for operator pipes.
 
 Uses annotations, generator detection, and a small AST fallback.

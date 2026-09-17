@@ -1,15 +1,16 @@
 # vim: sw=4:ts=4:expandtab
 """
-Bounded-parallelism for the async engine (P10). A ``parallel=True`` AsyncPipe
-maps a loopable pipe over its source with bounded concurrency and backpressure:
-``async_map_stream`` yields results as they complete (unordered, matching sync's
-``imap_unordered`` default) while ``async_map_ordered_stream`` (``ordered=True``)
-preserves source order — both advance the source only as workers free up, so it
-is never pre-materialized. ``AsyncCollection`` uses the same seam over its source
-feeds (always fanned out).
+Bounded-parallelism for the async engine.
+
+A ``parallel=True`` AsyncPipe maps a loopable pipe over its source with bounded
+concurrency and backpressure: ``async_map_stream`` yields results as they complete
+(unordered, matching sync's ``imap_unordered`` default) while
+``async_map_ordered_stream`` (``ordered=True``) preserves source order. Noth advance the
+source only as workers free up, so it is never pre-materialized. ``AsyncCollection``
+uses the same seam over its source feeds (always fanned out).
 
 The primitives' precise ``limit + buffer`` bound is covered in
-``tests/internal/test_streams.py``; here we assert the *pipe/collection-level*
+``tests/internal/test_streams.py``. Here we assert the *pipe/collection-level*
 contract: same results as sequential, order control, and non-materialization.
 """
 
@@ -83,11 +84,7 @@ class TestAsyncBoundedParallel:
     @pytest.mark.parametrize("ordered", [False, True])
     @pytest.mark.anyio
     async def test_early_close_is_clean(self, ordered):
-        """
-        Closing a bounded pipe mid-flight (via ``async with`` + ``break``) tears
-        the inner task-group stream down in the owning task — no cross-task
-        cancel-scope error, no wrapped ``GeneratorExit`` (P7.5).
-        """
+        """Ensure early closure tears down bounded async pipelines cleanly."""
 
         async def unbounded():
             index = 0

@@ -1,6 +1,4 @@
-"""
-Dataclass and rule coercion helpers used by module configuration.
-"""
+"""Dataclass and rule coercion helpers used by module configuration."""
 
 from __future__ import annotations
 

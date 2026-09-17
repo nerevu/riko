@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.coercion.cast
-~~~~~~~~~
-
 Provides type casting capabilities.
 
 Dispatch is by destination type; ``CAST_SWITCH`` maps each type to its caster

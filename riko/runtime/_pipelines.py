@@ -204,8 +204,7 @@ class PipelineResolver:
         self, name: str, *, directory: Path | None = None
     ) -> ParsedPipeDef:
         """
-        Loads a named JSON pipeline definition, overriding the configured
-        directory when ``directory`` is given.
+        Load a named JSON pipeline with an optional directory override.
 
         Raises:
 

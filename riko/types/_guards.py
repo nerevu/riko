@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides type guard functions for riko types.
-"""
+"""Provides type guard functions for riko types."""
 
 from __future__ import annotations
 

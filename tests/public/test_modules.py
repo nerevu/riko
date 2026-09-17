@@ -1,8 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Public module-discovery contracts: filtering combinations, API errors, and the
-input test-flag scoping. Exact metadata derivation lives in
-``tests/internal/test_metadata.py``.
+Test public module-discovery contracts.
+
+This covers filtering, API errors, and input test-flag scoping. Exact metadata
+derivation is tested in ``tests/internal/test_metadata.py``.
 """
 
 import pytest
@@ -17,9 +18,9 @@ from riko.types.modules import InputConf
 
 def test_input_test_flag_scoped_to_test_context(monkeypatch):
     """
-    The auto-wired context.test skips the input prompt only in a test
-    context. A non-test context (test=False) still prompts, so the flag can
-    never silently suppress prompting outside of tests.
+    Limit the auto-wired test flag to test contexts.
+
+    Non-test contexts must still prompt for input.
     """
     monkeypatch.setattr("builtins.input", lambda *args: "typed")
     conf = InputConf({"prompt": "?", "default": "def", "type": CastType.TEXT})

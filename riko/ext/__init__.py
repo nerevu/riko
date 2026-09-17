@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.ext
-~~~~~~~~
-
 Stable, SemVer-guaranteed API for riko extension authors.
 
 This namespace contains pipe decorators, configuration helpers, module

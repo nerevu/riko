@@ -1,6 +1,5 @@
 """
-Fetches a freelance-jobs JSON feed, drops duplicate links, filters out PHP gigs,
-and reverse-sorts the rest.
+Fetch freelance jobs, drop duplicate links and PHP gigs, then reverse-sort the rest.
 
 Examples:
 

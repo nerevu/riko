@@ -248,9 +248,7 @@ class Resource[T]:
         lazy: bool = False,
         **kwargs: object,
     ) -> ReusableResource[T]:
-        """
-        The alternate form of ``Context.with_resource(name, factory)``
-        """
+        """The alternate form of ``Context.with_resource(name, factory)``."""
         return _FactoryResource[T](
             factory, *args, cleanup=cleanup, credential=credential, lazy=lazy, **kwargs
         )
@@ -555,11 +553,12 @@ class _ExternalResource[T](ReusableResource[T]):
 
 class _FactoryResource[T](ReusableResource[T]):
     """
-    Constructed by :meth:`riko.runtime.context.Context.with_resource` when given a generator
-    function or context manager rather than a resource value. ``with_resource`` stores
-    the factory, but does **not** enter into it. Entering (setup / ``yield`` / teardown)
-    belongs to the execution layer. So ``open``/``aopen``/``close``/``aclose`` raise
-    ``NotImplementedError``.
+    Represent lifecycle factories stored by ``Context.with_resource``.
+
+    This applies to generator functions and context managers rather than resource
+    values. ``with_resource`` stores but does not enter the factory; setup,
+    ``yield``, and teardown belong to execution. Therefore ``open``, ``aopen``,
+    ``close``, and ``aclose`` raise ``NotImplementedError``.
     """
 
     __slots__ = ("_args", "_factory", "_kwargs")

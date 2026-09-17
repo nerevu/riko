@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.ext.registry
-~~~~~~~~~~~~~~~~~
-
 Provides registration and resolution for named modules.
 
 Resolution order is runtime registration, entry point, then built-in module.

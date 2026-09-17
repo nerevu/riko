@@ -268,8 +268,10 @@ type ModuleParser = ProcessorParser | OperatorParser | SplitterParser
 
 class Resolver(Protocol):
     """
-    Resolves a pipe name + interface to its callable — a ``ModuleRegistry``
-    (leaf modules) or a ``PipelineResolver`` (``pipe`` sub-pipelines).
+    Resolve a pipe name and interface to its callable.
+
+    Leaf modules use ``ModuleRegistry``; ``pipe`` sub-pipelines use
+    ``PipelineResolver``.
     """
 
     @overload

@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.types
-~~~~~~~~~~
-
 Stable types for annotating code that uses Riko.
 
 Implementation typing machinery lives in underscore-prefixed modules and is

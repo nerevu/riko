@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.bado._util
-~~~~~~~~~~~~~~~
-
 AnyIO + httpx implementations used by :mod:`riko.bado._backend`.
 
 This module is private. Optional dependency handling and the sync-only fallback

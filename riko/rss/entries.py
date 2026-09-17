@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-RSS/feed entry helpers for text extraction, enrichment, and content truncation.
-"""
+"""RSS/feed entry helpers for text extraction, enrichment, and content truncation."""
 
 from __future__ import annotations
 

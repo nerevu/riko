@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.base.currencies
-~~~~~~~~~~~~~~~
-
 Provides currency lookup dictionaries.
 
 Symbols resolve to ISO 4217 codes, and each code resolves to a record of the

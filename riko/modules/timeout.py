@@ -226,8 +226,7 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Asynchronously returns items from a stream until a certain amount of time has
-    passed.
+    Streams items until the timeout expires.
 
     Not lazy: awaiting collects items until the timeout expires and holds every
     collected item in memory. Accepts either a sync stream or an async ``Feed``

@@ -1,10 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.io._reencode
-~~~~~~~~~~~~~~
-A corrected ``Reencoder`` (over meza's ``Reencoder``) plus a ``reencode``
-factory. This whole module is meant to be ported wholesale into meza, after
-which riko drops it and imports ``reencode`` from ``meza.io`` again. It fixes:
+Provide a corrected ``Reencoder`` and ``reencode`` factory.
+
+This module is intended to move into meza. Riko can then import ``reencode`` from
+``meza.io`` again. It fixes:
 
 * ``read`` — meza treats ``n`` as a *line* count and, via a falsy ``if n``
   guard, reads the entire stream when ``n == 0``, so a probing ``read(0)``
@@ -78,9 +77,7 @@ class PatchedReencoder(_Reencoder):
 
 class IterStringIO(_IterStringIO):  # pyright: ignore[reportRedeclaration])
     def __buffer__(self, flags: int) -> memoryview:
-        """
-        Exposes the internal memory buffer directly for passing into bytes().
-        """
+        """Exposes the internal memory buffer directly for passing into bytes()."""
         joined = b"".join(cast("Iterator[bytes]", self.iter))
         return memoryview(cast("bytes", joined))
 
@@ -97,9 +94,7 @@ class Reencoder[T: AnyStr](PatchedReencoder):  # pyright: ignore[reportRedeclara
         self.lineseps: T = cast("T", b"\r\n" if self.binary else "\r\n")
 
     def __buffer__(self, flags: int) -> memoryview:
-        """
-        Exposes the internal memory buffer directly for passing into bytes().
-        """
+        """Exposes the internal memory buffer directly for passing into bytes()."""
         if not isinstance(self._buf, bytes):
             raise TypeError("Buffer not enabled for str Reencoder")
 

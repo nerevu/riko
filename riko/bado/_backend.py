@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.bado._backend
-~~~~~~~~~~~~~~~~~~
-
 Private guarded backend facade for Riko's async runtime.
 
 Riko internals import AnyIO/httpx runtime primitives from this module rather
