@@ -99,7 +99,7 @@ class _FileWriteSession:
         self.csv_format = self.fmt is Formats.CSV
         self.file_mode: OpenBinaryMode = "ab" if self.append_mode else "wb"
         self.jsonl_format = self.fmt is Formats.JSONL
-        self.path = Path(self.target.url)
+        self.path = Path(self.target.dest)
 
         self._fields: tuple[str, ...] | None = None
         self._initial_fize_size: int | None = None

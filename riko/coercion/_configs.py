@@ -286,7 +286,7 @@ class UrlParseObjconf(DynamicConf):
 
 
 class WriteObjconf(DynamicConf):
-    url: PathLike
+    dest: PathLike
     fmt: FmtLike | None
     mode: str
 

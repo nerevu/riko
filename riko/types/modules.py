@@ -821,7 +821,7 @@ class UrlParseConf(TypedDict, total=False):
 
 
 class WriteConf(TypedDict, total=False):
-    url: Required[PathLike]
+    dest: Required[PathLike]
     fmt: FmtLike | None
     mode: str
 

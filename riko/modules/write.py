@@ -4,7 +4,7 @@ Writes a stream to a file as a terminal sink.
 
 ``write`` is the in-pipeline counterpart of the top-level ``export`` converter:
 it serializes the stream with a ``Targets`` converter and writes the result to
-``conf['url']``, then yields every item unchanged so the pipeline can continue
+``conf['dest']``, then yields every item unchanged so the pipeline can continue
 (fan-out: write here, keep processing). Because it emits data outward it is
 bucketed as a ``Sink`` in the discovery tree.
 
@@ -23,7 +23,7 @@ Examples:
         >>> from riko.modules.write import pipe
         >>>
         >>> with get_temp_file() as fp:
-        ...     stream = pipe([{"x": 0}, {"x": 1}], conf={"url": fp.name})
+        ...     stream = pipe([{"x": 0}, {"x": 1}], conf={"dest": fp.name})
         ...     next(stream)
         ...
         ...     with open(fp.name, mode="rb") as f:
@@ -66,12 +66,12 @@ def _validate(items: Items, objconf: WriteObjconf) -> AnyStr | IOFileLike | None
     content = None
 
     try:
-        fmt = resolve_format(objconf.url, objconf.fmt)
+        fmt = resolve_format(objconf.dest, objconf.fmt)
     except ValueError as e:
         logger.warning(f"{e}")
     else:
-        if not objconf.url:
-            logger.warning("The url is not set, skipping writing")
+        if not objconf.dest:
+            logger.warning("The destination is not set. Skipping writing.")
         elif (content := convert_records(items, fmt)) is None:
             logger.warning(f"The {fmt} converter produced no content")
         elif not isinstance(content, (AnyStrType, IOFileLikeType)):
@@ -84,14 +84,14 @@ async def async_parser(
     stream: Stream, objconf: WriteObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Asynchronously serializes the stream and writes it to ``objconf.url``.
+    Asynchronously serializes the stream and writes it to ``objconf.dest``.
 
     Args:
 
         stream: The source. Note: this shares the ``tuples`` iterator, so
             consuming it will consume ``tuples`` as well.
 
-        objconf: The item independent configuration: ``url``, ``fmt``, and ``mode``.
+        objconf: The item independent configuration: ``dest``, ``fmt``, and ``mode``.
 
         tuples: Iterable of ``(item, objconf)`` pairs, where ``item`` is an
             element in the source stream. Note: this shares the ``stream``
@@ -109,7 +109,7 @@ async def async_parser(
         >>>
         >>> async def main():
         ...     async with get_async_temp_file() as fp:
-        ...         conf = {"url": fp.name, "fmt": "json", "mode": "wb+"}
+        ...         conf = {"dest": fp.name, "fmt": "json", "mode": "wb+"}
         ...         objconf = Objectify(conf)
         ...         stream = [{"x": 0}, {"x": 1}]
         ...         tuples = zip(stream, repeat(objconf))
@@ -125,7 +125,7 @@ async def async_parser(
     items = list(stream)
 
     if content := _validate(items, objconf):
-        await async_write(objconf.url, content, mode=objconf.mode)
+        await async_write(objconf.dest, content, mode=objconf.mode)
 
     return iter(items)
 
@@ -134,14 +134,14 @@ def parser(
     stream: Stream, objconf: WriteObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Serializes the stream and writes it to ``objconf.url``.
+    Serializes the stream and writes it to ``objconf.dest``.
 
     Args:
 
         stream: The source. Note: this shares the ``tuples`` iterator, so
             consuming it will consume ``tuples`` as well.
 
-        objconf: The item independent configuration: ``url``, ``fmt``, and ``mode``.
+        objconf: The item independent configuration: ``dest``, ``fmt``, and ``mode``.
 
         tuples: Iterable of ``(item, objconf)`` pairs, where ``item`` is an
             element in the source stream. Note: this shares the ``stream``
@@ -158,7 +158,7 @@ def parser(
         >>> from riko import get_temp_file
         >>>
         >>> with get_temp_file() as fp:
-        ...     objconf = Objectify({"url": fp.name, "fmt": "json", "mode": "wb+"})
+        ...     objconf = Objectify({"dest": fp.name, "fmt": "json", "mode": "wb+"})
         ...     stream = [{"x": 0}, {"x": 1}]
         ...     tuples = zip(stream, repeat(objconf))
         ...     next(parser(stream, objconf, tuples))
@@ -170,7 +170,7 @@ def parser(
     items = list(stream)
 
     if content := _validate(items, objconf):
-        io.write(objconf.url, content, mode=objconf.mode)
+        io.write(objconf.dest, content, mode=objconf.mode)
 
     return iter(items)
 
@@ -187,11 +187,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         items (Items): The source stream.
 
-        conf (dict): The pipe configuration. Must contain the key 'url'.
+        conf (dict): The pipe configuration. Must contain the key 'dest'.
 
-            url (PathLike): the destination file path
+            dest (PathLike): the destination file path
 
-            fmt (str): the export format (default: derived from the ``url`` extension
+            fmt (str): the export format (default: derived from the ``dest`` extension
                 when recognized, else 'json')
 
             mode (str): the file open mode (default: 'wb+')
@@ -213,7 +213,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Notes:
 
-        Nothing is written and a warning is logged when ``url`` is unset,
+        Nothing is written and a warning is logged when ``dest`` is unset,
         ``fmt`` is ``'list'``/``'tuple'``, ``fmt`` is invalid, or the converter
         produces no content. The stream still passes through unchanged in every case.
 
@@ -223,7 +223,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>>
         >>> async def main():
         ...     async with get_async_temp_file() as fp:
-        ...         conf = {"url": fp.name, "fmt": "csv"}
+        ...         conf = {"dest": fp.name, "fmt": "csv"}
         ...         stream = async_pipe([{"x": 0}, {"x": 1}], conf=conf)
         ...         print(await anext(stream))
         ...         print((await fp.read()).split())
@@ -248,11 +248,11 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
         items (Items): The source stream.
 
-        conf (dict): The pipe configuration. Must contain the key 'url'.
+        conf (dict): The pipe configuration. Must contain the key 'dest'.
 
-            url (PathLike): the destination file path
+            dest (PathLike): the destination file path
 
-            fmt (str): the export format (default: derived from the ``url`` extension
+            fmt (str): the export format (default: derived from the ``dest`` extension
                 when recognized, else 'json')
 
             mode (str): the file open mode (default: 'wb+')
@@ -274,7 +274,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Notes:
 
-        Nothing is written and a warning is logged when ``url`` is unset,
+        Nothing is written and a warning is logged when ``dest`` is unset,
         ``fmt`` is ``'list'``/``'tuple'``, ``fmt`` is invalid, or the converter
         produces no content. The stream still passes through unchanged in every case.
 
@@ -283,7 +283,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>> from riko import get_temp_file
         >>>
         >>> with get_temp_file() as fp:
-        ...     conf = {"url": fp.name, "fmt": "csv"}
+        ...     conf = {"dest": fp.name, "fmt": "csv"}
         ...     stream = pipe([{"x": 0}, {"x": 1}], conf=conf)
         ...     next(stream)
         ...     fp.read().split()

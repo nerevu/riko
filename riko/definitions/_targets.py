@@ -9,11 +9,22 @@ implementations outside core. ``resolve_target`` normalizes a destination argume
 (a path string or a target object) into a ``WriteTarget``.
 
 Preparation is generic over ``WriteTarget`` and validated in one place:
+
 ``prepare_write`` resolves the target, resolves its ``(target × fmt)`` capabilities,
 normalizes the keys, validates the ``(target, mode, keys)`` triple, and returns a
 ``PreparedWrite``. What a mode's keys mean — record-match identity vs. idempotency
 identity — is decided by the target's capabilities, so the caller passes a single
 unified ``keys`` and never distinguishes the two.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko.definitions._targets import File, resolve_target
+        >>>
+        >>> resolve_target("out.csv")
+        File(dest='out.csv', fmt=None)
+
 """
 
 from dataclasses import dataclass
@@ -196,7 +207,7 @@ def resolve_target(dest: Destination, **kwargs: str) -> WriteTarget:
         >>> from riko.definitions._targets import resolve_target
         >>>
         >>> resolve_target("out.csv")
-        File(url='out.csv', fmt=None)
+        File(dest='out.csv', fmt=None)
 
     """
     if isinstance(dest, WriteTarget):
@@ -209,16 +220,16 @@ def resolve_target(dest: Destination, **kwargs: str) -> WriteTarget:
     return target
 
 
-def resolve_format(url: PathLike | None, fmt: FmtLike | None) -> Formats:
+def resolve_format(dest: PathLike | None, fmt: FmtLike | None) -> Formats:
     """
     Resolves a serialization format from an explicit ``fmt``.
 
-    An explicit ``fmt`` wins. Otherwise the url's lowercased extension is used.
+    An explicit ``fmt`` wins. Otherwise the dest's lowercased extension is used.
     Anything else falls back to ``json``.
 
     Args:
 
-        url: The destination path, or ``None``.
+        dest: The destination path, or ``None``.
         fmt: The explicit format, or ``None`` to derive one.
 
     Returns:
@@ -242,7 +253,7 @@ def resolve_format(url: PathLike | None, fmt: FmtLike | None) -> Formats:
     if fmt:
         resolved = fmt
     else:
-        ext = Path(str(url)).suffix.lstrip(".").lower()
+        ext = Path(str(dest)).suffix.lstrip(".").lower()
         resolved = ext or Formats.JSON
 
     return Formats(resolved)
@@ -261,7 +272,7 @@ class File:
 
     Attributes:
 
-        url: The destination path.
+        dest: The destination path.
         fmt: The ``Formats`` converter name, or ``None`` to derive it from the
             path extension (default: ``json``).
 
@@ -274,7 +285,7 @@ class File:
 
     """
 
-    url: PathLike
+    dest: PathLike
     fmt: FmtLike | None = None
 
     def capabilities(self, fmt: FmtLike | None = None) -> WriteCapabilities:
@@ -306,7 +317,7 @@ class File:
             False
 
         """
-        resolved_fmt = resolve_format(self.url, fmt or self.fmt)
+        resolved_fmt = resolve_format(self.dest, fmt or self.fmt)
         modes = {WriteMode.REPLACE}
 
         if resolved_fmt in _FILE_APPEND_FORMATS:
