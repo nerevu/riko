@@ -34,6 +34,15 @@ Changes
   shadow the ``write`` module, so use ``pipe("write", conf={"url": ...})`` when you need
   the old module call shape.
 
+- A single ``write``/``sink`` destination now accepts one input shape only. Feeding it a
+  whole stream after individual items, or a second stream, raises ``RuntimeError`` instead
+  of silently interleaving or overwriting the earlier records.
+
+- The async transport helpers ``async_url_open``, ``async_write``, and
+  ``get_async_temp_file`` are no longer re-exported from ``riko.bado``. Import them from
+  ``riko`` (or ``riko.io``); ``riko.bado`` now covers only the async iteration and
+  runtime helpers.
+
 - ``Context`` is now a fully immutable snapshot and ``Resource`` definitions are
   structurally immutable. Derive a changed context with ``augment``/``with_resource``
   instead of assigning to its fields, inputs, or resources.
