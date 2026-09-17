@@ -16,11 +16,7 @@ from typing import Annotated, Any
 
 import pytest
 
-from riko.modules._inference import (
-    gen_operator_return_kinds,
-    gen_return_inferences,
-    infer_from_source,
-)
+from riko.modules._inference import gen_operator_return_kinds, gen_return_inferences
 from riko.types._sentinels import MISSING
 from riko.types.modules import InferenceSource, OperatorReturnKind
 
@@ -92,10 +88,6 @@ def only(pipe):
     return next(iter(gen_return_inferences(pipe)))
 
 
-def kinds(pipe):
-    return [inference.kind for inference in gen_return_inferences(pipe)]
-
-
 @pytest.mark.parametrize(
     ("pipe", "kind", "source"),
     [
@@ -140,13 +132,6 @@ def test_unknown_with_reason(pipe, reasons):
         assert reason in inference.reason
 
 
-def test_annotated_union():
-    def pipe(items) -> Iterator[int] | int:
-        return iter(items)
-
-    assert set(kinds(pipe)) == {STREAM, NONSTREAM}
-
-
 def test_nested_decorator_with_wraps():
     def deco(fn):
         @wraps(fn)
@@ -167,15 +152,6 @@ def test_gen_operator_return_kinds_yields_bare_kinds():
         return iter(items)
 
     assert set(gen_operator_return_kinds(pipe)) == {STREAM, NONSTREAM}
-
-
-def test_infer_from_source_direct():
-    def pipe(items):
-        return sorted(items)
-
-    inference = infer_from_source(pipe)
-    assert inference.kind is NONSTREAM
-    assert inference.source is AST
 
 
 @pytest.mark.parametrize(

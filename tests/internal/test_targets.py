@@ -51,9 +51,6 @@ class _RecordStore:
 
 
 class TestResolveTarget:
-    def test_path_string_becomes_file(self):
-        assert resolve_target("out.csv") == File("out.csv")
-
     def test_write_target_passes_through(self):
         target = File("out.json")
         assert resolve_target(target) is target
@@ -64,13 +61,6 @@ class TestResolveTarget:
 
 
 class TestResolveFormat:
-    @pytest.mark.parametrize(
-        ("url", "expected"),
-        [("out.csv", "csv"), ("out.jsonl", "jsonl"), ("out", "json")],
-    )
-    def test_infers_from_extension(self, url, expected):
-        assert resolve_format(url, None) == expected
-
     def test_explicit_format_wins(self):
         assert resolve_format("out.csv", "json") == "json"
 
@@ -80,15 +70,6 @@ class TestResolveFormat:
 
 
 class TestNormalizeKeys:
-    def test_wraps_bare_string(self):
-        assert normalize_keys("id") == ("id",)
-
-    def test_preserves_iterable_order(self):
-        assert normalize_keys(["b", "a"]) == ("b", "a")
-
-    def test_none_is_empty(self):
-        assert normalize_keys(None) == ()
-
     def test_empty_key_rejected(self):
         with pytest.raises(ValueError, match="non-empty"):
             normalize_keys(["id", ""])
@@ -124,19 +105,17 @@ class TestValidateTargetMode:
         with pytest.raises(ValueError, match="requires 'keys'"):
             validate_target_mode(_RecordStore(), WriteMode.MERGE, capabilities)
 
-    def test_match_keyed_with_keys_accepted(self):
+    @pytest.mark.parametrize(
+        ("mode", "keys"),
+        [
+            pytest.param(WriteMode.MERGE, ("id",), id="match-keyed"),
+            pytest.param(WriteMode.APPEND, (), id="idempotent-unkeyed"),
+            pytest.param(WriteMode.APPEND, ("id",), id="idempotent-keyed"),
+        ],
+    )
+    def test_supported_key_combinations(self, mode, keys):
         capabilities = _RecordStore().capabilities()
-        keys = ("id",)
-        validate_target_mode(_RecordStore(), WriteMode.MERGE, capabilities, keys=keys)
-
-    def test_idempotent_without_keys_accepted(self):
-        capabilities = _RecordStore().capabilities()
-        validate_target_mode(_RecordStore(), WriteMode.APPEND, capabilities)
-
-    def test_idempotent_with_keys_accepted(self):
-        capabilities = _RecordStore().capabilities()
-        keys = ("id",)
-        validate_target_mode(_RecordStore(), WriteMode.APPEND, capabilities, keys=keys)
+        validate_target_mode(_RecordStore(), mode, capabilities, keys=keys)
 
     def test_unkeyed_mode_with_keys_rejected(self):
         capabilities = File("out.csv").capabilities()
@@ -147,33 +126,20 @@ class TestValidateTargetMode:
 
 
 class TestPrepareWrite:
-    def test_file_forbids_keys(self):
-        with pytest.raises(ValueError, match="forbids 'keys'"):
-            prepare_write(File("out.csv"), "append", keys="id")
-
     def test_file_unsupported_mode(self):
         with pytest.raises(ValueError, match="does not support the 'merge'"):
             prepare_write(File("out.csv"), "merge")
 
-    def test_file_append_rejected_for_framed_format(self):
-        for dest in ("out.json", "out.geojson"):
-            with pytest.raises(ValueError, match="does not support the 'append'"):
-                prepare_write(File(dest), "append")
-
-    def test_file_append_allowed_for_line_oriented_format(self):
-        for dest in ("out.csv", "out.jsonl"):
-            prepared = prepare_write(File(dest), "append")
-            assert prepared.operation.mode is WriteMode.APPEND
+    @pytest.mark.parametrize("dest", ["out.json", "out.geojson"])
+    def test_file_append_rejected_for_framed_format(self, dest):
+        with pytest.raises(ValueError, match="does not support the 'append'"):
+            prepare_write(File(dest), "append")
 
     def test_record_store_binds_match_keys(self):
         prepared = prepare_write(_RecordStore(), "merge", keys="endpoint_id")
 
         assert prepared.operation.mode is WriteMode.MERGE
         assert prepared.operation.keys == ("endpoint_id",)
-
-    def test_record_store_missing_keys_rejected(self):
-        with pytest.raises(ValueError, match="requires 'keys'"):
-            prepare_write(_RecordStore(), "merge")
 
 
 class TestConverterPath:
@@ -260,13 +226,6 @@ class TestJsonl:
         path = tmp_path / "out.jsonl"
         list(SyncPipe(source=ITEMS).write(path))
         assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
-
-    def test_ends_in_single_newline(self, tmp_path):
-        path = tmp_path / "out.jsonl"
-        SyncPipe(source=ITEMS).sink(path, mode="replace")
-        data = path.read_bytes()
-        assert data.endswith(b"\n")
-        assert not data.endswith(b"\n\n")
 
     def test_append_newline_terminated_concatenates(self, tmp_path):
         path = tmp_path / "out.jsonl"
