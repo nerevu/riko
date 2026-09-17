@@ -1,10 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.coercion._sequences
-~~~~~~~~~~~~~~~
-
-Functional/iterable helpers: fan-out (``dispatch``/``broadcast``), grouping,
-dedup, chainable retry binding, and sort-key construction.
+Sort-key construction and grouping helpers used by built-in pipeline modules.
 
 Attributes:
 
@@ -13,7 +9,6 @@ Attributes:
     INVALID_DEF_TYPES: Cast types with no usable typed default.
     INVALID_TYPES: Cast types that cannot be cast at all.
     NON_SORTABLE: Types (mappings, sequences) that fall back to the default key.
-    noop: Identity function returning its argument unchanged.
 
 """
 

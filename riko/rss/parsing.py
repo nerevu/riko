@@ -1,3 +1,26 @@
+"""
+RSS and Atom feed parsing with optional accelerated parser backends.
+
+Examples:
+
+    >>> from riko.rss.parsing import parse_rss
+    >>>
+    >>> content = (
+    ...     "<rss version='2.0'><channel><title>Example</title>"
+    ...     "<item><title>First</title></item></channel></rss>"
+    ... )
+    >>> parse_rss(content=content)[0]["title"]
+    'First'
+
+Attributes:
+
+    IS_LXML: Whether lxml is available for hardened XML parsing.
+    XML_PARSER: Hardened lxml parser, or ``None`` without lxml.
+    IS_FASTFEEDPARSER: Whether the optional fast feed parser is available.
+    IJSON_IS_NATIVE: Whether ijson is using a native backend.
+
+"""
+
 from logging import Logger
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, cast, overload
@@ -81,7 +104,30 @@ def parse_rss(**kwargs: Any) -> list[ParserRSSEntry]: ...  # noqa: E704
 def parse_rss(  # noqa: E302
     url: BasicArg = "", *, content: AnyStr | None = None, **kwargs: BasicArg
 ) -> list[ParserRSSEntry]:
-    """Fetches (or reads) and parses an RSS/Atom feed into its entries."""
+    """
+    Fetches or reads an RSS/Atom feed and returns its parsed entries.
+
+    Args:
+
+        url: URL, path, or source string used when ``content`` is not supplied.
+        content: Feed content to parse directly instead of fetching ``url``.
+        **kwargs: Additional options forwarded to ``Fetch`` when reading ``url``.
+
+    Returns:
+
+        Parsed RSS/Atom entries in source order.
+
+    Examples:
+
+        >>> content = (
+        ...     "<rss version='2.0'><channel><title>Example</title>"
+        ...     "<item><title>First</title></item></channel></rss>"
+        ... )
+        >>> entries = parse_rss(content=content)
+        >>> len(entries), entries[0]["title"]
+        (1, 'First')
+
+    """
     f = None
 
     if content is None:

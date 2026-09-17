@@ -1,3 +1,5 @@
+"""Sequence normalization and fluent application helpers."""
+
 import builtins
 import itertools
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -98,12 +100,12 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
 
     Examples:
 
-        >>> listize(x for x in range(3))  # doctest: +ELLIPSIS
-        <generator object <genexpr> at 0x...>
-        >>> listize([x for x in range(3)])
-        [0, 1, 2]
-        >>> listize(iter(x for x in range(3)))  # doctest: +ELLIPSIS
-        <generator object <genexpr> at 0x...>
+        >>> generator = (x for x in range(3))
+        >>> listize(generator) is generator
+        True
+        >>> values = [x for x in range(3)]
+        >>> listize(values) is values
+        True
         >>> listize(range(3))
         range(0, 3)
         >>> listize(0)
@@ -139,6 +141,29 @@ def gen_items(  # noqa: E704
 def gen_items(  # noqa: E302
     content: RikoValue, key: str | None = None, yield_if_none=False
 ) -> StreamOrValueStream:
+    """
+    Flattens nested Riko values into a stream of values or keyed items.
+
+    Args:
+
+        content: Scalar, mapping, or nested list/tuple content to emit.
+        key: Optional field name used to wrap each emitted value in a mapping.
+        yield_if_none: Whether a top-level ``None`` should be emitted.
+
+    Yields:
+
+        Flattened values, or mappings of ``key`` to each value when ``key`` is set.
+
+    Examples:
+
+        >>> list(gen_items([1, [2, 3]]))
+        [1, 2, 3]
+        >>> list(gen_items({"a": 1}, key="value"))
+        [{'value': {'a': 1}}]
+        >>> list(gen_items(None, yield_if_none=True))
+        [None]
+
+    """
     if isinstance(content, (struct_time, dict, CaseInsensitiveDict)):
         yield {key: cast(BasicDict, content)} if key else content
     elif isinstance(content, (list, tuple)):

@@ -1,6 +1,16 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides date and time helpers
+Date and timezone normalization helpers.
+
+Attributes:
+
+    TIMEOUT: One-hour timeout expressed in seconds.
+    HALF_DAY: Twelve hours expressed in seconds.
+    NOW: UTC datetime captured when the module is imported.
+    TODAY: UTC calendar date captured when the module is imported.
+    TT_KEYS: Field names used when working with ``struct_time`` values.
+    TZINFOS: Timezone-abbreviation lookup built from common IANA zones.
+
 """
 
 from collections.abc import Iterator
@@ -57,6 +67,26 @@ TT_KEYS = (
 def get_local_tz(
     try_local_tz: bool | None = True, fallback_tzinfo: tzinfo = UTC
 ) -> tzinfo:
+    """
+    Resolves the host's local timezone or a fallback timezone.
+
+    Args:
+
+        try_local_tz: Whether to inspect the host's local timezone.
+        fallback_tzinfo: Timezone returned when local lookup is disabled or fails.
+
+    Returns:
+
+        The resolved local timezone, or ``fallback_tzinfo``.
+
+    Examples:
+
+        >>> from datetime import UTC
+        >>>
+        >>> get_local_tz(False) is UTC
+        True
+
+    """
     _tzinfo = dt.now(UTC).astimezone().tzinfo if try_local_tz else None
     return _tzinfo or fallback_tzinfo
 
@@ -71,6 +101,19 @@ def _add_zones(*zones: str) -> Iterator[tuple[str, tzinfo]]:
 
 
 def gen_tzinfos() -> Iterator[tuple[str, tzinfo]]:
+    """
+    Generates timezone-abbreviation mappings from common IANA zones.
+
+    Yields:
+
+        Pairs of timezone abbreviation and corresponding ``ZoneInfo`` object.
+
+    Examples:
+
+        >>> dict(gen_tzinfos())["UTC"].key
+        'UTC'
+
+    """
     # Cover the broad common set first, then re-add the US-preferred zones so a shared
     # abbreviation (``CST``/``EST``/...) resolves to its US zone rather than a foreign
     # one (e.g. Asia/Taipei).
@@ -86,6 +129,27 @@ TZINFOS = dict(gen_tzinfos())
 def get_tzname(
     _date: AwareDT | NaiveDT | AwareST | NaiveST | date | None,
 ) -> str | None:
+    """
+    Extracts a timezone name from a datetime or ``struct_time`` value.
+
+    Args:
+
+        _date: Date-like value whose timezone name should be inspected.
+
+    Returns:
+
+        The timezone name when available, otherwise ``None``.
+
+    Examples:
+
+        >>> from datetime import UTC, datetime
+        >>>
+        >>> get_tzname(datetime(2020, 1, 1, tzinfo=UTC))
+        'UTC'
+        >>> get_tzname(datetime(2020, 1, 1).date()) is None
+        True
+
+    """
     if isinstance(_date, struct_time):
         tzname = _date.tm_zone
     elif isinstance(_date, dt):
@@ -100,8 +164,29 @@ def tzinfo_from_tt(
     tt: AwareST | NaiveST, def_tzinfo: tzinfo | None = None
 ) -> ZoneInfo | tzinfo | timezone | None:
     """
-    Try to get a ZoneInfo from struct_time's tm_zone name,
-    falling back to a fixed-offset timezone from tm_gmtoff.
+    Resolves timezone information from a ``struct_time`` value.
+
+    The timezone abbreviation is preferred when it maps to a known IANA zone;
+    otherwise a fixed-offset timezone is built from ``tm_gmtoff`` when available.
+
+    Args:
+
+        tt: ``struct_time`` value to inspect.
+        def_tzinfo: Fallback timezone when ``tt`` has no timezone information.
+
+    Returns:
+
+        A resolved timezone, fixed-offset timezone, or ``def_tzinfo``.
+
+    Examples:
+
+        >>> from datetime import UTC
+        >>> from time import struct_time
+        >>>
+        >>> tt = struct_time((1970, 1, 1, 0, 0, 0, 3, 1, 0))
+        >>> tzinfo_from_tt(tt, UTC) is UTC
+        True
+
     """
     if tt.tm_zone and tt.tm_zone in TZINFOS:
         _tzinfo = TZINFOS[tt.tm_zone]
@@ -117,6 +202,28 @@ def get_tzinfo(
     _date: AwareDT | NaiveDT | AwareST | NaiveST | date,
     def_tzinfo: tzinfo | None = None,
 ) -> tzinfo | None:
+    """
+    Resolves timezone information from a datetime or ``struct_time`` value.
+
+    Args:
+
+        _date: Date-like value to inspect.
+        def_tzinfo: Fallback timezone for naive datetime or ``struct_time`` values.
+
+    Returns:
+
+        The value's timezone, ``def_tzinfo`` when applicable, or ``None``.
+
+    Examples:
+
+        >>> from datetime import UTC, datetime
+        >>>
+        >>> get_tzinfo(datetime(2020, 1, 1, tzinfo=UTC)) is UTC
+        True
+        >>> get_tzinfo(datetime(2020, 1, 1), UTC) is UTC
+        True
+
+    """
     _tzinfo = None
 
     if isinstance(_date, struct_time):

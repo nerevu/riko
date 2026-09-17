@@ -1,3 +1,15 @@
+"""
+Dataclass and rule coercion helpers used by module configuration.
+
+Examples:
+
+    >>> from riko.ext import normalize_module_name
+    >>>
+    >>> normalize_module_name("fetch")
+    'fetch'
+
+"""
+
 from __future__ import annotations
 
 import re
@@ -26,6 +38,26 @@ def fromdict(
     **data: DataclassInstance | RikoValue | StringyList | StringyDict,
 ) -> DataclassInstance:
     """
+    Builds a dataclass while coercing nested mappings into nested dataclasses.
+
+    Optional dataclass fields are resolved recursively. Union fields with multiple
+    non-``None`` alternatives are left unchanged because their target type is
+    ambiguous.
+
+    Args:
+
+        cls: Dataclass type to construct.
+        **data: Field values used to construct ``cls``.
+
+    Returns:
+
+        A new ``cls`` instance with unambiguous nested dataclasses coerced.
+
+    Raises:
+
+        TypeError: When ``cls`` is not a dataclass type.
+        ValueError: When a ``Literal`` field receives a value outside its choices.
+
     Examples:
 
         >>> from dataclasses import dataclass
@@ -88,6 +120,28 @@ def fromdict(
 def make_regex_rule(
     f: str, m: str, r: str, seriesmatch: bool = True, default: str | None = None
 ) -> RegexConfRule:
+    """
+    Builds a parsed regex configuration rule from compact arguments.
+
+    Args:
+
+        f: Item field to operate on.
+        m: Regular-expression pattern to match.
+        r: Replacement text.
+        seriesmatch: Whether later rules operate on the previous rule's result.
+        default: Value used when the source field is missing.
+
+    Returns:
+
+        A ``RegexConfRule`` containing the supplied values and standard defaults.
+
+    Examples:
+
+        >>> rule = make_regex_rule("title", "foo", "bar")
+        >>> rule.field, rule.match, rule.replace, rule.seriesmatch
+        ('title', 'foo', 'bar', True)
+
+    """
     return RegexConfRule(
         field=f, match=m, replace=r, seriesmatch=seriesmatch, default=default
     )
@@ -96,6 +150,29 @@ def make_regex_rule(
 def get_regex_rule(
     rule: DynamicConf | RegexConfRule, recompile: bool = False
 ) -> RegexRule:
+    """
+    Normalizes a parsed regex configuration into an executable rule mapping.
+
+    Args:
+
+        rule: Parsed dynamic or dataclass regex rule.
+        recompile: Whether to compile the match expression and translate ``$N``
+            replacement references for Python's regex engine.
+
+    Returns:
+
+        A normalized ``RegexRule`` used by regex processing modules.
+
+    Examples:
+
+        >>> rule = get_regex_rule(make_regex_rule("title", "foo", "bar"))
+        >>> rule["field"], rule["match"], rule["replace"], rule["series"]
+        ('title', 'foo', 'bar', True)
+        >>> compiled = get_regex_rule(make_regex_rule("title", "foo", "bar"), True)
+        >>> compiled["match"].pattern
+        'foo'
+
+    """
     if not is_dataclass(rule):
         keys = {f.name for f in fields(RegexConfRule)}
         filtered = {k: v for k, v in rule.items() if k in keys}
@@ -131,5 +208,23 @@ def get_regex_rule(
 
 
 def normalize_module_name(name: ModuleNameLike | None) -> str:
-    """Normalizes a module name to its canonical string."""
+    """
+    Normalizes a module name to its canonical string value.
+
+    Args:
+
+        name: String or ``ModuleName`` value, or ``None``.
+
+    Returns:
+
+        The underlying module-name string, or an empty string for ``None``.
+
+    Examples:
+
+        >>> normalize_module_name("fetch")
+        'fetch'
+        >>> normalize_module_name(None)
+        ''
+
+    """
     return name.value if isinstance(name, ModuleName) else name or ""

@@ -1,9 +1,28 @@
+"""General iterable composition, fan-out, selection, and deduplication helpers."""
+
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from itertools import chain, dropwhile, takewhile
 from typing import overload
 
 
 def noop[T](item: T) -> T:
+    """
+    Passes an item through unchanged.
+
+    Args:
+
+        item: Value to pass through.
+
+    Returns:
+
+        The original ``item``.
+
+    Examples:
+
+        >>> noop({"value": 1})
+        {'value': 1}
+
+    """
     return item
 
 
@@ -240,11 +259,11 @@ def broadcast(  # noqa: E302
 
     Differs from ``map``, which applies multiple items to the same function::
 
-           /--> item --> len(item) --------> \
-          /                                   \
-    item -----> item --> hash(item) ------->  split
-          \                                   /
-           \--> item --> sorted(item) -----> /
+           /--> item --> len(item) ----------> \
+          /                                     \
+    item -----> item --> str.upper(item) ---->  split
+          \                                     /
+           \--> item --> sorted(item) --------> /
 
     Args:
 
@@ -258,8 +277,8 @@ def broadcast(  # noqa: E302
 
     Examples:
 
-        >>> broadcast("bar", len, hash, sorted)
-        (3, -6516517828960271057, ['a', 'b', 'r'])
+        >>> broadcast("bar", len, str.upper, sorted)
+        (3, 'BAR', ['a', 'b', 'r'])
 
     """
     return tuple(func(item, **kwargs) for func in funcs)

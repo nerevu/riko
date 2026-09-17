@@ -1,3 +1,18 @@
+"""
+Module definitions shared by the extension API and runtime registry.
+
+Examples:
+
+    >>> from riko.ext import ModuleDefinition
+    >>>
+    >>> def pipe(*args, **kwargs):
+    ...     return []
+    >>> definition = ModuleDefinition(name="example", sync_pipe=pipe)
+    >>> definition.get_pipe() is pipe
+    True
+
+"""
+
 from dataclasses import dataclass
 
 from riko.types._wrappers import AsyncPipeCallable, Pipe, PipeCallable, SyncPipeCallable
@@ -31,6 +46,18 @@ class ModuleDefinition:
         description: Summary used by module discovery. Defaults to ``module.__doc__``'s
             first non-blank line if ``module`` is given.
 
+    Examples:
+
+        >>> from riko.ext import ModuleDefinition
+        >>>
+        >>> def pipe(*args, **kwargs):
+        ...     return []
+        >>> definition = ModuleDefinition(name="example", sync_pipe=pipe)
+        >>> definition.name
+        'example'
+        >>> definition.get_pipe() is pipe
+        True
+
     """
 
     name: str = ""
@@ -40,7 +67,29 @@ class ModuleDefinition:
     description: str | None = None
 
     def get_pipe(self, is_async: bool = False) -> PipeCallable | Pipe | None:
-        """Resolves the callable for ``interface``, or ``None`` if undefined."""
+        """
+        Resolves this definition's sync or async pipe callable.
+
+        Args:
+
+            is_async: Whether to resolve ``async_pipe`` instead of ``pipe``.
+
+        Returns:
+
+            The explicitly configured callable, the corresponding attribute from
+            ``module``, or ``None`` when that interface is undefined.
+
+        Examples:
+
+            >>> def sync_pipe(*args, **kwargs):
+            ...     return []
+            >>> definition = ModuleDefinition(sync_pipe=sync_pipe)
+            >>> definition.get_pipe() is sync_pipe
+            True
+            >>> definition.get_pipe(is_async=True) is None
+            True
+
+        """
         pipe: PipeCallable | Pipe | None = (
             self.async_pipe if is_async else self.sync_pipe
         )

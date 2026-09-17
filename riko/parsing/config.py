@@ -1,3 +1,19 @@
+"""
+Configuration parsing and per-item resolution helpers.
+
+Examples:
+
+    >>> from riko.parsing import parse_conf
+    >>>
+    >>> parse_conf(conf={"type": "text", "value": "hello"})
+    'hello'
+
+Attributes:
+
+    SKIP_SWITCH: Text predicates used by ``get_skip`` configuration rules.
+
+"""
+
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, is_dataclass
@@ -46,7 +62,18 @@ def _conf_is_dynamic_cached(conf: object, **kwargs: object) -> bool:
 
 def conf_is_dynamic(conf: object, memoize: bool = False, **kwargs: object) -> bool:
     """
-    Whether ``conf`` holds a ``subkey`` or sentinel needing per-item parsing.
+    Reports whether configuration requires per-item parsing.
+
+    Args:
+
+        conf: Configuration value to inspect recursively.
+        memoize: Whether to use the representation-based cache.
+        **kwargs: Sentinel values used when identifying dynamic configuration.
+
+    Returns:
+
+        ``True`` when ``conf`` contains a subkey or sentinel that depends on an
+        input item, otherwise ``False``.
 
     Examples:
 
@@ -121,9 +148,22 @@ def parse_conf[VT](
     **kwargs: VT,
 ) -> VT | None:
     """
-    Resolves a pipe ``conf`` against an ``item`` by expanding subkeys and sentinels.
+    Resolves configuration against an item by expanding subkeys and sentinels.
 
-    Static confs are memoized by default. ``memoize`` forces the choice.
+    Static configurations are memoized by default; ``memoize`` can force or disable
+    caching for a specific call.
+
+    Args:
+
+        item: Input item used to resolve subkey references.
+        conf: Configuration value to parse recursively.
+        default: Value returned when ``conf`` does not produce another value.
+        memoize: Explicit cache choice, or ``None`` to cache only static config.
+        **kwargs: Sentinel values and options forwarded while resolving config.
+
+    Returns:
+
+        The resolved configuration value, or ``default`` when unresolved.
 
     Examples:
 
@@ -247,7 +287,30 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
 def get_field(
     item: ItemOrValue | None = None, field: str = "", **kwargs: object
 ) -> ItemOrValue:
-    """Extracts ``item[field]``, or ``item`` itself when no field is given."""
+    """
+    Extracts a configured field from an item.
+
+    Args:
+
+        item: Mapping, ``DotDict``, or scalar value to inspect.
+        field: Field name to extract; an empty name returns ``item`` unchanged.
+        **kwargs: Dynamic values forwarded to ``DotDict.get``.
+
+    Returns:
+
+        The requested field value, ``None`` when an ordinary mapping lacks the
+        field, or ``item`` itself when no field is requested.
+
+    Examples:
+
+        >>> get_field({"title": "hello"}, "title")
+        'hello'
+        >>> get_field({"title": "hello"})
+        {'title': 'hello'}
+        >>> get_field({"title": "hello"}, "missing") is None
+        True
+
+    """
     if field and isinstance(item, DotDict):
         value = item.get(field, **cast(dict[str, RikoValue], kwargs))
     elif field and is_mapping(item):
