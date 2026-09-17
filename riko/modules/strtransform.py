@@ -33,14 +33,14 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._iterutils import listize
 from riko.bado.itertools import coop_reduce
-from riko.cast import BasicCastType
-from riko.types._configs import StrTransformObjconf
+from riko.coercion._configs import StrTransformObjconf
+from riko.coercion._sequences import listize
+from riko.types._enums import BasicCastType
 from riko.types._options import Defaults, Opts
 from riko.types.modules import StrTransformConfRule
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = {
     "listize": True,

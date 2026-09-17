@@ -9,8 +9,8 @@ when it is absent (see the collection hook in ``conftest.py``).
 
 import pytest
 
-from riko.collections import export, list_formats
-from riko.types._write import Formats
+from riko.runtime.collections import export, list_formats
+from riko.types._enums import Formats
 
 pytestmark = pytest.mark.finance
 

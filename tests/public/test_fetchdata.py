@@ -13,7 +13,7 @@ from typing import cast
 
 import pytest
 
-from riko.bado.io import async_url_open
+from riko.io._async import async_url_open
 from riko.modules.fetchdata import async_pipe
 from riko.types._streams import Item
 from tests import skipif_issync
@@ -49,7 +49,7 @@ class TestExtensionlessAsyncUrlOpen:
     )
     @pytest.mark.anyio
     async def test_ext_from_content_type(self, monkeypatch, content_type, expected):
-        monkeypatch.setattr("riko.bado.io.async_get", _async_get(b"{}", content_type))
+        monkeypatch.setattr("riko.io._async.async_get", _async_get(b"{}", content_type))
         f = await async_url_open(URL)
         assert f.ext == expected
         assert f.content_type == content_type
@@ -64,7 +64,9 @@ class TestExtensionlessFetchdata:
     )
     @pytest.mark.anyio
     async def test_file_contents(self, monkeypatch, content, content_type):
-        monkeypatch.setattr("riko.bado.io.async_get", _async_get(content, content_type))
+        monkeypatch.setattr(
+            "riko.io._async.async_get", _async_get(content, content_type)
+        )
         result = await _titles({"url": URL, "path": "items"})
         assert result == ["A", "B"]
 
@@ -80,7 +82,7 @@ class TestExtensionlessFetchdata:
         its format from the extension alone.
         """
         monkeypatch.setattr(
-            "riko.bado.io.async_get", _async_get(JSON, "application/json")
+            "riko.io._async.async_get", _async_get(JSON, "application/json")
         )
         url = "https://example.test/export.json?token=abc"
         result = await _titles({"url": url, "path": "items"})

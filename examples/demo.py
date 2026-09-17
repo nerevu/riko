@@ -15,8 +15,8 @@ Examples:
 
 from typing import cast
 
-from riko.collections import AsyncPipe, SyncPipe
-from riko.paths import get_path
+from riko.base._paths import get_path
+from riko.runtime.collections import AsyncPipe, SyncPipe
 from riko.types.modules import FetchPageConf, StrReplaceConf, StrReplaceConfRule
 
 replace_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="\n", replace=" ")})

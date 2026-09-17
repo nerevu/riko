@@ -5,7 +5,7 @@ Tests DotDict deletion: root, nested, deep, case variation, and missing paths.
 
 import pytest
 
-from riko.dotdict import DotDict
+from riko.parsing._dotdict import DotDict
 
 
 @pytest.mark.parametrize(

@@ -14,8 +14,8 @@ Examples:
 
 from pprint import pprint
 
-from riko.cast import CastType
-from riko.collections import AsyncPipe, SyncPipe
+from riko.runtime.collections import AsyncPipe, SyncPipe
+from riko.types._enums import CastType
 from riko.types.modules import DateFormatRawConf, InputConf, ItemBuilderRawConf, Param
 
 format_conf = InputConf({"type": CastType.TEXT, "input_key": "format", "test": True})

@@ -1,60 +1,165 @@
 # Key Paths — per-file detail
 
-Long-form companion to the short key-path router in `CLAUDE.md`. Each row is the
-full role of a source file, including the non-obvious "don't silently revert
-this" invariants that shape code around it. Cross-cutting rules that span modules
-live in `CLAUDE.md` § Cross-cutting invariants; codegen/discovery/tooling
-internals live in `_docs/INTERNALS.md`.
+Long-form companion to the short key-path router in `CLAUDE.md`. The source tree is
+now grouped by dependency responsibility; `_docs/gameplans/dependency-layers.md`
+defines the enforceable import DAG. This file answers the second question: **where
+does a given kind of implementation live?**
 
-## Core
+Cross-cutting correctness rules stay in `CLAUDE.md`; codegen/discovery/tooling
+internals stay in `_docs/INTERNALS.md`.
 
-| Path | Role |
-|---|---|
-| `riko/collections.py` | `SyncPipe`, `AsyncPipe`, `SyncCollection`, `AsyncCollection`; `Formats` export enum, `export()` (also accepts `"list"`/`"tuple"` collection materializations), `list_formats()` (serialized formats only); `write`/`sink` verbs |
-| `riko/modules/` | individual pipe implementations (`fetch`, `filter`, `hash`, etc.) |
-| `riko/modules/__init__.py` | **narrow** module-dev facade — `__all__` is exactly 9 names: `processor`/`operator`/`splitter`, `list_modules`/`get_module_metadata`/`describe_module`, `ModuleMetadata`/`ModuleSubtype`/`ModuleType`. Everything else (`PreparedModule`, `parse_and_cast`, `get_casters`, `broadcast`, `objectify`, the `types.general` aliases, …) is **private — import from its defining module** (`from riko.modules._prepare import PreparedModule`), never through this package |
-| `riko/modules/_decorators.py` | `Module` base + `processor`/`operator`/`splitter` decorators; sync/async wrappers, incl. implicit-looping auto-map: a processor maps over any non-mapping/non-primitive iterable (`list`/`tuple`/`range`/generator/iterator, gated by `_iterutils.is_listlike`); a mapping/primitive/`None` stays one item so `None` still invokes source pipes |
-| `riko/modules/_loop.py` | loop execution — `_run_loop_sync`/`_run_loop_async`, `loop_embed_sync`/`loop_embed_async`, per-parent `_fold_parent`/`_take`/`_take_first`. `LoopRawConf`/`LoopConf` (`count`/`assign`/`field` + compact `embed`) belong to the **explicit** `loop` module — kept, not vestigial, distinct from implicit looping. The legacy nested `conf.embed.value` form is gone |
-| `riko/modules/_derive.py` | init-time type/subtype derivation (`derive_loopable`/`derive_subtypes`) — a **leaf** (no `riko.ext` imports) split out of `_metadata` so decorators can pull it during `riko.modules` init |
-| `riko/modules/_names.py` | **generated** discovery surface: flat `Modules` + `Sources`/`Transforms`/`Sinks` bucket `StrEnum`s (`Modules.FILTER is Transforms.FILTER`); re-exported from `riko`. Never hand-edit (run `gen-names`) |
-| `riko/parsers.py` | sync XML/HTML parsing (`xml2etree`, `LinkParser`, etc.) |
-| `riko/dates.py` + `riko/_date_utils.py` | date helpers. `_date_utils` is the **leaf** half (`parse_date_string`, `ensure_tzinfo`, `date_to_datetime`, `tt_to_datetime`, `date_to_tt`, tz lookup) — imports nothing from `riko` outside `types`, so `_iterutils` can use it for sort keys without a cycle; `dates.py` keeps the `riko`-aware half (`NOW`/`TODAY`, `get_date`, `tt_to_datedict`) |
-| `riko/dotdict.py` | `DotDict` — case-insensitive nested dict for pipe items (dotted keys = nested paths; see `_docs/gameplans/dotdict-parsing.md` for the data-derived-key footgun) |
-
-## Async (`bado`)
+## Package map
 
 | Path | Role |
 |---|---|
-| `riko/bado/__init__.py` | async backend detection (AnyIO or empty fallback) |
-| `riko/bado/io.py` | async file/URL I/O (`async_url_read`, `async_url_open`, `async_write`, `get_async_temp_file`). `async_write` is the anyio-native counterpart of `meza.io.write` (chunk/mode/encoding parity, no sync fallback); `get_async_temp_file` is a plain `def` returning anyio's `NamedTemporaryFile` CM, so `async with` needs no `await`. `async_url_open` is likewise a plain `def` returning an `_AsyncURLStream` handle that is **both** awaitable (`await async_url_open(url)` → open stream, caller closes) and an async CM (`async with async_url_open(url) as f` → auto-closes on exit). It is **eager-read, lazy-parse** — the full body is buffered via `response.content`/`Path.read_bytes` (no read-time backpressure), only parsing stays lazy. The fetch parsers pair `await async_url_open` with `_io.auto_close` (close-on-iteration); **never** "tidy" them into `async with`, which closes the handle before the returned lazy iterator is read. True `httpx.stream()` body reads + `AsyncClient` reuse are unimplemented (`_docs/IMPLEMENTED.md` §2) |
-| `riko/bado/itertools.py` | async itertools: `async_map` + streaming `async_map_stream`/`async_map_ordered_stream`, `async_merge`, `coop_reduce`/`async_reduce`, `async_iter` |
-| `riko/bado/_util.py` | async utilities (`async_sleep`, `defer_to_process`) |
-| `riko/_pubsub/` | pub/sub package (`send`/`receive`/`coroutine`, `reset_pubsub`) — state via `contextvars`; `_sync.py`/`_async.py`. (`riko/utils.py`/`helpers.py` are gone — decomposed into `_io`/`_iterutils`/`_serialize`/`_strutils`/`_logging`, graph→`compile.py`, `parse_context`→`context.py`, pub/sub→`_pubsub`) |
+| `riko/__init__.py` | stable application facade; re-exports the supported `riko` surface rather than owning implementations |
+| `riko/_package.py` | package/version metadata classified with the base layer |
+| `riko/base/` | bottom-layer primitives shared across the package: constants, path/location helpers, logging, strings/iterators/date utilities, exceptions, source formatting, and the private API-surface declaration |
+| `riko/types/` | static contracts: streams/items, module configs, options, compiler/pipeline/resource/I/O types, enums, wrappers, sentinels, guards |
+| `riko/coercion/` | conversion and normalization: casts, `DynamicConf`, generated objconf types, mapping/objectification, date/dataclass coercion, graph/freeze helpers |
+| `riko/bado/` | async backend selection plus async itertools/utilities; I/O no longer lives here |
+| `riko/definitions/` | immutable/declarative contracts for modules, resources, targets, and writes |
+| `riko/io/` | sync/async URL and file I/O, serialization, and re-encoding |
+| `riko/parsing/` | config parsing, `DotDict`, and document/XML/HTML parsing |
+| `riko/rss/` | RSS/Atom discovery, parsing, and entry normalization |
+| `riko/runtime/` | executable orchestration: collections, compiler, pipeline resolution, registry, pub/sub, subpipes, execution resources/context, and write sessions |
+| `riko/modules/` | built-in pipe implementations plus decorators, preparation, metadata, inference, looping, and generated discovery names |
+| `riko/ext/` | supported extension-author facade and extension codegen/name helpers; architecturally shares the `modules` layer |
+| `riko/cli/` | command implementations, generators, documentation checks, and import-contract linters |
+| `riko/data/` | bundled package data used by runtime helpers; not an implementation layer |
 
-## Contracts & surfaces
-
-| Path | Role |
-|---|---|
-| `riko/exceptions.py` | hierarchy rooted at `RikoError` (`ModuleError`/`PipelineError`/`PubSubError` bases): `UnsupportedModuleError` (unresolved leaf module) / `UnsupportedPipelineError` (unresolved `pipe_*` sub-pipeline) — both from `resolve_module` in `compile.py`; `PipelineStateError`; pub/sub `ReceiverUnavailableError`/`DuplicateReceiverError`. Only `RikoError`/`PipelineStateError`/`Unsupported*` are stable (`ROOT_EXCEPTIONS` in `riko/_api_surface.py`) — bases + pub/sub errors are not |
-| `riko/_api_surface.py` | **private** declaration of the supported import contract — `STABLE` (= `BADO`/`COLLECTIONS`/`COMPILE`/`MODULES`/`OTHER`/`ROOT_EXCEPTIONS`), `EXTENSION`, `TYPES`, `PRIVATE_RESOLUTION` frozensets. Source of truth for `_docs/API_SURFACE.md` + `tests/public/test_imports.py`; not itself public |
-| `riko/resources.py` | **PRIVATE** thin-slice of the `execution-semantics.md` resource contract (foundation for `monthly-dashboard.md`): immutable generic `Resource[H, C]` (`H`=handle type, `C`=cleanup return; `spec`/`handle` were collapsed since they're the same object — the factory case where they differ is deferred to `from_factory`) — owned via `Resource(handle)`, external via `Resource.from_external(handle)` (a distinct `ExternalResource` subclass that resolves to the handle and never closes, so **external-ness is a type, not a runtime flag**); `credential` ref; sync/async `open`/`aopen` + `close`/`aclose` returning `C | None` (the `cleanup` override's result, else `None` — you **can't overload on the `_cleanup` instance flag**, so it's encoded in the return union). Execution-bound `ResourceView` (`view.db`/`view["db"]`), `normalize_resources`/`coerce_binding`/`ResourcesLike`, and `bind_resources` (resolve a node's declared binding against `Context.resources`). `Context` carries an immutable `resources` mapping + `with_resource()` (populated only via `with_resource`, never the constructor, so `**kwargs` splats can't collide); `__getstate__/__setstate__` keep the `mappingproxy` picklable for the process pool. **Wired into the preparation seam**: a `@processor`/`@operator(resources="x")` decoration is normalized in `Module.prepare` onto `PreparedModule.resources` and delivered to the parser as a `ResourceView` in `kwargs["resources"]`; missing binding raises. **External resources only** — owned-resource lifecycle (open-once/close-at-teardown) + lazy/`from_factory`/rollback still deferred to the Execution layer (owned bindings raise `NotImplementedError`) |
-
-## Write architecture
-
-| Path | Role |
-|---|---|
-| `riko/types/_write.py` | **PRIVATE** declarative write model: `WriteMode` (`append`/`merge`/`replace`/`delete` — no `.keyed`/`.destructive`), `Formats` (serialized reps only — **no** `list`/`tuple`), frozen `WriteOperation` (plain `mode`+`keys` intent, unvalidated on its own), `WriteCapabilities` (`modes`/`fmt`/`incremental`/`match_keyed_modes`/`idempotent_modes`; `appendable`/`serializes`/`keyed_modes` are **derived** properties, `__post_init__` only enforces keyed⊆modes + match/idempotent non-overlap), `PreparedWrite` (target+operation+capabilities = the validated object), `WriteResult`, `WriteTarget` Protocol (reports capabilities only), `SyncWriteSession` Protocol (`write(Item\|Items)`/`finalize`/`abort`/`teardown`). Unified `keys` — the `(target, mode)` decides record-match vs. idempotency meaning; no separate `idempotency_key`. Async session + `write.py` file-open `mode` are distinct axes |
-| `riko/targets.py` | **PRIVATE** write targets + validated preparation: `File` (owns its `target × format` behavior via private `_FILE_APPEND_FORMATS`/`_FILE_INCREMENTAL_FORMATS`; `capabilities(fmt)` reports `modes`/`incremental`), `resolve_target`, `resolve_format` (ext→fmt incl. `jsonl`), `normalize_keys` (local helper — wraps a bare string, rejects empty/duplicate, preserves order; **not** `listize`), `validate_target_mode` (unsupported mode / keys-on-unkeyed / match-keyed-missing-keys), `prepare_write(dest, mode, *, fmt=, keys=) -> PreparedWrite`. Generic over `WriteTarget`; no `deliver`/`build_write`/`file_writer`/`Sink*` |
-| `riko/_write_session.py` | **PRIVATE** runtime write session (temporary pre-R4B host): `_FileWriteSession` — `_SessionState` machine (`OPEN`/`FINALIZED`/`ABORTED`/`CLOSED`); `_InputShape` invariant — a session is **either** repeated `_write_item` singletons **or** one whole-stream `_write_items`, never mixed (mixing raises). Singleton path (`_skip_header`) keeps csv schema/header across records; jsonl final-terminator. Append boundary is **session-local**: `acquire` inspects the destination's size/trailing-newline **once** into `_initial_has_content`/`_needs_boundary`, then each `_emit` consumes/updates it in memory (no per-emit file re-reads). Idempotent `finalize`, `abort` (discards staged framed doc; **no** rollback for incremental), **pure** `teardown` (never commits). `file_write_session`/`async_file_write_session` CMs own acquire→teardown and reject non-`File` targets (`NotImplementedError`); `write_through`/`async_write_through` **enter the CM themselves**, so acquisition is **lazy** — deferred to first iteration, no eager open/truncate (commit=finalize on graceful close, abort on terminate/exception). `mint_write_resource(dest, *, mode, fmt, keys)` desugars `write("report.csv")` via `Resource.from_lifecycle` into an anonymous one-shot `OneShotResource[SyncWriteSession]` (never stored in a `Context`), entered by the execution layer (R4B). Collection verbs in `collections.py`: `sink` (terminal → `WriteResult`; whole stream to one converter call; async drains then reuses the sync session), `write` (passthrough via `_passthrough_pipe`/`_async_passthrough_pipe` identity host — no `self.name`, never re-runs the preceding module, and **preserves execution settings + shares/transfers the pipeline pool handle** like `_chain`). Async write mirrors the sync path; async terminate/early-close lifecycle is R4B-owned (xfailed). Both `write` and `sink` default to `WriteMode.REPLACE` |
-
-## Compiler & codegen
+## Base
 
 | Path | Role |
 |---|---|
-| `riko/cli/` | `compile.py` (`compile-pipe`), `convert_dag.py` (`convert-dag`), `gen_config.py` (`gen-config`), `gen_names.py` (`gen-names`), `manage.py` (`manage`). `compile-pipe` reads stdin when its path is `-`/omitted (pipe name `anonymous`) so it chains off `convert-dag`; `-v` reports deps + bytes to **stderr**, keeping stdout a clean source stream. The legacy `bin/compile` is **gone** — it had been dead since `riko.utils` was decomposed, and its `-p`/`-o`/`-s` options scraped Yahoo! Pipes (retired 2015). Don't resurrect it |
-| `riko/types/configs.py` | **fully generated** per-module `<Name>Objconf(DynamicConf)` parse-time types; imports + re-exports `DynamicConf` from `riko/types/base.py` (edit `modules.py` contracts, run `gen-config` — never hand-edit) |
-| `riko/types/base.py` | hand-maintained `DynamicConf(Objectify[Any])` base, kept out of generated `configs.py` so it can regenerate safely |
-| `riko/types/_module_ids.py` | **generated** `ModuleId` (every built-in id) + `LoopableModuleId` (loopable subset); pure `typing`-only leaf. Never hand-edit (run `gen-names`) |
-| `riko/ext/names.py` | `ModuleName(StrEnum)` base + `ModuleNameLike`/`normalize_module_name`; `derive_category`/`SINK_NAMES` |
-| `riko/ext/codegen.py` | codegen — `enum_member_name`, `catalog_entries`, `generate_module_names`, plus `ruff_format(str)->str`, the **shared** formatter for all three generators |
-| `riko/transform.py` | column transformation helpers (shelved; ideas folded into `_docs/gameplans/`) |
+| `riko/base/_api_surface.py` | **private** declaration of `STABLE`, `EXTENSION`, `TYPES`, and private surface name sets; source for generated blocks in `_docs/API_SURFACE.md` |
+| `riko/base/exceptions.py` | exception hierarchy rooted at `RikoError`; stable root exceptions are re-exported from `riko` |
+| `riko/base/_paths.py` | package/repository path constants and filesystem helpers used by runtime and CLI code |
+| `riko/base/_dateutils.py` | low-level date/time conversion helpers kept below coercion/runtime code |
+| `riko/base/_iterutils.py` | generic iterator helpers that do not belong to pipeline execution |
+| `riko/base/_source_format.py` | shared source-formatting helper used by generators |
+| `riko/base/{_constants,_imports,_locations,_logging,_strutils}.py` | small base utilities; keep them free of upward package dependencies |
+| `riko/base/{currencies,locations,warnings}.py` | shared domain/reference helpers that sit at the bottom of the import graph |
+
+## Types and coercion
+
+| Path | Role |
+|---|---|
+| `riko/types/modules.py` | hand-maintained module configuration contracts; source input for config code generation |
+| `riko/types/_module_ids.py` | **generated** `ModuleId`/`LoopableModuleId` literals; regenerate with `gen-names` or `manage codegen --names` |
+| `riko/types/_streams.py` | core `Item`/`Items`/stream aliases and async stream contracts |
+| `riko/types/_compiler.py` + `riko/types/_pipeline.py` | compiler/DAG and parsed-pipeline structural contracts |
+| `riko/types/_resource.py` | resource factory/kind type contracts used by definitions and execution |
+| `riko/types/_enums.py` | shared enums and enum-like aliases, including serialization format typing |
+| `riko/types/_io.py` | path/closeable I/O contracts, not executable I/O |
+| `riko/types/_wrappers.py` | decorator wrapper typing; upward references needed only for typing stay behind `TYPE_CHECKING` |
+| `riko/coercion/_configs.py` | **generated** `<Name>Objconf` parse-time config classes; edit `riko/types/modules.py`, then run `gen-config` or `manage codegen --config` |
+| `riko/coercion/_dynamic_conf.py` | hand-maintained `DynamicConf` base used by generated objconf classes |
+| `riko/coercion/cast.py` | public coercion/casting implementation used by parsing/modules |
+| `riko/coercion/_graph.py` | generic graph helpers, including topological sorting and descendant traversal reused by the architecture linter |
+| `riko/coercion/{_dates,_dataclass,_freeze,_mapping,_objectify,_sequences}.py` | focused conversion/normalization helpers |
+
+## Async and I/O
+
+| Path | Role |
+|---|---|
+| `riko/bado/__init__.py` + `riko/bado/_backend.py` | optional AnyIO backend selection and guarded async runtime surface |
+| `riko/bado/itertools.py` | async iterator helpers (`async_map`, streaming map/merge/reduce helpers, etc.) |
+| `riko/bado/_util.py` | async utility helpers not tied to transport/file I/O |
+| `riko/io/_async.py` | async URL/file I/O (`async_url_open`, `async_write`, `get_async_temp_file`); owns the async-handle lifecycle details that previously lived under `bado` |
+| `riko/io/_sync.py` | synchronous URL/file open/read helpers |
+| `riko/io/_serialization.py` | stream serialization/export conversion helpers |
+| `riko/io/_reencode.py` | byte/text re-encoding utilities |
+| `riko/io/__init__.py` | narrow I/O facade; stable async I/O names are promoted through `riko` |
+
+`async_url_open` remains an awaitable/async-context-manager handle. Call sites that
+return lazy parsers must keep the handle alive until iteration completes; do not
+replace a close-on-iteration path with an `async with` that exits before the lazy
+iterator is consumed.
+
+## Parsing and RSS
+
+| Path | Role |
+|---|---|
+| `riko/parsing/_dotdict.py` | `DotDict`, the case-insensitive nested mapping used for pipe items |
+| `riko/parsing/config.py` | parse-time module configuration normalization and casting |
+| `riko/parsing/documents.py` | XML/HTML/document parsing (`xml2etree`, `LinkParser`, etc.) |
+| `riko/rss/discovery.py` | feed discovery helpers |
+| `riko/rss/parsing.py` | RSS/Atom parser coordination |
+| `riko/rss/entries.py` | feed-entry normalization |
+
+## Definitions and execution resources
+
+| Path | Role |
+|---|---|
+| `riko/definitions/modules.py` | immutable `ModuleDefinition` contract used by built-ins, registry entries, and discovery |
+| `riko/definitions/_resource_types.py` | resource-definition aliases shared by declarative binding code; any runtime references here are type-only |
+| `riko/definitions/_resources.py` | resource binding normalization, factory classification, `ResourceView`, and definition-side binding helpers |
+| `riko/definitions/_targets.py` | declarative write-target preparation/validation and file target behavior |
+| `riko/definitions/_write.py` | `WriteMode`, `WriteResult`, `WriteOperation`, `WriteCapabilities`, `PreparedWrite`, and sync/async write-session protocols |
+| `riko/runtime/context.py` | immutable execution `Context`; resource bindings derive new contexts rather than mutating one in place |
+| `riko/runtime/_resources.py` | concrete `Resource` hierarchy and one-shot/reusable lifecycle execution; this file and `context.py` form the architecture's explicit `execution` sublayer |
+
+The definition/execution split is intentional: descriptions stay immutable and
+reusable; mutable open/close/session state belongs to execution-owned objects.
+
+## Runtime
+
+| Path | Role |
+|---|---|
+| `riko/runtime/collections.py` | `SyncPipe`/`AsyncPipe`/`SyncCollection`/`AsyncCollection`; `Formats`, `export()`, `list_formats()`, `write`/`sink`, pipeline lifecycle and pool ownership |
+| `riko/runtime/_compile.py` | DAG/JSON parsing and compilation (`build_pipeline`, `compile_pipe`, `convert_dag`, dependency extraction) |
+| `riko/runtime/_compile_repr.py` | Python-source representation helpers used by compiler/codegen paths |
+| `riko/runtime/_pipelines.py` | pipeline lookup/loading support |
+| `riko/runtime/_resolver.py` | module/pipeline resolution orchestration |
+| `riko/runtime/_registry.py` | runtime extension/entry-point registry and built-in registration lookup |
+| `riko/runtime/_importutils.py` | dynamic import helpers; string-constructed imports are intentionally invisible to the static AST dependency graph |
+| `riko/runtime/_subpipe.py` | nested/sub-pipeline execution helpers |
+| `riko/runtime/_write_session.py` | concrete sync/async write-session acquisition, incremental/framed delivery, finalize/abort/teardown semantics |
+| `riko/runtime/_pubsub/` | sync/async pub/sub hubs and message types; mutable hub state is isolated via `contextvars` |
+| `riko/runtime/templates/` | compiler templates for generated sync/async Python pipelines |
+
+Pipes are one-shot execution objects. Pool ownership remains explicit: borrowed
+pools stay open, while a pipeline-created pool is closed by its owner. Write and
+sink execution use the same prepared write/session contracts; terminality is a
+collection-consumption concern, not a second write model.
+
+## Modules and extension surface
+
+| Path | Role |
+|---|---|
+| `riko/modules/<name>.py` | one built-in pipe implementation per module |
+| `riko/modules/__init__.py` | intentionally narrow module-development facade; implementation internals should import their defining private modules, not round-trip through the facade |
+| `riko/modules/_decorators.py` | `processor`/`operator`/`splitter` machinery and sync/async wrappers |
+| `riko/modules/_prepare.py` | immutable `PreparedModule` construction and call-site option/resource preparation |
+| `riko/modules/_metadata.py` | runtime module catalog/metadata discovery |
+| `riko/modules/_derive.py` + `riko/modules/_inference.py` | subtype/loopability/return-kind derivation kept isolated from higher extension/runtime surfaces |
+| `riko/modules/_loop.py` | explicit loop module execution, distinct from processors' implicit iterable mapping |
+| `riko/modules/_names.py` | **generated** `Modules`/`Sources`/`Transforms`/`Sinks` discovery enums; never hand-edit |
+| `riko/ext/decorators.py` + `riko/ext/protocols.py` | supported module-author decorator/protocol surface |
+| `riko/ext/registry.py` | supported registration surface over the private runtime registry |
+| `riko/ext/_names.py` | `ModuleName`, normalization, category derivation, and sink-name criteria |
+| `riko/ext/codegen.py` | shared module-catalog codegen helpers |
+| `riko/ext/config.py` | supported extension configuration helpers |
+
+## CLI and generators
+
+| Path | Role |
+|---|---|
+| `riko/cli/manage.py` | thin Click command composer only |
+| `riko/cli/_lint.py` | `manage lint`, additive selectors, `--all`, and nested `lint imports` registration |
+| `riko/cli/_import_graph.py` | pure-AST import scanner; classifies module/local/type-only imports without importing riko |
+| `riko/cli/_lint_import_architecture.py` | package-layer DAG, module-to-layer mapping, architecture report/validation |
+| `riko/cli/_lint_canonical_imports.py` | canonical-definition import contract |
+| `riko/cli/_lint_relative_imports.py` | sibling-relative import contract |
+| `riko/cli/_import_commands.py` | selector-based `manage lint imports` command and shared import-check runner |
+| `riko/cli/_codegen.py` | selector-based `manage codegen`; defaults to config and supports additive `--config`/`--names`/`--pipes`/`--api` plus `--all` |
+| `riko/cli/_gen_config.py` | generates `riko/coercion/_configs.py` from `riko/types/modules.py` |
+| `riko/cli/_gen_names.py` | generates `riko/modules/_names.py` and `riko/types/_module_ids.py` |
+| `riko/cli/_gen_pipelines.py` | regenerates compiled pipeline fixture trees |
+| `riko/cli/_gen_api_surface.py` | regenerates marked name blocks in `_docs/API_SURFACE.md` from `riko/base/_api_surface.py` |
+| `riko/cli/{compile,convert_dag,runpipe,benchmark}.py` | standalone console-script implementations |
+| `riko/cli/{_build,_docs,_docstyle,_release,_test}.py` | private `manage` command helpers grouped by reason to change |
+
+Use `_docs/gameplans/dependency-layers.md` when deciding **which package** should own
+new code. Use this file when deciding **which existing module** is the closest home.

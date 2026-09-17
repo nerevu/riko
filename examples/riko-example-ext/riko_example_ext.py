@@ -29,8 +29,9 @@ Examples:
 
 from typing import Any, cast
 
+from riko.coercion._dynamic_conf import DynamicConf
 from riko.ext import operator
-from riko.types import DynamicConf, Item, PipeTuples, Stream
+from riko.types import Item, PipeTuples, Stream
 
 
 def _shout(item: Item) -> Item:

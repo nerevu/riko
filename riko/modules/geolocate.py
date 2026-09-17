@@ -6,7 +6,7 @@ Warning:
     Only ``type="currency"`` performs a real lookup. ``street_address`` and
     ``ip_address`` ignore their input and return fixed placeholder data, and
     ``coordinates`` echoes the supplied lat/lon but reports a placeholder
-    country. See ``riko.cast.lookup_street_address`` and friends.
+    country. See ``riko.coercion.cast.lookup_street_address`` and friends.
 
 Examples:
 
@@ -29,12 +29,13 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType, CastType, cast_value
-from riko.types._configs import GeolocateObjconf
-from riko.types._locations import AnyLocation
+from riko.base._locations import AnyLocation
+from riko.coercion._configs import GeolocateObjconf
+from riko.coercion.cast import cast_value
+from riko.types._enums import BasicCastType, CastType
 from riko.types._options import Defaults, Opts
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {"type": "street_address"}

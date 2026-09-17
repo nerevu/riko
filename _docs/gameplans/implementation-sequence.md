@@ -211,6 +211,23 @@ envelope. It does **not** depend on cache, effects, or durable state.
 The graph is intentionally not identical to P8–P14 numbering. The reconciled architecture introduced
 foundational identity/resource/state work that cuts across those phases.
 
+### Phase closure rule
+
+Every R-phase closes against three questions:
+
+- **ADD** — what canonical capability or contract now exists?
+- **MIGRATE** — which existing consumers, representations, or mechanics now use it?
+- **DELETE** — which superseded runtime, surface, shim, or representation is now gone?
+
+A phase is not complete while both the canonical path and its superseded implementation remain,
+unless the older form is an explicitly bounded compatibility boundary with a named owner and removal
+point.
+
+Compatibility must terminate at an ingress boundary; it must not preserve a parallel runtime path.
+
+When a phase genuinely has nothing to migrate or delete, its exit criteria say `none` explicitly
+rather than omitting the category.
+
 ## 4. PR sequence
 
 ### R0 — Characterization and internal naming
@@ -229,7 +246,13 @@ Changes:
 
 Keep P8 behavior unchanged except for type-name cleanup.
 
-**Exit:** no released public API change; tests prove the seams the following PRs will replace.
+**Exit:**
+
+- **ADD:** characterization tests pin the resolver, source-normalization, one-shot lifecycle, and
+  pub/sub seams that later phases replace.
+- **MIGRATE:** the internal parser callable alias is `PipeCallable`, leaving `Pipeline` available for
+  the public definition type.
+- **DELETE:** none; R0 intentionally makes no released runtime deletion.
 
 ### R1 — Stable errors first
 
@@ -260,6 +283,13 @@ RikoError
 Do not force every current legacy call site through the new hierarchy in this PR. Establish the
 public types and use them in new code; migrate old call sites when touched.
 
+**Exit:**
+
+- **ADD:** the stable Riko-owned error families required by later R-phases exist.
+- **MIGRATE:** new foundations use those errors, and legacy call sites migrate when touched rather
+  than introducing new builtin-exception contracts.
+- **DELETE:** none; untouched legacy call sites are intentionally not bulk-migrated in R1.
+
 ### R2A — Canonical value encoding
 
 **Goal:** one deterministic *value* encoder before checkpoints/idempotency/fingerprints depend on it.
@@ -287,8 +317,13 @@ Deliver:
 `repr_cache` reuses the same freezing primitives but may bypass caching on unsupported values;
 durable consumers raise.
 
-**Exit:** golden canonical bytes/digests, cross-process deterministic fixtures, and no use of Python's
-randomized `hash()` for durable identity. R5A/R5B/R6 may depend on R2A completely.
+**Exit:**
+
+- **ADD:** golden canonical bytes/digests and cross-process deterministic fixtures prove the shared
+  value encoder.
+- **MIGRATE:** `repr_cache` and every durable identity consumer use the shared freezing primitives.
+- **DELETE:** Python's randomized `hash()` and parallel ad hoc encoders are absent from durable
+  identity paths. R5A/R5B/R6 may depend on R2A completely.
 
 ### R2B — Semantic identity and version contract
 
@@ -319,6 +354,14 @@ detection, and semantic fingerprints. Durable checkpoints and idempotent side ef
 explicit version when they must survive software/dependency changes.
 
 `execution-semantics.md` owns the semantics; this split governs sequencing and scope only.
+
+**Exit:**
+
+- **ADD:** explicit node/resource identity and `version=` exist, with automatic fingerprinting kept
+  best-effort.
+- **MIGRATE:** node/resource semantic identity construction follows the version-first contract.
+- **DELETE:** none; R2B removes no runtime surface, but no durable contract may depend on automatic
+  callable introspection being complete.
 
 ### R3 — Immutable Context and Resource definitions
 
@@ -388,6 +431,14 @@ The fluent async `write()`/`sink()` surface also landed here (an async write ses
 passthrough/terminal verbs), earlier than the sequence originally deferred it. R4B still owns the
 final form: it re-hosts that same session lifetime on the execution `AsyncExitStack` rather than on
 the current one-shot pipe host. The session contract does not change — only its owner.
+
+**Exit:**
+
+- **ADD:** immutable Context/Resource definitions and the private sync/async write-session seam exist.
+- **MIGRATE:** reusable resource declarations use the immutable definition model, while fluent
+  `write()`/`sink()` use `WriteSession` rather than hidden pub/sub callbacks.
+- **DELETE:** mutable/catch-all Context definition behavior and the write path's hidden
+  `send`/`on_receive` dependency are absent; the explicitly bounded one-shot Resource form remains.
 
 ### R4A — Public Pipeline definition and canonical Workflow v2 IR
 
@@ -503,10 +554,6 @@ Structural validation answers "is this a valid WorkflowSpec v2?" Runtime prepara
 may therefore round-trip a node whose runtime capability has not landed yet, while execution fails
 with a clear unsupported-capability error.
 
-**Exit:** every supported topology round-trips through canonical v2 without relying on traversal or
-JSON-array order for semantics, and the bounded v1 migration path is explicit rather than a parallel
-runtime.
-
 #### R4A slice ordering
 
 R4A is the largest single slice in this sequence and lands as ordered PRs, not one sitting. The
@@ -553,6 +600,15 @@ proceed without it, and the byte-stable serialization/golden-fixture work waits 
 the true unblocked head and the highest-risk decision — the `Targets`→`Formats` rename touches the
 STABLE `riko` surface (`_api_surface.py`, `tests/public/test_imports.py`) — so it is front-loaded to
 force that decision early.
+
+**Exit:**
+
+- **ADD:** the public immutable `Pipeline[T]` and strict canonical Workflow v2 definition,
+  validation, and serialization path exist.
+- **MIGRATE:** compiler/CLI output and released v1 ingress normalize once into canonical v2, including
+  v1 `write` → `WriteNode` migration.
+- **DELETE:** v1 is absent as an emitted or internal/runtime representation. During 0.x, only the
+  bounded v1→v2 ingress migration remains; the offline pure migration utility may survive 1.0.
 
 ### R4B — Private SyncExecution/AsyncExecution and lifetime
 
@@ -615,6 +671,15 @@ Covered cases: eager open, lazy open, mid-execution failure rollback, early cons
 cancellation, and cleanup-error grouping. R12 proves the **external package API**; R4B proves the
 **runtime architecture**.
 
+**Exit:**
+
+- **ADD:** private sync/async executions own task groups, exit stacks, adaptation, resources, events,
+  and shutdown.
+- **MIGRATE:** P10 bounded/executor mechanics, R3 resource acquisition, and the write-session
+  lifecycle run under the common execution lifetime.
+- **DELETE:** `SyncPipe`/`AsyncPipe`/Collection runtime classes and superseded one-shot pipe lifecycle
+  hosts are absent rather than wrapped; no parallel task-group/exit-stack/portal runtime remains.
+
 ### R5A — FeedResult, Metadata, and private per-item provenance
 
 **Goal:** create the internal value envelope required by state, idempotency, generation, cache replay,
@@ -639,6 +704,14 @@ Normal parser APIs still receive values and their prepared arguments, not `_Feed
 
 Once R5A lands, ordinary Feed-native transforms whose semantics depend only on the final execution
 envelope may migrate immediately rather than waiting for R10.
+
+**Exit:**
+
+- **ADD:** `FeedResult`, `Metadata`, and the private `_FeedItem` provenance/identity envelope exist.
+- **MIGRATE:** ordinary streaming transforms that are otherwise ready use the final Feed-native
+  envelope and resolved resource definitions participate in semantic fingerprints.
+- **DELETE:** none at the public surface; migrated modules retain no second per-item
+  provenance/identity carrier beside `_FeedItem`.
 
 ### R5B — CacheNode runtime / Mezmoize replay
 
@@ -672,6 +745,14 @@ Deliver the locked cache semantics:
 Cache capacity is Resource/backend policy, not a `.cache(limit=...)` node option. `ByteSize` is the
 public size-value type; canonical size representation is bytes.
 
+**Exit:**
+
+- **ADD:** `CacheNode` has the finalized Mezmoize-backed chunk/manifest replay runtime.
+- **MIGRATE:** cache identity, replay, invalidation, and backend access use the canonical graph/R2A
+  identity plus the private Mezmoize shim.
+- **DELETE:** superseded cache representations that bypass canonical identity or manifest/generation
+  publication are gone; no parallel Riko-owned cache-store hierarchy remains.
+
 ### R5C — Provider-neutral write/action effects
 
 **Goal:** establish one side-effect execution model before durable idempotency is layered on in R6.
@@ -698,6 +779,16 @@ seam is removed here once `write()` at a graph leaf provides the same terminal c
 `read()` owns acquisition plus interpretation/parsing through Target + Format. `write()` owns
 reconciliation/mutation. Provider commands that do not naturally mean data write are actions.
 Concrete FILE/HTTP/S3/Postgres/Airtable/Intune/etc. adapters remain R11.
+
+**Exit:**
+
+- **ADD:** `WriteNode`/`ActionNode` execute through the common effect runtime and report
+  `WriteResult`/`ActionResult` through `EventSink`.
+- **MIGRATE:** internal write execution uses the canonical `WriteNode` path and execution-owned
+  write-session/lifetime machinery.
+- **DELETE:** `riko.modules.write`, its discovery entry, and the interim fluent `sink()` surface are
+  absent. The only legacy `write` behavior retained is bounded persisted-v1 migration at the R4A
+  Workflow ingress boundary.
 
 ### R6 — StateStore, checkpoint, CAS, and idempotency
 
@@ -729,6 +820,15 @@ nodes that declare support.
 
 Checkpoint declarations already exist structurally in R4A. R6 adds owner resolution, restore,
 persistence, CAS, cleanup, and runtime validation.
+
+**Exit:**
+
+- **ADD:** `StateStore`/`AsyncStateStore`, checkpoint ownership, CAS, and central idempotency key
+  derivation form one durability contract.
+- **MIGRATE:** recovery checkpoints, intrinsic source/poll state, and R5C idempotent effects use the
+  shared state/identity contract.
+- **DELETE:** none if no parallel durability prototype exists; no `SourceCheckpoint`,
+  `CheckpointStore`, generic lease layer, or non-CAS persistence path may survive beside StateStore.
 
 ### R7 — Execution-owned publish/subscribe and split
 
@@ -766,6 +866,15 @@ part of subscription semantics and differs from ordinary downstream UDF evaluati
 Feed-native send/receive/split implementation migration belongs in this phase rather than being
 deferred to R10; only the useful mechanics survive behind the new API.
 
+**Exit:**
+
+- **ADD:** publish/subscribe/split use execution-owned topology, buffering, task ownership, and
+  lifetime.
+- **MIGRATE:** useful send/receive/split mechanics are Feed-native behind `PublishEdge`,
+  `SubscribeNode`, and the object-first API.
+- **DELETE:** legacy `send`/`receive` modules, global/context-local hub lifecycle, and
+  PENDING/DONE/sender-id stream bookkeeping are absent.
+
 ### R8 — Single-Pipeline batch execution
 
 **Goal:** add batching without a parallel BatchPipe hierarchy.
@@ -793,6 +902,15 @@ across processes. Forced unavailable backend raises. `batch_size` is invalid whe
 Batches are ordinary logical values, so `.map(func)` receives the current batch in batch mode.
 
 Batch-aware Feed-native representation optimization lands here; no separate R10 rewrite is required.
+
+**Exit:**
+
+- **ADD:** batch mode runs on ordinary `Pipeline` with deterministic capability/conversion-cost
+  representation negotiation.
+- **MIGRATE:** batch-aware modules use the same Pipeline execution path and negotiated Feed-native
+  representations.
+- **DELETE:** none if no parallel batch prototype exists; no `BatchPipe`, public `BatchPolicy`, or
+  global backend-preference runtime may coexist with the single-Pipeline model.
 
 ### R9 — Loop/resumable iteration
 
@@ -834,6 +952,14 @@ Deliver iterative mode:
 Agent packages compose Pipeline + loop + Publisher/Subscription + StateStore rather than creating
 `AgentGraph`/`AgentNetwork` runtime primitives.
 
+**Exit:**
+
+- **ADD:** the existing `loop` module supports bounded/conditional resumable iteration through R6
+  state while preserving its default one-run semantics.
+- **MIGRATE:** iterative and resumed execution use the ordinary Pipeline/loop/StateStore contracts.
+- **DELETE:** none if no parallel loop prototype exists; no `LoopNode`, feedback-graph runtime,
+  `AgentGraph`/`AgentNetwork`, or redundant iterative mode surface may coexist with this model.
+
 ### R10 — Final Feed-native legacy-seam cleanup
 
 **Goal:** finish and prove the migration rather than begin it here.
@@ -859,6 +985,14 @@ R10 therefore owns:
 - proof that genuinely eager operators (`sort`, `reverse`, etc.) are the only intentional
   materialization points.
 
+**Exit:**
+
+- **ADD:** no new public runtime abstraction; parity/laziness/memory proofs cover the final
+  Feed-native execution path.
+- **MIGRATE:** all remaining eligible sources, composers, and modules use that path.
+- **DELETE:** the legacy whole-source materialization seam and obsolete async-wrapper/shim shapes are
+  gone; only intentionally eager operators still materialize.
+
 ### R11 — adapters: CLI, orchestration, providers, MCP
 
 Only after the core contracts above are stable:
@@ -875,6 +1009,15 @@ Only after the core contracts above are stable:
 - provider integrations establish the `OperationHandle` waiter contract before Operations as Code
   needs long-running provider steps;
 - RDP projects R5A/R6 identity/state rather than owning parallel checkpoint semantics.
+
+**Exit:**
+
+- **ADD:** concrete adapters, Click-native CLI seams, orchestration adapters, provider sessions, and
+  MCP/provider capability integration consume the stabilized Core contracts.
+- **MIGRATE:** provider state/effects/idempotency, long-running operation waiting, and RDP projections
+  use R3/R5C/R6/shared capability contracts.
+- **DELETE:** provider/RDP/orchestration-local duplicates of state, capability catalogs,
+  idempotency, provider waiting, or operation-planning ownership are absent.
 
 ### R11A — Operations as Code implementation scaffolding
 
@@ -924,8 +1067,14 @@ Two implementation-readiness fixtures close the slice:
 Use fakes/golden fixtures first. Live provider implementations are later external-package work and do
 not block proving ownership boundaries.
 
-**Exit:** both fixtures compose existing owners without introducing a second capability catalog,
-state store, scheduler, provider waiter, Microsoft plan, or runtime execution model.
+**Exit:**
+
+- **ADD:** the external `riko-ops` scaffolding and both implementation-readiness fixtures compose the
+  intended Operations as Code architecture.
+- **MIGRATE:** validate/plan/apply/verify flows consume the shared capability, provider,
+  orchestration, Microsoft-plan, and Pipeline contracts.
+- **DELETE:** none in Core; the slice is invalid if it introduces a second capability catalog, state
+  store, scheduler, provider waiter, Microsoft plan, or runtime execution model.
 
 ### R12 — external proof and release gate
 
@@ -945,6 +1094,15 @@ Core external-extension proof above; Core 1.0 must remain independently extensib
 
 Then run the release-readiness wheel, typing, docs, optional-dependency, public-surface, and Workflow
 v1-cutoff gates.
+
+**Exit:**
+
+- **ADD:** an external extension package proves the frozen resource/state/pubsub/target/action seams,
+  and the 1.0 release-readiness gates pass.
+- **MIGRATE:** generated discovery, release docs, wheels, and public-surface checks describe only the
+  final architecture.
+- **DELETE:** remaining superseded 0.x APIs/categories and normal Workflow v1 runtime loading are
+  gone. Only the explicitly allowed offline pure v1→v2 migration utility may remain.
 
 ## 4a. Contracts that are not frozen yet
 

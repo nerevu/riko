@@ -34,14 +34,14 @@ import pygogo as gogo
 from meza.fntools import remove_keys
 
 from riko.bado.itertools import coop_reduce
-from riko.dotdict import DotDict
-from riko.types._configs import RenameObjconf
+from riko.coercion._configs import RenameObjconf
+from riko.parsing._dotdict import DotDict
 from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING
 from riko.types._streams import Item
 from riko.types.modules import RenameConfRule
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = {"extract": "rule", "listize": True, "emit": True}
 DEFAULTS: Defaults = {}

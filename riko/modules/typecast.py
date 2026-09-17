@@ -26,12 +26,13 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import CastType, cast_value
-from riko.types._configs import TypecastObjconf
+from riko.coercion._configs import TypecastObjconf
+from riko.coercion.cast import cast_value
+from riko.types._enums import CastType
 from riko.types._options import Defaults, Opts
 from riko.types._scalars import PrimitiveValue
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = {"field": "content"}
 DEFAULTS: Defaults = {"type": "text"}

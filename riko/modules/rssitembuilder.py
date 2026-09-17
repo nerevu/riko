@@ -32,14 +32,14 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType
-from riko.dotdict import DotDict
+from riko.coercion._configs import RssItemBuilderObjconf
+from riko.parsing._dotdict import DotDict
 from riko.types._collections import RikoValue
-from riko.types._configs import RssItemBuilderObjconf
+from riko.types._enums import BasicCastType
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = {"ftype": BasicCastType.NONE}
 DEFAULTS: Defaults = {}

@@ -1,49 +1,165 @@
 # Internals
 
-Long-form detail extracted from `CLAUDE.md` (which keeps the terse index plus the
-[correctness invariants](../CLAUDE.md#correctness-invariants-audit-remediation) inline).
+Long-form implementation notes extracted from `CLAUDE.md`. The short repo router
+lives there; `_docs/KEY_PATHS.md` maps concrete source locations; and
+`gameplans/dependency-layers.md` defines the package dependency DAG.
 
 ## Index
 
 - [Codegen & generated files](#codegen--generated-files)
-- [Discovery enums & export targets](#discovery-enums--export-targets)
+- [Compiled pipeline fixtures](#compiled-pipeline-fixtures)
+- [Discovery enums & export formats](#discovery-enums--export-formats)
+- [Import contract tooling](#import-contract-tooling)
 - [Tooling & environment notes](#tooling--environment-notes)
 
 ## Codegen & generated files
 
-Three generators, all formatting through the one `riko.ext.codegen.ruff_format(str)->str` helper
-**inside** the generator (the return value is the final, format-stable artifact) rather than
-shelling out to `ruff format <file>` after writing. Graceful: no ruff ⇒ returns the input
-unformatted. `manage codegen -m {config,names,pipes,api}` (mutually-exclusive `Choice`, default `config`)
-drives `gen_config_main`/`gen_names_main`/`gen_pipelines_main`/`gen_api_surface_main`; each `main()`
-writes its artifact and returns an int status.
+The `manage codegen` command is selector-based. With no selector it regenerates
+config types; selectors are additive, and `--all` runs every generator:
 
-- **`gen-config`** = `riko.cli.gen_config:main` — regenerates `riko/types/configs.py` (the per-module `<Name>Objconf(DynamicConf)` parse-time types) from the nonraw `<Name>Conf` TypedDict contracts in `riko/types/modules.py` (strips `Required`/`NotRequired` + `= default` doc-hints, dereferences forward-refs, rebases `FetchTableConf(CsvConf)` → `FetchTableObjconf(CsvObjconf)`). `configs.py` is **fully generated and round-trip safe** — the `DynamicConf` base was extracted to `riko/types/base.py`, and the generated file imports+re-exports it (so `from riko.types._dynamic_conf import DynamicConf` still works). `tests/internal/test_gen_config.py` guards it two ways: a **byte** compare (`read_text() == render()`) + a structural `*Objconf` check. Edit the `<Name>Conf` contracts in `modules.py`, never `configs.py` by hand.
-- **`gen-names`** = `riko.cli.gen_names:main` (also `manage codegen -m names`) — regenerates **two** catalog-derived files: the discovery tree `riko/modules/_names.py` (`gen_catalog_entries` → `generate_module_names`) and the id `Literal`s `riko/types/_module_ids.py` (`generate_module_ids`); `main()` is two `write_text`s. Idempotent/deterministic/byte-stable (sorted by id, no timestamps). Fully generated (no hand-maintained parts, unlike `configs.py`), so `test_codegen_names.py` byte-drift-guards both (`test_generated_names_match`, `test_generated_module_ids_match`) + cross-checks `LoopableModuleId` against `list_modules(loopable=True)`. Edit module implementations, never these files by hand.
-- **`gen-api-surface`** = `riko.cli.gen_api_surface:main` (also `manage codegen -m api`) — regenerates the name lists in `_docs/API_SURFACE.md` from the private `riko/_api_surface.py` frozensets, so each supported surface is enumerated once. Only the fenced blocks between `<!-- api-surface:KEY -->` / `<!-- /api-surface:KEY -->` markers are rendered (`generate_api_surface(text)` splices via regex); the surrounding prose stays hand-written. Idempotent, so `tests/internal/test_codegen_api_surface.py` byte-drift-guards it (`generate_api_surface(doc) == doc`) and checks every group block lists its declared names. Edit `_api_surface.py`, never the generated blocks by hand.
-- **`ModuleId` is generated, complete (`_module_ids.py`)** — the old hand-written stale `Literal` (16 of ~40 ids) in `types/modules.py` is gone. `ModuleId` = **every** built-in id; `LoopableModuleId` = the loopable subset. The shared descriptor field `EmbedRef.type` (base of `PipeModule`/`LoopModule`, so it holds `output`/`loop` too) and `DagModule.type` are `ModuleId | PipeId` — **not** `LoopableModuleId` (a loop/output module is a valid descriptor but not loopable). The loopable constraint lives on the loop **body**: `LoopableEmbedRef.type: LoopableModuleId | PipeId` (in `types/modules.py`), and `LoopModule.embed: Required[LoopableEmbedRef]` — so embedding a non-loopable module in a loop is a static type error.
-- **Codegen regression tests** (`tests/internal/test_compile.py`) — `test_codegen_matches_expected_file` compiles every `tests/pipelines/*.json` with a matching `tests/pypipelines/*.py` and asserts `stringify_pipe` output is byte-identical to the expected file (**all** pairs now round-trip byte-identically — the old `HAND_MAINTAINED` splitter-pipe exclusion is gone); `test_codegen_matches_executor` runs the generated modules; `test_malformed_pipeline_syntax` asserts unknown modules raise `UnsupportedModuleError` and structurally-broken defs raise `KeyError`/`IndexError`. `S102` (exec) is per-file-ignored for `tests/**`.
-- **Module catalog is derived, not declared** — `list_modules()`/`list_modules(show_metadata=True)` (in `riko/modules/_metadata.py`, re-exported from `riko/modules/__init__.py`) discover pipes via `pkgutil` and read `ModuleMetadata` off the decorator-set wrapper attrs (`type`, `subtype`, `supported_subtypes`, `pollable`). Subtype is derived from decorator type + `ftype`/`emit` + return annotation (see `_derive_subtypes`); there are no `__aggregators__`/`__sources__` dunders. `type`/`subtype` filters are mutually exclusive; `primary=True` matches only the default subtype. `list_formats()` (in `collections.py`) lists registered export converters.
-- **Bare-bones DAG** — `convert_dag(dag)` in `riko/compile.py` expands a minimal DAG (`modules` + *optional* `[src, tgt]` wire pairs, opaque `conf`) into a full `PipeDef`: chains modules linearly when `wires` is omitted, auto-assigns `sw-{n}` ids when absent, appends the terminal `output` node, and wires every sink to `_OUTPUT`. Type is `PipeDag`/`DagModule` in `riko/types/compile.py`; fixture `tests/dags/pipe_forever.json`; see `docs/DAG_FORMAT.rst`.
-- **`compile.compile(pipe_def, pipe_name)`** — one-call wrapper over `parse_pipe_def` + `stringify_pipe` (JSON pipe def → Python source); parallels `convert-dag` and backs the `compile-pipe` CLI (the CLI is `compile-pipe`, not `compile`). Shadows the builtin only inside `riko/compile.py`, which doesn't use it.
+```text
+manage codegen
+manage codegen --config
+manage codegen --names --api
+manage codegen --all
+```
 
-## Discovery enums & export targets
+The private command implementation is `riko/cli/_codegen.py`; individual generators
+live beside it as `_gen_*.py`. Standalone `gen-*` console scripts remain available.
+All Python-source generators format through the shared
+`riko.base._source_format.ruff_format(str) -> str` helper rather than shelling out
+at call sites.
 
-- **Discovery enums are P9A (import cycle)** — the flat `Modules` namespace + `Sources`/`Transforms`/`Sinks` bucket enums (member `.value` = canonical string id) are re-exported from the **stable `riko`** surface, **not** `riko.modules`. `Modules` is flat (`Modules.FILTER`, no category needed) and its members **are** the bucket members (`Modules.FILTER is Transforms.FILTER`); ids are globally unique so the flat namespace never collides. (The wrapper was renamed `Module`→`Modules` — plural reads as "the FILTER module" and sidesteps the decorator base `_decorators.Module`; the import cycle still forces the stable-surface placement.) Canonical import is `riko.modules._names`. Because `riko.ext` depends on `riko.modules`, `riko.modules._names` must import **after** `riko.modules` is fully initialized — hence the late re-export in `riko/__init__` (not from `riko.modules`).
-- **`category` is a data-flow axis** — `derive_category` (`riko/ext/names.py`) yields `Sources`/`Transforms`/`Sinks`, independent of the runtime `type`/`subtype`. `list_modules(*, type, subtype, category)` + `describe_module(name)` (stable surface) give filtered runtime truth. `describe_module` **synthesizes** a `ModuleDefinition` for a built-in (not in the registry — that's for extensions/entry points), filling `description` from the docstring summary line via `_summarize` and `sync_pipe`/`async_pipe` off the module; a *registry* definition reports only what its registrant supplied, so its callables may be `None` and `ModuleDefinition.get_pipe(interface)` is the accessor that resolves either. Corollary: a pipe module's **first docstring line is user-facing metadata** — an RST `module.name`/`~~~~` header there surfaces as the description (this is why `write.py` leads with a summary).
-- **Name normalization** — every public name-accepting metadata/discovery entry point (`get_module_metadata`/`describe_module`) takes `ModuleNameLike` (a `str` **or** a discovery-tree member) and runs it through `normalize_module_name` **first**, so `ModuleMetadata.name` is always the canonical `str` (never the enum) — don't pass the raw member straight into `ModuleMetadata(name=...)`. Docs (README/COOKBOOK/FAQ) default to the enum form (`SyncPipe(Sources.FETCH, …)`, `pipe | Transforms.HASH`) for IDE completion; plain strings stay only for genuinely dynamic/dotted names (`SyncPipe('your.module', …)`, runtime-chosen ids) and pub/sub **channel** names (`others=[…]`, `conf={'name': …}`), which are not module names.
-- **`Targets` ≠ `Sinks`** — `Targets` (`StrEnum` in `riko/collections.py`, re-exported from the stable surface) is the typed **export-format** surface: the `export()` converters (`csv`/`geojson`/`json`/`list`/`tuple` + `ofx`/`qif` with the `finance` extra). `CONVERSION_FUNCS` is keyed by `Targets` members; `export(type_)` accepts a member **or** a plain string (StrEnum hashes as its value, so `CONVERSION_FUNCS.get('json')` finds the `Targets.JSON`-keyed entry); `list_formats()` returns plain `str`s (`str(target)` — must NOT leak enum members, doctests assert `list_formats()[0] == 'csv'`). This is riko's terminal-output mechanism and is **separate** from the discovery tree's `Sinks` bucket (sink *pipes*) — riko sends data outward through export targets, not sink modules.
-- **`Sinks` vs `SINK_NAMES`** — `SINK_NAMES = {"output","write"}` is the *criterion* (`derive_category` returns the lowercase `ModuleCategory` value `"sink"` only when `metadata.name in SINK_NAMES`; `codegen._CATEGORY_CLASS` pluralizes `sink`→`Sinks` for the bucket **class** name), while the bucket is *derived from the actual module catalog*. NB the `list_modules(category=…)` filter takes that lowercase singular string (`"sink"`, not `"Sinks"`, and not a tree member — a member's `.value` is the module id). The one built-in that matches is **`write`** (`riko/modules/write.py`, `Modules.WRITE`/`Sinks.WRITE`) — a pass-through operator (runtime type `operator`/`composer`, but `category` `"sink"` by name) that serializes the stream to `conf['url']` via a `Targets` converter (lazy-imports `CONVERSION_FUNCS` to avoid a `collections` import cycle) and yields items unchanged. `output` still doesn't match (compiler-local passthrough node, not a `riko/modules/*.py` pipe). Adding another sink = create `riko/modules/<name>.py` with a name in `SINK_NAMES`, then `gen-names`.
-- **`write` async** — `async_pipe` is a real `async def` returning `await async_parser(...)` (send.py pattern); `write.async_parser` serializes via `CONVERSION_FUNCS` then writes with the anyio-native `riko.bado.io.async_write` (`anyio.open_file`, not a thread offload), which preserves `meza.io.write`'s chunk/mode/encoding semantics. Both `parser`/`async_parser` guard the write: skip (with a `logger.warning`) when `url` is unset or `target` is `list`/`tuple` (no file converter). Drift guard: `TestExportTargets` (`tests/public/test_collections.py`) asserts every `CONVERSION_FUNCS` key is a `Targets` member and every runtime `list_formats()` value has one.
-- **`write` url + target derivation** — `conf['url']` accepts a `str` **or** `pathlib.Path` (`WriteConf.url: Required[str | Path]`), and `target` **defaults to `None`** (not `"json"`) so `write._resolve_target(url, target, CONVERSION_FUNCS)` can pick it: an explicit `target` wins, else the url's lowercased extension when it names a known converter (`out.csv` → `csv`), else `"json"`. Passing a `Path` conf value forced a `_serialize` fix — `_to_hashable` (via `repr_cache`, which memoizes `parse_conf`) didn't recognize `Path` and replaced nested path values with the `_UNSUPPORTED` sentinel (surfacing as a bare `object()` in `objconf.url`); `PurePath` is now in `HashableType` (`riko/types/values.py`, the leaf-hashable tuple used only by `_to_hashable`) so paths round-trip through the cache unchanged.
+- **Config** — `riko/cli/_gen_config.py` derives `<Name>Objconf` classes from the
+  `<Name>Conf` TypedDict contracts in `riko/types/modules.py` and writes
+  `riko/coercion/_configs.py`. `DynamicConf` lives in
+  `riko/coercion/_dynamic_conf.py`. Edit the hand-maintained config contracts, not
+  the generated objconf file.
+- **Names** — `riko/cli/_gen_names.py` derives both
+  `riko/modules/_names.py` (`Modules`/`Sources`/`Transforms`/`Sinks`) and
+  `riko/types/_module_ids.py` (`ModuleId`/`LoopableModuleId`) from the runtime
+  module catalog. Both artifacts are deterministic and generated; never hand-edit
+  them.
+- **Pipelines** — `riko/cli/_gen_pipelines.py` regenerates compiled Python fixtures
+  from their JSON pipeline definitions.
+- **API surface** — `riko/cli/_gen_api_surface.py` rewrites only the marked name
+  blocks in `_docs/API_SURFACE.md` from the private declarations in
+  `riko/base/_api_surface.py`. Surrounding prose stays hand-maintained.
+
+Tests under `tests/internal/` byte/structure-check generated outputs so source and
+generated artifacts cannot drift silently.
+
+## Compiled pipeline fixtures
+
+The `tests/pypipelines/pipe_*.py` and `examples/pypipelines/pipe_*.py` modules are
+generated from sibling `pipelines/pipe_*.json` definitions. Regenerate both trees
+with:
+
+```text
+gen-pipelines
+# or
+manage codegen --pipes
+```
+
+Regenerate one example directly with `compile-pipe` when that is the narrower
+operation. `tests/internal/test_compile.py` guards test fixtures and
+`tests/internal/test_example_pipes.py` guards examples.
+
+The compiler implementation now lives under `riko/runtime/`:
+
+- `riko/runtime/_compile.py` — parse/build/compile/convert operations.
+- `riko/runtime/_compile_repr.py` — source representation/stringification helpers.
+- `riko/runtime/templates/` — generated sync/async pipeline templates.
+- `riko/types/_compiler.py` — compiler/DAG type contracts.
+
+When a historical generated Python module has no JSON source, reconstruct the
+pipeline definition from the calls and options rather than treating generated
+Python as authoritative. Iterate against `build_pipeline`/`compile-pipe` until
+behavior and generated output agree. Historical reverse-engineering notes stay in
+`archive/compiling-example-pipes.md`.
+
+## Discovery enums & export formats
+
+- **Module catalog is derived, not declared.** `riko/modules/_metadata.py` discovers
+  built-ins and reads decorator-set metadata. `list_modules()` and
+  `describe_module()` expose that truth through supported facades.
+- **Discovery enums are generated.** `riko/modules/_names.py` owns the flat
+  `Modules` namespace and the `Sources`/`Transforms`/`Sinks` buckets. The stable
+  `riko` facade re-exports them; do not hand-maintain parallel lists.
+- **Name normalization lives in `riko/ext/_names.py`.** Public name-accepting
+  discovery APIs normalize a string or discovery member to the canonical module id
+  before constructing metadata.
+- **Formats are not sinks.** `Formats` is the serialization/export enum used by
+  `riko/runtime/collections.py` and the write stack. `Sinks` is a generated bucket
+  of pipe modules. These are separate axes even when a sink pipe ultimately writes
+  a serialized format.
+- **Write contracts live below execution.** Declarative write intent and protocols
+  are in `riko/definitions/_write.py`; target validation is in
+  `riko/definitions/_targets.py`; live session state is in
+  `riko/runtime/_write_session.py`; collection verbs are in
+  `riko/runtime/collections.py`.
+- **Async I/O moved out of Bado.** Backend/iterator helpers remain under
+  `riko/bado/`, while `async_url_open`, `async_write`, and async temp-file support
+  live under `riko/io/` and are promoted through the stable `riko` surface.
+
+The chainable `write` verb and terminal `sink` verb use the same prepared write and
+session contracts. `sink` returns `WriteResult`; terminality is a collection
+consumption choice rather than a distinct `Sink*` object hierarchy.
+
+## Import contract tooling
+
+Package boundaries are executable policy rather than documentation-only convention.
+The relevant CLI is:
+
+```text
+manage lint imports                 # canonical check (default)
+manage lint imports --relative
+manage lint imports --architecture
+manage lint imports --all
+manage lint --all                   # includes all import checks
+```
+
+The implementation is split by responsibility:
+
+- `riko/cli/_import_graph.py` — pure AST discovery and module/local/type-only import
+  classification.
+- `riko/cli/_lint_canonical_imports.py` — rejects internal imports through re-export
+  facades when a canonical defining module exists.
+- `riko/cli/_lint_relative_imports.py` — requires relative sibling imports within a
+  package.
+- `riko/cli/_lint_import_architecture.py` — maps modules to the declared layer DAG,
+  renders observed dependencies, and rejects forbidden package direction.
+- `riko/cli/_import_commands.py` — shared selector command and exit-code handling.
+
+The current layer/package mapping is documented in
+`gameplans/dependency-layers.md`. Keep that document and the executable mapping in
+sync when source is moved between package groups.
 
 ## Tooling & environment notes
 
-- **`manage` console-script collision** — `mezmorize` also declares `manage = manage:manager` (its own old CLI: `--cover`/`--cov=mezmorize`, no `--no-cov`). Both write `bin/manage`; whichever installs last wins, so `manage` may resolve to mezmorize's CLI and fail with e.g. `No such option '--no-cov'`. tox sidesteps this by invoking `python -m riko.cli.manage ...` (never the `manage` script); `riko/cli/manage.py` has an `if __name__ == "__main__": manager()` guard for this. Dev `uv run --active manage` works only when riko wins install order — use `python -m riko.cli.manage` if it ever breaks. Root cure = removing mezmorize (§26 M10).
-- **`mezmorize`** — memoization in `riko/_io.py::get_opener`; the Flask concern is moot (it depends on `cachelib`, not Flask). Optional dependency swap tracked in `gameplans/rdp-connect.md` §26 Milestone 10.
-- **`meza` pinned to git** — `pyproject.toml` sources meza from `github.com/reubano/meza` at a specific commit; meza owns conversion work (`RUNTIME_CONTRACT.md` §25).
-- **`conftest.py` at root and `tests/`** — both reset pub/sub state via `reset_pubsub` (from `riko._pubsub`) in a `contextvars` fixture.
-- **Parallel pipes** use `listpipe_safe` 5-tuple `(source, pipeline, error_key, on_error, worker_local)`.
-- **`DotDict` fast paths** — single-segment keys, plain-dict `update`, and non-dotted `_parse_key` all bypass slow paths.
-- **Changelog house style** (`docs/CHANGES.rst`) — one entry ≈ **one to three lines**, and the shortest form that carries the change wins. Write **only what a user observes**: what to call now, or what behaves differently. **No implementation detail** — no internal helper/attribute names, no mechanism, no "because", no before/after narration of the old code path. A single high-level mention is tolerable only when the change is unintelligible without it. Lead with the verb (`Added …`/`Removed …`) under **New**/**Removed**, with the subject under **Changes**/**Fixed** (``` ``sort`` now orders … ```). **No `.. code-block::`, no headings, no multi-paragraph entries** — a call or signature goes inline in double backticks. Rationale, mechanism, and design justification belong in the gameplan, `_docs/IMPLEMENTED.md`, or the docstring; if an entry seems to need a "because", it is usually two entries or the wrong document. Group under the existing `New`/`Changes`/`Fixed`/`Removed` headings of the unreleased version.
-- **User-facing docs house style** (`README.rst`, `docs/{FAQ,COOKBOOK,INSTALLATION}.rst`, `CONTRIBUTING.rst`) — wrap riko terms in ``double backticks``; **horizontal simple/grid tables only, never `.. list-table::`**; manual `Index` line with explicit `.. _Label: #github-anchor` targets (not `.. contents::`); `√`/blank in capability matrices. Every `>>>` block is a doctest — validate with `uv run --active --no-sync manage test --no-cov --where <file>` and lint RST with docutils. README keeps both the Huginn/Flink/Spark/Storm comparison **and** a "Choosing riko" grid (Pandas/Polars/Beam/RxPY/itertools/Luigi/Prefect).
+- **`manage` is a thin composer.** `riko/cli/manage.py` registers commands; private
+  `_build`, `_lint`, `_docs`, `_test`, `_codegen`, `_release`, and import-lint
+  modules own implementation by reason to change.
+- **`manage` console-script collision.** `mezmorize` also declares a `manage`
+  script. If install order selects the wrong executable, invoke
+  `python -m riko.cli.manage`. Tox uses the module form to avoid that ambiguity.
+- **`uv`.** Use `uv run --active ...` when the current shell environment should win
+  over the default `.venv`.
+- **Python 3.12+.** Prefer PEP 695 type parameters and modern union syntax.
+- **Doctests are tests.** Source/docs examples under the configured pytest testpaths
+  are collected; avoid copying the same happy-path example into multiple files.
+- **Pub/sub state.** Runtime pub/sub lives under `riko/runtime/_pubsub/`; tests reset
+  that context-local hub state between cases.
+- **`DotDict`.** The implementation lives in `riko/parsing/_dotdict.py`; fast paths
+  for simple keys should remain simple rather than routing everything through
+  dotted-path parsing.
+- **`meza` is pinned to the project source declared in `pyproject.toml`.** Meza owns
+  the lower-level conversion semantics referenced by the runtime contract.
+- **Changelog style.** `docs/CHANGES.rst` records user-observable behavior in the
+  shortest useful form; implementation moves and private helper names do not belong
+  there unless they change a supported import or command surface.
+
+The source hierarchy itself is not a compatibility promise for private modules.
+It is an internal architecture promise: code belongs in the lowest package layer
+that owns its responsibility, and `manage lint imports --architecture` enforces the
+runtime direction between those layers.

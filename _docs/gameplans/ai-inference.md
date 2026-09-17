@@ -2,7 +2,7 @@
 
 > **Scope.** Provider-neutral inference for the `riko-ai` package. The prior-art
 > analysis (Langly/LangChain extraction) and native-reimplementation sketches live in
-> [ai-inference-research.md](ai-inference-research.md); this file is the actionable plan.
+> [ai-inference-research.md](../research/ai-inference-research.md); this file is the actionable plan.
 
 ## 1. Mission
 
@@ -1159,4 +1159,3 @@ Required:
 Do not implement capability selection, task planning,
 research, model optimization, or MCP execution.
 ```
-

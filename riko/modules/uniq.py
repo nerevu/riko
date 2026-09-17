@@ -29,12 +29,12 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.types._configs import UniqObjconf
+from riko.coercion._configs import UniqObjconf
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Stream
 from riko.types._wrappers import PipeTuples
 
-from . import operator
+from ._decorators import operator
 
 OPTS: Opts = Opts()
 DEFAULTS: Defaults = {"uniq_key": "content", "limit": 1024}

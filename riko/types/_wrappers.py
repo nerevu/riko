@@ -14,10 +14,10 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, TypedDict, over
 from ._streams import AsyncStreamOrValueStream
 
 if TYPE_CHECKING:
-    from riko.context import Context
+    from riko.base._locations import AnyLocation
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.runtime.context import Context
 
-    from ._dynamic_conf import DynamicConf
-    from ._locations import AnyLocation
     from ._scalars import NumLike, PrimitiveValue
     from ._streams import (
         Feed,

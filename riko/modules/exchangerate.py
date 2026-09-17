@@ -36,15 +36,15 @@ from typing import Any, TypedDict, cast
 
 import pygogo as gogo
 
-from riko._constants import ENCODING
-from riko._io import Fetch
-from riko.bado._util import async_json
-from riko.bado.io import async_get, async_url_read
-from riko.cast import BasicCastType
-from riko.types._configs import ExchangeRateObjconf
+from riko.bado._util import async_get, async_json
+from riko.base._constants import ENCODING
+from riko.coercion._configs import ExchangeRateObjconf
+from riko.io._async import async_url_read
+from riko.io._sync import Fetch
+from riko.types._enums import BasicCastType
 from riko.types._options import Defaults, Opts
 
-from . import processor
+from ._decorators import processor
 
 EXCHANGE_API = "https://openexchangerates.org/api/latest.json"
 PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_ID")}

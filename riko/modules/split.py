@@ -35,12 +35,12 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType
+from riko.types._enums import BasicCastType
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Stream
 from riko.types._wrappers import PipeTuples
 
-from . import splitter
+from ._decorators import splitter
 
 OPTS: Opts = {"extract": "splits", "ptype": BasicCastType.INT, "objectify": False}
 DEFAULTS: Defaults = {"splits": 2}

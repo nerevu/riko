@@ -14,8 +14,8 @@ contract.
 
 import importlib.util
 
-from riko.collections import list_formats
-from riko.parsers import IJSON_IS_NATIVE, IS_FASTFEEDPARSER, IS_LXML
+from riko.parsing.documents import IJSON_IS_NATIVE, IS_FASTFEEDPARSER, IS_LXML
+from riko.runtime.collections import list_formats
 
 
 def _installed(module: str) -> bool:

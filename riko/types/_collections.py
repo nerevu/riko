@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from riko.dotdict import DotDict
+    from riko.parsing._dotdict import DotDict
 
     from ._scalars import BasicValue, PrimitiveValue
 

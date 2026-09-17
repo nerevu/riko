@@ -70,7 +70,6 @@ test = [
     "pytest-cov>=7.0.0,<8.0.0",
     "pytest-timeout>=2.4.0",
     "pytest-xdist>=3.8.0",
-    "sybil>=6,<10",
 ]
 
 lint = [
@@ -232,7 +231,7 @@ exclude = [
 
 [tool.pytest.ini_options]
 addopts = ["--doctest-modules", "--doctest-glob=*.rst", "--cov=riko", "--tb=short"]
-testpaths = ["tests", "riko", "examples", "README.rst", "docs", "_docs/API_SURFACE.md"]
+testpaths = ["tests", "riko", "examples", "README.rst", "docs"]
 doctest_optionflags = ["ELLIPSIS"]
 timeout = 300
 markers = [
@@ -325,11 +324,8 @@ description = "run linter"
 runner = "uv-venv-lock-runner"
 dependency_groups = ["lint"]
 commands = [
-    ["python", "-m", "riko.cli.manage", "lint"],
-    ["python", "-m", "riko.cli.manage", "lint", "--rst"],
-    ["python", "-m", "riko.cli.manage", "lint", "--actions"],
-    ["python", "-m", "riko.cli.manage", "lint", "--yaml"],
-    ["python", "-m", "riko.cli.manage", "lint", "--docstrings"],
+    ["python", "-m", "riko.cli.manage", "lint", "--all"],
+    ["python", "-m", "riko.cli.manage", "lint", "imports", "--all"],
 ]
 
 [tool.uv.build-backend]

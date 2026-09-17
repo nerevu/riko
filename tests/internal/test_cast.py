@@ -8,7 +8,7 @@ from datetime import timedelta
 
 import pytest
 
-from riko.cast import cast_datetime
+from riko.coercion.cast import cast_datetime
 
 
 @pytest.fixture

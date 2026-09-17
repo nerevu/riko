@@ -8,6 +8,49 @@ authoritative specs. The shipped runtime contract lives in
 in [MILESTONES.md](MILESTONES.md), while forward implementation dependency order lives in
 [implementation-sequence.md](gameplans/implementation-sequence.md).
 
+R-phase completion in the forward sequence follows explicit **ADD → MIGRATE → DELETE** exit
+criteria; `implementation-sequence.md` owns that phase-closure rule.
+
+## Documentation authority
+
+Documentation follows the same dependency discipline as code. Each namespace has one reason to
+change, and lower-authority documents do not override higher-authority contracts:
+
+```text
+ROADMAP
+    routing only
+
+implementation-sequence
+    ordering only
+
+one active gameplan
+    target semantics for each planned concept
+
+RUNTIME_CONTRACT
+    shipped behavioral guarantees
+
+IMPLEMENTED
+    as-built reality and build completeness
+
+PHASE_CHECKLISTS
+    live P-track status only
+
+MILESTONES
+    P-track history, file maps, and exit-test references only
+
+research/
+    rationale and prior art only; never authoritative
+
+archive/
+    superseded historical material only; never authoritative
+```
+
+`_docs/gameplans/` is the authoritative namespace for active plans. A concept should have one
+semantic owner there; other active gameplans may sequence or consume that contract but must point
+back to the owner instead of restating competing answers. When a plan is superseded, move it to
+`_docs/archive/`. Research/ADR notebooks belong in `_docs/research/`. Neither namespace may satisfy
+an active ownership or ROADMAP-index requirement.
+
 Planned/end-state architecture is owned by matching gameplans, not by the shipped runtime contract.
 The core target is deliberately split by responsibility:
 
@@ -55,6 +98,9 @@ in [commercialization.md](gameplans/commercialization.md) and owns no runtime co
 | **Live phase status** | [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md) |
 | **P-track file maps / exit tests / phase history** | [MILESTONES.md](MILESTONES.md) |
 | **Forward implementation dependency order** | [implementation-sequence.md](gameplans/implementation-sequence.md) |
+| **Target semantics for a planned concept** | its owning file under `gameplans/` |
+| Historical rationale / prior art | `research/` — context only, never a contract |
+| Superseded plans | `archive/` — history only, never a contract |
 | Canonical **Workflow v2** graph/serialization contract | [extensibility.md](gameplans/extensibility.md#e3-canonical-workflow-v2-specification) |
 | `Pipeline.cache()` replay behavior | [cache.md](gameplans/cache.md) |
 | `write` / action side-effect semantics | [effects.md](gameplans/effects.md) |
@@ -72,7 +118,8 @@ Tie-breakers:
 - live status -> PHASE_CHECKLISTS;
 - P-track mechanics/history/file maps -> MILESTONES;
 - forward implementation dependency order -> implementation-sequence;
-- target/end-state API semantics -> owning gameplan;
+- target/end-state API semantics -> one owning gameplan;
+- research/archive -> rationale or history only, never semantic ownership;
 - commercial packaging/market hypotheses -> commercialization, never a semantic owner.
 
 `§N` contract topics and `PN` implementation phases are separate axes.
@@ -119,6 +166,7 @@ The complete `§0–27` routing map:
 | Gameplan | Covers |
 |---|---|
 | [execution-semantics.md](gameplans/execution-semantics.md) | Immutable `Pipeline[T]` execution semantics; private sync/async executions and lifetime primitives; immutable Context/resources; FeedResult/provenance; identity/idempotency; StateStore/checkpoint/CAS; loop runtime; batch/retry/backpressure/timeout/merge/memory semantics. |
+| [dependency-layers.md](gameplans/dependency-layers.md) | Current package-layer DAG and import-contract boundaries; execution behavior remains owned by `execution-semantics.md`. |
 | [extensibility.md](gameplans/extensibility.md) | Canonical Workflow v2 normalization/serialization, node/edge/port grammar, Inputs/Targets/Formats structure, module/plugin contracts, ecosystem observability/adapters/drivers/GUI contracts. |
 | [events.md](gameplans/events.md) | Minimal execution-owned `Event`/`EventSink` transport and optional-consumer boundary. |
 | [cache.md](gameplans/cache.md) | `Pipeline.cache()` / `CacheNode` explicit replay semantics, Mezmoize integration, fill/manifest/invalidation/backend-failure behavior. |
@@ -162,7 +210,6 @@ The complete `§0–27` routing map:
 | Gameplan | Covers |
 |---|---|
 | [ai-inference.md](gameplans/ai-inference.md) | Provider-neutral inference and embedding/retrieval adapters. |
-| [ai-inference-research.md](gameplans/ai-inference-research.md) | Research/ADR rationale for AI inference. |
 | [agents.md](gameplans/agents.md) | Agent-oriented workflows built from ordinary Pipeline, loop, pub/sub, StateStore, and provider/tool effects; no AgentGraph. |
 | [agent-scenarios.md](gameplans/agent-scenarios.md) | Deterministic/policy-aware scenario/evaluation layer. |
 | [mcp.md](gameplans/mcp.md) | Client-first capability discovery/catalog/execution, OpenAPI/APIs.guru, resources, policy/artifacts/telemetry. |
@@ -185,16 +232,8 @@ The complete `§0–27` routing map:
 |---|---|
 | [commercialization.md](gameplans/commercialization.md) | Ecosystem commercialization strategy; no runtime/API ownership. |
 | [module-documentation.md](gameplans/module-documentation.md) | Yahoo! Pipes module reference documentation. |
-| [inspiration-coverage.md](gameplans/inspiration-coverage.md) | Traceability from prior-art ideas to active gameplans. |
 | [riko-site.md](gameplans/riko-site.md) | Framework-neutral site pipeline built on Core. |
 | [testing.md](gameplans/testing.md) | Test-suite layering/consolidation and cross-package scenario placement. |
-
-### Retired redirects
-
-| Gameplan | Covers |
-|---|---|
-| [productionizing.md](gameplans/productionizing.md) | Retired redirect into active owners. |
-| [repo-refinement.md](gameplans/repo-refinement.md) | Retired redirect into active owners. |
 
 Implementation status remains authoritative only in
 [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md). P-track phase history/file maps/exit tests remain in

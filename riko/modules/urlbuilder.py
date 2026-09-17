@@ -34,14 +34,14 @@ from urllib.parse import urlencode, urljoin
 
 import pygogo as gogo
 
-from riko._strutils import INVALID_FILECHAR_PATTERN
-from riko.cast import BasicCastType
-from riko.types._configs import UrlBuilderObjconf
+from riko.base._strutils import INVALID_FILECHAR_PATTERN
+from riko.coercion._configs import UrlBuilderObjconf
+from riko.types._enums import BasicCastType
 from riko.types._options import Defaults, Opts
 from riko.types._streams import Item
 from riko.types.modules import ObjconfParam
 
-from . import processor
+from ._decorators import processor
 from ._prepare import require_conf
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "extract": "param", "listize": True}

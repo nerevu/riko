@@ -28,12 +28,12 @@ from typing import Any, cast
 import pygogo as gogo
 from babel.numbers import format_currency
 
-from riko.cast import BasicCastType
-from riko.currencies import CURRENCY_CODES
-from riko.types._configs import CurrencyFormatObjconf
+from riko.base.currencies import CURRENCY_CODES
+from riko.coercion._configs import CurrencyFormatObjconf
+from riko.types._enums import BasicCastType
 from riko.types._options import Defaults, Opts
 
-from . import processor
+from ._decorators import processor
 from ._prepare import require_conf
 
 OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}

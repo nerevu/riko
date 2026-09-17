@@ -15,22 +15,18 @@ from typing import cast, overload
 
 import pygogo as gogo
 
-from riko._iterutils import broadcast, dispatch, listize
-from riko._objectify import objectify
-from riko.cast import (
-    CAST_SWITCH,
-    BasicCastType,
-    CastType,
-    cast_none,
-    cast_pass,
-    cast_value,
-)
-from riko.dotdict import DotDict, is_mapping
-from riko.parsers import conf_is_dynamic, get_field, parse_conf
-from riko.resources import ResourcesLike
+from riko.base._iterutils import broadcast, dispatch
+from riko.base._locations import AnyLocation
+from riko.coercion._dynamic_conf import DynamicConf
+from riko.coercion._objectify import objectify
+from riko.coercion._sequences import listize
+from riko.coercion.cast import CAST_SWITCH, cast_none, cast_pass, cast_value
+from riko.definitions._resource_types import ResourcesLike
+from riko.parsing._dotdict import DotDict
+from riko.parsing.config import conf_is_dynamic, get_field, parse_conf
 from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
-from riko.types._dynamic_conf import DynamicConf
-from riko.types._locations import AnyLocation
+from riko.types._enums import BasicCastType, CastType
+from riko.types._guards import is_mapping
 from riko.types._options import (
     Casted,
     Defaults,

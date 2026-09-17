@@ -4,7 +4,7 @@ Drift guard for the compiled example pipes.
 
 Each ``examples/pypipelines/pipe_*.py`` is generated from its sibling
 ``examples/pipelines/pipe_*.json`` by ``compile-pipe`` (see
-``_docs/COMPILING_EXAMPLE_PIPES.md``). This regenerates the module in memory and
+``_docs/INTERNALS.md#compiled-pipeline-fixtures``). This regenerates the module in memory and
 fails if it diverges from the committed file, exactly like the
 ``tests/pypipelines`` guard in ``test_compile.py``. Regenerate with::
 
@@ -16,8 +16,8 @@ from json import loads
 
 import pytest
 
-from riko.compile import compile_pipe
-from riko.paths import ROOT_DIR
+from riko.base._paths import ROOT_DIR
+from riko.runtime._compile import compile_pipe
 
 PIPELINE_DIR = ROOT_DIR / "examples" / "pipelines"
 PYPIPELINE_DIR = ROOT_DIR / "examples" / "pypipelines"

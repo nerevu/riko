@@ -57,7 +57,7 @@ converters. Higher-level orchestration/integration layers remain roadmap work; s
 
 ## 2. Core item and stream types
 
-The core types (`riko/types/general.py`):
+The core types (`riko/types/_streams.py`):
 
 ```python
 type Item = RikoDict | dict[str, RikoValue] | RSSEntry | DotDict[RikoValue]

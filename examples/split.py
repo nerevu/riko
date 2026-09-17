@@ -13,8 +13,8 @@ Examples:
 from pprint import pprint
 from typing import cast
 
-from riko.cast import CastType
-from riko.collections import AsyncPipe, SyncPipe
+from riko.runtime.collections import AsyncPipe, SyncPipe
+from riko.types._enums import CastType
 from riko.types.modules import DateFormatConf, InputConf
 
 date_conf = InputConf({"type": CastType.DATE})

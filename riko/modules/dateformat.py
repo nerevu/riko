@@ -29,11 +29,11 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType
-from riko.types._configs import DateFormatObjconf
+from riko.coercion._configs import DateFormatObjconf
+from riko.types._enums import BasicCastType
 from riko.types._options import Defaults, Opts
 
-from . import processor
+from ._decorators import processor
 
 OPTS: Opts = {"field": "date", "ftype": BasicCastType.DATETIME}
 DEFAULTS: Defaults = {"format": "%m/%d/%Y %H:%M:%S"}
