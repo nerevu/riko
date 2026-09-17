@@ -1,12 +1,11 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules._subpipe
-~~~~~~~~~~~~~~~~~~~~~~
-Declared metadata for compiled sub-pipelines (``pipe_*`` callables). A
-sub-pipeline never passes through the ``@processor``/``@operator`` decorators, so
-it carries none of the inferred module metadata. Its contract is *known* by
-construction — it takes ``(item, context)``, returns a stream, and any pipe is
-loopable — so the metadata is **declared** here rather than inferred.
+Declared metadata for compiled sub-pipelines (``pipe_*`` callables).
+
+A sub-pipeline never passes through the ``@processor``/``@operator`` decorators, so
+it carries none of the inferred module metadata. Its contract is known by construction:
+it takes ``(item, context)``, returns a stream, and any pipe is loopable. The metadata
+is therefore declared here rather than inferred.
 """
 
 from collections.abc import Awaitable, Callable

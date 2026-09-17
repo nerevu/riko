@@ -1,16 +1,12 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.io._async
-~~~~~~~~~~~~
-
 Async file and URL reading and writing for riko pipes (anyio + httpx).
 
 Examples:
 
     Basic usage::
 
-        >>> from riko import get_path, run
-        >>> from riko.io._async import async_url_open
+        >>> from riko import async_url_open, get_path, run
         >>>
         >>> async def main():
         ...     async with async_url_open(get_path("spreadsheet.csv")) as f:

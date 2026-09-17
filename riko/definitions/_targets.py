@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.definitions._targets
-~~~~~~~~~~~~
-
 Write target adapters.
 
 A ``WriteTarget`` is a destination that reports what it can write. ``File`` is the
@@ -12,21 +9,11 @@ implementations outside core. ``resolve_target`` normalizes a destination argume
 (a path string or a target object) into a ``WriteTarget``.
 
 Preparation is generic over ``WriteTarget`` and validated in one place:
-``prepare_write`` resolves the target, resolves its ``(target × fmt)``
-capabilities, normalizes the keys, validates the ``(target, mode, keys)`` triple,
-and returns a ``PreparedWrite``. What a mode's keys mean — record-match identity vs.
-idempotency identity — is decided by the target's capabilities, so the caller passes
-a single unified ``keys`` and never distinguishes the two.
-
-Examples:
-
-    Basic usage::
-
-        >>> from riko.definitions._targets import File, resolve_target
-        >>>
-        >>> resolve_target("out.csv")
-        File(url='out.csv', fmt=None)
-
+``prepare_write`` resolves the target, resolves its ``(target × fmt)`` capabilities,
+normalizes the keys, validates the ``(target, mode, keys)`` triple, and returns a
+``PreparedWrite``. What a mode's keys mean — record-match identity vs. idempotency
+identity — is decided by the target's capabilities, so the caller passes a single
+unified ``keys`` and never distinguishes the two.
 """
 
 from dataclasses import dataclass

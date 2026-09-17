@@ -1,16 +1,11 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.parsers
-~~~~~~~~~~~~
-
-Parses feeds, XML/HTML documents, and pipe configurations.
+Parses feeds and XML, HTML, and JSON documents.
 
 Attributes:
 
     XML_PARSER: Hardened lxml parser (entity, DTD, and network access
         disabled), or ``None`` when lxml is unavailable.
-
-    SKIP_SWITCH: Named text predicates backing ``get_skip``.
 
     ESCAPE: XML/HTML special-character to entity-reference map.
 

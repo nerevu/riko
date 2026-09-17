@@ -1,9 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.utils._rssutils
-~~~~~~~~~~
-RSS/feed entry helpers: entry-text extraction, RSS enrichment, item generation,
-and content truncation.
+RSS/feed entry helpers for text extraction, enrichment, and content truncation.
 """
 
 from collections.abc import Iterable, Iterator, Mapping

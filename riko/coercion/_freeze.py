@@ -1,9 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.utils._serialize
-~~~~~~~~~~~~~~~
-Dataclass construction (``fromdict``) and hashable round-tripping for the
-argument-repr memoization cache (``repr_cache``).
+Dataclass construction and hashable round-tripping for repr-based memoization.
 """
 
 from collections.abc import Callable, Iterable, Mapping, Sequence

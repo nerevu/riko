@@ -1,9 +1,17 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.coercion._dynamic_conf
-~~~~~~~~~~~~~~~
-
 Provides hand-maintained base types for generated module configurations.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko.ext import DynamicConf
+        >>>
+        >>> conf = DynamicConf({"NAME": "riko"})
+        >>> conf.name
+        'riko'
+
 """
 
 from __future__ import annotations

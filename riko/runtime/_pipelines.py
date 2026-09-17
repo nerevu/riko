@@ -1,24 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.runtime._pipelines
-~~~~~~~~~~~~~~~~~~~
-
 Provides resolution for named pipelines.
 
 Pipelines can be loaded from generated modules or JSON definitions.
-
-Examples:
-
-    Basic usage::
-
-        >>> from types import ModuleType
-        >>> from riko.runtime._pipelines import MappingStore, PipelineResolver
-        >>>
-        >>> module = ModuleType("pipe_demo")
-        >>> module.pipe = lambda stream=None, **kwargs: iter([{"x": 1}])
-        >>> resolver = PipelineResolver(store=MappingStore({"pipe_demo": module}))
-        >>> list(resolver.resolve("pipe_demo")())
-        [{'x': 1}]
 
 Attributes:
 
@@ -139,11 +123,19 @@ class PipelineResolver:
     """
     Resolves whole sub-pipelines, where the module registry resolves leaf modules.
 
-    Lookup has two independent halves: ``store`` supplies generated Python
-    pipe modules for ``resolve``, and ``definitions`` supplies JSON pipeline
-    definitions for ``load_definition``. Both are **injected** rather than
-    hardcoded. This is what keeps test-only locations out of the core compiler. The
-    suite points the global at its own package and directory via ``conftest``.
+    Lookup has two independent halves: ``store`` supplies generated Python pipe
+    modules for ``resolve``, and ``definitions`` supplies JSON pipeline definitions
+    for ``load_definition``. Both are injected rather than hardcoded. This is what
+    keeps test-only locations out of the core compiler. The suite points the global
+    at its own package and directory via ``conftest``.
+
+    Examples:
+
+        >>> module = ModuleType("pipe_demo")
+        >>> module.pipe = lambda stream=None, **kwargs: iter([{"x": 1}])
+        >>> resolver = PipelineResolver(store=MappingStore({"pipe_demo": module}))
+        >>> list(resolver.resolve("pipe_demo")())
+        [{'x': 1}]
 
     """
 

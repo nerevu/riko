@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.cli.gen_names
-~~~~~~~~~~~~~~~~~~
-
 Provides functions for generating module names and ids from the runtime catalog.
 """
 

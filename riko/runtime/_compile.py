@@ -5,8 +5,7 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.runtime._compile import build_pipeline, compile_pipe
-        >>> from riko.runtime._compile import convert_dag, parse_pipe_def
+        >>> from riko import build_pipeline, compile_pipe, convert_dag, parse_pipe_def
         >>>
         >>> dag = {
         ...     "modules": [

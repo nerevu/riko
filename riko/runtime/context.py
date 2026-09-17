@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.runtime.context
-~~~~~~~~~~~~
-
 Provides the execution context for a pipeline.
 
 An immutable definition-layer snapshot. Its fields cannot be reassigned, its
@@ -15,7 +12,7 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.runtime.context import Context, ExecutionMode
+        >>> from riko import Context, ExecutionMode
         >>>
         >>> context = Context(ExecutionMode.DESCRIBE, inputs={"count": 2})
         >>> context.describe_input

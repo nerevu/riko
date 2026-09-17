@@ -1,16 +1,15 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.cli.gen_pipelines
-~~~~~~~~~~~~~~~~~~~~~~~
+Regenerates compiled pipe modules from their JSON pipe definitions.
 
-Regenerates the compiled pipe modules from their JSON pipe definitions, the same
-way ``compile-pipe`` does one file at a time. Each ``<root>/pipelines/pipe_*.json``
-that has a committed ``<root>/pypipelines/pipe_*.py`` is recompiled in place, for
-both the test fixtures (``tests/``) and the runnable examples (``examples/``).
+This uses the same compilation path as ``compile-pipe`` one file at a time. Each
+``<root>/pipelines/pipe_*.json`` that has a committed
+``<root>/pypipelines/pipe_*.py`` is recompiled in place for both the test fixtures
+(``tests/``) and runnable examples (``examples/``).
 
-Edit the JSON (not the generated module), then regenerate with ``gen-pipelines``.
-``tests/internal/test_compile.py`` and ``tests/internal/test_example_pipes.py``
-fail if the two layers drift.
+Edit the JSON, not the generated module, then regenerate with ``gen-pipelines``.
+``tests/internal/test_compile.py`` and ``tests/internal/test_example_pipes.py`` fail
+if the two layers drift.
 """
 
 from json import loads

@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko._metadata
+Resolves sync or async pipe interfaces from importable modules.
 """
 
 from collections.abc import Callable

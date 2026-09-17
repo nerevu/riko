@@ -1,22 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.runtime._resolver
-~~~~~~~~~~~~~~~~~~
-
 Provides pipe resolution for modules and named pipelines.
 
-Names prefixed with ``pipe_`` or ``pipe:`` resolve as pipelines, everything
-else as a module.
-
-Examples:
-
-    Basic usage::
-
-        >>> from riko.runtime._resolver import pipe_resolver
-        >>>
-        >>> pipe = pipe_resolver.resolve("count")
-        >>> list(pipe([{"x": 1}, {"x": 2}]))
-        [{'count': 2}]
+Names prefixed with ``pipe_`` or ``pipe:`` resolve as pipelines, everything else as a
+module.
 
 Attributes:
 
@@ -39,6 +26,12 @@ class PipeResolver:
     Both sides share a ``resolve(name, interface)`` shape. The dispatch is a single
     symmetric branch: :class:`ModuleRegistry` for leaf modules,
     :class:`PipelineResolver` for composed ``pipe_*`` sub-pipelines.
+
+    Examples:
+
+        >>> pipe = pipe_resolver.resolve("count")
+        >>> list(pipe([{"x": 1}, {"x": 2}]))
+        [{'count': 2}]
 
     """
 

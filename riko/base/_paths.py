@@ -1,9 +1,16 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.base._paths
-~~~~~~~~~~
-File/URL path resolution: locating bundled data files (``get_path``) and
-normalizing file/http URLs to absolute form (``get_abspath``).
+File and URL path resolution for bundled data and external resources.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko import get_path
+        >>>
+        >>> get_path("spreadsheet.csv").startswith("file://")
+        True
+
 """
 
 from os import path

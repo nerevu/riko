@@ -1,9 +1,18 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.ext.names
-~~~~~~~~~~~~~~
-
 Provides module-name normalization and discovery categories.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko import get_module_metadata
+        >>> from riko.ext import derive_category
+        >>>
+        >>> metadata = get_module_metadata("fetch", strict=True)
+        >>> derive_category(metadata)
+        'source'
+
 """
 
 from typing import TYPE_CHECKING, overload
