@@ -10,7 +10,7 @@ from riko.bado import _backend
 from riko.bado._backend import async_open, asyncify
 from riko.bado.itertools import as_async
 from riko.base._constants import ENCODING
-from riko.definitions._targets import File, prepare_write
+from riko.definitions._targets import FileTarget, prepare_write
 from riko.definitions._write import (
     AsyncWriteSession,
     Destination,
@@ -84,7 +84,7 @@ def _normalize_jsonl(content: str) -> str:
 
 class _FileWriteSession:
     def __init__(self, prepared: PreparedWrite):
-        if not isinstance(prepared.target, File):
+        if not isinstance(prepared.target, FileTarget):
             raise TypeError("_FileWriteSession requires a File target")
 
         self._buffer: list[Item] = []
@@ -95,7 +95,7 @@ class _FileWriteSession:
         self.fmt: Formats = prepared.fmt or Formats.JSON
         self.mode: WriteMode = prepared.operation.mode
         self.operation = prepared.operation
-        self.target: File = prepared.target
+        self.target: FileTarget = prepared.target
 
         self.append_mode = self.mode is WriteMode.APPEND
         self.csv_format = self.fmt is Formats.CSV
@@ -643,7 +643,7 @@ def file_write_session(prepared: PreparedWrite) -> Generator[SyncWriteSession]:
         True
 
     """
-    if not isinstance(prepared.target, File):
+    if not isinstance(prepared.target, FileTarget):
         raise NotImplementedError("only file targets can be written today")
 
     session = _SyncFileWriteSession(prepared)
@@ -670,7 +670,7 @@ def mint_write_resource(
 
     Args:
 
-        dest: A path, ``Path``, or ``WriteTarget``.
+        dest: A path, ``Path``, or ``SupportsWrite`` target.
         mode: The write mode, as a ``WriteMode`` or its string value.
         fmt: The serialization format override, else derived from the extension.
         keys: The unified keys, interpreted per the target's capabilities.
@@ -703,7 +703,7 @@ def mint_write_resource(
 async def async_file_write_session(
     prepared: PreparedWrite,
 ) -> AsyncGenerator[AsyncWriteSession]:
-    if not isinstance(prepared.target, File):
+    if not isinstance(prepared.target, FileTarget):
         raise NotImplementedError("only file targets can be written today")
 
     session = _AsyncFileWriteSession(prepared)

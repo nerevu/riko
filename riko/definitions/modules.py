@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING
 
 from riko.types._enums import ModuleName, ModuleNameLike
 
+_UNNAMEABLE_PIPES = frozenset({"<lambda>", "pipe", "async_pipe"})
+
 if TYPE_CHECKING:
     from riko.types._wrappers import (
         AsyncPipeCallable,
@@ -76,6 +78,45 @@ class ModuleDefinition:
     async_pipe: AsyncPipeCallable | None = None
     module: object | None = None
     description: str | None = None
+
+    @property
+    def resolved_name(self) -> str:
+        """
+        Derives the registry key from the explicit name or a bound callable.
+
+        An explicit ``name`` wins. Otherwise the last component of ``module``'s
+        ``__name__`` is used, then the bound pipe callable's ``__name__`` — treating
+        the generic ``<lambda>``/``pipe``/``async_pipe`` names as un-nameable, so
+        those require an explicit ``name``.
+
+        Returns:
+
+            The derived registry key, or an empty string when none can be derived.
+
+        Examples:
+
+            >>> def double(source, **kwargs):
+            ...     return source
+            >>> ModuleDefinition(sync_pipe=double).resolved_name
+            'double'
+            >>> ModuleDefinition(sync_pipe=lambda source, **_: source).resolved_name
+            ''
+
+        """
+        pipe = self.sync_pipe or self.async_pipe
+        candidate = getattr(pipe, "__name__", "")
+        module_name = getattr(self.module, "__name__", "")
+
+        if self.name:
+            name = self.name
+        elif module_name:
+            name = module_name.rsplit(".", 1)[-1]
+        elif candidate not in _UNNAMEABLE_PIPES:
+            name = candidate
+        else:
+            name = ""
+
+        return name
 
     def get_pipe(self, is_async: bool = False) -> PipeCallable | Pipe | None:
         """

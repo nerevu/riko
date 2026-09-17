@@ -256,13 +256,22 @@ is the module removed at the R5C clean-break once `Pipeline.write()` / `WriteNod
 
 The runtime→compiler resolution coupling is inverted behind three **compiler-free** layers sharing
 one overloaded `resolve(name, interface)` contract (`riko/types/_wrappers.py::Resolver`):
-`ModuleRegistry` (`riko/ext/registry.py`; built-ins lazy per name, runtime `register`/`reset`, entry
+`ModuleRegistry` (`riko/runtime/_module_registry.py`, re-exported via `riko/ext/registry.py`; built-ins
+lazy per name, runtime `register_module`/`reset_module_registry`, entry
 points under `[project.entry-points."riko.modules"]`; precedence runtime → entry-point → built-in),
 `PipelineResolver` + injectable `ModuleStore`/`DirectoryStore` (`riko/runtime/_pipelines.py`; core ships
 no locations), and the `PipeResolver` façade (`riko/runtime/_resolver.py`) doing one symmetric dispatch.
 `riko/runtime/collections.py` resolves through the façade; `riko.runtime._compile.resolve_module`
 delegates to it. Generated pipelines expose a stable `pipe`/`async_pipe` entry, so a sub-pipeline resolves exactly
 like a built-in. External packages add modules with **no core edit** (`examples/riko-example-ext/`).
+The module registry and a private target registry (`riko/runtime/_target_registry.py`, built-in
+`FileTarget`, entry points under `riko.targets`) share a generic `Registry[T]` base
+(`riko/runtime/_registry.py`) — one three-tier runtime → entry-point → built-in lifetime, each keyed by a
+per-domain `_key` hook (module `resolved_name`, target `backend`). The target registry stores target
+classes keyed by `backend` and resolves a `Backends` to its target class. The target vocabulary (base
+`Target` + `SupportsRead`/`SupportsWrite`/`SupportsActions`, `WriteCapabilities`, `FileTarget`,
+`TargetRegistry`, `register_target`) is on the extension surface (`riko.ext`); the `Backends` enum is on
+the stable `riko` surface alongside `Formats`.
 P9A discoverability (generated `Modules` tree, `list_modules`/`describe_module`) shipped — see
 §24 above. Remaining P9 (non-P9A): the installed-env aggregate `riko.generated.Modules` + `.pyi`
 stubs → [module-enums.md](gameplans/module-enums.md).
@@ -377,9 +386,9 @@ execution-outcome propagation (including terminate/cancellation → abort), R5C 
 The fluent `write()`/`sink()` verbs ride a private write-session mechanism (no hidden `send`/`on_receive`
 pub/sub). Four durable layers:
 
-- **declarative** — `WriteOperation` (frozen `mode` + unified `keys`), `WriteTarget` (a destination
-  that *reports write capabilities*, it does not itself deliver records), and `Formats`
-  (`riko/definitions/_write.py`).
+- **declarative** — `WriteOperation` (frozen `mode` + unified `keys`), `SupportsWrite` (a destination
+  that *reports write capabilities*, it does not itself deliver records; the protocol lives in
+  `riko/types/_targets.py`), and `Formats` (`riko/definitions/_write.py`).
 - **prepared** — `PreparedWrite` (target + normalized operation + resolved `WriteCapabilities`) is the
   validated object; `WriteOperation` on its own is unvalidated intent. `WriteCapabilities` stores only
   independent facts (`modes`, `fmt`, `incremental`, `match_keyed_modes`, `idempotent_modes`);

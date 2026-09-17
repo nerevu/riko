@@ -9,10 +9,11 @@ import pytest
 from riko.base._paths import ROOT_DIR
 from riko.base.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.definitions.modules import ModuleDefinition
-from riko.ext import register
+from riko.ext import register_module
 from riko.ext.codegen import list_modules
-from riko.ext.registry import reset_registry
+from riko.ext.registry import reset_module_registry
 from riko.modules import regex, tokenizer
+from riko.runtime._module_registry import module_registry
 from riko.runtime._pipelines import (
     CompositeStore,
     DirectoryStore,
@@ -21,7 +22,6 @@ from riko.runtime._pipelines import (
     PipelineResolver,
     pipeline_resolver,
 )
-from riko.runtime._registry import registry
 from riko.runtime._resolver import PipeResolver, pipe_resolver
 from riko.runtime.collections import SyncPipe
 from riko.types._guards import is_mapping
@@ -42,9 +42,9 @@ _DOC = "\nShouts each item.\n\nIgnored trailing prose.\n"
 
 @pytest.fixture
 def fixed_registry():
-    registry.reset()
-    yield registry
-    registry.reset()
+    module_registry.reset()
+    yield module_registry
+    module_registry.reset()
 
 
 marker = lambda source, **_: source
@@ -54,7 +54,8 @@ MOD_DEFN = ModuleDefinition(name=_NAME, sync_pipe=marker)
 def _patch_entry_points(monkeypatch, *eps):
     ep_func = lambda group: list(eps) if group == "riko.modules" else []
     monkeypatch.setattr("riko.runtime._registry.entry_points", ep_func)
-    registry.reset()  # invalidate the cache memoized by the fixture's pre-test reset
+    # invalidate the cache memoized by the fixture's pre-test reset
+    module_registry.reset()
 
 
 def _pipe_wrapper(**attrs):
@@ -147,23 +148,23 @@ class TestModuleRegistry:
 
 
 class TestPublicRegister:
-    """The public ``riko.ext.register`` surface that targets the global registry."""
+    """Public ``riko.ext.module_registry`` surface that targets the global registry."""
 
     def test_register_resolves_via_facade(self, fixed_registry):
-        register(MOD_DEFN)
+        register_module(MOD_DEFN)
         assert pipe_resolver.resolve(_NAME) is marker
-        assert registry.resolve(_NAME) is marker
+        assert module_registry.resolve(_NAME) is marker
 
     def test_register_runs_end_to_end(self, fixed_registry):
         """A registered alias of a built-in resolves and runs through SyncPipe."""
-        register(ModuleDefinition(name=_NAME, module=tokenizer))
+        register_module(ModuleDefinition(name=_NAME, module=tokenizer))
         flow = SyncPipe(_NAME, source=[{"content": "a b c"}], conf={"delimiter": " "})
         expected = ["a", "b", "c"]
         assert [item.get("content") for item in flow if is_mapping(item)] == expected
 
     def test_reset_registry_clears_registration(self, fixed_registry):
-        register(MOD_DEFN)
-        reset_registry()
+        register_module(MOD_DEFN)
+        reset_module_registry()
 
         with pytest.raises(UnsupportedModuleError):
             pipe_resolver.resolve(_NAME)
@@ -216,7 +217,7 @@ class TestEntryPointModules:
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, defn))
 
         assert fixed_registry.resolve(_NAME) is marker
-        assert fixed_registry._entry_point_definition(_NAME).name == _NAME
+        assert fixed_registry._entry_point(_NAME).name == _NAME
 
     def test_name_key_mismatch_raises(self, monkeypatch, fixed_registry):
         defn = ModuleDefinition(name="acme.other", sync_pipe=marker)

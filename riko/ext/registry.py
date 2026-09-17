@@ -20,12 +20,21 @@ Examples:
 
 Attributes:
 
-    ENTRY_POINT_GROUP: Entry point group scanned for third-party modules.
-    registry: Process-global registry backing ``register`` and pipe resolution.
+    module_registry: Process-global registry backing ``register_module`` and pipe
+        resolution.
 
 """
 
 from riko.definitions.modules import ModuleDefinition
-from riko.runtime._registry import ModuleRegistry, register, reset_registry
+from riko.runtime._module_registry import (
+    ModuleRegistry,
+    register_module,
+    reset_module_registry,
+)
 
-__all__ = ["ModuleDefinition", "ModuleRegistry", "register", "reset_registry"]
+__all__ = [
+    "ModuleDefinition",
+    "ModuleRegistry",
+    "register_module",
+    "reset_module_registry",
+]

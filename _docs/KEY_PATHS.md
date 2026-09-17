@@ -53,6 +53,7 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/types/_enums.py` | shared enums and enum-like aliases, including serialization format typing |
 | `riko/types/_io.py` | path/closeable I/O contracts, not executable I/O |
 | `riko/types/_wrappers.py` | decorator wrapper typing; upward references needed only for typing stay behind `TYPE_CHECKING` |
+| `riko/types/_targets.py` | base `Target` protocol (a destination keyed by `backend`) plus the `SupportsRead`/`SupportsWrite`/`SupportsActions` capability protocols concrete adapters implement; `SupportsWrite.capabilities` references `WriteCapabilities` behind `TYPE_CHECKING` |
 | `riko/coercion/_configs.py` | **generated** `<Name>Objconf` parse-time config classes; edit `riko/types/modules.py`, then run `gen-config` or `manage codegen --config` |
 | `riko/coercion/_dynamic_conf.py` | hand-maintained `DynamicConf` base used by generated objconf classes |
 | `riko/coercion/cast.py` | public coercion/casting implementation used by parsing/modules |
@@ -95,7 +96,7 @@ iterator is consumed.
 | `riko/definitions/modules.py` | immutable `ModuleDefinition` contract used by built-ins, registry entries, and discovery |
 | `riko/definitions/_resource_types.py` | resource-definition aliases shared by declarative binding code; any runtime references here are type-only |
 | `riko/definitions/_resources.py` | resource binding normalization, factory classification, `ResourceView`, and definition-side binding helpers |
-| `riko/definitions/_targets.py` | declarative write-target preparation/validation and file target behavior |
+| `riko/definitions/_targets.py` | the built-in `FileTarget` write adapter (carrying `backend = Backends.FILE`) and write preparation/validation (`resolve_target`/`resolve_format`/`prepare_write`); the base target protocols live in `riko/types/_targets.py` |
 | `riko/definitions/_write.py` | `WriteMode`, `WriteResult`, `WriteOperation`, `WriteCapabilities`, `PreparedWrite`, and sync/async write-session protocols |
 | `riko/runtime/context.py` | immutable execution `Context`; resource bindings derive new contexts rather than mutating one in place |
 | `riko/runtime/_resources.py` | concrete `Resource` hierarchy and one-shot/reusable lifecycle execution; this file and `context.py` form the architecture's explicit `execution` sublayer |
@@ -112,7 +113,9 @@ reusable; mutable open/close/session state belongs to execution-owned objects.
 | `riko/runtime/_compile_repr.py` | Python-source representation helpers used by compiler/codegen paths |
 | `riko/runtime/_pipelines.py` | pipeline lookup/loading support |
 | `riko/runtime/_resolver.py` | module/pipeline resolution orchestration |
-| `riko/runtime/_registry.py` | runtime extension/entry-point registry and built-in registration lookup |
+| `riko/runtime/_registry.py` | generic `Registry[T]` base shared by the module and target registries: the three-tier runtime→entry-point→built-in lifetime + entry-point discovery/loading scaffolding; subclasses supply a `_key` hook so `register` stores one self-keying entry |
+| `riko/runtime/_module_registry.py` | `ModuleRegistry` + process-global `module_registry`/`register_module`/`reset_module_registry`; keyed by `ModuleDefinition.resolved_name`, built-in modules resolved lazily per name, entry points under `riko.modules` |
+| `riko/runtime/_target_registry.py` | private `TargetRegistry` + `target_registry`/`register_target`/`reset_target_registry`; stores adapter classes keyed by `backend` and resolves a `Backends` to its adapter class (built-in `FileTarget`), entry points under `riko.targets` |
 | `riko/runtime/_importutils.py` | dynamic import helpers; string-constructed imports are intentionally invisible to the static AST dependency graph |
 | `riko/runtime/_subpipe.py` | nested/sub-pipeline execution helpers |
 | `riko/runtime/_write_session.py` | concrete sync/async write-session acquisition, incremental/framed delivery, finalize/abort/teardown semantics |
@@ -137,7 +140,7 @@ collection-consumption concern, not a second write model.
 | `riko/modules/_loop.py` | explicit loop module execution, distinct from processors' implicit iterable mapping |
 | `riko/modules/_names.py` | **generated** `Modules`/`Sources`/`Transforms`/`Sinks` discovery enums; never hand-edit |
 | `riko/ext/decorators.py` + `riko/ext/protocols.py` | supported module-author decorator/protocol surface |
-| `riko/ext/registry.py` | supported registration surface over the private runtime registry |
+| `riko/ext/registry.py` | supported registration surface (`register_module`/`reset_module_registry`/`ModuleRegistry`) re-exported over the private runtime module registry |
 | `riko/ext/_names.py` | `ModuleName`, normalization, category derivation, and sink-name criteria |
 | `riko/ext/codegen.py` | shared module-catalog codegen helpers |
 | `riko/ext/config.py` | supported extension configuration helpers |

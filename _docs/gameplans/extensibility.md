@@ -343,10 +343,13 @@ null and therefore must also be nullable. Canonical object schemas use
 
 ### E3.7 Targets and Formats
 
-`Target` is an immutable serializable endpoint/provider spec. `Format` is an immutable serializable
+A `Target` is a destination identified by its `backend`. The base `Target` protocol and its
+`SupportsRead`/`SupportsWrite`/`SupportsActions` capability refinements are behavior contracts (in `riko.types`); concrete
+`<Backend>Target` adapters implement them (in `riko.definitions`). `Format` is an immutable serializable
 interpretation/serialization spec. Resource bindings to live clients are separate.
 
-Canonical endpoint/provider vocabulary belongs under `Targets`, for example:
+Canonical endpoint/provider vocabulary belongs under `Backends` (renamed from `Targets` for symmetry
+with `Formats`), for example:
 
 ```text
 FILE
@@ -369,9 +372,12 @@ XML
 TEXT
 ```
 
-Targets use concrete backend granularity and are behaviorally inert definitions; adapters own
-behavior. A dedicated `TargetRegistry` parallels `ModuleRegistry`. Optional sync/async target
-protocols allow execution to adapt an implementation through its normal bridge.
+Backends use concrete granularity; adapters own behavior. A dedicated `TargetRegistry` parallels
+`ModuleRegistry`: it stores one self-describing adapter class per `backend` — the class is its own
+factory — exactly as `ModuleRegistry` stores one definition per name, and `resolve(backend)` returns the
+adapter class the caller then constructs. Two configurations of the same backend (prod vs. staging) are
+two constructions of one adapter, not two registrations. Sync/async is a session-layer concern, so one
+adapter serves both its capabilities.
 
 Read owns acquisition + interpretation. Write owns mutation/reconciliation. Format resolution order
 is:

@@ -46,7 +46,7 @@ from riko.runtime.collections import (
     list_formats,
 )
 from riko.runtime.context import Context
-from riko.types._enums import ExecutionMode, Formats
+from riko.types._enums import Backends, ExecutionMode, Formats
 
 from ._package import PACKAGE_INFO
 
@@ -64,6 +64,7 @@ __copyright__ = "Copyright 2015 Reuben Cummings"
 __all__ = [
     "AsyncCollection",
     "AsyncPipe",
+    "Backends",
     "Context",
     "ExecutionMode",
     "Formats",

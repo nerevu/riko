@@ -7,10 +7,14 @@ metadata and naming types, wrapper protocols, and registry interfaces.
 """
 
 from riko.coercion._dynamic_conf import DynamicConf
+from riko.definitions._targets import FileTarget
+from riko.definitions._write import WriteCapabilities
 from riko.definitions.modules import ModuleDefinition, resolve_module_name
 from riko.modules._decorators import operator, processor, splitter
-from riko.runtime._registry import ModuleRegistry, register
+from riko.runtime._module_registry import ModuleRegistry, register_module
+from riko.runtime._target_registry import TargetRegistry, register_target
 from riko.types._enums import ModuleName, ModuleNameLike
+from riko.types._targets import SupportsActions, SupportsRead, SupportsWrite, Target
 from riko.types._wrappers import (
     AsyncOperatorWrapper,
     AsyncProcessorWrapper,
@@ -30,6 +34,7 @@ __all__ = [
     "AsyncProcessorWrapper",
     "AsyncSplitterWrapper",
     "DynamicConf",
+    "FileTarget",
     "ModuleDefinition",
     "ModuleMetadata",
     "ModuleName",
@@ -38,14 +43,21 @@ __all__ = [
     "ModuleSubtype",
     "ModuleType",
     "ModuleWrapper",
+    "SupportsActions",
+    "SupportsRead",
+    "SupportsWrite",
     "SyncOperatorWrapper",
     "SyncProcessorWrapper",
     "SyncSplitterWrapper",
+    "Target",
+    "TargetRegistry",
+    "WriteCapabilities",
     "derive_category",
     "get_conf_type",
     "operator",
     "processor",
-    "register",
+    "register_module",
+    "register_target",
     "resolve_module_name",
     "splitter",
 ]

@@ -19,6 +19,16 @@ New
   arrives and yields nothing. It is a distinct operation from ``func`` (a map), so
   passing both raises ``TypeError``.
 
+- Added the ``Backends`` ``StrEnum`` (``file``/``http``/``s3``/``postgres``/``airtable``/
+  ``intune``) to the stable ``riko`` surface alongside ``Formats``. It names the kind of
+  backend a write reaches.
+
+- Extension authors can register target classes for their own backends. ``riko.ext``
+  exports the base ``Target`` protocol and its ``SupportsRead``/``SupportsWrite``/
+  ``SupportsActions`` refinements, ``WriteCapabilities``, ``FileTarget``, and a
+  ``TargetRegistry``/``register_target`` that key one self-describing target class per
+  ``backend``. ``FileTarget`` is the built-in.
+
 Changes
 ~~~~~~~
 

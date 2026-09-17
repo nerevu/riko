@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from riko.types._enums import FmtLike, Formats
 from riko.types._io import PathLike
+from riko.types._targets import SupportsWrite
 
 if TYPE_CHECKING:
     from riko.types._streams import AsyncItems, Item, Items
@@ -46,7 +47,7 @@ type ExportType = FmtLike | Literal["list", "tuple"]
 @dataclass(frozen=True, slots=True)
 class WriteCapabilities:
     """
-    What a write target supports for a resolved ``(target × format)``.
+    What a ``SupportsWrite`` target supports for a resolved ``(target × format)``.
 
     ``incremental`` says the target can make delivery progress before the whole
     logical input is known (a line-oriented file), rather than needing the complete
@@ -118,33 +119,7 @@ class WriteOperation:
     keys: tuple[str, ...] = ()
 
 
-@runtime_checkable
-class WriteTarget(Protocol):
-    """A destination that reports its write capabilities."""
-
-    def capabilities(self, fmt: FmtLike | None = None) -> WriteCapabilities:
-        """
-        Reports the modes and serialization behavior the target supports.
-
-        Format-dependent behavior (which modes are appendable, whether delivery is
-        incremental) is a ``target × format`` fact the target itself decides; the
-        returned :class:`WriteCapabilities` merely reports that decision. A native
-        target ignores ``fmt``.
-
-        Args:
-
-            fmt: The serialization format, used by a serializing target to resolve
-                its capabilities; ignored by a native target.
-
-        Returns:
-
-            The modes and serialization behavior the target supports.
-
-        """
-        ...
-
-
-type Destination = PathLike | WriteTarget
+type Destination = PathLike | SupportsWrite
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,13 +129,13 @@ class PreparedWrite:
 
     Attributes:
 
-        target: The resolved write target.
+        target: The resolved ``SupportsWrite`` target.
         operation: The normalized, validated write intent.
         capabilities: The resolved ``(target × format)`` capabilities.
 
     """
 
-    target: WriteTarget
+    target: SupportsWrite
     operation: WriteOperation
     capabilities: WriteCapabilities
 

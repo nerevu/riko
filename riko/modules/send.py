@@ -72,8 +72,8 @@ async def async_parser(
     Asynchronously publishes each item to every target, then returns them.
 
     Receivers may start before or after the sender, so no startup ordering is
-    needed. Targets are completed even when a publish fails, so a healthy receiver isn't
-    left waiting.
+    needed. Backends are completed even when a publish fails, so a healthy receiver
+    isn't left waiting.
 
     Args:
 

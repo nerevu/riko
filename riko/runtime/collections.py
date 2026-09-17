@@ -1401,7 +1401,7 @@ class SyncPipe(PyPipe):
 
         Args:
 
-            dest: A path, or a ``WriteTarget``.
+            dest: A path, or a ``SupportsWrite`` target.
 
             mode: The reconciliation mode, validated against the target. (default:
                 replace)

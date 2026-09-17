@@ -87,7 +87,7 @@ the `IO_` contract group.
 <!-- api-surface:other -->
 ```python
 >>> sorted(OTHER)
-['Context', 'ExecutionMode', 'get_path', 'get_temp_file', 'list_modules']
+['Backends', 'Context', 'ExecutionMode', 'get_path', 'get_temp_file', 'list_modules']
 ```
 <!-- /api-surface:other -->
 
@@ -137,7 +137,7 @@ authors rather than ordinary application code.
 <!-- api-surface:extension -->
 ```python
 >>> sorted(EXTENSION)
-['AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'DynamicConf', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'derive_category', 'get_conf_type', 'operator', 'processor', 'register_module', 'resolve_module_name', 'splitter']
+['AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'DynamicConf', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WriteCapabilities', 'derive_category', 'get_conf_type', 'operator', 'processor', 'register_module', 'register_target', 'resolve_module_name', 'splitter']
 ```
 <!-- /api-surface:extension -->
 

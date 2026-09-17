@@ -49,8 +49,8 @@ class Formats(StrEnum):
     QIF = "qif"
 
 
-class Targets(StrEnum):
-    """The kind of endpoint a write reaches."""
+class Backends(StrEnum):
+    """The kind of backend a write reaches."""
 
     FILE = "file"
     HTTP = "http"
@@ -167,4 +167,4 @@ class ExecutionMode(StrEnum):
 type ModuleNameLike = str | ModuleName
 type KeyLike = str | Iterable[str]
 type FmtLike = Formats | str
-type TargetLike = Targets | str
+type BackendLike = Backends | str

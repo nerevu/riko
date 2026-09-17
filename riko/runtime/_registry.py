@@ -1,333 +1,131 @@
 """
-Module registration and resolution backing the extension API.
+Generic name registry shared by the module and target registries.
+
+A ``Registry`` resolves names through three tiers with a hybrid lifetime: runtime
+registration, then entry point, then built-in. Built-ins are immutable process-global
+facts; entry points are discovered by name on first lookup, so no extension imports
+until one of its names is resolved; runtime registrations live in a mutable tier that
+``reset`` clears for test isolation.
+
+A subclass sets ``entry_point_group`` and ``label``, derives an entry's registry key
+via ``_key``, turns a loaded entry point into a concrete entry via ``_load``, and layers
+a domain ``resolve`` on top of ``_registered``.
 
 Examples:
 
-    >>> from riko.ext import ModuleDefinition, ModuleRegistry
-    >>>
-    >>> def pipe(*args, **kwargs):
-    ...     return []
-    >>> registry = ModuleRegistry()
-    >>> registry.register(ModuleDefinition(name="example", sync_pipe=pipe))
-    >>> registry.resolve("example") is pipe
-    True
+    Basic usage::
 
-Attributes:
-
-    ENTRY_POINT_GROUP: Python entry-point group used for extension modules.
-    registry: Process-global registry used by the extension-level ``register`` helper.
+        >>> from riko.runtime._registry import Registry
+        >>>
+        >>> class Demo(Registry[int]):
+        ...     entry_point_group = "riko.demo"
+        ...     label = "demo"
+        ...
+        ...     def _key(self, entry):
+        ...         return str(entry)
+        >>>
+        >>> demo = Demo()
+        >>> demo.register(42)
+        >>> demo.registered_names()
+        ('42',)
 
 """
 
-from __future__ import annotations
-
-from dataclasses import replace as _replace
 from importlib.metadata import EntryPoint, entry_points
-from typing import TYPE_CHECKING, Literal, overload
-
-from riko.base.exceptions import UnsupportedModuleError
-from riko.definitions.modules import ModuleDefinition
-
-from ._importutils import resolve_interface
-
-if TYPE_CHECKING:
-    from riko.types._wrappers import (
-        AsyncPipeWrapper,
-        Pipe,
-        PipeCallable,
-        SyncPipeWrapper,
-    )
-
-ENTRY_POINT_GROUP = "riko.modules"
+from typing import ClassVar
 
 
-def _module_summary(module: object) -> str | None:
-    lines = (getattr(module, "__doc__", "") or "").strip().splitlines()
-    return next((line.strip() for line in lines if line.strip()), None)
-
-
-def _resolve_definition(obj: object) -> ModuleDefinition | None:
-    """Passes a ``ModuleDefinition`` through, and wraps a bare pipe-exposing module."""
-    if isinstance(obj, ModuleDefinition):
-        definition = obj
-    elif hasattr(obj, "pipe") or hasattr(obj, "async_pipe"):
-        definition = ModuleDefinition(module=obj, description=_module_summary(obj))
-    else:
-        definition = None
-
-    return definition
-
-
-class ModuleRegistry:
+class Registry[T]:
     """
-    Resolves module names to their sync/async interface callables.
+    A three-tier name registry with a hybrid lifetime.
 
-    Precedence is runtime registration, then entry point
-    (``[project.entry-points."riko.modules"]``), then built-in. Only module
-    implementations are resolved here. Composed ``pipe_*`` pipelines are the resolver
-    façade's concern and no JSON is loaded or compiled.
-
-    Lifetime is hybrid. Built-ins are immutable process-global facts imported lazily
-    on first use. This keeps heavy optional dependencies off the startup path. Entry
-    points are discovered by name on first lookup so no extension is imported until
-    one of its names is resolved. Runtime registrations live in a mutable tier that
-    ``reset`` clears for test isolation.
-
-    Examples:
-
-        >>> from riko.ext import ModuleDefinition, ModuleRegistry
-        >>>
-        >>> def pipe(*args, **kwargs):
-        ...     return []
-        >>> registry = ModuleRegistry()
-        >>> registry.register(ModuleDefinition(name="example", sync_pipe=pipe))
-        >>> registry.registered_names()
-        ('example',)
-        >>> registry.resolve("example") is pipe
-        True
+    Precedence is runtime registration, then entry point, then built-in. Subclasses
+    provide the entry-point group, a human ``label`` for messages, and how to turn a
+    loaded entry point into a concrete entry.
 
     """
+
+    entry_point_group: ClassVar[str]
+    label: ClassVar[str]
 
     def __init__(self) -> None:
-        self._runtime: dict[str, ModuleDefinition] = {}
+        self._runtime: dict[str, T] = {}
         self._entry_points: dict[str, EntryPoint] | None = None
-        self._loaded: dict[str, ModuleDefinition] = {}
+        self._loaded: dict[str, T] = {}
+
+    def _key(self, entry: T) -> str:
+        raise NotImplementedError(
+            f"{type(self).__name__}._key must derive a registry key for {entry!r}"
+        )
+
+    def _load(self, ep: EntryPoint) -> T:
+        raise NotImplementedError(
+            f"{type(self).__name__}._load must handle entry point {ep.name!r}"
+        )
 
     def _discover_entry_points(self) -> dict[str, EntryPoint]:
         if self._entry_points is None:
-            eps = entry_points(group=ENTRY_POINT_GROUP)
+            eps = entry_points(group=self.entry_point_group)
             self._entry_points = {ep.name: ep for ep in eps}
 
         return self._entry_points
 
-    def _entry_point_definition(self, name: str) -> ModuleDefinition | None:
+    def _entry_point(self, name: str) -> T | None:
         if name not in self._loaded and (ep := self._discover_entry_points().get(name)):
-            loaded = ep.load()
-            obj = loaded() if callable(loaded) else loaded
-            definition: ModuleDefinition | None = _resolve_definition(obj)
-
-            if definition is None:
-                raise TypeError(
-                    f"entry point {ep.name!r} returned {type(obj).__name__}, expected a"
-                    " ModuleDefinition or a module exposing 'pipe'/'async_pipe'"
-                )
-            elif not definition.name:
-                definition = _replace(definition, name=ep.name)
-            elif definition.name != ep.name:
-                raise ValueError(
-                    f"entry point {ep.name!r} declares a module named "
-                    f"{definition.name!r}; the two must match"
-                )
-
-            self._loaded[name] = definition
+            self._loaded[name] = self._load(ep)
 
         return self._loaded.get(name)
 
-    def _resolve_builtin(self, name: str, is_async: bool = False) -> Pipe:
-        return resolve_interface(name, is_async=is_async)
+    def _registered(self, name: str) -> T | None:
+        return self._runtime.get(name) or self._entry_point(name)
 
-    def register(self, definition: ModuleDefinition, *, replace: bool = False) -> None:
+    def register(self, entry: T, *, replace: bool = False) -> None:
         """
-        Adds a definition to the runtime tier that shadows lower tiers.
+        Adds a self-keying entry to the runtime tier that shadows lower tiers.
+
+        The registry key is derived from ``entry`` by ``_key``, so an entry carries
+        its own identity rather than being registered under a separate name.
 
         Args:
 
-            definition: Named module definition to register.
-            replace: Whether an existing runtime definition with the same name may
-                be replaced.
+            entry: The self-keying entry to register.
+            replace: Whether an existing runtime entry with the same key may be
+                replaced.
 
         Raises:
 
-            ValueError: If ``definition`` has no name, or names an already
-                registered module and ``replace`` is False.
-
-        Examples:
-
-            >>> registry = ModuleRegistry()
-            >>> definition = ModuleDefinition(name="example", sync_pipe=lambda: [])
-            >>> registry.register(definition)
-            >>> registry.definition("example") is definition
-            True
+            ValueError: If ``entry`` has no derivable key, or its key is already
+                registered and ``replace`` is False.
 
         """
-        if not definition.name:
-            raise ValueError("a runtime-registered module needs a name")
+        name = self._key(entry)
 
-        if definition.name in self._runtime and not replace:
-            raise ValueError(f"module {definition.name!r} is already registered")
+        if not name:
+            raise ValueError(f"a runtime-registered {self.label} needs a name")
 
-        self._runtime[definition.name] = definition
+        if name in self._runtime and not replace:
+            raise ValueError(f"{self.label} {name!r} is already registered")
 
-    @overload
-    def resolve(  # noqa: E704
-        self, name: str, is_async: Literal[False] = ...
-    ) -> SyncPipeWrapper: ...
-    @overload  # noqa: E301
-    def resolve(  # noqa: E704
-        self, name: str, is_async: Literal[True]
-    ) -> AsyncPipeWrapper: ...
-    def resolve(self, name: str, is_async: bool = False) -> Pipe | PipeCallable:  # noqa: E301
-        """
-        Resolves a module's sync or async callable, honoring tier precedence.
-
-        Args:
-
-            name: Canonical module name to resolve.
-            is_async: Whether to resolve the async interface.
-
-        Returns:
-
-            The selected pipe callable from the runtime, entry-point, or built-in
-            tier.
-
-        Raises:
-
-            UnsupportedModuleError: If no tier defines ``name``, or the tier that
-                does has no requested interface callable.
-
-        Examples:
-
-            >>> def pipe(*args, **kwargs):
-            ...     return []
-            >>> registry = ModuleRegistry()
-            >>> registry.register(ModuleDefinition(name="example", sync_pipe=pipe))
-            >>> registry.resolve("example") is pipe
-            True
-
-        """
-        definition = self._runtime.get(name) or self._entry_point_definition(name)
-
-        if definition is None:
-            pipe = self._resolve_builtin(name, is_async)
-        elif (pipe := definition.get_pipe(is_async)) is None:
-            interface = "async_pipe" if is_async else "pipe"
-            raise UnsupportedModuleError(f"{name!r} has no {interface!r}")
-
-        return pipe
+        self._runtime[name] = entry
 
     def registered_names(self) -> tuple[str, ...]:
-        """
-        Collects the sorted runtime-registered names.
-
-        Returns:
-
-            Runtime-registered module names in lexical order.
-
-        Examples:
-
-            >>> registry = ModuleRegistry()
-            >>> registry.register(ModuleDefinition(name="z", sync_pipe=lambda: []))
-            >>> registry.register(ModuleDefinition(name="a", sync_pipe=lambda: []))
-            >>> registry.registered_names()
-            ('a', 'z')
-
-        """
+        """Collects the sorted runtime-registered names."""
         return tuple(sorted(self._runtime))
 
     def catalog_names(self) -> tuple[str, ...]:
         """
         Collects the sorted runtime-registered and entry-point names.
 
-        Built-ins are excluded since the pkgutil catalog enumerates those separately.
-
-        Returns:
-
-            Runtime and discovered entry-point names in lexical order.
-
-        Examples:
-
-            >>> registry = ModuleRegistry()
-            >>> registry.register(ModuleDefinition(name="example", sync_pipe=lambda: []))
-            >>> "example" in registry.catalog_names()
-            True
+        Built-ins are excluded since they are enumerated separately.
 
         """
         return tuple(sorted({*self._runtime, *self._discover_entry_points()}))
 
-    def definition(self, name: str) -> ModuleDefinition | None:
-        """
-        Resolves a runtime or entry-point definition by name.
-
-        Args:
-
-            name: Canonical module name to inspect.
-
-        Returns:
-
-            The matching definition, or ``None`` for a built-in or unknown name.
-
-        Examples:
-
-            >>> registry = ModuleRegistry()
-            >>> definition = ModuleDefinition(name="example", sync_pipe=lambda: [])
-            >>> registry.register(definition)
-            >>> registry.definition("example") is definition
-            True
-
-        """
-        return self._runtime.get(name) or self._entry_point_definition(name)
-
     def reset(self) -> None:
-        """
-        Drops runtime registrations and the entry-point discovery cache.
-
-        Examples:
-
-            >>> registry = ModuleRegistry()
-            >>> registry.register(ModuleDefinition(name="example", sync_pipe=lambda: []))
-            >>> registry.reset()
-            >>> registry.registered_names()
-            ()
-
-        """
+        """Drops runtime registrations and the entry-point discovery cache."""
         self._runtime.clear()
         self._loaded.clear()
         self._entry_points = None
 
 
-registry: ModuleRegistry = ModuleRegistry()
-
-
-def register(definition: ModuleDefinition, *, replace: bool = False) -> None:
-    """
-    Registers a module on the process-global registry.
-
-    Args:
-
-        definition: Named module definition to register.
-        replace: Whether an existing runtime definition with the same name may be
-            replaced.
-
-    Raises:
-
-        ValueError: If ``definition`` has no name, or names an already registered
-            module and ``replace`` is False.
-
-    Examples:
-
-        >>> from riko.ext import ModuleDefinition, register
-        >>>
-        >>> reset_registry()
-        >>> definition = ModuleDefinition(name="__doctest__", sync_pipe=lambda: [])
-        >>> register(definition)
-        >>> registry.definition("__doctest__") is definition
-        True
-        >>> reset_registry()
-
-    """
-    registry.register(definition, replace=replace)
-
-
-def reset_registry() -> None:
-    """
-    Resets the process-global registry, chiefly for test isolation.
-
-    Examples:
-
-        >>> registry.register(ModuleDefinition(name="__doctest__", sync_pipe=lambda: []))
-        >>> reset_registry()
-        >>> registry.registered_names()
-        ()
-
-    """
-    registry.reset()
+__all__ = ["Registry"]
