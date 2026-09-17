@@ -18,6 +18,7 @@ The combination tables below exercise every input to that expression.
 
 from collections.abc import AsyncIterator, Awaitable
 from inspect import isawaitable, iscoroutinefunction
+from typing import cast
 
 import pytest
 
@@ -80,7 +81,11 @@ class TestExplicitIsasyncRequired:
 
     @async_test
     async def test_explicit_lambda_runs_as_async_pipe(self):
-        async_shout = processor(isasync=True)(shout)
+        async_shout = processor(isasync=True)(
+            lambda item, *args, **kwargs: str(
+                cast(Item, item).get("content", "")
+            ).upper()
+        )
         stream = async_shout({"content": "hi"}, assign="content")
         assert [item async for item in stream] == [{"content": "HI"}]
 
@@ -89,28 +94,21 @@ class TestInvalidCombinations:
     """A function named ``pipe`` that resolves async — always a contradiction."""
 
     @pytest.mark.parametrize(
-        ("iscoro", "isasync"),
+        ("iscoro", "isasync", "reason"),
         [
-            pytest.param(True, False, id="async_def"),
-            pytest.param(False, True, id="isasync=True"),
-            pytest.param(True, True, id="async_def+isasync=True"),
+            pytest.param(True, False, "an async def", id="async_def"),
+            pytest.param(False, True, "marked isasync=True", id="isasync=True"),
+            pytest.param(True, True, "an async def", id="async_def+isasync=True"),
         ],
     )
-    def test_async_named_pipe_raises(self, iscoro, isasync):
-        with pytest.raises(TypeError, match="async_pipe"):
+    def test_async_named_pipe_raises(self, iscoro, isasync, reason):
+        with pytest.raises(TypeError) as excinfo:
             _create_wrapper("pipe", iscoro=iscoro, isasync=isasync)
 
-    def test_error_names_the_offending_pipe_and_reason(self):
-        with pytest.raises(TypeError) as e:
-            _create_wrapper("pipe", iscoro=True, isasync=False)
-
-        message = str(e.value)
+        message = str(excinfo.value)
         assert "'pipe' is the synchronous interface" in message
-        assert "an async def" in message
-
-    def test_error_reason_reflects_explicit_flag(self):
-        with pytest.raises(TypeError, match="marked isasync=True"):
-            _create_wrapper("pipe", iscoro=False, isasync=True)
+        assert "async_pipe" in message
+        assert reason in message
 
     @pytest.mark.parametrize(
         ("decorator", "option"),

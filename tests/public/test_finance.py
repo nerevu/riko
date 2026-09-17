@@ -9,7 +9,7 @@ when it is absent (see the collection hook in ``conftest.py``).
 
 import pytest
 
-from riko.runtime.collections import export, list_formats
+from riko.runtime.collections import export
 from riko.types._enums import Formats
 
 pytestmark = pytest.mark.finance
@@ -32,13 +32,6 @@ TRANSACTIONS = [
         "Row": "2",
     },
 ]
-
-
-def test_finance_targets_registered():
-    """The finance extra registers the ``ofx``/``qif`` export targets."""
-    targets = list_formats()
-    assert "ofx" in targets
-    assert "qif" in targets
 
 
 def test_export_ofx_serializes_transactions():

@@ -75,23 +75,14 @@ async def test_async_url_open_honors_content_type_charset():
 
 
 class TestReencode:
-    def test_reencode_read_honors_char_count(self):
-        """``read(1)`` yields a single character and the remainder survives."""
+    @pytest.mark.parametrize("method", ["read", "readline"])
+    def test_char_count_preserves_remainder(self, method):
+        """A one-character read consumes only that character."""
         data = b"line one\nline two\nline three\n"
         full = reencode(BytesIO(data), decode=True).read()
         reader = reencode(BytesIO(data), decode=True)
-        head, rest = reader.read(1), reader.read()
-
-        assert head == "l"
-        assert rest == "ine one\nline two\nline three\n"
-        assert head + rest == full
-
-    def test_reencode_readline_honors_char_count(self):
-        """``readline(1)`` yields a single character and the remainder survives."""
-        data = b"line one\nline two\nline three\n"
-        full = reencode(BytesIO(data), decode=True).read()
-        reader = reencode(BytesIO(data), decode=True)
-        head, rest = reader.readline(1), reader.read()
+        head = getattr(reader, method)(1)
+        rest = reader.read()
 
         assert head == "l"
         assert rest == "ine one\nline two\nline three\n"

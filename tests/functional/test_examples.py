@@ -158,22 +158,6 @@ class TestExamples:
         assert async_result == sync_result
 
     @pytest.mark.parametrize(
-        ("pipeid", "expected"),
-        [
-            ("usage", "'hash': 197222720"),
-            ("demo", "Deadline to clear up health law eligibility near"),
-        ],
-    )
-    def test_run_pipe(self, pipeid, expected):
-        """Tests the run-pipe CLI against the example pipelines."""
-        cmd = [sys.executable, "-m", "riko.cli.runpipe", pipeid]
-        proc = subprocess.run(
-            cmd, cwd=ROOT_DIR, capture_output=True, text=True, check=False
-        )
-        assert proc.returncode == 0, f"run-pipe {pipeid} failed: {proc.stderr}"
-        assert expected in proc.stdout, f"run-pipe {pipeid} output: {proc.stdout!r}"
-
-    @pytest.mark.parametrize(
         ("pipe_name", "expected"),
         [
             (

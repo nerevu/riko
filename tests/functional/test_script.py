@@ -87,6 +87,12 @@ def test_demo_sync(value):
     assert_output_matches(output, expected, command=command)
 
 
+def test_usage_sync():
+    """The usage example still runs through the CLI entry point."""
+    output = run_command(DEMO_SCRIPT, "usage")
+    assert "'hash': 197222720" in output
+
+
 @skipif_issync
 @pytest.mark.parametrize("value", DEMO_PARAMS)
 def test_demo_async(value):
