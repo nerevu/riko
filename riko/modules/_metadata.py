@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 
 from riko.base._imports import import_or_else
 from riko.definitions.modules import ModuleDefinition, resolve_module_name
-from riko.runtime._registry import registry
+from riko.runtime._module_registry import module_registry
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
 if TYPE_CHECKING:
@@ -120,8 +120,8 @@ def gen_registry_catalog() -> Iterator[ModuleMetadata]:
     """
     is_async = (True, False)
 
-    for name in registry.catalog_names():
-        definition = registry.definition(name)
+    for name in module_registry.catalog_names():
+        definition = module_registry.definition(name)
         pipes = map(definition.get_pipe, is_async) if definition else ()
         targets = tuple(cast("ModuleWrapper", pipe) for pipe in pipes if callable(pipe))
         args = (name, targets)
@@ -177,7 +177,7 @@ def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
 
     """
     if canonical := resolve_module_name(name):
-        definition: ModuleDefinition | None = registry.definition(canonical)
+        definition: ModuleDefinition | None = module_registry.definition(canonical)
 
         if definition is None:  # noqa: SIM102
             if module := import_or_else(f"{_PACKAGE}.{canonical}"):

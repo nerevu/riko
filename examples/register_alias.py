@@ -18,9 +18,9 @@ Examples:
 """
 
 from riko import SyncPipe
-from riko.ext import ModuleDefinition, register
+from riko.ext import ModuleDefinition, register_module
 from riko.modules import count
 
 if __name__ == "__main__":
-    register(ModuleDefinition(name="stats.count", module=count))
+    register_module(ModuleDefinition(name="stats.count", module=count))
     print(list(SyncPipe("stats.count", source=[{"n": 1}, {"n": 2}, {"n": 3}])))

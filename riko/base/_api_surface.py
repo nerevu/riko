@@ -53,7 +53,14 @@ MODULES = frozenset(
 )
 
 OTHER = frozenset(
-    {"Context", "ExecutionMode", "get_path", "get_temp_file", "list_modules"}
+    {
+        "Backends",
+        "Context",
+        "ExecutionMode",
+        "get_path",
+        "get_temp_file",
+        "list_modules",
+    }
 )
 
 ROOT_EXCEPTIONS = frozenset(
@@ -87,6 +94,7 @@ EXTENSION = frozenset(
         "AsyncProcessorWrapper",
         "AsyncSplitterWrapper",
         "DynamicConf",
+        "FileTarget",
         "ModuleDefinition",
         "ModuleMetadata",
         "ModuleName",
@@ -95,15 +103,22 @@ EXTENSION = frozenset(
         "ModuleSubtype",
         "ModuleType",
         "ModuleWrapper",
+        "SupportsActions",
+        "SupportsRead",
+        "SupportsWrite",
         "SyncOperatorWrapper",
         "SyncProcessorWrapper",
         "SyncSplitterWrapper",
+        "Target",
+        "TargetRegistry",
+        "WriteCapabilities",
         "derive_category",
         "get_conf_type",
         "resolve_module_name",
         "operator",
         "processor",
-        "register",
+        "register_module",
+        "register_target",
         "splitter",
     }
 )

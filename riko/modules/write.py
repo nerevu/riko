@@ -3,7 +3,7 @@
 Writes a stream to a file as a terminal sink.
 
 ``write`` is the in-pipeline counterpart of the top-level ``export`` converter:
-it serializes the stream with a ``Targets`` converter and writes the result to
+it serializes the stream with a ``Formats`` converter and writes the result to
 ``conf['dest']``, then yields every item unchanged so the pipeline can continue
 (fan-out: write here, keep processing). Because it emits data outward it is
 bucketed as a ``Sink`` in the discovery tree.

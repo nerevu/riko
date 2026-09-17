@@ -15,8 +15,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, overload
 
+from ._module_registry import module_registry
 from ._pipelines import pipeline_resolver
-from ._registry import registry
 
 if TYPE_CHECKING:
     from riko.types._wrappers import AsyncPipeWrapper, Pipe, Resolver, SyncPipeWrapper
@@ -65,4 +65,4 @@ class PipeResolver:
         return resolver.resolve(name, is_async)
 
 
-pipe_resolver: PipeResolver = PipeResolver(registry, pipeline_resolver)
+pipe_resolver: PipeResolver = PipeResolver(module_registry, pipeline_resolver)

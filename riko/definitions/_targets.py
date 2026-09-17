@@ -1,37 +1,34 @@
 # vim: sw=4:ts=4:expandtab
 """
-Write target adapters.
+The built-in ``FileTarget`` and write preparation.
 
-A ``WriteTarget`` is a destination that reports what it can write. ``File`` is the
-one built-in target: it serializes records with a ``Formats`` converter and writes a
-path. External providers (Airtable, databases, …) supply their own ``WriteTarget``
-implementations outside core. ``resolve_target`` normalizes a destination argument
-(a path string or a target object) into a ``WriteTarget``.
+``FileTarget`` is the one built-in target that implements ``SupportsWrite``. It
+serializes records with a ``Formats`` converter and writes a path.
 
-Preparation is generic over ``WriteTarget`` and validated in one place:
-
-``prepare_write`` resolves the target, resolves its ``(target × fmt)`` capabilities,
-normalizes the keys, validates the ``(target, mode, keys)`` triple, and returns a
-``PreparedWrite``. What a mode's keys mean — record-match identity vs. idempotency
-identity — is decided by the target's capabilities, so the caller passes a single
-unified ``keys`` and never distinguishes the two.
+``prepare_write`` resolves a destination to a target, reads the target's capabilities,
+normalizes the keys, performs validation.
 
 Examples:
 
     Basic usage::
 
-        >>> from riko.definitions._targets import File, resolve_target
+        >>> from riko.definitions._targets import prepare_write
         >>>
-        >>> resolve_target("out.csv")
-        File(dest='out.csv', fmt=None)
+        >>> prepared = prepare_write("out.csv")
+        >>> prepared.fmt
+        <Formats.CSV: 'csv'>
+        >>> prepared.operation.mode
+        <WriteMode.REPLACE: 'replace'>
 
 """
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
-from riko.types._enums import FmtLike, Formats, KeyLike
+from riko.types._enums import Backends, FmtLike, Formats, KeyLike
 from riko.types._io import PathLike, PathLikeType
+from riko.types._targets import SupportsWrite
 
 from ._write import (
     Destination,
@@ -39,8 +36,6 @@ from ._write import (
     WriteCapabilities,
     WriteMode,
     WriteOperation,
-    WriteResult,
-    WriteTarget,
 )
 
 _FILE_APPEND_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
@@ -90,7 +85,7 @@ def resolve_keys(value: KeyLike | None) -> tuple[str, ...]:
 
 
 def validate_target_mode(
-    target: WriteTarget,
+    target: SupportsWrite,
     mode: WriteMode,
     capabilities: WriteCapabilities,
     *,
@@ -104,7 +99,7 @@ def validate_target_mode(
 
     Args:
 
-        target: The resolved write target, named in error messages.
+        target: The resolved target, named in error messages.
         mode: The resolved write mode.
         capabilities: The resolved ``(target × fmt)`` capabilities.
         keys: The normalized keys.
@@ -147,7 +142,7 @@ def prepare_write(
 
     Args:
 
-        dest: A path, ``Path``, or ``WriteTarget``.
+        dest: A path, ``Path``, or ``SupportsWrite`` target.
         mode: The write mode, as a ``WriteMode`` or its string value.
         fmt: The serialization format override for a serializing target.
         keys: The unified keys, interpreted per the target's capabilities.
@@ -162,9 +157,9 @@ def prepare_write(
 
     Examples:
 
-        >>> from riko.definitions._targets import File, prepare_write
+        >>> from riko.definitions._targets import FileTarget, prepare_write
         >>>
-        >>> prepared = prepare_write(File("out.csv"), "append")
+        >>> prepared = prepare_write(FileTarget("out.csv"), "append")
         >>> prepared.operation.mode
         <WriteMode.APPEND: 'append'>
         >>> prepared.fmt
@@ -181,41 +176,41 @@ def prepare_write(
     return PreparedWrite(target, operation, capabilities)
 
 
-def resolve_target(dest: Destination, **kwargs: str) -> WriteTarget:
+def resolve_target(dest: Destination, **kwargs: str) -> SupportsWrite:
     """
-    Normalizes a destination argument into a ``WriteTarget``.
+    Normalizes a destination argument into a ``SupportsWrite`` target.
 
-    A ``WriteTarget`` is returned unchanged; a path string or ``Path`` becomes a
-    ``File``. Named registry targets are deferred until a second built-in target
+    A ``SupportsWrite`` target is returned unchanged; a path string or ``Path`` becomes
+    a ``FileTarget``. Named registry targets are deferred until a second built-in target
     exists, so every string is currently treated as a file path.
 
     Args:
 
         dest: The destination location.
-        kwargs: Extra keyword configuration for a constructed ``File``.
+        kwargs: Extra keyword configuration for a constructed ``FileTarget``.
 
     Returns:
 
-        The resolved write target.
+        The resolved ``SupportsWrite`` target.
 
     Raises:
 
-        TypeError: When ``dest`` is neither a ``WriteTarget`` nor a path.
+        TypeError: When ``dest`` is neither a ``SupportsWrite`` target nor a path.
 
     Examples:
 
         >>> from riko.definitions._targets import resolve_target
         >>>
         >>> resolve_target("out.csv")
-        File(dest='out.csv', fmt=None)
+        FileTarget(dest='out.csv', fmt=None)
 
     """
-    if isinstance(dest, WriteTarget):
-        target: WriteTarget = dest
+    if isinstance(dest, SupportsWrite):
+        target: SupportsWrite = dest
     elif isinstance(dest, PathLikeType):
-        target = File(dest, **kwargs)
+        target = FileTarget(dest, **kwargs)
     else:
-        raise TypeError(f"cannot resolve a write target from {dest!r}")
+        raise TypeError(f"cannot resolve a target from {dest!r}")
 
     return target
 
@@ -260,31 +255,33 @@ def resolve_format(dest: PathLike | None, fmt: FmtLike | None) -> Formats:
 
 
 @dataclass(frozen=True, slots=True)
-class File:
+class FileTarget:
     """
     A file target: serialize records with a ``Formats`` converter and write a path.
 
     The target owns its format-dependent behavior: a line-oriented format (csv/jsonl)
     is appendable and delivered incrementally; a whole-document format
     (json/geojson/ofx/qif) supports ``replace`` only and is delivered as one framed
-    document. Those are ``target × fmt`` facts private to ``File``, not global
+    document. Those are ``target × fmt`` facts private to ``FileTarget``, not global
     properties of a ``Formats`` value.
 
     Attributes:
 
+        backend: The backend this target serves.
         dest: The destination path.
         fmt: The ``Formats`` converter name, or ``None`` to derive it from the
             path extension (default: ``json``).
 
     Examples:
 
-        >>> from riko.definitions._targets import File
+        >>> from riko.definitions._targets import FileTarget
         >>>
-        >>> File("out.jsonl").capabilities().incremental
+        >>> FileTarget("out.jsonl").capabilities().incremental
         True
 
     """
 
+    backend: ClassVar[Backends] = Backends.FILE
     dest: PathLike
     fmt: FmtLike | None = None
 
@@ -307,13 +304,13 @@ class File:
 
         Examples:
 
-            >>> from riko.definitions._targets import File
+            >>> from riko.definitions._targets import FileTarget
             >>> from riko.definitions._write import WriteMode
             >>>
-            >>> capabilities = File("out.jsonl").capabilities()
+            >>> capabilities = FileTarget("out.jsonl").capabilities()
             >>> capabilities.serializes, capabilities.appendable
             (True, True)
-            >>> WriteMode.APPEND in File("out.json").capabilities().modes
+            >>> WriteMode.APPEND in FileTarget("out.json").capabilities().modes
             False
 
         """
@@ -331,14 +328,7 @@ class File:
 
 
 __all__ = [
-    "Destination",
-    "File",
-    "Formats",
-    "PreparedWrite",
-    "WriteCapabilities",
-    "WriteOperation",
-    "WriteResult",
-    "WriteTarget",
+    "FileTarget",
     "prepare_write",
     "resolve_format",
     "resolve_keys",

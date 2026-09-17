@@ -10,21 +10,20 @@ the passthrough execution host (``riko.definitions._targets`` and
 """
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 import pytest
 
 from riko.base._paths import get_path
 from riko.definitions._targets import (
-    File,
-    WriteCapabilities,
-    WriteResult,
+    FileTarget,
     prepare_write,
     resolve_format,
     resolve_keys,
     resolve_target,
     validate_target_mode,
 )
-from riko.definitions._write import WriteMode
+from riko.definitions._write import WriteCapabilities, WriteMode, WriteResult
 from riko.runtime import _write_session
 from riko.runtime._resources import FactoryKind, OneShotResource
 from riko.runtime._write_session import (
@@ -34,6 +33,7 @@ from riko.runtime._write_session import (
     mint_write_resource,
 )
 from riko.runtime.collections import AsyncPipe, SyncCollection, SyncPipe
+from riko.types._enums import Backends
 from tests import skipif_issync
 
 ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
@@ -42,6 +42,8 @@ ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
 @dataclass(frozen=True)
 class _RecordStore:
     """A native keyed target exercising the match-keyed/idempotent branches."""
+
+    backend: ClassVar[Backends] = Backends.AIRTABLE
 
     def capabilities(self, fmt=None) -> WriteCapabilities:
         return WriteCapabilities(
@@ -53,7 +55,7 @@ class _RecordStore:
 
 class TestResolveTarget:
     def test_write_target_passes_through(self):
-        target = File("out.json")
+        target = FileTarget("out.json")
         assert resolve_target(target) is target
 
     def test_non_target_raises(self):
@@ -91,7 +93,7 @@ class TestFileCapabilities:
         ],
     )
     def test_target_owns_format_behavior(self, dest, appendable, incremental):
-        capabilities = File(dest).capabilities()
+        capabilities = FileTarget(dest).capabilities()
 
         assert capabilities.serializes is True
         assert capabilities.appendable is appendable
@@ -119,8 +121,8 @@ class TestValidateTargetMode:
         validate_target_mode(_RecordStore(), mode, capabilities, keys=keys)
 
     def test_unkeyed_mode_with_keys_rejected(self):
-        capabilities = File("out.csv").capabilities()
-        target = File("out.csv")
+        capabilities = FileTarget("out.csv").capabilities()
+        target = FileTarget("out.csv")
 
         with pytest.raises(ValueError, match="forbids 'keys'"):
             validate_target_mode(target, WriteMode.APPEND, capabilities, keys=("x",))
@@ -129,12 +131,12 @@ class TestValidateTargetMode:
 class TestPrepareWrite:
     def test_file_unsupported_mode(self):
         with pytest.raises(ValueError, match="does not support the 'merge'"):
-            prepare_write(File("out.csv"), "merge")
+            prepare_write(FileTarget("out.csv"), "merge")
 
     @pytest.mark.parametrize("dest", ["out.json", "out.geojson"])
     def test_file_append_rejected_for_framed_format(self, dest):
         with pytest.raises(ValueError, match="does not support the 'append'"):
-            prepare_write(File(dest), "append")
+            prepare_write(FileTarget(dest), "append")
 
     def test_record_store_binds_match_keys(self):
         prepared = prepare_write(_RecordStore(), "merge", keys="endpoint_id")
