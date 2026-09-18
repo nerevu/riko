@@ -1,32 +1,21 @@
 """
-Compile a riko JSON pipeline into a Python module.
+Compiles a Riko pipeline definition into a Python module.
 
-A full pipe definition (modules + verbose ``src``/``tgt`` wires) compiles to a
-runnable module exposing a ``pipe`` (or ``async_pipe``) entry point:
+Examples:
 
->>> from riko.runtime._compile import compile_pipe
->>>
->>> pipe_def = {
-...     "modules": [
-...         {"id": "sw-1", "type": "forever", "conf": {}},
-...         {"id": "_OUTPUT", "type": "output", "conf": {}},
-...     ],
-...     "wires": [
-...         {
-...             "id": "_w1",
-...             "src": {"id": "_OUTPUT", "moduleid": "sw-1"},
-...             "tgt": {"id": "_INPUT", "moduleid": "_OUTPUT"},
-...         }
-...     ],
-... }
->>> source = compile_pipe(pipe_def, "pipe_demo")
->>> print(next(line for line in source.splitlines() if line.startswith("def ")))
-def pipe(item=None, context: Context | None = None, **_):
+    Basic usage::
 
-A ``path`` of ``-`` (or no ``path`` at all) reads the definition from stdin and
-names the pipe ``anonymous``, so the compiler composes in a shell pipeline::
+        >>> from riko import compile_pipe, convert_dag
+        >>>
+        >>> dag = {"modules": [{"type": "forever", "conf": {}}]}
+        >>> source = compile_pipe(convert_dag(dag), "pipe_demo")
+        >>> print(next(line for line in source.splitlines() if line.startswith("def ")))
+        def pipe(item=None, context: Context | None = None, **_):
 
-    convert-dag flow.dag | compile-pipe - -o flow.py
+    CLI composition::
+
+        $ convert-dag flow.dag | compile-pipe - -o flow.py
+
 """
 
 from __future__ import annotations

@@ -1,16 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-Fetches a web page and yields the nodes matched by an XPath.
+Fetches a page and yields nodes matched by an XPath expression.
 
-Use ``xpath`` to narrow what you extract; e.g., ``"/a"`` for every link,
-``"/img"`` for every image, ``"/rss/channel/item"`` for feed entries. Without
-one the whole document is returned as a single nested item. The result can be
-converted into an RSS/JSON feed or combined with the regex and string builder
-pipes.
-
-The format is taken from the url's extension and defaults to ``html`` for an
-extension-less http url. Set ``html5`` to parse with the HTML5 parser instead
-of HTML4.
+Without an ``xpath``, the whole document is returned as one nested item.
 
 Examples:
 

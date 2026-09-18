@@ -1,3 +1,5 @@
+"""Synchronous and asynchronous item and stream typing aliases."""
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Iterable, Iterator

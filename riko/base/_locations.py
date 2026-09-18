@@ -1,3 +1,5 @@
+"""Location and currency record typing contracts."""
+
 from typing import Required, TypedDict
 
 

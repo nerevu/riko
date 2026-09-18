@@ -1,15 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Internal pub/sub backends.
-
-Delivers items from ``send`` to the named receivers that ``receive`` drains, one
-hub per execution model: ``sync_hub`` for synchronous pipelines and
-``async_hub`` for asynchronous ones. The two are independent — a sync sender
-cannot reach an async receiver.
-
-``reset_pubsub`` exists for test isolation only; runtime correctness does not
-depend on it.
-"""
+"""Internal sync and async hubs for named in-process pub/sub channels."""
 
 from __future__ import annotations
 

@@ -1,3 +1,5 @@
+"""Pipeline-definition and compiler typing contracts."""
+
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence

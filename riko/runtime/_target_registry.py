@@ -1,13 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Resolves a backend to its target class.
-
-A target is a self-describing class keyed by its ``backend`` (a
-:class:`Backends` member): registering the class is enough, and resolving a backend
-returns the target class, which is its own factory. ``FileTarget`` is the one
-built-in, keyed to :attr:`Backends.FILE`. External providers register their own
-targets at runtime or through the ``riko.targets`` entry-point group, so a new
-backend needs no core edit.
+Registers and resolves target classes by backend.
 
 Examples:
 
@@ -28,8 +21,7 @@ Examples:
 
 Attributes:
 
-    target_registry: Process-global registry backing ``register_target`` and target
-        resolution.
+    target_registry: Process-global target registry.
 
 """
 

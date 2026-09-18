@@ -299,11 +299,21 @@ def pipe(items):
 
 ## Module docstrings
 
-Every module keeps a description plus a basic usage example. The example is an
-**entry point**, not a comprehensive test suite — prefer *one* representative
-public workflow, exercising the module's public surface (e.g. `pipe`) rather
-than an internal helper (`parser`). Add `Attributes:` for module-level
-constants.
+These rules apply to Python modules across the entire `riko/` package, not only
+`riko/modules/`.
+
+Every module keeps a user-facing description. Every public module, and every
+private module that defines a re-exported public API, also keeps at least one
+basic usage example. Pure private implementation/type modules with no public
+entry point follow the private-module exception below.
+
+A module example is an **entry point**, not a comprehensive test suite — prefer
+*one* representative public workflow, exercising the module's public surface
+(e.g. `pipe`) rather than an internal helper (`parser`). This is a soft limit,
+not a hard cap: retain additional examples when they demonstrate a materially
+distinct first-class mode or complete the module's primary workflow in a way
+one example cannot. Do not add variants merely to enumerate configuration
+options. Add `Attributes:` for module-level constants.
 
 ```python
 """
@@ -325,9 +335,12 @@ Attributes:
 """
 ```
 
-Reducing a module docstring to a bare one-liner is a regression: the description
-may shrink, but the `Examples:` block stays. Package `__init__.py` files are the
-exception — see the `__init__.py` policy below.
+Reducing a public module docstring to a bare one-liner is a regression: prose
+may shrink, but the useful entry-point example stays. Removing a second example
+solely to satisfy the one-example preference is also a regression when that
+example demonstrates a distinct first-class mode or completes the primary
+workflow. Package `__init__.py` files are exempt from the module-example
+requirement, not from the package-docstring contract below.
 
 **Keep it user-facing.** A module docstring answers *what this is for* and *how
 to use it*. It is the first thing a reader sees, so it must not spend its space
@@ -347,6 +360,43 @@ The test: if a sentence would stop being true after a refactor that changed no
 behavior, it is mechanism and does not belong. Applies to *any* module,
 underscore-prefixed or not — a private module's reader is still arriving cold,
 and a stale mechanism summary misleads faster than no summary at all.
+
+### Preserving examples during cleanup
+
+Before shortening a module docstring, inventory its existing examples and classify
+each one:
+
+- **same workflow, different option/value** — usually keep one representative
+  example and remove the rest;
+- **distinct first-class mode** — keep it (for example, `loop` emit versus
+  assign/fold behavior);
+- **workflow completion** — keep the steps needed to show the abstraction's
+  primary use end to end (for example, register then resolve);
+- **different public surface** — keep it when the module genuinely exposes both
+  surfaces and neither is adequately demonstrated elsewhere;
+- **imported/library concept or implementation mechanism** — remove it from the
+  module docstring; point to or test the owning concept instead.
+
+Do not optimize for example count. Optimize for the smallest set that teaches the
+module's real public shape.
+
+When removing executable examples:
+
+1. Check function/class doctests and pytest coverage before adding anything.
+2. If the removed behavior has no executable owner, move it to the appropriate
+   test before deleting it from the docstring.
+3. Do not add a pytest test when an existing function/class doctest already owns
+   the same behavior.
+4. If an example is later restored as an executable doctest, remove any pytest
+   test that was added solely to preserve that identical happy path.
+5. Keep edge/error/non-deterministic/integration behavior in pytest even when a
+   related happy path appears in a doctest.
+
+Removing prose that merely taught an external/library concept does not require a
+replacement test. Removing a concrete user-visible Riko behavior does.
+
+Generated module docstrings follow the same rules, but the canonical edit belongs
+in the generator. Never patch only the generated file.
 
 ### Private modules
 
@@ -458,13 +508,13 @@ code block without interpreter prompts.
   breathing room and separates it from the statements around it:
 
   ```
-  >>> from riko import issync, run
+  >>> from riko import run
   >>>
   >>> async def main():
   ...     result = async_pipe(items)
   ...     print(await anext(result))
   >>>
-  >>> print(sync_result) if issync else run(main)
+  >>> run(main)
   ```
 
   Those two positions only — no other empty prompts for visual spacing. A true
@@ -493,17 +543,21 @@ Use idiomatic Python 3.12+:
 - modern asyncio / AnyIO patterns
 
 **There is no Twisted anywhere.** The optional async backend is AnyIO. Document
-the async contract, not the machinery. The canonical async doctest form is:
+the async contract, not the machinery. Async/Bado doctest items are skipped by
+`conftest.py` when async support is unavailable, so do not add `issync` fallback
+branches merely to make an async doctest pass in a sync-only environment. The
+canonical async doctest form is:
 
 ```python
 Examples:
-    >>> from riko import issync, run
+    >>> from riko import run
+    >>>
     >>> async def main():
     ...     items = ({"x": x} for x in range(5))
     ...     result = async_pipe(items)
     ...     print(await anext(result))
     >>>
-    >>> print({"count": 5}) if issync else run(main)
+    >>> run(main)
     {'count': 5}
 ```
 
@@ -525,8 +579,11 @@ import time.
   from there (`from riko.modules._prepare import PreparedModule`), not through a
   public-looking namespace.
 - Document the namespace's purpose, audience, stability, and package-wide
-  semantics — not how every exported object works.
+  semantics — not how every exported object works. A vague one-line summary is
+  a regression when it drops one of those boundary facts.
 - Keep package doctests minimal; tutorials belong in `README.rst`/`docs`.
+  Package examples are optional, but keep one when the package itself exposes a
+  distinct package-level workflow that is not better owned by a submodule.
 
 **PRIVATE namespaces:**
 
@@ -543,6 +600,13 @@ a justified exception).
 When deciding whether to re-export a symbol, ask: *do we intend users or
 extension authors to rely on this exact import path across releases?* If not,
 import it from its defining module and keep it out of `__all__`.
+
+**Package-docstring regression check:** when editing an `__init__.py`, compare the
+old and new docstrings separately from the import diff. A STABLE/EXTENSION package
+must still tell a reader what namespace they imported, who should use it, and what
+stability/package-wide contract it carries. A PRIVATE package may stay concise,
+but do not move architecture/mechanism into the package docstring merely to make
+it longer.
 
 ## Degrade or raise
 

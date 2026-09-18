@@ -1,19 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Writes a stream to a file as a terminal sink.
+Writes a stream to a file and passes its items through unchanged.
 
-``write`` is the in-pipeline counterpart of the top-level ``export`` converter:
-it serializes the stream with a ``Formats`` converter and writes the result to
-``conf['dest']``, then yields every item unchanged so the pipeline can continue
-(fan-out: write here, keep processing). Because it emits data outward it is
-bucketed as a ``Sink`` in the discovery tree.
-
-``write`` is **not lazy**. Serializing requires the complete stream, so the
-source is materialized into memory before anything is written, and the
-pass-through it yields replays that list rather than the original iterator. An
-infinite source never reaches the write; a large one is held in full. Place it
-after the pipes that shrink the stream (``filter``, ``truncate``, ``tail``),
-not before.
+Writing begins only after the complete source has been consumed, so the source
+must be finite.
 
 Examples:
 
@@ -33,8 +23,8 @@ Examples:
 
 Attributes:
 
-    OPTS (Opts): The default pipe options
-    DEFAULTS (Defaults): The default parser options
+    OPTS: Operator wrapper options.
+    DEFAULTS: Default operator configuration.
 
 """
 

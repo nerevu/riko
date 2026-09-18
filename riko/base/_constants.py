@@ -1,3 +1,5 @@
+"""Shared runtime defaults and encoding constants."""
+
 DEF_CONNECTION_COUNT = 16
 STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 ENCODING = "utf-8"

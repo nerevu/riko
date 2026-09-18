@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 
-"""Compose development commands under the ``manage`` CLI."""
+"""Composes development commands under the ``manage`` CLI."""
 
 import sys
 from functools import partial

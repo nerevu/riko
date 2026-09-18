@@ -1,9 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides return-kind inference for operator pipes.
-
-Uses annotations, generator detection, and a small AST fallback.
-"""
+"""Provides return-kind inference for operator pipes."""
 
 from __future__ import annotations
 

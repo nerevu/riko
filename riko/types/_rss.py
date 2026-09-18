@@ -1,3 +1,5 @@
+"""RSS and Atom entry typing contracts."""
+
 from __future__ import annotations
 
 from time import struct_time

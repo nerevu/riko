@@ -1,16 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Regenerates compiled pipe modules from their JSON pipe definitions.
-
-This uses the same compilation path as ``compile-pipe`` one file at a time. Each
-``<root>/pipelines/pipe_*.json`` that has a committed
-``<root>/pypipelines/pipe_*.py`` is recompiled in place for both the test fixtures
-(``tests/``) and runnable examples (``examples/``).
-
-Edit the JSON, not the generated module, then regenerate with ``gen-pipelines``.
-``tests/internal/test_compile.py`` and ``tests/internal/test_example_pipes.py`` fail
-if the two layers drift.
-"""
+"""Regenerates committed Python pipeline fixtures from JSON definitions."""
 
 from __future__ import annotations
 

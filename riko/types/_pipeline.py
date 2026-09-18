@@ -1,3 +1,5 @@
+"""Compiled pipeline step and dependency typing contracts."""
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable

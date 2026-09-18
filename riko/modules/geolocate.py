@@ -1,12 +1,11 @@
 # vim: sw=4:ts=4:expandtab
 """
-Resolves a currency code, street/ip address, or coordinates to a location.
+Resolves a currency code, street/IP address, or coordinates to a location.
 
 Warning:
     Only ``type="currency"`` performs a real lookup. ``street_address`` and
-    ``ip_address`` ignore their input and return fixed placeholder data, and
-    ``coordinates`` echoes the supplied lat/lon but reports a placeholder
-    country. See ``riko.coercion.cast.lookup_street_address`` and friends.
+    ``ip_address`` return placeholder data, while ``coordinates`` preserves the
+    supplied coordinates with placeholder location metadata.
 
 Examples:
 

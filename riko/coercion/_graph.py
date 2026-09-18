@@ -1,9 +1,7 @@
 """
-Tarjan's algorithm and topological sorting implementation in Python.
+Graph traversal and topological sorting helpers.
 
-by Paul Harrison
-
-Public domain, do with it as you will
+Derived from the public-domain implementation by Paul Harrison.
 """
 
 from __future__ import annotations

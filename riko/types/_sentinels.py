@@ -1,3 +1,5 @@
+"""Missing-value, stream-state, and terminal sentinel types."""
+
 from enum import Enum, auto
 from typing import NotRequired, TypedDict
 

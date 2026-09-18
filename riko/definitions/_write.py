@@ -1,3 +1,5 @@
+"""Declarative write modes, capabilities, results, and session contracts."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

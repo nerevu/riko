@@ -1,24 +1,16 @@
 # vim: sw=4:ts=4:expandtab
 """
-The built-in ``FileTarget`` and write preparation.
-
-``FileTarget`` is the one built-in target that implements ``SupportsWrite``. It
-serializes records with a ``Formats`` converter and writes a path.
-
-``prepare_write`` resolves a destination to a target, reads the target's capabilities,
-normalizes the keys, performs validation.
+Built-in file targets and write-preparation helpers.
 
 Examples:
 
     Basic usage::
 
-        >>> from riko.definitions._targets import prepare_write
+        >>> from riko.ext import FileTarget
         >>>
-        >>> prepared = prepare_write("out.csv")
-        >>> prepared.fmt
-        <Formats.CSV: 'csv'>
-        >>> prepared.operation.mode
-        <WriteMode.REPLACE: 'replace'>
+        >>> target = FileTarget("out.csv")
+        >>> target.backend.value
+        'file'
 
 """
 

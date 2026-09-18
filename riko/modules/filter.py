@@ -1,17 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Filters (includes or excludes) items from a stream.
+Filters items in a stream with one or more comparison rules.
 
-With filter you create rules that compare item elements to values you specify.
-So, for example, you may create a rule that says "permit items where the
-item.description contains 'kittens'". Or a rule that says "omit any items where
-the item.y:published is before yesterday".
-
-A single filter module can contain multiple rules. You can choose whether those
-rules will permit or block items that match those rules. Finally, you can choose
-whether an item must match all the rules, or if it can just match any rule.
-
-Lazy: items are tested and yielded one at a time.
+Rules can include or exclude matching items and can be combined with all/any
+semantics. Items are tested and yielded lazily.
 
 Examples:
 
@@ -28,7 +20,7 @@ Attributes:
 
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
-    ALLOW_INF: Whether to allow ``inf``/``-inf`` to compare numerically (default: False)
+    ALLOW_INF: Whether to allow ``inf``/``-inf`` to compare numerically.
 
 """
 

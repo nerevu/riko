@@ -1,14 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Receives items pushed by the send module.
+Receives items from a named in-process channel.
 
-Pairs with ``send`` for in-process fan-out: ``receive`` subscribes to a sender as named
-``others``.
-
-This is the low-level interface: it must be primed (the first ``next()`` registers
-its channel) and it emits a ``StreamState.PENDING`` marker on every poll that finds
-the queue empty, so a caller has to filter those out. ``riko.SyncPipe.subscribe`` is
-the high-level path — it registers up front and drains without ever emitting a marker.
+The sync pipe may emit ``StreamState.PENDING`` while waiting and stops after
+``max_wait`` seconds without an item.
 
 Examples:
 
@@ -17,12 +12,10 @@ Examples:
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.modules.send import pipe as sender
         >>>
-        >>> conf = {"name": "receiver1", "wait": 0.01, "max_wait": 2}
-        >>> target = receiver(conf=conf)
+        >>> target = receiver(conf={"name": "receiver1", "wait": 0.01, "max_wait": 2})
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
-        >>> stream = ({"x": x} for x in range(5))
-        >>> source = sender(stream, others=["receiver1"])
+        >>> source = sender([{"x": 0}], others=["receiver1"])
         >>> next(source)
         {'x': 0}
         >>> next(target)

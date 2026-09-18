@@ -1,15 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Splits a stream into identical copies.
+Splits a finite stream into independent copies.
 
-Use split when you want to perform different operations on data from the same
-stream. The union module is the reverse of split, it merges multiple input
-streams into a single combined stream.
-
-Not lazy: handing out independent copies requires the whole stream up front, so
-the source is materialized and each branch replays it. For lazy fan-out use
-named ``send``/``receive`` channels instead. Each branch deep copies its items,
-so mutating one branch never affects another.
+The complete source is consumed before the branches are returned, and each
+branch receives independent item copies.
 
 Examples:
 

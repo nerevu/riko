@@ -1,3 +1,5 @@
+"""Acquires and manages concrete write sessions for prepared writes."""
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager, contextmanager

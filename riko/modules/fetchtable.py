@@ -2,8 +2,7 @@
 """
 Fetches tabular data and yields rows.
 
-Reads csv/tsv, xls(x), mdb, json, geojson, dbf, yaml, sqlite, fixed width, and
-html files. The format is taken from the url's extension.
+The source format is selected from the url's extension.
 
 Examples:
 

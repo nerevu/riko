@@ -354,7 +354,7 @@ Both accept a plain ``str`` or a ``StrEnum`` member.
 
     >>> write = describe_module(Sinks.WRITE)
     >>> write.name, write.description
-    ('write', 'Writes a stream to a file as a terminal sink.')
+    ('write', 'Writes a stream to a file and passes its items through unchanged.')
     >>> fetch = describe_module(Sources.FETCH)
     >>> fetch.module
     <module 'riko.modules.fetch' from '...fetch.py'>

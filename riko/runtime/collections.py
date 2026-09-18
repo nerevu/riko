@@ -1,84 +1,16 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for creating (a)synchronous riko flows and streams.
+Synchronous and asynchronous pipeline collection APIs.
 
 Examples:
 
-    sync usage::
+    Basic usage::
 
-        >>> from riko import get_path, SyncPipe
+        >>> from riko import SyncPipe
         >>>
-        >>> fconf = {"url": get_path("gigs.json"), "path": "value.items"}
-        >>> str_conf = {"delimiter": "<br>"}
-        >>> str_kwargs = {"field": "description", "emit": True}
-        >>> sort_conf = {"rule": {"field": "title"}}
-        >>>
-        >>> list(SyncPipe("fetchdata", conf=fconf)
-        ...     .sort(conf=sort_conf)
-        ...     .tokenizer(conf=str_conf, **str_kwargs)
-        ...     .count()
-        ... )
-        [{'count': 169}]
-        >>> list(SyncPipe("fetchdata", conf=fconf, parallel=True)
-        ...     .sort(conf=sort_conf)
-        ...     .tokenizer(conf=str_conf, **str_kwargs)
-        ...     .count()
-        ... )
-        [{'count': 169}]
-        >>> list(SyncPipe("fetchdata", conf=fconf, parallel=True, threads=False)
-        ...     .sort(conf=sort_conf)
-        ...     .tokenizer(conf=str_conf, **str_kwargs)
-        ...     .count()
-        ... )
-        [{'count': 169}]
-        >>> fconf["type"] = "fetchdata"
-        >>> sources = [{"url": get_path("feed.xml")}, fconf]
-        >>> stream = SyncCollection(sources)
-        >>> next(stream)["title"]
-        'Donations'
-        >>> len(list(stream))
-        55
-        >>> len(list(SyncCollection(sources, parallel=True)))
-        56
-
-    async usage::
-
-        >>> from riko import AsyncPipe, AsyncCollection, get_path, run, issync
-        >>>
-        >>> fconf = {"url": get_path("gigs.json"), "path": "value.items"}
-        >>> str_conf = {"delimiter": "<br>"}
-        >>> str_kwargs = {"field": "description", "emit": True}
-        >>> sort_conf = {"rule": {"field": "title"}}
-        >>>
-        >>> async def main():
-        ...     d = await (AsyncPipe("fetchdata", conf=fconf)
-        ...         .sort(conf=sort_conf)
-        ...         .tokenizer(conf=str_conf, **str_kwargs)
-        ...         .count()
-        ...     )
-        ...
-        ...     print(list(d))
-        >>>
-        >>> if issync:
-        ...     [{"count": 169}]
-        ... else:
-        ...     run(main)
-        [{'count': 169}]
-        >>> async def main():
-        ...     fconf["type"] = "fetchdata"
-        ...     sources = [{"url": get_path("feed.xml")}, fconf]
-        ...     s = await AsyncCollection(sources, ordered=True)
-        ...     d = list(s)
-        ...     print(d[0]["title"])
-        ...     print(len(d))
-        >>>
-        >>> if issync:
-        ...     print("Donations")
-        ...     print(56)
-        ... else:
-        ...     run(main)
-        Donations
-        56
+        >>> items = [{"x": 1}, {"x": 2}]
+        >>> list(SyncPipe(source=items).count())
+        [{'count': 2}]
 
 """
 

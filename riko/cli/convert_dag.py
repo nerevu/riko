@@ -1,26 +1,22 @@
 """
-Convert a bare-bones riko DAG into a full JSON pipeline.
+Converts a compact Riko DAG into a full pipeline definition.
 
-A DAG lists ``modules`` and, optionally, ``wires`` as ``[source, target]``
-pairs. With no ``wires`` the modules are chained linearly in listing order, and
-a missing ``id`` defaults to ``sw-{n}``:
+Examples:
 
->>> from riko.runtime._compile import convert_dag
->>>
->>> dag = {
-...     "modules": [
-...         {"type": "forever", "conf": {}},
-...         {"type": "truncate", "conf": {}},
-...     ]
-... }
->>> pipe_def = convert_dag(dag)
->>> [(w["src"]["moduleid"], w["tgt"]["moduleid"]) for w in pipe_def["wires"]]
-[('sw-1', 'sw-2'), ('sw-2', '_OUTPUT')]
+    Basic usage::
 
-Every generated wire targets ``_INPUT``, so fan-in operators such as
-``union``/``join`` (whose secondary inputs need ``_OTHER{n}`` targets) cannot be
-expressed by the ``[source, target]`` pair format and must be authored as a full
-pipe definition instead.
+        >>> from riko import convert_dag
+        >>>
+        >>> dag = {
+        ...     "modules": [
+        ...         {"type": "forever", "conf": {}},
+        ...         {"type": "truncate", "conf": {}},
+        ...     ]
+        ... }
+        >>> pipe_def = convert_dag(dag)
+        >>> [(w["src"]["moduleid"], w["tgt"]["moduleid"]) for w in pipe_def["wires"]]
+        [('sw-1', 'sw-2'), ('sw-2', '_OUTPUT')]
+
 """
 
 import sys

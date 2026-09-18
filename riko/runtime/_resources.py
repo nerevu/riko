@@ -1,3 +1,5 @@
+"""Executes owned, external, one-shot, and reusable resource lifecycles."""
+
 from __future__ import annotations
 
 from types import MappingProxyType

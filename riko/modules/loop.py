@@ -1,14 +1,12 @@
 # vim: sw=4:ts=4:expandtab
 """
-Runs a submodule once per item.
+Runs an embedded module once per source item.
 
-A loop runs a processor or compiled sub-pipeline (``embed`` submodule)
-once per source item, and folds its output back into the stream. All processors
-except ``*input`` are loopable and may be embedded.
+The embedded result can replace the source item or be assigned back onto it.
 
 Examples:
-    1. Transform a field in place -- ``emit=True`` yields the submodule's
-       transformed items (each source item is replaced)::
+
+    Basic usage::
 
         >>> from riko.modules.loop import pipe
         >>> from riko.modules.regex import pipe as regex
@@ -22,10 +20,7 @@ Examples:
         >>> list(pipe(items, embed=regex, conf={"rule": [rule]}, emit=True))
         [{'title': 'heLLo'}, {'title': 'yeLLow'}]
 
-    2. Enrich each item with the first of many submodule results --
-       ``emit=False`` + ``assign`` + ``count="first"``. The submodule
-       (``tokenizer``) yields several values; the loop keeps the first and stores
-       it under the ``assign`` subkey::
+    Assigning the first embedded result::
 
         >>> from riko.modules.tokenizer import pipe as tokenizer
         >>>

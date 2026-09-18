@@ -1,10 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Formats a date field as text.
-
-``format`` is a ``strftime`` format string, so any specifier Python accepts
-works: ``"%m-%d-%Y"`` gives ``02-12-2008``, ``"%R"`` gives ``20:45``, and
-``"%A, %b %d, %y at %I:%M %p"`` gives ``Tuesday, Feb 12, 08 at 08:45 PM``.
+Formats a date field as text using a ``strftime`` format string.
 
 Examples:
 

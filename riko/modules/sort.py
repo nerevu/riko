@@ -82,7 +82,7 @@ async def async_parser(
     Examples:
 
         >>> from itertools import repeat
-        >>> from riko import run, issync
+        >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
@@ -93,10 +93,7 @@ async def async_parser(
         ...     result = await async_parser(stream, [rule], tuples, **kwargs)
         ...     print(next(result))
         >>>
-        >>> if issync:
-        ...     {"content": 4}
-        ... else:
-        ...     run(main)
+        >>> run(main)
         {'content': 4}
 
     """

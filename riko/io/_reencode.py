@@ -1,21 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provide a corrected ``Reencoder`` and ``reencode`` factory.
-
-This module is intended to move into meza. Riko can then import ``reencode`` from
-``meza.io`` again. It fixes:
-
-* ``read`` — meza treats ``n`` as a *line* count and, via a falsy ``if n``
-  guard, reads the entire stream when ``n == 0``, so a probing ``read(0)``
-  (e.g. html5lib's) silently drains the source and every later read hits EOF.
-  Here ``read`` honors ``n`` as documented (``0`` -> empty, negative/``None``
-  -> read all).
-* ``close`` — a ``StreamReader`` should close its underlying stream, but meza's
-  ``Reencoder`` only closes the decoded generator. It now retains the source
-  (``self._f``) and closes it. When the readable is a sub-stream of a larger
-  resource (e.g. a requests ``raw`` or a urlopen ``fp``), pass the owning
-  object as ``owner`` so ``close`` releases the whole resource.
-"""
+"""Provides byte/text re-encoding with file-like read and close semantics."""
 
 from __future__ import annotations
 

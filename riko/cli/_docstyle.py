@@ -1,24 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Docstring-style checks (PRIVATE).
-
-Scans Python source for function docstring summaries that begin with ``Returns`` or
-``Yields``, which the documentation standard forbids: the summary names the action,
-while the output belongs in the ``Returns:``/``Yields:`` section. Backs the
-``manage lint --docstrings`` check.
-
-Examples:
-
-    Basic usage::
-
-        >>> from riko.cli._docstyle import summary_leads_with_output
-        >>>
-        >>> summary_leads_with_output("Returns the parsed response body.")
-        True
-        >>> summary_leads_with_output("Parses the response body.")
-        False
-
-"""
+"""Checks docstring summaries against the Riko documentation rules."""
 
 from __future__ import annotations
 

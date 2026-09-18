@@ -1,3 +1,5 @@
+"""Collection, mapping, and nested value typing aliases."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
