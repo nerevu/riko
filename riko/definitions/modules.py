@@ -153,7 +153,7 @@ class ModuleDefinition:
         return pipe
 
 
-def resolve_module_name(name: ModuleNameLike | None) -> str:
+def normalize_module_name(name: ModuleNameLike | None) -> str:
     """
     Normalizes a module name to its canonical string value.
 
@@ -167,9 +167,9 @@ def resolve_module_name(name: ModuleNameLike | None) -> str:
 
     Examples:
 
-        >>> resolve_module_name("fetch")
+        >>> normalize_module_name("fetch")
         'fetch'
-        >>> resolve_module_name(None)
+        >>> normalize_module_name(None)
         ''
 
     """

@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 # Keep this module independent of riko.ext. It is imported while riko.modules is still
 # initializing.
-def _derive_operator_subtypes(
+def _get_operator_subtypes(
     pipe: ModuleParser,
 ) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
     subtype: ModuleSubtype | None = None
@@ -47,11 +47,11 @@ def _derive_operator_subtypes(
     return subtype, subtypes
 
 
-def derive_loopable(name: str, module_type: ModuleType | str) -> bool:
+def is_loopable(name: str, module_type: ModuleType | str) -> bool:
     return module_type == "processor" and name != "input"
 
 
-def derive_subtypes(
+def get_module_subtypes(
     pipe: ModuleParser,
     module_type: ModuleType | str,
     ftype: BasicCastType | None = None,
@@ -64,6 +64,6 @@ def derive_subtypes(
     elif module_type == "splitter":
         result = "splitter", {"splitter"}
     else:
-        result = _derive_operator_subtypes(pipe)
+        result = _get_operator_subtypes(pipe)
 
     return result

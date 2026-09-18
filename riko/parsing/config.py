@@ -3,9 +3,9 @@ Configuration parsing and per-item resolution helpers.
 
 Examples:
 
-    >>> from riko.parsing import parse_conf
+    >>> from riko.parsing import resolve_conf
     >>>
-    >>> parse_conf(conf={"type": "text", "value": "hello"})
+    >>> resolve_conf(conf={"type": "text", "value": "hello"})
     'hello'
 
 Attributes:
@@ -143,7 +143,7 @@ def _parse_conf_cached[VT](
     return _parse_conf_uncached(item, conf, default=default, **kwargs)
 
 
-def parse_conf[VT](
+def resolve_conf[VT](
     item: Item | None = None,
     conf: VT | None = None,
     default: VT | None = None,
@@ -188,7 +188,7 @@ def parse_conf[VT](
         ...     "PARAM": params
         ... }
         >>> item = {"title": "the title"}
-        >>> parsed = parse_conf(item, conf=conf, objectify=True)
+        >>> parsed = resolve_conf(item, conf=conf, objectify=True)
         >>> parsed["count"], parsed["base"]
         ('all', 'http://example.com')
         >>> parsed["param"]
@@ -197,18 +197,18 @@ def parse_conf[VT](
         >>> conf.get(attrs_1=iter([{'content': 'baz'}]))
         {'content': 'baz'}
         >>> _parse_conf_cached.cache_clear()
-        >>> parse_conf(conf={'type': 'text', 'value': 'hello'})
+        >>> resolve_conf(conf={'type': 'text', 'value': 'hello'})
         'hello'
         >>> _parse_conf_cached.cache_info().hits
         0
-        >>> _ = parse_conf(conf={'type': 'text', 'value': 'hello'})
+        >>> _ = resolve_conf(conf={'type': 'text', 'value': 'hello'})
         >>> _parse_conf_cached.cache_info().hits
         1
-        >>> parse_conf(conf={'type': 'text', 'value': 'hello'}, memoize=False)
+        >>> resolve_conf(conf={'type': 'text', 'value': 'hello'}, memoize=False)
         'hello'
         >>> _parse_conf_cached.cache_info().hits
         1
-        >>> _ = parse_conf(conf={'type': 'text', 'value': 'hello'}, memoize=True)
+        >>> _ = resolve_conf(conf={'type': 'text', 'value': 'hello'}, memoize=True)
         >>> _parse_conf_cached.cache_info().hits
         2
 

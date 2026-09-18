@@ -20,7 +20,7 @@ from pkgutil import iter_modules as iter_package_modules
 from typing import TYPE_CHECKING, Literal, cast, overload
 
 from riko.base._imports import import_or_else
-from riko.definitions.modules import ModuleDefinition, resolve_module_name
+from riko.definitions.modules import ModuleDefinition, normalize_module_name
 from riko.runtime._module_registry import module_registry
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
@@ -97,7 +97,7 @@ def get_module_metadata(  # noqa: E704
 def get_module_metadata(  # noqa: E302
     name: ModuleNameLike, strict: bool = False
 ) -> ModuleMetadata | None:
-    canonical = resolve_module_name(name)
+    canonical = normalize_module_name(name)
     module = import_module(f"{_PACKAGE}.{canonical}")
     pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
     targets = tuple(cast("ModuleWrapper", pipe) for pipe in pipes if callable(pipe))
@@ -188,7 +188,7 @@ def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
         >>> describe_module("does-not-exist")
 
     """
-    if canonical := resolve_module_name(name):
+    if canonical := normalize_module_name(name):
         definition: ModuleDefinition | None = module_registry.definition(canonical)
 
         if definition is None:  # noqa: SIM102

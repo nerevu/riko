@@ -172,6 +172,19 @@ new permanent bullet here.
   **Carve-out:** the metadata axes `ModuleType`/`ModuleCategory`/`ModuleSubtype` stay
   `Literal` even though they appear as `list_modules(...)` args — their canonical form is
   the bare metadata string; the discovery *tree* is the enum layer.
+- **Function-verb vocabulary.** Name a function by what it does; the six verbs a
+  developer weighs are: `parse` (interpret a serialized/grammar representation into a
+  different-kind structure — may reject bad input), `normalize` (canonicalize an
+  accepted form into the same kind — idempotent, no decoding, no validation), `resolve`
+  (map a reference / `*Like` convenience union / name to the one concrete thing it
+  denotes), `load` (acquire from an external/ambient source — file, env, importable),
+  `validate` (check only, no transform), `build` (construct an object — absorbs the old
+  `prepare`/`convert`/`make`). Specialized verbs are not alternatives to weigh: `cast`
+  (coercion), `compile` (compiler), `generate`/`gen_` (codegen / Python-generator
+  convention), `migrate` (version migration), `serialize`, `register`,
+  `read`/`write`/`open`/`close`, and `get`/`is`/`has` for ordinary queries and
+  predicates. `get` is not a house verb for lookups (use `resolve`) or construction
+  (use `build`).
 
 ## Project Quirks
 

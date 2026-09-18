@@ -5,10 +5,10 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import compile_pipe, convert_dag
+        >>> from riko import compile_pipe, build_pipe_def
         >>>
         >>> dag = {"modules": [{"type": "forever", "conf": {}}]}
-        >>> source = compile_pipe(convert_dag(dag), "pipe_demo")
+        >>> source = compile_pipe(build_pipe_def(dag), "pipe_demo")
         >>> print(next(line for line in source.splitlines() if line.startswith("def ")))
         def pipe(item=None, context: Context | None = None, **_):
 
@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from riko.base._logging import logger
-from riko.runtime._compile import compile_pipe, extract_dependencies
+from riko.runtime._compile import compile_pipe, get_pipeline_dependencies
 
 if TYPE_CHECKING:
     from riko.types._compiler import PipeDef
@@ -109,7 +109,7 @@ def run() -> None:
             dest = "stdout"
 
         if args.verbose:
-            deps = ", ".join(extract_dependencies(pipe_def))
+            deps = ", ".join(get_pipeline_dependencies(pipe_def))
             print(f"Modules used in {name}: {deps}", file=sys.stderr)
             print(f"wrote {size} bytes to {dest}", file=sys.stderr)
 

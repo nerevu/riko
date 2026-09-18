@@ -22,10 +22,10 @@ from riko.io._async import async_url_open, async_write, get_async_temp_file
 from riko.modules._metadata import describe_module, get_module_metadata
 from riko.modules._names import Modules, Sinks, Sources, Transforms
 from riko.runtime._compile import (
+    build_pipe_def,
     build_pipeline,
     compile_pipe,
-    convert_dag,
-    extract_dependencies,
+    get_pipeline_dependencies,
     parse_pipe_def,
 )
 from riko.runtime.collections import (
@@ -81,15 +81,15 @@ __all__ = [
     "async_url_open",
     "async_write",
     "backend",
+    "build_pipe_def",
     "build_pipeline",
     "compile_pipe",
-    "convert_dag",
     "describe_module",
     "export",
-    "extract_dependencies",
     "get_async_temp_file",
     "get_module_metadata",
     "get_path",
+    "get_pipeline_dependencies",
     "get_temp_file",
     "isasync",
     "issync",

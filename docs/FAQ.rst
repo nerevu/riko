@@ -74,8 +74,8 @@ Which imports are public?
 - **Stable**: the top-level ``riko`` package holds the SemVer-guaranteed API: the
   ``SyncPipe``/``AsyncPipe``/``SyncCollection``/
   ``AsyncCollection`` classes, ``Context``, ``ExecutionMode``, ``PipeState``,
-  ``backend``, ``build_pipeline``, ``compile_pipe``, ``convert_dag``, ``export``,
-  ``extract_dependencies``, ``get_module_metadata``, ``get_path``, ``isasync``,
+  ``backend``, ``build_pipeline``, ``compile_pipe``, ``build_pipe_def``, ``export``,
+  ``get_pipeline_dependencies``, ``get_module_metadata``, ``get_path``, ``isasync``,
   ``issync``, ``list_modules``, ``describe_module``, ``list_formats``,
   ``parse_pipe_def``, ``run``, the typed discovery surface (``Modules``/``Sources``/
   ``Transforms``/``Sinks``/``Formats`` bucket enums), and the pipeline exceptions.
@@ -716,7 +716,7 @@ DESCRIBE_DEPENDENCIES    Return module dependencies
 DESCRIBE                 Return both input and dependency information
 =======================  =========================================================
 
-``extract_dependencies()`` can also inspect a pipe definition without executing
+``get_pipeline_dependencies()`` can also inspect a pipe definition without executing
 it. See `Inspecting a pipeline`_ in the cookbook for additional details.
 
 The chainable classes share one pipeline model across four execution styles.

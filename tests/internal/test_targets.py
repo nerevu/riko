@@ -2,7 +2,7 @@
 """
 Tests target registration, write targets, sessions, and the ``write``/``sink`` verbs.
 
-Covers ``File`` capability resolution, key normalization, ``prepare_write``
+Covers ``File`` capability resolution, key normalization, ``build_write``
 validation, the native whole-stream vs. temporary singleton converter paths, the
 csv/jsonl/framed serialization contracts, the session lifecycle state machine, and
 the passthrough execution host (``riko.definitions._targets`` and
@@ -17,9 +17,9 @@ import pytest
 from riko.base._paths import get_path
 from riko.definitions._targets import (
     FileTarget,
-    prepare_write,
+    build_write,
+    normalize_keys,
     resolve_format,
-    resolve_keys,
     resolve_target,
     validate_target_mode,
 )
@@ -75,11 +75,11 @@ class TestResolveFormat:
 class TestNormalizeKeys:
     def test_empty_key_rejected(self):
         with pytest.raises(ValueError, match="non-empty"):
-            resolve_keys(["id", ""])
+            normalize_keys(["id", ""])
 
     def test_duplicate_keys_rejected(self):
         with pytest.raises(ValueError, match="duplicate"):
-            resolve_keys(["id", "id"])
+            normalize_keys(["id", "id"])
 
 
 class TestFileCapabilities:
@@ -130,21 +130,21 @@ class TestValidateTargetMode:
 
 class TestPrepareWrite:
     def test_path_defaults_to_extension_format_and_replace(self):
-        prepared = prepare_write("out.csv")
+        prepared = build_write("out.csv")
         assert prepared.fmt is Formats.CSV
         assert prepared.operation.mode is WriteMode.REPLACE
 
     def test_file_unsupported_mode(self):
         with pytest.raises(ValueError, match="does not support the 'merge'"):
-            prepare_write(FileTarget("out.csv"), "merge")
+            build_write(FileTarget("out.csv"), "merge")
 
     @pytest.mark.parametrize("dest", ["out.json", "out.geojson"])
     def test_file_append_rejected_for_framed_format(self, dest):
         with pytest.raises(ValueError, match="does not support the 'append'"):
-            prepare_write(FileTarget(dest), "append")
+            build_write(FileTarget(dest), "append")
 
     def test_record_store_binds_match_keys(self):
-        prepared = prepare_write(_RecordStore(), "merge", keys="endpoint_id")
+        prepared = build_write(_RecordStore(), "merge", keys="endpoint_id")
 
         assert prepared.operation.mode is WriteMode.MERGE
         assert prepared.operation.keys == ("endpoint_id",)
@@ -155,14 +155,14 @@ class TestConverterPath:
 
     def _spy(self, monkeypatch):
         calls = []
-        original = _write_session.convert_records
+        original = _write_session.serialize_records
 
         def spy(items, fmt, **kwargs):
             materialized = list(items)
             calls.append(materialized)
             return original(materialized, fmt, **kwargs)
 
-        monkeypatch.setattr(_write_session, "convert_records", spy)
+        monkeypatch.setattr(_write_session, "serialize_records", spy)
         return calls
 
     def test_sink_converts_whole_stream_once(self, monkeypatch, tmp_path):
@@ -271,7 +271,7 @@ class TestFramed:
 
     def test_abort_discards_staged_document(self, tmp_path):
         path = tmp_path / "out.json"
-        prepared = prepare_write(path)
+        prepared = build_write(path)
 
         with file_write_session(prepared) as session:
             session.write(ITEMS)
@@ -292,7 +292,7 @@ class TestMintWriteResource:
 
 class TestSessionLifecycle:
     def _session(self, tmp_path, name="out.json"):
-        session = _SyncFileWriteSession(prepare_write(tmp_path / name))
+        session = _SyncFileWriteSession(build_write(tmp_path / name))
         session.acquire()
         return session
 
@@ -341,7 +341,7 @@ class TestSessionLifecycle:
 
     def test_teardown_never_commits(self, tmp_path):
         path = tmp_path / "out.json"
-        session = _SyncFileWriteSession(prepare_write(path))
+        session = _SyncFileWriteSession(build_write(path))
         session.acquire()
         session.write(ITEMS)
         session.teardown()
@@ -349,7 +349,7 @@ class TestSessionLifecycle:
 
     def test_incremental_abort_keeps_written_bytes(self, tmp_path):
         path = tmp_path / "out.jsonl"
-        session = _SyncFileWriteSession(prepare_write(path))
+        session = _SyncFileWriteSession(build_write(path))
         session.acquire()
         session.write({"x": 1})
         session.abort()

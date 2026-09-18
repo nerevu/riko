@@ -175,7 +175,7 @@ def get_text(html: str, convert_charrefs: bool = False) -> str:
     return parser.data.getvalue()
 
 
-def extract_namespace(tree: AnyElementTree | AnyElement) -> str | None:
+def get_namespace(tree: AnyElementTree | AnyElement) -> str | None:
     """
     Extracts the XML namespace URI from an element's tag.
 
@@ -193,9 +193,9 @@ def extract_namespace(tree: AnyElementTree | AnyElement) -> str | None:
         >>> from xml.etree.ElementTree import fromstring
         >>>
         >>> tree = fromstring('<root xmlns="http://example.com/ns"/>')
-        >>> extract_namespace(tree)
+        >>> get_namespace(tree)
         'http://example.com/ns'
-        >>> extract_namespace(fromstring('<root/>'))
+        >>> get_namespace(fromstring('<root/>'))
 
     """
     tag = str(getattr(tree, "tag", None) or "")
@@ -330,7 +330,7 @@ def xpath(
         ['x']
 
     """
-    namespace = namespace or extract_namespace(tree) or ""
+    namespace = namespace or get_namespace(tree) or ""
     auto_pos = pos is None
 
     if auto_pos:

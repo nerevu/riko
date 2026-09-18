@@ -8,8 +8,7 @@ Examples:
 
         >>> from riko.ext import FileTarget
         >>>
-        >>> target = FileTarget("out.csv")
-        >>> target.backend.value
+        >>> FileTarget("out.csv").backend.value
         'file'
 
 """
@@ -34,7 +33,7 @@ _FILE_APPEND_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL
 _FILE_INCREMENTAL_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
 
 
-def resolve_keys(value: KeyLike | None) -> tuple[str, ...]:
+def normalize_keys(value: KeyLike | None) -> tuple[str, ...]:
     """
     Normalizes ``value`` into a tuple of keys.
 
@@ -54,11 +53,11 @@ def resolve_keys(value: KeyLike | None) -> tuple[str, ...]:
 
     Examples:
 
-        >>> resolve_keys("id")
+        >>> normalize_keys("id")
         ('id',)
-        >>> resolve_keys(["a", "b"])
+        >>> normalize_keys(["a", "b"])
         ('a', 'b')
-        >>> resolve_keys(None)
+        >>> normalize_keys(None)
         ()
 
     """
@@ -118,7 +117,7 @@ def validate_target_mode(
         raise ValueError(msg)
 
 
-def prepare_write(
+def build_write(
     dest: Destination,
     mode: WriteMode | str = WriteMode.REPLACE,
     *,
@@ -149,9 +148,9 @@ def prepare_write(
 
     Examples:
 
-        >>> from riko.definitions._targets import FileTarget, prepare_write
+        >>> from riko.definitions._targets import FileTarget, build_write
         >>>
-        >>> prepared = prepare_write(FileTarget("out.csv"), "append")
+        >>> prepared = build_write(FileTarget("out.csv"), "append")
         >>> prepared.operation.mode
         <WriteMode.APPEND: 'append'>
         >>> prepared.fmt
@@ -161,7 +160,7 @@ def prepare_write(
     target = resolve_target(dest)
     resolved_mode = WriteMode(mode)
     capabilities = target.capabilities(fmt)
-    normalized_keys = resolve_keys(keys)
+    normalized_keys = normalize_keys(keys)
 
     validate_target_mode(target, resolved_mode, capabilities, keys=normalized_keys)
     operation = WriteOperation(resolved_mode, keys=normalized_keys)
@@ -321,9 +320,9 @@ class FileTarget:
 
 __all__ = [
     "FileTarget",
-    "prepare_write",
+    "build_write",
+    "normalize_keys",
     "resolve_format",
-    "resolve_keys",
     "resolve_target",
     "validate_target_mode",
 ]

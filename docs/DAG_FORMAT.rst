@@ -4,7 +4,7 @@ Bare-bones DAG format
 riko pipelines are stored as verbose JSON pipe definitions (``tests/pipelines/*.json``):
 every wire is a full ``src``/``tgt`` endpoint record, and a terminal ``output`` module is
 always present. The **bare-bones DAG** is a minimal authoring format that captures only
-the essentials and expands to a full pipe definition via ``convert_dag``.
+the essentials and expands to a full pipe definition via ``build_pipe_def``.
 
 Schema
 ------
@@ -56,10 +56,10 @@ e.g. the source is listed after the operator it feeds
         ]
     }
 
-Expansion rules (``convert_dag``)
----------------------------------
+Expansion rules (``build_pipe_def``)
+------------------------------------
 
-``riko.runtime.compile.convert_dag(dag)`` returns a full pipe definition:
+``riko.runtime.compile.build_pipe_def(dag)`` returns a full pipe definition:
 
 1. Modules missing an ``id`` are assigned ``sw-{n}`` in 1-based listing order.
 2. When ``wires`` is omitted or empty, consecutive modules are wired in listing order.

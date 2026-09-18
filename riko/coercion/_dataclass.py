@@ -107,7 +107,7 @@ def fromdict(
     return cls(**data)
 
 
-def make_regex_conf_rule(
+def build_regex_conf_rule(
     f: str, m: str, r: str, seriesmatch: bool = True, default: str | None = None
 ) -> RegexConfRule:
     """
@@ -127,7 +127,7 @@ def make_regex_conf_rule(
 
     Examples:
 
-        >>> rule = make_regex_conf_rule("title", "foo", "bar")
+        >>> rule = build_regex_conf_rule("title", "foo", "bar")
         >>> rule.field, rule.match, rule.replace, rule.seriesmatch
         ('title', 'foo', 'bar', True)
 
@@ -155,10 +155,10 @@ def resolve_regex_rule(
 
     Examples:
 
-        >>> rule = resolve_regex_rule(make_regex_conf_rule("title", "foo", "bar"))
+        >>> rule = resolve_regex_rule(build_regex_conf_rule("title", "foo", "bar"))
         >>> rule["field"], rule["match"], rule["replace"], rule["series"]
         ('title', 'foo', 'bar', True)
-        >>> conf_rule = make_regex_conf_rule("title", "foo", "bar")
+        >>> conf_rule = build_regex_conf_rule("title", "foo", "bar")
         >>> compiled = resolve_regex_rule(conf_rule, True)
         >>> compiled["match"].pattern
         'foo'

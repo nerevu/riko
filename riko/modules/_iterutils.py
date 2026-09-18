@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Literal, TypeVar, cast
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
-from riko.coercion._dates import date_to_datetime, ensure_tzinfo
+from riko.coercion._dates import date_to_datetime, normalize_tzinfo
 from riko.coercion.cast import CAST_SWITCH, cast_value
 from riko.types._enums import CastType
 from riko.types._scalars import PrimitiveValue, SortableValue
@@ -195,7 +195,7 @@ def def_itemgetter(
 
         if type_ in DATELIKE_TYPES and isinstance(casted, (date, dt)):
             if isinstance(casted, dt):
-                aware = ensure_tzinfo(casted, fallback_tzinfo=fallback_tzinfo)
+                aware = normalize_tzinfo(casted, fallback_tzinfo=fallback_tzinfo)
             else:
                 aware = date_to_datetime(casted, fallback_tzinfo=fallback_tzinfo)
 

@@ -76,7 +76,7 @@ if OFX is not None:
     CONVERSION_FUNCS[Formats.QIF] = records2qif
 
 
-def convert_records(
+def serialize_records(
     records: RikoItems, fmt: Formats, **kwargs: object
 ) -> ConversionOutput:
     """Serializes ``records`` with the resolved ``Formats`` converter."""

@@ -229,14 +229,14 @@ discoverable too. Unqualified names are reserved for built-ins; dotted namespace
 `describe_module(name) -> ModuleDefinition | None` (`riko/modules/_metadata.py`, on the stable
 `riko` surface) give filtered runtime truth. **The three filter axes are all lowercase
 `Literal` strings, not enums** — `ModuleType = Literal["operator","processor","splitter"]`,
-`ModuleSubtype`, and `ModuleCategory = Literal["source","transform","sink"]` (the `derive_category`
+`ModuleSubtype`, and `ModuleCategory = Literal["source","transform","sink"]` (the `get_module_category`
 return value) — so `list_modules(category="sink")` → `["write"]`. These are a **separate axis** from
 the discovery-tree identifier enums (`Modules`/`Sources`/`Transforms`/`Sinks`, whose member `.value`
 is the module id, for `SyncPipe(...)`/`|` chaining): don't confuse them. In particular
 `category="Sinks"` (the bucket class name) returns `[]` — the value is `"sink"`, lowercase singular.
 (The codegen maps the three category strings to the plural bucket **class** names via `_CATEGORY_CLASS`
 = `{"source": "Sources", "transform": "Transforms", "sink": "Sinks"}`.)
-`derive_category` (`riko/ext/_names.py`) buckets each module by **data-flow capability only**.
+`get_module_category` (`riko/ext/_names.py`) buckets each module by **data-flow capability only**.
 `SINK_NAMES` (`{"output","write"}`) is the *criterion*, not the
 membership: a module is a `Sink` iff its name is in that set. The one built-in match is `write`
 (`riko/modules/write.py`) — a pass-through operator that serializes the stream to `conf['url']` via a
@@ -287,7 +287,7 @@ async). Tests: `tests/internal/test_decorators.py`.
 
 **Fluent surface (P9, partial — shipped):** value-taking chaining — `pipe | "name"`,
 `pipe | ("name", conf)`, `pipe | SyncPipe(...)`, `items | SyncPipe(...)`, and `.pipe()`/`.async_pipe()`
-— plus the `ModuleName` `StrEnum` base and `resolve_module_name` (`riko/ext/_names.py`); a name may
+— plus the `ModuleName` `StrEnum` base and `normalize_module_name` (`riko/ext/_names.py`); a name may
 be a `str` or `ModuleName` member anywhere, normalized to its canonical string at the boundary. The
 generated `Modules` tree (P9A) shipped — `pipe | Transforms.FILTER` resolves identically to
 `pipe.filter()`; see §24.
@@ -409,8 +409,8 @@ pub/sub). Four durable layers:
 - **prepared** — `PreparedWrite` (target + normalized operation + resolved `WriteCapabilities`) is the
   validated object; `WriteOperation` on its own is unvalidated intent. `WriteCapabilities` stores only
   independent facts (`modes`, `fmt`, `incremental`, `match_keyed_modes`, `idempotent_modes`);
-  `appendable`/`serializes`/`keyed_modes` are **derived** properties. `prepare_write` +
-  `validate_target_mode` + local `resolve_keys` live in `riko/definitions/_targets.py` (`resolve_keys` is a
+  `appendable`/`serializes`/`keyed_modes` are **derived** properties. `build_write` +
+  `validate_target_mode` + local `normalize_keys` live in `riko/definitions/_targets.py` (`normalize_keys` is a
   dedicated helper, *not* a widened `_iterutils.listize`).
 - **runtime** — the `SyncWriteSession` protocol (`write(Item | Items)` / `finalize` / `abort` /
   `teardown`) and the `_FileWriteSession` state machine (`_SessionState` OPEN/FINALIZED/ABORTED/CLOSED,

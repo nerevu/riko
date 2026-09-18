@@ -31,7 +31,7 @@ from riko.bado._util import as_awaitable
 from riko.bado.itertools import as_async, async_iter, async_map
 from riko.base._iterutils import dispatch
 from riko.coercion._sequences import is_listlike
-from riko.definitions._resources import bind_resources, resolve_binding
+from riko.definitions._resources import bind_resources, normalize_binding
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
 from riko.runtime.context import Context
@@ -54,12 +54,12 @@ from riko.types._streams import (
 )
 
 from ._assignment import gen_assignments, get_assignment
-from ._derive import derive_loopable, derive_subtypes
+from ._derive import get_module_subtypes, is_loopable
 from ._loop import loop_embed_async, loop_embed_sync
 from ._prepare import (
     PreparedModule,
-    get_casters,
-    get_parsers,
+    build_casters,
+    build_parsers,
     get_pieces_or_conf,
     parse_and_cast,
 )
@@ -269,9 +269,9 @@ class Module[B: (Literal[True], Literal[False])]:
         if module_type not in {"operator", "processor", "splitter"}:
             raise TypeError(f"Unsupported module type: {module_type!r}")
 
-        subtype, subtypes = derive_subtypes(pipe, module_type, **self._opts)
+        subtype, subtypes = get_module_subtypes(pipe, module_type, **self._opts)
         name = pipe.__module__.rsplit(".", 1)[-1]
-        loopable = derive_loopable(name, module_type)
+        loopable = is_loopable(name, module_type)
 
         setattr(wrapper, "name", name)  # noqa: B010
         setattr(wrapper, "type", module_type)  # noqa: B010
@@ -351,10 +351,10 @@ class Module[B: (Literal[True], Literal[False])]:
         opts["assign"] = _assign
         opts.update(cast("Opts", kwargs))
 
-        parsers, is_dynamic = get_parsers(opts, conf=_conf, **kwargs)
+        parsers, is_dynamic = build_parsers(opts, conf=_conf, **kwargs)
         static_casted = None
 
-        casters: CastFuncs[ItemOrValue, object] = get_casters(opts)
+        casters: CastFuncs[ItemOrValue, object] = build_casters(opts)
 
         if casters and not is_dynamic:
             parsed_conf = parsers.conf_parser({})
@@ -373,7 +373,7 @@ class Module[B: (Literal[True], Literal[False])]:
             emit=_emit,
             is_source=is_source,
             static_casted=static_casted,
-            resources=resolve_binding(opts.get("resources")),
+            resources=normalize_binding(opts.get("resources")),
         )
 
 
