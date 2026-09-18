@@ -1,3 +1,5 @@
+"""Static config contracts for the built-in pipe modules."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

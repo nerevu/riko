@@ -1,4 +1,5 @@
 # vim: sw=4:ts=4:expandtab
+"""Hand-written full Kazeeki pipeline fixture."""
 
 from __future__ import annotations
 

@@ -1,4 +1,5 @@
 # vim: sw=4:ts=4:expandtab
+"""Hand-written sync Kazeeki pipeline fixture (variant 2)."""
 
 from riko.runtime.collections import SyncPipe
 from riko.runtime.context import Context
