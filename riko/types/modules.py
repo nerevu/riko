@@ -420,7 +420,7 @@ class UrlBuilderRawConf(TypedDict, total=False):
 
 
 class UrlParseRawConf(TypedDict, total=False):
-    parse_key: Value
+    normalize_key: Value
 
 
 class XpathFetchPageRawConf(TypedDict):
@@ -822,7 +822,7 @@ class UrlBuilderConf(TypedDict, total=False):
 
 
 class UrlParseConf(TypedDict, total=False):
-    parse_key: str
+    normalize_key: str
 
 
 class WriteConf(TypedDict, total=False):

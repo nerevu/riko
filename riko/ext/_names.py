@@ -7,10 +7,10 @@ Examples:
     Basic usage::
 
         >>> from riko import get_module_metadata
-        >>> from riko.ext import derive_category
+        >>> from riko.ext import get_module_category
         >>>
         >>> metadata = get_module_metadata("fetch", strict=True)
-        >>> derive_category(metadata)
+        >>> get_module_category(metadata)
         'source'
 
 """
@@ -26,14 +26,14 @@ if TYPE_CHECKING:
 
 
 @overload
-def derive_category(  # noqa: E704
+def get_module_category(  # noqa: E704
     metadata: ModuleMetadata, *, provider: str = "riko", override: str
 ) -> str: ...
 @overload  # noqa: E302
-def derive_category(  # noqa: E704
+def get_module_category(  # noqa: E704
     metadata: ModuleMetadata, *, provider: str = "riko", override: None = ...
 ) -> ModuleCategory: ...
-def derive_category(  # noqa: E302
+def get_module_category(  # noqa: E302
     metadata: ModuleMetadata, *, provider: str = "riko", override: str | None = None
 ) -> ModuleCategory | str:
     """

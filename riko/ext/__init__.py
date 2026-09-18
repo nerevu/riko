@@ -20,7 +20,7 @@ from riko.definitions._workflow import (
     WriteNode,
 )
 from riko.definitions._write import WriteCapabilities
-from riko.definitions.modules import ModuleDefinition, resolve_module_name
+from riko.definitions.modules import ModuleDefinition, normalize_module_name
 from riko.modules._decorators import operator, processor, splitter
 from riko.runtime._module_registry import ModuleRegistry, register_module
 from riko.runtime._target_registry import TargetRegistry, register_target
@@ -38,7 +38,7 @@ from riko.types._wrappers import (
 )
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
-from ._names import derive_category
+from ._names import get_module_category
 from .config import get_conf_type
 
 __all__ = [
@@ -74,12 +74,12 @@ __all__ = [
     "WorkflowSpec",
     "WriteCapabilities",
     "WriteNode",
-    "derive_category",
     "get_conf_type",
+    "get_module_category",
+    "normalize_module_name",
     "operator",
     "processor",
     "register_module",
     "register_target",
-    "resolve_module_name",
     "splitter",
 ]

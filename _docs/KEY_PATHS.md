@@ -96,7 +96,7 @@ iterator is consumed.
 | `riko/definitions/modules.py` | immutable `ModuleDefinition` contract used by built-ins, registry entries, and discovery |
 | `riko/definitions/_resource_types.py` | resource-definition aliases shared by declarative binding code; any runtime references here are type-only |
 | `riko/definitions/_resources.py` | resource binding normalization, factory classification, `ResourceView`, and definition-side binding helpers |
-| `riko/definitions/_targets.py` | the built-in `FileTarget` write adapter (carrying `backend = Backends.FILE`) and write preparation/validation (`resolve_target`/`resolve_format`/`prepare_write`); the base target protocols live in `riko/types/_targets.py` |
+| `riko/definitions/_targets.py` | the built-in `FileTarget` write adapter (carrying `backend = Backends.FILE`) and write preparation/validation (`resolve_target`/`resolve_format`/`build_write`); the base target protocols live in `riko/types/_targets.py` |
 | `riko/definitions/_write.py` | `WriteMode`, `WriteResult`, `WriteOperation`, `WriteCapabilities`, `PreparedWrite`, and sync/async write-session protocols |
 | `riko/runtime/context.py` | immutable execution `Context`; resource bindings derive new contexts rather than mutating one in place |
 | `riko/runtime/_resources.py` | concrete `Resource` hierarchy and one-shot/reusable lifecycle execution; this file and `context.py` form the architecture's explicit `execution` sublayer |
@@ -109,7 +109,7 @@ reusable; mutable open/close/session state belongs to execution-owned objects.
 | Path | Role |
 |---|---|
 | `riko/runtime/collections.py` | `SyncPipe`/`AsyncPipe`/`SyncCollection`/`AsyncCollection`; `Formats`, `export()`, `list_formats()`, `write`/`sink`, pipeline lifecycle and pool ownership |
-| `riko/runtime/_compile.py` | DAG/JSON parsing and compilation (`build_pipeline`, `compile_pipe`, `convert_dag`, dependency extraction) |
+| `riko/runtime/_compile.py` | DAG/JSON parsing and compilation (`build_pipeline`, `compile_pipe`, `build_pipe_def`, dependency extraction) |
 | `riko/runtime/_compile_repr.py` | Python-source representation helpers used by compiler/codegen paths |
 | `riko/runtime/_pipelines.py` | pipeline lookup/loading support |
 | `riko/runtime/_resolver.py` | module/pipeline resolution orchestration |

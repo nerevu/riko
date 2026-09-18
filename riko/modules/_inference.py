@@ -429,7 +429,7 @@ def gen_operator_return_kinds(pipe: Callable) -> Iterator[OperatorReturnKind]:
     """
     Reduces the full inferences to their bare return kinds.
 
-    The projection ``_derive_operator_subtypes`` (in ``riko.modules._derive``)
+    The projection ``_get_operator_subtypes`` (in ``riko.modules._derive``)
     consumes: it needs only the kinds to classify an operator as
     ``aggregator``/``composer``, not where each kind came from.
 

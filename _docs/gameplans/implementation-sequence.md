@@ -419,7 +419,7 @@ the right seams without pulling their runtimes forward:
 - the async **operator** wrapper now returns an `AsyncIterator` directly rather than
   `Awaitable[AsyncIterator]`; async processors/splitters keep their awaitable contract for now;
 - the fluent sync `write()`/`sink()` implementation is moved off the hidden `send`/`on_receive`
-  pub/sub channel onto a private write-session mechanism (`prepare_write` → a `WriteSession`
+  pub/sub channel onto a private write-session mechanism (`build_write` → a `WriteSession`
   lifecycle) shared by both verbs.
 
 This establishes the seam only. R4B moves ownership of the write-session lifecycle into the private

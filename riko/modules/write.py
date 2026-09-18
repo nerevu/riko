@@ -37,7 +37,7 @@ from meza import io
 
 from riko.definitions._targets import resolve_format
 from riko.io._async import async_write
-from riko.io._serialization import convert_records
+from riko.io._serialization import serialize_records
 from riko.types._io import IOFileLike, IOFileLikeType
 from riko.types._options import Defaults, Opts
 from riko.types._scalars import AnyStr, AnyStrType
@@ -67,7 +67,7 @@ def _validate(items: Items, objconf: WriteObjconf) -> AnyStr | IOFileLike | None
     else:
         if not objconf.dest:
             logger.warning("The destination is not set. Skipping writing.")
-        elif (content := convert_records(items, fmt)) is None:
+        elif (content := serialize_records(items, fmt)) is None:
             logger.warning(f"The {fmt} converter produced no content")
         elif not isinstance(content, (AnyStrType, IOFileLikeType)):
             logger.warning(f"The {fmt} converter produced unwritable content")

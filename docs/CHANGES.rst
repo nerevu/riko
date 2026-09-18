@@ -42,6 +42,12 @@ Changes
 - Renamed the ``riko.Targets`` export enum to ``riko.Formats``, since its members name
   serialization formats; ``export``/``write`` accept the same members under the new name.
 
+- Renamed several functions to a consistent verb vocabulary. Stable ``riko``:
+  ``convert_dag`` → ``build_pipe_def`` and ``extract_dependencies`` →
+  ``get_pipeline_dependencies``. Extension ``riko.ext``: ``resolve_module_name`` →
+  ``normalize_module_name`` and ``derive_category`` → ``get_module_category``. The
+  ``convert-dag`` CLI command name is unchanged.
+
 - Added chainable ``write`` and terminal ``sink`` methods to ``SyncPipe`` and
   ``SyncCollection``. They take the destination directly, e.g., ``write("out.csv")``)
   and accept ``fmt`` (``Formats``/str, e.g., ``json``) and ``mode`` (``WriteMode``/str,

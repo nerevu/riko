@@ -47,7 +47,7 @@ class Defaults(TypedDict, total=False):
     name: str
     prompt: str
     param: dict[str, str | None]
-    parse_key: str
+    normalize_key: str
     permit: bool
     precision: int
     pubDate: str

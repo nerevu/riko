@@ -35,8 +35,8 @@ COMPILE = frozenset(
     {
         "build_pipeline",
         "compile_pipe",
-        "convert_dag",
-        "extract_dependencies",
+        "build_pipe_def",
+        "get_pipeline_dependencies",
         "parse_pipe_def",
     }
 )
@@ -123,9 +123,9 @@ EXTENSION = frozenset(
         "WorkflowSpec",
         "WriteCapabilities",
         "WriteNode",
-        "derive_category",
+        "get_module_category",
         "get_conf_type",
-        "resolve_module_name",
+        "normalize_module_name",
         "operator",
         "processor",
         "register_module",

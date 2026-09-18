@@ -28,7 +28,7 @@ from riko.base._iterutils import broadcast
 from riko.base._source_format import ruff_format
 from riko.modules._metadata import gen_module_catalog, gen_registry_catalog
 
-from ._names import derive_category
+from ._names import get_module_category
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
@@ -86,7 +86,7 @@ def enum_member_name(name: str, *, override: str | None = None) -> str:
 def gen_catalog_entries() -> Iterator[NameEntry]:
     """Emits name entries from the runtime module catalog."""
     for md in sorted(gen_module_catalog(), key=lambda md: md.name):
-        yield NameEntry(name=md.name, category=derive_category(md))
+        yield NameEntry(name=md.name, category=get_module_category(md))
 
 
 def _class_name(group: ModuleCategory | str) -> ModuleClass | str:
@@ -223,7 +223,9 @@ def list_modules(  # noqa: E302
     subtype_match = partial(_matches_subtype, subtype=subtype, primary=primary)
     type_match = lambda module: type is None or module.type == type
     loop_match = lambda module: loopable is None or module.loopable is loopable
-    user_match = lambda module: category is None or derive_category(module) == category
+    user_match = lambda module: (
+        category is None or get_module_category(module) == category
+    )
     matches = subtype_match, type_match, loop_match, user_match
     match = lambda module: all(broadcast(module, *matches))
 

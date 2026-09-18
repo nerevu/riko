@@ -45,7 +45,7 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 <!-- api-surface:compile -->
 ```python
 >>> sorted(COMPILE)
-['build_pipeline', 'compile_pipe', 'convert_dag', 'extract_dependencies', 'parse_pipe_def']
+['build_pipe_def', 'build_pipeline', 'compile_pipe', 'get_pipeline_dependencies', 'parse_pipe_def']
 ```
 <!-- /api-surface:compile -->
 
@@ -137,7 +137,7 @@ authors rather than ordinary application code.
 <!-- api-surface:extension -->
 ```python
 >>> sorted(EXTENSION)
-['ActionNode', 'AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'CacheNode', 'DynamicConf', 'Endpoint', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleNode', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WorkflowSpec', 'WriteCapabilities', 'WriteNode', 'derive_category', 'get_conf_type', 'operator', 'processor', 'register_module', 'register_target', 'resolve_module_name', 'splitter']
+['ActionNode', 'AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'CacheNode', 'DynamicConf', 'Endpoint', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleNode', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WorkflowSpec', 'WriteCapabilities', 'WriteNode', 'get_conf_type', 'get_module_category', 'normalize_module_name', 'operator', 'processor', 'register_module', 'register_target', 'splitter']
 ```
 <!-- /api-surface:extension -->
 

@@ -276,7 +276,7 @@ class UrlBuilderObjconf(DynamicConf):
 
 
 class UrlParseObjconf(DynamicConf):
-    parse_key: str
+    normalize_key: str
 
 
 class WriteObjconf(DynamicConf):

@@ -13,7 +13,7 @@ from riko.base._iterutils import broadcast, dispatch
 from riko.coercion._objectify import objectify
 from riko.coercion._sequences import listize
 from riko.coercion.cast import CAST_SWITCH, cast_none, cast_pass, cast_value
-from riko.parsing.config import conf_is_dynamic, get_field, parse_conf
+from riko.parsing.config import conf_is_dynamic, get_field, resolve_conf
 from riko.types._enums import BasicCastType, CastType
 from riko.types._guards import is_mapping
 from riko.types._options import (
@@ -336,7 +336,7 @@ def parse_and_cast[T, E](  # noqa: E302
     return dispatched
 
 
-def get_parsers(opts: Opts, conf: Conf, **kwargs: object) -> tuple[ParseFuncs, bool]:
+def build_parsers(opts: Opts, conf: Conf, **kwargs: object) -> tuple[ParseFuncs, bool]:
     """
     Builds the field and conf parsers for a module, detecting dynamic conf.
 
@@ -364,24 +364,24 @@ def get_parsers(opts: Opts, conf: Conf, **kwargs: object) -> tuple[ParseFuncs, b
     if opts.get("ptype") == BasicCastType.NONE:
         conf_parser = cast_none
     elif conf_is_dynamic(conf, memoize=False, **kwargs):
-        conf_parser = partial(parse_conf, conf=conf, memoize=False)
+        conf_parser = partial(resolve_conf, conf=conf, memoize=False)
         is_dynamic = True
     else:
-        pre_parsed = parse_conf(None, conf=conf, memoize=True)
+        pre_parsed = resolve_conf(None, conf=conf, memoize=True)
         conf_parser = lambda _, **__: pre_parsed
 
     return ParseFuncs(field_parser, conf_parser), is_dynamic
 
 
 @overload
-def _get_caster[T](type_: None) -> ArgCaster[T]: ...  # noqa: E704
+def _build_caster[T](type_: None) -> ArgCaster[T]: ...  # noqa: E704
 @overload
-def _get_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
+def _build_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
 @overload  # noqa: E302
-def _get_caster(  # noqa: E704
+def _build_caster(  # noqa: E704
     type_: CastType,
 ) -> ArgCaster[ItemOrValue | AnyLocation]: ...
-def _get_caster[T](  # noqa: E302
+def _build_caster[T](  # noqa: E302
     type_: BasicCastType | CastType | None,
 ) -> ArgCaster[T | PrimitiveValue | AnyLocation]:
     """
@@ -413,7 +413,7 @@ def _get_caster[T](  # noqa: E302
     return caster
 
 
-def get_casters(opts: Opts) -> CastFuncs[ItemOrValue, object]:
+def build_casters(opts: Opts) -> CastFuncs[ItemOrValue, object]:
     """
     Builds the field, extract, and conf casters from a module's options.
 
@@ -435,8 +435,8 @@ def get_casters(opts: Opts) -> CastFuncs[ItemOrValue, object]:
     ptype = opts.get("ptype")
     extract = opts.get("extract")
 
-    field_caster = _get_caster(ftype)
-    value_caster = _get_caster(ptype)
+    field_caster = _build_caster(ftype)
+    value_caster = _build_caster(ptype)
 
     if ptype == BasicCastType.NONE:
         extract_caster: ArgCaster[object] = cast_none

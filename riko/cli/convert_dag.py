@@ -5,7 +5,7 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import convert_dag
+        >>> from riko import build_pipe_def
         >>>
         >>> dag = {
         ...     "modules": [
@@ -13,7 +13,7 @@ Examples:
         ...         {"type": "truncate", "conf": {}},
         ...     ]
         ... }
-        >>> pipe_def = convert_dag(dag)
+        >>> pipe_def = build_pipe_def(dag)
         >>> [(w["src"]["moduleid"], w["tgt"]["moduleid"]) for w in pipe_def["wires"]]
         [('sw-1', 'sw-2'), ('sw-2', '_OUTPUT')]
 
@@ -24,7 +24,7 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from json import dumps, loads
 from pathlib import Path
 
-from riko.runtime._compile import convert_dag
+from riko.runtime._compile import build_pipe_def
 
 
 def run() -> None:
@@ -48,7 +48,7 @@ def run() -> None:
 
     args = parser.parse_args()
     dag = loads(Path(args.path).read_text(encoding="utf-8"))
-    pipe_def = dumps(convert_dag(dag), indent=4)
+    pipe_def = dumps(build_pipe_def(dag), indent=4)
 
     if args.output:
         Path(args.output).write_text(pipe_def, encoding="utf-8")

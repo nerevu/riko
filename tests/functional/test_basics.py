@@ -27,7 +27,7 @@ from riko.coercion._sequences import listize
 from riko.runtime._compile import (
     abuild_pipeline,
     build_pipeline,
-    extract_dependencies,
+    get_pipeline_dependencies,
     resolve_module,
 )
 from riko.runtime._pipelines import pipeline_resolver
@@ -103,7 +103,7 @@ def _extract_dependencies(pipe_name) -> list[str]:
     with pipe_file_name.open() as f:
         pipe_def = loads(f.read())
 
-    return extract_dependencies(pipe_def)
+    return get_pipeline_dependencies(pipe_def)
 
 
 def _check_results(
@@ -214,7 +214,7 @@ class TestBasics:
             pydeps = _extract_dependencies(pipe_name)
         else:
             pipeline: SyncPipelineDependencies = module.pipe
-            pydeps = extract_dependencies(pipeline=pipeline)
+            pydeps = get_pipeline_dependencies(pipeline=pipeline)
 
         _check_results(pydeps, items, pipe_name, value=value, check=check)
 
@@ -225,7 +225,7 @@ class TestBasics:
             pydeps = _extract_dependencies(pipe_name)
         else:
             pipeline: AsyncPipelineDependencies = module.async_pipe
-            pydeps = await extract_dependencies(pipeline=pipeline)
+            pydeps = await get_pipeline_dependencies(pipeline=pipeline)
 
         _check_results(pydeps, items, pipe_name, value=value, check=check)
 

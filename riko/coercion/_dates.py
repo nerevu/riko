@@ -189,26 +189,26 @@ def tt_to_datedict(  # noqa: E302
 
 
 @overload
-def ensure_tzinfo(  # noqa: E704
+def normalize_tzinfo(  # noqa: E704
     _date: None, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo = ...
 ) -> None: ...
 @overload  # noqa: E302
-def ensure_tzinfo(  # noqa: E704
+def normalize_tzinfo(  # noqa: E704
     _date: AwareDT | NaiveDT | str,
     try_local_tz: bool | None = ...,
     fallback_tzinfo: tzinfo = ...,
 ) -> AwareDT: ...
 @overload  # noqa: E302
-def ensure_tzinfo(  # noqa: E704
+def normalize_tzinfo(  # noqa: E704
     _date: AwareST | NaiveST,
     try_local_tz: bool | None = ...,
     fallback_tzinfo: tzinfo = ...,
 ) -> AwareST: ...
 @overload  # noqa: E302
-def ensure_tzinfo(  # noqa: E704
+def normalize_tzinfo(  # noqa: E704
     _date: date, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo = ...
 ) -> date: ...
-def ensure_tzinfo(  # noqa: E302
+def normalize_tzinfo(  # noqa: E302
     _date: AwareDT | NaiveDT | AwareST | NaiveST | date | str | None,
     try_local_tz: bool | None = True,
     fallback_tzinfo: tzinfo = UTC,
@@ -222,10 +222,10 @@ def ensure_tzinfo(  # noqa: E302
         >>> from datetime import datetime
         >>>
         >>> st = time.struct_time((2020, 6, 15, 12, 0, 0, 0, 0, -1))
-        >>> ensure_tzinfo(st, try_local_tz=False).tm_gmtoff
+        >>> normalize_tzinfo(st, try_local_tz=False).tm_gmtoff
         0
         >>> local = datetime(2020, 6, 15, 12).astimezone().utcoffset().total_seconds()
-        >>> ensure_tzinfo(st, try_local_tz=True).tm_gmtoff == local
+        >>> normalize_tzinfo(st, try_local_tz=True).tm_gmtoff == local
         True
 
     """

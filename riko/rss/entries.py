@@ -7,7 +7,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from datetime import datetime as dt
 from typing import TYPE_CHECKING, cast
 
-from riko.coercion._dates import date_to_tt, ensure_tzinfo
+from riko.coercion._dates import date_to_tt, normalize_tzinfo
 
 if TYPE_CHECKING:
     from riko.types._rss import (
@@ -56,7 +56,7 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
             pub_date = updated_date = entry["published"]
 
         if pub_date:
-            pub_date = ensure_tzinfo(pub_date)
+            pub_date = normalize_tzinfo(pub_date)
 
             if isinstance(pub_date, dt):
                 pub_date = date_to_tt(pub_date)
@@ -67,7 +67,7 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
             updated_date = entry["updated"]
 
         if updated_date:
-            updated_date = ensure_tzinfo(updated_date)
+            updated_date = normalize_tzinfo(updated_date)
 
             if isinstance(updated_date, dt):
                 updated_date = date_to_tt(updated_date)

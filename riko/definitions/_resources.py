@@ -122,7 +122,7 @@ def classify_factory[T](
     return kind
 
 
-def resolve_resources(resources: ResourcesLike) -> Mapping[str, str]:
+def normalize_resources(resources: ResourcesLike) -> Mapping[str, str]:
     """
     Normalizes a declared binding into local-alias-to-Context-name form.
 
@@ -137,11 +137,11 @@ def resolve_resources(resources: ResourcesLike) -> Mapping[str, str]:
 
     Examples:
 
-        >>> from riko.definitions._resources import resolve_resources
+        >>> from riko.definitions._resources import normalize_resources
         >>>
-        >>> resolve_resources(["db", "cache"])
+        >>> normalize_resources(["db", "cache"])
         mappingproxy({'db': 'db', 'cache': 'cache'})
-        >>> resolve_resources({"db": "primary_db"})
+        >>> normalize_resources({"db": "primary_db"})
         mappingproxy({'db': 'primary_db'})
 
     """
@@ -155,7 +155,7 @@ def resolve_resources(resources: ResourcesLike) -> Mapping[str, str]:
     return MappingProxyType(binding)
 
 
-def resolve_binding(raw: object) -> ResourcesLike | None:
+def normalize_binding(raw: object) -> ResourcesLike | None:
     """
     Narrows an untyped decoration option into a resource binding, or ``None``.
 
@@ -173,13 +173,13 @@ def resolve_binding(raw: object) -> ResourcesLike | None:
 
     Examples:
 
-        >>> from riko.definitions._resources import resolve_binding
+        >>> from riko.definitions._resources import normalize_binding
         >>>
-        >>> resolve_binding("client")
+        >>> normalize_binding("client")
         'client'
-        >>> resolve_binding(["db", "cache"])
+        >>> normalize_binding(["db", "cache"])
         ['db', 'cache']
-        >>> resolve_binding(None)
+        >>> normalize_binding(None)
 
     """
     if raw is None:
@@ -301,7 +301,7 @@ def bind_resources(
         True
 
     """
-    normalized = resolve_resources(binding)
+    normalized = normalize_resources(binding)
     missing = [name for name in normalized.values() if name not in resources]
 
     if missing:
@@ -321,6 +321,6 @@ __all__ = [
     "ResourcesLike",
     "bind_resources",
     "classify_factory",
-    "resolve_binding",
-    "resolve_resources",
+    "normalize_binding",
+    "normalize_resources",
 ]

@@ -819,7 +819,7 @@ chained linearly, and a missing ``id`` defaults to ``sw-{n}``.
 
 .. code-block:: python
 
-    >>> from riko import Context, convert_dag, build_pipeline, parse_pipe_def
+    >>> from riko import Context, build_pipe_def, build_pipeline, parse_pipe_def
     >>>
     >>> ### Author a terse, linear DAG (no wires, no ids) ###
     >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
@@ -833,9 +833,9 @@ chained linearly, and a missing ``id`` defaults to ``sw-{n}``.
     >>>
     >>> ### Expand it into a full JSON pipe definition ###
     >>> #
-    >>> # `convert_dag` appends the terminal `output` node, wires the modules in
+    >>> # `build_pipe_def` appends the terminal `output` node, wires the modules in
     >>> # listing order, and connects the final sink to `_OUTPUT`.
-    >>> pipe_def = convert_dag(dag)
+    >>> pipe_def = build_pipe_def(dag)
     >>>
     >>> ### Execute it in-process ###
     >>> stream = build_pipeline(parse_pipe_def(pipe_def, 'pipe_demo'), context=Context())
@@ -873,12 +873,12 @@ Inspecting a pipeline
 ^^^^^^^^^^^^^^^^^^^^^
 
 You can introspect a JSON pipe definition *without running it*.
-``extract_dependencies`` returns the sorted set of modules a ``pipeline`` uses —
+``get_pipeline_dependencies`` returns the sorted set of modules a ``pipeline`` uses —
 handy for validating that every required ``pipe`` is installed before execution.
 
 .. code-block:: python
 
-    >>> from riko import convert_dag, extract_dependencies
+    >>> from riko import build_pipe_def, get_pipeline_dependencies
     >>>
     >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hi'}}
     >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
@@ -888,7 +888,7 @@ handy for validating that every required ``pipe`` is installed before execution.
     ...         {'type': 'rename', 'conf': rename_conf},
     ...     ]
     ... }
-    >>> extract_dependencies(convert_dag(dag))
+    >>> get_pipeline_dependencies(build_pipe_def(dag))
     ['itembuilder', 'rename']
 
 A *compiled* pipeline (see `Compiling JSON pipelines`_) can additionally report

@@ -5,7 +5,8 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import build_pipeline, compile_pipe, convert_dag, parse_pipe_def
+        >>> from riko import build_pipe_def, build_pipeline
+        >>> from riko import compile_pipe, parse_pipe_def
         >>>
         >>> dag = {
         ...     "modules": [
@@ -15,7 +16,7 @@ Examples:
         ...         }
         ...     ]
         ... }
-        >>> pipe_def = convert_dag(dag)
+        >>> pipe_def = build_pipe_def(dag)
         >>> list(build_pipeline(parse_pipe_def(pipe_def, "demo")))
         [{'title': 'riko'}]
         >>> compile_pipe(pipe_def, "demo").splitlines()[2].strip('"')
@@ -163,10 +164,10 @@ _RAW_CONFS = {
 }
 
 __all__ = [
+    "build_pipe_def",
     "build_pipeline",
     "compile_pipe",
-    "convert_dag",
-    "extract_dependencies",
+    "get_pipeline_dependencies",
     "parse_pipe_def",
 ]
 
@@ -242,22 +243,22 @@ async def drain[T: str | tuple[str, ...]](
 
 
 @overload
-def extract_dependencies(  # noqa: E704
+def get_pipeline_dependencies(  # noqa: E704
     pipe_def: PipeDef | ParsedPipeDef | None = ...,
 ) -> list[str]: ...
 @overload  # noqa: E302
-def extract_dependencies(  # noqa: E704
+def get_pipeline_dependencies(  # noqa: E704
     pipe_def: PipeDef | ParsedPipeDef | None = ...,
     *,
     pipeline: AsyncPipelineDependencies,
 ) -> Awaitable[list[str]]: ...
 @overload  # noqa: E302
-def extract_dependencies(  # noqa: E704
+def get_pipeline_dependencies(  # noqa: E704
     pipe_def: PipeDef | ParsedPipeDef | None = ...,
     *,
     pipeline: SyncPipelineDependencies,
 ) -> list[str]: ...
-def extract_dependencies(  # noqa: E302
+def get_pipeline_dependencies(  # noqa: E302
     pipe_def: PipeDef | ParsedPipeDef | None = None,
     pipeline: PipelineDependencies | None = None,
 ) -> Awaitable[list[str]] | list[str]:
@@ -329,22 +330,22 @@ def get_input(conf: InputRawConf, **kwargs: object) -> str | int | bool:
 
 
 @overload
-def extract_input(  # noqa: E704
+def get_pipeline_inputs(  # noqa: E704
     pipe_def: PipeDef | ParsedPipeDef | None = ...,
 ) -> SyncPyInput: ...
 @overload  # noqa: E302
-def extract_input(  # noqa: E704
+def get_pipeline_inputs(  # noqa: E704
     pipe_def: PipeDef | ParsedPipeDef | None = ...,
     *,
     pipeline: AsyncPipelineDependencies,
 ) -> AsyncPyInput: ...
 @overload  # noqa: E302
-def extract_input(  # noqa: E704
+def get_pipeline_inputs(  # noqa: E704
     pipe_def: PipeDef | ParsedPipeDef | None = ...,
     *,
     pipeline: SyncPipelineDependencies,
 ) -> SyncPyInput: ...
-def extract_input(  # noqa: E302
+def get_pipeline_inputs(  # noqa: E302
     pipe_def: PipeDef | ParsedPipeDef | None = None,
     pipeline: PipelineDependencies | None = None,
 ) -> PyInput:
@@ -868,7 +869,7 @@ def get_wire(
     )
 
 
-def convert_dag(dag: PipeDag) -> PipeDef:
+def build_pipe_def(dag: PipeDag) -> PipeDef:
     """
     Expands a bare-bones DAG into a full JSON pipeline.
 
@@ -1055,8 +1056,8 @@ def _get_descriptions(
     **kwargs: bool,
 ) -> PipelineDescriptions:
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
-    pydeps = extract_dependencies(parsed_pipe_def)
-    pyinput = extract_input(parsed_pipe_def)
+    pydeps = get_pipeline_dependencies(parsed_pipe_def)
+    pyinput = get_pipeline_inputs(parsed_pipe_def)
 
     if context.mode is ExecutionMode.DESCRIBE:
         pipeline = [PipelineDescription({"inputs": pyinput, "dependencies": pydeps})]
@@ -1204,14 +1205,14 @@ def stringify_pipe(
     _uniq_modules = sorted(single_sources | embeds | subpipes)
     uniq_modules = [dict(zip(keys, m, strict=False)) for m in _uniq_modules]
 
-    pyinput = extract_input(parsed_pipe_def)
+    pyinput = get_pipeline_inputs(parsed_pipe_def)
     data = TemplateData(
         {
             "uniq_modules": [cast("AbbrevStringModule", m) for m in uniq_modules],
             "modules": string_modules,
             "pipe_name": parsed_pipe_def["name"],
             "inputs": pyinput,
-            "dependencies": extract_dependencies(parsed_pipe_def),
+            "dependencies": get_pipeline_dependencies(parsed_pipe_def),
             "embedded_pipes": parsed_pipe_def["embed"],
             "last_module": module_ids[-1],
             "raw_confs": sorted(_used_raw_confs(parsed_pipe_def)),

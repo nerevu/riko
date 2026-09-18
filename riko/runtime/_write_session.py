@@ -12,7 +12,7 @@ from riko.bado import _backend
 from riko.bado._backend import async_open, asyncify
 from riko.bado.itertools import as_async
 from riko.base._constants import ENCODING
-from riko.definitions._targets import FileTarget, prepare_write
+from riko.definitions._targets import FileTarget, build_write
 from riko.definitions._write import (
     AsyncWriteSession,
     Destination,
@@ -22,7 +22,7 @@ from riko.definitions._write import (
     WriteResult,
 )
 from riko.io._reencode import IterStringIO, Reencoder, reencode
-from riko.io._serialization import convert_records
+from riko.io._serialization import serialize_records
 from riko.types._enums import FmtLike, Formats, KeyLike
 from riko.types._guards import is_mapping
 
@@ -171,10 +171,10 @@ class _SyncFileWriteSession(_FileWriteSession):
     Examples:
 
         >>> from riko import get_temp_file
-        >>> from riko.definitions._targets import prepare_write
+        >>> from riko.definitions._targets import build_write
         >>>
         >>> with get_temp_file() as fp:
-        ...     prepared = prepare_write(fp.name, fmt="jsonl")
+        ...     prepared = build_write(fp.name, fmt="jsonl")
         ...     session = _SyncFileWriteSession(prepared)
         ...     session.acquire()
         ...     session.write([{"x": 0}, {"x": 1}])
@@ -246,10 +246,10 @@ class _SyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_temp_file
-            >>> from riko.definitions._targets import prepare_write
+            >>> from riko.definitions._targets import build_write
             >>>
             >>> with get_temp_file() as fp:
-            ...     prepare = prepare_write(fp.name, fmt="csv")
+            ...     prepare = build_write(fp.name, fmt="csv")
             ...     session = _SyncFileWriteSession(prepare)
             ...     session.acquire()
             ...     session.teardown()
@@ -263,7 +263,7 @@ class _SyncFileWriteSession(_FileWriteSession):
             items = self._validate_items(items)
 
         kwargs = {"skip_header": self.skip_header} if self.csv_format else {}
-        result = convert_records(items, self.fmt, **kwargs)
+        result = serialize_records(items, self.fmt, **kwargs)
 
         if result and self.jsonl_format:
             result = _normalize_jsonl(_as_text(result))
@@ -309,10 +309,10 @@ class _SyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_temp_file
-            >>> from riko.definitions._targets import prepare_write
+            >>> from riko.definitions._targets import build_write
             >>>
             >>> with get_temp_file() as fp:
-            ...     prepare = prepare_write(fp.name, fmt="jsonl")
+            ...     prepare = build_write(fp.name, fmt="jsonl")
             ...     session = _SyncFileWriteSession(prepare)
             ...     session.acquire()
             ...     session.write({"x": 0})
@@ -361,10 +361,10 @@ class _SyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_temp_file
-            >>> from riko.definitions._targets import prepare_write
+            >>> from riko.definitions._targets import build_write
             >>>
             >>> with get_temp_file() as fp:
-            ...     session = _SyncFileWriteSession(prepare_write(fp.name))
+            ...     session = _SyncFileWriteSession(build_write(fp.name))
             ...     session.acquire()
             ...     session.write([{"x": 1}])
             ...     result = session.finalize()
@@ -391,10 +391,10 @@ class _SyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_temp_file
-            >>> from riko.definitions._targets import prepare_write
+            >>> from riko.definitions._targets import build_write
             >>>
             >>> with get_temp_file() as fp:
-            ...     prepare = prepare_write(fp.name, fmt="csv")
+            ...     prepare = build_write(fp.name, fmt="csv")
             ...     session = _SyncFileWriteSession(prepare)
             ...     session.acquire()
             ...     session.teardown()
@@ -473,7 +473,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             records = self._validate_items(records)
 
         kwargs = {"skip_header": await self.askip_header} if self.csv_format else {}
-        result = await asyncify(convert_records)(records, self.fmt, **kwargs)
+        result = await asyncify(serialize_records)(records, self.fmt, **kwargs)
 
         if result and self.jsonl_format:
             result = _normalize_jsonl(_as_text(result))
@@ -519,11 +519,11 @@ class _AsyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_async_temp_file, issync, run
-            >>> from riko.definitions._targets import prepare_write
+            >>> from riko.definitions._targets import build_write
             >>>
             >>> async def main():
             ...     async with get_async_temp_file() as fp:
-            ...         prepare = prepare_write(fp.name, fmt="jsonl")
+            ...         prepare = build_write(fp.name, fmt="jsonl")
             ...         session = _AsyncFileWriteSession(prepare)
             ...         await session.aacquire()
             ...         await session.write({"x": 0})
@@ -578,11 +578,11 @@ class _AsyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_async_temp_file, issync, run
-            >>> from riko.definitions._targets import prepare_write
+            >>> from riko.definitions._targets import build_write
             >>>
             >>> async def main():
             ...     async with get_async_temp_file() as fp:
-            ...         session = _AsyncFileWriteSession(prepare_write(fp.name))
+            ...         session = _AsyncFileWriteSession(build_write(fp.name))
             ...         await session.aacquire()
             ...         await session.write([{"x": 1}])
             ...         result = await session.afinalize()
@@ -632,10 +632,10 @@ def file_write_session(prepared: PreparedWrite) -> Generator[SyncWriteSession]:
     Examples:
 
         >>> from riko import get_temp_file
-        >>> from riko.definitions._targets import prepare_write
+        >>> from riko.definitions._targets import build_write
         >>>
         >>> with get_temp_file() as fp:
-        ...     prepared = prepare_write(fp.name)
+        ...     prepared = build_write(fp.name)
         ...
         ...     with file_write_session(prepared) as session:
         ...         session.write([{"x": 0}])
@@ -696,7 +696,7 @@ def mint_write_resource(
         'sync_contextmanager'
 
     """
-    prepared = prepare_write(dest, mode, fmt=fmt, keys=keys)
+    prepared = build_write(dest, mode, fmt=fmt, keys=keys)
     session = file_write_session(prepared)
     return Resource.from_lifecycle(session)
 

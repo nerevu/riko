@@ -19,9 +19,9 @@ import pytest
 
 from riko.base.exceptions import UnsupportedModuleError
 from riko.runtime._compile import (
+    build_pipe_def,
     build_pipeline,
     compile_pipe,
-    convert_dag,
     get_wire,
     parse_pipe_def,
     pythonise,
@@ -243,7 +243,7 @@ def test_unresolved_subpipeline_raises():
 
 def test_convert_dag_appends_output():
     dag = loads((DAG_DIR / "pipe_forever.json").read_text())
-    pipe_def = convert_dag(dag)
+    pipe_def = build_pipe_def(dag)
     module_ids = [module["id"] for module in pipe_def["modules"]]
     output_wire = pipe_def["wires"][-1]
 
@@ -255,7 +255,7 @@ def test_convert_dag_appends_output():
 def test_convert_dag_matches_full_pipeline():
     dag = loads((DAG_DIR / "pipe_forever.json").read_text())
     full = loads((PIPELINE_DIR / "pipe_forever.json").read_text())
-    converted = _compile_and_run(convert_dag(dag), "pipe_forever")
+    converted = _compile_and_run(build_pipe_def(dag), "pipe_forever")
     expected = _compile_and_run(full, "pipe_forever")
     assert converted == expected
 
@@ -271,29 +271,29 @@ def test_convert_dag_linear_default_matches_explicit_wires():
             }
         ),
     ]
-    linear = convert_dag({"modules": modules})
-    wired = convert_dag({"modules": modules, "wires": [("sw-1", "sw-2")]})
+    linear = build_pipe_def({"modules": modules})
+    wired = build_pipe_def({"modules": modules, "wires": [("sw-1", "sw-2")]})
     assert linear == wired
 
 
 @pytest.mark.xfail(
     strict=True,
     reason="An empty module list never reaches ``module_ids[-1]`` because the terminal "
-    "``output`` node is appended unconditionally. So ``convert_dag`` returns just that"
-    " node with no wires rather than raising.",
+    "``output`` node is appended unconditionally. So ``build_pipe_def`` returns just "
+    "that node with no wires rather than raising.",
 )
 def test_convert_dag_empty_modules_raises():
     with pytest.raises(IndexError):
-        convert_dag({"modules": []})
+        build_pipe_def({"modules": []})
 
 
 def test_convert_dag_wires_override_listing_order():
     dag = loads((DAG_DIR / "pipe_reordered.json").read_text())
-    wires = convert_dag(dag)["wires"]
+    wires = build_pipe_def(dag)["wires"]
     edges = [(wire["src"]["moduleid"], wire["tgt"]["moduleid"]) for wire in wires]
 
     assert edges == [("gen", "trunc"), ("trunc", "_OUTPUT")]
-    assert len(_compile_and_run(convert_dag(dag), "pipe_reordered")) == 2
+    assert len(_compile_and_run(build_pipe_def(dag), "pipe_reordered")) == 2
 
 
 def test_convert_dag_generates_ids_when_omitted():
@@ -310,7 +310,7 @@ def test_convert_dag_generates_ids_when_omitted():
             ]
         }
     )
-    pipe_def = convert_dag(dag)
+    pipe_def = build_pipe_def(dag)
     module_ids = [module["id"] for module in pipe_def["modules"]]
     edges = [
         (wire["src"]["moduleid"], wire["tgt"]["moduleid"]) for wire in pipe_def["wires"]

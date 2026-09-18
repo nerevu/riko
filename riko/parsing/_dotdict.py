@@ -48,7 +48,7 @@ D = TypeVar("D")
 type Data[VT] = Iterable[tuple[str, VT]] | RSSEntry
 
 
-def parse_key(key: Key | None = None) -> list[str]:
+def normalize_key(key: Key | None = None) -> list[str]:
     if isinstance(key, str):
         if "." in key:
             keys = key.rstrip(".").split(".")
@@ -86,20 +86,20 @@ def raw_get[VT](data: Mapping[str, VT], key: str) -> VT:
 
 
 @overload
-def parse_sentinel(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+def resolve_sentinel(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
     value: ConfArg, default: object | None = ...
 ) -> PrimitiveValue: ...
 @overload  # noqa: E302
-def parse_sentinel[D](  # noqa: E704
+def resolve_sentinel[D](  # noqa: E704
     value: Sentinel, default: D | None = ..., **kwargs: object
 ) -> Item | D | None: ...
 @overload  # noqa: E302
-def parse_sentinel[D, VT](  # noqa: E704
+def resolve_sentinel[D, VT](  # noqa: E704
     value: Mapping[str, VT],
     default: D | None = ...,  # pyright: ignore[reportInvalidTypeVarUse]
     **kwargs: VT,
 ) -> dict[str, VT]: ...
-def parse_sentinel[D, VT](  # noqa: E302
+def resolve_sentinel[D, VT](  # noqa: E302
     value: Sentinel | Mapping[str, VT], default: D | None = None, **kwargs: VT
 ) -> Item | D | dict[str, VT] | PrimitiveValue:
     if is_sentinel(value, **kwargs):
@@ -129,14 +129,14 @@ def parse_sentinel[D, VT](  # noqa: E302
         _parsed = {}
 
         for k, v in value.items():
-            _parsed[k] = parse_sentinel(v, v, **kwargs) if is_mapping(v) else v
+            _parsed[k] = resolve_sentinel(v, v, **kwargs) if is_mapping(v) else v
 
         parsed = cast("dict[str, VT]", _parsed)
 
     return parsed
 
 
-def parse_map[VT](
+def gen_map_items[VT](
     *keys: str, data: Mapping[str, VT], **kwargs: VT
 ) -> Iterator[tuple[str, VT | None]]:
     for key in keys:
@@ -145,7 +145,9 @@ def parse_map[VT](
         yield (key.lower(), v)
 
 
-def parse_dotdict[VT](*keys: str, data: DotDict[VT]) -> Iterator[tuple[str, VT | None]]:
+def gen_dotdict_items[VT](
+    *keys: str, data: DotDict[VT]
+) -> Iterator[tuple[str, VT | None]]:
     for key in keys:
         if key in data:
             value = raw_get(data, key)
@@ -227,11 +229,11 @@ def gen_dict[VT](  # noqa: E302
 
     """
     if key:
-        keys = parse_key(key)
+        keys = normalize_key(key)
     else:
         if is_mapping(data):
             if DotDict.is_self(data) and not kwargs:
-                data = parse_sentinel(cast("DotDict[VT]", data), default=data)
+                data = resolve_sentinel(cast("DotDict[VT]", data), default=data)
             else:
                 data = DotDict(cast("Mapping[str, VT]", data)).get(**kwargs)
 
@@ -241,9 +243,9 @@ def gen_dict[VT](  # noqa: E302
         keys = keys or data.keys()
 
         if DotDict.is_self(data) and not kwargs:
-            items = parse_dotdict(*keys, data=data)
+            items = gen_dotdict_items(*keys, data=data)
         else:
-            items = parse_map(*keys, data=data, **kwargs)
+            items = gen_map_items(*keys, data=data, **kwargs)
 
         items = cast("Iterator[tuple[str, VT]]", items)
 
@@ -428,7 +430,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
                 if key in dd_value:
                     parsed = dd_value[key]
                 elif is_sentinel(value, **kwargs):
-                    parsed = parse_sentinel(value, default=default, **kwargs)
+                    parsed = resolve_sentinel(value, default=default, **kwargs)
 
                     if is_mapping(parsed) and key in parsed:
                         parsed = parsed[key]
@@ -473,7 +475,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             'bar'
 
         """
-        keys = parse_key(key)
+        keys = normalize_key(key)
         value = raw_get(self, keys[0])
 
         if len(keys) > 1:
@@ -488,7 +490,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         result = value
 
         if is_mapping(value):
-            parsed = parse_sentinel(value, default=value)
+            parsed = resolve_sentinel(value, default=value)
             result = cast("VT", self.dictize(parsed))
 
         return result
@@ -531,7 +533,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
             return cast("Self", existing)
 
-        keys = parse_key(key)
+        keys = normalize_key(key)
 
         if len(keys) == 1:
             CaseInsensitiveDict.__setitem__(self, key, value)
@@ -621,7 +623,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             'verse2'
 
         """
-        keys = parse_key(key)
+        keys = normalize_key(key)
         item = self
 
         if keys:
@@ -633,10 +635,10 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
                 item = self._parse_value(item, k, default=default, **kwargs)
         else:
-            item = parse_sentinel(item, default=item, **kwargs)
+            item = resolve_sentinel(item, default=item, **kwargs)
 
         if is_mapping(item) and is_sentinel(item, **kwargs):
-            item = parse_sentinel(item, default=default, **kwargs)
+            item = resolve_sentinel(item, default=default, **kwargs)
 
         return self.dictize(item)
 
@@ -677,7 +679,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
             return cast("Self", value) if is_mapping(value) else None
 
-        keys = parse_key(key)
+        keys = normalize_key(key)
         rest, last = keys[:-1], keys[-1]
 
         if len(keys) == 1 and match_key(self, key):
@@ -752,7 +754,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         if dot_keys := [k for k in _dict if "." in k]:
             # skip key if a subkey redefines it
             # i.e., 'author.name' has precedence over 'author'
-            skip_keys = {".".join(parse_key(key)[:-1]) for key in dot_keys}
+            skip_keys = {".".join(normalize_key(key)[:-1]) for key in dot_keys}
             items = [(k, _dict[k]) for k in _dict if k not in skip_keys]
         else:
             items = _dict.items()

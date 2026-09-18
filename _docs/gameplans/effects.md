@@ -143,7 +143,7 @@ input record
 A write may buffer internally when the destination format requires framing/atomic publication, but
 that buffering must not change the Pipeline-level pass-through contract.
 
-`WriteNode` executes through the shared write-session mechanism (`prepare_write` → `WriteSession`)
+`WriteNode` executes through the shared write-session mechanism (`build_write` → `WriteSession`)
 that the fluent `write()` and `sink()` verbs already use; there is no separate effect-specific writer.
 Terminality (the interim `sink()`, returns a `WriteResult`) versus passthrough (`write`, keeps the
 stream flowing) is a consumption difference, not a distinct node family — R5C adds the canonical

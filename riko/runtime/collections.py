@@ -55,10 +55,10 @@ from riko.bado.itertools import (
 from riko.base._constants import DEF_CONNECTION_COUNT
 from riko.base.exceptions import PipelineStateError
 from riko.coercion._sequences import listize
-from riko.definitions._targets import prepare_write
+from riko.definitions._targets import build_write
 from riko.definitions._write import Destination, ExportType, WriteMode, WriteResult
-from riko.definitions.modules import resolve_module_name
-from riko.io._serialization import CONVERSION_FUNCS, convert_records
+from riko.definitions.modules import normalize_module_name
+from riko.io._serialization import CONVERSION_FUNCS, serialize_records
 from riko.types._enums import ExecutionMode, FmtLike, Formats, KeyLike, ModuleNameLike
 from riko.types._scalars import AnyStrType, BasicValue
 from riko.types.modules import Conf, ReceiveConf
@@ -471,7 +471,7 @@ def export(  # noqa: E302
         )
     else:
         fmt = cast("Formats", type_)
-        serialized = convert_records(items, fmt, **kwargs)
+        serialized = serialize_records(items, fmt, **kwargs)
         result = cast("int", io.write(f, serialized, **kwargs)) if f else serialized
 
     return result
@@ -546,7 +546,7 @@ def _write(
     fmt: FmtLike | None = None,
 ) -> SyncPipe:
     """Writes each item to ``dest`` while passing the stream through unchanged."""
-    prepared = prepare_write(dest, mode, fmt=fmt)
+    prepared = build_write(dest, mode, fmt=fmt)
     pipe = _passthrough_pipe(source)
     items = cast("Items", iter(source))
     pipe.source = write_through(items, prepared, terminating=lambda: pipe._terminating)
@@ -561,7 +561,7 @@ def _awrite(
     fmt: FmtLike | None = None,
 ) -> AsyncPipe:
     """Writes each item to ``dest`` while passing the stream through unchanged."""
-    prepared = prepare_write(dest, mode, fmt=fmt)
+    prepared = build_write(dest, mode, fmt=fmt)
     pipe = _async_passthrough_pipe(source)
     items = cast("AsyncItems", aiter(source))
     pipe.source = async_write_through(items, prepared)
@@ -577,7 +577,7 @@ def _sink(
     keys: KeyLike | None,
 ) -> WriteResult:
     """Resolves ``dest``, validates the write, and delivers the whole stream to it."""
-    prepared = prepare_write(dest, mode, fmt=fmt, keys=keys)
+    prepared = build_write(dest, mode, fmt=fmt, keys=keys)
 
     with file_write_session(prepared) as session:
         try:
@@ -600,7 +600,7 @@ async def _asink(
     keys: KeyLike | None,
 ) -> WriteResult:
     """Drains ``source`` and delivers the records through a sync file session."""
-    prepared = prepare_write(dest, mode, fmt=fmt, keys=keys)
+    prepared = build_write(dest, mode, fmt=fmt, keys=keys)
 
     async with async_file_write_session(prepared) as session:
         try:
@@ -656,7 +656,7 @@ class PyPipe(_Lifecycle):
         self._terminating: bool = False
         self.conf: Conf = conf or {}
         self.kwargs = kwargs
-        self.name: str = resolve_module_name(name)
+        self.name: str = normalize_module_name(name)
         self.parallel = parallel
         self.source = source
         self.test: bool = bool(test)
@@ -1920,7 +1920,7 @@ class AsyncPipe(PyPipe):
     async def _stream(self) -> AsyncGenerator[RikoItem, None]:
         self._begin()
         async_pipeline = partial(self._async_pipe, **self.kwargs)
-        # The mapped/bounded branch is processor-only (``derive_loopable`` is
+        # The mapped/bounded branch is processor-only (``is_loopable`` is
         # processor-only), so its wrapper keeps the awaitable per-item contract;
         # narrow it here rather than widening the shared operator alias.
         mapped_pipeline = cast(

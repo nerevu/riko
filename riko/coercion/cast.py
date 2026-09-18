@@ -44,8 +44,8 @@ from riko.types._enums import BasicCastType, CastType, LocationType
 
 from ._dates import (
     date_to_tt,
-    ensure_tzinfo,
     get_date,
+    normalize_tzinfo,
     parse_date_string,
     tt_to_datedict,
     tt_to_datetime,
@@ -427,7 +427,7 @@ def cast_datetime(  # noqa: E302
             _date = _date.date()
 
     if isinstance(_date, dt):
-        _date = ensure_tzinfo(_date, try_local_tz=try_local_tz)
+        _date = normalize_tzinfo(_date, try_local_tz=try_local_tz)
 
     if _date and as_datedict:
         tt = tt or date_to_tt(_date)

@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from riko.types._options import Defaults, Opts
 
 OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
-DEFAULTS: Defaults = {"parse_key": "content"}
+DEFAULTS: Defaults = {"normalize_key": "content"}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -55,17 +55,17 @@ def parser(
 
         url: The link to parse.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `parse_key`.
+        objconf: The pipe configuration, containing `normalize_key`.
 
     Returns:
 
-        Six items, each ``{"component": <name>, <parse_key>: <value>}``.
+        Six items, each ``{"component": <name>, <normalize_key>: <value>}``.
 
     Examples:
 
         >>> from meza.fntools import Objectify
         >>>
-        >>> objconf = Objectify({"parse_key": "value"})
+        >>> objconf = Objectify({"normalize_key": "value"})
         >>> result = parser("http://yahoo.com", None, objconf)
         >>> next(result)
         {'component': 'scheme', 'value': 'http'}
@@ -73,7 +73,7 @@ def parser(
     """
     parsed = urlparse(url)
     items = parsed._asdict().items()
-    return ({"component": k, objconf.parse_key: v} for k, v in items)
+    return ({"component": k, objconf.normalize_key: v} for k, v in items)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -90,7 +90,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
 
         conf (dict): The pipe configuration.
 
-            parse_key (str): Field each component value is stored under
+            normalize_key (str): Field each component value is stored under
                 (default: "content").
 
         context (Context): the execution context
@@ -107,7 +107,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
 
     Yields:
 
-        - ``{"component": <name>, <parse_key>: <value>}`` when ``emit`` is True
+        - ``{"component": <name>, <normalize_key>: <value>}`` when ``emit`` is True
           (default)
         - ``{<assign>: <component>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<component>, ...]}`` when ``emit`` is
@@ -142,7 +142,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
 
         conf (dict): The pipe configuration.
 
-            parse_key (str): Field each component value is stored under
+            normalize_key (str): Field each component value is stored under
                 (default: "content").
 
         context (Context): the execution context
@@ -159,7 +159,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
 
     Yields:
 
-        - ``{"component": <name>, <parse_key>: <value>}`` when ``emit`` is True
+        - ``{"component": <name>, <normalize_key>: <value>}`` when ``emit`` is True
           (default)
         - ``{<assign>: <component>}`` when ``emit`` is False and no item given
         - one merged ``{Item, <assign>: [<component>, ...]}`` when ``emit`` is
@@ -170,7 +170,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
         >>> item = {"content": "http://yahoo.com"}
         >>> next(pipe(item))
         {'component': 'scheme', 'content': 'http'}
-        >>> conf = {"parse_key": "value"}
+        >>> conf = {"normalize_key": "value"}
         >>> next(pipe(item, conf=conf, emit=True))
         {'component': 'scheme', 'value': 'http'}
 

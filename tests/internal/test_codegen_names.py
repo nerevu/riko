@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, get_args
 import pytest
 
 from riko.base._paths import PACKAGE_DIR
-from riko.ext._names import derive_category
+from riko.ext._names import get_module_category
 from riko.ext.codegen import (
     NameEntry,
     enum_member_name,
@@ -56,7 +56,7 @@ _SINKS = {"write"}
 
 @pytest.fixture
 def categories() -> dict[str, ModuleCategory]:
-    return {md.name: derive_category(md) for md in gen_module_catalog()}
+    return {md.name: get_module_category(md) for md in gen_module_catalog()}
 
 
 def test_taxonomy_partition_matches_golden(categories):
@@ -71,14 +71,14 @@ def test_taxonomy_partition_matches_golden(categories):
 
 def test_provider_override_wins():
     md = next(iter(gen_module_catalog()))
-    assert derive_category(md, provider="microsoft") == "microsoft"
-    assert derive_category(md, provider="microsoft", override="custom") == "custom"
+    assert get_module_category(md, provider="microsoft") == "microsoft"
+    assert get_module_category(md, provider="microsoft", override="custom") == "custom"
 
 
 def test_sink_name_is_classified_as_sink():
     md = next(md for md in gen_module_catalog() if md.name == "fetch")
     renamed = dataclasses.replace(md, name="write")
-    assert derive_category(renamed) == "sink"
+    assert get_module_category(renamed) == "sink"
 
 
 @pytest.mark.parametrize(
