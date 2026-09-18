@@ -8,6 +8,9 @@ from enum import StrEnum
 from functools import partial
 from typing import TYPE_CHECKING
 
+from riko.base._config import EXACT_LAYERS as _EXACT_LAYERS
+from riko.base._config import LAYER_DEPENDENCIES as _RAW_LAYER_DEPENDENCIES
+from riko.base._config import PREFIX_LAYERS as _PREFIX_LAYERS
 from riko.base.exceptions import InvalidArchitectureError
 from riko.coercion._graph import (
     AnyGraph,
@@ -29,46 +32,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
     from pathlib import Path
 
-_LAYER_DEPENDENCIES: FrozenGraph[str] = freeze_graph(
-    {
-        "base": set[str](),
-        "types": {"base"},
-        "coercion": {"types"},
-        "bado": {"types"},
-        "definitions": {"types"},
-        "io": {"coercion", "bado", "definitions"},
-        "parsing": {"io"},
-        "rss": {"parsing"},
-        "execution": {"bado", "definitions"},
-        "runtime": {"execution", "parsing"},
-        "modules": {"runtime", "rss"},
-        "api": {"modules"},
-        "cli": {"api"},
-    }
-)
-
-
-_EXACT_LAYERS = {
-    "riko": "api",
-    "riko._package": "base",
-    "riko.runtime._resources": "execution",
-    "riko.runtime.context": "execution",
-}
-
-_PREFIX_LAYERS = {
-    "riko.bado": "bado",
-    "riko.base": "base",
-    "riko.cli": "cli",
-    "riko.coercion": "coercion",
-    "riko.definitions": "definitions",
-    "riko.ext": "modules",
-    "riko.io": "io",
-    "riko.modules": "modules",
-    "riko.parsing": "parsing",
-    "riko.rss": "rss",
-    "riko.runtime": "runtime",
-    "riko.types": "types",
-}
+_LAYER_DEPENDENCIES: FrozenGraph[str] = freeze_graph(_RAW_LAYER_DEPENDENCIES)
 
 
 class ViolationCodes(StrEnum):

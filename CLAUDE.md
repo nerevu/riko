@@ -197,3 +197,9 @@ new permanent bullet here.
   (serialization) is not `Sinks` (pipe category).
 - **meza is pinned by `pyproject.toml`**; lower-level conversion ownership remains
   with meza where the runtime contract says so.
+- **Tunable knobs live in `riko/base/_config.py`** — static project policy
+  (`LAYER_DEPENDENCIES`/`EXACT_LAYERS`/`PREFIX_LAYERS`, consumed and frozen by the import
+  linter; `SINK_NAMES`; `SUBPIPE_TYPE`; `PIPELINE_DIRS`) plus a frozen `Settings` with
+  `RIKO_*` env overrides (`load_settings`; a malformed value logs a warning and falls back
+  to the default). Existing names (`DEF_CONNECTION_COUNT`, `TIMEOUT`, `EXCHANGE_API`, …)
+  re-source from `settings`; add operator-tunable defaults here, not as scattered literals.

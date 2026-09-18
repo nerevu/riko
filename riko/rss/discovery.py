@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, cast
 
 import pygogo as gogo
 
+from riko.base._config import settings
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close
 from riko.parsing.documents import LinkParser
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     from riko.types._io import StringFileLike
     from riko.types._streams import Stream
 
-TIMEOUT = 10
+TIMEOUT = settings.discovery_timeout
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 

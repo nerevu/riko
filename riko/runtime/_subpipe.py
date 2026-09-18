@@ -5,13 +5,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast, overload
 
+from riko.base._config import SUBPIPE_TYPE
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from riko.types._wrappers import AsyncSubPipe, SubPipe, SyncSubPipe
     from riko.types.modules import ModuleSubtype
-
-SUBPIPE_TYPE = "pipe"
 
 
 @overload

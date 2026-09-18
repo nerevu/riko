@@ -6,16 +6,11 @@ from __future__ import annotations
 from json import loads
 from typing import TYPE_CHECKING
 
-from riko.base._paths import ROOT_DIR
+from riko.base._config import PIPELINE_DIRS
 from riko.runtime._compile import compile_pipe
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-PIPELINE_DIRS = (
-    (ROOT_DIR / "tests" / "pipelines", ROOT_DIR / "tests" / "pypipelines"),
-    (ROOT_DIR / "examples" / "pipelines", ROOT_DIR / "examples" / "pypipelines"),
-)
 
 
 def _targets() -> list[tuple[Path, Path]]:
