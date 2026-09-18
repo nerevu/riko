@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Any, TypedDict, cast
 import pygogo as gogo
 
 from riko.bado._util import async_get, async_json
+from riko.base._config import settings
 from riko.base._constants import ENCODING
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch
@@ -51,7 +52,7 @@ if TYPE_CHECKING:
     from riko.coercion._configs import ExchangeRateObjconf
     from riko.types._options import Defaults, Opts
 
-EXCHANGE_API = "https://openexchangerates.org/api/latest.json"
+EXCHANGE_API = settings.exchange_api
 PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_ID")}
 
 OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}

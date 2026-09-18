@@ -19,10 +19,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, overload
 
+from riko.base._config import SINK_NAMES
+
 if TYPE_CHECKING:
     from riko.types.modules import ModuleCategory, ModuleMetadata
-
-SINK_NAMES: frozenset[str] = frozenset({"output", "write"})
 
 
 @overload
