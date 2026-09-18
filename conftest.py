@@ -1,3 +1,5 @@
+"""Shared pytest fixtures and collection hooks for the Riko test suite."""
+
 import importlib.util
 
 import pytest

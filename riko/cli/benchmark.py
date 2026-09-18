@@ -1,3 +1,5 @@
+"""Benchmark command for timing sync, async, and parallel pipe execution."""
+
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterator

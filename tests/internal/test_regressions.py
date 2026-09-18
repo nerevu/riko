@@ -1,4 +1,5 @@
 # vim: sw=4:ts=4:expandtab
+"""Regression tests guarding previously fixed bugs."""
 
 from datetime import datetime, timedelta, timezone
 from io import BytesIO

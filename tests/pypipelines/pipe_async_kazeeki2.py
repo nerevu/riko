@@ -1,4 +1,5 @@
 # vim: sw=4:ts=4:expandtab
+"""Hand-written async Kazeeki pipeline fixture (variant 2)."""
 
 from riko.bado import as_async
 from riko.bado._backend import run

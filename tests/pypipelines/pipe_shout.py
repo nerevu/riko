@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
-# A small hand-written sub-pipeline used to demonstrate a pipe:-loop.
+"""Hand-written sub-pipeline fixture demonstrating a pipe loop."""
 
 from __future__ import annotations
 

@@ -148,11 +148,9 @@ extend-select = [
 
 ignore = [
     # docs
-    "D100",  # Missing docstring in public module
     "D101",  # undocumented-public-class
     "D102",  # undocumented-public-method
     "D103",  # undocumented-public-function
-    "D104",  # undocumented-public-package
     "D105",  # undocumented-magic-method
     "D107",  # undocumented-public-init
     "D401",  # non-imperative-mood

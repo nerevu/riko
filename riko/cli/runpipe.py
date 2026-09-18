@@ -1,3 +1,5 @@
+"""Command for loading and running a compiled pipe module from the CLI."""
+
 from __future__ import annotations
 
 import sys
