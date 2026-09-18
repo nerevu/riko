@@ -24,7 +24,7 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 | `riko/types/` | static contracts: streams/items, configs, options, compiler/pipeline/resource/I/O types, enums/wrappers |
 | `riko/coercion/` | casts, `DynamicConf`, **generated** objconf classes, objectification, graph/freeze/normalization helpers |
 | `riko/bado/` | stable async backend/iterator API; transport/file I/O is in `riko/io/` |
-| `riko/definitions/` | immutable/declarative module, resource, target, and write contracts |
+| `riko/definitions/` | immutable/declarative module, resource, target, write, and Workflow v2 graph contracts |
 | `riko/io/` | sync/async URL/file I/O, serialization, re-encoding |
 | `riko/parsing/` | config parsing, `DotDict`, XML/HTML/document parsing |
 | `riko/rss/` | feed discovery, parsing, entry normalization |
@@ -163,6 +163,15 @@ new permanent bullet here.
   and the overload layout conflict.
 - Keep package-local imports relative; canonical import and architecture rules are
   enforced by `manage lint imports`.
+- **`StrEnum` vs `Literal`.** Use a `StrEnum` when a caller **supplies the value at a
+  Python call site** (a parameter, or a field callers construct) or for a runtime
+  **state** — they get named members and one import instead of magic strings; `.value`
+  is canonical. Use a `Literal[...]` when the value only **arrives as a serialized/JSON
+  string**, is produced internally and merely read/matched (a return tag / discriminant),
+  or is a fixed `ClassVar` tag. Non-string internal markers/states use a plain `Enum`.
+  **Carve-out:** the metadata axes `ModuleType`/`ModuleCategory`/`ModuleSubtype` stay
+  `Literal` even though they appear as `list_modules(...)` args — their canonical form is
+  the bare metadata string; the discovery *tree* is the enum layer.
 
 ## Project Quirks
 

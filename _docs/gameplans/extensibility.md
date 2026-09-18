@@ -192,6 +192,12 @@ making v1 executable. Unreleased branch-only experiments, including the discarde
 surface, receive no loader compatibility and are not accepted as legacy grammar merely because a
 prototype once existed.
 
+> **Superseded — clean-break policy.** The temporary-0.x-v1-loader framing in this section (and the
+> acceptance bullets in §E3.10) is superseded by the R4A clean-break policy: v1 is **not** a maintained
+> runtime ingress. Each commit deletes the v1 construct its v2 replacement lands, the v1→v2 cutover
+> completes at **R4B**, and `migrate_v1_to_v2()` is a one-shot corpus/offline tool rather than a live
+> loader. Authoritative owner + deletion ledger: `implementation-sequence.md` R4A clean-break policy.
+
 ### E3.2 Canonical graph envelope
 
 Canonical v2 uses top-level `nodes` and `edges` with explicit named outputs and typed inputs.

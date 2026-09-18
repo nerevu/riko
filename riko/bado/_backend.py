@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, Unpack, cast
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-type Backends = Literal["anyio", "empty"]
+type AsyncBackend = Literal["anyio", "empty"]
 
 
 class Run(Protocol):
@@ -52,7 +52,7 @@ except ImportError:
     async_return: Callable[..., Any] = lambda *_, **_kw: None
     async_sleep: Callable[..., Any] = lambda *_, **_kw: None
     asyncify: Callable[..., Any] = lambda *_, **_kw: None
-    backend: Backends = "empty"
+    backend: AsyncBackend = "empty"
     create_memory_object_stream: Callable[..., Any] | None = None
     create_task_group: Callable[..., Any] | None = None
     fail_after: Callable[..., Any] | None = None

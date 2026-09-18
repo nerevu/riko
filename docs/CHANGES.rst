@@ -29,6 +29,13 @@ New
   ``TargetRegistry``/``register_target`` that key one self-describing target class per
   ``backend``. ``FileTarget`` is the built-in.
 
+- Added the canonical Workflow v2 definition model. The immutable ``Pipeline`` is on the
+  stable ``riko`` surface; ``riko.ext`` exports the graph model — the ``WorkflowSpec``
+  envelope, the node families (``ModuleNode``/``ReadNode``/``WriteNode``/``CacheNode``/
+  ``ActionNode``/``SubscribeNode``), the edge families (``StreamEdge``/``PublishEdge``),
+  and ``Endpoint``. This is the structural definition surface only; execution lands in a
+  later release.
+
 Changes
 ~~~~~~~
 
