@@ -1402,8 +1402,12 @@ class SyncPipe(PyPipe):
         Args:
 
             dest: A path, or a ``WriteTarget``.
-            mode: The reconciliation mode, validated against the target. (default: replace)
+
+            mode: The reconciliation mode, validated against the target. (default:
+                replace)
+
             keys: The match keys for a keyed record target.
+
             fmt: A ``Formats`` converter override for a file destination.
 
         Returns:

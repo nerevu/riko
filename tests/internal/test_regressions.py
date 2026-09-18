@@ -197,7 +197,7 @@ class TestRSSUtils:
         ],
     )
     def test_augment_entries_fallbacks(self, entry, expected):
-        """Feed-entry augmentation fallbacks (``riko.utils._rssutils.augment_entries``)."""
+        """Feed-entry augmentation fallbacks from ``riko.utils._rssutils``."""
         item = next(augment_entries([FeedParserRSSEntry(entry)]))
         assert item.get("summary") == expected
         assert item.get("description") == expected
