@@ -116,6 +116,30 @@ def test_benchmark():
     assert not missing, msg
 
 
+def test_convert_dag_pipes_to_compile_stdin():
+    dag = TESTS_DIR / "dags" / "pipe_forever.json"
+
+    convert = subprocess.run(
+        [sys.executable, "-m", "riko.cli.convert_dag", dag],
+        cwd=_BASEDIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    compiled = subprocess.run(
+        [sys.executable, "-m", "riko.cli.compile", "-"],
+        cwd=_BASEDIR,
+        input=convert.stdout,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert '"moduleid": "_OUTPUT"' in convert.stdout
+    assert "def pipe(" in compiled.stdout
+    assert "truncate" in compiled.stdout
+
+
 def test_convert_dag_and_compile(tmp_path):
     dag = TESTS_DIR / "dags" / "pipe_forever.json"
     pipe_file = tmp_path / "pipe_forever.json"

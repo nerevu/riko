@@ -112,6 +112,11 @@ class TestModuleRegistry:
         fixed_registry.register(ModuleDefinition(name="tokenizer", sync_pipe=marker))
         assert fixed_registry.resolve("tokenizer") is marker
 
+    def test_registered_names_are_sorted(self, fixed_registry):
+        fixed_registry.register(ModuleDefinition(name="zeta", sync_pipe=marker))
+        fixed_registry.register(ModuleDefinition(name="alpha", sync_pipe=marker))
+        assert fixed_registry.registered_names() == ("alpha", "zeta")
+
     def test_register_rejects_duplicate_without_replace(self, fixed_registry):
         fixed_registry.register(MOD_DEFN)
 
