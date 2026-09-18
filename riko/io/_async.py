@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Async file and URL reading and writing for riko pipes (anyio + httpx).
+Asynchronous file and URL I/O helpers.
 
 Examples:
 
@@ -405,7 +405,7 @@ async def async_write(
     Examples:
 
         >>> from io import StringIO
-        >>> from riko import get_async_temp_file, issync, run
+        >>> from riko import get_async_temp_file, run
         >>>
         >>> async def main():
         ...     async with get_async_temp_file() as fp:

@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides HTTP and file I/O helpers.
+Synchronous file and URL I/O helpers.
 
 Attributes:
 

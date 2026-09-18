@@ -1,13 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Pushes items to one or more named receivers.
+Pushes source items to one or more named receivers.
 
-Pairs with the ``receive`` module for in-process fan-out: ``send`` publishes to the
-names listed in ``others`` and passes the items through unchanged.
-
-This is the low-level interface. ``riko.SyncPipe.publish`` is the high-level path,
-both as ``SyncPipe.publish(items, "alerts")`` and as ``flow.publish("alerts")``
-mid-chain.
+Each source item also passes through unchanged, so the module can be used in the
+middle of a pipeline.
 
 Examples:
 
@@ -19,8 +15,7 @@ Examples:
         >>> target = receiver(conf={"name": "receiver1", "wait": 0.01, "max_wait": 2})
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
-        >>> stream = ({"x": x} for x in range(5))
-        >>> source = sender(stream, others=["receiver1"])
+        >>> source = sender([{"x": 0}], others=["receiver1"])
         >>> next(source)
         {'x': 0}
         >>> next(target)

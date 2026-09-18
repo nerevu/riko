@@ -1,3 +1,5 @@
+"""Serializes record streams into supported output formats."""
+
 from __future__ import annotations
 
 from functools import partial

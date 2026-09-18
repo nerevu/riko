@@ -1,15 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Fetches the first RSS or Atom feed discovered on a page.
-
-Uses the page's auto-discovery links to find a feed, then fetches and parses it.
-Only the first feed found is used. Because the url is rediscovered on each run,
-a site that later moves its feed keeps working, provided it updates its
-auto-discovery links.
-
-Not every site advertises auto-discovery links. Where one does and you want the
-list of feeds rather than their contents, use the feedautodiscovery module,
-which reports every feed found without fetching any of them.
+Fetches and parses the first RSS or Atom feed advertised by a page.
 
 Examples:
 

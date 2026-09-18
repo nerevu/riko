@@ -1,5 +1,17 @@
 # vim: sw=4:ts=4:expandtab
-"""Derive module metadata and build the module catalog."""
+"""
+Derives metadata for built-in and registered modules.
+
+Examples:
+    Basic usage::
+
+        >>> from riko import get_module_metadata
+        >>>
+        >>> metadata = get_module_metadata("count")
+        >>> metadata.name, metadata.type, metadata.subtype
+        ('count', 'operator', 'aggregator')
+
+"""
 
 from __future__ import annotations
 

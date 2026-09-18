@@ -1,13 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Yields a placeholder item endlessly.
+Produces a placeholder item endlessly.
 
-Mocks an input source so other modules, e.g. datebuilder, can be called and keep
-consuming values from indirect terminal inputs.
-
-The stream never ends, so bound it downstream with ``truncate`` or ``timeout``.
-Pipes that must reach the end of the source, such as ``tail`` or ``sort``, will
-hang.
+The stream never ends, so bound it before operations that require the source to
+finish.
 
 Examples:
 

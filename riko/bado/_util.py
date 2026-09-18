@@ -1,9 +1,19 @@
 # vim: sw=4:ts=4:expandtab
 """
-AnyIO + httpx implementations used by :mod:`riko.bado._backend`.
+Provides utility helpers for the Riko async runtime.
 
-This module is private. Optional dependency handling and the sync-only fallback
-are provided by :mod:`riko.bado._backend`.
+Examples:
+
+    Basic usage::
+
+        >>> from riko import async_return, run
+        >>>
+        >>> async def main():
+        ...     print(await async_return("riko"))
+        >>>
+        >>> run(main)
+        riko
+
 """
 
 from __future__ import annotations

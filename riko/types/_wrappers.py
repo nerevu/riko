@@ -1,3 +1,5 @@
+"""Parser, wrapper, conversion, and decorator typing contracts."""
+
 from __future__ import annotations
 
 from collections.abc import (

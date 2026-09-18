@@ -1,28 +1,15 @@
 # vim: sw=4:ts=4:expandtab
 """
-Base target protocols shared by every concrete target.
-
-A ``Target`` is a destination identified by its ``backend`` (a :class:`Backends`
-member). The three capability protocols split by effect: ``SupportsRead`` acquires and
-interprets, ``SupportsWrite`` reconciles a record stream, and ``SupportsActions`` runs
-provider commands that are not data writes. One target class opts into whichever
-capabilities its backend supports, so the matrix stays sparse without a god-interface.
-
-The base contract lives here, below its implementers: concrete target classes in
-``riko.definitions`` implement these protocols, and the target registry keys them by
-``backend``.
+Target capability protocols for extension backends.
 
 Examples:
 
     Basic usage::
 
-        >>> from riko.definitions._targets import FileTarget
-        >>> from riko.types._targets import SupportsWrite, Target
+        >>> from riko.ext import FileTarget, SupportsWrite
         >>>
         >>> isinstance(FileTarget("out.csv"), SupportsWrite)
         True
-        >>> FileTarget.backend.value
-        'file'
 
 """
 

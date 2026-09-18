@@ -1,3 +1,5 @@
+"""Date/time parsing, normalization, and conversion helpers."""
+
 from __future__ import annotations
 
 from datetime import UTC, date, timedelta, tzinfo

@@ -1,10 +1,18 @@
 # vim: sw=4:ts=4:expandtab
 """
-Private guarded backend facade for Riko's async runtime.
+Provides guarded access to the optional Riko async runtime.
 
-Riko internals import AnyIO/httpx runtime primitives from this module rather
-than importing those dependencies directly. This module is private and carries
-no SemVer compatibility guarantee.
+Examples:
+
+    Basic usage::
+
+        >>> from riko import backend, isasync, issync
+        >>>
+        >>> backend in {"anyio", "empty"}
+        True
+        >>> isasync is not issync
+        True
+
 """
 
 from __future__ import annotations

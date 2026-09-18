@@ -1,22 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Implement loop-specific execution outside the generic operator decorator.
+Implements per-item loop execution for embedded modules.
 
-This module owns embedded-target validation, child-context creation through
-``_get_subpipe``, and per-parent folding over the source stream.
-
-The loop runs the embed once per parent and folds its results back against *that
-parent* — ``count`` reduces per parent, ``emit`` yields the child results, and
-``assign`` stores each result on a preserved copy of the parent (one copy per
-result). This is the Yahoo per-parent contract, shared by ``loop_embed_sync`` and
-``loop_embed_async`` (``loop.async_pipe``) via the common ``_fold_parent``/
-``_take`` fold.
-
-The lazy-async loop runs the embed once per parent *sequentially* and yields the
-per-parent fold incrementally as an ``AsyncIterator`` — preserving parent order,
-applying backpressure (the source only advances as the consumer pulls), and
-letting ``count="first"`` stop after the first result without materializing the
-rest.
+Each source item is processed independently by the embedded module, and its
+results are emitted or assigned back to that same parent item.
 """
 
 from __future__ import annotations

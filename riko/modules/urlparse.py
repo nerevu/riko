@@ -1,8 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-Parses a url into its six components.
+Parses a url into its components.
 
-Produces one item is per component: ``scheme``, ``netloc``, ``path``, ``params``,
+Produces one item per component: ``scheme``, ``netloc``, ``path``, ``params``,
 ``query``, and ``fragment``.
 
 Examples:

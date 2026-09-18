@@ -1,35 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Obtains and parses user input.
+Obtains and casts user input.
 
-Use this module any time you need to obtain and parse user input to wire into
-another pipe. Not loopable.
-
-The value is read from ``inputs`` when given, falls back to ``conf["default"]``
-under ``test``, and otherwise prompts on stdin.
-
-Valid Date Values
-
-Obvious date formats:
-
-    Jan. 12, 2001
-    10/21/1958
-    15 JUN 06
-
-Plus some unusual formats as well:
-
-    now
-    today
-    yesterday
-    tomorrow
-    +3 days
-    -10 weeks
-    last year
-    next month
-    1181230100
-
-Note: Relative date/time calculations reference the current UTC time. Timezones
-are not currently supported.
+Values come from ``inputs`` when supplied, from the configured default in test
+mode, and otherwise from stdin.
 
 Examples:
 
@@ -40,9 +14,6 @@ Examples:
         >>> conf = {"prompt": "How old are you?", "type": "int"}
         >>> next(pipe(conf=conf, inputs={"content": "30"}))
         30
-        >>> conf["test"] = True
-        >>> next(pipe(conf=conf))
-        0
 
 Attributes:
 

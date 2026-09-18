@@ -1,8 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Casts an item field into a specific type.
-
-Useful as terminal data. Loopable.
+Casts an item field into a configured type.
 
 Examples:
 

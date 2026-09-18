@@ -1,24 +1,25 @@
 # vim: sw=4:ts=4:expandtab
 """
-Concurrency helpers for the async runtime.
+Concurrent mapping, merging, and reduction helpers for async code.
 
-These map an async function over an iterable, merge async feeds, adapt sync
-iterables for async consumers, and reduce cooperatively. They are importable
-without the ``async`` extra but only run under an async runtime.
+``async_map`` preserves source order after concurrent execution, while streaming
+helpers yield incrementally for large or unbounded inputs.
 
-The mapping helpers differ in how they trade result ordering against memory:
+Examples:
 
-- ``async_map``: bounded-concurrency map, results in source order; collects
-  every result before returning.
-- ``async_map_stream``: streaming map, results in completion order.
-- ``async_map_ordered_stream``: streaming map, results in source order.
-- ``async_merge``: interleaves many async feeds into one stream, records in
-  arrival order.
+    Basic usage::
 
-The streaming variants bound in-flight memory, so they suit large or unbounded
-sources; ``async_map`` is eager. ``async_iter`` wraps a sync iterable as an
-async generator, and ``coop_reduce``/``async_reduce`` reduce with cooperative
-checkpoints.
+        >>> from riko import async_map, run
+        >>>
+        >>> async def double(x):
+        ...     return x * 2
+        >>>
+        >>> async def main():
+        ...     print(await async_map(double, range(3)))
+        >>>
+        >>> run(main)
+        [0, 2, 4]
+
 """
 
 from __future__ import annotations

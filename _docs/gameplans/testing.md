@@ -142,19 +142,30 @@ and `describe_module`; prove the enum crosses the pipe boundary with a determini
 Different deletion rule from pytest, because doctests are executable documentation:
 
 - **Public/built-in doctests stay** when they demonstrate a useful API behavior — overlap between a
-  README journey and a module example is not inherently wasteful.
+  README journey and a module example is not inherently wasteful. One module-level example is a
+  soft default, not a cap: keep a second example when it demonstrates a distinct first-class mode
+  or completes the module's primary workflow.
+- **Deleting a module example requires an ownership check.** First look for equivalent function/class
+  doctests and pytest coverage. Move genuinely uncovered behavior to the appropriate test before
+  deleting the example; do not create a duplicate pytest test when another doctest already owns it.
+  If the example is later restored, remove a pytest test that exists only as its duplicate.
 - **Private doctests need stronger justification.** If `_inference`/`_iterutils`/`_objectify` already
   have focused pytest coverage, move edge cases to pytest and leave at most a tiny descriptive
   example. `_inference.infer_from_source()` is the clearest candidate — its doctests repeat pytest
   cases.
 - **The root `riko/__init__.py` doctest should go.** It re-teaches a normal `SyncPipe` workflow the
-  README/module docs already own. The package initializer should describe the namespace.
+  README/module docs already own. The package initializer should describe the namespace's purpose,
+  audience, stability, and package-wide semantics instead. This exception removes the requirement
+  for a package example; it does not permit collapsing a public package docstring to a vague label.
 - **FAQ doctests should own ordinary discovery examples** (`list_modules()` ordering/type/loopable/
   subtype/primary/metadata/export targets) — which is *why* several simple `public/test_modules.py`
   assertions can disappear. Once typed discovery is documented there, add `Modules.Sources`,
   `list_modules`, and `describe_module` happy paths to the FAQ.
 - **`docs/INSTALLATION.rst`** doctest is worth keeping: a self-contained "imports + basic chaining"
   installation smoke test.
+- Async/Bado doctest items are skipped by `conftest.py` in sync-only environments. Do not add
+  `issync` branches solely as doctest fallbacks; write the real async example and let collection
+  policy handle unavailable optional support.
 - `>>>` in `examples/**`, `_docs/**`, and `CLAUDE.md` are **not** collected today — which is exactly
   why `functional/test_examples.py` matters: it is what actually executes the example pipelines.
 

@@ -1,3 +1,5 @@
+"""Package metadata exposed through the root Riko namespace."""
+
 from __future__ import annotations
 
 from importlib import metadata

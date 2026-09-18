@@ -1,14 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-Returns a portion of a string.
+Extracts a substring by starting position and length.
 
-You enter two numbers to tell the module the starting character position and
-the length of the resulting substring. If your input string is "ABCDEFG", then
-a start of 2 and length of 4 gives you a resulting string of "CDEF". Notice
-that the first character in the original string is 0, not 1.
-
-A length past the end of the string just returns the remainder, so a start of 3
-and a length of 100 gives "DEFG".
+Positions are zero-based, and a length past the end returns the remaining text.
 
 Examples:
 

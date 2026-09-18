@@ -1,3 +1,5 @@
+"""Module defaults, wrapper options, and dispatch typing contracts."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable

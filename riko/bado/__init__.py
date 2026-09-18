@@ -1,9 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-Stable, SemVer-guaranteed async API for Riko.
+Stable async-runtime API for Riko.
 
-The names in ``__all__`` are also re-exported from :mod:`riko`. Riko's private backend
-facade lives in :mod:`riko.bado._backend`.
+Names in ``__all__`` are also available from the top-level ``riko`` namespace.
 """
 
 from ._backend import async_sleep, backend, isasync, issync, run

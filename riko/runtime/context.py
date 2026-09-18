@@ -1,12 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides the execution context for a pipeline.
-
-An immutable definition-layer snapshot. Its fields cannot be reassigned, its
-``inputs``/``resources`` mappings are read-only containers, and every derivation
-(``augment``/``with_resource``/unpickling) constructs a fresh snapshot rather than
-mutating an existing one. Immutability is structural: riko does not recursively freeze
-arbitrary values referenced by an input or a resource.
+Immutable execution context passed through pipeline operations.
 
 Examples:
 
@@ -14,18 +8,14 @@ Examples:
 
         >>> from riko import Context, ExecutionMode
         >>>
-        >>> context = Context(ExecutionMode.DESCRIBE, inputs={"count": 2})
-        >>> context.describe_input
-        True
-        >>> context.inputs["count"]
+        >>> base = Context(ExecutionMode.DESCRIBE, inputs={"count": 2})
+        >>> derived = base.augment(inputs={"limit": 5})
+        >>> base.inputs["count"]
         2
-        >>> context = context.augment(inputs={"limit": 5})
-        >>> context.describe_input
+        >>> derived.describe_input
         True
-        >>> "count" in context.inputs
-        False
-        >>> context.inputs["limit"]
-        5
+        >>> dict(derived.inputs)
+        {'limit': 5}
 
 """
 

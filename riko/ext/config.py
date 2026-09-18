@@ -1,5 +1,20 @@
 # vim: sw=4:ts=4:expandtab
-"""Expose parsed module configuration helpers to extension authors."""
+"""
+Exposes parsed module configuration helpers to extension authors.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko.ext import DynamicConf, get_conf_type
+        >>>
+        >>> def parser(objconf: DynamicConf):
+        ...     return objconf
+        >>>
+        >>> get_conf_type(parser) is DynamicConf
+        True
+
+"""
 
 from typing import get_type_hints
 

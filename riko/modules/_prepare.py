@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Prepare modules for per-item dispatch."""
+"""Prepares modules for per-item dispatch."""
 
 from __future__ import annotations
 

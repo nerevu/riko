@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Provide logging, verbosity, and CLI exception helpers."""
+"""Provides logging, verbosity, and CLI exception helpers."""
 
 from __future__ import annotations
 

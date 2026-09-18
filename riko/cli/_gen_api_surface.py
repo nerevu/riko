@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Generate the API-surface reference from the private contract declaration."""
+"""Generates the API-surface reference from its contract declarations."""
 
 from __future__ import annotations
 

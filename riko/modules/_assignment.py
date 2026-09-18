@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Handle sub-pipe binding and item assignment."""
+"""Handles sub-pipe binding and item assignment."""
 
 from __future__ import annotations
 

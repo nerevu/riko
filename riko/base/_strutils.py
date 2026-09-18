@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provide string sanitization, substitution, and extraction helpers.
+Provides string sanitization, substitution, and extraction helpers.
 
 Attributes:
 

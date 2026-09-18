@@ -1,15 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Returns items from a stream until a certain amount of time has passed.
+Limits a stream by elapsed time.
 
-Contrast this with the truncate module, which also limits the number of items,
-but returns items based on a count.
-
-The sync pipe is lazy: items pass through as they arrive and the source is
-abandoned once the deadline is reached. The async pipe accepts either a sync
-stream or an async ``Feed`` (e.g. an async generator) and is eager — awaiting it
-collects items until the deadline, so it returns only once the timeout expires
-(bounding even an unbounded source) and holds every collected item in memory.
+The sync pipe yields items as they arrive. The async pipe collects items until
+the deadline before yielding them, so both paths can bound an unbounded source.
 
 Examples:
 

@@ -1,3 +1,5 @@
+"""Scalar, temporal, and primitive value typing aliases."""
+
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import PurePath

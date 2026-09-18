@@ -1,35 +1,4 @@
-"""
-Generic name registry shared by the module and target registries.
-
-A ``Registry`` resolves names through three tiers with a hybrid lifetime: runtime
-registration, then entry point, then built-in. Built-ins are immutable process-global
-facts; entry points are discovered by name on first lookup, so no extension imports
-until one of its names is resolved; runtime registrations live in a mutable tier that
-``reset`` clears for test isolation.
-
-A subclass sets ``entry_point_group`` and ``label``, derives an entry's registry key
-via ``_key``, turns a loaded entry point into a concrete entry via ``_load``, and layers
-a domain ``resolve`` on top of ``_registered``.
-
-Examples:
-
-    Basic usage::
-
-        >>> from riko.runtime._registry import Registry
-        >>>
-        >>> class Demo(Registry[int]):
-        ...     entry_point_group = "riko.demo"
-        ...     label = "demo"
-        ...
-        ...     def _key(self, entry):
-        ...         return str(entry)
-        >>>
-        >>> demo = Demo()
-        >>> demo.register(42)
-        >>> demo.registered_names()
-        ('42',)
-
-"""
+"""Generic registry for runtime, entry-point, and built-in named entries."""
 
 from importlib.metadata import EntryPoint, entry_points
 from typing import ClassVar

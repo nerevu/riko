@@ -1,18 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Public entry point for riko.
+Stable application API for Riko.
 
-Application code imports stable APIs from ``riko``. Extension
-authors import from ``riko.ext``. ``riko.bado`` provides the supported async
-runtime namespace, with selected helpers promoted into this stable surface.
-
-The stable, SemVer-guaranteed application-facing surface of riko. Import
-application code from here or from the top-level :mod:`riko` package, which
-re-exports this module.
-
-Extension-author symbols live in :mod:`riko.ext`. :mod:`riko.bado` is the
-supported async-runtime namespace; selected application-facing helpers from it
-are promoted here.
+Application code imports from this namespace; extension authors use ``riko.ext``.
+``riko.bado`` exposes the supported async-runtime namespace.
 """
 
 from riko.bado._backend import async_sleep, backend, isasync, issync, run

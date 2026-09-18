@@ -1,19 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Asynchronous pub/sub backend.
-
-Each named receiver is a lazily created rendezvous channel (an AnyIO memory
-object stream with ``max_buffer_size=0``). ``publish`` and ``subscribe`` both
-resolve the same named slot, so concurrent startup converges deterministically
-with no sleep, readiness event, or task-order assumption: whichever side
-arrives first waits through channel backpressure for the other. Completion is
-channel closure (one active publisher per receiver); a publish to a name that is
-never subscribed is bounded by a timeout and raises ``ReceiverUnavailableError``
-rather than dropping data or hanging.
-
-AnyIO objects are created lazily inside these operations, so the hub instance is
-safe to construct at import time even when the async extra is absent.
-"""
+"""Asynchronous delivery for named in-process pub/sub channels."""
 
 from __future__ import annotations
 

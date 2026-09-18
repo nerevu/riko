@@ -150,9 +150,11 @@ new permanent bullet here.
   (`logger.warning` + carry on). Missing required call arguments are programming
   errors and raise; `require_arg` in `riko/modules/_prepare.py` owns that pattern.
 - Docstrings follow `_docs/DOCUMENTATION_STANDARD.md`: annotations own types except
-  the documented pipe conventions; summaries use third-person present; modules keep
-  a `Basic usage::` example; public behavior carries doctest coverage where
-  appropriate.
+  the documented pipe conventions; summaries use third-person present. Public
+  modules (including private files that define re-exported public APIs) keep a useful
+  entry-point example; one example is a soft default, not a cap when distinct modes
+  or a complete workflow need more. Public package docstrings preserve namespace
+  purpose/audience/stability rather than collapsing to generic one-liners.
 - New code is fully typed and documented. Prefer type narrowing over `cast`; narrow
   untyped values once at the boundary and carry the tightened type forward.
 - Guard optional imports with `try/except` and set the backend/feature flag in the
@@ -168,8 +170,11 @@ new permanent bullet here.
   shell venv should win over the default `.venv`.
 - **Python 3.12+** — `requires-python = ">=3.12"`; use PEP 695 type params and
   modern union syntax.
-- **Doctests are tests** — configured pytest testpaths include source/docs/examples;
-  avoid duplicating the same happy-path example across surfaces.
+- **Doctests are tests** — configured pytest testpaths include source/docs/examples.
+  Before deleting a doc example, confirm its behavior still has an executable owner;
+  before adding a replacement pytest test, check function/class doctests first.
+  Async/Bado doctests are skipped automatically when async support is unavailable,
+  so do not add `issync` fallback branches solely for doctest collection.
 - **`manage`** — `riko.cli.manage:manager` is the Click entry point. `manage.py`
   composes private command modules by reason to change. It collides with
   `mezmorize`'s console script in some install orders; use
