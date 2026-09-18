@@ -4,11 +4,13 @@ Drift guard for the compiled example pipes.
 
 Each ``examples/pypipelines/pipe_*.py`` is generated from its sibling
 ``examples/pipelines/pipe_*.json`` by ``compile-pipe`` (see
-``_docs/INTERNALS.md#compiled-pipeline-fixtures``). This regenerates the module in memory and
-fails if it diverges from the committed file, exactly like the
+``_docs/INTERNALS.md#compiled-pipeline-fixtures``). This regenerates the module in
+memory and fails if it diverges from the committed file, exactly like the
 ``tests/pypipelines`` guard in ``test_compile.py``. Regenerate with::
 
-    gen-pipelines  # or: compile-pipe examples/pipelines/pipe_<name>.json -o examples/pypipelines/pipe_<name>.py
+    gen-pipelines  # or:
+    compile-pipe examples/pipelines/pipe_<name>.json \\
+        -o examples/pypipelines/pipe_<name>.py
 """
 
 from difflib import unified_diff

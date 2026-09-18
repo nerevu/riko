@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Tests the execution-resource foundation (``riko.runtime._resources`` + Context wiring)."""
+"""Tests execution-resource foundations and Context wiring."""
 
 from __future__ import annotations
 

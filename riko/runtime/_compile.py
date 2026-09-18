@@ -756,10 +756,10 @@ def resolve_module(module_name: str, is_async: bool = False) -> Pipe:  # noqa: E
 
         >>> resolve_module("filter")
         <function pipe at...>
-        >>> resolve_module("does_not_exist")
+        >>> resolve_module("fake")
         Traceback (most recent call last):
            ...
-        riko.base.exceptions.UnsupportedModuleError: Unsupported riko module: does_not_exist
+        riko.base.exceptions.UnsupportedModuleError: Unsupported riko module: fake
 
     Leaf-module resolution (incl. preserving a transitive ``ModuleNotFoundError``
     raised *inside* a valid module) lives in ``ModuleRegistry`` now; see

@@ -5,8 +5,9 @@ Pushes items to one or more named receivers.
 Pairs with the ``receive`` module for in-process fan-out: ``send`` publishes to the
 names listed in ``others`` and passes the items through unchanged.
 
-This is the low-level interface. ``riko.SyncPipe.publish`` is the high-level path, both as
-``SyncPipe.publish(items, "alerts")`` and as ``flow.publish("alerts")`` mid-chain.
+This is the low-level interface. ``riko.SyncPipe.publish`` is the high-level path,
+both as ``SyncPipe.publish(items, "alerts")`` and as ``flow.publish("alerts")``
+mid-chain.
 
 Examples:
 

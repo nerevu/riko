@@ -70,7 +70,11 @@ def test_type_checking_is_exempt(tmp_path: Path) -> None:
     write(
         root,
         "types/a.py",
-        "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from riko.runtime.b import thing\n",
+        (
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n"
+            "    from riko.runtime.b import thing\n"
+        ),
     )
     write(root, "runtime/__init__.py", "")
     write(root, "runtime/b.py", "thing = 1\n")

@@ -5,10 +5,10 @@ Receives items pushed by the send module.
 Pairs with ``send`` for in-process fan-out: ``receive`` subscribes to a sender as named
 ``others``.
 
-This is the low-level interface: it must be primed (the first ``next()`` registers the
-channel) and it emits a ``StreamState.PENDING`` marker on every poll that finds the queue
-empty, so a caller has to filter those out. ``riko.SyncPipe.subscribe`` is the high-level
-path — it registers up front and drains without ever emitting a marker.
+This is the low-level interface: it must be primed (the first ``next()`` registers
+its channel) and it emits a ``StreamState.PENDING`` marker on every poll that finds
+the queue empty, so a caller has to filter those out. ``riko.SyncPipe.subscribe`` is
+the high-level path — it registers up front and drains without ever emitting a marker.
 
 Examples:
 

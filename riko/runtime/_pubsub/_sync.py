@@ -2,9 +2,9 @@
 """
 Synchronous pub/sub backend.
 
-Delivers buffered items to named receivers within a single synchronous run. Backs the
-sync half of ``send`` and ``receive``. The async half uses ``riko.runtime._pubsub._async``
-instead.
+Delivers buffered items to named receivers within a single synchronous run. Backs
+the sync half of ``send`` and ``receive``. The async half uses
+``riko.runtime._pubsub._async`` instead.
 """
 
 from __future__ import annotations

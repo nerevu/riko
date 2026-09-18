@@ -165,7 +165,6 @@ ignore = [
     # stylistic
     "D301",  # escape-sequence-in-docstring
     "D412",  # blank-lines-between-header-and-content
-    "E501",  # line too long
     "E731",  # do not assign a lambda expression, use a def
 
     # security
@@ -199,6 +198,7 @@ split-on-trailing-comma = false
 ]
 
 "tests/pypipelines/*" = [
+    "E501",  # Line too long (generated fixture data)
     "N999",  # Invalid module name
     "N802",  # Function name
     "N806",  # Variable in function should be lowercase (generated _OUTPUT)

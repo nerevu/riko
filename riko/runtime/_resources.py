@@ -321,7 +321,11 @@ class Resource[T]:
 
         Examples:
 
-            >>> from riko.runtime._resources import OneShotResource, Resource, FactoryKind
+            >>> from riko.runtime._resources import (
+            ...     FactoryKind,
+            ...     OneShotResource,
+            ...     Resource,
+            ... )
             >>>
             >>> def db():
             ...     yield object()

@@ -5,7 +5,8 @@ Tests the write targets, sessions, and the ``write``/``sink`` verbs.
 Covers ``File`` capability resolution, key normalization, ``prepare_write``
 validation, the native whole-stream vs. temporary singleton converter paths, the
 csv/jsonl/framed serialization contracts, the session lifecycle state machine, and
-the passthrough execution host (``riko.definitions._targets``/``riko.runtime._write_session``).
+the passthrough execution host (``riko.definitions._targets`` and
+``riko.runtime._write_session``).
 """
 
 from dataclasses import dataclass

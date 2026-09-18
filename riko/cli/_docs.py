@@ -73,7 +73,8 @@ _STATUS_BANNER = re.compile(
 _SECTION_ROW = re.compile(r"^\|\s*(\d+)\s*\|", re.MULTILINE)
 _GAMEPLAN_LINK = re.compile(r"gameplans/([A-Za-z0-9._-]+\.md)")
 _NON_AUTHORITATIVE_HEADER = re.compile(
-    r"\b(retired|archived)\b|research/adr notebook|prior-art research|not as a task list",
+    r"\b(retired|archived)\b|research/adr notebook|prior-art research|"
+    r"not as a task list",
     re.IGNORECASE,
 )
 _NON_AUTHORITATIVE_TABLE_LINK = re.compile(r"\]\((?:archive|research)/")
@@ -152,7 +153,8 @@ def _render_errors(path: str, doctree: Any) -> list[str]:
         raise RuntimeError("docutils not found")
     else:
         return [
-            f"{path}:{node.get('line', '?')}: [{node['type']}] {node.children[0].astext()}"
+            f"{path}:{node.get('line', '?')}: [{node['type']}] "
+            f"{node.children[0].astext()}"
             for node in doctree.findall(nodes.system_message)
             if node["level"] >= 2
         ]
@@ -363,7 +365,8 @@ def _check_docs() -> int:
 
     if counts != expected:
         problems.append(
-            f"{_ROADMAP}: section index must contain each §0-{_EXPECTED_SECTIONS - 1} once"
+            f"{_ROADMAP}: section index must contain each "
+            f"§0-{_EXPECTED_SECTIONS - 1} once"
         )
 
     linked = set(_GAMEPLAN_LINK.findall(roadmap))
@@ -379,28 +382,32 @@ def _check_docs() -> int:
 
     if offenders := _root_markdown_offenders():
         problems.append(
-            f"{_INTERNAL_DOCS}: root Markdown docs require explicit authority: {offenders}"
+            f"{_INTERNAL_DOCS}: root Markdown docs require explicit "
+            f"authority: {offenders}"
         )
 
     if _LEGACY_INSPIRATION.exists():
         problems.append(
-            f"{_LEGACY_INSPIRATION}: prior-art material belongs under research/inspiration/"
+            f"{_LEGACY_INSPIRATION}: prior-art material belongs under "
+            "research/inspiration/"
         )
 
     if offenders := _authority_namespace_offenders():
         problems.append(
-            f"{_GAMEPLANS}: archive/research material must leave gameplans/: {offenders}"
+            f"{_GAMEPLANS}: archive/research material must leave "
+            f"gameplans/: {offenders}"
         )
 
     if offenders := _non_authoritative_listing_offenders(roadmap):
         problems.append(
-            f"{_ROADMAP}: archive/research documents cannot appear in authority tables: "
-            f"{offenders}"
+            f"{_ROADMAP}: archive/research documents cannot appear in "
+            f"authority tables: {offenders}"
         )
 
     if offenders := _status_banner_offenders():
         problems.append(
-            f"{_GAMEPLANS}: status banners belong only in PHASE_CHECKLISTS.md: {offenders}"
+            f"{_GAMEPLANS}: status banners belong only in "
+            f"PHASE_CHECKLISTS.md: {offenders}"
         )
 
     if offenders := _phase_closure_offenders():
