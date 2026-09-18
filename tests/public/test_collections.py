@@ -3,16 +3,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Iterator
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import itemgetter
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from riko.bado._backend import run
 from riko.bado._util import gather_results
-from riko.base._iterutils import noop
 from riko.base._paths import get_path
 from riko.base.exceptions import ReceiverUnavailableError
 from riko.definitions.modules import normalize_module_name
@@ -30,6 +30,7 @@ from riko.runtime.collections import (
 from riko.types._enums import ModuleName
 from riko.types._guards import is_mapping, is_stateful_item
 from riko.types._sentinels import StreamState
+from riko.types._streams import AsyncCascade, AsyncStream, Cascade, Stream
 from riko.types.modules import (
     ItemBuilderConf,
     ParsedParam,
@@ -40,9 +41,17 @@ from riko.types.modules import (
 from tests import PipeBuilder, skipif_issync
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterable, Iterator
+    from collections.abc import Callable
 
     from riko.types._streams import Item
+
+type SyncExtract[T] = Callable[[Stream], T] | Callable[[Stream | Cascade], T]
+type AsyncExtract[T] = (
+    Callable[[AsyncStream], Awaitable[T]]
+    | Callable[[AsyncStream | AsyncCascade], Awaitable[T]]
+)
+
+SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
 
 value = "once is 1x,twice is 2x,thrice is 3x"
 attrs = ParsedParam({"key": "content", "value": value})
@@ -50,25 +59,41 @@ builder_conf = ItemBuilderConf({"attrs": attrs})
 recv_conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
 strr_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
 
-_ENGINES = [
-    pytest.param(SyncPipe, id="sync"),
-    pytest.param(AsyncPipe, id="async", marks=skipif_issync),
-]
 
-SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
+def _get_params[T](*extracts: SyncExtract[T] | AsyncExtract[T] | None):
+    if extracts:
+        sync_args, async_args = zip((SyncPipe, AsyncPipe), extracts, strict=True)
+    else:
+        sync_args, async_args = (SyncPipe,), (AsyncPipe,)
+
+    return [
+        pytest.param(*sync_args, id="sync"),
+        pytest.param(*async_args, id="async", marks=skipif_issync),
+    ]
 
 
-def _aresolve[T](awaitable: Awaitable[Any], extract: Callable[..., T]) -> T:
-    """Await *awaitable* on the async engine and return ``extract`` of the result."""
+def _first_two(splits: Stream | Cascade) -> tuple[Item, ...]:
+    streams = list(splits)
 
-    async def _collect() -> T:
-        return extract(await awaitable)
+    if not all(isinstance(stream, Iterator) for stream in streams):
+        raise TypeError("Expected an AsyncCascade, not an AsyncStream")
 
-    return run(_collect)
+    return tuple(next(cast("Stream", stream)) for stream in streams)
+
+
+async def _afirst_two(splits: AsyncStream | AsyncCascade) -> tuple[Item, ...]:
+    streams = [stream async for stream in splits]
+
+    if not all(isinstance(stream, Iterator) for stream in streams):
+        raise TypeError("Expected an AsyncCascade, not an AsyncStream")
+
+    return tuple(next(cast("Stream", stream)) for stream in streams)
 
 
 def _run_on[T](
-    pipe: type[SyncPipe | AsyncPipe], build: PipeBuilder, extract: Callable[..., T]
+    pipe: type[SyncPipe | AsyncPipe],
+    build: PipeBuilder,
+    extract: SyncExtract[T] | AsyncExtract[T],
 ) -> T:
     """
     Build one pipeline specification for either execution engine.
@@ -76,17 +101,14 @@ def _run_on[T](
     ``build(pipe)`` returns the terminal chain object. The async engine awaits it
     before applying ``extract``, allowing one specification to drive both engines.
     """
-    if pipe is SyncPipe:
-        result = extract(build(pipe))
+    stream = build(pipe)
+
+    if isinstance(stream, AsyncPipe):
+        result = run(cast("AsyncExtract", extract), stream)
     else:
-        result = _aresolve(build(cast("type[AsyncPipe]", pipe)), extract)
+        result = cast("SyncExtract", extract)(stream)
 
     return result
-
-
-def _first_two[T](splits: Iterable[Iterator[T]]) -> tuple[T, T]:
-    stream1, stream2 = splits
-    return next(stream1), next(stream2)
 
 
 class _CollectionTest:
@@ -523,7 +545,7 @@ class TestAsyncCollections(_CollectionTest):
 class TestCollectionParity(_CollectionTest):
     """Behaviors whose observable output is identical across both engines."""
 
-    @pytest.mark.parametrize("pipe", _ENGINES)
+    @pytest.mark.parametrize("pipe", _get_params())
     def test_pipes_use_loopability_for_mapping(self, pipe):
         transformer = pipe("strtransform", source=SRC)
         non_loopable = pipe("input", source=SRC)
@@ -533,35 +555,35 @@ class TestCollectionParity(_CollectionTest):
         assert not non_loopable.loopable
         assert not non_loopable.mapify
 
-    @pytest.mark.parametrize("pipe", _ENGINES)
-    def test_udf(self, pipe):
+    @pytest.mark.parametrize(("pipe", "extract"), _get_params(next, anext))
+    def test_udf(self, pipe, extract):
         build = lambda pipe: (
             pipe("itembuilder", conf=builder_conf)
             .tokenizer(emit=True)
             .udf(func=itemgetter("content"))
         )
-        assert _run_on(pipe, build, next) == "once is 1x"
+        assert _run_on(pipe, build, extract) == "once is 1x"
 
-    @pytest.mark.parametrize("pipe", _ENGINES)
+    @pytest.mark.parametrize("pipe", _get_params())
     def test_export(self, pipe):
-        build = lambda pipe: (
-            pipe("itembuilder", conf=builder_conf).tokenizer(emit=True).export()
-        )
-        assert _run_on(pipe, build, noop) == [
+        build = lambda pipe: pipe("itembuilder", conf=builder_conf).tokenizer(emit=True)
+        extract = lambda pipe: pipe.export()
+
+        assert _run_on(pipe, build, extract) == [
             {"content": "once is 1x"},
             {"content": "twice is 2x"},
             {"content": "thrice is 3x"},
         ]
 
-    @pytest.mark.parametrize("pipe", _ENGINES)
-    def test_split(self, pipe):
+    @pytest.mark.parametrize(("pipe", "extract"), _get_params(_first_two, _afirst_two))
+    def test_split(self, pipe, extract):
         build = lambda pipe: (
             pipe("itembuilder", conf=builder_conf)
             .tokenizer(emit=True)
             .udf(func=self.udf)
             .split()
         )
-        first1, first2 = _run_on(pipe, build, _first_two)
+        first1, first2 = _run_on(pipe, build, extract)
         assert first1 == {"content": "once is 1x"}
         assert first2 == {"content": "once is 1x"}
         assert self.runs == 3

@@ -66,30 +66,25 @@ error/disposition callbacks and sinks. **Riko Connect** is not started.
 
 The core item and stream types exist as described, in `riko/types/_streams.py`:
 
-```python
-type Item = RikoDict | dict[str, RikoValue] | RSSEntry | DotDict[RikoValue]
-
-type Items = Iterable[Item]
-type Stream = Iterator[Item]
-type Feed = AsyncIterable[Item]
-```
-
-`Stream` and `Feed` differ by iteration mechanism, not by whether the source is finite or
+`Stream` and `AsyncStream` differ by iteration mechanism, not by whether the source is finite or
 live.
 
 * `Stream` is synchronous iteration.
-* `Feed` is asynchronous iteration.
+* `AsyncStream` is asynchronous iteration.
 * Boundedness is **not** a declared `Opts` field yet (`Opts.boundedness` / `require_bounded` are planned — [execution-semantics.md §5](gameplans/execution-semantics.md#5-execution-characteristics)); the bound that ships is behavioral, in the §6 async primitives.
 
-The public asynchronous source type is:
+The public cross-mode source union is:
 
 ```python
-type AsyncSource = Items | Feed | Awaitable[Items | Feed]
+type Feed = Items | AsyncItems
 ```
 
+`Feed` may therefore be a synchronous or asynchronous item source; `AsyncItems`
+(`AsyncIterable[Item]`) is the asynchronous iterable type.
+
 Each asynchronous execution resolves the source once and normalizes it to
-`AsyncIterator[Item]`. `Awaitable[Items]` sources are awaited. A `Feed`
-(`AsyncIterable[Item]`) passed directly to an async operator now flows through the wrapper
+`AsyncIterator[Item]`. `Awaitable[Items]` sources are awaited. `AsyncItems`
+passed directly to an async operator now flows through the wrapper
 as an `AsyncIterator[Item]` (via `operator.aparse` + async-aware `operator.setup`), so
 composer operators (e.g. `timeout`) consume it lazily via `async for` and can bound an
 infinite `Feed`; the `AsyncPipe` collection path still buffers non-Feed-native parsers at
@@ -101,6 +96,11 @@ parsing, so there is no read-time backpressure. Streaming parsers pair `await
 async_url_open(...)` with `_io.auto_close` (close-on-iteration), never `async with`.
 Incremental `httpx.stream()` body reads and `AsyncClient` reuse are **Partial** (not
 implemented). Sync `Fetch` differs — its non-memoized path streams `r.raw` incrementally.
+
+**Typing boundary.** Parser outputs are generic over `ItemOrValue`. Processor and operator
+wrappers remain `Stream` / `AsyncStream` at the public boundary; splitters are the structural
+exception and return cascades. Broader `StreamOrValueStream`-style types remain internal
+implementation scaffolding rather than public pipe output contracts.
 
 ## 3. Pipe behavior (shipped)
 
@@ -141,9 +141,10 @@ materialize per source.
 
 ### Feed reuse
 
-Feeds behave like ordinary async iterators. Riko does **not** detect consumed feeds,
-recreate them automatically, or raise a custom consumed-state exception — the underlying
-`StopAsyncIteration` behavior is authoritative.
+The asynchronous half of `Feed` (`AsyncItems`) behaves like ordinary async iterators. Riko
+does **not** detect consumed async sources, recreate them automatically, or raise a custom
+consumed-state exception — the underlying `StopAsyncIteration` behavior is authoritative.
+Synchronous `Items` retain their ordinary iterable semantics.
 
 ## 6. Async execution and backpressure (shipped)
 
@@ -206,10 +207,9 @@ comparison is skipped. Drop-policy and disposition semantics are absent.
 
 AnyIO is the **sole** async runtime (`riko/bado/__init__.py`); backend selection is purely
 "does `anyio` import?" (`backend = "empty" if run is None else "anyio"`). There is **no
-Twisted** anywhere in the code and **no `RIKO_ASYNC_BACKEND` env var**. `AsyncIterable` is
-the pipeline-level abstraction; async iteration is pull-based (`__anext__` awaited by the
-consumer), and a `Feed` is defined by its iteration mechanism, not by whether the source is
-finite or live.
+Twisted** anywhere in the code and **no `RIKO_ASYNC_BACKEND` env var**. `AsyncItems` is
+the asynchronous iterable source type, while `Feed = Items | AsyncItems` is the cross-mode
+source union. Async iteration is pull-based (`__anext__` awaited by the consumer).
 
 Runtime and protocol layers are orthogonal: network protocol support is a source/sink
 adapter concern, not a core-runtime concern. That adapter design (asyncio-native libraries;
@@ -358,13 +358,20 @@ interleaved manual stepping. The two behaviors coexist transitionally on the com
 surface.
 
 **`func` queues its return value, not the received item.** So `func=archived.append` yields
-`None` per item and `func=len` yields an `int` — neither an `Item`, which is why
-`receive.pipe`'s declared return does not satisfy `SyncOperatorParser`, and why chaining
-(`subscribe("x", func=…).sort()`) yields `{'content': None}`. This transformation behavior is
-preserved during the revised compatibility MVP so sync and async do not diverge. Final F5
-changes **both** modes together to `on_receive=` semantics, where the callback return is discarded
-and the received item continues. Do not silence the current typing symptom by widening
-`OperatorParserOutput`.
+`None` per item and `func=len` yields an `int`. Those scalar/value results are deliberately
+representable by the parser contract:
+
+```python
+type OperatorParserOutput[T: ItemOrValue] = T | Iterator[T] | Stream
+```
+
+That does **not** widen the public wrapper/pipe boundary: processor and operator wrapper outputs
+remain item-stream typed. Broader value-stream shapes used to represent `emit=True` behavior
+remain internal implementation scaffolding and are not yet propagated into the public `Pipe`
+output contract. Chaining (`subscribe("x", func=…).sort()`) still yields `{'content': None}`;
+the typing change represents the existing transformation rather than changing it. Final F5 fanout
+work changes **both** modes together to `on_receive=` semantics, where the callback return is
+discarded and the received item continues.
 
 **Known lifecycle gap:** `receive.parser` calls `close(name)` on idle expiry as well as on DONE,
 and `SyncPubSubHub.close` pops receiver, queue, and id together — so an empty drain destroys

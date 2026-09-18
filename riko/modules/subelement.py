@@ -33,7 +33,7 @@ Attributes:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 
@@ -96,7 +96,7 @@ def parser(
     """
     raw: str | Sequence[str] = require_conf(objconf, "path", "subelement")
     path = raw if isinstance(raw, str) else ".".join(raw)
-    element = item.get(path, **kwargs)
+    element = cast("RikoValue", item.get(path, **kwargs))
     return gen_items(element, objconf.token_key or "")
 
 

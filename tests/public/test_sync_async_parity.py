@@ -21,15 +21,13 @@ from riko.types.modules import ItemBuilderConf, StrReplaceConf, StrReplaceConfRu
 from tests import PipeBuilder, aresolve, skipif_issync
 
 if TYPE_CHECKING:
-    from riko.types._streams import RikoItem
+    from riko.types._streams import Items
 
 BUILDER_CONF = ItemBuilderConf({"attrs": {"key": "content", "value": "a,bb,ccc"}})
 STRR_CONF = StrReplaceConf({"rule": StrReplaceConfRule(find="c", replace="C")})
 
 
-def _both[P: (SyncPipe, AsyncPipe), T](
-    build: PipeBuilder,
-) -> tuple[list[RikoItem], list[RikoItem]]:
+def _both[P: (SyncPipe, AsyncPipe), T](build: PipeBuilder) -> tuple[Items, Items]:
     """Run *build* on both engines; return ``(sync_result, async_result)``."""
     sync_result = list(build(SyncPipe))
     async_result = aresolve(build(AsyncPipe))

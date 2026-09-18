@@ -17,7 +17,7 @@ from riko.base._iterutils import multi_try
 from riko.types._scalars import PrimitiveValueType
 
 if TYPE_CHECKING:
-    from riko.types._collections import BasicDict, RikoValue
+    from riko.types._collections import BasicDict, RikoValue, StringyDict
     from riko.types._streams import Item, Stream, StreamOrValueStream, ValueStream
 
 
@@ -133,6 +133,10 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
 
 
 @overload
+def gen_items(  # noqa: E704
+    content: BasicDict | StringyDict, key: str | None = ...
+) -> Stream: ...
+@overload
 def gen_items(content: RikoValue) -> ValueStream: ...  # noqa: E704
 @overload  # noqa: E302
 def gen_items(  # noqa: E704
@@ -143,7 +147,9 @@ def gen_items(  # noqa: E704
     content: RikoValue, key: None = ..., yield_if_none: bool = ...
 ) -> ValueStream: ...
 def gen_items(  # noqa: E302
-    content: RikoValue, key: str | None = None, yield_if_none=False
+    content: RikoValue | BasicDict | StringyDict,
+    key: str | None = None,
+    yield_if_none=False,
 ) -> StreamOrValueStream:
     """
     Flattens nested Riko values into a stream of values or keyed items.
@@ -169,7 +175,7 @@ def gen_items(  # noqa: E302
 
     """
     if isinstance(content, (struct_time, dict, CaseInsensitiveDict)):
-        yield {key: cast("BasicDict", content)} if key else content
+        yield {key: content} if key else content
     elif isinstance(content, (list, tuple)):
         for value in content:
             yield from gen_items(value, key)
@@ -204,7 +210,7 @@ class Chainable:
 
     def __getattr__(self, name: str) -> Self:
         funcs = (partial(getattr, x) for x in [self.data, builtins, itertools])
-        zipped = zip(funcs, repeat(AttributeError))
+        zipped = zip(funcs, repeat(AttributeError), strict=False)
         method = multi_try(name, zipped, default=None)
         result = Chainable(self.data, method)
         return cast("Self", result)

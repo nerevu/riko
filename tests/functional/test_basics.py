@@ -34,7 +34,7 @@ from riko.runtime._pipelines import pipeline_resolver
 from riko.runtime.collections import SyncPipe
 from riko.runtime.context import Context, ExecutionMode
 from riko.types._guards import is_mapping
-from riko.types._streams import AsyncRikoStream, StatefulItem
+from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput
 from tests import TESTS_DIR, async_test
 
@@ -196,7 +196,7 @@ class TestBasics:
 
     def _aget_pipeline(
         self, pipe_name: str, file_path: Path | None = None
-    ) -> AsyncRikoStream:
+    ) -> AsyncStream:
         try:
             pipeline = resolve_module(pipe_name, True)
         except (UnsupportedPipelineError, UnsupportedModuleError):
@@ -205,7 +205,7 @@ class TestBasics:
         else:
             stream = pipeline(context=self.context)
 
-        return cast("AsyncRikoStream", stream)
+        return stream
 
     def _load(self, items: Sequence[Items], pipe_name, value=0, check=1):
         try:

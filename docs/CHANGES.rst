@@ -78,6 +78,17 @@ Changes
   per parse instead of rescanning raw wires at each step. A cyclic pipe is rejected up
   front rather than silently reordered.
 
+- Refined the supported ``riko.types`` stream aliases. ``Feed`` now represents either
+  synchronous or asynchronous item input (``Items | AsyncItems``), and ``Item`` now
+  reflects the full set of item shapes accepted by the runtime.
+
+- Added ``AsyncItems``, ``SyncPipeTuples``, and ``AsyncPipeTuples`` to the supported
+  ``riko.types`` surface. ``PipeTuples`` now represents either the synchronous or
+  asynchronous form.
+
+- ``DynamicConf`` is no longer exported from ``riko.types``. Extension authors should
+  import it from ``riko.ext``.
+
 Fixes
 ~~~~~
 

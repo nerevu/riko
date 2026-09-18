@@ -70,7 +70,7 @@ async def async_parser(
 
     Returns:
 
-        Records at ``path``, or the whole document when ``path`` is empty.
+        Items at ``path``, or the whole document when ``path`` is empty.
 
     Raises:
 
@@ -119,7 +119,7 @@ def parser(
 
     Returns:
 
-        Records at ``path``, or the whole document when ``path`` is empty.
+        Items at ``path``, or the whole document when ``path`` is empty.
 
     Raises:
 

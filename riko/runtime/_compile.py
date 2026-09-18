@@ -42,7 +42,6 @@ from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 from jinja2 import Environment, PackageLoader
 
-from riko.bado._util import maybe_deferred
 from riko.bado.itertools import as_async
 from riko.base._source_format import ruff_format
 from riko.base._strutils import replacer
@@ -103,12 +102,7 @@ if TYPE_CHECKING:
         SyncSteps,
         SyncStepValue,
     )
-    from riko.types._streams import (
-        AsyncStreamOrValueStream,
-        ItemOrValue,
-        Stream,
-        StreamOrValueStream,
-    )
+    from riko.types._streams import AsyncStream, Item, Stream
     from riko.types._wrappers import (
         AsyncPipeWrapper,
         AsyncWrapperOutput,
@@ -1085,7 +1079,7 @@ def _resolve_leaf_modules(parsed_pipe_def: ParsedPipeDef) -> None:
 @overload
 def build_pipeline(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef, context: Context | None = ...
-) -> StreamOrValueStream: ...
+) -> Stream: ...
 @overload  # noqa: E302
 def build_pipeline(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef,
@@ -1100,7 +1094,7 @@ def build_pipeline(  # noqa: E302
     mode: ExecutionMode | None = None,
     inputs: Inputs | None = None,
     **kwargs: bool,
-) -> Iterator[ItemOrValue | Stream | PipelineDescriptionLike]:
+) -> Iterator[Item | PipelineDescriptionLike]:
     """
     Builds an executable Python pipeline from a parsed pipe definition.
 
@@ -1125,7 +1119,7 @@ def build_pipeline(  # noqa: E302
 @overload
 def abuild_pipeline(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef, context: Context | None = ...
-) -> AsyncStreamOrValueStream: ...
+) -> AsyncStream: ...
 @overload  # noqa: E302
 def abuild_pipeline(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef,
@@ -1140,7 +1134,7 @@ async def abuild_pipeline(  # noqa: E302
     mode: ExecutionMode | None = None,
     inputs: Inputs | None = None,
     **kwargs: bool,
-) -> AsyncIterator[ItemOrValue | Stream | PipelineDescriptionLike]:
+) -> AsyncIterator[Item | PipelineDescriptionLike]:
     """
     Builds an executable Python pipeline from a parsed pipe definition.
 
@@ -1154,11 +1148,9 @@ async def abuild_pipeline(  # noqa: E302
         _resolve_leaf_modules(parsed_pipe_def)
         module_names = gen_names(module_ids, parsed_pipe_def)
         args = (parsed_pipe_def, module_names, module_ids)
-        bkwargs = {**kwargs, "is_async": True}
-        built = await maybe_deferred(_build_pipeline, *args, context=context, **bkwargs)
-        stream = cast("AsyncStreamOrValueStream", built)
+        pipeline = _build_pipeline(*args, is_async=True, context=context, **kwargs)
 
-        async for item in as_async(stream):
+        async for item in as_async(pipeline):
             yield item
     else:
         args = (parsed_pipe_def, context)

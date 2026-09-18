@@ -60,14 +60,29 @@ converters. Higher-level orchestration/integration layers remain roadmap work; s
 The core types (`riko/types/_streams.py`):
 
 ```python
-type Item = RikoDict | dict[str, RikoValue] | RSSEntry | DotDict[RikoValue]
+type Item = (
+    RikoDict
+    | dict[str, RikoValue]
+    | dict[str, ItemValue]
+    | RSSEntry
+    | StatefulItem
+    | DotDict[RikoValue]
+    | DotDict[ItemValue]
+    | AnyLocation
+    | StringyDict
+)
+
+type ItemOrValue = Item | RikoValue
+type ItemValue = ItemOrValue | list[ItemOrValue]
+
 type Items = Iterable[Item]
-type Stream = Iterator[Item]  # synchronous iteration
-type Feed = AsyncIterable[Item]  # asynchronous iteration
-type AsyncSource = Items | Feed | Awaitable[Items | Feed]
+type Stream = Iterator[Item]
+type AsyncItems = AsyncIterable[Item]
+type AsyncStream = AsyncIterator[Item]
+type Feed = Items | AsyncItems
 ```
 
-`Stream` and `Feed` differ by iteration mechanism, not by whether the source is finite or
+`Stream` and `AsyncStream` differ by iteration mechanism, not by whether the source is finite or
 live. Boundedness is **not** a declared `Opts` field today — planned execution
 characteristics are documented in
 [execution-semantics.md §5](gameplans/execution-semantics.md#5-execution-characteristics).
@@ -83,7 +98,7 @@ yields items lazily. Incremental `httpx.stream()` body reads are not implemented
 A pipe instance is **one-shot** — a single execution. Iteration never restarts and never
 raises; an exhausted or closed pipe simply yields nothing. `SyncPipe` is synchronous and
 iterable (`for item in pipe`); `AsyncPipe` iterates lazily (`async for item in pipe`) with an
-`await pipe` collect terminal. Async chaining is lazy at the pipe boundary. `Feed`s behave
+`await pipe` collect terminal. Async chaining is lazy at the pipe boundary. `AsyncStream`s behave
 like ordinary async iterators — riko does not detect or recreate a consumed feed.
 
 This describes the shipped API only. The planned `Pipeline` definition is reusable while

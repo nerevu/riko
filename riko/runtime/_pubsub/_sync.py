@@ -14,7 +14,7 @@ from riko.types._sentinels import MissingType, StreamState
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from riko.types._streams import Item, StatefulItem
+    from riko.types._streams import Item
 
     from ._types import Receiver
 
@@ -74,7 +74,7 @@ class SyncPubSubHub:
         self.queues[name] = deque(maxlen=maxlen)
         self.ids[name] = next(self._counter)
 
-    def send(self, target: str, item: Item | StatefulItem) -> int | None:
+    def send(self, target: str, item: Item) -> int | None:
         """
         Pushes one item to a named receiver.
 

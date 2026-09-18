@@ -63,7 +63,7 @@ class IterStringIO(_IterStringIO):  # pyright: ignore[reportRedeclaration])
     def __buffer__(self, flags: int) -> memoryview:
         """Exposes the internal memory buffer directly for passing into bytes()."""
         joined = b"".join(cast("Iterator[bytes]", self.iter))
-        return memoryview(cast("bytes", joined))
+        return memoryview(joined)
 
 
 class Reencoder[T: AnyStr](PatchedReencoder):  # pyright: ignore[reportRedeclaration])

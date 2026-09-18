@@ -3,13 +3,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator, Mapping
 from datetime import datetime as dt
 from typing import TYPE_CHECKING, cast
 
 from riko.coercion._dates import date_to_tt, normalize_tzinfo
+from riko.types._guards import is_mapping
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+
     from riko.types._rss import (
         ExpandedRSSEntry,
         ParserRSSEntry,
@@ -29,7 +31,7 @@ def _get_entry_text(entry: ParserRSSEntry) -> str:
     content = entry.get("content") or []
     first = next(iter(content), {})
 
-    if not text and isinstance(first, Mapping):
+    if not text and is_mapping(first):
         text = str(first.get("value") or "")
 
     if not text:

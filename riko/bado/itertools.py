@@ -496,7 +496,7 @@ async def async_merge[S](
     """
     Merges many async feeds into one interleaved stream.
 
-    Like :func:`async_map_stream`, but each source item is a *feed*. Records
+    Like :func:`async_map_stream`, but each source item is a *feed*. Items
     interleave across feeds as they are produced, rather than one feed at a
     time. *limit* and *buffer* bound in-flight memory.
 

@@ -127,6 +127,18 @@ Lower-level async iterator helpers may remain available from submodules such as
 `riko.bado.itertools` without being included in `BADO`. Async transport/file
 helpers are exposed from `riko.io`, not `riko.bado.io`.
 
+## Stable typing API
+
+`riko.types` is the supported namespace for annotations used by applications
+and extension authors.
+
+<!-- api-surface:types -->
+```python
+>>> sorted(TYPES)
+['AsyncItems', 'AsyncPipeTuples', 'AsyncStream', 'Conf', 'EdgeAuthoring', 'EndpointAuthoring', 'Feed', 'Item', 'Items', 'NodeAuthoring', 'PipeTuples', 'Stream', 'SyncPipeTuples', 'WorkflowAuthoring', 'WorkflowSpecLike']
+```
+<!-- /api-surface:types -->
+
 ## Extension API
 
 `riko.ext` is the supported API for module authors and integration packages.

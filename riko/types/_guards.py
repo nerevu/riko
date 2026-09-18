@@ -21,11 +21,13 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs
 
+from riko.base._config import SUBPIPE_TYPE
 from riko.base._strutils import replacer
 
 from ._io import AsyncCloseable, SyncCloseable
 from ._scalars import BasicValueType
 from ._sentinels import MISSING, SentinelValue, StreamState
+from ._wrappers import AsyncSubPipe, SyncSubPipe
 
 if TYPE_CHECKING:
     from ._collections import BasicList
@@ -123,7 +125,7 @@ def isinstance_strict(obj: object, protocol: type, *methods: str) -> bool:
     return match
 
 
-def is_mapping[D, VT](val: Mapping[D, VT] | object) -> TypeIs[Mapping[D, VT]]:
+def is_mapping[K, V](val: Mapping[K, V] | object) -> TypeIs[Mapping[K, V]]:
     failure = False
 
     # Delay calling isinstance(val, Mapping) as much as possible
@@ -133,7 +135,7 @@ def is_mapping[D, VT](val: Mapping[D, VT] | object) -> TypeIs[Mapping[D, VT]]:
     return success or (False if failure else isinstance(val, Mapping))
 
 
-def is_stateful_item(val: Item | StatefulItem) -> TypeGuard[StatefulItem]:
+def is_stateful_item(val: Item) -> TypeGuard[StatefulItem]:
     return isinstance(val.get("state"), StreamState) if is_mapping(val) else False
 
 
@@ -173,6 +175,10 @@ def is_type_value(val: Mapping[Any, Any]) -> TypeGuard[ConfArg]:
 
 def is_loop_module(module: PipeModule) -> TypeGuard[LoopModule]:
     return module["type"] == "loop" and "embed" in module
+
+
+def is_subpipe[T: SyncSubPipe | AsyncSubPipe](val: object | T) -> TypeGuard[T]:
+    return callable(val) and getattr(val, "type", None) == SUBPIPE_TYPE
 
 
 def is_sync_gen_factory(

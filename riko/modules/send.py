@@ -56,7 +56,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    stream: Stream | Feed,
+    stream: Feed,
     objconf: SendObjconf,
     tuples: PipeTuples,
     *,
@@ -185,7 +185,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items | Feed): The source stream, sync or async.
+        items (Feed): The source stream, sync or async.
 
         conf (dict): The pipe configuration.
 

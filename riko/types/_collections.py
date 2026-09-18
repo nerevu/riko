@@ -13,7 +13,8 @@ if TYPE_CHECKING:
 
 
 type Inputs = Mapping[str, str | int | bool]
-type Key = str | dict[str, str]
+type InputSource = Mapping[str, str]
+type Key = str | InputSource
 
 # Args
 type BasicMapping = Mapping[str, BasicValue]
@@ -43,4 +44,4 @@ type RikoDict = (
     | "DotDict[PrimitiveValue]"
 )
 type RikoList = BasicList | list[BasicDict] | StringyList
-type RikoValue = PrimitiveValue | RikoDict | RikoList
+type RikoValue = PrimitiveValue | RikoList

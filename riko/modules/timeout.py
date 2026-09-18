@@ -122,7 +122,7 @@ class TimeoutIterator[T](Iterator[T]):
 
 
 async def async_parser(
-    stream: Stream | Feed, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
+    stream: Feed, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Asynchronously collects items until the configured duration elapses.
@@ -230,7 +230,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items | Feed): The source stream.
+        items (Feed): The source stream.
 
         conf (dict): The pipe configuration. Each key is cast to an int, so a
             numeric string is accepted. A total of 0 means no timeout and the

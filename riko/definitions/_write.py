@@ -11,7 +11,7 @@ from riko.types._io import PathLike
 from riko.types._targets import SupportsWrite
 
 if TYPE_CHECKING:
-    from riko.types._streams import AsyncItems, Item, Items
+    from riko.types._streams import Feed, Item, Items
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,9 +21,9 @@ class WriteResult:
 
     Attributes:
 
-        created: Records inserted (keyed record targets).
-        updated: Records updated (keyed record targets).
-        deleted: Records removed (keyed record targets).
+        created: Items inserted (keyed record targets).
+        updated: Items updated (keyed record targets).
+        deleted: Items removed (keyed record targets).
         written: Bytes written (serializing file targets).
 
     """
@@ -189,7 +189,7 @@ class SyncWriteSession(Protocol):
 class AsyncWriteSession(Protocol):
     """A live, execution-owned asynchronous write session."""
 
-    async def write(self, value: Item | Items | AsyncItems) -> None: ...  # noqa: E704
+    async def write(self, value: Item | Feed) -> None: ...  # noqa: E704
     async def aacquire(self) -> None: ...  # noqa: E704
     async def afinalize(self) -> WriteResult: ...  # noqa: E704
     def abort(self) -> None: ...  # noqa: E704

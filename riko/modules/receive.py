@@ -44,7 +44,7 @@ from riko.runtime._pubsub import async_hub, coroutine, sync_hub
 from riko.types._enums import BasicCastType
 from riko.types._guards import is_missing_type, is_stateful_item
 from riko.types._sentinels import MISSING, StreamState
-from riko.types._streams import Item, StatefulItem, Stream, StreamOrValueStream
+from riko.types._streams import Item, StatefulItem, Stream
 
 from ._decorators import operator
 
@@ -107,8 +107,6 @@ def register_receiver(
                         if state is StreamState.DONE and on_complete is not None:
                             on_complete()
                     else:
-                        item = cast("Item", item)
-
                         if on_receive is not None:
                             on_receive(item)
                             continue
@@ -173,7 +171,7 @@ def parser(
     tuples: PipeTuples,
     func: Callable[[Item], Item | None] | None = None,
     **kwargs: object,
-) -> StreamOrValueStream | Iterator[StatefulItem]:
+) -> Iterator[Item | None]:
     """
     Emits items as the sender pushes them.
 
@@ -278,7 +276,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> StreamOrValueStream | Iterator[StatefulItem]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[Item | None]:
     """
     Receives items pushed by the send module.
 

@@ -392,7 +392,7 @@ def xml2etree(  # noqa: E302
             logger.warning("lxml parser not found. Using html5lib instead.")
 
         element = cast("nativeElement", html.parse(f))
-        element_tree = cast("nativeElementTree", ElementTree(element))
+        element_tree = ElementTree(element)
 
     return element_tree
 
