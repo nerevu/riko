@@ -1,9 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-Test public module-discovery contracts.
+Tests public built-in module and discovery contracts.
 
-This covers filtering, API errors, and input test-flag scoping. Exact metadata
-derivation is tested in ``tests/internal/test_metadata.py``.
+Exact metadata derivation is tested in ``tests/internal/test_metadata.py``.
 """
 
 import pytest
@@ -28,6 +27,14 @@ def test_input_test_flag_scoped_to_test_context(monkeypatch):
     assert next(input_pipe(conf=conf, context=Context(test=True))) == "def"
     assert next(input_pipe(conf=conf, context=Context(test=False))) == "typed"
     assert next(input_pipe(conf=conf)) == "typed"
+
+
+def test_input_conf_test_flag_uses_default(monkeypatch):
+    monkeypatch.setattr(
+        "builtins.input", lambda *args: pytest.fail("input() should not be called")
+    )
+    conf = InputConf({"prompt": "How old are you?", "type": CastType.INT, "test": True})
+    assert next(input_pipe(conf=conf)) == 0
 
 
 def test_filter_non_loopable_modules():

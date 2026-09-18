@@ -8,11 +8,17 @@ import pytest
 from click.testing import CliRunner
 
 from riko.cli import _codegen, _import_commands, _lint
+from riko.cli._docstyle import summary_leads_with_output
 from riko.cli.manage import manager
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
+
+
+def test_docstring_summary_output_lead_detection() -> None:
+    assert summary_leads_with_output("Returns the parsed response body.")
+    assert not summary_leads_with_output("Parses the response body.")
 
 
 def _record(calls: list[str], name: str, code: int = 0) -> Callable[[], int]:

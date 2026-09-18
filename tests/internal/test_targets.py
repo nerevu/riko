@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests the write targets, sessions, and the ``write``/``sink`` verbs.
+Tests target registration, write targets, sessions, and the ``write``/``sink`` verbs.
 
 Covers ``File`` capability resolution, key normalization, ``prepare_write``
 validation, the native whole-stream vs. temporary singleton converter paths, the
@@ -33,7 +33,7 @@ from riko.runtime._write_session import (
     mint_write_resource,
 )
 from riko.runtime.collections import AsyncPipe, SyncCollection, SyncPipe
-from riko.types._enums import Backends
+from riko.types._enums import Backends, Formats
 from tests import skipif_issync
 
 ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
@@ -129,6 +129,11 @@ class TestValidateTargetMode:
 
 
 class TestPrepareWrite:
+    def test_path_defaults_to_extension_format_and_replace(self):
+        prepared = prepare_write("out.csv")
+        assert prepared.fmt is Formats.CSV
+        assert prepared.operation.mode is WriteMode.REPLACE
+
     def test_file_unsupported_mode(self):
         with pytest.raises(ValueError, match="does not support the 'merge'"):
             prepare_write(FileTarget("out.csv"), "merge")
