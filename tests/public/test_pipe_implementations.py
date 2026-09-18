@@ -31,7 +31,7 @@ from riko.types.modules import (
 from tests import async_test
 
 if TYPE_CHECKING:
-    from riko.types._streams import Feed, Item, ItemOrValue, Stream
+    from riko.types._streams import AsyncStream, Item, ItemOrValue, Stream
 
 
 def _values(stream: Any, key: str) -> list[Any]:
@@ -203,7 +203,7 @@ def _finite_source(consumed: list[int]) -> Stream:
         yield {"x": "foo", "i": i}
 
 
-async def _afinite_source(consumed: list[int]) -> Feed:
+async def _afinite_source(consumed: list[int]) -> AsyncStream:
     for i in range(_SOURCE_LEN):
         consumed.append(i)
         yield {"x": "foo", "i": i}

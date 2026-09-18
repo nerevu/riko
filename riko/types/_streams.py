@@ -2,8 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Iterable, Iterator
-from typing import TYPE_CHECKING, TypedDict
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterable,
+    AsyncIterator,
+    Generator,
+    Iterable,
+    Iterator,
+)
+from typing import TYPE_CHECKING, Any, TypedDict
+
+from riko.base._locations import AnyLocation
+
+from ._collections import StringyDict
 
 if TYPE_CHECKING:
     from riko.parsing._dotdict import DotDict
@@ -13,42 +24,52 @@ if TYPE_CHECKING:
     from ._sentinels import StreamState
 
 
-# Base Sync
-type Item = RikoDict | dict[str, RikoValue] | RSSEntry | DotDict[RikoValue]
-type ItemOrValue = Item | RikoValue
-type Items = Iterable[Item]
-type ItemsOrValues = Iterable[ItemOrValue]
-type ValueStream = Iterator[RikoValue]
-type Stream = Iterator[Item]
-type StreamOrValueStream = Iterator[ItemOrValue]
-type Streams = Iterator[Stream]
-
-
+# Item/value
 class StatefulItem(TypedDict):
     state: StreamState
 
 
-# Base Async
-type AsyncItems = AsyncIterable[Item]
-type AsyncItemsOrValues = AsyncIterable[ItemOrValue]
-type AsyncStream = AsyncIterator[Item]
-type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
-type Feed = AsyncItems
-type AsyncSource = Items | Feed | Awaitable[Items | Feed]
-
-
-# Riko Sync
-type RikoItem = ItemOrValue | Stream
-type RikoItems = Iterable[RikoItem]
-type RikoStream = Iterator[RikoItem]
-
-# Riko Async
-type AsyncRikoItems = AsyncIterable[RikoItem]
-type AsyncRikoStream = AsyncIterator[RikoItem]
-type RikoFeed = AsyncRikoItems
-type AsyncRikoSource = RikoItems | RikoFeed | Awaitable[RikoItems | RikoFeed]
-
-# Operator `others` — pipe names or streams (sync or async) to merge or reference
-type OthersLike = (
-    Iterable[str] | Iterable[RikoStream] | Iterable[AsyncRikoStream] | None
+type Item = (
+    RikoDict
+    | dict[str, RikoValue]
+    | dict[str, ItemValue]
+    | RSSEntry
+    | StatefulItem
+    | DotDict[RikoValue]
+    | DotDict[ItemValue]
+    | AnyLocation
+    | StringyDict
 )
+
+type ItemOrValue = Item | RikoValue
+type ItemValue = ItemOrValue | list[ItemOrValue]
+
+# Sync
+type Stream = Iterator[Item]
+type Cascade = Iterator[Stream]
+type ItemOrStream = Item | Stream
+
+type Items = Iterable[Item]
+type Streams = Iterable[Stream]
+type ItemsOrValues = Iterable[ItemOrValue]
+
+type ValueStream = Iterator[RikoValue]
+type StreamOrValueStream = Iterator[ItemOrValue]
+type ItemGenerator = Generator[Item, None]
+
+# Async
+type AsyncStream = AsyncIterator[Item]
+type AsyncCascade = AsyncIterator[Stream]
+type AsyncItemOrStream = ItemOrStream | AsyncStream
+
+type AsyncItems = AsyncIterable[Item]
+type AsyncStreams = Iterable[AsyncStream]
+type AsyncItemsOrValues = AsyncIterable[ItemOrValue]
+
+type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
+type AsyncItemGenerator = AsyncGenerator[Item, None]
+type StreamGenerator = Generator[Any, None, Stream]
+
+# Both
+type Feed = Items | AsyncItems
+type OthersLike = Iterable[str] | Streams | AsyncStreams

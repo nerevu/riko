@@ -6,7 +6,7 @@ from datetime import UTC, date, timedelta, tzinfo
 from datetime import datetime as dt
 from functools import cache
 from time import struct_time
-from typing import TYPE_CHECKING, Literal, cast, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
@@ -45,7 +45,7 @@ def _parse_date_cached(value: str) -> dt | BaseException:
     # cache doesn't work with exceptions, so we return the exception and raise it in the
     # caller
     try:
-        result = cast("dt", parser.parse(value, tzinfos=TZINFOS))
+        result = parser.parse(value, tzinfos=TZINFOS)
     except Exception as e:  # noqa: BLE001
         result = e
 

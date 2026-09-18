@@ -7,7 +7,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from datetime import date
 from decimal import Decimal
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Self, TypeGuard, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Self, TypeGuard, TypeVar, cast, overload
 
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
@@ -24,28 +24,27 @@ from riko.types._guards import (
     is_type_value,
     is_value_seq,
 )
-from riko.types._rss import RSSEntry
-from riko.types._sentinels import Sentinel, SentinelValue
+from riko.types._sentinels import Sentinel, SentinelValue, StreamState
 
 if TYPE_CHECKING:
     from logging import Logger
 
     from _typeshed import SupportsKeysAndGetItem
 
-    from riko.types._collections import Key, RikoList, RikoValue
+    from riko.types._collections import Key, RikoList
     from riko.types._scalars import BasicValue, PrimitiveValue
-    from riko.types._streams import Item, Stream
+    from riko.types._streams import Item, ItemOrValue, StatefulItem, Stream
     from riko.types.modules import ConfArg
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
-
 
 TV_KEYS = ("type", "value")
 WIRE_KEYS = ("id", "src", "tgt")
 PASSTHROUGH_TYPES = (str, int, float, date, Decimal, Objectify)
 D = TypeVar("D")
 
-type Data[VT] = Iterable[tuple[str, VT]] | RSSEntry
+type Data[VT] = Iterable[tuple[str, VT]]
+type DotDictInput[VT] = Data[VT] | Item
 
 
 def normalize_key(key: Key | None = None) -> list[str]:
@@ -155,7 +154,7 @@ def gen_dotdict_items[VT](
         else:
             v = None
 
-        yield (key.lower(), cast("VT", v))
+        yield (key.lower(), v)
 
 
 @overload
@@ -196,21 +195,12 @@ def gen_dict[VT](  # noqa: E704
 def gen_dict[VT](  # noqa: E704
     data: VT, key: Key | None = ..., *, default_key: None, **kwargs: VT
 ) -> Iterator[VT | None]: ...
-def gen_dict[VT](  # noqa: E302
-    data: Sentinel
-    | ConfArg
-    | DotDict[VT]
-    | Mapping[str, VT]
-    | list[VT]
-    | tuple[VT, ...]
-    | VT
-    | None,
+def gen_dict(  # noqa: C901, E302
+    data: object,
     key: Key | None = None,
     default_key: str | None = "self",
-    **kwargs: VT,
-) -> Iterator[
-    tuple[str, VT | None] | VT | list[VT | None] | dict[str, VT | None] | None
-]:
+    **kwargs: object,
+) -> Iterator[object]:
     """
     Generates a data tuple.
 
@@ -233,9 +223,9 @@ def gen_dict[VT](  # noqa: E302
     else:
         if is_mapping(data):
             if DotDict.is_self(data) and not kwargs:
-                data = resolve_sentinel(cast("DotDict[VT]", data), default=data)
+                data = resolve_sentinel(data, default=data)
             else:
-                data = DotDict(cast("Mapping[str, VT]", data)).get(**kwargs)
+                data = DotDict(data).get(**kwargs)
 
         keys = []
 
@@ -246,8 +236,6 @@ def gen_dict[VT](  # noqa: E302
             items = gen_dotdict_items(*keys, data=data)
         else:
             items = gen_map_items(*keys, data=data, **kwargs)
-
-        items = cast("Iterator[tuple[str, VT]]", items)
 
         if default_key:
             yield from items
@@ -325,7 +313,9 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     """
 
-    def __init__(self, data: Mapping[str, VT] | Data[VT] | None = None, **kwargs: VT):
+    def __init__(
+        self, data: Mapping[str, VT] | DotDictInput[VT] | None = None, **kwargs: VT
+    ):
         super().__init__()
         self.update(data, **kwargs)
 
@@ -335,42 +325,44 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     @overload
     @classmethod
+    def dictize(cls, value: StatefulItem) -> DotDict[StreamState]: ...  # noqa: E704
+    @overload
+    @classmethod
     def dictize[V](cls, value: Mapping[str, V]) -> DotDict[V]: ...  # noqa: E704
+    @overload
+    @classmethod
+    def dictize[V](cls, value: Mapping[str, V], key: Key) -> V | None: ...  # noqa: E704
     @overload  # noqa: E301
     @classmethod
-    def dictize[V](cls, value: Mapping[str, V], key: Key) -> V: ...  # noqa: E704
-    @overload  # noqa: E301
-    @classmethod
-    def dictize[T, V](  # noqa: E704
+    def dictize[V, D](  # noqa: E704
         cls,
         value: Mapping[str, V],
         key: Key | None = ...,
-        default: T | None = ...,
+        default: D | None = ...,
         **kwargs: V,
-    ) -> T | None: ...
+    ) -> V | D | None: ...
     @overload  # noqa: E301
     @classmethod
-    def dictize[V](cls, value: V) -> V: ...  # noqa: E704
-    @overload  # noqa: E301
-    @classmethod
-    def dictize[V](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
-        cls, value: Mapping[str, V] | V
-    ) -> DotDict[V] | V: ...
+    def dictize[V](  # noqa: E704
+        cls, value: V
+    ) -> V: ...
     @classmethod  # noqa: E301
-    def dictize[T, V](
+    def dictize(
         cls,
-        value: Mapping[str, V] | V,
+        value: object,
         key: Key | None = None,
-        default: T | None = None,
-        **kwargs: V,
-    ) -> DotDict[V] | V | T | None:
+        default: object | None = None,
+        **kwargs: object,
+    ) -> object:
         if is_mapping(value):
-            if cls.is_self(value):
-                result = value
-            else:
-                result = cast("DotDict[V]", cls(cast("Mapping[str, Any]", value)))
+            mapping = cast("Mapping[str, object]", value)
 
-            if key or kwargs:
+            if cls.is_self(mapping):
+                result: object = mapping
+            else:
+                result = DotDict[object](mapping)
+
+            if key is not None or kwargs:
                 result = result.get(key=key, default=default, **kwargs)
         else:
             result = value
@@ -384,7 +376,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         key: str | int,
         default: D | None = ...,
         **kwargs: VT,
-    ) -> VT | dict[str, VT] | Item | RikoValue | D | None: ...
+    ) -> VT | dict[str, VT] | ItemOrValue | D | None: ...
     @overload  # noqa: E301
     def _parse_value(  # noqa: E704
         self,
@@ -394,16 +386,12 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         **kwargs: VT,
     ) -> RikoList | BasicValue: ...
     @overload  # noqa: E301
-    def _parse_value(  # noqa: E704
-        self, value: object, key: str | int, default: D | None = ..., **kwargs: VT
-    ) -> D | None: ...
+    def _parse_value[V, D](  # noqa: E704
+        self, value: V, key: str | int, default: D | None = ..., **kwargs: VT
+    ) -> V | D | None: ...
     def _parse_value(  # noqa: E301
-        self,
-        value: list[VT] | tuple[VT, ...] | Mapping[str, VT] | object,
-        key: str | int,
-        default: D | None = None,
-        **kwargs: VT,
-    ) -> VT | D | Any:
+        self, value: object, key: str | int, default: object | None = None, **kwargs: VT
+    ) -> object:
         """
         Parse value helper.
 
@@ -544,9 +532,17 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             reduced[last] = value
             CaseInsensitiveDict.update(self, item)
 
-    def __or__[V](self, other: Mapping[str, V]) -> Self:
+    @overload
+    def __or__(self, other: SupportsKeysAndGetItem[str, VT]) -> Self: ...  # noqa: E704
+    @overload  # noqa: E301
+    def __or__[T](  # noqa: E704
+        self, other: SupportsKeysAndGetItem[str, T]
+    ) -> DotDict[VT | T]: ...
+    def __or__[T](  # noqa: E301
+        self, other: SupportsKeysAndGetItem[str, T]
+    ) -> Self | DotDict[VT | T]:
         """
-        __or__.
+        Merge another mapping, widening the value type to cover both sides.
 
         Examples:
 
@@ -557,7 +553,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             {'key': 'baz'}
 
         """
-        dd = self.copy()
+        dd = cast("DotDict[VT | T]", self.copy())
         dd.update(other)
         return dd
 
@@ -698,20 +694,18 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         self, data: SupportsKeysAndGetItem[str, VT], **kwargs: VT
     ) -> None: ...
     @overload
-    def update(self, data: Data[VT]) -> None: ...  # noqa: E704
+    def update(self, data: DotDictInput[VT]) -> None: ...  # noqa: E704
     @overload  # noqa: E301
     def update(  # noqa: E704
-        self, data: Data[VT], **kwargs: VT
+        self, data: DotDictInput[VT], **kwargs: VT
     ) -> None: ...
-    @overload
-    def update[V](self, data: Mapping[str, V]) -> None: ...  # noqa: E704
     @overload
     def update(self, **kwargs: VT) -> None: ...  # noqa: E704
     @overload
     def update(self, data: None) -> None: ...  # noqa: E704
     def update(  # noqa: E301  # pyright: ignore[reportInconsistentOverload]
         self,
-        data: SupportsKeysAndGetItem[str, VT] | Data[VT] | None = None,
+        data: SupportsKeysAndGetItem[str, VT] | DotDictInput[VT] | None = None,
         **kwargs: VT,
     ):
         """
@@ -740,7 +734,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
                 else:
                     return self._store.update(data._store)
             elif kwargs or any("." in k for k in data):
-                _dict = cast("dict[str, VT]", {**data, **kwargs})
+                _dict = {**data, **kwargs}
             else:
                 for key, value in data.items():
                     CaseInsensitiveDict.__setitem__(self, key, value)  # noqa: PLC2801

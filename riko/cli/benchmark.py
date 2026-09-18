@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from functools import partial
 from itertools import chain
 from multiprocessing import Pool
@@ -26,14 +26,15 @@ from riko.runtime.collections import (
     get_worker_cnt,
 )
 from riko.types._rss import RSSEntry
+from riko.types._streams import ItemOrValue
 from riko.types.modules import FetchConf
 
 if TYPE_CHECKING:
-    from riko.types._streams import Items, RikoItem, RikoStream
+    from riko.types._streams import Item, Items
     from riko.types._wrappers import (
         AsyncPipeParser,
         ParserMaterializedOutput,
-        ProcessorWrapperOutput,
+        SyncProcessorWrapperOutput,
     )
 
 NUMBER = 1
@@ -89,9 +90,14 @@ def sync_pipeline() -> ParserMaterializedOutput:
     return list(chain.from_iterable(pipes))
 
 
-def sync_pipe() -> list[RikoItem]:
-    streams = (SyncPipe("fetch", conf=conf) for conf in confs)
-    return list(chain.from_iterable(streams))
+def sync_pipe() -> Items:
+    results: list[Item] = []
+
+    for conf in confs:
+        stream = SyncPipe("fetch", conf=conf)
+        results.extend(stream)
+
+    return results
 
 
 def sync_collection() -> Items:
@@ -106,26 +112,30 @@ async def baseline_async() -> list[None]:
     return await async_map(async_sleep, iterable)
 
 
-async def delayed_fetch(conf: FetchConf) -> ProcessorWrapperOutput:
+async def delayed_fetch(conf: FetchConf) -> SyncProcessorWrapperOutput:
     await async_sleep(DELAY)
     return await async_fetch({}, conf)
 
 
-async def async_pipeline() -> list[ProcessorWrapperOutput]:
+async def async_pipeline() -> list[SyncProcessorWrapperOutput]:
     return await async_map(delayed_fetch, confs)
 
 
-async def async_pipe2() -> list[RikoStream]:
-    func = partial(AsyncPipe, "fetch", iter(()))
-    return await async_map(func, confs)
+async def async_pipe2() -> Items:
+    results: list[Item] = []
+
+    for conf in confs:
+        stream = AsyncPipe("fetch", conf=conf)
+        results.extend([item async for item in stream])
+
+    return results
 
 
-async def async_collection() -> list[RikoItem]:
-    results = await AsyncCollection(sources, sleep=DELAY)
-    return list(results)
+async def async_collection() -> list[Item]:
+    return [item async for item in AsyncCollection(sources, sleep=DELAY)]
 
 
-def parse_results(results: list[float]) -> tuple[float, str]:
+def parse_results(results: Sequence[float]) -> tuple[float, str]:
     switch = {0: "secs", 3: "msecs", 6: "usecs"}
     best = min(results)
 
@@ -143,7 +153,9 @@ def print_time(test: str, max_chars: int, run_time: float, units: str) -> None:
     print(msg.format(padded, NUMBER, LOOPS, run_time, units))
 
 
-async def run_async(tests: list[AsyncPipeParser], max_chars: int) -> None:
+async def run_async[T: ItemOrValue](
+    tests: Sequence[AsyncPipeParser[T]], max_chars: int
+) -> None:
     for test in tests:
         results = []
 

@@ -378,12 +378,10 @@ def _build_caster[T](type_: None) -> ArgCaster[T]: ...  # noqa: E704
 @overload
 def _build_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
 @overload  # noqa: E302
-def _build_caster(  # noqa: E704
-    type_: CastType,
-) -> ArgCaster[ItemOrValue | AnyLocation]: ...
+def _build_caster(type_: CastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
 def _build_caster[T](  # noqa: E302
     type_: BasicCastType | CastType | None,
-) -> ArgCaster[T | PrimitiveValue | AnyLocation]:
+) -> ArgCaster[T | PrimitiveValue | ItemOrValue]:
     """
     Builds a caster for a destination type, degrading on an unknown one.
 

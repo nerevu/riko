@@ -45,6 +45,7 @@ except ImportError:
     MemoryObjectSendStream: Any = None
     NamedTemporaryFile: Any = None
     Path: Any = None
+    async_chain: Callable[..., Any] = lambda *_, **_kw: None
     async_get: Callable[..., Any] = lambda *_, **_kw: None
     async_json: Callable[..., Any] = lambda *_, **_kw: None
     async_read: Callable[..., Any] = lambda *_, **_kw: None
@@ -58,7 +59,6 @@ except ImportError:
     fail_after: Callable[..., Any] | None = None
     gather_results: Callable[..., Any] = lambda *_, **_kw: None
     lowlevel: Any = None
-    maybe_deferred: Callable[..., Any] = lambda *_, **_kw: None
     async_open: Callable[..., Any] = lambda *_, **_kw: None
 
     async def checkpoint() -> None:
@@ -83,6 +83,7 @@ else:
     )
     from anyio import open_file as async_open
     from anyio import sleep as async_sleep
+    from anyio.itertools import chain as async_chain
     from anyio.lowlevel import checkpoint
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
     from asyncer import asyncify
@@ -103,6 +104,7 @@ __all__ = [
     "NamedTemporaryFile",
     "Path",
     "Semaphore",
+    "async_chain",
     "async_get",
     "async_json",
     "async_open",
@@ -120,6 +122,5 @@ __all__ = [
     "isasync",
     "issync",
     "lowlevel",
-    "maybe_deferred",
     "run",
 ]

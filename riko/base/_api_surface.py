@@ -135,5 +135,16 @@ EXTENSION = frozenset(
 )
 
 TYPES = frozenset(
-    {"AsyncStream", "Conf", "Feed", "Item", "Items", "PipeTuples", "Stream"}
+    {
+        "AsyncStream",
+        "AsyncItems",
+        "AsyncPipeTuples",
+        "Conf",
+        "Feed",
+        "Item",
+        "Items",
+        "PipeTuples",
+        "Stream",
+        "SyncPipeTuples",
+    }
 )

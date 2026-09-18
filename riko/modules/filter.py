@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 
     from riko.types._options import Defaults, Opts
     from riko.types._streams import Item, Stream
-    from riko.types._wrappers import PipeTuples
+    from riko.types._wrappers import SyncPipeTuples
     from riko.types.modules import FilterConfRule
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
@@ -198,7 +198,10 @@ def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
 
 
 def parser(
-    _: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs: object
+    _: Stream,
+    extract: Sequence[FilterConfRule],
+    tuples: SyncPipeTuples,
+    **kwargs: object,
 ) -> Stream:
     """
     Filters the stream to items that match (or fail to match) every rule.

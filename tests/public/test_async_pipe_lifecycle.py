@@ -55,7 +55,7 @@ class TestAsyncAwaitLifecycle:
             .udf(func=count)
         )
         assert await anext(pipe) == {"content": "a"}
-        assert list(await pipe) == [{"content": "b"}, {"content": "c"}]
+        assert [item async for item in pipe] == [{"content": "b"}, {"content": "c"}]
         assert len(runs) == 3
 
     @pytest.mark.anyio
@@ -65,12 +65,31 @@ class TestAsyncAwaitLifecycle:
         assert list(await pipe) == []
 
     @pytest.mark.anyio
+    async def test_iteration_after_exhaustion_is_empty(self):
+        pipe = AsyncPipe(source=list(SRC))
+        assert [item async for item in pipe] == SRC
+        assert [item async for item in pipe] == []
+
+    @pytest.mark.anyio
     async def test_collection_await_after_partial_iteration_consumes_remainder(self):
         full = AsyncCollection([{"url": get_path("feed.xml")}])
         total = len([item async for item in full])
         stream = AsyncCollection([{"url": get_path("feed.xml")}])
         await anext(stream)
         rest = len(list(await stream))
+
+        assert total > 1
+        assert rest == total - 1
+
+    @pytest.mark.anyio
+    async def test_collection_iteration_after_partial_iteration_consumes_remainder(
+        self,
+    ):
+        full = AsyncCollection([{"url": get_path("feed.xml")}])
+        total = len([item async for item in full])
+        stream = AsyncCollection([{"url": get_path("feed.xml")}])
+        await anext(stream)
+        rest = len([item async for item in stream])
 
         assert total > 1
         assert rest == total - 1

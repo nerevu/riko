@@ -109,10 +109,11 @@ class TestLifecycleContract:
     def test_context_manager_closes(self, backend):
         flow = backend.context_pipe()
         items = backend.context_consume(flow)
-
         assert items
+
         if backend.context_count is not None:
             assert len(items) == backend.context_count
+
         assert flow.closed
         assert flow.state is PipeState.CLOSED
 

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, TypedDict
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
 
-    from ._collections import BasicArg, RikoDict, RikoList
+    from ._collections import BasicArg, RikoList
     from ._compiler import CountValues
     from ._enums import BasicCastType, FmtLike
     from ._scalars import PrimitiveValue
@@ -92,7 +92,7 @@ class Casted[T, E](NamedTuple):
 
 
 class ItemDispatch[T, E](NamedTuple):
-    item: Item | RikoDict
+    item: Item
     casted: Casted[T, E]
 
 

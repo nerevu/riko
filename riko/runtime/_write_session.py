@@ -34,7 +34,15 @@ if TYPE_CHECKING:
     from _typeshed import OpenBinaryMode
     from anyio import AsyncFile
 
-    from riko.types._streams import AsyncItems, Item, Items, Stream
+    from riko.types._streams import (
+        AsyncItemGenerator,
+        AsyncItems,
+        Feed,
+        Item,
+        ItemGenerator,
+        Items,
+        Stream,
+    )
     from riko.types._wrappers import ConversionOutput
 
 
@@ -465,7 +473,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             self._ahandle = await async_open(self.path, self.file_mode)
 
     async def _aconvert(
-        self, items: Items | AsyncItems, validate: bool = False
+        self, items: Feed, validate: bool = False
     ) -> ConversionOutput | str:
         records = [item async for item in as_async(items)]
 
@@ -487,7 +495,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
             self._written += await self._ahandle.write(_as_bytes(content))
 
-    async def _awrite_items(self, items: Items | AsyncItems) -> None:
+    async def _awrite_items(self, items: Feed) -> None:
         self.input_shape = _InputShape.STREAM
         content = await self._aconvert(items)
 
@@ -505,7 +513,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
         else:
             self._buffer.append(item)
 
-    async def write(self, value: Item | Items | AsyncItems) -> None:
+    async def write(self, value: Item | Feed) -> None:
         r"""
         Delivers one record or the whole record stream.
 
@@ -719,7 +727,7 @@ async def async_file_write_session(
 
 def write_through(
     source: Items, prepared: PreparedWrite, *, terminating: Callable[[], bool]
-) -> Generator[Item]:
+) -> ItemGenerator:
     """
     Passes each item through a lazily acquired write session unchanged.
 
@@ -754,11 +762,11 @@ def write_through(
 
 
 async def async_write_through(
-    source: Items | AsyncItems,
+    source: AsyncItems,
     prepared: PreparedWrite,
     *,
     terminating: Callable[[], bool] | None = None,
-) -> AsyncGenerator[Item]:
+) -> AsyncItemGenerator:
     """
     Passes each item through a lazily acquired write session unchanged.
 

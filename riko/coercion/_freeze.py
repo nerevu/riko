@@ -102,9 +102,16 @@ def _to_hashable(obj: object) -> HashableOrTuple:
 
 
 @cache
-def _from_hashable(
-    obj: HashableOrTuple,
-) -> RikoValue | Objectify | DataclassInstance | CollectionTuple | DataclassTuple:
+def _from_hashable[T: HashableOrTuple](
+    obj: T,
+) -> (
+    RikoValue
+    | RikoDict
+    | Objectify[T]
+    | DataclassInstance
+    | CollectionTuple
+    | DataclassTuple
+):
     if not isinstance(obj, struct_time) and isinstance(obj, tuple) and len(obj) == 2:
         if is_dataclass_tuple(obj):
             typ, (cls, inner) = obj

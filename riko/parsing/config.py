@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, cast
 
 from riko.coercion._freeze import repr_cache
 from riko.coercion._sequences import listize
+from riko.types._collections import RikoValue
 from riko.types._guards import is_mapping, is_sentinel, is_type_value
 
 from ._dotdict import DotDict
@@ -31,9 +32,8 @@ from ._dotdict import DotDict
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
-    from riko.types._collections import RikoValue
     from riko.types._options import SkipIf
-    from riko.types._streams import Item, ItemOrValue
+    from riko.types._streams import Item, ItemOrValue, ItemValue
 
 
 SKIP_SWITCH: dict[str, Callable[[str, str], bool]] = {
@@ -94,16 +94,17 @@ def conf_is_dynamic(conf: object, memoize: bool = False, **kwargs: object) -> bo
     return func(conf, **kwargs)
 
 
-def _parse_conf_uncached[VT](
+def _parse_conf_uncached[T](
     item: Item | None = None,
-    conf: VT | None = None,
-    default: VT | None = None,
-    **kwargs: VT,
-) -> VT | None:
+    conf: T | None = None,
+    default: T | None = None,
+    **kwargs: T,
+) -> T | None:
     parsed = default
+    dd_conf = DotDict.dictize([])
 
     if is_dataclass(conf):
-        d_conf: dict[str, VT] | VT | None = asdict(cast("DataclassInstance", conf))
+        d_conf: dict[str, T] | T | None = asdict(cast("DataclassInstance", conf))
     else:
         d_conf = conf
 
@@ -111,35 +112,34 @@ def _parse_conf_uncached[VT](
 
     if isinstance(dd_conf, DotDict):
         if subkey := dd_conf.get("subkey"):
-            dd_item = DotDict.dictize(item) if item else DotDict()
+            dd_item = DotDict.dictize(item) if item else DotDict[RikoValue]()
             parsed = dd_item.get(cast("str", subkey), **kwargs)
         elif is_sentinel(dd_conf, **kwargs) or is_type_value(dd_conf):
-            # parsed = next(gen_dict(dd_conf, key=None, default_key=None, **kwargs))
-            parsed = cast("DotDict[VT]", dd_conf).get()
+            parsed = cast("DotDict[T]", dd_conf).get()
         else:
             _parsed = {
                 k: _parse_conf_uncached(item, v, **kwargs)
                 for k, v in dd_conf.asdict(key=None, **kwargs).items()
             }
-            parsed = cast("VT", _parsed)
+            parsed = cast("T", _parsed)
     elif isinstance(dd_conf, (str, struct_time)):
         parsed = dd_conf
-    elif isinstance(dd_conf, (list, tuple)):
+    elif isinstance(dd_conf, (list, tuple, Sequence)):
         _parsed = [_parse_conf_uncached(item, c, **kwargs) for c in dd_conf]
-        parsed = cast("VT", _parsed)
+        parsed = cast("T", _parsed)
     elif dd_conf is not None:
-        parsed = cast("VT", dd_conf)
+        parsed = cast("T", dd_conf)
 
     return parsed
 
 
 @repr_cache
-def _parse_conf_cached[VT](
+def _parse_conf_cached[T](
     item: Item | None = None,
-    conf: VT | None = None,
-    default: VT | None = None,
-    **kwargs: VT,
-) -> VT | None:
+    conf: T | None = None,
+    default: T | None = None,
+    **kwargs: T,
+) -> T | None:
     return _parse_conf_uncached(item, conf, default=default, **kwargs)
 
 
@@ -289,7 +289,7 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
 
 def get_field(
     item: ItemOrValue | None = None, field: str = "", **kwargs: object
-) -> ItemOrValue:
+) -> ItemValue:
     """
     Extracts a configured field from an item.
 

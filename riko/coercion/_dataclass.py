@@ -17,14 +17,13 @@ from riko.types.modules import RegexConfRule, RegexRule
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
-    from riko.types._collections import RikoValue, StringyDict, StringyList
+    from riko.types._collections import RikoDict, RikoValue
 
     from ._dynamic_conf import DynamicConf
 
 
 def fromdict(
-    cls: type[DataclassInstance],
-    **data: DataclassInstance | RikoValue | StringyList | StringyDict,
+    cls: type[DataclassInstance], **data: DataclassInstance | RikoValue | RikoDict
 ) -> DataclassInstance:
     """
     Builds a dataclass while coercing nested mappings into nested dataclasses.

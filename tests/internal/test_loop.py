@@ -13,7 +13,7 @@ global-vs-per-parent ``count`` gap.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -34,8 +34,8 @@ from tests import skipif_issync
 
 if TYPE_CHECKING:
     from riko.runtime.context import Context
-    from riko.types._streams import AsyncStream, Item, Stream
-    from riko.types._wrappers import OperatorWrapperOutput
+    from riko.types._streams import Item, Stream
+    from riko.types._wrappers import SyncOperatorWrapperOutput
 
 PARENTS = [{"title": "a b"}, {"title": "c d"}]
 TOKENIZER_CONF = TokenizerRawConf({"delimiter": {"type": "text", "value": " "}})
@@ -145,7 +145,9 @@ _SYNC_SUBPIPE = mark_subpipe(_sync_subpipe)
 _ASYNC_SUBPIPE = mark_subpipe(_async_subpipe)
 
 
-def _tokenizer_loop(source: Stream, field="title", **kwargs) -> OperatorWrapperOutput:
+def _tokenizer_loop(
+    source: Stream, field="title", **kwargs
+) -> SyncOperatorWrapperOutput:
     return loop(source, embed=tokenizer, conf=TOKENIZER_CONF, field=field, **kwargs)
 
 
@@ -323,7 +325,7 @@ class TestAsyncLoop:
             emit=True,
         )
 
-        first = await anext(cast("AsyncStream", stream))
+        first = await anext(stream)
         assert first == {"content": "a"}
         assert list(consumed) == ["a b"]
 

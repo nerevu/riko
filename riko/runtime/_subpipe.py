@@ -38,7 +38,3 @@ def mark_subpipe(  # noqa: E302
     setattr(pipe, "loopable", loopable)  # noqa: B010
     setattr(pipe, "pollable", False)  # noqa: B010
     return cast("SubPipe", pipe)
-
-
-def is_subpipe(pipe: object) -> bool:
-    return callable(pipe) and getattr(pipe, "type", None) == SUBPIPE_TYPE

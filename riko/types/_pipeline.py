@@ -8,10 +8,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ._wrappers import (
         AsyncPipeWrapper,
+        AsyncSplitterWrapperOutput,
         AsyncWrapperOutput,
         SyncPipeWrapper,
+        SyncSplitterWrapperOutput,
         SyncWrapperOutput,
     )
+
 
 # dependencies
 type SyncPipelineDependencies = Callable[..., list[str]]
@@ -19,11 +22,13 @@ type AsyncPipelineDependencies = Callable[..., AsyncIterator[str]]
 type PipelineDependencies = SyncPipelineDependencies | AsyncPipelineDependencies
 
 # generated/executable steps
-type SyncStepValue = SyncWrapperOutput | SyncPipeWrapper
+type SyncStepOutput = SyncWrapperOutput | SyncSplitterWrapperOutput
+type SyncStepValue = SyncStepOutput | SyncPipeWrapper
 type SyncStep = tuple[str, SyncStepValue]
 type SyncSteps = dict[str, SyncStepValue]
 
-type AsyncStepValue = AsyncWrapperOutput | AsyncPipeWrapper
+type AsyncStepOutput = AsyncWrapperOutput | AsyncSplitterWrapperOutput
+type AsyncStepValue = AsyncStepOutput | AsyncPipeWrapper
 type AsyncStep = tuple[str, AsyncStepValue]
 type AsyncSteps = dict[str, AsyncStepValue]
 

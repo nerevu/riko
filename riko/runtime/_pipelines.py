@@ -19,9 +19,10 @@ from typing import TYPE_CHECKING, Literal, Protocol, cast, overload
 
 from riko.base._imports import import_or_else
 from riko.base.exceptions import UnsupportedPipelineError
+from riko.types._guards import is_subpipe
 
 from ._importutils import resolve_interface
-from ._subpipe import is_subpipe, mark_subpipe
+from ._subpipe import mark_subpipe
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
