@@ -454,7 +454,11 @@ Folded in from the retired `REFINEMENT_PLAN.md`. Cross-phase decisions that surv
 
 **Backward-compatibility contract (evergreen).** Every phase ships compat shims (moved-name
 re-exports, `describe_*` properties, re-homed exceptions keep old bases); raw pipeline JSON must
-work unchanged throughout — the `compile.py` path is the compatibility contract.
+work unchanged throughout — the `compile.py` path is the compatibility contract. **Scope exception —
+Workflow v1→v2 (R4A/R4B).** The canonical-format transition follows a per-commit clean break, not a
+maintained dual loader: raw v1 JSON keeps working until the R4B cutover, then becomes migrate-only
+(no long-lived v1 runtime ingress). Authoritative owner: `gameplans/implementation-sequence.md` R4A
+clean-break policy.
 
 **Style tension (raise vs. graceful).** "No `raise` at call sites" governs **per-item processing**
 (graceful via `error_key`/`on_error`); **lifecycle/definition/config boundaries** may raise stable

@@ -16,6 +16,7 @@ from riko.base.exceptions import (
     UnsupportedModuleError,
     UnsupportedPipelineError,
 )
+from riko.definitions._workflow import Pipeline
 from riko.ext.codegen import list_modules
 from riko.io._async import async_url_open, async_write, get_async_temp_file
 from riko.modules._metadata import describe_module, get_module_metadata
@@ -61,6 +62,7 @@ __all__ = [
     "Formats",
     "Modules",
     "PipeState",
+    "Pipeline",
     "PipelineStateError",
     "RikoError",
     "Sinks",

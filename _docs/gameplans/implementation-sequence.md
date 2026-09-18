@@ -576,7 +576,8 @@ R4A.5  deterministic serialization + acceptance
 - **R4A.1 — canonical v2 model.** The closed discriminated node union and edge families (E3.3/E3.4),
   full `{node, port}` endpoints and port grammar, the `nodes`/`edges`/`outputs`/`inputs` envelope
   (E3.2/E3.6), inputs-as-JSON-Schema, and the public immutable `Pipeline[T]`. Structural only, no
-  runtime. Files: new `riko/workflow/` package, `riko/types/_pipeline.py`.
+  runtime. Files: `riko/types/_workflow.py`, `riko/definitions/_workflow.py` (placement supersedes
+  the original `riko/workflow/` package note — see the clean-break policy below).
 - **R4A.2 — `normalize_workflow()`.** Authoring sugar → strict canonical (E3.1): omitted
   outputs→`outputs.default`, inline `Target`/`Format`→explicit, singular `resource`→`resources`,
   omitted ids→`<name>-<occurrence>`, port aliases, inferred formats made explicit.
@@ -600,6 +601,40 @@ proceed without it, and the byte-stable serialization/golden-fixture work waits 
 the true unblocked head and the highest-risk decision — the `Targets`→`Formats` rename touches the
 STABLE `riko` surface (`_api_surface.py`, `tests/public/test_imports.py`) — so it is front-loaded to
 force that decision early.
+
+#### R4A clean-break policy (supersedes the staged 0.x v1 loader)
+
+Decided with the maintainer: R4A does **not** build or maintain a long-lived dual-format loader. Each
+PR that lands a v2 construct deletes the v1 construct it replaces in the **same commit** — there is no
+compatibility window carrying both. This supersedes the "released v1 accepted at the migration
+boundary throughout 0.x" framing in `extensibility.md` §E3.1/§E3.10: v1 is not a maintained runtime
+ingress. The v1→v2 runtime cutover completes at **R4B** (the first phase v2 executes), not gradually
+across 0.x and not lingering to 1.0. `migrate_v1_to_v2()` is a one-shot corpus-conversion / offline
+rescue tool, never a live loader.
+
+Because R4A.1 sits below any executor, it is the one **add-only foundation** commit — there is no v1
+counterpart to delete yet. Paired deletions begin once a consumer can flip:
+
+| v1 construct | Deleted at |
+|---|---|
+| (nothing — pure foundation) | R4A.1 |
+| verbatim `_INPUT`/`_OTHER`/`_OUTPUT` ports, `_OUTPUT`-as-node | R4A.2/.4 (normalize/migrate resolve the `_GraphIndex` legacy artifacts) |
+| v1 `write` module → `WriteNode`; **`SINK_NAMES` + the `Sinks` discovery bucket**; v1 `PipeDef`/`wires` compiler consumption; the `tests/pypipelines` + `tests/pipelines` fixtures | R4B cutover (first commit v2 executes) |
+
+`SINK_NAMES` (`riko/base/_config.py`, `{"output","write"}` → the P9A `sink` category) has no v2 role —
+E3.3 defines no `SinkNode`, terminality is a consumption behavior — so it is removed in the same commit
+that retires the v1 `write` module and the `Sinks` bucket (R4B; the discovery reconciliation R4B
+unblocks per `module-enums.md`).
+
+**Placement (supersedes the R4A.1 `riko/workflow/` package note).** The canonical model is not a new
+top-level package/layer. Pure contracts live in `riko/types/_workflow.py`; the immutable
+node/edge/`WorkflowSpec`/`Pipeline` model lives in `riko/definitions/_workflow.py` (the existing
+declarative-contract layer); the later `normalize`/`validate`/`migrate` logic lives in `riko/runtime/`
+beside `_compile.py`. No `riko/workflow/` package is added.
+
+**R4A.1 landed** (see `IMPLEMENTED.md`): the closed node/edge union, port grammar, `WorkflowSpec`
+envelope, and public `Pipeline[T]`. `Pipeline` is STABLE (`riko`); the
+node/edge/`WorkflowSpec`/`Endpoint` model is EXTENSION (`riko.ext`).
 
 **Exit:**
 

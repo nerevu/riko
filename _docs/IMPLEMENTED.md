@@ -312,6 +312,23 @@ front instead of silently SCC-reordered. Generated output stays byte-identical (
 > index. Execution concepts never move onto it. See
 > [extensibility § E3.11](gameplans/extensibility.md#e311-reuse-of-the-shipped-graph-index).
 
+## Canonical Workflow v2 model (R4A.1, shipped)
+
+The structural v2 vocabulary — no runtime yet (R4B executes it). Pure contracts live in
+`riko/types/_workflow.py` (`Endpoint`, the `NodeFamily`/`EdgeFamily`/`PortDirection` discriminant
+literals, `InputRef`, and the `parse_port` grammar helper); the immutable model lives in
+`riko/definitions/_workflow.py` — the closed node union
+`ModuleNode`/`ReadNode`/`WriteNode`/`CacheNode`/`ActionNode`/`SubscribeNode`, the edge union
+`StreamEdge`/`PublishEdge`, the `WorkflowSpec` envelope (by-id `nodes` mapping wrapped read-only,
+`edges`/`outputs`/`inputs`, `version` defaulting to `"2"`), and the public generic `Pipeline[T]`.
+Each node/edge is a frozen slotted dataclass carrying a `family` `ClassVar` discriminant;
+`WriteNode`/`ActionNode` carry declarative `backend`/`fmt`/`mode`/`keys`/`params` intent only — no
+live resource or write session. `Pipeline` is STABLE (`riko`); the node/edge/`WorkflowSpec`/`Endpoint`
+model is EXTENSION (`riko.ext`). Structural validation, authoring-sugar normalization, and v1
+migration are later R4A slices. Tests: `tests/public/test_workflow.py` plus module doctests. Forward
+order and the clean-break deletion ledger:
+[implementation-sequence.md](gameplans/implementation-sequence.md) R4A.
+
 ## Subscription lifecycle — `subscribe` / `publish` (F5a, partial)
 
 > **Partial.** The shipped compatibility behavior and the revised MVP/F5 staging boundary are
