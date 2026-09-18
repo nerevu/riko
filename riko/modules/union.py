@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.types._streams import Stream
+    from riko.types._streams import RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = Opts()
@@ -49,8 +49,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    stream: RecordStream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
+) -> RecordStream:
     """
     Chains the source and every ``others`` stream into one stream.
 
@@ -85,12 +85,12 @@ def parser(
 
     """
     _others = DotDict(kwargs).get("others", [])
-    others = cast("Iterable[Stream]", _others)
+    others = cast("Iterable[RecordStream]", _others)
     return chain(stream, chain.from_iterable(others))
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously merges multiple source streams together.
 
@@ -136,7 +136,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Merges multiple source streams together.
 

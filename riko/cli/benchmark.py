@@ -29,7 +29,7 @@ from riko.types._rss import RSSEntry
 from riko.types.modules import FetchConf
 
 if TYPE_CHECKING:
-    from riko.types._streams import Items, RikoItem, RikoStream
+    from riko.types._streams import Item, Records, Stream
     from riko.types._wrappers import (
         AsyncPipeParser,
         ParserMaterializedOutput,
@@ -89,16 +89,16 @@ def sync_pipeline() -> ParserMaterializedOutput:
     return list(chain.from_iterable(pipes))
 
 
-def sync_pipe() -> list[RikoItem]:
+def sync_pipe() -> list[Item]:
     streams = (SyncPipe("fetch", conf=conf) for conf in confs)
     return list(chain.from_iterable(streams))
 
 
-def sync_collection() -> Items:
+def sync_collection() -> Records:
     return list(SyncCollection(sources, sleep=DELAY))
 
 
-def par_sync_collection() -> Items:
+def par_sync_collection() -> Records:
     return list(SyncCollection(sources, parallel=True, sleep=DELAY))
 
 
@@ -115,12 +115,12 @@ async def async_pipeline() -> list[ProcessorWrapperOutput]:
     return await async_map(delayed_fetch, confs)
 
 
-async def async_pipe2() -> list[RikoStream]:
+async def async_pipe2() -> list[Stream]:
     func = partial(AsyncPipe, "fetch", iter(()))
     return await async_map(func, confs)
 
 
-async def async_collection() -> list[RikoItem]:
+async def async_collection() -> list[Item]:
     results = await AsyncCollection(sources, sleep=DELAY)
     return list(results)
 

@@ -20,7 +20,7 @@ from riko.modules.fetchdata import async_pipe
 from tests import skipif_issync
 
 if TYPE_CHECKING:
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 URL = "https://example.test/data"
 JSON = b'{"items": [{"title": "A"}, {"title": "B"}]}'
@@ -36,7 +36,7 @@ def _async_get(content, content_type):
 
 async def _titles(conf):
     stream = async_pipe(conf=conf)
-    return [cast("Item", item).get("title") async for item in stream]
+    return [cast("Record", item).get("title") async for item in stream]
 
 
 @skipif_issync

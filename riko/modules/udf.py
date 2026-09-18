@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import UdfObjconf
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 OPTS: Opts = {"listize": True, "emit": True}
 DEFAULTS: Defaults = {}
@@ -48,13 +48,13 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    item: Item,
+    item: Record,
     extraction: object,
     objconf: UdfObjconf,
     *,
-    func: Callable[[Item], Item | Awaitable[Item]] | None = None,
+    func: Callable[[Record], Record | Awaitable[Record]] | None = None,
     **kwargs: object,
-) -> Item:
+) -> Record:
     """
     Asynchronously applies ``func`` to one item.
 
@@ -92,13 +92,13 @@ async def async_parser(
 
 
 def parser(
-    item: Item,
+    item: Record,
     extraction: object,
     objconf: UdfObjconf,
     *,
-    func: Callable[[Item], Item] | None = None,
+    func: Callable[[Record], Record] | None = None,
     **kwargs: object,
-) -> Item:
+) -> Record:
     """
     Applies ``func`` to one item.
 
@@ -131,7 +131,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: object) -> Item:
+async def async_pipe(*args: Any, **kwargs: object) -> Record:
     """
     Asynchronously applies an arbitrary (user-defined) function to each item.
 
@@ -187,7 +187,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Item:
+def pipe(*args: Any, **kwargs: object) -> Record:
     """
     Applies an arbitrary (user-defined) function to each item.
 

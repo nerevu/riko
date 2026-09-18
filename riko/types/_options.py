@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from ._compiler import CountValues
     from ._enums import BasicCastType, FmtLike
     from ._scalars import PrimitiveValue
-    from ._streams import Item
+    from ._streams import Record
     from ._wrappers import ParserOutput
     from .modules import AnyConfRule, Skip
 
@@ -92,7 +92,7 @@ class Casted[T, E](NamedTuple):
 
 
 class ItemDispatch[T, E](NamedTuple):
-    item: Item | RikoDict
+    item: Record | RikoDict
     casted: Casted[T, E]
 
 
@@ -103,5 +103,5 @@ class ValueDispatch[T, E](NamedTuple):
 
 type ItemOrValueDispatch[T, E] = ItemDispatch[T, E] | ValueDispatch[T, E]
 
-type SkipFunc = Callable[[Item], bool]
+type SkipFunc = Callable[[Record], bool]
 type SkipIf = SkipFunc | Skip | Iterable[SkipFunc] | Iterable[Skip]

@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import TruncateObjconf
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Stream
+    from riko.types._streams import RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
@@ -48,8 +48,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: TruncateObjconf, tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    stream: RecordStream, objconf: TruncateObjconf, tuples: PipeTuples, **kwargs: object
+) -> RecordStream:
     """
     Keeps the ``count`` items beginning at ``start``.
 
@@ -87,7 +87,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously returns a specified number of items from a stream.
 
@@ -137,7 +137,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Keeps a specified number of items from a stream.
 

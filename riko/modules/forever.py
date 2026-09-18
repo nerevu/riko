@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {}
@@ -46,7 +46,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: Item, extraction: object, objconf: DynamicConf, **kwargs: object
+    _: Record, extraction: object, objconf: DynamicConf, **kwargs: object
 ) -> Iterator[dict[str, bool]]:
     """
     Emits ``{"forever": True}`` endlessly.

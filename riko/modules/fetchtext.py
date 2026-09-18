@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import FetchTextObjconf
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "assign": "content"}
 DEFAULTS: Defaults = {"encoding": ENCODING}
@@ -52,7 +52,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: object, objconf: FetchTextObjconf, **kwargs: object
+    _: Record, extraction: object, objconf: FetchTextObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Asynchronously reads the file into a stream of stripped lines.
@@ -92,7 +92,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: object, objconf: FetchTextObjconf, **kwargs: object
+    _: Record, extraction: object, objconf: FetchTextObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Reads the file into a stream of stripped lines.

@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from riko.types._collections import Inputs
     from riko.types._options import Defaults, Opts
     from riko.types._scalars import PrimitiveValue
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {
@@ -54,7 +54,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: Item,
+    _: Record,
     extraction: object,
     objconf: InputObjconf,
     skip: bool = False,

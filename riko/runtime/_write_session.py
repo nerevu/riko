@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from _typeshed import OpenBinaryMode
     from anyio import AsyncFile
 
-    from riko.types._streams import AsyncItems, Item, Items, Stream
+    from riko.types._streams import AsyncRecords, Record, Records, RecordStream
     from riko.types._wrappers import ConversionOutput
 
 
@@ -89,7 +89,7 @@ class _FileWriteSession:
         if not isinstance(prepared.target, FileTarget):
             raise TypeError("_FileWriteSession requires a File target")
 
-        self._buffer: list[Item] = []
+        self._buffer: list[Record] = []
         self._incremental: bool = prepared.capabilities.incremental
         self._result: WriteResult = WriteResult()
         self._state: _SessionState = _SessionState.OPEN
@@ -129,7 +129,7 @@ class _FileWriteSession:
         if self._state is not _SessionState.OPEN:
             raise RuntimeError(f"write session is {self._state.name.lower()}")
 
-    def _validate_items(self, items: Items) -> Stream:
+    def _validate_items(self, items: Records) -> RecordStream:
         if self.csv_format:
             for item in items:
                 if self._fields is None:
@@ -258,7 +258,9 @@ class _SyncFileWriteSession(_FileWriteSession):
         if self._incremental:
             self._handle = self.path.open(self.file_mode)
 
-    def _convert(self, items: Items, validate: bool = False) -> ConversionOutput | str:
+    def _convert(
+        self, items: Records, validate: bool = False
+    ) -> ConversionOutput | str:
         if validate:
             items = self._validate_items(items)
 
@@ -277,7 +279,7 @@ class _SyncFileWriteSession(_FileWriteSession):
 
             self._written += self._handle.write(_as_bytes(content))
 
-    def _write_items(self, items: Items) -> None:
+    def _write_items(self, items: Records) -> None:
         self.input_shape = _InputShape.STREAM
         content = self._convert(items)
 
@@ -286,7 +288,7 @@ class _SyncFileWriteSession(_FileWriteSession):
         else:
             self._staged = content
 
-    def _write_item(self, item: Item) -> None:
+    def _write_item(self, item: Record) -> None:
         self.input_shape = _InputShape.ITEM
 
         if self._incremental:
@@ -295,7 +297,7 @@ class _SyncFileWriteSession(_FileWriteSession):
         else:
             self._buffer.append(item)
 
-    def write(self, value: Item | Items) -> None:
+    def write(self, value: Record | Records) -> None:
         r"""
         Delivers one record or the whole record stream.
 
@@ -465,7 +467,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             self._ahandle = await async_open(self.path, self.file_mode)
 
     async def _aconvert(
-        self, items: Items | AsyncItems, validate: bool = False
+        self, items: Records | AsyncRecords, validate: bool = False
     ) -> ConversionOutput | str:
         records = [item async for item in as_async(items)]
 
@@ -487,7 +489,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
             self._written += await self._ahandle.write(_as_bytes(content))
 
-    async def _awrite_items(self, items: Items | AsyncItems) -> None:
+    async def _awrite_items(self, items: Records | AsyncRecords) -> None:
         self.input_shape = _InputShape.STREAM
         content = await self._aconvert(items)
 
@@ -496,7 +498,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
         else:
             self._staged = content
 
-    async def _awrite_item(self, item: Item) -> None:
+    async def _awrite_item(self, item: Record) -> None:
         self.input_shape = _InputShape.ITEM
 
         if self._incremental:
@@ -505,7 +507,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
         else:
             self._buffer.append(item)
 
-    async def write(self, value: Item | Items | AsyncItems) -> None:
+    async def write(self, value: Record | Records | AsyncRecords) -> None:
         r"""
         Delivers one record or the whole record stream.
 
@@ -718,8 +720,8 @@ async def async_file_write_session(
 
 
 def write_through(
-    source: Items, prepared: PreparedWrite, *, terminating: Callable[[], bool]
-) -> Generator[Item]:
+    source: Records, prepared: PreparedWrite, *, terminating: Callable[[], bool]
+) -> Generator[Record]:
     """
     Passes each item through a lazily acquired write session unchanged.
 
@@ -754,11 +756,11 @@ def write_through(
 
 
 async def async_write_through(
-    source: Items | AsyncItems,
+    source: Records | AsyncRecords,
     prepared: PreparedWrite,
     *,
     terminating: Callable[[], bool] | None = None,
-) -> AsyncGenerator[Item]:
+) -> AsyncGenerator[Record]:
     """
     Passes each item through a lazily acquired write session unchanged.
 

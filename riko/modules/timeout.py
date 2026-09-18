@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import TimeoutObjconf
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Feed, Stream
+    from riko.types._streams import RecordFeed, RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
@@ -122,8 +122,11 @@ class TimeoutIterator[T](Iterator[T]):
 
 
 async def async_parser(
-    stream: Stream | Feed, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    stream: RecordStream | RecordFeed,
+    objconf: TimeoutObjconf,
+    tuples: PipeTuples,
+    **kwargs: object,
+) -> RecordStream:
     """
     Asynchronously collects items until the configured duration elapses.
 
@@ -173,8 +176,8 @@ async def async_parser(
 
 
 def parser(
-    stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    stream: RecordStream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
+) -> RecordStream:
     """
     Streams items until the configured duration elapses.
 
@@ -218,7 +221,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: object) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Streams items until the timeout expires.
 
@@ -281,7 +284,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Streams items from a stream until a certain amount of time has passed.
 

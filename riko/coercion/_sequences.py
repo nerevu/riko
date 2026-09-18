@@ -18,7 +18,12 @@ from riko.types._scalars import PrimitiveValueType
 
 if TYPE_CHECKING:
     from riko.types._collections import BasicDict, RikoValue
-    from riko.types._streams import Item, Stream, StreamOrValueStream, ValueStream
+    from riko.types._streams import (
+        Record,
+        RecordOrValueStream,
+        RecordStream,
+        ValueStream,
+    )
 
 
 def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
@@ -68,8 +73,8 @@ def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
 # TODO: move back to meza
 @overload
 def listize(  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
-    value: Item | Iterable[Item],
-) -> Iterable[Item]: ...
+    value: Record | Iterable[Record],
+) -> Iterable[Record]: ...
 @overload
 def listize[T](value: list[T]) -> list[T]: ...  # noqa: E704
 @overload  # noqa: E302
@@ -137,14 +142,14 @@ def gen_items(content: RikoValue) -> ValueStream: ...  # noqa: E704
 @overload  # noqa: E302
 def gen_items(  # noqa: E704
     content: RikoValue, key: str, yield_if_none: bool = ...
-) -> Stream: ...  # noqa: E704
+) -> RecordStream: ...  # noqa: E704
 @overload  # noqa: E302
 def gen_items(  # noqa: E704
     content: RikoValue, key: None = ..., yield_if_none: bool = ...
 ) -> ValueStream: ...
 def gen_items(  # noqa: E302
     content: RikoValue, key: str | None = None, yield_if_none=False
-) -> StreamOrValueStream:
+) -> RecordOrValueStream:
     """
     Flattens nested Riko values into a stream of values or keyed items.
 

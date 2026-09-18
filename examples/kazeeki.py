@@ -40,7 +40,7 @@ from riko.types.modules import (
 )
 
 if TYPE_CHECKING:
-    from riko.types._streams import RikoItems
+    from riko.types._streams import Items
 
 # from riko.utils import make_regex_conf_rule
 
@@ -627,7 +627,7 @@ def parse_freelancer[T: SyncPipe | AsyncPipe](source: T) -> T:
     return cast("T", result)
 
 
-def pipe(test=False, parallel=False, threads=False) -> RikoItems:
+def pipe(test=False, parallel=False, threads=False) -> Items:
     kwargs = {"parallel": parallel, "threads": threads}
 
     pipe = partial(SyncPipe, "fetchdata", **kwargs)

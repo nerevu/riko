@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import SendObjconf
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Feed, Stream
+    from riko.types._streams import RecordFeed, RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"pollable": True, "emit": True}
@@ -56,13 +56,13 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    stream: Stream | Feed,
+    stream: RecordStream | RecordFeed,
     objconf: SendObjconf,
     tuples: PipeTuples,
     *,
     others: list[str] | None = None,
     **kwargs: object,
-) -> Stream:
+) -> RecordStream:
     """
     Asynchronously publishes each item to every target, then returns them.
 
@@ -109,14 +109,14 @@ async def async_parser(
 
 
 def parser(
-    stream: Stream,
+    stream: RecordStream,
     objconf: SendObjconf,
     tuples: PipeTuples,
     *,
     others: list[str] | None = None,
     ids: dict[str, int] | None = None,
     **kwargs: object,
-) -> Stream:
+) -> RecordStream:
     """
     Publishes each item to every target, then yields it unchanged.
 
@@ -174,7 +174,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: object) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously pushes items to named receivers.
 
@@ -212,7 +212,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Pushes each items to named receivers.
 

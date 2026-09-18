@@ -42,7 +42,7 @@ from tests import PipeBuilder, skipif_issync
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Iterator
 
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 value = "once is 1x,twice is 2x,thrice is 3x"
 attrs = ParsedParam({"key": "content", "value": value})
@@ -93,7 +93,7 @@ class _CollectionTest:
     def setup_method(self):
         self.runs = 0
 
-    def udf(self, item: Item) -> Item:
+    def udf(self, item: Record) -> Record:
         self.runs += 1
         return item
 

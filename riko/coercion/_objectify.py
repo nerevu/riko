@@ -14,7 +14,7 @@ _VT = TypeVar("_VT")
 
 
 if TYPE_CHECKING:
-    from riko.types._streams import ItemOrValue
+    from riko.types._streams import RecordOrValue
     from riko.types._wrappers import ArgCaster
 
     class Objectify(Mapping[str, _VT]):
@@ -81,14 +81,16 @@ def objectify[T](  # noqa: E704
 @overload  # noqa: E302
 def objectify[T](  # noqa: E704
     data: Sequence[T], func: ArgCaster
-) -> list[ItemOrValue | Objectify[object]]: ...
+) -> list[RecordOrValue | Objectify[object]]: ...
 @overload  # noqa: E302
 def objectify[T](  # noqa: E704
     data: T, func: ArgCaster
-) -> T | ItemOrValue: ...
+) -> T | RecordOrValue: ...
 def objectify[T](  # noqa: E302
     data: T, func: ArgCaster | None = None, **defaults: object
-) -> T | ItemOrValue | Objectify[T] | list[T] | list[ItemOrValue | Objectify[object]]:
+) -> (
+    T | RecordOrValue | Objectify[T] | list[T] | list[RecordOrValue | Objectify[object]]
+):
     """
     Wraps a mapping as ``Objectify`` and applies ``func`` to any other value.
 

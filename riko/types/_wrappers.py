@@ -13,7 +13,7 @@ from collections.abc import (
 from io import StringIO
 from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, TypedDict, overload
 
-from ._streams import AsyncStreamOrValueStream
+from ._streams import AsyncRecordOrValueStream
 
 if TYPE_CHECKING:
     from riko.base._locations import AnyLocation
@@ -22,39 +22,41 @@ if TYPE_CHECKING:
 
     from ._scalars import NumLike, PrimitiveValue
     from ._streams import (
-        Feed,
-        Item,
-        ItemOrValue,
-        Items,
+        Record,
+        RecordFeed,
+        RecordOrValue,
+        RecordOrValueStream,
+        Records,
+        RecordStream,
         StatefulItem,
-        Stream,
-        StreamOrValueStream,
         Streams,
     )
     from .modules import AnyModuleConf, Conf, ModuleSubtype, ModuleSubtypes, ModuleType
 
 # per-item pipe values
-type PipeTuple = tuple[Item, DynamicConf]
+type PipeTuple = tuple[Record, DynamicConf]
 type PipeTuples = Iterator[PipeTuple]
 
 # implementation interface
 type Interface = Literal["pipe", "async_pipe"]
 
 # Input/Output
-type ProcessorParserOutput = Stream | ItemOrValue | AnyLocation | Iterator[str]
-type OperatorParserOutput = StreamOrValueStream | ItemOrValue | Iterator[StatefulItem]
+type ProcessorParserOutput = RecordStream | RecordOrValue | AnyLocation | Iterator[str]
+type OperatorParserOutput = RecordOrValueStream | RecordOrValue | Iterator[StatefulItem]
 type SplitterParserOutput = Streams
 type ParserOutput = ProcessorParserOutput | OperatorParserOutput | SplitterParserOutput
-type ParserMaterializedOutput = list[StatefulItem | ItemOrValue | AnyLocation | Stream]
+type ParserMaterializedOutput = list[
+    StatefulItem | RecordOrValue | AnyLocation | RecordStream
+]
 
-type ProcessorWrapperOutput = StreamOrValueStream
-type OperatorWrapperOutput = StreamOrValueStream
+type ProcessorWrapperOutput = RecordOrValueStream
+type OperatorWrapperOutput = RecordOrValueStream
 type SplitterWrapperOutput = SplitterParserOutput
 
 type ProcessorWrapperInput = (
-    Items | ProcessorWrapperOutput | OperatorWrapperOutput | ItemOrValue
+    Records | ProcessorWrapperOutput | OperatorWrapperOutput | RecordOrValue
 )
-type OperatorWrapperInput = Items | ProcessorWrapperOutput | OperatorWrapperOutput
+type OperatorWrapperInput = Records | ProcessorWrapperOutput | OperatorWrapperOutput
 type SplitterWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type WrapperInput = ProcessorWrapperInput | OperatorWrapperInput | SplitterWrapperInput
 
@@ -75,13 +77,17 @@ type ConversionFunc = Callable[..., ConversionOutput]
 type SyncWrapperOutput = (
     ProcessorWrapperOutput | OperatorWrapperOutput | SplitterWrapperOutput
 )
-type SyncFieldParseFunc = Callable[..., ItemOrValue]
+type SyncFieldParseFunc = Callable[..., RecordOrValue]
 type SyncConfCastFunc = Callable[..., DynamicConf]
 type SyncConfParseFunc = Callable[..., AnyModuleConf | None]
 
 type SyncProcessorParser[T, E] = Callable[[T, E, DynamicConf], ProcessorParserOutput]
-type SyncOperatorParser[E] = Callable[[Stream, E, PipeTuples], OperatorParserOutput]
-type SyncSplitterParser[E] = Callable[[Stream, E, PipeTuples], SplitterParserOutput]
+type SyncOperatorParser[E] = Callable[
+    [RecordStream, E, PipeTuples], OperatorParserOutput
+]
+type SyncSplitterParser[E] = Callable[
+    [RecordStream, E, PipeTuples], SplitterParserOutput
+]
 
 type SyncPipeParser = Callable[..., ParserOutput]
 type SyncPipeWrapper = Callable[..., SyncWrapperOutput]
@@ -152,9 +158,9 @@ class SyncSplitterWrapper(ModuleWrapper):
 
 
 # Async
-type AsyncProcessorWrapperOutput = AsyncStreamOrValueStream
-type AsyncOperatorWrapperOutput = AsyncStreamOrValueStream
-type AsyncSplitterWrapperOutput = AsyncIterator[Stream]
+type AsyncProcessorWrapperOutput = AsyncRecordOrValueStream
+type AsyncOperatorWrapperOutput = AsyncRecordOrValueStream
+type AsyncSplitterWrapperOutput = AsyncIterator[RecordStream]
 type AsyncWrapperOutput = (
     AsyncProcessorWrapperOutput
     | AsyncOperatorWrapperOutput
@@ -165,10 +171,10 @@ type AwaitableProcessorParser[T, E] = Callable[
     [T, E, DynamicConf], Awaitable[ProcessorParserOutput]
 ]
 type AwaitableOperatorParser[E] = Callable[
-    [Stream, E, PipeTuples], Awaitable[OperatorParserOutput]
+    [RecordStream, E, PipeTuples], Awaitable[OperatorParserOutput]
 ]
 type AwaitableSplitterParser[E] = Callable[
-    [Stream, E, PipeTuples], Awaitable[SplitterParserOutput]
+    [RecordStream, E, PipeTuples], Awaitable[SplitterParserOutput]
 ]
 
 type AsyncProcessorParser[T, E] = (
@@ -204,7 +210,7 @@ class AsyncProcessorWrapper(ModuleWrapper):
         conf: Conf | DynamicConf | None = None,
         context: Context | None = None,
         **__: object,
-    ) -> AsyncWrapperStream[ItemOrValue, ProcessorWrapperOutput]:
+    ) -> AsyncWrapperStream[RecordOrValue, ProcessorWrapperOutput]:
         _ = (item, conf, context)
         raise NotImplementedError
 
@@ -212,7 +218,7 @@ class AsyncProcessorWrapper(ModuleWrapper):
 class AsyncSubPipe(ModuleWrapper):
     def __call__(  # noqa: E704
         self, *_: object, **__: object
-    ) -> AsyncWrapperStream[ItemOrValue, ProcessorWrapperOutput]:
+    ) -> AsyncWrapperStream[RecordOrValue, ProcessorWrapperOutput]:
         raise NotImplementedError
 
 
@@ -224,7 +230,7 @@ async def _empty_async_stream() -> AsyncOperatorWrapperOutput:
 class AsyncOperatorWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
-        items: OperatorWrapperInput | Feed | None = None,
+        items: OperatorWrapperInput | RecordFeed | None = None,
         conf: Conf | None = None,
         embed: AsyncProcessorWrapper | AsyncSubPipe | None = None,
         context: Context | None = None,
@@ -240,7 +246,7 @@ class AsyncSplitterWrapper(ModuleWrapper):
         items: SplitterWrapperInput | None = None,
         conf: Conf | None = None,
         **__: object,
-    ) -> AsyncWrapperStream[Stream, SplitterWrapperOutput]:
+    ) -> AsyncWrapperStream[RecordStream, SplitterWrapperOutput]:
         _ = (items, conf)
         raise NotImplementedError
 

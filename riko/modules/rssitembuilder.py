@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from riko.coercion._configs import RssItemBuilderObjconf
     from riko.types._collections import RikoValue
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 OPTS: Opts = {"ftype": BasicCastType.NONE}
 DEFAULTS: Defaults = {}
@@ -73,7 +73,7 @@ RSS = cast(
 
 
 def parser(
-    _: Item, extraction: object, objconf: RssItemBuilderObjconf, **kwargs: object
+    _: Record, extraction: object, objconf: RssItemBuilderObjconf, **kwargs: object
 ) -> DotDict[RikoValue]:
     """
     Builds an RSS item from the configured attributes.

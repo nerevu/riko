@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from riko.coercion._configs import FetchObjconf
     from riko.types._options import Defaults, Opts
     from riko.types._rss import RSSEntry
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {"encoding": ENCODING}
@@ -54,7 +54,7 @@ keys: set[str] = {"author", "dc:creator", "id", "link", "pubDate", "summary", "t
 
 
 async def async_parser(
-    _: Item, extraction: object, objconf: FetchObjconf, **kwargs: object
+    _: Record, extraction: object, objconf: FetchObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Asynchronously fetches the feed and returns its entries.
@@ -95,7 +95,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: object, objconf: FetchObjconf, **kwargs: object
+    _: Record, extraction: object, objconf: FetchObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Fetches the feed and returns its entries.

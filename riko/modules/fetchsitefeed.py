@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from riko.coercion._configs import FetchSiteFeedObjconf
     from riko.types._options import Defaults, Opts
     from riko.types._rss import RSSEntry
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {}
@@ -49,7 +49,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: object, objconf: FetchSiteFeedObjconf, **kwargs: object
+    _: Record, extraction: object, objconf: FetchSiteFeedObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Asynchronously discovers the first feed on a page and parses it.
@@ -96,7 +96,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: object, objconf: FetchSiteFeedObjconf, **kwargs: object
+    _: Record, extraction: object, objconf: FetchSiteFeedObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Discovers the first feed on a page and parses it.

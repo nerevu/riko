@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import FetchDataObjconf
     from riko.types._io import FileLike
-    from riko.types._streams import Item, Stream
+    from riko.types._streams import Record, RecordStream
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING})
@@ -54,8 +54,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: object, objconf: FetchDataObjconf, **kwargs: object
-) -> Stream:
+    _: Record, extraction: object, objconf: FetchDataObjconf, **kwargs: object
+) -> RecordStream:
     """
     Asynchronously reads the data source into a stream of records.
 
@@ -103,8 +103,8 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: object, objconf: FetchDataObjconf, **kwargs: object
-) -> Stream:
+    _: Record, extraction: object, objconf: FetchDataObjconf, **kwargs: object
+) -> RecordStream:
     """
     Reads the data source into a stream of records.
 
@@ -149,7 +149,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: object) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously fetches an XML or JSON source and yields its records.
 
@@ -209,7 +209,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Fetches an XML or JSON source and yields its records.
 

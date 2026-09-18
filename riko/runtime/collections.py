@@ -81,17 +81,16 @@ if TYPE_CHECKING:
     from riko.types._io import PathLike
     from riko.types._options import SkipIf
     from riko.types._streams import (
-        AsyncItems,
-        AsyncRikoItems,
-        AsyncRikoSource,
-        AsyncRikoStream,
+        AsyncRecords,
+        AsyncStream,
+        Feed,
         Item,
         Items,
         OthersLike,
-        RikoFeed,
-        RikoItem,
-        RikoItems,
-        RikoStream,
+        Record,
+        Records,
+        RecordStream,
+        Source,
         Stream,
     )
     from riko.types._wrappers import (
@@ -125,7 +124,7 @@ class TemplatePipe(Protocol):
 
     name: str
 
-    def _prime(self, source: RikoItems) -> Self: ...  # noqa: E704
+    def _prime(self, source: Items) -> Self: ...  # noqa: E704
 
 
 def _is_pipe_spec(obj: object) -> TypeGuard[tuple[str, Conf]]:
@@ -138,7 +137,7 @@ def _is_pipe_spec(obj: object) -> TypeGuard[tuple[str, Conf]]:
     )
 
 
-def _is_source(obj: object) -> TypeGuard[Items]:
+def _is_source(obj: object) -> TypeGuard[Records]:
     """
     Represent items on the left of ``|`` as a stream.
 
@@ -301,7 +300,7 @@ class _SendDispatcher:
 
         return method
 
-    def cls_send(self, cls: type[SyncPipe], source: RikoItems, *names: str) -> SyncPipe:
+    def cls_send(self, cls: type[SyncPipe], source: Items, *names: str) -> SyncPipe:
         """
         Builds a publisher that pushes source items to each named subscriber.
 
@@ -353,7 +352,7 @@ def _settle_iter[T](current: T | None) -> T | Iterator[Never]:
     return result
 
 
-async def _spent_aiter() -> AsyncGenerator[RikoItem, None]:
+async def _spent_aiter() -> AsyncGenerator[Item, None]:
     """An exhausted async generator; the async counterpart to ``iter(())``."""
     return
     yield  # pragma: no cover
@@ -378,20 +377,20 @@ def list_formats() -> list[str]:
 
 
 @overload
-def export(items: RikoItems) -> list[Item]: ...  # noqa: E704
+def export(items: Items) -> list[Record]: ...  # noqa: E704
 @overload
-def export(items: RikoItems, **kwargs: Any) -> list[Item]: ...  # noqa: E704
+def export(items: Items, **kwargs: Any) -> list[Record]: ...  # noqa: E704
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: RikoItems, type_: Literal["list"], **kwargs: Any
-) -> list[Item]: ...
+    items: Items, type_: Literal["list"], **kwargs: Any
+) -> list[Record]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: RikoItems, type_: Literal["tuple"], **kwargs: Any
-) -> tuple[Item]: ...
+    items: Items, type_: Literal["tuple"], **kwargs: Any
+) -> tuple[Record]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: RikoItems,
+    items: Items,
     type_: Literal[
         "csv", "json", "geojson", Formats.CSV, Formats.JSON, Formats.GEOJSON
     ],
@@ -400,7 +399,7 @@ def export(  # noqa: E704
 ) -> int: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: RikoItems,
+    items: Items,
     type_: Literal[
         "csv", "json", "geojson", Formats.CSV, Formats.JSON, Formats.GEOJSON
     ],
@@ -409,28 +408,28 @@ def export(  # noqa: E704
 ) -> StringIO: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: RikoItems,
+    items: Items,
     type_: Literal["ofx", "qif", Formats.OFX, Formats.QIF],
     f: str,
     **kwargs: Any,
 ) -> int: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: RikoItems,
+    items: Items,
     type_: Literal["ofx", "qif", Formats.OFX, Formats.QIF],
     f: None = ...,
     **kwargs: Any,
 ) -> Iterable[str]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: RikoItems, type_: ExportType = ..., **kwargs: Any
-) -> StringIO | Items | Iterable[str] | None: ...
+    items: Items, type_: ExportType = ..., **kwargs: Any
+) -> StringIO | Records | Iterable[str] | None: ...
 def export(  # noqa: E302
-    items: RikoItems,
+    items: Items,
     type_: ExportType = "list",
     f: str | TextIO | None = None,
     **kwargs: Any,
-) -> int | ConversionOutput | RikoItems | None:
+) -> int | ConversionOutput | Items | None:
     """
     Converts a stream to ``type_``, optionally writing it to ``f``.
 
@@ -466,7 +465,7 @@ def export(  # noqa: E302
 
     """
     if type_ in {"list", "tuple"}:
-        result: int | ConversionOutput | RikoItems | None = (
+        result: int | ConversionOutput | Items | None = (
             tuple(items) if type_ == "tuple" else list(items)
         )
     else:
@@ -478,7 +477,7 @@ def export(  # noqa: E302
 
 
 def _passthrough_pipe(
-    template: SyncPipe | SyncCollection, source: RikoItems | None = None
+    template: SyncPipe | SyncCollection, source: Items | None = None
 ) -> SyncPipe:
     """
     Builds an identity ``SyncPipe`` over ``source`` with the template's runtime.
@@ -518,8 +517,7 @@ def _passthrough_pipe(
 
 
 def _async_passthrough_pipe(
-    template: AsyncPipe | AsyncCollection,
-    source: RikoItems | AsyncRikoItems | None = None,
+    template: AsyncPipe | AsyncCollection, source: Items | Feed | None = None
 ) -> AsyncPipe:
     """
     Builds an identity ``AsyncPipe`` over ``source`` with the template's runtime.
@@ -548,7 +546,7 @@ def _write(
     """Writes each item to ``dest`` while passing the stream through unchanged."""
     prepared = build_write(dest, mode, fmt=fmt)
     pipe = _passthrough_pipe(source)
-    items = cast("Items", iter(source))
+    items = cast("Records", iter(source))
     pipe.source = write_through(items, prepared, terminating=lambda: pipe._terminating)
     return pipe
 
@@ -563,13 +561,13 @@ def _awrite(
     """Writes each item to ``dest`` while passing the stream through unchanged."""
     prepared = build_write(dest, mode, fmt=fmt)
     pipe = _async_passthrough_pipe(source)
-    items = cast("AsyncItems", aiter(source))
+    items = cast("AsyncRecords", aiter(source))
     pipe.source = async_write_through(items, prepared)
     return pipe
 
 
 def _sink(
-    source: RikoItems,
+    source: Items,
     dest: Destination,
     *,
     mode: WriteMode | str,
@@ -581,7 +579,7 @@ def _sink(
 
     with file_write_session(prepared) as session:
         try:
-            session.write(cast("Items", source))
+            session.write(cast("Records", source))
         except BaseException:
             session.abort()
             raise
@@ -592,7 +590,7 @@ def _sink(
 
 
 async def _asink(
-    source: RikoItems | AsyncRikoItems,
+    source: Items | Feed,
     dest: Destination,
     *,
     mode: WriteMode | str,
@@ -604,7 +602,7 @@ async def _asink(
 
     async with async_file_write_session(prepared) as session:
         try:
-            await session.write(cast("AsyncItems", source))
+            await session.write(cast("AsyncRecords", source))
         except BaseException:
             session.abort()
             raise
@@ -635,7 +633,7 @@ class PyPipe(_Lifecycle):
     def __init__(
         self,
         name: ModuleNameLike | None = None,
-        source: AsyncRikoSource | None = None,
+        source: Source | None = None,
         *,
         assign: str | None = None,
         conf: Conf | None = None,
@@ -760,7 +758,7 @@ class SyncPipe(PyPipe):
     def __init__(
         self,
         name: ModuleNameLike | None = None,
-        source: RikoItems | None = None,
+        source: Items | None = None,
         conf: Conf | None = None,
         *,
         _pool_handle: _PoolHandle | None = None,
@@ -810,13 +808,13 @@ class SyncPipe(PyPipe):
             self.executor = Executor.INLINE
 
         self._in_context: bool = False
-        self._iter: RikoStream | None = None
-        self._mapped: Iterable[Stream] | None = None
+        self._iter: Stream | None = None
+        self._mapped: Iterable[RecordStream] | None = None
         self._terminal: bool = True
-        self.map: Callable[..., Iterable[Stream]]
+        self.map: Callable[..., Iterable[RecordStream]]
         self.ordered = ordered
         self.pool_scope: PoolScope = pool_scope
-        self.source: RikoItems = cast("RikoItems", self.source)
+        self.source: Items = cast("Items", self.source)
 
         if pool_scope not in {"pipe", "pipeline"}:
             raise ValueError("pool_scope must be either 'pipe' or 'pipeline'")
@@ -971,7 +969,7 @@ class SyncPipe(PyPipe):
 
         return primed
 
-    def _prime(self, source: RikoItems) -> SyncPipe:
+    def _prime(self, source: Items) -> SyncPipe:
         """Copies this pipe template, bound to ``source``."""
         self._require_usable("chain")
         skwargs = {
@@ -1012,11 +1010,11 @@ class SyncPipe(PyPipe):
         assign: str | None = None,
         context: Context | None = None,
         inputs: dict[str, Any] | None = None,
-        skip_if: Callable[[RikoItem], bool] | None = None,
+        skip_if: Callable[[Item], bool] | None = None,
         test: bool | None = None,
         verbose: bool | None = None,
         *,
-        on_receive: Callable[[RikoItem], object] | None = None,
+        on_receive: Callable[[Item], object] | None = None,
         **kwargs: object,
     ) -> SyncPipe:
         """
@@ -1178,7 +1176,7 @@ class SyncPipe(PyPipe):
 
         return result
 
-    def _stream(self) -> Generator[RikoItem, None, None]:
+    def _stream(self) -> Generator[Item, None, None]:
         if self.name == "send":
             self.kwargs.setdefault("ids", {})
 
@@ -1227,13 +1225,13 @@ class SyncPipe(PyPipe):
             if completed:
                 self._notify_subscribers()
 
-    def __iter__(self) -> RikoStream:
+    def __iter__(self) -> Stream:
         if self._iter is None:
             self._iter = self._stream()
 
         return self._iter
 
-    def __next__(self) -> RikoItem:
+    def __next__(self) -> Item:
         if self._iter is None:
             self._iter = self._stream()
 
@@ -1258,14 +1256,14 @@ class SyncPipe(PyPipe):
         return cast("SplitterWrapperOutput", splits)
 
     @overload
-    def export(self) -> list[Item]: ...  # noqa: E704
+    def export(self) -> list[Record]: ...  # noqa: E704
     @overload  # noqa: E301
     def export(  # noqa: E704
         self, type_: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     def export(  # noqa: E301
         self, *args: Any, **kwargs: object
-    ) -> int | str | Items | None:
+    ) -> int | str | Records | None:
         try:
             result = export(self, *args, **kwargs)
         except AttributeError as e:
@@ -1432,8 +1430,8 @@ class SyncCollection(PyCollection):
             self.executor = Executor.INLINE
 
         self.ordered: bool = bool(ordered)
-        self._iter: Stream | None = None
-        self.map: Callable[..., Iterable[Stream]]
+        self._iter: RecordStream | None = None
+        self.map: Callable[..., Iterable[RecordStream]]
         self._in_context: bool = False
         self._pool_handle: _PoolHandle | None = (
             _PoolHandle(pool, owned=False) if pool else None
@@ -1459,13 +1457,13 @@ class SyncCollection(PyCollection):
         """The live worker pool, or ``None`` when inline or already released."""
         return self._pool_handle.pool if self._pool_handle else None
 
-    def __iter__(self) -> Stream:
+    def __iter__(self) -> RecordStream:
         if self._iter is None:
             self._iter = self._stream()
 
         return self._iter
 
-    def __next__(self) -> RikoItem:
+    def __next__(self) -> Item:
         if self._iter is None:
             self._iter = self._stream()
 
@@ -1535,7 +1533,7 @@ class SyncCollection(PyCollection):
         self.close() if exc_type is None else self.terminate()
         return False
 
-    def _stream(self) -> Stream:
+    def _stream(self) -> RecordStream:
         """Fetches every source url."""
         self._begin()
 
@@ -1577,14 +1575,14 @@ class SyncCollection(PyCollection):
         return SyncPipe(name, source=self, **kwargs)
 
     @overload
-    def export(self) -> list[Item]: ...  # noqa: E704
+    def export(self) -> list[Record]: ...  # noqa: E704
     @overload  # noqa: E301
     def export(  # noqa: E704
         self, type_: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     def export(  # noqa: E301
         self, *args: Any, **kwargs: object
-    ) -> int | str | Items | None:
+    ) -> int | str | Records | None:
         result = export(self, *args, **kwargs)
         return result.getvalue() if isinstance(result, StringIO) else result
 
@@ -1636,7 +1634,7 @@ class AsyncPipe(PyPipe):
     def __init__(
         self,
         name: ModuleNameLike | None = None,
-        source: AsyncRikoSource | None = None,
+        source: Source | None = None,
         conf: Conf | None = None,
         *,
         assign: str | None = None,
@@ -1680,7 +1678,7 @@ class AsyncPipe(PyPipe):
         self.connections: int = connections
         self.ordered: bool = ordered
         self.prefetch: int = prefetch
-        self._aiter: AsyncGenerator[RikoItem, None] | None = None
+        self._aiter: AsyncGenerator[Item, None] | None = None
 
         if self.name:
             self._async_pipe: AsyncPipeWrapper = pipe_resolver.resolve(self.name, True)
@@ -1754,7 +1752,7 @@ class AsyncPipe(PyPipe):
 
         return primed
 
-    def _prime(self, source: RikoItems) -> AsyncPipe:
+    def _prime(self, source: Items) -> AsyncPipe:
         """Copies this pipe template, bound to ``source``."""
         self._require_usable("chain")
         skwargs = {
@@ -1773,19 +1771,19 @@ class AsyncPipe(PyPipe):
         """Chains the next pipe by name."""
         return self._chain(name, **kwargs)
 
-    def __aiter__(self) -> AsyncRikoStream:
+    def __aiter__(self) -> AsyncStream:
         if self._aiter is None:
             self._aiter = self._stream()
 
         return self._aiter
 
-    async def __anext__(self) -> RikoItem:
+    async def __anext__(self) -> Item:
         if self._aiter is None:
             self._aiter = self._stream()
 
         return await anext(self._aiter)
 
-    def __await__(self) -> Generator[Any, None, RikoStream]:
+    def __await__(self) -> Generator[Any, None, Stream]:
         """
         Drains the pipe and returns a **sync** iterator over the result.
 
@@ -1822,14 +1820,14 @@ class AsyncPipe(PyPipe):
         return cast("AsyncSplitterWrapperOutput", splits)
 
     @overload
-    async def export(self) -> list[Item]: ...  # noqa: E704
+    async def export(self) -> list[Record]: ...  # noqa: E704
     @overload  # noqa: E301
     async def export(  # noqa: E704
         self, type_: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     async def export(  # noqa: E301
         self, *args: Any, **kwargs: object
-    ) -> int | str | Items | None:
+    ) -> int | str | Records | None:
         items = [item async for item in self]
 
         try:
@@ -1894,7 +1892,7 @@ class AsyncPipe(PyPipe):
         skwargs.update(kwargs)
         return AsyncPipe(name, source=self, **skwargs)
 
-    async def _resolve_source(self) -> RikoFeed | None:
+    async def _resolve_source(self) -> Feed | None:
         """Normalizes the source into a lazy async iterable."""
         if self.source is None:
             resolved = None
@@ -1904,9 +1902,7 @@ class AsyncPipe(PyPipe):
 
         return resolved
 
-    async def _materialize_legacy_source(
-        self, feed: RikoFeed | None
-    ) -> RikoItems | None:
+    async def _materialize_legacy_source(self, feed: Feed | None) -> Items | None:
         """
         Drains a Feed into a list for a non-Feed-native module parser.
 
@@ -1917,15 +1913,13 @@ class AsyncPipe(PyPipe):
         """
         return None if feed is None else [item async for item in feed]
 
-    async def _stream(self) -> AsyncGenerator[RikoItem, None]:
+    async def _stream(self) -> AsyncGenerator[Item, None]:
         self._begin()
         async_pipeline = partial(self._async_pipe, **self.kwargs)
         # The mapped/bounded branch is processor-only (``is_loopable`` is
         # processor-only), so its wrapper keeps the awaitable per-item contract;
         # narrow it here rather than widening the shared operator alias.
-        mapped_pipeline = cast(
-            "Callable[[RikoItem], Awaitable[RikoStream]]", async_pipeline
-        )
+        mapped_pipeline = cast("Callable[[Item], Awaitable[Stream]]", async_pipeline)
         bounded = self.mapify and self.parallel
 
         try:
@@ -1978,7 +1972,7 @@ class AsyncPipe(PyPipe):
         finally:
             self._end()
 
-    async def _await_stream(self) -> RikoStream:
+    async def _await_stream(self) -> Stream:
         """Converts the AsyncIterator stream to an Awaitable."""
         return iter([item async for item in self])
 
@@ -2027,21 +2021,21 @@ class AsyncCollection(PyCollection):
         self.connections: int = connections
         self.ordered: bool = ordered
         self.prefetch: int = prefetch
-        self._aiter: AsyncGenerator[RikoItem, None] | None = None
+        self._aiter: AsyncGenerator[Item, None] | None = None
 
-    def __aiter__(self) -> AsyncRikoStream:
+    def __aiter__(self) -> AsyncStream:
         if self._aiter is None:
             self._aiter = self._stream()
 
         return self._aiter
 
-    async def __anext__(self) -> RikoItem:
+    async def __anext__(self) -> Item:
         if self._aiter is None:
             self._aiter = self._stream()
 
         return await anext(self._aiter)
 
-    def __await__(self) -> Generator[Any, None, RikoStream]:
+    def __await__(self) -> Generator[Any, None, Stream]:
         return self._await_stream().__await__()
 
     async def __aenter__(self) -> Self:
@@ -2067,14 +2061,14 @@ class AsyncCollection(PyCollection):
         return AsyncPipe(name, source=self, **kwargs)
 
     @overload
-    async def export(self) -> list[Item]: ...  # noqa: E704
+    async def export(self) -> list[Record]: ...  # noqa: E704
     @overload  # noqa: E301
     async def export(  # noqa: E704
         self, type_: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     async def export(  # noqa: E301
         self, *args: Any, **kwargs: object
-    ) -> int | str | Items | None:
+    ) -> int | str | Records | None:
         items = [item async for item in self]
         result = export(items, *args, **kwargs)
         return result.getvalue() if isinstance(result, StringIO) else result
@@ -2119,7 +2113,7 @@ class AsyncCollection(PyCollection):
         """The async collection counterpart of :meth:`SyncPipe.sink`."""
         return await _asink(aiter(self), dest, mode=mode, fmt=fmt, keys=keys)
 
-    async def _stream(self) -> AsyncGenerator[RikoItem, None]:
+    async def _stream(self) -> AsyncGenerator[Item, None]:
         """Fetches every source url."""
         self._begin()
 
@@ -2163,7 +2157,7 @@ class AsyncCollection(PyCollection):
         finally:
             self._end()
 
-    async def _await_stream(self) -> RikoStream:
+    async def _await_stream(self) -> Stream:
         """Converts the AsyncIterator stream to an Awaitable."""
         return iter([item async for item in self])
 
@@ -2180,9 +2174,7 @@ def get_worker_cnt(length: int, threads: bool | None = True) -> int:
     return min(length, maximum) if length else maximum
 
 
-def listpipe(
-    args: tuple[RikoItem, SyncPipeWrapper], **kwargs: BasicValue
-) -> list[RikoItem]:
+def listpipe(args: tuple[Item, SyncPipeWrapper], **kwargs: BasicValue) -> list[Item]:
     """Runs one item through a pipeline, materialized so it can cross a pool."""
     source, pipeline = args
     result = pipeline(source, **kwargs)
@@ -2201,14 +2193,14 @@ def _fetch_source[T: SyncPipe | AsyncPipe](
 
 def fetch_source(
     args: tuple[Mapping[str, str], Conf], pipe: type[SyncPipe] = SyncPipe
-) -> RikoStream:
+) -> Stream:
     """Builds a lazy, unstarted iterator over one collection source."""
     return iter(_fetch_source(args, pipe))
 
 
 def afetch_source(
     args: tuple[Mapping[str, str], Conf], pipe: type[AsyncPipe] = AsyncPipe
-) -> AsyncRikoStream:
+) -> AsyncStream:
     """
     Builds a lazy, unstarted async feed for one collection source.
 
@@ -2221,6 +2213,6 @@ def afetch_source(
 
 async def afetch_source_eager(
     args: tuple[Mapping[str, str], Conf], pipe: type[AsyncPipe] = AsyncPipe
-) -> RikoStream:
+) -> Stream:
     """Drains one collection source, for the ordered path that needs it whole."""
     return await _fetch_source(args, pipe)

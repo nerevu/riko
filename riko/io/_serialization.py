@@ -23,11 +23,11 @@ else:
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from riko.types._streams import RikoItems
+    from riko.types._streams import Items
     from riko.types._wrappers import ConversionFunc, ConversionOutput
 
 
-def records2ofx(items: RikoItems, **_: object) -> Iterable[str]:
+def records2ofx(items: Items, **_: object) -> Iterable[str]:
     """Serializes records as OFX. Registered only with the ``finance`` extra."""
     if not (OFX and gen_data):
         raise RuntimeError(
@@ -42,7 +42,7 @@ def records2ofx(items: RikoItems, **_: object) -> Iterable[str]:
     return chain(ofx.header(), ofx.gen_body(data), ofx.footer())
 
 
-def records2qif(items: RikoItems, **_: object) -> Iterable[str]:
+def records2qif(items: Items, **_: object) -> Iterable[str]:
     """Serializes records as QIF. Registered only with the ``finance`` extra."""
     if not (QIF and gen_data):
         raise RuntimeError(
@@ -77,7 +77,7 @@ if OFX is not None:
 
 
 def serialize_records(
-    records: RikoItems, fmt: Formats, **kwargs: object
+    records: Items, fmt: Formats, **kwargs: object
 ) -> ConversionOutput:
     """Serializes ``records`` with the resolved ``Formats`` converter."""
     items = map(validate_dict, records)

@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import JoinObjconf
-    from riko.types._streams import Item, Items, Stream
+    from riko.types._streams import Record, Records, RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = Opts()
@@ -56,13 +56,13 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream,
+    stream: RecordStream,
     objconf: JoinObjconf,
     tuples: PipeTuples,
     *,
-    other: Items | None = None,
+    other: Records | None = None,
     **kwargs: object,
-) -> Stream:
+) -> RecordStream:
     """
     Joins the source against ``other`` by merging each matching pair.
 
@@ -117,7 +117,7 @@ def parser(
     """
     other = require_arg(other, "other", "join", strict=True)
 
-    def compare(x: Item, y: Item, x_key: str, y_key: str) -> bool:
+    def compare(x: Record, y: Record, x_key: str, y_key: str) -> bool:
         if isinstance(x, Mapping) and isinstance(y, Mapping):
             x_value, y_value = x.get(x_key, MISSING), y.get(y_key, MISSING)
 
@@ -149,11 +149,11 @@ def parser(
         others = list(filter(is_mapping, other))
         joined = (merge([x, y]) for x in stream for y in others)
 
-    return cast("Stream", joined)
+    return cast("RecordStream", joined)
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously joins a source stream against another stream.
 
@@ -219,7 +219,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Joins a source stream against another stream.
 

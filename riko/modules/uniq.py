@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import UniqObjconf
-    from riko.types._streams import Stream
+    from riko.types._streams import RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = Opts()
@@ -47,8 +47,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: UniqObjconf, tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    stream: RecordStream, objconf: UniqObjconf, tuples: PipeTuples, **kwargs: object
+) -> RecordStream:
     """
     Filters the stream to items whose ``uniq_key`` value was not seen recently.
 
@@ -92,7 +92,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously filters out non unique items according to a specified field.
 
@@ -141,7 +141,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Filters out non unique items according to a specified field.
 

@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.types._streams import Stream
+    from riko.types._streams import RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = Opts()
@@ -44,8 +44,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    stream: RecordStream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
+) -> RecordStream:
     """
     Reverses the stream order.
 
@@ -78,7 +78,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously reverses the order of source items in a stream.
 
@@ -120,7 +120,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Reverses the order of source items in a stream.
 

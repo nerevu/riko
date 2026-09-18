@@ -26,13 +26,13 @@ if TYPE_CHECKING:
     from riko.runtime.context import Context
     from riko.types._compiler import CountValues, EmbedKwargs
     from riko.types._streams import (
-        AsyncItemsOrValues,
-        AsyncStreamOrValueStream,
-        Item,
-        Items,
-        ItemsOrValues,
-        Stream,
-        StreamOrValueStream,
+        AsyncRecordOrValueStream,
+        AsyncRecordsOrValues,
+        Record,
+        RecordOrValueStream,
+        Records,
+        RecordsOrValues,
+        RecordStream,
     )
     from riko.types._wrappers import (
         AsyncProcessorWrapper,
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def _take_first(results: ItemsOrValues) -> ItemsOrValues:
+def _take_first(results: RecordsOrValues) -> RecordsOrValues:
     """
     Emits only the first result, then promptly closes the underlying iterator.
 
@@ -63,7 +63,7 @@ def _take_first(results: ItemsOrValues) -> ItemsOrValues:
             iterator.close()
 
 
-async def _atake_first(results: AsyncItemsOrValues) -> AsyncItemsOrValues:
+async def _atake_first(results: AsyncRecordsOrValues) -> AsyncRecordsOrValues:
     iterator = aiter(results)
 
     try:
@@ -75,31 +75,33 @@ async def _atake_first(results: AsyncItemsOrValues) -> AsyncItemsOrValues:
             await iterator.aclose()
 
 
-def _take(results: ItemsOrValues, count: CountValues | None = "all") -> ItemsOrValues:
+def _take(
+    results: RecordsOrValues, count: CountValues | None = "all"
+) -> RecordsOrValues:
     return _take_first(results) if count == "first" else results
 
 
 def _atake(
-    results: AsyncItemsOrValues, count: CountValues | None = "all"
-) -> AsyncItemsOrValues:
+    results: AsyncRecordsOrValues, count: CountValues | None = "all"
+) -> AsyncRecordsOrValues:
     return _atake_first(results) if count == "first" else results
 
 
 @overload
 def _fold_parent(  # noqa: E704
-    parent: Item, results: ItemsOrValues, assign: str, emit: Literal[False]
-) -> Stream: ...
+    parent: Record, results: RecordsOrValues, assign: str, emit: Literal[False]
+) -> RecordStream: ...
 @overload  # noqa: E302
 def _fold_parent(  # noqa: E704
-    parent: Item, results: Items, assign: str, emit: bool
-) -> Stream: ...
+    parent: Record, results: Records, assign: str, emit: bool
+) -> RecordStream: ...
 @overload  # noqa: E302
 def _fold_parent(  # noqa: E704
-    parent: Item, results: ItemsOrValues, assign: str, emit: bool
-) -> StreamOrValueStream: ...
+    parent: Record, results: RecordsOrValues, assign: str, emit: bool
+) -> RecordOrValueStream: ...
 def _fold_parent(  # noqa: E302
-    parent: Item, results: ItemsOrValues, assign: str, emit: bool
-) -> StreamOrValueStream:
+    parent: Record, results: RecordsOrValues, assign: str, emit: bool
+) -> RecordOrValueStream:
     """
     Fold a parent's per-child ``results`` back against that parent.
 
@@ -116,20 +118,20 @@ def _fold_parent(  # noqa: E302
 
     for value in results:
         yielded = True
-        yield value if emit else cast("Item", {**parent, assign: value})
+        yield value if emit else cast("Record", {**parent, assign: value})
 
     if not (yielded or emit):
         yield parent
 
 
 async def _afold_parent(
-    parent: Item, results: AsyncItemsOrValues, assign: str, emit: bool
-) -> AsyncItemsOrValues:
+    parent: Record, results: AsyncRecordsOrValues, assign: str, emit: bool
+) -> AsyncRecordsOrValues:
     yielded = False
 
     async for value in results:
         yielded = True
-        yield value if emit else cast("Item", {**parent, assign: value})
+        yield value if emit else cast("Record", {**parent, assign: value})
 
     if not (yielded or emit):
         yield parent
@@ -139,13 +141,13 @@ def _run_loop_sync(
     embed: SyncProcessorWrapper | SyncSubPipe,
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
-    source: Stream,
+    source: RecordStream,
     *,
     field: str | None,
     assign: str | None = None,
     emit: bool | None = None,
     count: CountValues | None,
-) -> StreamOrValueStream:
+) -> RecordOrValueStream:
     embedder = get_subpipe(embed, context, embedded_kwargs, field=field)
 
     for parent in source:
@@ -157,13 +159,13 @@ async def _run_loop_async(
     embed: AsyncProcessorWrapper | AsyncSubPipe,
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
-    source: Stream,
+    source: RecordStream,
     *,
     field: str | None,
     assign: str | None = None,
     emit: bool | None = None,
     count: CountValues | None,
-) -> AsyncStreamOrValueStream:
+) -> AsyncRecordOrValueStream:
     embedder = get_subpipe(embed, context, embedded_kwargs, field=field)
 
     async for parent in async_iter(source):
@@ -178,14 +180,14 @@ def loop_embed_sync(
     embed: SyncProcessorWrapper | SyncSubPipe | None,
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
-    source: Stream,
+    source: RecordStream,
     module_name: str,
     *,
     field: str | None = None,
     assign: str | None = None,
     emit: bool | None = None,
     count: CountValues | None = None,
-) -> tuple[bool, bool, StreamOrValueStream]:
+) -> tuple[bool, bool, RecordOrValueStream]:
     """
     Resolve the sync embedded stream for an operator invocation.
 
@@ -227,14 +229,14 @@ def loop_embed_async(
     embed: AsyncProcessorWrapper | AsyncSubPipe | None,
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
-    source: Stream,
+    source: RecordStream,
     op_module_name: str,
     *,
     field: str | None = None,
     assign: str | None = None,
     emit: bool | None = None,
     count: CountValues | None = None,
-) -> tuple[bool, bool, AsyncStreamOrValueStream | Stream]:
+) -> tuple[bool, bool, AsyncRecordOrValueStream | RecordStream]:
     """
     Build the lazy async counterpart to ``loop_embed_sync``.
 

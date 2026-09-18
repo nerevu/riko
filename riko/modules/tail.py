@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import TailObjconf
-    from riko.types._streams import Stream
+    from riko.types._streams import RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
@@ -52,8 +52,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: TailObjconf, tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    stream: RecordStream, objconf: TailObjconf, tuples: PipeTuples, **kwargs: object
+) -> RecordStream:
     """
     Keeps the last ``count`` items of the stream.
 
@@ -89,7 +89,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously truncates a stream to the last N items.
 
@@ -138,7 +138,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Truncates a stream to the last N items.
 

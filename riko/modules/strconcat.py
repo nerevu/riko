@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import StrconcatObjconf
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 OPTS: Opts = {"listize": True, "extract": "part"}
 DEFAULTS: Defaults = {}
@@ -45,7 +45,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: Item, extraction: Sequence[object], objconf: StrconcatObjconf, **kwargs: object
+    _: Record, extraction: Sequence[object], objconf: StrconcatObjconf, **kwargs: object
 ) -> str:
     """
     Joins the resolved parts into one string.

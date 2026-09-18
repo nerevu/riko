@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
     from riko.types._collections import RikoValue
     from riko.types._options import SkipIf
-    from riko.types._streams import Item, ItemOrValue
+    from riko.types._streams import Record, RecordOrValue
 
 
 SKIP_SWITCH: dict[str, Callable[[str, str], bool]] = {
@@ -95,7 +95,7 @@ def conf_is_dynamic(conf: object, memoize: bool = False, **kwargs: object) -> bo
 
 
 def _parse_conf_uncached[VT](
-    item: Item | None = None,
+    item: Record | None = None,
     conf: VT | None = None,
     default: VT | None = None,
     **kwargs: VT,
@@ -135,7 +135,7 @@ def _parse_conf_uncached[VT](
 
 @repr_cache
 def _parse_conf_cached[VT](
-    item: Item | None = None,
+    item: Record | None = None,
     conf: VT | None = None,
     default: VT | None = None,
     **kwargs: VT,
@@ -144,7 +144,7 @@ def _parse_conf_cached[VT](
 
 
 def resolve_conf[VT](
-    item: Item | None = None,
+    item: Record | None = None,
     conf: VT | None = None,
     default: VT | None = None,
     memoize: bool | None = None,
@@ -220,7 +220,7 @@ def resolve_conf[VT](
     return func(item, conf, default=default, **kwargs)
 
 
-def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> bool:
+def get_skip(item: RecordOrValue, skip_if: SkipIf | None = None, **_: object) -> bool:
     """
     Determines whether or not to skip an item.
 
@@ -288,8 +288,8 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
 
 
 def get_field(
-    item: ItemOrValue | None = None, field: str = "", **kwargs: object
-) -> ItemOrValue:
+    item: RecordOrValue | None = None, field: str = "", **kwargs: object
+) -> RecordOrValue:
     """
     Extracts a configured field from an item.
 

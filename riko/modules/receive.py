@@ -44,7 +44,7 @@ from riko.runtime._pubsub import async_hub, coroutine, sync_hub
 from riko.types._enums import BasicCastType
 from riko.types._guards import is_missing_type, is_stateful_item
 from riko.types._sentinels import MISSING, StreamState
-from riko.types._streams import Item, StatefulItem, Stream, StreamOrValueStream
+from riko.types._streams import Record, RecordOrValueStream, RecordStream, StatefulItem
 
 from ._decorators import operator
 
@@ -62,7 +62,7 @@ DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5, "max_len": 256}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def _apply(func: ReceiveFunc, item: Item, **fkwargs: object) -> Item | None:
+def _apply(func: ReceiveFunc, item: Record, **fkwargs: object) -> Record | None:
     try:
         params = signature(func).parameters
     except (TypeError, ValueError):
@@ -81,7 +81,7 @@ def register_receiver(
     maxlen: int | None = None,
     func: ReceiveFunc | None = None,
     *,
-    on_receive: Callable[[Item], object] | None = None,
+    on_receive: Callable[[Record], object] | None = None,
     on_complete: Callable[[], object] | None = None,
     func_kwargs: Mapping[str, object] | None = None,
 ) -> None:
@@ -107,7 +107,7 @@ def register_receiver(
                         if state is StreamState.DONE and on_complete is not None:
                             on_complete()
                     else:
-                        item = cast("Item", item)
+                        item = cast("Record", item)
 
                         if on_receive is not None:
                             on_receive(item)
@@ -128,12 +128,12 @@ def register_receiver(
 
 
 async def async_parser(
-    _: Stream,
+    _: RecordStream,
     objconf: ReceiveObjconf,
     tuples: PipeTuples,
-    func: Callable[[Item], Item] | None = None,
+    func: Callable[[Record], Record] | None = None,
     **kwargs: object,
-) -> Stream:
+) -> RecordStream:
     """
     Asynchronously collects items the sender pushes.
 
@@ -156,24 +156,24 @@ async def async_parser(
     """
     name = objconf.name or "".join(gen_name())
     fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
-    results: list[Item] = []
+    results: list[Record] = []
 
     async with async_hub.subscribe(name) as receive_stream:
         async for item in receive_stream:
             results.append(
-                cast("Item", _apply(func, item, **fkwargs) if func else item)
+                cast("Record", _apply(func, item, **fkwargs) if func else item)
             )
 
     return iter(results)
 
 
 def parser(
-    _: Stream,
+    _: RecordStream,
     objconf: ReceiveObjconf,
     tuples: PipeTuples,
-    func: Callable[[Item], Item | None] | None = None,
+    func: Callable[[Record], Record | None] | None = None,
     **kwargs: object,
-) -> StreamOrValueStream | Iterator[StatefulItem]:
+) -> RecordOrValueStream | Iterator[StatefulItem]:
     """
     Emits items as the sender pushes them.
 
@@ -240,7 +240,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: object) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously receives items pushed by the send module.
 
@@ -278,7 +278,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> StreamOrValueStream | Iterator[StatefulItem]:
+def pipe(*args: Any, **kwargs: object) -> RecordOrValueStream | Iterator[StatefulItem]:
     """
     Receives items pushed by the send module.
 

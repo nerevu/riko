@@ -41,7 +41,7 @@ from riko.types.modules import ItemBuilderRawConf, Param, TruncateRawConf
 from tests import TESTS_DIR, async_test
 
 if TYPE_CHECKING:
-    from riko.types._streams import Item, ItemOrValue
+    from riko.types._streams import Record, RecordOrValue
 
 PIPELINE_DIR = TESTS_DIR / "pipelines"
 PYPIPELINE_DIR = TESTS_DIR / "pypipelines"
@@ -163,17 +163,17 @@ PIPES = {
 }
 
 
-def _run_generated(source, pipe_name) -> list[Item]:
+def _run_generated(source, pipe_name) -> list[Record]:
     namespace: dict = {}
     exec(compile(source, f"<{pipe_name}>", "exec"), namespace)
     return list(namespace["pipe"](context=Context()))
 
 
-def _run_executor(parsed) -> list[ItemOrValue]:
+def _run_executor(parsed) -> list[RecordOrValue]:
     return list(build_pipeline(parsed, context=Context()))
 
 
-def _compile_and_run(pipe_def, pipe_name) -> list[ItemOrValue]:
+def _compile_and_run(pipe_def, pipe_name) -> list[RecordOrValue]:
     return _run_executor(parse_pipe_def(pipe_def, pipe_name))
 
 

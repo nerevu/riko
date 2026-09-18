@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import WriteObjconf
-    from riko.types._streams import Items, Stream
+    from riko.types._streams import Records, RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = Opts()
@@ -56,7 +56,7 @@ DEFAULTS: Defaults = Defaults({"fmt": None, "mode": "wb+"})
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def _validate(items: Items, objconf: WriteObjconf) -> AnyStr | IOFileLike | None:
+def _validate(items: Records, objconf: WriteObjconf) -> AnyStr | IOFileLike | None:
     items = list(items)
     content = None
 
@@ -76,8 +76,8 @@ def _validate(items: Items, objconf: WriteObjconf) -> AnyStr | IOFileLike | None
 
 
 async def async_parser(
-    stream: Stream, objconf: WriteObjconf, tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    stream: RecordStream, objconf: WriteObjconf, tuples: PipeTuples, **kwargs: object
+) -> RecordStream:
     """
     Asynchronously serializes the stream and writes it to ``objconf.dest``.
 
@@ -126,8 +126,8 @@ async def async_parser(
 
 
 def parser(
-    stream: Stream, objconf: WriteObjconf, tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    stream: RecordStream, objconf: WriteObjconf, tuples: PipeTuples, **kwargs: object
+) -> RecordStream:
     """
     Serializes the stream and writes it to ``objconf.dest``.
 
@@ -171,7 +171,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: object) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Write an async stream to a file and pass its items through unchanged.
 
@@ -231,7 +231,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Write a stream to a file and pass its items through unchanged.
 

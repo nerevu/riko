@@ -35,7 +35,7 @@ from riko.types._wrappers import (
 from tests import async_test
 
 if TYPE_CHECKING:
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 
 def _create_wrapper(name: str, *, iscoro: bool, isasync: bool) -> ProcessorWrapper:
@@ -53,7 +53,7 @@ def _create_wrapper(name: str, *, iscoro: bool, isasync: bool) -> ProcessorWrapp
     return decorate(fn)
 
 
-def shout(item: Item, *args, **kwargs) -> str:
+def shout(item: Record, *args, **kwargs) -> str:
     return str(item.get("content", "")).upper()
 
 
@@ -89,7 +89,7 @@ class TestExplicitIsasyncRequired:
     async def test_explicit_lambda_runs_as_async_pipe(self):
         async_shout = processor(isasync=True)(
             lambda item, *args, **kwargs: str(
-                cast("Item", item).get("content", "")
+                cast("Record", item).get("content", "")
             ).upper()
         )
         stream = async_shout({"content": "hi"}, assign="content")

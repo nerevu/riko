@@ -40,15 +40,14 @@ from riko.types._enums import BasicCastType, ExecutionMode
 from riko.types._guards import is_mapping
 from riko.types._options import Casted, Defaults, ItemDispatch, Opts
 from riko.types._streams import (
-    AsyncItemsOrValues,
-    AsyncStream,
-    AsyncStreamOrValueStream,
-    Feed,
-    Item,
-    ItemOrValue,
-    StatefulItem,
-    Stream,
-    StreamOrValueStream,
+    AsyncRecordOrValueStream,
+    AsyncRecordsOrValues,
+    AsyncRecordStream,
+    Record,
+    RecordFeed,
+    RecordOrValue,
+    RecordOrValueStream,
+    RecordStream,
     Streams,
     ValueStream,
 )
@@ -71,6 +70,7 @@ if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.types._collections import Inputs, RikoValue
     from riko.types._scalars import PrimitiveValue
+    from riko.types._streams import StatefulItem
     from riko.types._wrappers import (
         AsyncOperatorParser,
         AsyncOperatorWrapper,
@@ -288,7 +288,7 @@ class Module[B: (Literal[True], Literal[False])]:
         *,
         assign: str | None = "",
         **kwargs: object,
-    ) -> PreparedModule[ItemOrValue, object]:
+    ) -> PreparedModule[RecordOrValue, object]:
         """
         Builds immutable invocation state for a module call.
 
@@ -354,7 +354,7 @@ class Module[B: (Literal[True], Literal[False])]:
         parsers, is_dynamic = build_parsers(opts, conf=_conf, **kwargs)
         static_casted = None
 
-        casters: CastFuncs[ItemOrValue, object] = build_casters(opts)
+        casters: CastFuncs[RecordOrValue, object] = build_casters(opts)
 
         if casters and not is_dynamic:
             parsed_conf = parsers.conf_parser({})
@@ -378,7 +378,7 @@ class Module[B: (Literal[True], Literal[False])]:
 
 
 def _call_kwargs(
-    prepared: PreparedModule[ItemOrValue, object],
+    prepared: PreparedModule[RecordOrValue, object],
     context: Context,
     count: CountValues | None,
     kwargs: Mapping[str, object],
@@ -610,7 +610,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         _reject_foreign_opts("processor", _PROCESSOR_FORBIDDEN_OPTS, kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
-    def parse(self, item: ItemOrValue, module_name: str) -> DotDict[RikoValue]:
+    def parse(self, item: RecordOrValue, module_name: str) -> DotDict[RikoValue]:
         """
         Normalizes a single input item into a ``DotDict``.
 
@@ -642,7 +642,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         input_: DotDict[RikoValue],
         field: str | None = None,
         **kwargs: object,
-    ) -> tuple[ItemOrValue, Casted[T, E] | Casted[ItemOrValue, E], bool]:
+    ) -> tuple[RecordOrValue, Casted[T, E] | Casted[RecordOrValue, E], bool]:
         """
         Extracts and casts the input for a processor call.
 
@@ -688,11 +688,11 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     def process(  # noqa: E704
         self,
         input_: DotDict[RikoValue],
-        stream: Stream | DotDict[RikoValue],
+        stream: RecordStream | DotDict[RikoValue],
         assign: str,
         emit: bool = ...,
         skip: bool = ...,
-    ) -> Stream: ...
+    ) -> RecordStream: ...
     @overload  # noqa: E301
     def process(  # noqa: E704
         self,
@@ -701,7 +701,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         assign: str,
         emit: Literal[False] = ...,
         skip: Literal[False] = ...,
-    ) -> Stream: ...
+    ) -> RecordStream: ...
     @overload  # noqa: E301
     def process(  # noqa: E704
         self,
@@ -877,7 +877,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 mapped = await async_map(_wrapper, item)
                 processed = chain.from_iterable(mapped)
             else:
-                input_ = self.parse(cast("ItemOrValue", item), module_name)
+                input_ = self.parse(cast("RecordOrValue", item), module_name)
                 prepared = self.prepare(
                     module_name, conf=conf, assign=assign, count=count, **kwargs
                 )
@@ -953,7 +953,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
                 processed = chain.from_iterable(map(_wrapper, item))
             else:
-                input_ = self.parse(cast("ItemOrValue", item), module_name)
+                input_ = self.parse(cast("RecordOrValue", item), module_name)
                 prepared = self.prepare(
                     module_name, conf=conf, assign=assign, count=count, **kwargs
                 )
@@ -1132,7 +1132,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         _reject_foreign_opts("operator", _OPERATOR_FORBIDDEN_OPTS, kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
-    def parse(self, items: OperatorWrapperInput | None = None) -> Stream:
+    def parse(self, items: OperatorWrapperInput | None = None) -> RecordStream:
         """
         Normalizes a sync input stream into ``DotDict`` items.
 
@@ -1155,7 +1155,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 else:
                     yield DotDict({"content": item})
 
-    async def aparse(self, items: AsyncItemsOrValues) -> AsyncStream:
+    async def aparse(self, items: AsyncRecordsOrValues) -> AsyncRecordStream:
         """
         Normalizes an async input stream into ``DotDict`` items.
 
@@ -1180,10 +1180,10 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     def setup[T, E](
         self,
         prepared: PreparedModule[T, E],
-        input_: Stream | AsyncStream,
+        input_: RecordStream | AsyncRecordStream,
         field: str | None = None,
         **kwargs: object,
-    ) -> tuple[PipeTuples, Stream, Casted[Item, E] | Casted[T, E]]:
+    ) -> tuple[PipeTuples, RecordStream, Casted[Record, E] | Casted[T, E]]:
         """
         Builds the per-item tuples and original stream for an operator call.
 
@@ -1209,16 +1209,16 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         if prepared.static_casted:
             _, pre_casted_extract, pre_casted_conf = prepared.static_casted
             objconf = pre_casted_conf
-            casted = Casted[Item, E](DotDict(), pre_casted_extract, pre_casted_conf)
+            casted = Casted[Record, E](DotDict(), pre_casted_extract, pre_casted_conf)
 
             if isinstance(input_, AsyncIterator):
-                orig_stream = cast("Stream", input_)
+                orig_stream = cast("RecordStream", input_)
                 tuples = cast("PipeTuples", ((item, objconf) async for item in input_))
             else:
                 orig_stream = input_
                 tuples = ((item, objconf) for item in input_)
         else:
-            _dispatcher: Callable[..., ItemDispatch] = partial(
+            _disp: Callable[..., ItemDispatch] = partial(
                 parse_and_cast,
                 conf=prepared.conf,
                 parsers=prepared.parsers,
@@ -1228,7 +1228,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 pipe=prepared.name,
             )
             # Parses conf that can vary per item. Can't handle terminal input
-            dispatcher = cast("Callable[[Item, Opts], ItemDispatch[T, E]]", _dispatcher)
+            dispatcher = cast("Callable[[Record, Opts], ItemDispatch[T, E]]", _disp)
 
             # - operators can't skip items
             # - purposely setting both tuples and orig_stream to maps of the same
@@ -1240,7 +1240,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 tuples = cast(
                     "PipeTuples", ((d.item, d.casted.conf) async for d in adispatches)
                 )
-                orig_stream = cast("Stream", (d.item async for d in adispatches))
+                orig_stream = cast("RecordStream", (d.item async for d in adispatches))
             else:
                 dispatches = (dispatcher(item, prepared.opts) for item in input_)
                 tuples = ((d.item, d.casted.conf) for d in dispatches)
@@ -1252,15 +1252,18 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
     @overload
     def process(  # noqa: E704
-        self, stream: Stream | Iterator[StatefulItem], assign: str, emit: bool = ...
-    ) -> Stream: ...
+        self,
+        stream: RecordStream | Iterator[StatefulItem],
+        assign: str,
+        emit: bool = ...,
+    ) -> RecordStream: ...
     @overload  # noqa: E301
     def process(  # noqa: E704
         self,
         stream: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
         assign: str,
         emit: Literal[False] = ...,
-    ) -> Stream: ...
+    ) -> RecordStream: ...
     @overload  # noqa: E301
     def process(  # noqa: E704
         self, stream: PrimitiveValue, assign: str, emit: Literal[True]
@@ -1388,7 +1391,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         async_native = iscoroutinefunction(pipe)
 
         async def async_wrapper(
-            items: OperatorWrapperInput | Feed | None = None,
+            items: OperatorWrapperInput | RecordFeed | None = None,
             conf: Conf | DynamicConf | None = None,
             context: Context | None = None,
             *,
@@ -1438,7 +1441,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 embed,
                 embedded_kwargs,
                 context,
-                cast("Stream", input_),
+                cast("RecordStream", input_),
                 module_name,
                 field=field,
                 assign=assign,
@@ -1447,9 +1450,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             )
 
             if looped:
-                processed = cast("AsyncStreamOrValueStream", embed_stream)
+                processed = cast("AsyncRecordOrValueStream", embed_stream)
             elif handled:
-                processed = async_iter(cast("Stream", embed_stream))
+                processed = async_iter(cast("RecordStream", embed_stream))
             else:
                 async_pipe = cast("AsyncOperatorParser[E]", pipe)
                 pkwargs = _call_kwargs(prepared, context, count, kwargs)
@@ -1516,7 +1519,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             )
 
             if looped:
-                processed = cast("StreamOrValueStream", embed_stream)
+                processed = cast("RecordOrValueStream", embed_stream)
             elif handled:
                 processed = embed_stream
             else:
@@ -1623,7 +1626,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         _reject_foreign_opts("splitter", _SPLITTER_FORBIDDEN_OPTS, kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
-    def parse(self, items: SplitterWrapperInput | None = None) -> Stream:
+    def parse(self, items: SplitterWrapperInput | None = None) -> RecordStream:
         """
         Normalizes an input stream into ``DotDict`` items.
 
@@ -1647,10 +1650,10 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     def setup[T, E](
         self,
         prepared: PreparedModule[T, E],
-        input_: Stream | SplitterWrapperInput,
+        input_: RecordStream | SplitterWrapperInput,
         field: str | None = None,
         **kwargs: object,
-    ) -> tuple[PipeTuples, Stream, Casted[T, E]]:
+    ) -> tuple[PipeTuples, RecordStream, Casted[T, E]]:
         """
         Builds the per-item tuples and original stream for a splitter call.
 
@@ -1680,7 +1683,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             defaults=self.defaults,
             field=field,
         )
-        dispatcher = cast("Callable[[ItemOrValue, Opts], ItemDispatch]", _dispatcher)
+        dispatcher = cast("Callable[[RecordOrValue, Opts], ItemDispatch]", _dispatcher)
         dispatches = (dispatcher(item, prepared.opts) for item in input_)
         tuples = ((d.item, d.casted.conf) for d in dispatches)
         orig_stream = (d.item for d in dispatches)

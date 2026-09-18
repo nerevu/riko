@@ -104,10 +104,10 @@ if TYPE_CHECKING:
         SyncStepValue,
     )
     from riko.types._streams import (
-        AsyncStreamOrValueStream,
-        ItemOrValue,
-        Stream,
-        StreamOrValueStream,
+        AsyncRecordOrValueStream,
+        RecordOrValue,
+        RecordOrValueStream,
+        RecordStream,
     )
     from riko.types._wrappers import (
         AsyncPipeWrapper,
@@ -1085,7 +1085,7 @@ def _resolve_leaf_modules(parsed_pipe_def: ParsedPipeDef) -> None:
 @overload
 def build_pipeline(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef, context: Context | None = ...
-) -> StreamOrValueStream: ...
+) -> RecordOrValueStream: ...
 @overload  # noqa: E302
 def build_pipeline(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef,
@@ -1100,7 +1100,7 @@ def build_pipeline(  # noqa: E302
     mode: ExecutionMode | None = None,
     inputs: Inputs | None = None,
     **kwargs: bool,
-) -> Iterator[ItemOrValue | Stream | PipelineDescriptionLike]:
+) -> Iterator[RecordOrValue | RecordStream | PipelineDescriptionLike]:
     """
     Builds an executable Python pipeline from a parsed pipe definition.
 
@@ -1125,7 +1125,7 @@ def build_pipeline(  # noqa: E302
 @overload
 def abuild_pipeline(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef, context: Context | None = ...
-) -> AsyncStreamOrValueStream: ...
+) -> AsyncRecordOrValueStream: ...
 @overload  # noqa: E302
 def abuild_pipeline(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef,
@@ -1140,7 +1140,7 @@ async def abuild_pipeline(  # noqa: E302
     mode: ExecutionMode | None = None,
     inputs: Inputs | None = None,
     **kwargs: bool,
-) -> AsyncIterator[ItemOrValue | Stream | PipelineDescriptionLike]:
+) -> AsyncIterator[RecordOrValue | RecordStream | PipelineDescriptionLike]:
     """
     Builds an executable Python pipeline from a parsed pipe definition.
 
@@ -1156,7 +1156,7 @@ async def abuild_pipeline(  # noqa: E302
         args = (parsed_pipe_def, module_names, module_ids)
         bkwargs = {**kwargs, "is_async": True}
         built = await maybe_deferred(_build_pipeline, *args, context=context, **bkwargs)
-        stream = cast("AsyncStreamOrValueStream", built)
+        stream = cast("AsyncRecordOrValueStream", built)
 
         async for item in as_async(stream):
             yield item

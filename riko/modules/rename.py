@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import RenameObjconf
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Item
+    from riko.types._streams import Record
     from riko.types.modules import RenameConfRule
 
 OPTS: Opts = {"extract": "rule", "listize": True, "emit": True}
@@ -53,22 +53,22 @@ DEFAULTS: Defaults = {}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def reducer(item: Item, rule: RenameConfRule) -> Item:
+def reducer(item: Record, rule: RenameConfRule) -> Record:
     value = DotDict(item).get(rule.field, MISSING)
     reduced = DotDict(item if rule.copy else remove_keys(item, rule.field))
 
     if rule.newval and value is not MISSING:
         reduced.update({rule.newval: value})
 
-    return cast("Item", reduced)
+    return cast("Record", reduced)
 
 
 async def async_parser(
-    item: Item,
+    item: Record,
     rules: Sequence[RenameConfRule],
     objconf: RenameObjconf,
     **kwargs: object,
-) -> Item:
+) -> Record:
     """
     Asynchronously applies each rename rule in turn to ``item``.
 
@@ -101,11 +101,11 @@ async def async_parser(
 
 
 def parser(
-    item: Item,
+    item: Record,
     rules: Sequence[RenameConfRule],
     objconf: RenameObjconf,
     **kwargs: object,
-) -> Item:
+) -> Record:
     """
     Applies each rename rule in turn to ``item``.
 
@@ -134,7 +134,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: object) -> Item:
+async def async_pipe(*args: Any, **kwargs: object) -> Record:
     """
     Asynchronously renames, copies, or deletes item fields.
 
@@ -199,7 +199,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Item:
+def pipe(*args: Any, **kwargs: object) -> Record:
     """
     Renames, copies, or deletes item fields.
 

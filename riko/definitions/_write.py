@@ -11,7 +11,7 @@ from riko.types._io import PathLike
 from riko.types._targets import SupportsWrite
 
 if TYPE_CHECKING:
-    from riko.types._streams import AsyncItems, Item, Items
+    from riko.types._streams import AsyncRecords, Record, Records
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,7 +165,7 @@ class SyncWriteSession(Protocol):
     second session type.
     """
 
-    def write(self, value: Item | Items) -> None:  # noqa: E301
+    def write(self, value: Record | Records) -> None:  # noqa: E301
         """Delivers a record or the whole record stream through this session."""
         ...
 
@@ -189,7 +189,7 @@ class SyncWriteSession(Protocol):
 class AsyncWriteSession(Protocol):
     """A live, execution-owned asynchronous write session."""
 
-    async def write(self, value: Item | Items | AsyncItems) -> None: ...  # noqa: E704
+    async def write(self, value: Record | Records | AsyncRecords) -> None: ...  # noqa: E704
     async def aacquire(self) -> None: ...  # noqa: E704
     async def afinalize(self) -> WriteResult: ...  # noqa: E704
     def abort(self) -> None: ...  # noqa: E704

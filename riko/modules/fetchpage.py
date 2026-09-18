@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import FetchPageObjconf
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING, "detag": False})
@@ -66,7 +66,7 @@ def get_string(content: str, start: str, end: str) -> str:
 
 
 async def async_parser(
-    _: Item, extraction: object, objconf: FetchPageObjconf, **kwargs: object
+    _: Record, extraction: object, objconf: FetchPageObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Asynchronously fetches the page and returns the requested slice.
@@ -113,7 +113,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: object, objconf: FetchPageObjconf, **kwargs: object
+    _: Record, extraction: object, objconf: FetchPageObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Fetches the page and returns the requested slice.

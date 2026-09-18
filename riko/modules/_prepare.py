@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from riko.parsing._dotdict import DotDict
     from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
     from riko.types._scalars import PrimitiveValue
-    from riko.types._streams import Item, ItemOrValue
+    from riko.types._streams import Record, RecordOrValue
     from riko.types.modules import AnyModuleConf, Conf
 
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -246,7 +246,7 @@ class PreparedModule[T, E]:
     conf: Conf
     opts: Opts
     parsers: ParseFuncs
-    casters: CastFuncs[ItemOrValue, E]
+    casters: CastFuncs[RecordOrValue, E]
     assign: str
     emit: bool | Callable[[ParserOutput], bool] | None
     is_source: bool
@@ -256,7 +256,7 @@ class PreparedModule[T, E]:
 
 @overload
 def parse_and_cast[T, E](  # noqa: E704
-    item: Item | RikoDict | DotDict[RikoValue],
+    item: Record | RikoDict | DotDict[RikoValue],
     opts: Opts,
     conf: Conf,
     *,
@@ -281,7 +281,7 @@ def parse_and_cast[T, E](  # noqa: E704
     **kwargs: object,
 ) -> ValueDispatch[T, E]: ...
 def parse_and_cast[T, E](  # noqa: E302
-    item: ItemOrValue,
+    item: RecordOrValue,
     opts: Opts,
     conf: Conf,
     *,
@@ -376,11 +376,11 @@ def build_parsers(opts: Opts, conf: Conf, **kwargs: object) -> tuple[ParseFuncs,
 @overload
 def _build_caster[T](type_: None) -> ArgCaster[T]: ...  # noqa: E704
 @overload
-def _build_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
+def _build_caster(type_: BasicCastType) -> ArgCaster[RecordOrValue]: ...  # noqa: E704
 @overload  # noqa: E302
 def _build_caster(  # noqa: E704
     type_: CastType,
-) -> ArgCaster[ItemOrValue | AnyLocation]: ...
+) -> ArgCaster[RecordOrValue | AnyLocation]: ...
 def _build_caster[T](  # noqa: E302
     type_: BasicCastType | CastType | None,
 ) -> ArgCaster[T | PrimitiveValue | AnyLocation]:
@@ -413,7 +413,7 @@ def _build_caster[T](  # noqa: E302
     return caster
 
 
-def build_casters(opts: Opts) -> CastFuncs[ItemOrValue, object]:
+def build_casters(opts: Opts) -> CastFuncs[RecordOrValue, object]:
     """
     Builds the field, extract, and conf casters from a module's options.
 

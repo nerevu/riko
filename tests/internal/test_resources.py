@@ -29,7 +29,7 @@ from tests import async_test
 
 if TYPE_CHECKING:
     from riko.types._resource import LifecycleFactory, ValueFactory
-    from riko.types._streams import Stream
+    from riko.types._streams import RecordStream
 
 _CREDENTIAL = "microsoft/cif"
 _SCALAR = 42
@@ -477,7 +477,7 @@ class TestResourceEcosystem:
 
     def test_operator_missing_resource_binding_raises(self):
         @operator(resources="connection")
-        def pipe(stream: Stream, objconf, tuples, **kwargs) -> Stream:
+        def pipe(stream: RecordStream, objconf, tuples, **kwargs) -> RecordStream:
             return stream
 
         with pytest.raises(TypeError, match="is not bound"):
@@ -529,7 +529,7 @@ class TestResourceEcosystem:
         captured = {}
 
         @operator(resources="resource")
-        def pipe(stream: Stream, objconf, tuples, **kwargs) -> Stream:
+        def pipe(stream: RecordStream, objconf, tuples, **kwargs) -> RecordStream:
             captured["view"] = kwargs.get("resources")
             return stream
 

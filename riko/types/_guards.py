@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     )
     from ._scalars import BasicValue
     from ._sentinels import MissingType, Sentinel
-    from ._streams import Item, StatefulItem
+    from ._streams import Record, StatefulItem
     from .modules import ConfArg
 
 
@@ -133,11 +133,11 @@ def is_mapping[D, VT](val: Mapping[D, VT] | object) -> TypeIs[Mapping[D, VT]]:
     return success or (False if failure else isinstance(val, Mapping))
 
 
-def is_stateful_item(val: Item | StatefulItem) -> TypeGuard[StatefulItem]:
+def is_stateful_item(val: Record | StatefulItem) -> TypeGuard[StatefulItem]:
     return isinstance(val.get("state"), StreamState) if is_mapping(val) else False
 
 
-def is_missing_type(val: Item | MissingType | None) -> TypeIs[MissingType]:
+def is_missing_type(val: Record | MissingType | None) -> TypeIs[MissingType]:
     return val is MISSING
 
 

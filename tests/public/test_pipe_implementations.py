@@ -31,7 +31,7 @@ from riko.types.modules import (
 from tests import async_test
 
 if TYPE_CHECKING:
-    from riko.types._streams import Feed, Item, ItemOrValue, Stream
+    from riko.types._streams import Record, RecordFeed, RecordOrValue, RecordStream
 
 
 def _values(stream: Any, key: str) -> list[Any]:
@@ -197,26 +197,26 @@ def test_send_populates_ids_when_given():
     assert isinstance(ids.get("id-target"), int)
 
 
-def _finite_source(consumed: list[int]) -> Stream:
+def _finite_source(consumed: list[int]) -> RecordStream:
     for i in range(_SOURCE_LEN):
         consumed.append(i)
         yield {"x": "foo", "i": i}
 
 
-async def _afinite_source(consumed: list[int]) -> Feed:
+async def _afinite_source(consumed: list[int]) -> RecordFeed:
     for i in range(_SOURCE_LEN):
         consumed.append(i)
         yield {"x": "foo", "i": i}
 
 
-async def _drain(receive_stream: Any, into: list[Item] | None = None) -> None:
+async def _drain(receive_stream: Any, into: list[Record] | None = None) -> None:
     async for item in receive_stream:
         if into is not None:
             into.append(item)
 
 
-async def _send_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
-    first: ItemOrValue = {}
+async def _send_first(consumed: list[int]) -> tuple[RecordOrValue, int]:
+    first: RecordOrValue = {}
     seen = 0
 
     async with (
@@ -231,7 +231,7 @@ async def _send_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
     return (first, seen)
 
 
-async def _send_missing_target(received: list[Item]) -> None:
+async def _send_missing_target(received: list[Record]) -> None:
     async with (
         async_hub.subscribe("r4-good") as receive_stream,
         create_task_group() as tg,
@@ -247,8 +247,10 @@ async def _send_missing_target(received: list[Item]) -> None:
                 pass
 
 
-async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrValue]:
-    out: list[ItemOrValue] = []
+async def _send_feed(
+    consumed: list[int], received: list[Record]
+) -> list[RecordOrValue]:
+    out: list[RecordOrValue] = []
 
     async with (
         async_hub.subscribe("r4-feed") as receive_stream,
@@ -261,8 +263,8 @@ async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrVa
     return out
 
 
-async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
-    first: ItemOrValue = {}
+async def _receive_first(consumed: list[int]) -> tuple[RecordOrValue, int]:
+    first: RecordOrValue = {}
     seen = 0
 
     async def _snapshot(receive_stream: Any) -> None:
@@ -307,7 +309,7 @@ async def test_async_send_completes_targets_when_publish_fails():
     ``publish`` raises ``ReceiverUnavailableError`` once an unsubscribed target
     outlasts ``max_wait``.
     """
-    received: list[Item] = []
+    received: list[Record] = []
     await _send_missing_target(received)
     assert received == [{"x": "foo", "i": 0}]
 
@@ -322,7 +324,7 @@ async def test_async_send_accepts_a_feed_source():
     caller passes a ``Feed``. So a sync ``for`` over it raises ``TypeError``.
     """
     consumed: list[int] = []
-    received: list[Item] = []
+    received: list[Record] = []
     expected = [{"x": "foo", "i": i} for i in range(_SOURCE_LEN)]
     out = await _send_feed(consumed, received)
 

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from xml.dom.minidom import Node
 
     from riko.types._io import StringFileLike
-    from riko.types._streams import Stream
+    from riko.types._streams import RecordStream
 
 TIMEOUT = settings.discovery_timeout
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
@@ -31,7 +31,9 @@ class RSSLinkParser(LinkParser):
         super().__init__(rss_only=True, link_type=link_type, **kwargs)
 
 
-def file2entries(f: StringFileLike | Iterator[str], parser: RSSLinkParser) -> Stream:
+def file2entries(
+    f: StringFileLike | Iterator[str], parser: RSSLinkParser
+) -> RecordStream:
     for line in f:
         parser.feed(line)
         for entry in parser.entry:
@@ -65,7 +67,7 @@ async def async_get_rss(
     convert_charrefs: bool = False,
     auto_sort: bool = False,
     **kwargs: bool,
-) -> Stream:
+) -> RecordStream:
     try:
         parser = RSSLinkParser(
             convert_charrefs=convert_charrefs, link_type=link_type, **kwargs
@@ -93,7 +95,7 @@ def get_rss(
     convert_charrefs: bool = False,
     auto_sort: bool = False,
     **kwargs: bool,
-) -> Stream:
+) -> RecordStream:
     try:
         parser = RSSLinkParser(
             convert_charrefs=convert_charrefs, link_type=link_type, **kwargs

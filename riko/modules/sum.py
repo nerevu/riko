@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import SumObjconf
-    from riko.types._streams import Stream
+    from riko.types._streams import RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = Opts()
@@ -45,7 +45,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: SumObjconf, tuples: PipeTuples, **kwargs: object
+    stream: RecordStream, objconf: SumObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Decimal | Iterator[dict[str, Decimal]]:
     """
     Sums the ``sum_key`` field, optionally grouping by ``group_key``.

@@ -12,12 +12,11 @@ import pygogo as gogo
 
 from riko.parsing._dotdict import DotDict
 from riko.types._streams import (
-    Item,
-    ItemOrValue,
-    ItemsOrValues,
-    StatefulItem,
-    Stream,
-    StreamOrValueStream,
+    Record,
+    RecordOrValue,
+    RecordOrValueStream,
+    RecordsOrValues,
+    RecordStream,
     ValueStream,
 )
 
@@ -28,6 +27,7 @@ if TYPE_CHECKING:
     from riko.types._collections import RikoValue
     from riko.types._compiler import CountValues, EmbedKwargs
     from riko.types._scalars import PrimitiveValue
+    from riko.types._streams import StatefulItem
     from riko.types._wrappers import (
         AsyncProcessorWrapper,
         AsyncSubPipe,
@@ -90,8 +90,8 @@ def get_subpipe(  # noqa: E302
 
 @overload
 def get_assignment(  # noqa: E704
-    items: Stream | Iterator[StatefulItem] | DotDict[RikoValue], skip: bool = ...
-) -> tuple[bool, Stream]: ...
+    items: RecordStream | Iterator[StatefulItem] | DotDict[RikoValue], skip: bool = ...
+) -> tuple[bool, RecordStream]: ...
 @overload  # noqa: E302
 def get_assignment(  # noqa: E704
     items: PrimitiveValue, skip: bool = ...
@@ -101,16 +101,16 @@ def get_assignment(  # noqa: E704
     items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
     skip: bool = ...,
     count: CountValues | None = ...,
-) -> tuple[bool, StreamOrValueStream]: ...
+) -> tuple[bool, RecordOrValueStream]: ...
 def get_assignment(  # noqa: E302
     items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
     skip=False,
     count: CountValues | None = None,
-) -> tuple[bool, StreamOrValueStream]:
+) -> tuple[bool, RecordOrValueStream]:
     if isinstance(items, Iterator):
-        dictized = cast("Stream", map(DotDict.dictize, items))
+        dictized = cast("RecordStream", map(DotDict.dictize, items))
     else:
-        dictized = cast("StreamOrValueStream", iter([DotDict.dictize(items)]))
+        dictized = cast("RecordOrValueStream", iter([DotDict.dictize(items)]))
 
     if skip:
         one = False
@@ -135,7 +135,7 @@ def get_assignment(  # noqa: E302
 
 
 @overload
-def gen_assignments[T: ItemOrValue](  # noqa: E704
+def gen_assignments[T: RecordOrValue](  # noqa: E704
     item: DotDict[RikoValue],
     assignment: Iterable[T],
     assign: str = ...,
@@ -144,18 +144,18 @@ def gen_assignments[T: ItemOrValue](  # noqa: E704
 @overload  # noqa: E302
 def gen_assignments(  # noqa: E704
     item: DotDict[RikoValue],
-    assignment: ItemsOrValues,
+    assignment: RecordsOrValues,
     assign: str = ...,
     *,
     one: Literal[True],
-) -> Stream: ...
+) -> RecordStream: ...
 def gen_assignments(  # noqa: E302
     item: DotDict[RikoValue],
-    assignment: Item | ItemsOrValues,
+    assignment: Record | RecordsOrValues,
     assign: str | None = None,
     one=False,
     **_,
-) -> StreamOrValueStream:
+) -> RecordOrValueStream:
     if one and isinstance(assignment, Iterator):
         value = next(assignment, None)
     else:
@@ -169,10 +169,10 @@ def gen_assignments(  # noqa: E302
         elif item and value_is_iterator:
             yield item | {assign: list(value)}
         elif value_is_iterator:
-            yield from cast("ItemsOrValues", ({assign: v} for v in value))
+            yield from cast("RecordsOrValues", ({assign: v} for v in value))
         else:
             yield item | {assign: value}
     elif value_is_iterator:
         yield from map(DotDict.dictize, value)
     else:
-        yield cast("Item", DotDict.dictize(value))
+        yield cast("Record", DotDict.dictize(value))

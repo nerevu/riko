@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import CsvObjconf
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Item, Stream
+    from riko.types._streams import Record, RecordStream
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {
@@ -61,8 +61,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: object, objconf: CsvObjconf, **kwargs: object
-) -> Stream:
+    _: Record, extraction: object, objconf: CsvObjconf, **kwargs: object
+) -> RecordStream:
     """
     Asynchronously reads the csv file into a stream of rows.
 
@@ -105,13 +105,13 @@ async def async_parser(
     renamed = {"first_row": first_row, "custom_header": custom_header}
     source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
-    content = cast("Stream", read_csv(source, **rkwargs))
+    content = cast("RecordStream", read_csv(source, **rkwargs))
     return auto_close(content, source, r)
 
 
 def parser(
-    _: Item, extraction: object, objconf: CsvObjconf, **kwargs: object
-) -> Stream:
+    _: Record, extraction: object, objconf: CsvObjconf, **kwargs: object
+) -> RecordStream:
     """
     Reads the csv file into a stream of rows.
 
@@ -151,12 +151,12 @@ def parser(
     f = Fetch(url, encoding=objconf.encoding)
     source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
-    content = cast("Stream", read_csv(source, **rkwargs))
+    content = cast("RecordStream", read_csv(source, **rkwargs))
     return auto_close(content, source, f)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: object) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously fetches a csv file and yields one item per row.
 
@@ -230,7 +230,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Fetches a csv file and yields one item per row.
 

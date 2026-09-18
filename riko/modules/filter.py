@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Item, Stream
+    from riko.types._streams import Record, RecordStream
     from riko.types._wrappers import PipeTuples
     from riko.types.modules import FilterConfRule
 
@@ -141,7 +141,7 @@ def parse_arg[VT](arg: VT, op: str, memoize: bool = False) -> str | date | VT | 
     return func(arg, op)
 
 
-def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
+def parse_rule(rule: FilterConfRule, item: Record, **kwargs: object) -> bool:
     """
     Evaluates a single rule against an item.
 
@@ -198,8 +198,11 @@ def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
 
 
 def parser(
-    _: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    _: RecordStream,
+    extract: Sequence[FilterConfRule],
+    tuples: PipeTuples,
+    **kwargs: object,
+) -> RecordStream:
     """
     Filters the stream to items that match (or fail to match) every rule.
 
@@ -274,7 +277,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously filters a stream to the items matching the given rules.
 
@@ -343,7 +346,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Filters a stream to the items matching the given rules.
 

@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
     from riko.types._collections import RikoDict, Stringy, StringyDict
     from riko.types._io import FileLike
-    from riko.types._streams import Item, Stream
+    from riko.types._streams import Record, RecordStream
 
 try:
     from lxml import etree, html
@@ -130,7 +130,7 @@ class LinkParser(HTMLParser):
         else:
             self.link_type = ()
 
-    def keyfunc(self, entry: Item) -> int:
+    def keyfunc(self, entry: Record) -> int:
         # sort according to the order of self.link_type
         count = len(self.link_type)
         enumerated = enumerate(self.link_type)
@@ -451,7 +451,7 @@ def any2dict(
     ext: str | None = "xml",
     html5: bool = False,
     path: str | None = None,
-) -> Stream:
+) -> RecordStream:
     """
     Emits items parsed from ``content`` (XML/HTML/JSON, mapping, or list).
 
@@ -499,7 +499,7 @@ def any2dict(
                 prefix = path
 
             items = ijson.items(content, prefix, use_float=True)
-            yield from cast("Stream", items)
+            yield from cast("RecordStream", items)
         elif isinstance(content, str):
             try:
                 json = loads(content)

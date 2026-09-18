@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Stream
+    from riko.types._streams import RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"extract": "count_key"}
@@ -42,7 +42,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, count_key: str | None, tuples: PipeTuples, **kwargs: object
+    stream: RecordStream, count_key: str | None, tuples: PipeTuples, **kwargs: object
 ) -> int | Iterator[dict[str, int]]:
     """
     Counts items, optionally grouping them by a field.

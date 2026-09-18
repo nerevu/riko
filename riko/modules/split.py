@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Stream
+    from riko.types._streams import RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"extract": "splits", "ptype": BasicCastType.INT, "objectify": False}
@@ -47,8 +47,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, splits: int, tuples: PipeTuples, **kwargs: object
-) -> Iterator[Stream]:
+    stream: RecordStream, splits: int, tuples: PipeTuples, **kwargs: object
+) -> Iterator[RecordStream]:
     """
     Splits the source into ``splits`` independent copies of the stream.
 
@@ -87,7 +87,7 @@ def parser(
 
 
 @splitter(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
+def async_pipe(*args: Any, **kwargs: object) -> Iterator[RecordStream]:
     """
     Asynchronously splits a stream into identical copies.
 
@@ -125,7 +125,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
 
 
 @splitter(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[RecordStream]:
     """
     Splits a stream into identical copies.
 

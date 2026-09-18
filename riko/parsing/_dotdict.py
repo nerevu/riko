@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
     from riko.types._collections import Key, RikoList, RikoValue
     from riko.types._scalars import BasicValue, PrimitiveValue
-    from riko.types._streams import Item, Stream
+    from riko.types._streams import Record, RecordStream
     from riko.types.modules import ConfArg
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
@@ -92,7 +92,7 @@ def resolve_sentinel(  # noqa: E704  # pyright: ignore[reportOverlappingOverload
 @overload  # noqa: E302
 def resolve_sentinel[D](  # noqa: E704
     value: Sentinel, default: D | None = ..., **kwargs: object
-) -> Item | D | None: ...
+) -> Record | D | None: ...
 @overload  # noqa: E302
 def resolve_sentinel[D, VT](  # noqa: E704
     value: Mapping[str, VT],
@@ -101,12 +101,12 @@ def resolve_sentinel[D, VT](  # noqa: E704
 ) -> dict[str, VT]: ...
 def resolve_sentinel[D, VT](  # noqa: E302
     value: Sentinel | Mapping[str, VT], default: D | None = None, **kwargs: VT
-) -> Item | D | dict[str, VT] | PrimitiveValue:
+) -> Record | D | dict[str, VT] | PrimitiveValue:
     if is_sentinel(value, **kwargs):
         key = replacer(value[SentinelValue], "")
 
         if stream := kwargs.get(key):
-            stream = cast("Stream", stream)
+            stream = cast("RecordStream", stream)
             parsed = next(stream, default)
         else:
             parsed = default
@@ -384,7 +384,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         key: str | int,
         default: D | None = ...,
         **kwargs: VT,
-    ) -> VT | dict[str, VT] | Item | RikoValue | D | None: ...
+    ) -> VT | dict[str, VT] | Record | RikoValue | D | None: ...
     @overload  # noqa: E301
     def _parse_value(  # noqa: E704
         self,
@@ -577,7 +577,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
     def get(self, **kwargs: VT) -> VT | None: ...  # noqa: E704
     def get(  # noqa: E301  # pyright: ignore[reportInconsistentOverload]
         self, key: Key | None = None, default: D | None = None, **kwargs: VT
-    ) -> Self | VT | D | Item | dict[str, VT] | PrimitiveValue:
+    ) -> Self | VT | D | Record | dict[str, VT] | PrimitiveValue:
         """
         Retrieves a value from a DotDict.
 

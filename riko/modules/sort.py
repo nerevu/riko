@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Stream
+    from riko.types._streams import RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
@@ -50,15 +50,18 @@ DEFAULTS: Defaults = {"rule": SortConfRule(dir="asc", field="content", type=sort
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def reducer(stream: Stream, rule: SortConfRule) -> Stream:
+def reducer(stream: RecordStream, rule: SortConfRule) -> RecordStream:
     reverse = rule.dir.lower() == "desc" if rule.dir else False
     keyfunc = def_itemgetter(rule.field, type_=rule.type)
     return iter(sorted(stream, key=keyfunc, reverse=reverse))
 
 
 async def async_parser(
-    stream: Stream, rules: Sequence[SortConfRule], tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    stream: RecordStream,
+    rules: Sequence[SortConfRule],
+    tuples: PipeTuples,
+    **kwargs: object,
+) -> RecordStream:
     """
     Asynchronously sorts the stream by each rule.
 
@@ -101,8 +104,11 @@ async def async_parser(
 
 
 def parser(
-    stream: Stream, rules: Sequence[SortConfRule], tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    stream: RecordStream,
+    rules: Sequence[SortConfRule],
+    tuples: PipeTuples,
+    **kwargs: object,
+) -> RecordStream:
     """
     Sorts the stream by each rule.
 
@@ -140,7 +146,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously sorts a stream according to a specified key.
 
@@ -199,7 +205,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Sorts a stream according to a specified key.
 

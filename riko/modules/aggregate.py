@@ -34,7 +34,7 @@ import pygogo as gogo
 from riko.bado._util import maybe_deferred
 from riko.coercion._sequences import listize
 from riko.types._options import Defaults
-from riko.types._streams import Item, Items, Stream
+from riko.types._streams import Record, Records, RecordStream
 
 from ._decorators import operator
 from ._prepare import require_arg
@@ -49,18 +49,18 @@ if TYPE_CHECKING:
 DEFAULTS: Defaults = Defaults()
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
-type AggregateResult = Item | Items
+type AggregateResult = Record | Records
 
 
 async def async_parser(
-    stream: Stream,
+    stream: RecordStream,
     objconf: AggregateObjconf,
     tuples: PipeTuples,
     *,
-    func: Callable[[Stream], AggregateResult | Awaitable[AggregateResult]]
+    func: Callable[[RecordStream], AggregateResult | Awaitable[AggregateResult]]
     | None = None,
     **kwargs: object,
-) -> Stream:
+) -> RecordStream:
     """
     Asynchronously applies ``func`` to the whole stream.
 
@@ -111,13 +111,13 @@ async def async_parser(
 
 
 def parser(
-    stream: Stream,
+    stream: RecordStream,
     objconf: AggregateObjconf,
     tuples: PipeTuples,
     *,
-    func: Callable[[Stream], AggregateResult] | None = None,
+    func: Callable[[RecordStream], AggregateResult] | None = None,
     **kwargs: object,
-) -> Stream:
+) -> RecordStream:
     """
     Applies ``func`` to the whole stream.
 
@@ -162,7 +162,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True)
-async def async_pipe(*args: Any, **kwargs: object) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously applies an arbitrary (user-defined) function to a stream.
 
@@ -214,7 +214,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Applies an arbitrary (user-defined) function to a stream.
 

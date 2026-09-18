@@ -24,21 +24,21 @@ from riko.ext import ModuleDefinition, operator, register_module
 
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.types import Item, PipeTuples, Stream
+    from riko.types import PipeTuples, Record, RecordStream
 
 
-def _shout(item: Item) -> Item:
-    return cast("Item", {**item, "content": str(item.get("content", "")).upper()})
+def _shout(item: Record) -> Record:
+    return cast("Record", {**item, "content": str(item.get("content", "")).upper()})
 
 
 def parser(
-    stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: Any
-) -> Stream:
+    stream: RecordStream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: Any
+) -> RecordStream:
     return map(_shout, stream)
 
 
 @operator(isasync=True)
-def async_pipe(*args: Any, **kwargs: Any) -> Stream:
+def async_pipe(*args: Any, **kwargs: Any) -> RecordStream:
     """
     Uppercases each item's ``content`` field.
 
@@ -72,7 +72,7 @@ def async_pipe(*args: Any, **kwargs: Any) -> Stream:
 
 
 @operator()
-def pipe(*args: Any, **kwargs: Any) -> Stream:
+def pipe(*args: Any, **kwargs: Any) -> RecordStream:
     """
     Uppercases each item's ``content`` field.
 

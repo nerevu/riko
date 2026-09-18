@@ -20,7 +20,7 @@ from riko.base.exceptions import DuplicateReceiverError, ReceiverUnavailableErro
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterable
 
-    from riko.types._streams import Item
+    from riko.types._streams import Record
 
 
 class SubscriptionState(StrEnum):
@@ -61,7 +61,7 @@ class AsyncPubSubHub:
         slot.receive_stream.close()
 
     async def publish(
-        self, targets: Iterable[str], item: Item, *, timeout: float | None = None
+        self, targets: Iterable[str], item: Record, *, timeout: float | None = None
     ) -> None:
         for name in targets:
             slot = self._get_or_create(name)

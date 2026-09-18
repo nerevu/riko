@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import XpathFetchPageObjconf
     from riko.types._io import FileLike
-    from riko.types._streams import Item, Stream
+    from riko.types._streams import Record, RecordStream
 
 OPTS = SourceOpts
 DEFAULTS = Defaults({"encoding": ENCODING, "html5": False})
@@ -58,8 +58,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: object, objconf: XpathFetchPageObjconf, **kwargs: object
-) -> Stream:
+    _: Record, extraction: object, objconf: XpathFetchPageObjconf, **kwargs: object
+) -> RecordStream:
     """
     Asynchronously reads the page and returns the nodes at ``xpath``.
 
@@ -121,8 +121,8 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: object, objconf: XpathFetchPageObjconf, **kwargs: object
-) -> Stream:
+    _: Record, extraction: object, objconf: XpathFetchPageObjconf, **kwargs: object
+) -> RecordStream:
     """
     Reads the page and returns the nodes at ``xpath``.
 
@@ -169,7 +169,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: object) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously fetches a web page and yields the nodes at an XPath.
 
@@ -242,7 +242,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Fetches a web page and yields the nodes at an XPath.
 

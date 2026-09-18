@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import FeedAutoDiscoveryObjconf
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Item, Stream
+    from riko.types._streams import Record, RecordStream
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {"strict": True, "sort": False}
@@ -45,8 +45,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: object, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
-) -> Stream:
+    _: Record, extraction: object, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
+) -> RecordStream:
     """
     Asynchronously discovers the feed links advertised by a page.
 
@@ -85,8 +85,8 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: object, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
-) -> Stream:
+    _: Record, extraction: object, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
+) -> RecordStream:
     """
     Discovers the feed links advertised by a page.
 
@@ -128,7 +128,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: object) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously discovers RSS/Atom feed links on a page.
 
@@ -184,7 +184,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Discovers RSS/Atom feed links on a page.
 

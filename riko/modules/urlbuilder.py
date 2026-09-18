@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import UrlBuilderObjconf
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Item
+    from riko.types._streams import Record
     from riko.types.modules import ObjconfParam
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "extract": "param", "listize": True}
@@ -55,7 +55,10 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: Item, param: Sequence[ObjconfParam], objconf: UrlBuilderObjconf, **kwargs: object
+    _: Record,
+    param: Sequence[ObjconfParam],
+    objconf: UrlBuilderObjconf,
+    **kwargs: object,
 ) -> str:
     """
     Assembles a url from the configured parts.

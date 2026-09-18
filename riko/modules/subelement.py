@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from riko.coercion._configs import SubelementObjconf
     from riko.types._collections import RikoValue
     from riko.types._options import Defaults, Opts
-    from riko.types._streams import Item, Stream
+    from riko.types._streams import Record, RecordStream
 
 OPTS: Opts = {"emit": True}
 DEFAULTS: Defaults = {"token_key": "content"}
@@ -57,8 +57,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    item: Item, extraction: object, objconf: SubelementObjconf, **kwargs: RikoValue
-) -> Stream:
+    item: Record, extraction: object, objconf: SubelementObjconf, **kwargs: RikoValue
+) -> RecordStream:
     """
     Extracts the element ``path`` names from ``item``.
 
@@ -101,7 +101,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
+def async_pipe(*args: Any, **kwargs: RikoValue) -> RecordStream:
     """
     Asynchronously extracts sub-elements from an item.
 
@@ -163,7 +163,7 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: RikoValue) -> Stream:
+def pipe(*args: Any, **kwargs: RikoValue) -> RecordStream:
     """
     Extracts sub-elements from an item.
 

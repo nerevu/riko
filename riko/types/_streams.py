@@ -12,43 +12,39 @@ if TYPE_CHECKING:
     from ._rss import RSSEntry
     from ._sentinels import StreamState
 
-
-# Base Sync
-type Item = RikoDict | dict[str, RikoValue] | RSSEntry | DotDict[RikoValue]
-type ItemOrValue = Item | RikoValue
-type Items = Iterable[Item]
-type ItemsOrValues = Iterable[ItemOrValue]
-type ValueStream = Iterator[RikoValue]
-type Stream = Iterator[Item]
-type StreamOrValueStream = Iterator[ItemOrValue]
-type Streams = Iterator[Stream]
+# Parser values
+type Record = RikoDict | dict[str, RikoValue] | RSSEntry | DotDict[RikoValue]
+type RecordOrValue = Record | RikoValue
 
 
 class StatefulItem(TypedDict):
     state: StreamState
 
 
-# Base Async
-type AsyncItems = AsyncIterable[Item]
-type AsyncItemsOrValues = AsyncIterable[ItemOrValue]
+# Parser sync
+type Records = Iterable[Record]
+type RecordsOrValues = Iterable[RecordOrValue]
+type RecordStream = Iterator[Record]
+type ValueStream = Iterator[RikoValue]
+type RecordOrValueStream = Iterator[RecordOrValue]
+type Streams = Iterator[RecordStream]
+
+# Parser async
+type AsyncRecords = AsyncIterable[Record]
+type AsyncRecordsOrValues = AsyncIterable[RecordOrValue]
+type AsyncRecordStream = AsyncIterator[Record]
+type AsyncRecordOrValueStream = AsyncIterator[RecordOrValue]
+type RecordFeed = AsyncRecords
+type RecordSource = Records | RecordFeed | Awaitable[Records | RecordFeed]
+
+# Pipe/wrapper
+type Item = RecordOrValue | RecordStream
+type Items = Iterable[Item]
+type Stream = Iterator[Item]
+
+type Feed = AsyncIterable[Item]
 type AsyncStream = AsyncIterator[Item]
-type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
-type Feed = AsyncItems
-type AsyncSource = Items | Feed | Awaitable[Items | Feed]
-
-
-# Riko Sync
-type RikoItem = ItemOrValue | Stream
-type RikoItems = Iterable[RikoItem]
-type RikoStream = Iterator[RikoItem]
-
-# Riko Async
-type AsyncRikoItems = AsyncIterable[RikoItem]
-type AsyncRikoStream = AsyncIterator[RikoItem]
-type RikoFeed = AsyncRikoItems
-type AsyncRikoSource = RikoItems | RikoFeed | Awaitable[RikoItems | RikoFeed]
+type Source = Items | Feed | Awaitable[Items | Feed]
 
 # Operator `others` — pipe names or streams (sync or async) to merge or reference
-type OthersLike = (
-    Iterable[str] | Iterable[RikoStream] | Iterable[AsyncRikoStream] | None
-)
+type OthersLike = Iterable[str] | Iterable[Stream] | Iterable[AsyncStream] | None

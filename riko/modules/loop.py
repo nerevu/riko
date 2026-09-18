@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.types._streams import Stream
+    from riko.types._streams import RecordStream
     from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"listize": False, "parse": False}
@@ -62,8 +62,8 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
-) -> Stream:
+    stream: RecordStream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
+) -> RecordStream:
     """
     Passes the source through unchanged.
 
@@ -90,7 +90,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Asynchronously creates submodules from existing pipes.
 
@@ -144,7 +144,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> RecordStream:
     """
     Creates submodules from existing pipes.
 

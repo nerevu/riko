@@ -34,7 +34,7 @@ from tests import skipif_issync
 
 if TYPE_CHECKING:
     from riko.runtime.context import Context
-    from riko.types._streams import AsyncStream, Item, Stream
+    from riko.types._streams import AsyncRecordStream, Record, RecordStream
     from riko.types._wrappers import OperatorWrapperOutput
 
 PARENTS = [{"title": "a b"}, {"title": "c d"}]
@@ -131,12 +131,14 @@ SUBPIPE_FOLD_CASES = [
 ASYNC_SUBPIPE_FOLD_CASES = [SUBPIPE_FOLD_CASES[0], SUBPIPE_FOLD_CASES[2]]
 
 
-async def _async_subpipe(item: Item, context: Context | None = None, **_) -> Stream:
+async def _async_subpipe(
+    item: Record, context: Context | None = None, **_
+) -> RecordStream:
     title = str(item.get("title", ""))
     return iter([{"content": title.upper()}, {"content": title[::-1]}])
 
 
-def _sync_subpipe(item: Item, context: Context | None = None, **_) -> Stream:
+def _sync_subpipe(item: Record, context: Context | None = None, **_) -> RecordStream:
     title = str(item.get("title", ""))
     return iter([{"content": title.upper()}, {"content": title[::-1]}])
 
@@ -145,7 +147,9 @@ _SYNC_SUBPIPE = mark_subpipe(_sync_subpipe)
 _ASYNC_SUBPIPE = mark_subpipe(_async_subpipe)
 
 
-def _tokenizer_loop(source: Stream, field="title", **kwargs) -> OperatorWrapperOutput:
+def _tokenizer_loop(
+    source: RecordStream, field="title", **kwargs
+) -> OperatorWrapperOutput:
     return loop(source, embed=tokenizer, conf=TOKENIZER_CONF, field=field, **kwargs)
 
 
@@ -309,7 +313,7 @@ class TestAsyncLoop:
     async def test_async_loop_is_lazy_and_ordered(self):
         consumed: list[str] = []
 
-        def tracking() -> Stream:
+        def tracking() -> RecordStream:
             for parent in PARENTS:
                 consumed.append(str(parent["title"]))
                 yield parent
@@ -323,7 +327,7 @@ class TestAsyncLoop:
             emit=True,
         )
 
-        first = await anext(cast("AsyncStream", stream))
+        first = await anext(cast("AsyncRecordStream", stream))
         assert first == {"content": "a"}
         assert list(consumed) == ["a b"]
 
