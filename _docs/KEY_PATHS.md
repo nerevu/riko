@@ -16,7 +16,7 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/_package.py` | package/version metadata classified with the base layer |
 | `riko/base/` | bottom-layer primitives shared across the package: constants, path/location helpers, logging, strings/iterators/date utilities, exceptions, source formatting, and the private API-surface declaration |
 | `riko/types/` | static contracts: streams/items, module configs, options, compiler/pipeline/resource/I/O types, enums, wrappers, sentinels, guards |
-| `riko/coercion/` | conversion and normalization: casts, `DynamicConf`, generated objconf types, mapping/objectification, date/dataclass coercion, graph/freeze helpers |
+| `riko/coercion/` | conversion and normalization: casts, `DynamicConf`, generated objconf types, mapping/objectification, date/dataclass coercion, graph/canonical-identity helpers |
 | `riko/bado/` | async backend selection plus async itertools/utilities; I/O no longer lives here |
 | `riko/definitions/` | immutable/declarative contracts for modules, resources, targets, and writes |
 | `riko/io/` | sync/async URL and file I/O, serialization, and re-encoding |
@@ -58,7 +58,7 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/coercion/_dynamic_conf.py` | hand-maintained `DynamicConf` base used by generated objconf classes |
 | `riko/coercion/cast.py` | public coercion/casting implementation used by parsing/modules |
 | `riko/coercion/_graph.py` | generic graph helpers, including topological sorting and descendant traversal reused by the architecture linter |
-| `riko/coercion/{_dates,_dataclass,_freeze,_mapping,_objectify,_sequences}.py` | focused conversion/normalization helpers |
+| `riko/coercion/{_dates,_dataclass,_canonical,_mapping,_objectify,_sequences}.py` | focused conversion/normalization helpers |
 
 ## Async and I/O
 
@@ -99,7 +99,9 @@ iterator is consumed.
 | `riko/definitions/_targets.py` | the built-in `FileTarget` write adapter (carrying `backend = Backends.FILE`) and write preparation/validation (`resolve_target`/`resolve_format`/`build_write`); the base target protocols live in `riko/types/_targets.py` |
 | `riko/definitions/_write.py` | `WriteMode`, `WriteResult`, `WriteOperation`, `WriteCapabilities`, `PreparedWrite`, and sync/async write-session protocols |
 | `riko/runtime/context.py` | immutable execution `Context`; resource bindings derive new contexts rather than mutating one in place |
-| `riko/runtime/_resources.py` | concrete `Resource` hierarchy and one-shot/reusable lifecycle execution; this file and `context.py` form the architecture's explicit `execution` sublayer |
+| `riko/runtime/_resources.py` | the `Resource` definition with the owned/external/lifecycle/factory variant carried as data (not a subclass hierarchy) behind the `OneShotResource`/`ReusableResource` markers; this file and `context.py` form the architecture's explicit `execution` sublayer |
+| `riko/runtime/_execution/` | private one-shot `SyncExecution`/`AsyncExecution` owning the three execution lifetime primitives (exit stack, root task group, sync/async bridge), the explicit stop→cancel→join→shielded-unwind→group shutdown order, and execution-local resource `acquire`/`aacquire` with single-flight memoization; part of the `execution` sublayer |
+| `riko/runtime/_execution/_plan.py` | the single declaration→plan boundary: `build_resource_plan` classifies a `Resource` once into a frozen `_ResourcePlan` (strategy, native mode, entry, teardown) that execution consumes without re-inspecting the original generator/context-manager/instance shape |
 
 The definition/execution split is intentional: descriptions stay immutable and
 reusable; mutable open/close/session state belongs to execution-owned objects.

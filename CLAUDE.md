@@ -120,6 +120,11 @@ new permanent bullet here.
 
 - **`is None` over truthiness** — `0`, `False`, and `""` are valid values. Missing
   data is not the same as a present falsy value.
+- **One canonical identity system** — durable identity (checkpoints, generation,
+  idempotency, fingerprints) uses the shared freezing/encoding layer in
+  `riko/coercion/_freeze.py` (`freeze`/`canonical_bytes`/`digest`), never Python's
+  randomized `hash()` or an ad-hoc encoder. It distinguishes types Python conflates and
+  raises on unsupported/cyclic values; process-local caches may bypass instead of raising.
 - **Immutable prepare** — `Module.prepare()` returns a frozen `PreparedModule` with
   no mutable call cache; call-site options cannot leak across items/concurrent
   invocations.
@@ -221,7 +226,9 @@ new permanent bullet here.
   with meza where the runtime contract says so.
 - **Tunable knobs live in `riko/base/_config.py`** — static project policy
   (`LAYER_DEPENDENCIES`/`EXACT_LAYERS`/`PREFIX_LAYERS`, consumed and frozen by the import
-  linter; `SINK_NAMES`; `SUBPIPE_TYPE`; `PIPELINE_DIRS`) plus a frozen `Settings` with
+  linter; `SINK_NAMES`; `SUBPIPE_TYPE`; the legacy port/output tokens
+  `INPUT_PORT`/`OUTPUT_PORT`/`OTHER_PORT`/`OUTPUT_MODULE` shared by `_compile`/`_normalize`/
+  `_migrate`; `PIPELINE_DIRS`) plus a frozen `Settings` with
   `RIKO_*` env overrides (`load_settings`; a malformed value logs a warning and falls back
   to the default). Existing names (`DEF_CONNECTION_COUNT`, `TIMEOUT`, `EXCHANGE_API`, …)
   re-source from `settings`; add operator-tunable defaults here, not as scattered literals.

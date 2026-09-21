@@ -292,6 +292,8 @@ public types and use them in new code; migrate old call sites when touched.
 
 ### R2A — Canonical value encoding
 
+**Landed** (see `IMPLEMENTED.md` § Canonical value encoder).
+
 **Goal:** one deterministic *value* encoder before checkpoints/idempotency/fingerprints depend on it.
 
 R2 is split because its two halves have very different confidence levels. R2A is mechanical,
@@ -376,7 +378,9 @@ the type/normalization boundary, not the execution lifecycle:
 - public generic `Resource[T]` umbrella with unconstrained resolved value type `T`;
 - public `ReusableResource[T]` category for wrappers safe in reusable Context definitions;
 - private concrete external/factory/one-shot-owned resource variants;
-- canonical `ResourceDefinition[T] = ReusableResource[T] | ResourceFactory[T]`;
+- canonical `ResourceDefinition[T] = ReusableResource[T] | LifecycleFactory[T]` (an
+  ordinary `ValueFactory` is not a definition: it must pass through
+  `Resource.from_factory(...)` so cleanup ownership stays explicit);
 - `Resource.from_external(value)` for caller-owned reusable resource values;
 - explicit `Resource.from_factory(factory, *args, **kwargs)` for arbitrary constructors/provider
   callables, including sync/async callables and optional explicit cleanup;
@@ -583,7 +587,7 @@ R4A.5  deterministic serialization + acceptance
   validate), omitted ids→`<name>-<occurrence>`, port aliases, family dispatch + `backend`/`fmt`/
   `mode` enum coercion, `src`/`tgt`/`from`/`to` rejection, string inputs→JSON Schema. The
   **structural, contract-free** pass: it reuses `normalize_binding`/`normalize_resources` (so a
-  bare-string `resources` self-binds, no contract needed), `normalize_keys`, `listize`, and the
+  bare-string `resources` self-binds, no contract needed), `normalize_strs`, `listize`, and the
   `is_mapping`/`is_listlike` guards; only format-from-locator inference and closed-schema rejection
   are deferred. Full `normalize∘serialize` idempotency is proven with the byte-stable serializer in
   R4A.5. File: `riko/runtime/_normalize.py` (the clean-break placement note below supersedes the
@@ -594,17 +598,24 @@ R4A.5  deterministic serialization + acceptance
   graph exposing an output (closing R4A.2's ambiguous-leaf case). The contract-aware E3.9 rules
   (undeclared ports, fan-in arity, registered conf/params/target-config validation) are **deferred**:
   `ModuleDefinition`/target contracts declare no ports or conf schemas yet, so they land with that
-  metadata. Structural validity is not runtime capability. File: `riko/runtime/_validate.py`
-  (placement per the clean-break note, superseding the `riko/workflow/validate.py` sketch).
-- **R4A.4 — `migrate_v1_to_v2()`.** Pure v1→v2 (E3.1/E3.11): `_INPUT`/`_OUTPUT`/`_OTHERn`→canonical
-  ports, v1 `write` module→`WriteNode`+Target/Format, terminal `_OUTPUT` passthrough→`outputs.default`,
-  orphan handling deferred to validation rather than silent erasure. Warn during 0.x, emit v2 only;
-  the interim fluent `sink()` had no serialized node form, so there is no legacy `sink` grammar. File:
-  `riko/workflow/migrate.py`.
-- **R4A.5 — deterministic serialization + acceptance.** Byte-stable canonical serialization, full
-  round-trip of every supported topology, golden fixtures, `normalize ∘ migrate` never emitting
-  v1-only structure, and CLI (`compile-pipe`/`convert-dag`) emitting v2 only (E3.10). Files:
-  `riko/cli/`, `tests/` golden fixtures.
+  metadata. Structural validity is not runtime capability. Home: validation is a method on the model
+  — `WorkflowSpec.validate()` / `isvalid` in `riko/definitions/_workflow.py` — after the refactor that
+  folded the standalone `riko/runtime/_validate.py` / `riko.ext.validate_workflow` into the spec.
+- **R4A.4 — `migrate_v1_to_v2()`. Landed** (see `IMPLEMENTED.md`). Pure v1→v2 (E3.1/E3.11):
+  `_INPUT`/`_OUTPUT`/`_OTHERn`→canonical ports, v1 `write` module→`WriteNode` (`backend=file`, `fmt`
+  from `conf.fmt`), terminal `_OUTPUT` passthrough→`outputs.default`, orphan handling deferred to
+  validation rather than silent erasure. It reuses `normalize_workflow` for the shared structural
+  pass; non-structural v1 module fields fold into `conf` for lossless migration. Warns during 0.x,
+  emits v2 only; the interim fluent `sink()` had no serialized node form, so there is no legacy `sink`
+  grammar. File: `riko/runtime/_migrate.py` (the clean-break placement note below supersedes the
+  original `riko/workflow/migrate.py` sketch).
+- **R4A.5 — deterministic serialization + acceptance. Landed** (see `IMPLEMENTED.md` § Workflow v2
+  serialization). Byte-stable `serialize_workflow`/`parse_workflow` in `riko/runtime/_serialize.py`
+  (`riko.ext`), full round-trip of every supported topology, golden fixtures, and `serialize ∘ migrate`
+  never emitting v1-only structure. The **CLI v2-emission** bullet (`compile-pipe`/`convert-dag`) and
+  the v1 compiler/fixture deletions are **deferred to R4B**: the E3.10 CLI-emission acceptance is
+  superseded by the clean-break policy, which completes the v1→v2 CLI/compiler cutover at R4B (the
+  first phase v2 executes). Files: `riko/runtime/_serialize.py`, `tests/public/test_serialize.py`.
 
 R4A.5 is the only slice gated on R2A (the canonical value encoder): the structural slices R4A.0–R4A.4
 proceed without it, and the byte-stable serialization/golden-fixture work waits on it. R4A.0 is both
@@ -681,6 +692,9 @@ Deliver:
 - lazy-resource single-flight acquisition and dependency-first/dependent-first lifetime ordering;
 - transactional partial-acquisition unwind and comprehensive cleanup-error grouping;
 - bounded cancellation-shielded resource teardown;
+- one R4B resource-model cleanup that normalizes user resource declarations into an executable
+  lifecycle plan and stops carrying generator/context-manager/instance distinctions past that
+  boundary;
 - external-resource lifecycle/concurrency proof;
 - remove `SyncPipe`/`AsyncPipe`/Collection classes rather than retain deprecated wrappers;
 - migrate P10 executor/bounded-stream mechanics out of `collections.py` rather than reimplementing
@@ -716,14 +730,39 @@ Covered cases: eager open, lazy open, mid-execution failure rollback, early cons
 cancellation, and cleanup-error grouping. R12 proves the **external package API**; R4B proves the
 **runtime architecture**.
 
+#### R4B resource-model cleanup
+
+The execution-owned exit stack is the architectural event that lets the resource model simplify once
+rather than twice. R4B collapses the two resource-model concerns into a single cleanup rather than
+carrying them forward as separate hotspots.
+
+Classify and validate each user declaration once, then prepare it into an executable lifecycle plan
+carrying `acquire`, native mode, `enter`, `teardown`, ownership, and cleanup policy. After that
+boundary the runtime consumes the plan; it does not re-inspect the original generator-vs-context-
+manager-vs-instance syntax.
+
+1. `FactoryKind` stays input-classification machinery and does not become the runtime ontology. The
+   normalization boundary preserves the distinctions required to acquire and adapt a resource —
+   value factory vs lifecycle factory, explicit cleanup vs intrinsic teardown, native sync vs async
+   capability — and drops the ones that only described the user's original syntax.
+2. Public/static `OneShotResource` vs `ReusableResource` remain user-facing declaration types, but a
+   type whose entire body sets an internal flag is not the mechanism that carries that fact into
+   execution. Reuse, ownership, and no-op-vs-real teardown become explicit fields on the lifecycle
+   plan — the `_reusable`/`_external` flags and the `_ExternalResource` no-op teardown override stop
+   existing as subclass bodies. The private variants (`_OwnedResource`, `_LifecycleResource`,
+   `_ExternalResource`, `_FactoryResource`) collapse into that plan data plus a lifecycle strategy
+   rather than a subclass hierarchy: internal execution choices are data, not types.
+
 **Exit:**
 
 - **ADD:** private sync/async executions own task groups, exit stacks, adaptation, resources, events,
   and shutdown.
 - **MIGRATE:** P10 bounded/executor mechanics, R3 resource acquisition, and the write-session
-  lifecycle run under the common execution lifetime.
+  lifecycle run under the common execution lifetime; resource declarations normalize once into the
+  executable lifecycle plan.
 - **DELETE:** `SyncPipe`/`AsyncPipe`/Collection runtime classes and superseded one-shot pipe lifecycle
-  hosts are absent rather than wrapped; no parallel task-group/exit-stack/portal runtime remains.
+  hosts are absent rather than wrapped; no parallel task-group/exit-stack/portal runtime remains; the
+  private resource-variant subclass hierarchy is absent, replaced by lifecycle-plan data.
 
 ### R5A — FeedResult, Metadata, and private per-item provenance
 

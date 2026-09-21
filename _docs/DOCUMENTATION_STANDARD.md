@@ -461,6 +461,14 @@ compact executable example clarifies non-obvious behavior.
   `"""Yields from stream, then closes f."""` both restates the section and
   describes the loop. Write `"""Passes stream through, closing f when iteration
   ends."""` plus a `Yields:` section naming the element.
+- The detail paragraph after the summary states *what the caller gets*, not *how
+  it is produced*. Do not name the internal collaborators a function delegates to
+  or narrate its sequence of transformation steps — that is the same mechanism the
+  module rule excludes (see "Keep it user-facing"), and it applies to every
+  docstring, function or module. Two or three plain sentences is the target; a
+  paragraph that reads like a design doc is a regression even when accurate. The
+  refactor test decides: if a sentence would change wording after a
+  behavior-preserving refactor, it is mechanism and belongs in `_docs/`.
 - Classes document the abstraction + constructor semantics; do not duplicate the
   class docstring in `__init__`. Give `__init__` its own docstring only for
   initialization behavior not reasonably documented on the class.

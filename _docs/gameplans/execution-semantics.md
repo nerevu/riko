@@ -116,16 +116,12 @@ The union admits an already-wrapped `ReusableResource` or a bare `LifecycleFacto
 Conceptually:
 
 ```text
-Resource[T]
-├── OneShotResource[T]        # one lifecycle acquisition; not Context-storable
-│   ├── _OwnedResource[T]     #   live value + explicit cleanup (compat form)
-│   └── _LifecycleResource[T] #   generator / context-manager lifecycle
+Resource[T]                   # variant carried as data, not a subclass:
+├── OneShotResource[T]        #   external (bool) / factory + kind mark the variant
 └── ReusableResource[T]       # Context-storable definition
-    ├── _ExternalResource[T]  #   caller-owned value; never closed
-    └── _FactoryResource[T]   #   Riko-owned provider recipe
 ```
 
-`Resource`, `OneShotResource`, and `ReusableResource` are public typing/construction abstractions. The concrete external/factory/owned/lifecycle variants are private implementation types and are not normal user construction surfaces. `Resource` is the public facade, with one constructor per intent:
+`Resource`, `OneShotResource`, and `ReusableResource` are the only classes. The owned/external/lifecycle/factory distinction is data on `Resource` — the `external` flag plus the `factory`/`kind`/`cleanup` fields — not a private subclass hierarchy. `reusable` follows the `OneShotResource` vs `ReusableResource` type; `external` is a field. The execution layer classifies these fields once into an executable lifecycle plan (strategy `EXTERNAL`/`OWNED`/`VALUE_FACTORY`/`LIFECYCLE`) and consumes the plan, never re-inspecting the original generator/context-manager/instance shape. `Resource` is the public facade, with one constructor per intent:
 
 | API | Accepted input | Interpretation | Parser receives | Lifecycle / cleanup | Resource type | Reusable? |
 |---|---|---|---|---|---|---|

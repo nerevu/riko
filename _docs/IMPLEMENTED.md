@@ -26,7 +26,10 @@ Planned** (nothing ships yet). Find any `§N` via the [ROADMAP §-index](ROADMAP
 - [24. Module discovery (shipped)](#24-module-discovery-shipped)
 - [Subscription lifecycle — `subscribe` / `publish` (F5a, partial)](#subscription-lifecycle--subscribe--publish-f5a-partial)
 - [Compiler graph index (shipped)](#compiler-graph-index-shipped)
+- [Canonical value encoder (R2A, shipped)](#canonical-value-encoder-r2a-shipped)
+- [Workflow v2 serialization — `serialize_workflow` / `parse_workflow` (R4A.5, shipped)](#workflow-v2-serialization--serialize_workflow--parse_workflow-r4a5-shipped)
 - [25. Conversion — export converters (shipped)](#25-conversion--export-converters-shipped)
+- [Private execution runtime — `SyncExecution` / `AsyncExecution` (R4B, partial)](#private-execution-runtime--syncexecution--asyncexecution-r4b-partial)
 - [Write architecture — `write()` / `sink()` sessions (shipped)](#write-architecture--write--sink-sessions-shipped)
 
 ---
@@ -312,21 +315,63 @@ front instead of silently SCC-reordered. Generated output stays byte-identical (
 > index. Execution concepts never move onto it. See
 > [extensibility § E3.11](gameplans/extensibility.md#e311-reuse-of-the-shipped-graph-index).
 
+## Canonical value encoder (R2A, shipped)
+
+The single deterministic value-freezing/encoding system that durable checkpoint identity,
+per-item generation, idempotency, and semantic fingerprints share — no consumer invents its
+own hashing. Lives in `riko/coercion/_canonical.py` (PRIVATE), generalizing the former
+`_to_hashable()` machinery.
+
+`canonicalize(obj)` canonicalizes a value into a JSON-safe tagged `CanonicalValue`, distinguishing
+types Python conflates (`bool` before `int`; `int`/`float`/`Decimal`; `list` vs `tuple`;
+`set` vs `frozenset`; `datetime` before `date`; enums before their scalar bases) and
+handling `bytes`, `PurePath` (flavor-preserving), `UUID`, mappings, sets, and both dataclasses
+and attrs classes (a shared representation-independent `record` tag keyed by type id, so swapping a
+type between `@dataclass` and `attrs @define` leaves its digest unchanged).
+Mappings and sets are order-independent and sort by canonical encoded key (heterogeneous
+keys included); naive datetimes take a UTC fallback and aware ones normalize to UTC via the
+existing `normalize_tzinfo`; `struct_time` stays distinct from `datetime`; `-0.0`
+canonicalizes with `+0.0`, and infinities/NaN carry stable tags. Cyclic structures raise
+`CyclicIdentityError`; unsupported values raise `IdentityEncodingError` (both under the new
+`IdentityError` branch of the `RikoError` tree).
+
+`canonical_json(canonicalize(obj))` (via `canonical_bytes`) emits fixed UTF-8 JSON v1 with no
+insignificant whitespace, and `digest(obj, domain)` returns a 32-character lowercase
+BLAKE2b-128 hex string, domain/version-separated by the fixed `IdentityDomain`
+(`fingerprint`/`generation`/`idempotency`/`state-key`) and `IDENTITY_FORMAT_VERSION` folded
+into the hashed bytes but not the returned text. `repr_cache` now keys process-local
+memoization on `canonical_bytes`, bypassing values that cannot be encoded, so the reversible
+`_from_hashable` reconstruction machinery is gone. `NonNullHashable`/`Hashable`
+(`riko/types/_scalars.py`) are the aligned static contracts. `Context(identity_encoder=...)`
+backend selection is deferred (R3-adjacent); the stdlib encoder is the reference. Tests:
+`tests/internal/test_canonical.py` (golden canonical bytes + golden digests + rule matrix) plus
+module doctests.
+
 ## Canonical Workflow v2 model (R4A.1, shipped)
 
-The structural v2 vocabulary — no runtime yet (R4B executes it). Pure contracts live in
-`riko/types/_workflow.py` (`Endpoint`, the `NodeFamily`/`EdgeFamily`/`PortDirection` discriminant
-literals, `InputRef`, and the `parse_port` grammar helper); the immutable model lives in
+The structural v2 vocabulary (no execution runtime yet — R4B executes it). Pure contracts live in
+`riko/types/_workflow.py` (`Endpoint`, the frozen `Edge` base with its `(node, port)` `port`
+property, the `NodeFamily`/`EdgeFamily`/`PortDirection` discriminant literals, `InputRef`, the
+`parse_port` grammar helper, and the authoring TypedDicts); the immutable model lives in
 `riko/definitions/_workflow.py` — the closed node union
-`ModuleNode`/`ReadNode`/`WriteNode`/`CacheNode`/`ActionNode`/`SubscribeNode`, the edge union
-`StreamEdge`/`PublishEdge`, the `WorkflowSpec` envelope (by-id `nodes` mapping wrapped read-only,
-`edges`/`outputs`/`inputs`, `version` defaulting to `"2"`), and the public generic `Pipeline[T]`.
-Each node/edge is a frozen slotted dataclass carrying a `family` `ClassVar` discriminant;
-`WriteNode`/`ActionNode` carry declarative `backend`/`fmt`/`mode`/`keys`/`params` intent only — no
-live resource or write session. `Pipeline` is STABLE (`riko`); the node/edge/`WorkflowSpec`/`Endpoint`
-model is EXTENSION (`riko.ext`). Structural validation and v1 migration are later R4A slices.
-Tests: `tests/public/test_workflow.py` plus module doctests. Forward order and the clean-break
-deletion ledger: [implementation-sequence.md](gameplans/implementation-sequence.md) R4A.
+`ModuleNode`/`ReadNode`/`WriteNode`/`CacheNode`/`ActionNode`/`SubscribeNode`, the edge families
+`StreamEdge`/`PublishEdge`, the `WorkflowSpec` envelope, and the public generic `Pipeline[T]`.
+
+The node/edge model, `Endpoint`, and `WorkflowSpec` are all `attrs @define(frozen, slots)` classes.
+The six node families share a public **`Node`** base (`id`/`name`/`resources`/`label` + a `family`
+`ClassVar` discriminant) and **self-normalize through `field(converter=…)`**: each field resolves its
+enum (`Backends`/`Formats`/`WriteMode` via `resolve_enum`), normalizes resource bindings, or freezes
+its `conf`/`policy`/`params` mapping — so constructing a node *is* canonicalizing it, and no separate
+builder is required. `ReadNode`/`WriteNode`/`ActionNode` carry declarative
+`backend`/`fmt`/`mode`/`keys`/`dest`/`params` intent only (no live resource or write session).
+`WorkflowSpec`'s converters freeze the `nodes`/`outputs`/`inputs` mappings (`FreezeMapping`) and
+normalize `edges`/`resources`; it also owns its own structural checks (see R4A.3). Field introspection
+uses `riko.types._collections.field_names` (attrs-or-dataclass field names *including* `ClassVar`
+discriminants like `family`, which `attrs.fields`/`dataclasses.fields` both drop), never
+`dataclasses.*`; derive variants with `attrs.evolve`. `Pipeline` is STABLE (`riko`) and stays a
+dataclass; the node/edge/`WorkflowSpec`/`Endpoint` model is EXTENSION (`riko.ext`). Tests:
+`tests/public/test_workflow.py` plus module doctests. Forward order and the clean-break deletion
+ledger: [implementation-sequence.md](gameplans/implementation-sequence.md) R4A.
 
 ## Workflow v2 normalization — `normalize_workflow` (R4A.2, shipped)
 
@@ -336,29 +381,39 @@ one strict canonical `WorkflowSpec` out, so no other subsystem reinterprets shor
 the original `riko/workflow/normalize.py` sketch); exported EXTENSION as `riko.ext.normalize_workflow`.
 
 It is the **structural, contract-free** pass — no `ModuleRegistry`/`TargetRegistry` lookup. It
-assigns node ids, dispatches node families with enum coercion, maps legacy ports to the canonical
-grammar, rejects the `src`/`tgt` and `from`/`to` edge shorthands, materializes a `default` output
-from a lone leaf, and normalizes shorthand inputs to JSON Schema; malformed structure raises
-`InvalidPipelineError`. It reuses the established `normalize_binding`/`normalize_resources`
-(a bare-string `resources: "db"` binds to itself as `{"db": "db"}`), `normalize_keys`, `listize`
-(top-level `resources`), and the `is_mapping`/`is_listlike` guards; legacy ports map through an
-open-ended `_normalize_port` (`_OTHER<n>`→`in:n`, `_OUTPUT<n>`→`out:n-1`), not a fixed table.
-Closed-schema rejection and the remaining contract-dependent sugar (format inference from a
-locator, registered conf/params/target-config validation) are R4A.3/later. The authoring grammar itself is owned by
+assigns node ids, dispatches each authoring mapping to its node family, maps legacy ports to the
+canonical grammar, rejects the `src`/`tgt` and `from`/`to` edge shorthands, materializes a `default`
+output from a lone leaf, and normalizes shorthand inputs to JSON Schema; malformed structure raises
+`InvalidPipelineError`. Dispatch is **dataclass-driven**: `_NODE_BUILDERS: Mapping[str, type[Node]]`
+maps each family to its node class, `_build_node` splats the authoring fields into that constructor
+(`builder(**fields)`), and `_reject_unknown` validates the keys against the class's
+`__dataclass_fields__` — so the node dataclass is the single source of truth for accepted fields, and
+the per-field enum/resource/mapping coercion is the node's own `__post_init__` (see R4A.1), not a
+normalize-local builder. It reuses `normalize_binding`/`normalize_resources`, `normalize_strs`,
+`listize`, and the `is_mapping`/`is_listlike` guards; legacy ports map through an open-ended
+`_normalize_port` (`_OTHER<n>`→`in:n`, `_OUTPUT<n>`→`out:n-1`). Closed-schema rejection and the
+remaining contract-dependent sugar (format inference from a locator, registered
+conf/params/target-config validation) are deferred. The authoring grammar is owned by
 [extensibility § E3](gameplans/extensibility.md#e3-canonical-workflow-v2-specification).
 
 The input is typed `WorkflowSpecLike` (`riko.types`) — the `*Like` union of the precise
 `WorkflowAuthoring` `TypedDict` (with `NodeAuthoring`/`EdgeAuthoring`/`EndpointAuthoring`) and a loose
-`Mapping[str, object]`, so a literal gets editor key-completion while any dict still passes. The six
-node families share a frozen keyword-only `_Node` base (`id`/`name`/`resources`/`label`); `Node` stays
-the closed six-member union. Tests: `tests/public/test_normalize.py` plus module doctests.
+`Mapping[str, object]`, so a literal gets editor key-completion while any dict still passes. The
+authoring TypedDicts are the one hand-written parallel to the canonical dataclasses; a drift guard
+(`tests/internal/test_workflow_authoring.py`) derives the expected key set from each node/edge/
+endpoint's `fields()` and fails if authoring omits a field (modulo the `type`/`family`/`format`
+aliases), so a new node field cannot silently drop out of the authoring surface. Tests:
+`tests/public/test_normalize.py` plus module doctests.
 
-## Workflow v2 validation — `validate_workflow` (R4A.3, shipped)
+## Workflow v2 validation — `WorkflowSpec.validate()` (R4A.3, shipped)
 
-Strict structural validation of a canonical `WorkflowSpec`, raising `InvalidPipelineError` on the
-first violation. Lives in `riko/runtime/_validate.py`; exported EXTENSION as
-`riko.ext.validate_workflow`. It answers "is this a valid graph?", not "can this run here?" — a
-structurally valid node whose runtime capability has not landed still passes (E3.10).
+Strict structural validation is a **method on the model**, not a standalone function: `WorkflowSpec`
+owns `validate()` (raises `InvalidPipelineError` on the first violation) and an `isvalid` property
+(the boolean wrapper), backed by the `ports()`/`endpoints`/`declared_resources` helpers on the same
+class. The earlier standalone `riko/runtime/_validate.py` / `riko.ext.validate_workflow` was removed
+in the refactor that moved validation onto the spec — there is no separate validation module or
+export. It answers "is this a valid graph?", not "can this run here?" — a structurally valid node
+whose runtime capability has not landed still passes (E3.10).
 
 Checks, all determinable from the spec alone: unsupported workflow version; empty node set;
 node-id disagreeing with its map key; edge and output endpoints referencing a missing node; more
@@ -368,7 +423,71 @@ top-level `resources`; and a non-empty graph exposing at least one output (closi
 `normalize_workflow`'s deferred ambiguous-leaf case). The contract-aware E3.9 rules — undeclared
 ports, fan-in arity, registered module/action/target schema validation — are **deferred** because
 the module and target contracts declare no ports or configuration schemas yet; they land with that
-metadata. Tests: `tests/public/test_validate.py` plus module doctests.
+metadata. Tests: `tests/public/test_validate.py` (builds `WorkflowSpec` graphs directly and asserts
+`spec.validate()`/`isvalid`) plus module doctests.
+
+## Workflow v2 serialization — `serialize_workflow` / `parse_workflow` (R4A.5, shipped)
+
+Deterministic byte-stable canonical serialization of a `WorkflowSpec` and its
+round-tripping parser. Lives in `riko/runtime/_serialize.py`; exported EXTENSION as
+`riko.ext.serialize_workflow` / `riko.ext.parse_workflow`.
+
+`serialize_workflow(spec)` is a thin `json.dumps(spec, cls=WorkflowEncoder, sort_keys=True,
+separators=(",", ":"), ensure_ascii=False)` — with `sort_keys` ordering map keys at every level, the
+same spec always yields identical bytes for golden-fixture comparison; edge order follows the spec
+while the semantic wiring lives in the endpoints, not the array order. `WorkflowEncoder` (a
+`json.JSONEncoder`) renders **every** structural and value type: it emits the `WorkflowSpec` envelope
+and each `Node`/`Edge` via **reflection** — `_serialize_dataclass` walks a frozen node/edge's
+`fields()` and `_serialize_attrs` uses `attrs.asdict(recurse=False)` for the attrs `WorkflowSpec`,
+both dropping empties (`_has_value`) while keeping required keys — and it coerces the remaining
+structural leaves (`Mapping`/`mappingproxy`→dict, `tuple`→list, `Enum`→`.value`). Because node
+serialization is field-reflection rather than a per-family branch, a new node field (e.g.
+`WriteNode.dest`) serializes automatically with no serializer edit. Canonical
+`conf`/`policy`/`params`/`inputs` values are JSON-native by construction: `normalize_workflow`
+deep-freezes them through `freeze_value` (`riko/types/_collections.py`), which rejects `Decimal`,
+`date`, `set`, `bytes`, non-finite floats, and non-string keys, and turns lists into tuples. The
+encoder therefore needs no Python-only value branches and `serialize_workflow` uses `allow_nan=False`.
+`parse_workflow(data)` reconstructs the spec by reusing `normalize_workflow` on the loaded JSON (the
+canonical form is valid strict authoring), so `parse_workflow(serialize_workflow(spec)) == spec` holds
+by value equality and serialization is idempotent. A migrated v1 document serializes with no v1-only structure: no
+`_INPUT`/`_OUTPUT`/`wires`/`src`/`tgt` tokens and no `type:"output"` node — the terminal `_OUTPUT`
+pseudo-node lives only in top-level `outputs`. Tests: `tests/public/test_serialize.py` (golden bytes,
+per-topology round-trip/idempotency, order-independence, JSON-native nested round-trip by equality,
+non-JSON-native value rejection, migrate-emits-no-v1) plus module doctests.
+
+The **CLI v1→v2 cutover** (`convert-dag`/`compile-pipe` emitting v2, plus deletion of the v1
+`PipeDef`/`wires` compiler consumption and the v1 fixture trees) is **not** part of this
+slice: the E3.10 CLI-emission acceptance bullet is superseded by the R4A clean-break policy,
+which completes that cutover at R4B (the first phase v2 executes). `migrate_v1_to_v2` remains
+the one-shot offline conversion path.
+
+## Workflow v1→v2 migration — `migrate_v1_to_v2` (R4A.4, shipped)
+
+A one-shot offline conversion of a released Workflow v1 `PipeDef` (`modules` plus `src`/`tgt`
+`wires`) into one strict canonical `WorkflowSpec`. Lives in `riko/runtime/_migrate.py` (the runtime
+home the clean-break placement note assigns, superseding the original `riko/workflow/migrate.py`
+sketch); exported EXTENSION as `riko.ext.migrate_v1_to_v2`. It is **not** a live loader — v1 is not a
+maintained runtime ingress, so it `logger.warning`s that a v1 document was migrated, then emits v2
+only.
+
+It reuses `normalize_workflow` for the shared structural pass (port grammar, node families, id
+handling, lone-leaf outputs) so only the v1-specific translation lives here: each module's `type`
+becomes the node `name`; a v1 `write` module becomes a `WriteNode` (`backend=file`, `fmt` from
+`conf.fmt`, mode defaulting to `replace`) rather than executing the legacy Python module; `src`/`tgt`
+wire endpoints become canonical `source`/`target` with `_INPUT`/`_OUTPUT`/`_OTHER<n>` ports mapped;
+and the terminal `_OUTPUT` pseudo-node plus its wire are consumed into top-level `outputs.default`
+and dropped from the graph (no `type:"output"` node survives). Non-structural v1 module fields
+(`emit`/`assign`/`field`/`count`/`embed`) fold into the node's `conf` so migration is lossless, with
+registered `conf` keys winning on collision; fully-uppercase v1 `conf` keys (e.g. `URL`) are
+lowercased through the compiler's `_lower_keys` so they keep v1's canonical casing. Orphan modules
+are **retained** as nodes rather than silently erased — arity/reachability is validation's call.
+Malformed structure raises `InvalidPipelineError`; an empty node set is left to
+`WorkflowSpec.validate()` (the `migrate → normalize → validate` flow of E3.1).
+
+Shared plumbing is reused, not reinvented: the legacy `_INPUT`/`_OUTPUT`/`_OTHER`/`output` tokens are
+`riko/base/_config` constants (`INPUT_PORT`/`OUTPUT_PORT`/`OTHER_PORT`/`OUTPUT_MODULE`) also consumed
+by `_compile`/`_normalize`; the module and edge splits use `partition` from `riko/base/_iterutils`
+(now shared with `_compile`). Tests: `tests/public/test_migrate.py` plus module doctests.
 
 ## Subscription lifecycle — `subscribe` / `publish` (F5a, partial)
 
@@ -439,6 +558,52 @@ built-ins — see §24) and reused by the write-session architecture (see § Wri
 serializes the same `Formats` at a destination. Meza owns conversion work. The Batch/dataframe path
 (Arrow/Narwhals/Polars/SQL execution representations selected by capability) is deferred.
 
+## Private execution runtime — `SyncExecution` / `AsyncExecution` (R4B, partial)
+
+> **Partial.** The private execution package, its lifetime primitives, and execution-local resource
+> acquisition ship now. Not yet wired: `iter(flow)`/`aiter(flow)`, source normalization, native-wins
+> resolution, `with_execution(...)`, `EventSink`, the P10 migration out of `collections.py`, and the
+> `SyncPipe`/`AsyncPipe`/v1-compiler clean-break cutover.
+
+`riko/runtime/_execution/` (the `execution` layer) hosts the one-shot executions a pipeline run
+creates. Each owns three sibling lifetime primitives — a task group, an exit stack, and a sync/async
+bridge — rather than deriving one from another.
+
+- **`SyncExecution`** runs synchronously behind an `ExitStack`; async-only components run through a
+  lazily started `BlockingPortal`. Shutdown stops the portal (joining its tasks) before the exit
+  stack unwinds.
+- **`AsyncExecution`** runs behind an `AsyncExitStack` with an eagerly entered root task group as the
+  outermost cancel scope; blocking sync components run on a worker thread. Shutdown cancels owned
+  tasks on failure, joins the group, then unwinds the stack behind a cancellation shield within an
+  optional teardown budget.
+- Shutdown order is explicit (stop spawning → cancel → join → shielded unwind → group failures as an
+  `ExceptionGroup`), not generic exit-stack LIFO.
+
+**Resource acquisition.** `acquire` / `aacquire` resolve a `Resource` at most once (single-flight,
+keyed by resource identity); a repeat returns the first value or replays the first failure.
+`build_resource_plan(resource)` (in `_execution/_plan.py`) is the one boundary that turns a
+declaration into a `_ResourcePlan` carrying a `_ResourceStrategy` (`EXTERNAL` / `OWNED` /
+`VALUE_FACTORY` / `LIFECYCLE`); the runtime consumes the plan and never re-inspects the original
+generator/context-manager/instance shape. Teardown rides the exit stack: owned → `close`/`aclose`
+callback, value-factory → cleanup callback, lifecycle → `enter_context` / `enter_async_context`.
+Explicit `cleanup` is authoritative; async factory results are awaited once (portal on sync,
+`maybe_deferred` on async). Async-native lifecycle/cleanup under sync execution raises
+`InvalidPipelineError` — a permanent boundary (the portal closes before the stack).
+
+**Resource-model shape.** The owned/external/lifecycle/factory distinction is data on `Resource` —
+the `external` flag plus `factory`/`kind`/`cleanup`/`args`/`kwargs` — not a private subclass
+hierarchy. `OneShotResource` / `ReusableResource` remain as user-facing marker types (`reusable` is
+`isinstance`, `external` is a field); construction routes through a private builder, and
+`open`/`aopen`/`close`/`aclose` dispatch on the data. `FactoryKind` stays input classification only,
+never a runtime ontology.
+
+**External-resource proof.** `tests/internal/test_execution.py` proves the lifetime holds a
+genuinely external resource — a real HTTP client against the loopback server
+(`@pytest.mark.simulated_network`), not a synthetic object — under both sync and async execution,
+across eager open + teardown, the async-under-sync rejection boundary, mid-run failure rollback, and
+cancellation. Deferred until `iter(flow)` wiring: true lazy-open-on-first-use and early-consumer
+abandonment during iteration.
+
 ## Write architecture — `write()` / `sink()` sessions (shipped)
 
 > **Partial.** Sync and async write sessions both ship now with the compatibility pipe runtime; R4B moves
@@ -458,7 +623,7 @@ pub/sub). Four durable layers:
   validated object; `WriteOperation` on its own is unvalidated intent. `WriteCapabilities` stores only
   independent facts (`modes`, `fmt`, `incremental`, `match_keyed_modes`, `idempotent_modes`);
   `appendable`/`serializes`/`keyed_modes` are **derived** properties. `build_write` +
-  `validate_target_mode` + local `normalize_keys` live in `riko/definitions/_targets.py` (`normalize_keys` is a
+  `validate_target_mode` + local `normalize_strs` live in `riko/definitions/_targets.py` (`normalize_strs` is a
   dedicated helper, *not* a widened `_iterutils.listize`).
 - **runtime** — the `SyncWriteSession` protocol (`write(Item | Items)` / `finalize` / `abort` /
   `teardown`) and the `_FileWriteSession` state machine (`_SessionState` OPEN/FINALIZED/ABORTED/CLOSED,

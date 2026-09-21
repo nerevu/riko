@@ -326,7 +326,7 @@ canonical everywhere (JSON, entry points, resolver); every enum member's `.value
   `"transform"`. `SINK_NAMES` = `frozenset({"output", "write"})`. Codegen maps those three strings to
   the plural bucket **enum class names** (`_CATEGORY_CLASS`: `source`→`Sources`, `transform`→
   `Transforms`, `sink`→`Sinks`). **`Sinks` now has one built-in: `write`** (`riko/modules/write.py`, a
-  pass-through operator serializing the stream to `conf['url']` via a `Targets` converter); `output`
+  pass-through operator serializing the stream to `conf['dest']` via a `Formats` converter); `output`
   stays unmatched (compiler-local passthrough, absent from the pkgutil catalog).
 - **Generator (`riko/ext/codegen.py`).** `enum_member_name` (uppercase; `._-/`+ws → `_`; collapse
   repeats; leading-digit → `_`-prefix; `enum_name` override) — **collisions raise `ValueError`** with
