@@ -211,6 +211,8 @@ split-on-trailing-comma = false
 ]
 
 [tool.pyright]
+venv = "riko"
+reportUnnecessaryCast = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
 exclude = [
     "**/pycache",

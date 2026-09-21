@@ -279,28 +279,7 @@ def _prettify_command(
 
     if yaml:
         return_code = _format_yaml(*where)
-    elif sort and _ruff:
-        sort_cmd = [_ruff, "check", "--select", "I", "--fix"]
-        style_cmd = [_ruff, "check", "--fix"]
-
-        if unsafe_fixes:
-            style_cmd.append("--unsafe-fixes")
-
-        if where:
-            sort_cmd.extend(where)
-            style_cmd.extend(where)
-
-        try:
-            check_call(sort_cmd)
-            check_call(style_cmd)
-        except CalledProcessError as e:
-            return_code = e.returncode
-        else:
-            return_code = 0
-    elif sort:
-        raise RuntimeError("ruff not found")
-
-    if _ruff and not return_code:
+    elif _ruff:
         cmd = [_ruff, "format"]
 
         if where:
@@ -312,7 +291,26 @@ def _prettify_command(
             return_code = e.returncode
         else:
             return_code = 0
-    elif not return_code:
+
+        if sort and not return_code:
+            sort_cmd = [_ruff, "check", "--select", "I", "--fix"]
+            style_cmd = [_ruff, "check", "--fix"]
+
+            if unsafe_fixes:
+                style_cmd.append("--unsafe-fixes")
+
+            if where:
+                sort_cmd.extend(where)
+                style_cmd.extend(where)
+
+            try:
+                check_call(sort_cmd)
+                check_call(style_cmd)
+            except CalledProcessError as e:
+                return_code = e.returncode
+            else:
+                return_code = 0
+    else:
         raise RuntimeError("ruff not found")
 
     exit(return_code)
