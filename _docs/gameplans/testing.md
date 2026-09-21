@@ -86,7 +86,7 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
 | ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_regressions.py::TestDates`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
 | ~~`get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics~~ — **landed** in `tests/internal/test_parsers.py`; absent `text` no longer coerced to `"None"` (correctness-audit R12) | internal | R12 |
-| ~~`listize=True` turns `0`/`False`/`""` into one-element lists~~ — **landed** as `tests/internal/test_prepare.py`; `get_pieces_or_conf` branches on the option, not truthiness (correctness-audit R13) | internal | R13 |
+| ~~`listize=True` turns `0`/`False`/`""` into one-element lists~~ — **landed** as `tests/internal/test_prepare.py`; `build_conf` branches on the option, not truthiness (correctness-audit R13) | internal | R13 |
 | a stalled async iterator is actually interrupted by `timeout` | internal | R14 |
 | the same bytes decode identically across sync HTTP, async HTTP and async local file | functional | R15 |
 | ~~`has_header=False` closes the original source as well as the spool~~ — **landed** as `tests/internal/test_io.py::test_csv_headerless_closes_original_source` (spies the original's `close`, cross-version); fix predated this via the variadic `auto_close` (correctness-audit R16) | internal | R16 |
@@ -94,11 +94,13 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 Both open-question rows are now resolved. R19 (`filter`'s `greater`/`less` over strings) was
 **decided** in favour of type-aware comparison — numeric when both operands coerce to a number,
 else lexicographic — so its characterization test was *updated, not deleted*, into a regression.
-R17 (`convert_dag` on an empty module list, not reproduced) landed as a **strict-xfail tripwire** —
-the divergent empty-input handling (full-def `IndexError` vs DAG silent output-only) is a gap
+R17 (`parse_dag` on an empty module list, not reproduced) landed as a **strict-xfail tripwire** —
+the divergent empty-input handling (full-def `IndexError` vs DAG silent output-only) was a gap
 deferred to the Workflow v2 normalization boundary
 ([extensibility § E3](extensibility.md#e3-canonical-workflow-v2-specification)), not accepted
-behaviour to pin.
+behaviour to pin. That boundary landed at cutover step 3 (2026-09-29): `parse_dag` rejects an
+empty DAG with `InvalidPipelineError`, the tripwire is retired, and
+`tests/public/test_parse_dag.py::test_empty_modules_raise_invalid_pipeline` guards it.
 
 ## 3. File-by-file audit
 
@@ -107,7 +109,7 @@ behaviour to pin.
 | `functional/test_basics.py` | **Keep, heavily refactor** | Fix `_load`/`_aload` first. Parametrize the three `augment_entries` fallback cases. Share expected payloads between sync/async Kazeeki tests. `fetchpage` vs `fetchpage_loop` should be parametrized or make the loop test assert loop-specific semantics. Move mocked `_io` and direct `augment_entries` unit tests to internal suites. Keep the legacy JSON/generated-pipeline regressions. |
 | `functional/test_examples.py` | **Keep, consolidate** | Important because `examples/**` is not in pytest's doctest collection. Parametrize `simple1`, `simple2`, `split`, `wired`. `gigs`/`kazeeki` overlap functional fixtures elsewhere; make example tests smaller smoke contracts rather than duplicating huge expected records. |
 | `functional/test_pipeline.py` | **Remove / relocate** | No pytest tests; generated pipeline implementation under a `test_*.py` filename. |
-| `functional/test_script.py` | **Keep, strengthen helper** | CLI/subprocess coverage is distinct. Fix/remove the boolean-comparison path: `fd.readlines()` consumes the stream before `bool(fd.read())`, so that branch always sees empty text. Replace the `SequenceMatcher(...).blocks[0].size == 7` benchmark check with explicit containment of stable benchmark labels. Keep `convert-dag → compile` (validates CLI wiring, not just library functions). |
+| `functional/test_script.py` | **Keep, strengthen helper** | CLI/subprocess coverage is distinct. Fix/remove the boolean-comparison path: `fd.readlines()` consumes the stream before `bool(fd.read())`, so that branch always sees empty text. Replace the `SequenceMatcher(...).blocks[0].size == 7` benchmark check with explicit containment of stable benchmark labels. Keep `build-workflow → compile` (validates CLI wiring, not just library functions). |
 | `internal/test_codegen_names.py` | **Keep, consolidate** | Collapse three taxonomy partition tests into one golden mapping. Fold enum override into the existing parametrization. Remove `test_member_is_shared_object` (public discovery suite owns it). Keep byte drift, order independence, collisions, and provider behavior. **Execute** generated provider code rather than string-searching it. |
 | `internal/test_compile.py` | **Keep nearly intact** | Clear distinct ownership: codegen/executor parity, byte-golden corpus, malformed pipelines, DAG behavior, compiler loop translation. Do not collapse into functional tests. Compiler-loop tests overlap `test_loop.py` in subject but test a different layer. |
 | `internal/test_decorators.py` | **Keep, trim duplicate rows** | Main truth table is good. `test_lambda_infers_sync_without_isasync`/`test_lambda_needs_explicit_isasync` repeat rows already in `test_resolved_isasync`; retain only the end-to-end async execution test from that class. Keep diagnostics. |
@@ -303,15 +305,20 @@ the suite, forcing the marker's removal) the moment its owner lands:
 - **R18** — `tests/internal/test_resolver.py::TestPipeResolver::test_runtime_registered_pipe_prefixed_module_resolves`
   (extensibility § 24).
 - **R17** — `tests/internal/test_compile.py::test_convert_dag_empty_modules_raises` asserts that
-  `convert_dag({"modules": []})` raises. It does *not* today — the terminal `output` node is appended
+  `parse_dag({"modules": []})` raises is **retired**. It does *not* today — the terminal `output` node is appended
   unconditionally, so an empty DAG silently yields `{_OUTPUT}` (the reported `module_ids[-1]` crash is
   *not reproduced* on this path; only the full-pipe-def path raises, via `MALFORMED["empty"]`). A clean
   typed rejection + one validation front-door that makes both paths reject identically is owned by the
   **Workflow v2 spec** ([extensibility § E3](extensibility.md#e3-canonical-workflow-v2-specification) —
   the E3.1 `normalize_workflow() -> validate` boundary; CLI surface: cli.md `riko pipeline validate`);
   recalibrate the tripwire from `IndexError` to the spec's error when it lands. The topology both paths
-  share is now the immutable `_GraphIndex` built by `parse_pipe_def` — the structural seam that
+  share is now the immutable `GraphIndex` built by `parse_pipe_def` — the structural seam that
   front-door validates over ([E3.11](extensibility.md#e311-reuse-of-the-shipped-graph-index)).
+  **Resolved at cutover step 3 (2026-09-29):** the legacy DAG adapter is now `parse_dag`, which
+  routes through that canonical `normalize_workflow` → `validate` front door, so an empty DAG raises
+  `InvalidPipelineError("workflow has no nodes")` — the same rejection the full-document path gives.
+  The tripwire is **retired**; the behavior is guarded by the regular test
+  `tests/public/test_parse_dag.py::test_empty_modules_raise_invalid_pipeline`.
 
 **Shipped (§ 2b open-question rows).** R19's characterization test was **updated, not deleted**, into
 a regression once the contract was decided (type-aware comparison):

@@ -76,7 +76,7 @@ from module resolution, compiler-local legacy output handling during migration, 
 `ModuleNotFoundError` preservation, and external package registration through entry points.
 
 The future public `Pipeline` class requires the old internal callable alias named `Pipeline` to become
-`PipeCallable`; that is implementation-sequence R0, not a P8 redesign.
+`ModuleWrapper`; that is implementation-sequence R0, not a P8 redesign.
 
 #### P9 / P9A — discoverability
 
@@ -194,7 +194,7 @@ The exact file split may evolve, but responsibilities must stay separated:
 | cache private shim NEW | CacheNode -> Mezmoize integration; no Riko cache-store hierarchy |
 | `riko/context.py` MOD | immutable Context/resources/state-store capability |
 | `riko/resources.py` MOD | Resource definitions/from_external/context-manager lifecycle |
-| `riko/types/general.py` MOD | internal callable alias Pipeline -> PipeCallable |
+| `riko/types/general.py` MOD | internal callable alias Pipeline -> ModuleWrapper |
 | `riko/collections.py` MOD/RETIRE | migrate mechanics; legacy classes not target public surface |
 | `riko/modules/_decorators.py` MOD | Feed-native parser forms + prepared resources |
 | `riko/ext/{registry,_resolver}.py` MOD | native-wins resolution over retained P8 definitions |

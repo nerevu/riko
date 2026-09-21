@@ -48,28 +48,28 @@ vertical slice.
 HigherGov code should be written against the final mode-neutral Pipeline definition:
 
 ```python
-flow = (
+pipeline = (
     Pipeline(source=dataframe.to_dict("records"))
     .map(processor)
     .with_execution(executor="thread", concurrency=workers, ordered=False)
 )
 
-result = pd.DataFrame(list(flow))
+result = pd.DataFrame(list(pipeline))
 ```
 
 For an expanding callable:
 
 ```python
-flow = Pipeline(source=items).flat_map(processor)
+pipeline = Pipeline(source=items).flat_map(processor)
 ```
 
 The same definition may run through async iteration when the surrounding application is async:
 
 ```python
-answers = [answer async for answer in flow]
+answers = [answer async for answer in pipeline]
 ```
 
-There is no target `flow.collect()` execution terminal and no separate final `SyncPipe.map` /
+There is no target `pipeline.collect()` execution terminal and no separate final `SyncPipe.map` /
 `AsyncPipe.map` contract. `with_execution(...)` owns execution-wide concurrency/executor/order
 settings; step configuration remains fixed when the step is declared.
 
@@ -368,13 +368,13 @@ async def entry_feed(entries: pd.DataFrame):
 and the same Pipeline abstraction handles the async callable:
 
 ```python
-flow = (
+pipeline = (
     Pipeline(source=entry_feed(entries_df))
     .map(analyze_entry)
     .with_execution(concurrency=MAX_CONCURRENT, ordered=False)
 )
 
-answers = [answer async for answer in flow]
+answers = [answer async for answer in pipeline]
 ```
 
 Recursive document summarization remains sequential **within one document** when later chunks depend
@@ -388,7 +388,7 @@ common `RetryPolicy` and provider hints at the correct failure boundary.
 Blocking functions can run through the common async adaptation path:
 
 ```python
-flow = (
+pipeline = (
     Pipeline(source=finder_opportunity_feed(dataframe))
     .map(fetch_finder_content)
     .with_execution(executor="thread", concurrency=3, ordered=False)
@@ -407,7 +407,7 @@ def call_highergov_api(item: dict, **kwargs) -> dict:
     return result if result is not None else item
 
 
-flow = (
+pipeline = (
     Pipeline(source=dataframe_feed(cleaned_higher_df))
     .map(call_highergov_api)
     .with_execution(executor="thread", concurrency=4, ordered=False)
@@ -433,7 +433,7 @@ bounded batch database write
 ```
 
 ```python
-flow = (
+pipeline = (
     Pipeline(source=opportunity_feed(logic_mapped))
     .flat_map(fetch_documents)
     .map(normalize_document)

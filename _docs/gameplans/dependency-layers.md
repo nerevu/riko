@@ -56,9 +56,8 @@ DAG is deliberately not flattened into one linear stack: `bado`, `coercion`, and
 | `riko/io/` | `io` | sync/async I/O, serialization, re-encoding |
 | `riko/parsing/` | `parsing` | config parsing, `DotDict`, HTML/XML/document parsing |
 | `riko/rss/` | `rss` | feed discovery, entry normalization, RSS/Atom parsing |
-| `riko/runtime/context.py` | `execution` | execution context definition and resource binding surface |
-| `riko/runtime/_resources.py` | `execution` | concrete one-shot/reusable resource lifecycle implementations |
-| remaining `riko/runtime/` | `runtime` | collections, compiler, pipelines, resolver/registry, pub/sub, write sessions |
+| `riko/execution/` | `execution` | one-shot sync/async executions, lifetime primitives, execution-local resource acquisition, event sink, execution context (`context.py`) and resource lifecycle (`_resources.py`) |
+| `riko/runtime/` | `runtime` | collections, compiler, pipelines, resolver/registry, pub/sub, write sessions, the frozen `_execution_plan.py` |
 | `riko/modules/` | `modules` | built-in pipe implementations and module metadata/decorator internals |
 | `riko/ext/` | `modules` | supported extension-author facade and codegen helpers; same dependency layer as modules |
 | `riko/__init__.py` | `api` | stable application facade |
@@ -73,14 +72,16 @@ The folder split deliberately separates immutable declarations from mutable runt
 state:
 
 - `riko/definitions/` contains descriptions of what a module/resource/write is.
-- `riko/runtime/context.py` and `riko/runtime/_resources.py` are the `execution`
-  sublayer: they own execution-facing resource/context behavior.
-- the rest of `riko/runtime/` orchestrates streams, compilation, resolution,
-  pub/sub, and write sessions around those contracts.
+- `riko/execution/` is the `execution` layer: `context.py` and `_resources.py`
+  own execution-facing resource/context behavior alongside the one-shot
+  executions and lifetime primitives.
+- `riko/runtime/` orchestrates streams, compilation, resolution, pub/sub, and
+  write sessions around those contracts, and holds the frozen
+  `_execution_plan.py` that preparation produces.
 
-The `execution` label therefore cuts across two files physically housed under
-`runtime/`. This exception is explicit in `_EXACT_LAYERS`; do not infer a module's
-layer from its first package component when those exact mappings apply.
+The `execution` label maps to the `riko.execution` package by prefix, so no
+per-file exception is needed; `_EXACT_LAYERS` now covers only `riko` (api) and
+`riko._package` (base).
 
 ## Import kinds
 

@@ -151,7 +151,7 @@ Declare a local subscription as a Pipeline object:
 
 ```python
 events = Pipeline.subscribe("events")
-flow = flow.publish(events)
+pipeline = pipeline.publish(events)
 ```
 
 Canonical Workflow v2 represents this with a `SubscribeNode` and one or more incoming `PublishEdge`s.
@@ -175,7 +175,7 @@ independently creates a fresh execution. A subscription definition is not a repl
 An external `Subscription[T]` is an ordinary source:
 
 ```python
-flow = Pipeline(source=subscription)
+pipeline = Pipeline(source=subscription)
 ```
 
 `publish()` accepts either a local subscription Pipeline or an external `Publisher[T]`.
@@ -271,7 +271,7 @@ owns final cleanup.
 The final `split()` contract supersedes the legacy eager finite duplication behavior.
 
 ```python
-left, right = flow.split(2)
+left, right = pipeline.split(2)
 ```
 
 `split` remains an ordinary registered multi-output module. Its output contract is positional:
@@ -293,7 +293,9 @@ Semantics:
 - default branch buffer is zero/rendezvous;
 - split is lossless and has **no** drop overflow mode;
 - per-branch ordering follows upstream order;
-- infinite/unbounded upstreams remain streamable.
+- infinite/unbounded upstreams remain streamable;
+- reachable positional ports, not `splits`, decide which branches are active; an explicit `splits`
+  smaller than the highest reachable `out:N` index is a validation error.
 
 ### 7.1 Branch isolation
 
@@ -306,7 +308,7 @@ initial API.
 Similarly:
 
 ```python
-flow.publish(target, isolate=True)
+pipeline.publish(target, isolate=True)
 ```
 
 isolates publication by default. `isolate=False` is the explicit escape hatch when sharing is known
@@ -317,7 +319,7 @@ to be safe and desired.
 Broadcast and routing are separate. A binary branch sends each item to exactly one semantic output:
 
 ```python
-matched, unmatched = flow.branch(
+matched, unmatched = pipeline.branch(
     conf={"rule": {"field": "score", "op": "greater", "value": 500}}
 )
 ```
@@ -346,7 +348,7 @@ Do not call this operation `split`; `split` means broadcast duplication.
 After binary branch semantics are stable, N-way routing may support:
 
 ```python
-flow.route(field="customer_id", branches=["a", "b", "c"], strategy="hash")
+pipeline.route(field="customer_id", branches=["a", "b", "c"], strategy="hash")
 ```
 
 Canonical output ports preserve route identity:
@@ -371,7 +373,9 @@ Requirements:
 - branch-count changes are documented as repartitioning events;
 - round-robin ordering is explicit;
 - routing remains local to one execution;
-- no distributed leases, partition ownership, or worker-assignment system is introduced here.
+- no distributed leases, partition ownership, or worker-assignment system is introduced here;
+- hash routing is Riko's partitioning primitive: there is no separate `key_by`/`partition`
+  option, and key affinity means "same key, same route port", never a worker or execution lane.
 
 ## 10. Port declaration and validation
 
@@ -404,6 +408,39 @@ Canonical validation rejects:
 - fan-in operand gaps when the owning contract requires contiguous positional inputs;
 - topology whose referenced nodes do not exist.
 
+### 10.1 Executor value-addressing (inherited from R4B)
+
+The R4B executor keys its per-node stream table by node id alone: it stores
+`steps[node_id]`, resolves upstream inputs as `steps[edge.source]`, and returns
+`steps[endpoint.node]`. Neither `GraphEdge.source_port` nor the selected output's
+port is consulted. Rather than silently aliasing a distinct output port (e.g.
+`out:1`, `out:matched`) onto the producer's `out` stream, R4B **fails closed**: a
+guard rejects any non-default source or selected-output port with
+`InvalidPipelineError`, so only the bare `out` port is executable today. This is
+sound because no built-in module produces more than the `out` port before this
+phase.
+
+This phase owns the replacement of that guard: value addressing becomes
+`(node, port)`-keyed so distinct output ports resolve to distinct streams (ordinary
+modules normalize to `out`; split/branch/route produce their declared ports).
+Because branch delivery must carry the final `_FeedItem` provenance envelope, the
+port-keyed production mechanism lands here (after R5A), not as an R4B interim. The
+current fail-closed guard is pinned by
+`tests/internal/test_prepare_execution.py::test_run_rejects_nondefault_source_output_port`,
+which R7 must replace when distinct ports begin resolving to distinct streams.
+
+For the same reason the R4B plan build also refuses one source port feeding more than
+one stream edge (`Workflow.require_executable()` in `riko/definitions/_workflow.py`, called from
+`build_execution_plan` and pinned by `test_build_plan_rejects_fan_out_from_one_source_port`):
+with node-keyed streams both consumers would share a single one-shot iterator. Multiple
+outgoing edges per source port remain valid canonical topology (§2), so
+`Workflow.validate()` does not reject them; this phase's bounded branch delivery removes
+the plan-build guard. Positional-input gaps are not guarded: `union` reads `others` as an
+ordered list, so `in` + `in:2` (legacy `_OTHER2`) executes
+(`test_run_accepts_sparse_positional_inputs`); `in:0`/`out:0` are grammar errors in
+`parse_port`; per-module fan-in arity belongs to the module port contracts, not this
+phase (tripwire `test_build_plan_rejects_undeclared_positional_input`).
+
 ## 11. Branch-to-fan-in composition
 
 Do not add a redundant generic `rejoin()` primitive. Branch outputs are ordinary Pipeline
@@ -412,7 +449,7 @@ definitions and feed existing fan-in operators.
 Conceptually:
 
 ```python
-matched, unmatched = flow.branch(conf=rule)
+matched, unmatched = pipeline.branch(conf=rule)
 result = Pipeline.union(matched.transform(...), unmatched.transform(...))
 ```
 

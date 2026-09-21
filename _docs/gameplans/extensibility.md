@@ -167,7 +167,7 @@ v2 authoring sugar
     -> normalize_workflow()
 
 both
-    -> strict canonical WorkflowSpec v2
+    -> strict canonical Workflow v2
     -> validate
     -> compile / serialize / execute
 ```
@@ -230,9 +230,10 @@ There is no fake `type:"output"` module. Authoring may omit `outputs` only when 
 unambiguous leaf exists; normalization materializes `outputs.default`.
 
 A canonical workflow must contain at least one executable node. Top-level `outputs` describe how a
-non-empty graph is exposed; they do not make an empty graph meaningful. Legacy
-`convert_dag({"modules": []})` therefore becomes a definition error when it is routed through this
-normalization boundary rather than producing an output-only pseudo-graph.
+non-empty graph is exposed; they do not make an empty graph meaningful. The legacy DAG adapter is now
+`parse_dag`, which routes through this normalization boundary, so `parse_dag({"modules":
+[]})` is a definition error rather than an output-only pseudo-graph — shipped behaviour as of the
+CLI cutover, raising `InvalidPipelineError("workflow has no nodes")`.
 
 ### E3.3 Node families
 
@@ -261,10 +262,16 @@ id      graph-instance identity
 name    stable registered implementation identity
 label   optional human-readable text
 conf    registered module configuration; ModuleNode only
+embed   the module a loop runs per item, with that module's configuration; ModuleNode only
 params  registered action parameters; ActionNode only
 ```
 
 Other node families use their own typed structural fields rather than `conf`.
+
+**Landed 2026-09-29:** a loop's embedded module is the node field `ModuleNode.embed: Embed | None`
+rather than a `conf.embed` entry, so `conf` means registered module configuration and nothing else.
+Canonical documents carry a node-level `embed` key; `LoopConf` is deleted; loop stays a registered
+module (no `LoopNode`); `Pipeline.pipe`/`from_module` take `embed=` and `options=`.
 
 Resource slots are declared by the owning contract; canonical nodes use a normalized `resources`
 mapping. Authoring singular `resource` sugar is allowed only where the owning contract has exactly
@@ -443,9 +450,9 @@ invalid registered target configuration when the target contract is available
 ```
 
 Invalid graph/workflow structure raises `InvalidPipelineError`, a `PipelineError` subtype, rather
-than leaking traversal accidents such as `IndexError`/`KeyError`. At the legacy DAG adapter boundary,
-`convert_dag({"modules": []})` must fail immediately with this domain-error family (the message must
-state that at least one module/node is required) once R4A owns conversion.
+than leaking traversal accidents such as `IndexError`/`KeyError`. At the legacy DAG adapter boundary
+this now holds: `parse_dag({"modules": []})` fails immediately with that domain-error family,
+stating that the workflow has no nodes.
 
 Forward compatibility comes from explicit `format_version`, not from an older runtime silently
 executing a workflow whose new semantics it does not understand.
@@ -484,13 +491,13 @@ compatibility, deployment, or drift semantics. Those stay in `operations-as-code
 ### E3.11 Reuse of the shipped graph index
 
 R4A does not reinterpret topology from scratch. The compiler already builds one immutable,
-runtime-neutral graph index (`_GraphIndex` in `riko/types/compile.py`, constructed once by
+runtime-neutral graph index (`GraphIndex` in `riko/types/_compiler.py`, constructed once by
 `parse_pipe_def`) that both the legacy compiler and future execution planning consume: wire-level
 `edges`/`incoming`/`outgoing` carry full port identity, while node-level
 `order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs` carry scheduling facts. Topology is
 interpreted once, deterministically, and frozen. This is the structural substrate for
 `migrate_v1_to_v2()` / `normalize_workflow()` / `validate` (E3.1) and, downstream, R4B's
-`_ExecutionPlan`.
+`ExecutionPlan`.
 
 Shipped: the index replaces the old `ParsedPipeDef` `graph`+`wires` fields; `_get_input_module`,
 `_gen_pykwargs`, and topological ordering read the index instead of rescanning wires; `order` uses a
@@ -510,7 +517,7 @@ itself:
   begins with every declared node and treats disconnection as a validation question (E3.9), never
   silent erasure.
 
-R4B's `_ExecutionPlan` consumes the same structural facts (`order`/`edges`/`dependencies`) and adds
+R4B's `ExecutionPlan` consumes the same structural facts (`order`/`edges`/`dependencies`) and adds
 execution interpretation — resolved implementations, resource bindings, sync/async policy. The index
 holds structural facts only; execution concepts (resolved callables, portals, resource values, task
 groups) never move onto it.

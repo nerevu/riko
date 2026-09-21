@@ -69,7 +69,8 @@ build/*
 # Misc
 *.local.json
 *.pstats
-.claude
+.claude/*
+!.claude/skills/
 .serena/memories
 .vscode
 callgraph.svg

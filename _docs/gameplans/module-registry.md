@@ -13,11 +13,16 @@
   `ModuleDefinition` + `register(defn, *, replace=False)` / `resolve(name, interface)` / `names()`.
   Populated from built-ins + entry points + runtime registrations. **Never loads JSON, never invokes
   the compiler.**
-- **`PipelineResolver`** (`riko/ext/_pipelines.py`) — resolves named **composed pipelines** (`pipe_*`,
-  JSON defs, generated py) via an injected `ModuleStore(Protocol).load`, with
-  `Directory`/`Package`/`Mapping`/`Composite` stores. Core ships **no `tests.*` reference** — the
-  test suite injects its own stores via `conftest.py`.
-- **`PipeResolver`** (`riko/ext/_resolver.py`) — the single façade.
+- **`PipelineResolver`** (`riko/runtime/_pipelines.py`, private per `PRIVATE_RESOLUTION`) — resolves
+  named **composed pipelines** (`pipe_*`, JSON defs, generated py) via an injected
+  `ModuleStore(Protocol).load`, with `Directory`/`Package`/`Mapping`/`Composite` stores. Sources are
+  registered through a `register(*, store, definitions, replace=False)` / `reset()` lifecycle that
+  mirrors `Registry`'s (per-slot clobber guard via `_register_slot`). Core ships **no `tests.*`
+  reference** — the test suite registers its own sources via an autouse `conftest.py` fixture calling
+  `register_pipeline_store(package=…, directory=…)`. The store classes and `PipelineResolver` stay
+  private; only `register_pipeline_store` (primitives) is on `riko.ext`, with `reset_pipeline_resolver`
+  in the `riko.ext.registry` submodule.
+- **`PipeResolver`** (`riko/runtime/_resolver.py`) — the single façade.
   Precedence **runtime registration → entry-point → built-in → named pipeline** (`register` needs
   `replace=True` to shadow).
 

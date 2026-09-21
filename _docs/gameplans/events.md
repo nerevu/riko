@@ -123,7 +123,8 @@ checkpoint/state CAS outcome
 retry/disposition
 cancellation/deadline
 artifact publication
-aggregate counters
+aggregate counters (per-node input/output counts, active time, upstream/downstream wait time,
+                    queue occupancy, active workers)
 ```
 
 Not every item needs a public per-item event. Aggregate counters are preferred when they express the

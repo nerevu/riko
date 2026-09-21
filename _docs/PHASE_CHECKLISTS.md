@@ -27,7 +27,7 @@ whole stream); that audit ordering is separate from the forward architecture dep
 | **P2** `DynamicConf` (`Objconf` gone) | ✅ done | § P2 |
 | **P3** split `modules/__init__.py` | ✅ done | § P3; leaf `_*.py` modules |
 | **P4** inference diagnostics | ✅ done | § P4; `ReturnInference` |
-| **P5** one-shot lifecycle | ✅ done | § P5; `PipeState` |
+| **P5** one-shot lifecycle | ✅ done | § P5; `PipeState` removed with the pipe classes at v1-cutover step 4 (2026-10-02) — one-shot lifetime is now owned by `SyncExecution`/`AsyncExecution` per `Pipeline` iteration |
 | **P6** `ExecutionMode` | ✅ done | § P6 |
 | **P7** sync/async parity + true async streaming | ✅ done | § P7. **Carryover:** bounded-memory streaming *export* → design in [gameplans/feed-native-streaming.md](gameplans/feed-native-streaming.md). |
 | **P8** module registry + entry points | ✅ done | § P8; `ext/{registry,pipelines,resolver}.py`, `Resolver` protocol, symmetric dispatch |
@@ -85,7 +85,7 @@ resolved decisions are at the bottom.
 EXT (`riko.ext`), PRIVATE (`_*`). New `riko/api.py` (stable hub), `riko/context.py` (Context home),
 `riko/py.typed`, `riko/ext/` (`decorators`/`protocols`/`__init__`).
 `Context` moved to `context.py` behind a top-level re-export shim; demoted utils
-(`Objectify`/`objectify`/`listize`/`get_path`/`get_abspath`/`replacer`) stay importable but absent
+(`Objectify`/`objectify`/`listize`/`get_path`/`normalize_url`/`replacer`) stay importable but absent
 from `__all__`.
 
 **Decisions.** `riko/__init__.py` binds `Context` (+ `objectify`/`listize`) *before* the bottom
@@ -232,9 +232,10 @@ equivalent to looping it:
   folds onto the **parent**; loop-level `field`/`assign`/`emit` win over embed-level. `count` became a
   first-class top-level kwarg (distinct from a module's own `conf.count`, resolved by location). The
   **compact form is canonical**: `normalize_raw_module` lifts legacy → compact (processor-loop → direct
-  node; `pipe:<id>` loop → compact loop), the compiler/runtime consume compact, every
-  `tests/pypipelines/*.py` regenerated. A loop embedding a `pipe:` sub-pipeline runs **per parent**
-  through the same fold; sub-pipelines are detected by **declared** metadata (`riko/modules/_subpipe.py`:
+  node; `pipe:<id>` loop → compact loop), the compiler/runtime consume compact (the generated
+  `tests/pypipelines/*.py` tree was regenerated then; the v1 cutover later replaced it with canonical
+  Workflow v2 JSON plus hand-maintained probes). A loop embedding a `pipe:` sub-pipeline runs **per parent**
+  through the same fold; sub-pipelines are detected by **declared** metadata (`riko/modules/_pipelines.py`:
   `SUBPIPE_TYPE`, `mark_subpipe`, `is_subpipe`) stamped at `resolve_module` + in the codegen templates.
   `_resolve_leaf_modules` fail-fast-resolves every leaf (incl. graph-disconnected) so an unreached
   unsupported module raises at build. Per-parent fold contract:
@@ -283,8 +284,9 @@ equivalent to looping it:
   (`module=` by-convention *or* explicit `sync_pipe`/`async_pipe`; `name` optional, stamped from the
   entry-point key with a mismatch guard).
 - **`riko/ext/_pipelines.py`** — `PipelineResolver` + an injectable `ModuleStore`
-  (`Package`/`Mapping`/`Composite`) and `DirectoryStore`; core ships no locations (conftest injects
-  the suite's `tests.pypipelines` / `tests/pipelines`, so no `tests.*` in `riko/`).
+  (`Package`/`Mapping`/`Composite`) and `DirectoryStore` (now parsing canonical Workflow v2 JSON);
+  core ships no locations (conftest injects the suite's `tests.pypipelines` / `tests/pipelines`, so
+  no `tests.*` in `riko/`).
 - **`riko/ext/_resolver.py`** — the `PipeResolver` façade: one symmetric dispatch
   (`pipe*` → pipelines, else registry). `collections` resolves through it; `compile.resolve_module`
   is now a one-line delegate to it (P8.11).
@@ -326,7 +328,7 @@ canonical everywhere (JSON, entry points, resolver); every enum member's `.value
   `"transform"`. `SINK_NAMES` = `frozenset({"output", "write"})`. Codegen maps those three strings to
   the plural bucket **enum class names** (`_CATEGORY_CLASS`: `source`→`Sources`, `transform`→
   `Transforms`, `sink`→`Sinks`). **`Sinks` now has one built-in: `write`** (`riko/modules/write.py`, a
-  pass-through operator serializing the stream to `conf['url']` via a `Targets` converter); `output`
+  pass-through operator serializing the stream to `conf['dest']` via a `Formats` converter); `output`
   stays unmatched (compiler-local passthrough, absent from the pkgutil catalog).
 - **Generator (`riko/ext/codegen.py`).** `enum_member_name` (uppercase; `._-/`+ws → `_`; collapse
   repeats; leading-digit → `_`-prefix; `enum_name` override) — **collisions raise `ValueError`** with
@@ -366,8 +368,9 @@ separate `test_fluent_discovery.py` was dropped as redundant — its coverage li
 `ordered`/`prefetch` kwargs; `_resolve_lazy_source` (never `list(source)`); unordered
 `async_map_stream` + ordered `async_map_ordered_stream` (`riko/bado/itertools.py`, in-flight memory
 within `limit + buffer`); `AsyncCollection` bounded parallel; a sync `executor` abstraction
-(`riko/concurrency.py`: `Executor` = `inline`/`thread`/`process`, `resolve_executor`, `pool_factory`;
-the `threads` bool kept as a back-compat shim); and a shared-budget foundation (anyio `Semaphore`
+(now `riko/execution/_pools.py`: `Executor` = `inline`/`thread`/`process`, `resolve_executor`,
+`open_pool`/`borrow_pool`/`PoolHandle`, `get_worker_cnt`/`get_chunksize`; the `threads` bool kept as
+a back-compat shim on the surviving v1 classes); and a shared-budget foundation (anyio `Semaphore`
 threaded through `async_map*` as opt-in `budget=`, wrapping **leaf** I/O to cap combined concurrency
 without multiplication or hold-and-wait deadlock).
 

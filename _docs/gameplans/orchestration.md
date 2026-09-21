@@ -42,6 +42,10 @@ There is no public `ExecutionContext` construction step. `Context` is the public
 environment/resource definition; private `SyncExecution` / `AsyncExecution` objects own live
 resources and runtime state.
 
+The definition crosses a process or scheduler boundary as canonical Workflow v2 JSON
+(`serialize_workflow`) plus a `PipelineRef`. An `ExecutionPlan` holds resolved callables and is
+process-local; it is never the portable artifact an external executor consumes.
+
 Do not map every streaming module to an orchestrator task. A stream crosses a process or
 scheduler boundary only through explicit durable materialization such as an artifact,
 database table, object, or state boundary.

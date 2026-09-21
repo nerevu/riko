@@ -38,7 +38,7 @@ Pipeline nodes and branches:
 incoming = Pipeline.subscribe("incoming")
 alerts = Pipeline.subscribe("alerts")
 
-flow = Pipeline(source=incoming).map(normalize).map(classify).publish(alerts)
+pipeline = Pipeline(source=incoming).map(normalize).map(classify).publish(alerts)
 ```
 
 No separate graph definition is required. Shared graph construction, validation,
@@ -90,20 +90,20 @@ class Channel[T](Publisher[T], Subscription[T], Protocol): ...
 An external event source implementing `Subscription[T]` is an ordinary Pipeline source:
 
 ```python
-flow = Pipeline(source=subscription)
+pipeline = Pipeline(source=subscription)
 ```
 
 An external event destination implementing `Publisher[T]` can be a publish target:
 
 ```python
-flow = flow.publish(publisher)
+pipeline = pipeline.publish(publisher)
 ```
 
 Local branches use object-first subscription declarations:
 
 ```python
 audit = Pipeline.subscribe("audit")
-flow = flow.publish(audit)
+pipeline = pipeline.publish(audit)
 ```
 
 Low-level compatibility modules may remain named `send` / `receive`, but new agent-facing
@@ -115,13 +115,13 @@ Agent routing does not imply that every shared Pipeline ancestor broadcasts auto
 Fan-out is explicit:
 
 ```python
-left, right = flow.split(2)
+left, right = pipeline.split(2)
 ```
 
 or:
 
 ```python
-flow = flow.publish(events)
+pipeline = pipeline.publish(events)
 ```
 
 Local published branches are attached to and owned by the execution. The caller does not
@@ -166,7 +166,9 @@ cycles to the Pipeline DAG.
 Conceptual example:
 
 ```python
-flow = Pipeline(...).loop(embed=step, until=done, max_iterations=20, id="research-loop")
+pipeline = Pipeline(...).loop(
+    embed=step, until=done, max_iterations=20, id="research-loop"
+)
 ```
 
 Iterative semantics:
@@ -334,10 +336,10 @@ than attempting to serialize arbitrary Python callables.
 Because agents reuse Pipeline, the same graph renderer and graph queries apply:
 
 ```python
-flow.dag.ancestors(node)
-flow.dag.descendants(node)
-flow.dag.roots
-flow.dag.sinks
+pipeline.dag.ancestors(node)
+pipeline.dag.descendants(node)
+pipeline.dag.roots
+pipeline.dag.sinks
 ```
 
 (if/when those public inspection conveniences are exposed).

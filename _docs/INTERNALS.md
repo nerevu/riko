@@ -7,7 +7,7 @@ lives there; `_docs/KEY_PATHS.md` maps concrete source locations; and
 ## Index
 
 - [Codegen & generated files](#codegen--generated-files)
-- [Compiled pipeline fixtures](#compiled-pipeline-fixtures)
+- [Pipeline fixtures](#pipeline-fixtures)
 - [Discovery enums & export formats](#discovery-enums--export-formats)
 - [Import contract tooling](#import-contract-tooling)
 - [Tooling & environment notes](#tooling--environment-notes)
@@ -40,8 +40,6 @@ at call sites.
   `riko/types/_module_ids.py` (`ModuleId`/`LoopableModuleId`) from the runtime
   module catalog. Both artifacts are deterministic and generated; never hand-edit
   them.
-- **Pipelines** — `riko/cli/_gen_pipelines.py` regenerates compiled Python fixtures
-  from their JSON pipeline definitions.
 - **API surface** — `riko/cli/_gen_api_surface.py` rewrites only the marked name
   blocks in `_docs/API_SURFACE.md` from the private declarations in
   `riko/base/_api_surface.py`. Surrounding prose stays hand-maintained.
@@ -49,34 +47,40 @@ at call sites.
 Tests under `tests/internal/` byte/structure-check generated outputs so source and
 generated artifacts cannot drift silently.
 
-## Compiled pipeline fixtures
+## Pipeline fixtures
 
-The `tests/pypipelines/pipe_*.py` and `examples/pypipelines/pipe_*.py` modules are
-generated from sibling `pipelines/pipe_*.json` definitions. Regenerate both trees
-with:
+`tests/pipelines/*.json` and `examples/pipelines/*.json` are canonical Workflow v2
+documents — exactly what `serialize_workflow` emits by default: indented, with sorted
+keys and a trailing newline — and the v2 runtime executes them directly. They are hand-maintained
+sources, not generated output. `tests/internal/test_workflow_fixtures.py` reparses
+and reserializes each file, so a committed fixture that drifts from canonical form
+fails there.
 
-```text
-gen-pipelines
-# or
-manage codegen --pipes
-```
+The `tests/pypipelines/pipe_*.py` and `examples/pypipelines/pipe_*.py` modules are a
+reduced covering set of hand-maintained typed probes. Their job is to put the
+`<Name>RawConf`/`<Name>Conf`/`<Name>ConfRule` shapes in real call position so pyright
+surfaces a config-contract error; the same test asserts each probe yields the items
+its JSON sibling does. There is no generator behind them — edit them by hand, and add
+one only for a config shape the surviving probes do not already reach.
 
-Regenerate one example directly with `compile-pipe` when that is the narrower
-operation. `tests/internal/test_compile.py` guards test fixtures and
-`tests/internal/test_example_pipes.py` guards examples.
+The compiler implementation lives under `riko/runtime/`:
 
-The compiler implementation now lives under `riko/runtime/`:
-
-- `riko/runtime/_compile.py` — parse/build/compile/convert operations.
-- `riko/runtime/_compile_repr.py` — source representation/stringification helpers.
-- `riko/runtime/templates/` — generated sync/async pipeline templates.
+- `riko/runtime/_codegen.py` — the Workflow v2 generator behind `compile_pipe`.
+- `riko/runtime/_migrate.py` — `parse_dag` (bare-bones DAG) and `migrate_v1_to_v2`.
+- `riko/runtime/_compile.py` — the v1 parse/build/compile operations.
+- `riko/runtime/_compile_repr.py` — the `Id` placeholder the v1 compiler renders unquoted; literal
+  rendering lives in `_codegen.render_value`.
+- `riko/runtime/templates/` — `pyworkflow.txt` (v2) plus the v1 `pypipe*.txt` templates.
 - `riko/types/_compiler.py` — compiler/DAG type contracts.
 
-When a historical generated Python module has no JSON source, reconstruct the
-pipeline definition from the calls and options rather than treating generated
-Python as authoritative. Iterate against `build_pipeline`/`compile-pipe` until
-behavior and generated output agree. Historical reverse-engineering notes stay in
-`archive/compiling-example-pipes.md`.
+The console scripts are v2-native. `riko/cli/_workflow.py` is their one document front
+door: it detects whether a document is a bare-bones DAG, a released pipe definition, or
+a canonical workflow, and hands it to `parse_dag`, `migrate_v1_to_v2`, or
+`normalize_workflow`. `build-workflow` is the only lenient reader — it accepts all three
+and always emits canonical v2; `compile-pipe` and `run-pipe` go through
+`require_workflow`, which refuses anything older. The v1 compiler (`_compile.py`,
+`pypipe*.txt`) survives only until the cutover's compiler-deletion step; nothing in the
+CLI reads it, and none of it is part of maintaining the fixtures above.
 
 ## Discovery enums & export formats
 
@@ -158,6 +162,15 @@ sync when source is moved between package groups.
 - **Changelog style.** `docs/CHANGES.rst` records user-observable behavior in the
   shortest useful form; implementation moves and private helper names do not belong
   there unless they change a supported import or command surface.
+- **Unreleased features get one entry, not a history.** The changelog describes the
+  delta against the *last release*, so a feature that has never shipped (today:
+  `Pipeline` and the workflow model) is one "Added …" bullet under **New** that
+  states what the feature does when it ships. Each change to it on `next`/`features`
+  edits that bullet in place; never append "`Pipeline` gained …", "`Pipeline.write`
+  now …", or similar deltas against a state no user has seen. A placeholder verb that
+  raises `NotImplementedError` is not user-observable behavior and is not mentioned at
+  all; the bullet is written against the capability that will actually ship. Deltas
+  are written only against names that appear in a released version.
 
 The source hierarchy itself is not a compatibility promise for private modules.
 It is an internal architecture promise: code belongs in the lowest package layer

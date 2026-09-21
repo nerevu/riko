@@ -157,8 +157,10 @@ This is additive, so it is not SemVer-gated.
 **Resolved:** the epoch-default half of this section. `CAST_SWITCH["date"]` and
 `["datetime"]` now default to `None`, so a miss is detectable, and the two roles
 `default` was serving are separated — `def_itemgetter` converts date sort keys to
-epoch floats and fills a miss with `_iterutils.SORT_FILLER` (`-inf`), which cannot
-collide with a real date the way the epoch did. `dateformat` guards on `None` and
+epoch floats and degrades an uncastable value to `_iterutils.SORT_FILLER` (`-inf`),
+which cannot collide with a real date the way the epoch did. A missing field is not
+compared at all: `build_sort_key` leads the key with a presence flag, and a rule
+`default` opts back into sorting it as a value. `dateformat` guards on `None` and
 returns `""`.
 
 ## 7. Composition

@@ -95,7 +95,9 @@ grouped aggregate later
 ```
 
 Preparation/explain reports which operations were pushed down and which remain local. Do not inspect
-arbitrary Python callables to synthesize SQL.
+arbitrary Python callables to synthesize SQL. Reusing data an earlier run already retained locally
+(narrowing a read to only the missing subset) is a future push-down planning concern owned here; it
+is not a cache mode, per `cache.md`.
 
 ## 6. Write API
 

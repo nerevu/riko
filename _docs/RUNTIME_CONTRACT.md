@@ -11,11 +11,14 @@ mapping every section number to its home. What actually ships (as-built detail) 
 > below (§4, §5, §11, §14–§22, §24, §25) are feature / end-state topics owned by gameplans —
 > find any of them via the [ROADMAP §-index](ROADMAP.md#index).
 >
-> **Target-architecture note.** The reconciled future runtime model is one immutable public
+> **Target-architecture note.** The reconciled runtime model is one immutable public
 > `Pipeline[T]` plus private per-iteration `SyncExecution` / `AsyncExecution`, one immutable
-> public `Context`, and the common `FeedState` / `StateStore` checkpoint model. Those are
-> planned contracts in [execution-semantics.md](gameplans/execution-semantics.md), not claims
-> about the shipped API documented below.
+> public `Context`, and the common `FeedState` / `StateStore` checkpoint model. The
+> `Pipeline` iteration surface and the private executions ship today; the v1 `SyncPipe`/`AsyncPipe`
+> classes were deleted on 2026-10-02 and only the v1 compiler remains until cutover step 5 removes
+> it; the checkpoint model is still a planned contract. The full target is in
+> [execution-semantics.md](gameplans/execution-semantics.md); what actually ships is in
+> [IMPLEMENTED.md](IMPLEMENTED.md).
 
 ## Index
 
@@ -40,10 +43,10 @@ Riko is an item-oriented pipeline engine. Its design favors explicit behavior ov
 at-least-once delivery over exactly-once claims; bounded resource use; simple defaults;
 conservative failure behavior; and compatibility with existing synchronous pipelines.
 
-The shipped classes below remain the current contract. The planned replacement architecture
-(single reusable `Pipeline`, private executions, immutable Context/resources, pub/sub,
-canonical identity/idempotency, `FeedResult`/`FeedState`/`StateStore`, and Pipeline batch
-mode) is owned by [execution-semantics.md](gameplans/execution-semantics.md). Callable-node
+The shipped `Pipeline` plus private-execution model below is the current contract. The
+remaining planned architecture (orchestration-owned pub/sub, canonical identity/idempotency,
+`FeedResult`/`FeedState`/`StateStore`, and Pipeline batch mode) is owned by
+[execution-semantics.md](gameplans/execution-semantics.md). Callable-node
 specifics live in [callable-pipes.md](gameplans/callable-pipes.md), fan-out in
 [fanout-topology.md](gameplans/fanout-topology.md), and tabular batching in
 [tabular-interop.md](gameplans/tabular-interop.md).
@@ -95,15 +98,16 @@ yields items lazily. Incremental `httpx.stream()` body reads are not implemented
 
 ## 3. Pipe behavior
 
-A pipe instance is **one-shot** — a single execution. Iteration never restarts and never
-raises; an exhausted or closed pipe simply yields nothing. `SyncPipe` is synchronous and
-iterable (`for item in pipe`); `AsyncPipe` iterates lazily (`async for item in pipe`) with an
-`await pipe` collect terminal. Async chaining is lazy at the pipe boundary. `AsyncStream`s behave
-like ordinary async iterators — riko does not detect or recreate a consumed feed.
+A `Pipeline` is a reusable definition; each `iter(flow)` / `aiter(flow)` creates a fresh
+**one-shot** private execution that owns the run's resources for the lifetime of the returned
+iterator. Iteration never restarts and never raises on exhaustion; a consumed iterator simply
+yields nothing. The sync path pulls lazily; the async path streams items as they are produced.
+`AsyncStream`s behave like ordinary async iterators — riko does not detect or recreate a consumed
+feed. (The one-shot `SyncPipe`/`AsyncPipe` instances this section used to describe were deleted
+at v1-cutover step 4, 2026-10-02.)
 
-This describes the shipped API only. The planned `Pipeline` definition is reusable while
-each `iter(flow)` / `aiter(flow)` creates a fresh one-shot private execution; source objects
-may themselves still be one-shot.
+This describes the shipped API only. Source objects seeded into a pipeline may themselves
+still be one-shot; a second iteration of the same pipeline does not recreate them.
 
 ## 6. Async execution and backpressure
 

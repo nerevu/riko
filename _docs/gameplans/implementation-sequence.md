@@ -64,24 +64,24 @@ Their current home in `collections.py` is temporary. Move reusable mechanics int
 modules rather than preserving `collections.py` as architecture.
 
 **Compiler graph index** is a retained foundation. `parse_pipe_def` builds one immutable
-`_GraphIndex` (`riko/types/compile.py`) that interprets a pipe's wiring exactly once — wire-level
+`GraphIndex` (`riko/types/_compiler.py`) that interprets a pipe's wiring exactly once — wire-level
 `edges`/`incoming`/`outgoing` (ports kept verbatim) plus node-level
 `order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs`. It replaces the old `ParsedPipeDef`
 `graph`+`wires` fields; R4A's `migrate_v1_to_v2()`/`normalize_workflow()`/`validate` build on it and
-R4B's `_ExecutionPlan` reuses its structural facts. The v1-behavior-preserving deltas it still
+R4B's `ExecutionPlan` reuses its structural facts. The v1-behavior-preserving deltas it still
 carries (`_OUTPUT` as a node, verbatim ports, dropped orphans) are resolved at the R4A boundary, not
 in the index — see [extensibility § E3.11](extensibility.md#e311-reuse-of-the-shipped-graph-index).
 Keep execution concepts (resolved callables, portals, resource values, task groups) off it.
 
 The reuse seam runs *through* the compiler, not around it. Graph parsing/validation/ordering/resolution
 is kept and adapted; the legacy generator-construction tail is replaced. Concretely: `topological_sort`
-(strict for canonical workflows), `ModuleRegistry`/`PipeResolver`/`PipelineResolver`, the `_GraphIndex`,
+(strict for canonical workflows), `ModuleRegistry`/`PipeResolver`/`PipelineResolver`, the `GraphIndex`,
 and the argument-binding *concepts* in `_get_input_module`/`_gen_pykwargs` all survive into R4B
 preparation. What is replaced is `_gen_steps`/`_build_pipeline`/`build_pipeline`, which today resolve,
 wire, invoke, and construct a running generator in one pass keyed off "the last topologically-sorted
-module." R4B splits that boundary one step later — preparation produces an immutable `_ExecutionPlan`
+module." R4B splits that boundary one step later — preparation produces an immutable `ExecutionPlan`
 of prepared nodes (no invocation), and a separate run step executes it against explicit `outputs`
-rather than a terminal-module assumption. `convert_dag` and `gen_parented_graph`'s orphan-dropping stay
+rather than a terminal-module assumption. `parse_dag` and `gen_parented_graph`'s orphan-dropping stay
 on the v1 authoring/migration side and do not feed canonical v2 preparation.
 
 ### Retain but reshape
@@ -236,7 +236,7 @@ rather than omitting the category.
 
 Changes:
 
-- rename the internal parser callable alias `Pipeline` → `PipeCallable` everywhere;
+- rename the internal parser callable alias `Pipeline` → `ModuleWrapper` everywhere;
 - characterize the current resolver native-interface behavior;
 - characterize source normalization (`Mapping`, iterable, `str`/`bytes`, generator, Feed,
   Awaitable);
@@ -250,7 +250,7 @@ Keep P8 behavior unchanged except for type-name cleanup.
 
 - **ADD:** characterization tests pin the resolver, source-normalization, one-shot lifecycle, and
   pub/sub seams that later phases replace.
-- **MIGRATE:** the internal parser callable alias is `PipeCallable`, leaving `Pipeline` available for
+- **MIGRATE:** the internal parser callable alias is `ModuleWrapper`, leaving `Pipeline` available for
   the public definition type.
 - **DELETE:** none; R0 intentionally makes no released runtime deletion.
 
@@ -291,6 +291,8 @@ public types and use them in new code; migrate old call sites when touched.
 - **DELETE:** none; untouched legacy call sites are intentionally not bulk-migrated in R1.
 
 ### R2A — Canonical value encoding
+
+**Landed** (see `IMPLEMENTED.md` § Canonical value encoder).
 
 **Goal:** one deterministic *value* encoder before checkpoints/idempotency/fingerprints depend on it.
 
@@ -376,7 +378,9 @@ the type/normalization boundary, not the execution lifecycle:
 - public generic `Resource[T]` umbrella with unconstrained resolved value type `T`;
 - public `ReusableResource[T]` category for wrappers safe in reusable Context definitions;
 - private concrete external/factory/one-shot-owned resource variants;
-- canonical `ResourceDefinition[T] = ReusableResource[T] | ResourceFactory[T]`;
+- canonical `ResourceDefinition[T] = ReusableResource[T] | LifecycleFactory[T]` (an
+  ordinary `ValueFactory` is not a definition: it must pass through
+  `Resource.from_factory(...)` so cleanup ownership stays explicit);
 - `Resource.from_external(value)` for caller-owned reusable resource values;
 - explicit `Resource.from_factory(factory, *args, **kwargs)` for arbitrary constructors/provider
   callables, including sync/async callables and optional explicit cleanup;
@@ -510,7 +514,7 @@ Workflow v2 normalization is one ingress boundary:
 legacy v1 -> migrate_v1_to_v2()
 authoring v2 sugar
         -> normalize_workflow()
-        -> strict canonical WorkflowSpec v2
+        -> strict canonical Workflow v2
         -> validate
         -> compile / serialize / execute
 ```
@@ -549,7 +553,7 @@ R4A also locks `Targets` as endpoint/provider identities and `Formats` as serial
 Concrete provider/storage implementations remain R11 adapters. A canonical workflow can therefore
 validate `Target`/`Format` structure without importing every optional client library.
 
-Structural validation answers "is this a valid WorkflowSpec v2?" Runtime preparation later answers
+Structural validation answers "is this a valid Workflow v2?" Runtime preparation later answers
 "can this graph execute with the installed/available contracts and resources?" A valid v2 document
 may therefore round-trip a node whose runtime capability has not landed yet, while execution fails
 with a clear unsupported-capability error.
@@ -583,7 +587,7 @@ R4A.5  deterministic serialization + acceptance
   validate), omitted ids→`<name>-<occurrence>`, port aliases, family dispatch + `backend`/`fmt`/
   `mode` enum coercion, `src`/`tgt`/`from`/`to` rejection, string inputs→JSON Schema. The
   **structural, contract-free** pass: it reuses `normalize_binding`/`normalize_resources` (so a
-  bare-string `resources` self-binds, no contract needed), `normalize_keys`, `listize`, and the
+  bare-string `resources` self-binds, no contract needed), `normalize_strs`, `listize`, and the
   `is_mapping`/`is_listlike` guards; only format-from-locator inference and closed-schema rejection
   are deferred. Full `normalize∘serialize` idempotency is proven with the byte-stable serializer in
   R4A.5. File: `riko/runtime/_normalize.py` (the clean-break placement note below supersedes the
@@ -594,17 +598,31 @@ R4A.5  deterministic serialization + acceptance
   graph exposing an output (closing R4A.2's ambiguous-leaf case). The contract-aware E3.9 rules
   (undeclared ports, fan-in arity, registered conf/params/target-config validation) are **deferred**:
   `ModuleDefinition`/target contracts declare no ports or conf schemas yet, so they land with that
-  metadata. Structural validity is not runtime capability. File: `riko/runtime/_validate.py`
-  (placement per the clean-break note, superseding the `riko/workflow/validate.py` sketch).
-- **R4A.4 — `migrate_v1_to_v2()`.** Pure v1→v2 (E3.1/E3.11): `_INPUT`/`_OUTPUT`/`_OTHERn`→canonical
-  ports, v1 `write` module→`WriteNode`+Target/Format, terminal `_OUTPUT` passthrough→`outputs.default`,
-  orphan handling deferred to validation rather than silent erasure. Warn during 0.x, emit v2 only;
-  the interim fluent `sink()` had no serialized node form, so there is no legacy `sink` grammar. File:
-  `riko/workflow/migrate.py`.
-- **R4A.5 — deterministic serialization + acceptance.** Byte-stable canonical serialization, full
-  round-trip of every supported topology, golden fixtures, `normalize ∘ migrate` never emitting
-  v1-only structure, and CLI (`compile-pipe`/`convert-dag`) emitting v2 only (E3.10). Files:
-  `riko/cli/`, `tests/` golden fixtures.
+  metadata. Structural validity is not runtime capability. Home: validation is a method on the model
+  — `Workflow.validate()` / `isvalid` in `riko/definitions/_workflow.py` — after the refactor that
+  folded the standalone `riko/runtime/_validate.py` / `riko.ext.validate_workflow` into the spec.
+- **R4A.4 — `migrate_v1_to_v2()`. Landed** (see `IMPLEMENTED.md`). Pure v1→v2 (E3.1/E3.11):
+  `_INPUT`/`_OUTPUT`/`_OTHERn`→canonical ports, v1 `write` module→`WriteNode` (`backend=file`, `fmt`
+  from `conf.fmt`), terminal `_OUTPUT` passthrough→`outputs.default`, orphan handling deferred to
+  validation rather than silent erasure. It reuses `normalize_workflow` for the shared structural
+  pass; non-structural v1 module fields fold into `conf` for lossless migration. Warns during 0.x,
+  emits v2 only; the interim fluent `sink()` had no serialized node form, so there is no legacy `sink`
+  grammar. File: `riko/runtime/_migrate.py` (the clean-break placement note below supersedes the
+  original `riko/workflow/migrate.py` sketch).
+- **R4A.5 — deterministic serialization + acceptance. Landed** (see `IMPLEMENTED.md` § Workflow v2
+  serialization). Byte-stable `serialize_workflow`/`parse_document` in `riko/runtime/_serialize.py`
+  (`riko.ext`), full round-trip of every supported topology, golden fixtures, and `serialize ∘ migrate`
+  never emitting v1-only structure. The **CLI v2-emission** bullet (`compile-pipe`/`build-workflow`) and
+  the v1 compiler/fixture deletions are **deferred to R4B**: the E3.10 CLI-emission acceptance is
+  superseded by the clean-break policy, which completes the v1→v2 CLI/compiler cutover at R4B (the
+  first phase v2 executes). Files: `riko/runtime/_serialize.py`, `tests/public/test_serialize.py`.
+  **The deferred CLI v2-emission has since landed** at cutover step 3 ([v1-cutover.md § Step
+  3](v1-cutover.md#step-3--retire-remaining-v1-cli-consumers)): `build-workflow` emits canonical v2 from
+  any supported form, `compile-pipe` generates from canonical v2 through the new
+  `riko/runtime/_codegen.py`, `run-pipe` executes canonical documents, and `build_pipe_def` gave way
+  to `parse_dag`. The `SyncPipe`/`AsyncPipe`/Collection class deletion (step 4) landed on
+  2026-10-02 (`2164c473`); of the CLI/compiler cutover, only the v1 compiler deletion (step 5) is
+  still outstanding.
 
 R4A.5 is the only slice gated on R2A (the canonical value encoder): the structural slices R4A.0–R4A.4
 proceed without it, and the byte-stable serialization/golden-fixture work waits on it. R4A.0 is both
@@ -618,9 +636,12 @@ Decided with the maintainer: R4A does **not** build or maintain a long-lived dua
 PR that lands a v2 construct deletes the v1 construct it replaces in the **same commit** — there is no
 compatibility window carrying both. This supersedes the "released v1 accepted at the migration
 boundary throughout 0.x" framing in `extensibility.md` §E3.1/§E3.10: v1 is not a maintained runtime
-ingress. The v1→v2 runtime cutover completes at **R4B** (the first phase v2 executes), not gradually
-across 0.x and not lingering to 1.0. `migrate_v1_to_v2()` is a one-shot corpus-conversion / offline
-rescue tool, never a live loader.
+ingress. The v1→v2 runtime cutover completes **within R4B** (the first phase v2 executes), not
+gradually across 0.x and not lingering to 1.0. R4B itself lands incrementally: v2 execution may be
+reachable through the public `Pipeline` iteration surface while the v1 compiler still exists during
+R4B's slices, provided the v1 compiler/fixtures are removed by the end of R4B rather than surviving
+past it. `migrate_v1_to_v2()` is a one-shot corpus-conversion / offline rescue tool, never a live
+loader.
 
 Because R4A.1 sits below any executor, it is the one **add-only foundation** commit — there is no v1
 counterpart to delete yet. Paired deletions begin once a consumer can flip:
@@ -628,23 +649,28 @@ counterpart to delete yet. Paired deletions begin once a consumer can flip:
 | v1 construct | Deleted at |
 |---|---|
 | (nothing — pure foundation) | R4A.1 |
-| verbatim `_INPUT`/`_OTHER`/`_OUTPUT` ports, `_OUTPUT`-as-node | R4A.2/.4 (normalize/migrate resolve the `_GraphIndex` legacy artifacts) |
-| v1 `write` module → `WriteNode`; **`SINK_NAMES` + the `Sinks` discovery bucket**; v1 `PipeDef`/`wires` compiler consumption; the `tests/pypipelines` + `tests/pipelines` fixtures | R4B cutover (first commit v2 executes) |
+| verbatim `_INPUT`/`_OTHER`/`_OUTPUT` ports, `_OUTPUT`-as-node | R4A.2/.4 (normalize/migrate resolve the `GraphIndex` legacy artifacts) |
+| v1 `PipeDef`/`wires` compiler consumption (`_index_pipe_def` and its inlined `GraphIndex` assembly, `parse_pipe_def`, `_gen_steps`/`build_pipeline`); the generated `tests/pypipelines` tree and the v1 form of the `tests/pipelines` fixtures | R4B — by the end of the phase (see the incremental-landing paragraph above; v2 may execute through `Pipeline` while the v1 compiler still exists mid-phase, but neither survives past R4B). Cutover step 2 (`b4850983`) already flipped the fixtures: the JSON is canonical v2 and stays, the generator is gone, and a covering set of hand-maintained probes remains; probes built on `SyncPipe`/`SyncCollection` go with the classes at step 4. Cutover step 3 then removed the CLI's dependence on the v1 compiler — `build-workflow`/`compile-pipe`/`run-pipe`/`benchmark` are v2-native and code generation moved to `riko/runtime/_codegen.py` — so the v1 compiler has no consumer left to block its deletion at step 5 |
+| the shipped `riko.modules.write` Python module + its discovery entry; **`SINK_NAMES` + the `Sinks` discovery bucket** | R5C — the write module survives until `WriteNode` executes, and is retired in that same commit (see the R5C section and `v1-cutover.md`) |
 
 `SINK_NAMES` (`riko/base/_config.py`, `{"output","write"}` → the P9A `sink` category) has no v2 role —
-E3.3 defines no `SinkNode`, terminality is a consumption behavior — so it is removed in the same commit
-that retires the v1 `write` module and the `Sinks` bucket (R4B; the discovery reconciliation R4B
-unblocks per `module-enums.md`).
+E3.3 defines no `SinkNode`, terminality is a consumption behavior — but the shipped `write` module must
+stay resolvable until `WriteNode` executes, so it is removed in the same R5C commit that retires the v1
+`write` module and the `Sinks` bucket.
+
+The ordered step-by-step cutover checklist for this table (migration-before-deletion sequencing,
+per-step drift guards, and the recorded keep-`migrate_v1_to_v2` divergence) is
+[v1-cutover.md](v1-cutover.md); this table remains the authority for *what* pairs with *what*.
 
 **Placement (supersedes the R4A.1 `riko/workflow/` package note).** The canonical model is not a new
 top-level package/layer. Pure contracts live in `riko/types/_workflow.py`; the immutable
-node/edge/`WorkflowSpec`/`Pipeline` model lives in `riko/definitions/_workflow.py` (the existing
+node/edge/`Workflow`/`Pipeline` model lives in `riko/definitions/_workflow.py` (the existing
 declarative-contract layer); the later `normalize`/`validate`/`migrate` logic lives in `riko/runtime/`
 beside `_compile.py`. No `riko/workflow/` package is added.
 
-**R4A.1 landed** (see `IMPLEMENTED.md`): the closed node/edge union, port grammar, `WorkflowSpec`
+**R4A.1 landed** (see `IMPLEMENTED.md`): the closed node/edge union, port grammar, `Workflow`
 envelope, and public `Pipeline[T]`. `Pipeline` is STABLE (`riko`); the
-node/edge/`WorkflowSpec`/`Endpoint` model is EXTENSION (`riko.ext`).
+node/edge/`Workflow`/`Endpoint` model is EXTENSION (`riko.ext`).
 
 **Exit:**
 
@@ -681,6 +707,9 @@ Deliver:
 - lazy-resource single-flight acquisition and dependency-first/dependent-first lifetime ordering;
 - transactional partial-acquisition unwind and comprehensive cleanup-error grouping;
 - bounded cancellation-shielded resource teardown;
+- one R4B resource-model cleanup that normalizes user resource declarations into an executable
+  lifecycle plan and stops carrying generator/context-manager/instance distinctions past that
+  boundary;
 - external-resource lifecycle/concurrency proof;
 - remove `SyncPipe`/`AsyncPipe`/Collection classes rather than retain deprecated wrappers;
 - migrate P10 executor/bounded-stream mechanics out of `collections.py` rather than reimplementing
@@ -709,21 +738,148 @@ and other consumers remain ecosystem/observability work.
 #### R4B external-resource proof
 
 Do not wait until R12 to discover that the execution lifecycle cannot hold a real client. R4B exit
-tests include at least one genuinely external async resource and one genuinely external sync
-resource, each proven under **both** sync and async Pipeline execution.
+tests prove a real sync lifecycle under **both** sync and async execution, a real async lifecycle
+under native async execution, and deterministic rejection of async-native teardown under sync
+execution. The fourth quadrant — async-native teardown on `SyncExecution` — is an explicit
+`InvalidPipelineError` raised before acquisition, not a bridged run, so async resources are never
+smuggled through the sync portal for cleanup.
 
-Covered cases: eager open, lazy open, mid-execution failure rollback, early consumer abandonment,
-cancellation, and cleanup-error grouping. R12 proves the **external package API**; R4B proves the
+Covered cases: eager open, mid-execution failure rollback, failure-induced task cancellation,
+ambient-cancellation-safe teardown, exception-aware `__exit__`/`__aexit__` teardown, and
+lone-versus-grouped cleanup-error reporting. Lazy open and early consumer abandonment are deferred
+past this foundation commit. R12 proves the **external package API**; R4B proves the
 **runtime architecture**.
+
+#### R4B resource-model cleanup
+
+The execution-owned exit stack is the architectural event that lets the resource model simplify once
+rather than twice. R4B collapses the two resource-model concerns into a single cleanup rather than
+carrying them forward as separate hotspots.
+
+Classify and validate each user declaration once, then prepare it into an executable lifecycle plan
+carrying `acquire`, native mode, `enter`, `teardown`, ownership, and cleanup policy. After that
+boundary the runtime consumes the plan; it does not re-inspect the original generator-vs-context-
+manager-vs-instance syntax.
+
+1. `FactoryKind` stays input-classification machinery and does not become the runtime ontology. The
+   normalization boundary preserves the distinctions required to acquire and adapt a resource —
+   value factory vs lifecycle factory, explicit cleanup vs intrinsic teardown, native sync vs async
+   capability — and drops the ones that only described the user's original syntax.
+2. Public/static `OneShotResource` vs `ReusableResource` remain user-facing declaration types, but a
+   type whose entire body sets an internal flag is not the mechanism that carries that fact into
+   execution. Reuse, ownership, and no-op-vs-real teardown become explicit fields on the lifecycle
+   plan — the `_reusable`/`_external` flags and the `_ExternalResource` no-op teardown override stop
+   existing as subclass bodies. The private variants (`_OwnedResource`, `_LifecycleResource`,
+   `_ExternalResource`, `_FactoryResource`) collapse into that plan data plus a lifecycle strategy
+   rather than a subclass hierarchy: internal execution choices are data, not types.
+
+#### R4B cross-mode adaptation — resolved audit tripwires
+
+Preparation is now a resolution snapshot: `build_execution_plan` (`riko/runtime/_execution_plan.py`)
+resolves each node's sync/async callables once into a `PreparedNode` and the returned `ExecutionPlan`
+holds no dispatcher, so `PreparedNode.select(is_async=...)` picks native-vs-adapter at run time without
+re-inspecting the registry (regression: `test_execution_plan_snapshots_resolution`). The two cross-mode
+defects this section tracked behind strict-xfail tripwires are now closed; the shared adaptation
+helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_prepare_execution.py`).
+
+1. **Lazy sync-under-async bridge.** A sync-only node under `AsyncExecution` materializes neither its
+   async source nor its own output. `AsyncExecution._run_sync_node` (`riko/execution/_execution.py`)
+   starts the sync pipe on a worker thread through the existing `run_sync` (asyncer's `asyncify`) and
+   pulls its output one item per `__anext__` as the consumer demands it, while the pipe reads its async
+   primary source and every async secondary input (`others`, named ports — `_bridge_inputs`) lazily from
+   the worker through `anyio.from_thread.run` (re-exposed by `riko/bado/_backend.py` as
+   `run_from_thread`). `_adapt.py` owns the pieces: `require_stream`/`require_async_stream` (the
+   node-output boundary, moved out of `_execution.py`), `drain_async(source, call)` — one
+   async-stream-as-lazy-sync-iterator function that the sync execution's portal drain and the worker-side
+   upstream reader share with a different `call` — and `pull_stream(...)`, its
+   sync-iterator-as-lazy-async-stream counterpart. `_adapt_worker_inputs` and `_drain_sync` are gone.
+   There are no background tasks and no channels: backpressure is pure demand, an error raises at the
+   pull that hits it after every earlier item has been yielded, and abandoning or closing the async
+   stream closes the sync pipe's generator off-loop. The MIGRATE item ("P10 bounded/executor mechanics")
+   therefore no longer owes a bounded channel at this boundary. Its `collections.py` half is done:
+   the sync executor/pool mechanics live in `riko/execution/_pools.py` (`Executor`,
+   `resolve_executor`, `get_worker_cnt`/`get_chunksize`, `PoolHandle` via `open_pool`/`borrow_pool`
+   with `map(ordered)`), consumed by the surviving `SyncPipe`/`SyncCollection` until their deletion
+   and by `with_execution(...)` after; the async bounded mapping already lived in
+   `riko/bado/itertools.py`. Handle-level characterization tests are `tests/internal/test_pools.py`.
+   Cutover step 2 followed (`b4850983`): the pipeline fixtures are canonical v2 documents run by the
+   v2 execution, `ModuleNode.options` carries per-node call options for every module node, and the
+   positional-input seed rule and `migrate_v1_to_v2` were corrected so the fixtures convert
+   faithfully (details in [v1-cutover.md](v1-cutover.md) step 2).
+   Regressions:
+   `test_arun_sync_only_source_streams_lazily` (xfail removed),
+   `test_arun_sync_only_source_raises_after_yielding_earlier_items`,
+   `test_arun_sync_only_source_closes_on_early_exit`,
+   `test_arun_unconsumed_sync_only_source_does_not_block_exit`,
+   `test_arun_sync_worker_node_reads_secondary_inputs_lazily`, and
+   `test_arun_sync_worker_node_runs_off_the_event_loop`.
+2. **Native-wins for loop embeds — execution-time adaptation.** Each node's mode is chosen at run time
+   by `PreparedNode.select(is_async=...)` (`riko/execution/_prepared.py`), which picks `NATIVE`/`ADAPTER`
+   per the four native-wins quadrants, and a loop node's embed is resolved at build into a nested
+   `PreparedNode.embed`. Both executions now re-select that embed against the **host pipe's actual mode**
+   (`_select_embed(embed, host_async=…)` on `SyncExecution` and `AsyncExecution`) and, on
+   `ExecMode.ADAPTER`, forward a synthesized host-mode wrapper instead of the raw other-mode one.
+   `adapt_embed_for_sync(embed, drain)` and `adapt_embed_for_async(embed, run_sync)` copy the wrapper's
+   discovery metadata (`name`, `type`, `subtype`, `subtypes`, `pollable`, `loopable`) and set `isasync`
+   to the host mode — leaving `__wrapped__` unset — so `loop_embed_sync`/`loop_embed_async`,
+   `is_subpipe`, and `bind_subpipe` treat the adapter as a native embed. An async-only embed under a sync
+   host is drained per item (through the portal on the main thread, or through `run_from_thread` when
+   the host pipe itself runs on a worker); a sync-only embed under an async host runs per parent item
+   off the event loop and returns its results as a list, which the per-parent result count keeps
+   bounded. Accepted limitation: the loop's `count="first"` early-close is not applied to a sync-only
+   embed under an async host (the child runs to completion on the worker); tripwire
+   `test_arun_count_first_stays_lazy_for_a_sync_only_embed` (strict xfail) marks it for whichever
+   phase makes that direction lazy. The other direction is already lazy and closes the child promptly
+   (regression `test_run_count_first_stays_lazy_for_an_async_only_embed`). This was R4B native-wins,
+   not R9 (which owns iterative/resumable loop semantics only). Regressions:
+   `test_run_adapts_async_only_embed_under_sync` (xfail removed) plus the
+   sync-embed-under-async-loop and worker-host cases.
+
+Repaired locally in the same series (not deferred): non-default output ports now fail closed. A
+reachable `StreamEdge.source_port` other than `out`, or a selected output whose port is not `out`,
+raises `InvalidPipelineError` instead of silently aliasing the node's `out` stream; executable
+port-keyed fan-out/split delivery remains R7, which removes the guard. Regressions:
+`test_run_rejects_nondefault_source_output_port` / `test_run_rejects_nondefault_selected_output_port`.
+One more fail-closed guard sits beside it, `Workflow.require_executable()` (called from `build_execution_plan`):
+a source port feeding more than one stream edge (the executor keys streams by node, so both consumers
+would share one iterator). R7's port-keyed delivery removes it. Regression:
+`test_build_plan_rejects_fan_out_from_one_source_port`. Sparse positional inputs (`in` + `in:2`) are
+executable, not guarded: `union` reads `others` as an ordered list and legacy `_OTHER2` normalizes to
+`in:2` (`test_run_accepts_sparse_positional_inputs`); `in:0`/`out:0` are grammar errors in
+`parse_port`; per-module arity stays with the module port contracts (R4A.3's deferred fan-in arity;
+tripwire `test_build_plan_rejects_undeclared_positional_input`). The R4B "source normalization at one boundary"
+item is also done: `SourceLike` (`Item | Feed | Awaitable[Item | Feed]`) is resolved once in
+`SyncExecution.run`/`AsyncExecution.run` (`_resolve_source`/`_aresolve_source`, sharing
+`normalize_items` in `_adapt.py`); `Pipeline.source`, `__ror__`, and the generated module template
+hand the raw seed through, and the async `processor` wrapper maps an `AsyncIterable` input lazily
+(`_aprocess_stream`) instead of treating it as one item. Shutdown reporting now meets the
+cleanup-error contract: plain callbacks and task/budget failures are recorded and grouped
+beside the unsuppressed primary error, while a native `__exit__` keeps its replace/suppress
+semantics (`_report_shutdown`; regressions in `tests/internal/test_execution.py`).
+Splitter nodes are likewise refused at plan build — `PreparedNode` validates both pipe fields with
+`require_single_output` (`riko/types/_guards.py`, keyed on the resolved pipe's declared `type`), so
+the invariant holds for every construction path — rather than by sniffing the first value a node
+yields: the old shape guard consumed the whole upstream before raising (split's parser
+is eager), surfaced a bare `TypeError` under async execution, and let a splitter whose branches
+were lists through as items. `_adapt.py`'s `require_items`/`arequire_items` are now `require_stream`/
+`require_async_stream(value, pipe)`: the execution-side boundary earns its narrowing from the same
+`is_splitter` `TypeIs` guard (`riko/types/_guards.py`) on the pipe's declared type, consuming nothing.
+Regressions: `test_build_plan_rejects_splitter_node_before_any_node_runs`,
+`test_build_plan_rejects_splitter_by_declared_type_not_output_shape`,
+`test_require_stream_refuses_a_splitter_pipe_without_consuming`, and the fluent
+`test_iterating_a_split_pipeline_raises_before_running` pair. The async splitter wrapper's inability
+to read an async input stream is R7's (tripwire `test_async_splitter_accepts_an_async_input_stream`).
 
 **Exit:**
 
 - **ADD:** private sync/async executions own task groups, exit stacks, adaptation, resources, events,
   and shutdown.
 - **MIGRATE:** P10 bounded/executor mechanics, R3 resource acquisition, and the write-session
-  lifecycle run under the common execution lifetime.
+  lifecycle run under the common execution lifetime; resource declarations normalize once into the
+  executable lifecycle plan.
 - **DELETE:** `SyncPipe`/`AsyncPipe`/Collection runtime classes and superseded one-shot pipe lifecycle
-  hosts are absent rather than wrapped; no parallel task-group/exit-stack/portal runtime remains.
+  hosts are absent rather than wrapped; no parallel task-group/exit-stack/portal runtime remains; the
+  private resource-variant subclass hierarchy is absent, replaced by lifecycle-plan data.
 
 ### R5A — FeedResult, Metadata, and private per-item provenance
 
@@ -812,8 +968,8 @@ Deliver:
 - results are emitted out-of-band through the R4B `EventSink`;
 - sync/async target/action implementations adapt through R4B rather than creating local bridges;
 - failure propagation and cancellation obey the common execution contract;
-- remove the shipped `riko.modules.write` Python module/discovery entry when `Pipeline.write()` /
-  `WriteNode` lands; do not keep a deprecated wrapper;
+- remove the shipped `riko.modules.write` Python module/discovery entry, plus `SINK_NAMES` and the
+  `Sinks` discovery bucket, when `Pipeline.write()` / `WriteNode` lands; do not keep a deprecated wrapper;
 - preserve only the bounded persisted-v1 `write` migration owned by R4A/extensibility.
 
 `write()` is an effect operation, not a public module and not a terminal by definition. Its graph
@@ -831,9 +987,9 @@ Concrete FILE/HTTP/S3/Postgres/Airtable/Intune/etc. adapters remain R11.
   `WriteResult`/`ActionResult` through `EventSink`.
 - **MIGRATE:** internal write execution uses the canonical `WriteNode` path and execution-owned
   write-session/lifetime machinery.
-- **DELETE:** `riko.modules.write`, its discovery entry, and the interim fluent `sink()` surface are
-  absent. The only legacy `write` behavior retained is bounded persisted-v1 migration at the R4A
-  Workflow ingress boundary.
+- **DELETE:** `riko.modules.write`, its discovery entry, `SINK_NAMES`, the `Sinks` discovery bucket,
+  and the interim fluent `sink()` surface are absent. The only legacy `write` behavior retained is
+  bounded persisted-v1 migration at the R4A Workflow ingress boundary.
 
 ### R6 — StateStore, checkpoint, CAS, and idempotency
 
@@ -900,6 +1056,14 @@ Deliver:
 - receive-time `func=` semantics in sync and async together: run at subscription
   delivery/materialization time, discard the return value, and preserve the original item;
 - `split()` upstream-once, active-branches-only, bounded, never lossy;
+- reachable positional output ports drive `split`'s active branch count: an explicit `splits`
+  smaller than the highest reachable `out:N` index is a validation error, and a graph that
+  references `out:N` beyond the configured count never reaches an undefined branch (today
+  `Workflow.validate()` accepts `splits=2` with an `out:2` edge);
+- port-keyed execution steps replace the R4B refusal of splitter nodes (`require_single_output` in
+  `riko/types/_guards.py`, applied as a `PreparedNode` pipe validator and inside
+  `require_stream`/`require_async_stream`) and the `_require_default_output_port` guard; the async splitter wrapper accepts an async input stream (tripwire
+  `test_async_splitter_accepts_an_async_input_stream`);
 - branch/route port behavior from the R4A contract;
 - no cleanup dependency on draining branch output;
 - remove legacy `send` / `receive` Python modules when the object-first surface lands rather than
@@ -1201,7 +1365,7 @@ implementation starts.
 
 R0 is deliberately small and low-risk:
 
-1. rename the internal `Pipeline` callable alias to `PipeCallable`;
+1. rename the internal `Pipeline` callable alias to `ModuleWrapper`;
 2. add characterization tests for resolver native selection and source normalization;
 3. add the failing desired-behavior test for R2A omitted-vs-`None` semantics;
 4. add characterization tests around current pub/sub lifecycle;

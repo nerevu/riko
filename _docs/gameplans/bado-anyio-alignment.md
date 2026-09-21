@@ -159,17 +159,17 @@ Audited while removing `delay`; **fix these before trusting any sync-vs-async nu
 | Group | Benchmarks | State |
 |---|---|---|
 | Pure sleep | `baseline*`, pool variants, `baseline_async` | Fine — they call `sleep`/`async_sleep` directly over `iterable`. |
-| Collections | `sync_collection`, `par_sync_collection`, `async_collection` | **Inert.** They pass `sleep=DELAY`, but no `sleep` parameter exists anywhere in riko — it lands in `**kwargs` and is dropped. These have never slept. |
-| Fetch | `sync_pipeline`, `sync_pipe2`, `async_pipeline`, `async_pipe2` | **Was asymmetric.** `delay` was honored only by `async_url_read`; the sync path never forwarded it (`parse_rss(url, encoding=...)`) and `_io.opener`'s delay was a `logger.debug` stub. Async paid ~0.1 s × 13 feeds that sync did not, so the comparison measured the handicap. |
+| Collections | `sync_workflow`, `async_workflow` | **Real work, no latency.** One Workflow v2 graph fans a fetch of every feed into a single `union` node and runs it through the v2 execution. The old `sync_collection`/`par_sync_collection`/`async_collection` rows and their dead `sleep=` kwarg are gone; there is no parallel variant because the execution has no concurrency option yet. |
+| Fetch | `sync_pipeline`, `sync_pipe`, `async_pipeline`, `async_pipe` | **Was asymmetric.** `delay` was honored only by `async_url_read`; the sync path never forwarded it (`parse_rss(url, encoding=...)`) and `_io.opener`'s delay was a `logger.debug` stub. Async paid ~0.1 s × 13 feeds that sync did not, so the comparison measured the handicap. `sync_pipe`/`async_pipe` are now one `Pipeline` run per feed; unlike the old `async_pipe2`, which only constructed a pipe, `async_pipe` really executes the fetch. |
 
 `delay` is now removed, so the fetch group is at least consistent — but it simulates no latency at
 all, and local-file parsing gives async concurrency nothing to win against. Restoring that signal
 belongs in the **harness**, not in a pipe's `conf`: a localhost HTTP server, or a sleeping wrapper
-applied to *both* callables equally. The same fixture would give the collection benchmarks
-something real to do, replacing the dead `sleep=` kwarg.
+applied to *both* callables equally. The same fixture would give the workflow benchmarks a latency
+signal to measure.
 
-**Matrix benchmark** (turn `benchmark.py` into this) using `perf_counter_ns`, warmup, and sorted
-percentile samples (`min`/`median`/`p95`), varying:
+**Matrix benchmark** (turn `benchmark.py` into this) using `perf_counter_ns`, warmup, sorted
+percentile samples (`min`/`median`/`p95`/`p99`), and the memory high-water mark, varying:
 
 ```text
 items:        1, 10, 100, 10_000
@@ -208,8 +208,8 @@ time."
 5. **Rename `maybe_deferred` → `maybe_await`/`invoke`** (private; touches decorator machinery).
 6. **Mark `async_return`** a next-major deprecation candidate (stable public API).
 7. **Leave** `coop_reduce`, `async_map*`, `async_merge`, `_pool_stream` alone unless profiling shows a real problem.
-8. **Repair the benchmark harness** (§4) — the dead `sleep=` kwarg and the missing latency
-   fixture — before using it to justify any of the above.
+8. **Repair the benchmark harness** (§4) — the missing latency fixture — before using it to
+   justify any of the above.
 
 The first three remove abstractions **without losing Riko-specific functionality**; `async_map*`/
 `_pool_stream` are exactly where Riko *should* own an abstraction over AnyIO.

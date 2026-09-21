@@ -101,7 +101,9 @@ resolved through declared `Context` resources and execution-owned connector sess
 REST is a first-class Riko module rather than an overload of RSS-oriented `fetch`:
 
 ```python
-flow = Pipeline("rest", conf={"base_url": "https://api.example.com/", "path": "events"})
+pipeline = Pipeline.from_module(
+    "rest", conf={"base_url": "https://api.example.com/", "path": "events"}
+)
 ```
 
 Serialized form:
@@ -336,7 +338,7 @@ Rules:
   workflow result compared with the declared source-selection semantics;
 * security-sensitive request fields cannot be introduced through an unvalidated filter;
 * a provider-specific executable filter language is not promoted into generic Riko core;
-* downstream `flow.filter(...)` remains available for transformations that cannot or should
+* downstream `pipeline.filter(...)` remains available for transformations that cannot or should
   not be pushed to the source.
 
 The plan/introspection layer should distinguish:
@@ -564,7 +566,7 @@ REST remains record-oriented by default. Batch mode is enabled through the ordin
 `Pipeline` contract rather than REST-specific frame conversion or a parallel `BatchPipe`:
 
 ```python
-flow = Pipeline("rest", conf=conf, batch=True, batch_size=1000)
+pipeline = Pipeline.from_module("rest", conf=conf, batch=True, batch_size=1000)
 ```
 
 The negotiated representation/backend and Pandas/Arrow/Polars conversion details belong
@@ -639,7 +641,7 @@ R9   schema observations/drift integration
 ## 25. Definition of done
 
 1. Common REST APIs can be ingested without custom pagination loops.
-2. `Pipeline("rest", ...)` and `{"type":"rest", ...}` are the canonical module forms.
+2. `Pipeline.from_module("rest", ...)` and `{"type":"rest", ...}` are the canonical module forms.
 3. Credentials remain references resolved through declared resources.
 4. REST cursor state uses `FeedState` / `StateStore` and commits only at valid lifecycle
    boundaries.

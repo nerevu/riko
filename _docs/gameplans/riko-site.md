@@ -352,12 +352,12 @@ from riko import Pipeline
 
 
 def site_artifacts() -> Pipeline[SiteArtifact]:
-    structure = Pipeline(
+    structure = Pipeline.from_module(
         "fetchdata", conf={"url": "site/structure.json"}
     ).sitestructure()
 
     programs = (
-        Pipeline("fetchdata", conf={"url": DATA_API, "path": "programs"})
+        Pipeline.from_module("fetchdata", conf={"url": DATA_API, "path": "programs"})
         .filter(conf={"rule": {"field": "active", "op": "is", "value": True}})
         .rename(
             conf={
@@ -378,7 +378,7 @@ def site_artifacts() -> Pipeline[SiteArtifact]:
     )
 
     blog = (
-        Pipeline("fetchdata", conf={"url": CONTENT_API, "path": "objects"})
+        Pipeline.from_module("fetchdata", conf={"url": CONTENT_API, "path": "objects"})
         .filter(conf={"rule": {"field": "published", "op": "is", "value": True}})
         .infer(
             conf={"field": "body", "prompt": "Write a two-sentence summary."},
@@ -1302,7 +1302,7 @@ Example:
 
 ```python
 def page_view(request, path):
-    page = site.resolve_path(path)
+    page = site.get_path(path)
 
     return render_django_page(
         request=request,

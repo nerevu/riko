@@ -16,13 +16,14 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/_package.py` | package/version metadata classified with the base layer |
 | `riko/base/` | bottom-layer primitives shared across the package: constants, path/location helpers, logging, strings/iterators/date utilities, exceptions, source formatting, and the private API-surface declaration |
 | `riko/types/` | static contracts: streams/items, module configs, options, compiler/pipeline/resource/I/O types, enums, wrappers, sentinels, guards |
-| `riko/coercion/` | conversion and normalization: casts, `DynamicConf`, generated objconf types, mapping/objectification, date/dataclass coercion, graph/freeze helpers |
+| `riko/coercion/` | conversion and normalization: casts, `DynamicConf`, generated objconf types, mapping/objectification, date/dataclass coercion, graph/canonical-identity helpers |
 | `riko/bado/` | async backend selection plus async itertools/utilities; I/O no longer lives here |
 | `riko/definitions/` | immutable/declarative contracts for modules, resources, targets, and writes |
 | `riko/io/` | sync/async URL and file I/O, serialization, and re-encoding |
 | `riko/parsing/` | config parsing, `DotDict`, and document/XML/HTML parsing |
 | `riko/rss/` | RSS/Atom discovery, parsing, and entry normalization |
-| `riko/runtime/` | executable orchestration: collections, compiler, pipeline resolution, registry, pub/sub, subpipes, execution resources/context, and write sessions |
+| `riko/execution/` | the explicit execution layer: one-shot sync/async executions, lifetime primitives, sync/async stream adaptation, execution-local resource acquisition, event sink, and the execution `Context` |
+| `riko/runtime/` | executable orchestration: collections, compiler, pipeline resolution, registry, pub/sub, subpipes, execution planning, and write sessions |
 | `riko/modules/` | built-in pipe implementations plus decorators, preparation, metadata, inference, looping, and generated discovery names |
 | `riko/ext/` | supported extension-author facade and extension codegen/name helpers; architecturally shares the `modules` layer |
 | `riko/cli/` | command implementations, generators, documentation checks, and import-contract linters |
@@ -58,7 +59,7 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/coercion/_dynamic_conf.py` | hand-maintained `DynamicConf` base used by generated objconf classes |
 | `riko/coercion/cast.py` | public coercion/casting implementation used by parsing/modules |
 | `riko/coercion/_graph.py` | generic graph helpers, including topological sorting and descendant traversal reused by the architecture linter |
-| `riko/coercion/{_dates,_dataclass,_freeze,_mapping,_objectify,_sequences}.py` | focused conversion/normalization helpers |
+| `riko/coercion/{_dates,_dataclass,_canonical,_mapping,_objectify,_sequences}.py` | focused conversion/normalization helpers |
 
 ## Async and I/O
 
@@ -67,7 +68,7 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/bado/__init__.py` + `riko/bado/_backend.py` | optional AnyIO backend selection and guarded async runtime surface |
 | `riko/bado/itertools.py` | async iterator helpers (`async_map`, streaming map/merge/reduce helpers, etc.) |
 | `riko/bado/_util.py` | async utility helpers not tied to transport/file I/O |
-| `riko/io/_async.py` | async URL/file I/O (`async_url_open`, `async_write`, `get_async_temp_file`); owns the async-handle lifecycle details that previously lived under `bado` |
+| `riko/io/_async.py` | async URL/file I/O (`async_url_open`, `async_write`, `async_get_temp_file`); owns the async-handle lifecycle details that previously lived under `bado` |
 | `riko/io/_sync.py` | synchronous URL/file open/read helpers |
 | `riko/io/_serialization.py` | stream serialization/export conversion helpers |
 | `riko/io/_reencode.py` | byte/text re-encoding utilities |
@@ -96,10 +97,16 @@ iterator is consumed.
 | `riko/definitions/modules.py` | immutable `ModuleDefinition` contract used by built-ins, registry entries, and discovery |
 | `riko/definitions/_resource_types.py` | resource-definition aliases shared by declarative binding code; any runtime references here are type-only |
 | `riko/definitions/_resources.py` | resource binding normalization, factory classification, `ResourceView`, and definition-side binding helpers |
-| `riko/definitions/_targets.py` | the built-in `FileTarget` write adapter (carrying `backend = Backends.FILE`) and write preparation/validation (`resolve_target`/`resolve_format`/`build_write`); the base target protocols live in `riko/types/_targets.py` |
+| `riko/definitions/_targets.py` | the built-in `FileTarget` write adapter (carrying `backend = Backends.FILE`) and write preparation/validation (`normalize_target`/`resolve_format`/`build_write`); the base target protocols live in `riko/types/_targets.py` |
 | `riko/definitions/_write.py` | `WriteMode`, `WriteResult`, `WriteOperation`, `WriteCapabilities`, `PreparedWrite`, and sync/async write-session protocols |
-| `riko/runtime/context.py` | immutable execution `Context`; resource bindings derive new contexts rather than mutating one in place |
-| `riko/runtime/_resources.py` | concrete `Resource` hierarchy and one-shot/reusable lifecycle execution; this file and `context.py` form the architecture's explicit `execution` sublayer |
+| `riko/execution/context.py` | immutable execution `Context`; resource bindings derive new contexts rather than mutating one in place |
+| `riko/execution/_resources.py` | the `Resource` definition with the owned/external/lifecycle/factory variant carried as data (not a subclass hierarchy) behind the `OneShotResource`/`ReusableResource` markers; this file and `context.py` anchor the architecture's explicit `execution` layer |
+| `riko/execution/_execution.py` | private one-shot `SyncExecution`/`AsyncExecution` owning the three execution lifetime primitives (exit stack, root task group, sync/async bridge), the explicit stop→cancel→join→shielded-unwind→group shutdown order, execution-local resource `acquire`/`aacquire` with single-flight memoization, and the node runners that build each output's stream |
+| `riko/execution/_adapt.py` | the mode-boundary helpers both executions share: the `require_stream`/`require_async_stream` node-output boundary (narrowing earned by the `is_splitter` guard on the pipe's declared type, never by reading its output), `drain_async(source, call)` (an async stream re-exposed as a lazy sync iterator — the portal drain and the worker-side upstream reader differ only in `call`), `pull_stream(...)` (a sync iterator re-exposed as a lazy async stream), and the `adapt_embed_for_sync`/`adapt_embed_for_async` cross-mode loop-embed wrappers, which preserve the embed's discovery metadata so the loop machinery sees a native embed |
+| `riko/execution/_prepared.py` | `PreparedNode` and `ExecMode`; `select(is_async=…)` picks the native callable or tags the other-mode one `ADAPTER`, touching no registry |
+| `riko/execution/_plan.py` | the single declaration→plan boundary: `build_resource_plan` classifies a `Resource` once into a frozen `_ResourcePlan` (strategy, native mode, entry, teardown) that execution consumes without re-inspecting the original generator/context-manager/instance shape |
+| `riko/execution/_events.py` | the minimal execution-owned `EventSink` transport with a no-op default |
+| `riko/execution/_pools.py` | the synchronous worker-pool/executor mechanics: `Executor` (`inline`/`thread`/`process`) with `resolve_executor`, `get_worker_cnt`/`get_chunksize` sizing, and `PoolHandle` (`open_pool` owns and releases a pool; `borrow_pool` never closes a caller's pool; `map(ordered)` picks `pool.map` vs `imap_unordered`); no consumer since the pipe classes were deleted at v1-cutover step 4 (2026-10-02) — `Pipeline.with_execution()` will consume it |
 
 The definition/execution split is intentional: descriptions stay immutable and
 reusable; mutable open/close/session state belongs to execution-owned objects.
@@ -108,19 +115,20 @@ reusable; mutable open/close/session state belongs to execution-owned objects.
 
 | Path | Role |
 |---|---|
-| `riko/runtime/collections.py` | `SyncPipe`/`AsyncPipe`/`SyncCollection`/`AsyncCollection`; `Formats`, `export()`, `list_formats()`, `write`/`sink`, pipeline lifecycle and pool ownership |
-| `riko/runtime/_compile.py` | DAG/JSON parsing and compilation (`build_pipeline`, `compile_pipe`, `build_pipe_def`, dependency extraction) |
-| `riko/runtime/_compile_repr.py` | Python-source representation helpers used by compiler/codegen paths |
-| `riko/runtime/_pipelines.py` | pipeline lookup/loading support |
+| `riko/runtime/collections.py` | `Formats` (the serialization-format enum), `export()`, and `list_formats()`; the v1 `SyncPipe`/`AsyncPipe`/`SyncCollection`/`AsyncCollection` classes were deleted at v1-cutover step 4 (2026-10-02) — `Pipeline` in `riko/definitions/_workflow.py` is the execution surface, and the pool/executor mechanics live in `riko/execution/_pools.py` |
+| `riko/runtime/_compile.py` | the v1 pipe-definition compiler (`parse_pipe_def`, `build_pipeline`, `compile_pipe_def`, dependency extraction), kept only until the cutover deletes it; nothing in the CLI reads it any more |
+| `riko/runtime/_compile_repr.py` | the `Id` unquoted-identifier placeholder for the v1 compiler's generated source; literal rendering is `_codegen.render_value`; deleted with the v1 compiler at cutover step 5 |
+| `riko/runtime/_codegen.py` | the Workflow v2 code generator behind STABLE `compile_pipe` and `compile-pipe`: renders a workflow as a Python module of typed `<Name>RawConf` confs that runs through the canonical execution and is `mark_subpipe`-marked |
+| `riko/runtime/_migrate.py` | authoring→canonical construction: `parse_dag` (bare-bones DAG) and `migrate_v1_to_v2` (released pipe definition); both land on `normalize_workflow` + `validate` |
+| `riko/runtime/_pipelines.py` | pipeline lookup/loading support and nested/sub-pipeline execution helpers; `PipelineResolver` searches a `PackageStore` of `pipe_*` modules and a `DirectoryStore` whose `pipe_*.json` files are canonical Workflow v2 documents parsed into a `Workflow` |
 | `riko/runtime/_resolver.py` | module/pipeline resolution orchestration |
 | `riko/runtime/_registry.py` | generic `Registry[T]` base shared by the module and target registries: the three-tier runtime→entry-point→built-in lifetime + entry-point discovery/loading scaffolding; subclasses supply a `_key` hook so `register` stores one self-keying entry |
 | `riko/runtime/_module_registry.py` | `ModuleRegistry` + process-global `module_registry`/`register_module`/`reset_module_registry`; keyed by `ModuleDefinition.resolved_name`, built-in modules resolved lazily per name, entry points under `riko.modules` |
 | `riko/runtime/_target_registry.py` | private `TargetRegistry` + `target_registry`/`register_target`/`reset_target_registry`; stores adapter classes keyed by `backend` and resolves a `Backends` to its adapter class (built-in `FileTarget`), entry points under `riko.targets` |
 | `riko/runtime/_importutils.py` | dynamic import helpers; string-constructed imports are intentionally invisible to the static AST dependency graph |
-| `riko/runtime/_subpipe.py` | nested/sub-pipeline execution helpers |
 | `riko/runtime/_write_session.py` | concrete sync/async write-session acquisition, incremental/framed delivery, finalize/abort/teardown semantics |
 | `riko/runtime/_pubsub/` | sync/async pub/sub hubs and message types; mutable hub state is isolated via `contextvars` |
-| `riko/runtime/templates/` | compiler templates for generated sync/async Python pipelines |
+| `riko/runtime/templates/` | source templates for generated Python pipelines: `pyworkflow.txt` (the canonical Workflow v2 generator) plus the v1 `pypipe.txt`/`pypipe_async.txt`, which go with `_compile.py` |
 
 Pipes are one-shot execution objects. Pool ownership remains explicit: borrowed
 pools stay open, while a pipeline-created pool is closed by its owner. Write and
@@ -156,12 +164,12 @@ collection-consumption concern, not a second write model.
 | `riko/cli/_lint_canonical_imports.py` | canonical-definition import contract |
 | `riko/cli/_lint_relative_imports.py` | sibling-relative import contract |
 | `riko/cli/_import_commands.py` | selector-based `manage lint imports` command and shared import-check runner |
-| `riko/cli/_codegen.py` | selector-based `manage codegen`; defaults to config and supports additive `--config`/`--names`/`--pipes`/`--api` plus `--all` |
+| `riko/cli/_codegen.py` | selector-based `manage codegen`; defaults to config and supports additive `--config`/`--names`/`--api` plus `--all` |
 | `riko/cli/_gen_config.py` | generates `riko/coercion/_configs.py` from `riko/types/modules.py` |
 | `riko/cli/_gen_names.py` | generates `riko/modules/_names.py` and `riko/types/_module_ids.py` |
-| `riko/cli/_gen_pipelines.py` | regenerates compiled pipeline fixture trees |
 | `riko/cli/_gen_api_surface.py` | regenerates marked name blocks in `_docs/API_SURFACE.md` from `riko/base/_api_surface.py` |
-| `riko/cli/{compile,convert_dag,runpipe,benchmark}.py` | standalone console-script implementations |
+| `riko/cli/_workflow.py` | shared JSON document front door for the console scripts: `DocumentFormat`, `read_document`, `get_document_format`, the lenient `normalize_document`, and the canonical-only `require_workflow` |
+| `riko/cli/{compile,build_workflow,runpipe,benchmark}.py` | standalone console-script implementations, all on canonical Workflow v2: `build-workflow` is the one lenient converter, `compile-pipe` generates from canonical documents only, `run-pipe` runs a script or a document, `benchmark` times `Pipeline` and workflow execution |
 | `riko/cli/{_build,_docs,_docstyle,_release,_test}.py` | private `manage` command helpers grouped by reason to change |
 
 Use `_docs/gameplans/dependency-layers.md` when deciding **which package** should own

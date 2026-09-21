@@ -35,7 +35,7 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 <!-- api-surface:collections -->
 ```python
 >>> sorted(COLLECTIONS)
-['AsyncCollection', 'AsyncPipe', 'Formats', 'PipeState', 'SyncCollection', 'SyncPipe', 'export', 'list_formats']
+['Formats', 'export', 'list_formats']
 ```
 <!-- /api-surface:collections -->
 
@@ -45,7 +45,7 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 <!-- api-surface:compile -->
 ```python
 >>> sorted(COMPILE)
-['build_pipe_def', 'build_pipeline', 'compile_pipe', 'get_pipeline_dependencies', 'parse_pipe_def']
+['build_pipeline', 'compile_pipe', 'get_pipeline_dependencies', 'parse_dag', 'parse_pipe_def']
 ```
 <!-- /api-surface:compile -->
 
@@ -55,12 +55,12 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 <!-- api-surface:bado -->
 ```python
 >>> sorted(BADO)
-['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'run']
+['as_async', 'async_chain', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'run']
 ```
 <!-- /api-surface:bado -->
 
 Stable async file/URL I/O (`async_url_open`, `async_write`,
-`get_async_temp_file`) is implemented under `riko.io` and promoted to `riko` via
+`async_get_temp_file`) is implemented under `riko.io` and promoted to `riko` via
 the `IO_` contract group.
 
 **Module discovery** — discovery enums and catalog helpers (`riko.modules`):
@@ -87,7 +87,7 @@ the `IO_` contract group.
 <!-- api-surface:other -->
 ```python
 >>> sorted(OTHER)
-['Backends', 'Context', 'ExecutionMode', 'Pipeline', 'get_path', 'get_temp_file', 'list_modules']
+['Backends', 'Context', 'Edge', 'Endpoint', 'ExecutionMode', 'Node', 'Pipeline', 'Workflow', 'WorkflowDocument', 'WorkflowLike', 'get_path', 'get_temp_file', 'list_modules']
 ```
 <!-- /api-surface:other -->
 
@@ -110,7 +110,7 @@ helpers. File/URL transport helpers live in the separate `riko.io` package.
 <!-- api-surface:bado-namespace -->
 ```python
 >>> sorted(BADO)
-['as_async', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'run']
+['as_async', 'async_chain', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'run']
 >>> BADO == set(riko.bado.__all__)
 True
 ```
@@ -135,7 +135,7 @@ and extension authors.
 <!-- api-surface:types -->
 ```python
 >>> sorted(TYPES)
-['AsyncItems', 'AsyncPipeTuples', 'AsyncStream', 'Conf', 'EdgeAuthoring', 'EndpointAuthoring', 'Feed', 'Item', 'Items', 'NodeAuthoring', 'PipeTuples', 'Stream', 'SyncPipeTuples', 'WorkflowAuthoring', 'WorkflowSpecLike']
+['AsyncItems', 'AsyncPipeTuples', 'AsyncStream', 'Conf', 'Feed', 'Item', 'Items', 'PipeTuples', 'RawEdge', 'RawEndpoint', 'RawNode', 'RawWorkflow', 'Stream', 'SyncPipeTuples']
 ```
 <!-- /api-surface:types -->
 
@@ -149,7 +149,7 @@ authors rather than ordinary application code.
 <!-- api-surface:extension -->
 ```python
 >>> sorted(EXTENSION)
-['ActionNode', 'AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'CacheNode', 'DynamicConf', 'Endpoint', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleNode', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WorkflowSpec', 'WriteCapabilities', 'WriteNode', 'get_conf_type', 'get_module_category', 'normalize_module_name', 'normalize_workflow', 'operator', 'processor', 'register_module', 'register_target', 'splitter', 'validate_workflow']
+['ActionNode', 'AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'CacheNode', 'DynamicConf', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleNode', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WriteCapabilities', 'WriteNode', 'get_conf_type', 'get_module_category', 'migrate_v1_to_v2', 'normalize_module_name', 'normalize_workflow', 'operator', 'parse_document', 'processor', 'register_module', 'register_pipeline_store', 'register_target', 'serialize_workflow', 'splitter']
 ```
 <!-- /api-surface:extension -->
 
@@ -181,7 +181,7 @@ them. These are re-exports of the same objects, not separate implementations.
 For example:
 
 ```python
->>> riko.Context is riko.runtime.context.Context
+>>> riko.Context is riko.execution.context.Context
 True
 ```
 

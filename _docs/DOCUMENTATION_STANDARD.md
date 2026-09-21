@@ -361,6 +361,33 @@ behavior, it is mechanism and does not belong. Applies to *any* module,
 underscore-prefixed or not — a private module's reader is still arriving cold,
 and a stale mechanism summary misleads faster than no summary at all.
 
+### No internal jargon in shipped text
+
+Internal planning vocabulary — phase codes (`R4B`, `R5C`, `P10`), gameplan
+section refs (`§E3.6`), `_docs/` paths, and internal ticket ids — must never
+appear in text a user or contributor reads outside the design docs. That covers
+**every shipped or user-facing surface**:
+
+- docstrings and doctests;
+- code comments;
+- test names and `xfail`/`skip`/`raises` reason strings (say *what* is pending in
+  plain English — "the pending callable-pipe support", not "R4B");
+- `docs/*.rst` (changelog, migration guide, cookbook, FAQ);
+- exception, log, and warning messages emitted at runtime.
+
+Describe the behavior or the pending capability in plain English instead. Phase
+codes and gameplan cross-refs stay in `_docs/` (gameplans, `IMPLEMENTED.md`) and
+`CLAUDE.md`, which are the internal design record. A strict-xfail tripwire, for
+example, names the *capability* it waits on, not the phase that owns it.
+
+The same rule fixes the names of the two pipeline JSON kinds in shipped text: the
+current nodes/edges form is a **workflow document** and the older `src`/`tgt` form is
+a **pipe definition**. "v1"/"v2" appear only when quoting a surface that uses them
+(`--format {dag,v1,v2}`, `migrate_v1_to_v2`); "canonical document", "released pipe
+definition", and "RawWorkflow" are design-doc vocabulary. A changelog entry
+also describes a change against the **last release tag**: a name that only existed
+between releases is never "renamed" or "removed" in `docs/CHANGES.rst`.
+
 ### Preserving examples during cleanup
 
 Before shortening a module docstring, inventory its existing examples and classify
@@ -461,6 +488,14 @@ compact executable example clarifies non-obvious behavior.
   `"""Yields from stream, then closes f."""` both restates the section and
   describes the loop. Write `"""Passes stream through, closing f when iteration
   ends."""` plus a `Yields:` section naming the element.
+- The detail paragraph after the summary states *what the caller gets*, not *how
+  it is produced*. Do not name the internal collaborators a function delegates to
+  or narrate its sequence of transformation steps — that is the same mechanism the
+  module rule excludes (see "Keep it user-facing"), and it applies to every
+  docstring, function or module. Two or three plain sentences is the target; a
+  paragraph that reads like a design doc is a regression even when accurate. The
+  refactor test decides: if a sentence would change wording after a
+  behavior-preserving refactor, it is mechanism and belongs in `_docs/`.
 - Classes document the abstraction + constructor semantics; do not duplicate the
   class docstring in `__init__`. Give `__init__` its own docstring only for
   initialization behavior not reasonably documented on the class.

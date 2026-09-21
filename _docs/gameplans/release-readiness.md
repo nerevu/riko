@@ -118,9 +118,9 @@ final public Pipeline API; legacy low-level names are migration inputs only unti
 > `with_execution(...)`.
 
 - **`Pipeline` is the sole public pipeline concept.** A reusable, immutable definition lives in
-  `riko/pipeline.py`, exported from `riko`. `Pipeline("fetch", source=...)` or
-  `Pipeline(source=...)` creates a definition; fluent composition returns new definitions and never
-  mutates the original.
+  `riko/pipeline.py`, exported from `riko`. `Pipeline.from_module("fetch")` seeds a module and
+  `Pipeline(source=...)` seeds an item stream; both create a definition, and fluent composition
+  returns new definitions and never mutates the original.
 - **Definition vs execution — the full split.** `iter(flow)` builds a fresh private
   `SyncExecution`; `aiter(flow)` builds a fresh private `AsyncExecution`. The same definition runs
   under `for` or `async for`; each iteration is an independent one-shot execution. No public
@@ -134,7 +134,7 @@ final public Pipeline API; legacy low-level names are migration inputs only unti
   follows the source itself: a list can replay, while a generator instance remains one-shot and is
   never secretly buffered.
 - **Rename the internal `Pipeline` callable alias first.** `riko/types/general.py` currently uses
-  `Pipeline` for parser callables; rename that internal alias to `PipeCallable` before the public
+  `Pipeline` for parser callables; rename that internal alias to `ModuleWrapper` before the public
   class lands.
 - **Iteration is the execution API.** Do not add executing `collect()` or `first()` terminals.
   `list(flow)`, `for`, and `async for` execute; `take(n)` remains a transform. Side-effecting
@@ -162,10 +162,10 @@ final public Pipeline API; legacy low-level names are migration inputs only unti
 **Migration shape:**
 
 ```text
-SyncPipe(mod, ...)           → Pipeline(mod, source=...)
-AsyncPipe(mod, ...)          → Pipeline(mod, source=...)
-SyncCollection(mod, srcs)    → Pipeline(mod, source=srcs)
-AsyncCollection(mod, srcs)   → Pipeline(mod, source=srcs)
+SyncPipe(mod, ...)           → src | Pipeline.from_module(mod)
+AsyncPipe(mod, ...)          → src | Pipeline.from_module(mod)
+SyncCollection(mod, srcs)    → srcs | Pipeline.from_module(mod)
+AsyncCollection(mod, srcs)   → srcs | Pipeline.from_module(mod)
 ```
 
 ## 5. Error UX (owned by P12 / execution-semantics)

@@ -393,7 +393,7 @@ MCP/capability modules are ordinary `Pipeline` modules and use the same definiti
 sync and async execution:
 
 ```python
-catalog = Pipeline(
+catalog = Pipeline.from_module(
     "capabilitycatalog",
     conf={
         "include": {

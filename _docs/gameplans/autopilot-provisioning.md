@@ -16,7 +16,9 @@ rules, state machine, and workflow sequencing.
 >
 > **Provenance.** Folded in from the untracked `_docs/current_implementation.md` (Part 1 — the
 > Autopilot implementation plan). Part 2 of that doc (the generated module-enum taxonomy) is owned
-> by [module-enums.md](module-enums.md).
+> by [module-enums.md](module-enums.md). A later untracked `_docs/autopilot.md` contributed the
+> Graph v1.0/beta endpoint split below; its multi-tenant MSP application model, GDAP caveat, and
+> delegated-login operator mode were folded into [azure-automation.md](azure-automation.md).
 
 Related authoritative plans (this scenario **consumes**, it does not redefine them):
 
@@ -122,6 +124,13 @@ Use the existing `MicrosoftContext(tenant_id, credential, cloud, operator_id, co
 Credentials stay **references, not serialized secrets**; live tenant clients/sessions remain
 execution-owned so concurrent MSP client work cannot leak state between tenants.
 
+Tenant selection follows the multi-tenant MSP application model in `azure-automation.md`: one
+consented multitenant application, one credential reference, and a per-execution `tenant_id`,
+so one central installation can run `ensure_autopilot_devices(...)` for customer A and then
+customer B back to back. This is the **unattended** path and uses consented application
+permissions; delegated login (`riko-ms auth login`) remains an operator mode for setup and
+diagnostics only, per that plan.
+
 Credential preference:
 
 ```text
@@ -154,7 +163,18 @@ assign fallback profile
 ```
 
 Use stable Graph APIs where available and isolate beta operations behind explicitly named adapter
-methods rather than scattering beta URLs through the reconciler.
+methods rather than scattering beta URLs through the reconciler. As of this writing the split is:
+
+```text
+v1.0  list/import importedWindowsAutopilotDeviceIdentities   [1] [2]
+v1.0  windowsAutopilotDeviceIdentity updateDeviceProperties   [3]
+v1.0  windowsAutopilotDeviceIdentity assignUserToDevice
+beta  windowsAutopilotSettings sync                           [4]
+beta  windowsAutopilotDeploymentProfile assign                [5]
+```
+
+Microsoft warns that beta APIs change more often, so re-check this table before implementing
+the sync and profile-assignment adapters.
 
 ## 8. Preflight, planning, apply-verify
 
@@ -221,8 +241,11 @@ authoritative service.
 
 ## 9. Import, waiting, sync, profile fallback
 
-Prefer the Graph batch import action with serial, hardware hash, group tag, and assigned user in the
-batch payload. Do not issue one HTTP request per CSV row.
+Prefer the Graph batch import action (`POST
+/v1.0/deviceManagement/importedWindowsAutopilotDeviceIdentities/import` [2]) with serial, hardware
+hash, group tag, and assigned user in the batch payload; the imported identity model carries
+`groupTag`, `hardwareIdentifier`, `assignedUserPrincipalName`, and an import state [1], so desired
+values land in one request where supported. Do not issue one HTTP request per CSV row.
 
 **Waiting** uses the `OperationHandle`/`wait_operation(...)` contract from
 `provider-integrations.md`, never a client-local `while True: sleep(...)` loop. Example conceptual
@@ -235,7 +258,9 @@ profile convergence: 15 min interval, 60 min timeout
 
 These are operation-wait settings, not `Pipeline.poll()` source-observation semantics.
 
-After registration, trigger Autopilot sync, then read authoritative profile state.
+After registration, trigger Autopilot sync, tolerate an already-running/throttled response
+according to provider semantics, then read authoritative profile state. The sync action reports
+successful *initiation*, not profile convergence, so it never substitutes for the verify step.
 `PROFILE_BY_GROUP_TAG` is tenant/environment configuration; real profile IDs are never hard-coded in
 core source.
 
@@ -285,7 +310,7 @@ microsoft.autopilot.status
 Target Pipeline use is:
 
 ```python
-Pipeline("microsoft.autopilot.ensure", conf=...)
+Pipeline.from_module("microsoft.autopilot.ensure", conf=...)
 ```
 
 Generated discovery names/enums remain owned by `module-enums.md`. No `nerevu/riko` code edit is
@@ -348,3 +373,11 @@ Cover:
 - **state:** any persisted resumable state uses common StateStore/CAS behavior;
 - **security:** no tokens/secrets in logs or ChangePlan;
 - **registration:** external package loads through entry point with no core edit.
+
+## 15. Graph references
+
+[1]: https://learn.microsoft.com/en-us/graph/api/resources/intune-enrollment-importedwindowsautopilotdeviceidentity?view=graph-rest-1.0 "importedWindowsAutopilotDeviceIdentity resource type (v1.0)"
+[2]: https://learn.microsoft.com/en-us/graph/api/intune-enrollment-importedwindowsautopilotdeviceidentity-import?view=graph-rest-1.0 "import action (v1.0)"
+[3]: https://learn.microsoft.com/en-us/graph/api/intune-enrollment-windowsautopilotdeviceidentity-updatedeviceproperties?view=graph-rest-1.0 "updateDeviceProperties action (v1.0)"
+[4]: https://learn.microsoft.com/en-us/graph/api/intune-enrollment-windowsautopilotsettings-sync?view=graph-rest-beta "sync action (beta)"
+[5]: https://learn.microsoft.com/en-us/graph/api/intune-enrollment-windowsautopilotdeploymentprofile-assign?view=graph-rest-beta "assign action (beta)"
