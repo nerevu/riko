@@ -46,7 +46,7 @@ R5C removes it.
 
 The R3-adjacent slice corrected only the async **operator** call boundary (operators return an
 `AsyncIterator` directly). It deliberately did **not** begin Feed-native parser migration: no
-async-generator parser inference (`isasyncgenfunction`), no `aget_assignment()`/`aprocess()`, no lazy
+async-generator parser inference (`isasyncgenfunction`), no `abuild_assignment()`/`aprocess()`, no lazy
 `send.async_parser`, and no aggregator/processor/splitter parser rewrites. Those remain owned by the
 phases below — ordinary transforms at R5A, `send`/`receive`/`split` at R7, and the final wrapper/parser
 seam cleanup at R10.
@@ -238,7 +238,7 @@ but R7 consumes those mechanics into the final object-first API and removes the 
 
 ```python
 events = Pipeline.subscribe("events", func=archive)
-flow = flow.publish(events)
+pipeline = pipeline.publish(events)
 ```
 
 Canonical Workflow v2 represents that relationship as a `PublishEdge` targeting a `SubscribeNode`.
@@ -282,6 +282,11 @@ S8  Pipeline batch representation optimization under R8
 ```
 
 R10 is the final S7-style cleanup/proof, not the first time S1–S6 are attempted.
+
+Tripwire for S1/S7: `tests/internal/test_decorators.py::test_async_truncate_stays_lazy_over_an_endless_source`
+(strict xfail) probes the seam at `riko/modules/_decorators.py` where an operator without an
+`async def` parser materializes its whole async input; today `forever → truncate` under the async
+execution never yields, while the sync run is lazy. It flips when `truncate` migrates or the seam goes.
 
 ## 12. Definition of done
 

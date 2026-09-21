@@ -160,9 +160,9 @@ DotDict(..., config_mode=True)
 
 or preferably at the workflow boundary:
 
-parse_pipe_def(..., legacy_typed_values=True)
+migrate_v1_to_v2(..., legacy_typed_values=True)
 
-This keeps compatibility scoped to imported workflow definitions rather than spreading it across all runtime data.
+This keeps compatibility scoped to migrated `PipeDef`s (pipe definitions) rather than spreading it across all runtime data.
 
 ---
 
@@ -176,7 +176,7 @@ The same boundary applies to promoted source and protocol adapters:
 * a two-element list received from an external system is never interpreted as a typed
   Riko value merely because it resembles legacy configuration syntax;
 * credential references and URI options use typed parsed configuration objects;
-* compatibility parsing is limited to imported legacy pipeline definitions.
+* compatibility parsing is limited to migrated serialized `PipeDef`s.
 
 This requirement is especially important for JSON, CKAN, Prometheus, OpenAPI, and mail
 payloads, where arbitrary arrays are normal data.

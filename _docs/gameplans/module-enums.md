@@ -48,10 +48,10 @@ P8/P11/P12); it appears here only as the fake in-repo example extension that pro
 ### One identifier sanitizer (R5)
 
 Two normalizers exist and only one works. `ext/codegen.py`'s `enum_member_name` collapses
-every run of non-alphanumerics and guards a leading digit; `compile.py`'s `pythonise`
+every run of non-alphanumerics and guards a leading digit; `riko/base/_strutils.py`'s `pythonise`
 replaces four characters (`-`, `:`, `/`, `""`) and ASCII-`replace`-encodes, so
 `"class"`, `"my module"`, `"foo.bar"`, `"1st"` and `"café"` all reach generated source as
-identifiers — a pipeline that runs fine through `build_pipeline` can emit source that
+identifiers — a workflow that runs fine through `Pipeline` can `compile_workflow` to source that
 does not parse ([correctness-audit **R5**](correctness-audit.md#8-open-defect-register--features-branch-audit),
 the `C6` "weaker duplicate" shape).
 
@@ -59,10 +59,10 @@ the `C6` "weaker duplicate" shape).
   formatting (`ruff_format`) — handling non-alphanumerics, leading digits, **`keyword.iskeyword`**,
   and collisions (suffix, deterministically); `enum_member_name` becomes the upper-case
   caller, `pythonise` the identifier caller.
-- `stringify_pipe` emits the sanitized id as the variable while the `PipeDef`/JSON keeps
-  the original string — ids stay canonical (§ Scope), exactly as enum `.value` does.
+- `compile_workflow` (`riko/runtime/_codegen.py`) emits the sanitized id as the variable while the
+  workflow document (`WorkflowDocument`) keeps the original string — ids stay canonical (§ Scope), exactly as enum `.value` does.
 - Round-trip test over the pathological ids above, plus the existing
-  `test_codegen_matches_expected_file` byte guard to prove no `tests/pypipelines/*.py`
+  `test_codegen_matches_expected_file` byte guard to prove no `tests/pyworkflows/*.py`
   output changes.
 
 This is additive and gates nothing; sequence it with whichever of the two generators is next

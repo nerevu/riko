@@ -9,18 +9,31 @@ The same definition runs through sync or async execution; the target API does no
 separate final `SyncPipe.map` and `AsyncPipe.map` contracts.
 
 ```python
-flow = Pipeline(source=items).map(normalize)
+pipeline = Pipeline(source=items).map(normalize)
 ```
 
 ### Existing decorator model
 
-Continue to use the existing module definition/preparation machinery:
+Continue to use the existing module definition/preparation machinery. Each decorator accepts a
+configured form and a bare form:
 
 ```python
 @processor(...)
 @operator(...)
 @splitter(...)
+
+@processor
+@operator
+@splitter
 ```
+
+The bare form is exactly the configured form with no options: `@processor` wraps the function
+the same way `@processor()` does, for sync and async implementations alike. It is scheduled in
+R4C ([implementation-sequence.md](implementation-sequence.md)), ahead of the M1 merge. Until then
+the bare form is rejected at decoration time with `TypeError` (the function would otherwise be
+taken as the positional `defaults`), pinned by
+`tests/internal/test_decorators.py::test_bare_decorator_raises_at_decoration`, which R4C replaces
+with a test that the bare form wraps.
 
 Do not add a parallel `PipeTraits`, `TraitOverrides`, `@riko.pipe`, signature-injection, or
 callable-context framework.
@@ -51,7 +64,7 @@ derivation.
 Conceptually:
 
 ```python
-flow.map(
+pipeline.map(
     fn,
     *,
     version=MISSING,
@@ -66,7 +79,7 @@ flow.map(
 and:
 
 ```python
-flow.flat_map(
+pipeline.flat_map(
     fn,
     *,
     version=MISSING,
@@ -91,7 +104,7 @@ Exact signatures may be narrowed during implementation. The contract is:
 Execution-wide settings belong to:
 
 ```python
-flow.with_execution(executor="thread", concurrency=8, ordered=False)
+pipeline.with_execution(executor="thread", concurrency=8, ordered=False)
 ```
 
 A retained node-level `execution=` hint only describes adaptation safety for that callable;
@@ -179,7 +192,7 @@ identity. Write the version whenever a checkpoint or an idempotent side effect m
 process restart or a dependency upgrade:
 
 ```python
-flow.map(transform, version="normalize-v3")
+pipeline.map(transform, version="normalize-v3")
 ```
 
 Automatic inspection remains excellent for process-local caching, debugging, obvious
@@ -277,7 +290,7 @@ StateStore / AsyncStateStore
 and an explicit boundary is:
 
 ```python
-flow.checkpoint(id="after-normalize")
+pipeline.checkpoint(id="after-normalize")
 ```
 
 A checkpoint in a reusable callable fragment resolves to exactly one enclosing stateful
@@ -288,10 +301,24 @@ owner when the concrete Pipeline is compiled. Restore belongs to that owner.
 Planner output should expose declared/resolved semantic metadata without a second trait
 runtime. Useful fields include boundedness, ordering, stable order, sync/async availability,
 adaptation policy, identity mode, side-effect/idempotency support, declared resources,
-callable/resource fingerprint source, and Feed-native vs legacy parser mode.
+callable/resource fingerprint source, and Feed-native vs legacy parser mode. Resource affinity
+(which nodes share a declared resource, and whether that resource may cross workers) is derived
+from `resources=` and the Resource definition at plan time; it is never declared as node metadata.
 
 Structural compilation may be cached; execution-sensitive callable/resource fingerprints
 are recomputed at execution preparation.
+
+### Per-item gating (`skip_if`)
+
+The module decorators accept a `skip_if` callable that passes an item through untouched when the
+predicate matches. It is a callable, so it is not JSON-native and cannot be a `ModuleNode` option;
+since v1-cutover step 4 (2026-10-02) no `Pipeline` form expresses it, and `examples/kazeeki.py` /
+`tests/pyworkflows/pipe_kazeeki_full.py` dropped their guards (the kazeeki async-parity row is a
+strict xfail because the ungated budget math yields `NaN`). The strict-xfail tripwire is
+`tests/public/test_pending_pipeline_api.py::TestConditionalNodes`, written against
+`.strconcat(..., skip_if=…)`. This phase decides the successor: a predicate argument on the callable
+node, or conditional routing from the fan-out plan; either way the tripwire is rewritten to the
+chosen form and un-xfailed here.
 
 ### Definition of done
 

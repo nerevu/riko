@@ -144,13 +144,13 @@ a second state model.
 Applications that own a long-lived process use the common polling vocabulary:
 
 ```python
-flow = Pipeline.poll(source, interval=60)
+pipeline = Pipeline.poll(source, interval=60)
 ```
 
 A subscription can use the same concept:
 
 ```python
-flow = subscription.poll(interval=5)
+pipeline = subscription.poll(interval=5)
 ```
 
 A finite iteration limit may be exposed for deterministic tests/CLI without defining an
@@ -480,8 +480,8 @@ the configured durable handoff.
 Deduplication answers: **has this logical record/change already been observed?**
 
 ```python
-flow.dedupe(key="guid", retention=1000)
-flow.dedupe(key=["source", "external_id"], retention="30d")
+pipeline.dedupe(key="guid", retention=1000)
+pipeline.dedupe(key=["source", "external_id"], retention="30d")
 ```
 
 Requirements:
@@ -514,7 +514,9 @@ cross-resume history.
 Approximate duplicate suppression is optional and explicit:
 
 ```python
-flow.dedupe(key="guid", backend="bloom", capacity=1_000_000, false_positive_rate=0.001)
+pipeline.dedupe(
+    key="guid", backend="bloom", capacity=1_000_000, false_positive_rate=0.001
+)
 ```
 
 Rules:
@@ -534,7 +536,7 @@ Near-duplicate content similarity such as Simhash/Nilsimsa belongs to
 Change detection answers: **has a known entity changed in selected business fields?**
 
 ```python
-flow.changed(key="product_id", fields=["price", "availability"], first="emit")
+pipeline.changed(key="product_id", fields=["price", "availability"], first="emit")
 ```
 
 Optional metadata may report previous/current selected values and changed fields. Metadata
@@ -568,8 +570,8 @@ key where the destination can honor it.
 Small local windows support lightweight anomaly detection:
 
 ```python
-flow.window(count=100)
-flow.window(duration="5m", timestamp="observed_at")
+pipeline.window(count=100)
+pipeline.window(duration="5m", timestamp="observed_at")
 ```
 
 Initial methods:
@@ -585,7 +587,7 @@ rate/count threshold
 Example:
 
 ```python
-flow.anomaly(
+pipeline.anomaly(
     conf={"field": "latency_ms", "method": "zscore", "window": 100, "threshold": 3.0}
 )
 ```
@@ -642,7 +644,7 @@ Do not hard-code notification clients into anomaly operators:
 ```python
 alerts = Pipeline.subscribe("alerts")
 
-flow = monitor.publish(alerts)
+pipeline = monitor.publish(alerts)
 email = alerts.write(...)
 webhook = alerts.write(...)
 audit = alerts.write(...)

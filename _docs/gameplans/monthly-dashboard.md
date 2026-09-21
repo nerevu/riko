@@ -25,6 +25,12 @@ CSV becomes a compatibility format, not the integration mechanism.
 > seam and the reconciled Pipeline/Context/resource/provider contracts. Forward dependency order is
 > owned by [implementation-sequence.md](implementation-sequence.md), especially R11/R12. No
 > vendor-specific dependencies land in `nerevu/riko`.
+>
+> **Provenance.** Folded in from the untracked `_docs/reporting.md` memo that first translated the
+> manual monthly SOP into this reconciliation run. Its provider-operation references (§4.1), the
+> example run record (§10), and the source links at the end of this plan came from that memo; its
+> registry, execution-resource, write-mode, and plan/apply proposals are owned by the plans listed
+> below.
 
 Related authoritative plans this scenario consumes:
 
@@ -125,6 +131,24 @@ Scenario notes:
 - **Intune:** Graph `managedDevices` replaces CIPP CSV export. CIPP may still be useful as an MSP auth/
   GDAP abstraction, but the Riko-facing capability is provider data, not browser CSV navigation.
 
+### 4.1 Provider operation reference
+
+The concrete provider operations each adapter builds on, with the vendor documentation that
+establishes them. Transport concerns (auth, pagination, throttling) stay with the consumed plans.
+
+| Provider | Operations | Notes |
+|---|---|---|
+| SuperOps GraphQL | `getAssetList`, `getAsset`, `getAssetSummary`, `getAssetPatchDetails` | asset objects expose id, name, serial, manufacturer, model, hostname, platform, last communication time [2] |
+| Microsoft Graph sign-ins | `GET /auditLogs/signIns` with `$filter` on `createdDateTime` bounded by the reporting period | `$filter` time ranges and paging are supported [3] |
+| Action1 report data | `GET /reportdata/{orgId}/{reportId}/data`, `.../export`, `POST .../requery` | the existing SOP URLs already carry `orgId`/`reportId` [4] |
+| Huntress REST | agents, organizations, incident reports, summary reports, billing reports | JSON responses; agents export + monthly report both become reads [5] |
+| Axcient x360Cloud | `/client/{clientId}`, `.../backup_status`, `.../user`, `.../shared_resource` | API-key auth with paging; compare against the Usage export before dropping the browser [6] |
+| Microsoft Graph Intune | `GET /deviceManagement/managedDevices` | `managedDevice` carries id, name, enrollment time, last sync, OS, compliance state [7] |
+| CIPP | frontend-backed API endpoints | optional MSP/GDAP auth abstraction only [8] |
+| Microsoft Graph licensing | `GET /subscribedSkus` | enabled/consumed seat counts [9] |
+| Microsoft Graph users | `proxyAddresses` is readable but not writable through the user API | that is why shared-email fixes go through the Exchange/PowerShell adapter (§7) [10] |
+| Airtable | record create/update and upsert | the CSV Import extension leaves the production workflow [1] |
+
 ## 5. Airtable is a writable Target
 
 The scenario's persistence surface is the common write effect:
@@ -148,13 +172,13 @@ operation-specific configuration:
 ```python
 target = Target(Targets.AIRTABLE, base=base, table=table)
 
-flow = flow.write(target, mode="merge", keys=("endpoint_id",))
+pipeline = pipeline.write(target, mode="merge", keys=("endpoint_id",))
 ```
 
 For append-style history:
 
 ```python
-flow = flow.write(
+pipeline = pipeline.write(
     Target(Targets.AIRTABLE, base=base, table=security_events),
     mode="append",
     # operation/domain identity participates in the common idempotency contract
@@ -349,6 +373,30 @@ POST /v1/monthly-dashboard/runs/{run_id}/apply
 GET  /v1/monthly-dashboard/runs/{run_id}/qa
 ```
 
+A run is created with the client, period, and mode:
+
+```json
+{
+  "client": "centralillinoisfriends",
+  "period": "2026-07",
+  "mode": "plan"
+}
+```
+
+The run record reports per-source counts, the pending Airtable write plan, reconciliation QA counts,
+and how many approvals the plan still needs:
+
+```json
+{
+  "run_id": "md_2026_07_cif_01",
+  "status": "planned",
+  "sources": {"superops": 88, "intune": 84, "action1": 86, "huntress": 83},
+  "airtable": {"creates": 14, "updates": 212, "deletes": 3},
+  "reconciliation": {"matched": 82, "unmatched": 2, "ambiguous": 1},
+  "approvals_required": 2
+}
+```
+
 Suggested external package:
 
 ```text
@@ -361,6 +409,11 @@ riko_msp/
 ```
 
 Register through entry points with no `nerevu/riko` code edit.
+
+Provider adapters call vendor APIs directly. Credential/auth handling may reuse authorizer-style
+components through declared resources ([provider-integrations.md](provider-integrations.md)), but no
+mandatory proxy sits between the package and its providers; the earlier unified-SaaS-proxy proposal
+is rejected for this scenario.
 
 ## 11. Phases
 
@@ -382,6 +435,44 @@ MD12 MonthlyDashboard service/API + package registration
 
 MD0–MD2 consume Core/R11 contracts. Forward cross-cutting order remains authoritative in
 `implementation-sequence.md`; this list is scenario specialization order only.
+
+The **M4 monthly-reports release** in [implementation-sequence.md](implementation-sequence.md) gates
+MD0–MD10 plus the Python `MonthlyDashboard` service half of MD12. Core prerequisites per phase:
+
+| Phase | Core prerequisite |
+|---|---|
+| MD0 | shipped entry-point seam |
+| MD1 | R3 resources (shipped) + R11 connector credential-reference contract |
+| MD2 | R5C `WriteNode`/`WriteResult` + R6 idempotency + connectors C4 Airtable adapter |
+| MD3 | R11: azure-automation AZ0/AZ2/AZ3 (Graph REST) |
+| MD4–MD7 | R11: rest-incremental R0–R4 + provider-integrations P0–P2/P4 |
+| MD8–MD10 | R4C `map` (M1); domain code in `riko-msp` |
+| MD11 | microsoft-administration MA1–MA3 + provider-integrations P9 — **after M4** |
+| MD12 | Python service in M4; HTTP surface + R11 orchestration adapter **after M4** |
+
+For M4 the MVP's destructive plan/apply is deferred: the dashboard detects and hands off destructive
+candidates but performs no destructive provider change.
+
+### 11.1 Monthly invoicing subset (M3)
+
+Before the dashboard, the **M3 monthly-invoicing release** ([implementation-sequence.md](implementation-sequence.md))
+ships a read-only subset: per client and reporting period, the two counts invoicing needs. Decided
+2026-10-04:
+
+| Count | Source | Definition |
+|---|---|---|
+| billable users | Graph `GET /users` (per client tenant) | `accountEnabled` is true and `assignedLicenses` is non-empty; shared mailboxes and disabled-but-licensed accounts are excluded (they are the dashboard's reallocatable set, § 7) |
+| billable devices | SuperOps GraphQL `getAssetList` | managed assets for the client; SuperOps is authoritative, with no cross-provider reconciliation |
+
+Output is one record per client, exported as CSV through the shipped `riko.export`:
+
+```text
+client, period, billable_users, billable_devices, generated_at
+```
+
+It reuses MD3/MD4's provider reads (so nothing is thrown away at M4) and needs none of MD2 (Airtable
+writes), MD8 (reconciliation), MD9 (license reallocation), or R5C/R6. A rerun simply recomputes the
+counts; there is nothing to de-duplicate.
 
 ## 12. Definition of done
 
@@ -419,3 +510,14 @@ Cover:
 - **security:** serialized definitions contain credential references, not secrets; events/logs redact
   sensitive values;
 - **registration:** external package loads through entry point with no Core edit.
+
+[1]: https://support.airtable.com/docs/api "Airtable API"
+[2]: https://developer.superops.com/msp "SuperOps MSP API documentation"
+[3]: https://learn.microsoft.com/en-us/graph/api/signin-list?view=graph-rest-1.0 "List signIns (Graph v1.0)"
+[4]: https://www.action1.com/api-documentation/how-action1-api-works/ "How the Action1 API works"
+[5]: https://support.huntress.io/hc/en-us/articles/4780697192851-Huntress-REST-API-Overview "Huntress REST API overview"
+[6]: https://help.axcient.com/en_US/Axcient-x360Cloud/x360cloud-public-api "Axcient x360Cloud public API"
+[7]: https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-manageddevice?view=graph-rest-1.0 "managedDevice resource type (Graph v1.0)"
+[8]: https://docs.cipp.app/api-documentation/endpoints "CIPP API endpoints"
+[9]: https://learn.microsoft.com/en-us/graph/api/subscribedsku-list?view=graph-rest-1.0 "List subscribedSkus (Graph v1.0)"
+[10]: https://learn.microsoft.com/en-us/graph/api/resources/user?view=graph-rest-1.0 "user resource type (Graph v1.0)"

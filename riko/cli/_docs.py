@@ -48,6 +48,7 @@ _ROOT_MARKDOWN = frozenset(
         "INTERNALS.md",
         "KEY_PATHS.md",
         "MILESTONES.md",
+        "ONBOARDING.md",
         "PHASE_CHECKLISTS.md",
         "ROADMAP.md",
         "RUNTIME_CONTRACT.md",

@@ -118,17 +118,17 @@ Website transformations must use named Riko modules.
 Use:
 
 ```python
-flow.sitestructure()
-flow.siteartifact(...)
-flow.sitespec(...)
-flow.siteroutes(...)
-flow.review(...)
+pipeline.sitestructure()
+pipeline.siteartifact(...)
+pipeline.sitespec(...)
+pipeline.siteroutes(...)
+pipeline.review(...)
 ```
 
 Do not add:
 
 ```python
-flow.pipe(callable)
+pipeline.pipe(callable)
 ```
 
 Keep `aggregate(func=...)` as an explicit low-level escape hatch, but do not use it in the canonical examples or implementation.
@@ -181,7 +181,7 @@ the core export/artifact API when that surface is finalized.
 
 ## 3.3 Pipeline definitions are reusable; executions are one-shot
 
-`Pipeline` is an immutable reusable definition. Each `iter(flow)` or `aiter(flow)` creates a fresh
+`Pipeline` is an immutable reusable definition. Each `iter(pipeline)` or `aiter(pipeline)` creates a fresh
 private one-shot execution; an exhausted execution is never cached on the definition.
 
 Replayability follows the source itself. A definition backed by replayable inputs may be executed
@@ -192,10 +192,10 @@ For multiple render targets, materialize the canonical `SiteSpec` once when that
 boundary:
 
 ```python
-site_flow = site_artifacts().sitespec(
+pipeline = site_artifacts().sitespec(
     conf={"validate": True}
 )
-site = next(iter(site_flow))
+site = next(iter(pipeline))
 
 site.render("mithril", ...)
 site.render("html", engine="htpy", ...)
@@ -352,12 +352,12 @@ from riko import Pipeline
 
 
 def site_artifacts() -> Pipeline[SiteArtifact]:
-    structure = Pipeline(
+    structure = Pipeline.from_module(
         "fetchdata", conf={"url": "site/structure.json"}
     ).sitestructure()
 
     programs = (
-        Pipeline("fetchdata", conf={"url": DATA_API, "path": "programs"})
+        Pipeline.from_module("fetchdata", conf={"url": DATA_API, "path": "programs"})
         .filter(conf={"rule": {"field": "active", "op": "is", "value": True}})
         .rename(
             conf={
@@ -378,7 +378,7 @@ def site_artifacts() -> Pipeline[SiteArtifact]:
     )
 
     blog = (
-        Pipeline("fetchdata", conf={"url": CONTENT_API, "path": "objects"})
+        Pipeline.from_module("fetchdata", conf={"url": CONTENT_API, "path": "objects"})
         .filter(conf={"rule": {"field": "published", "op": "is", "value": True}})
         .infer(
             conf={"field": "body", "prompt": "Write a two-sentence summary."},
@@ -841,7 +841,7 @@ A processor that wraps normalized records as artifacts.
 Example:
 
 ```python
-flow.siteartifact(
+pipeline.siteartifact(
     conf={
         "kind": "collection_item",
         "target": "programs",
@@ -862,7 +862,7 @@ Produces route artifacts before rendering.
 Example:
 
 ```python
-flow.siteroutes(conf={"collection": "blog", "pattern": "/news/{id}"})
+pipeline.siteroutes(conf={"collection": "blog", "pattern": "/news/{id}"})
 ```
 
 ### `review`
@@ -872,7 +872,7 @@ Applies publication state after AI or other generated transformations.
 Example:
 
 ```python
-flow.review(
+pipeline.review(
     conf={
         "policy": "approval",
         "default_status": "draft",
@@ -1302,7 +1302,7 @@ Example:
 
 ```python
 def page_view(request, path):
-    page = site.resolve_path(path)
+    page = site.get_path(path)
 
     return render_django_page(
         request=request,

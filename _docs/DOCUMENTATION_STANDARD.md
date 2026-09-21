@@ -361,6 +361,55 @@ behavior, it is mechanism and does not belong. Applies to *any* module,
 underscore-prefixed or not — a private module's reader is still arriving cold,
 and a stale mechanism summary misleads faster than no summary at all.
 
+### No internal jargon in shipped text
+
+Internal planning vocabulary — phase codes (`R4B`, `R5C`, `P10`), gameplan
+section refs (`§E3.6`), `_docs/` paths, and internal ticket ids — must never
+appear in text a user or contributor reads outside the design docs. That covers
+**every shipped or user-facing surface**:
+
+- docstrings and doctests;
+- code comments;
+- test names and `xfail`/`skip`/`raises` reason strings (say *what* is pending in
+  plain English — "the pending callable-pipe support", not "R4B");
+- `docs/*.rst` (changelog, migration guide, cookbook, FAQ);
+- exception, log, and warning messages emitted at runtime.
+
+Describe the behavior or the pending capability in plain English instead. Phase
+codes and gameplan cross-refs stay in `_docs/` (gameplans, `IMPLEMENTED.md`) and
+`CLAUDE.md`, which are the internal design record. A strict-xfail tripwire, for
+example, names the *capability* it waits on, not the phase that owns it.
+
+The same rule fixes the names of the workflow forms. Shipped text calls each by its
+type name:
+
+- `Workflow` — the in-memory graph object;
+- `RawWorkflow` — the shorthand mapping a person writes (`WorkflowLike` when a
+  `Workflow` is accepted too);
+- `WorkflowDocument` — a serialized `Workflow`, introduced once as a **workflow
+  document**;
+- `PipeDef` — the older `src`/`tgt` form, introduced once as a **pipe definition**;
+- `PipeDag` — the bare-bones DAG mapping;
+- `WorkflowModule` — the Python source `compile_workflow` generates from a `Workflow`,
+  introduced once as a **workflow module** (imported, it is still a workflow module).
+
+The hand-written Python file `run-pipe` executes — one defining `pipe(test=False)` —
+is a **pipe script**. It has no type, because no API takes or returns it. Never call
+either Python form a "pipe file" or "pipe module": "pipe module" already means a
+built-in pipe and a `PipeDef` module entry (`PipeModule`).
+
+Introduce "workflow document", "pipe definition", and "workflow module" once per file (once per section
+in a long guide such as the cookbook), then use the type names. The older JSON has no
+document type of its own, so it is a "serialized `PipeDef`" (likewise "serialized
+`PipeDag`"). Headings, CLI `--help` text, and runtime/log messages are read on their
+own: they use the plain prose terms without backticks. "v1"/"v2" appear only when
+quoting a surface that uses them (`--format {dag,v1,v2}`, `migrate_v1_to_v2`); never
+write "canonical document/workflow", "v1/v2 document", "authoring form/mapping",
+"released pipe definition", or "pipeline/workflow definition" for one of these forms.
+A changelog entry
+also describes a change against the **last release tag**: a name that only existed
+between releases is never "renamed" or "removed" in `docs/CHANGES.rst`.
+
 ### Preserving examples during cleanup
 
 Before shortening a module docstring, inventory its existing examples and classify
@@ -461,6 +510,14 @@ compact executable example clarifies non-obvious behavior.
   `"""Yields from stream, then closes f."""` both restates the section and
   describes the loop. Write `"""Passes stream through, closing f when iteration
   ends."""` plus a `Yields:` section naming the element.
+- The detail paragraph after the summary states *what the caller gets*, not *how
+  it is produced*. Do not name the internal collaborators a function delegates to
+  or narrate its sequence of transformation steps — that is the same mechanism the
+  module rule excludes (see "Keep it user-facing"), and it applies to every
+  docstring, function or module. Two or three plain sentences is the target; a
+  paragraph that reads like a design doc is a regression even when accurate. The
+  refactor test decides: if a sentence would change wording after a
+  behavior-preserving refactor, it is mechanism and belongs in `_docs/`.
 - Classes document the abstraction + constructor semantics; do not duplicate the
   class docstring in `__init__`. Give `__init__` its own docstring only for
   initialization behavior not reasonably documented on the class.
@@ -651,6 +708,16 @@ reader to the wrong place.
 | **stream** | an iterator of items | don't use it for a single item |
 | **item** | one dict-like record | don't use it for a stream |
 | **pipe** | a configured module | don't use it for the `parser` |
+| **pipeline** | the variable bound to a `Pipeline` (`pipeline = Pipeline.from_module(...)`, `stream = iter(pipeline)`) | never `flow = Pipeline(...)` |
+| **flow** | only a bare `Workflow` graph (`flow = pipeline.workflow`) | don't use it for a `Pipeline` |
+| **`Workflow`** | the in-memory graph object (`parse_dag`, `parse_document`, `migrate_v1_to_v2` return one) | not "canonical workflow", "spec", or "workflow document" |
+| **`RawWorkflow`** | the shorthand mapping a person writes, before normalization | not "authoring mapping" |
+| **`WorkflowDocument`** | a serialized `Workflow` (bytes); "workflow document" on first use | not "canonical document", "v2 document", or "pipeline JSON" |
+| **`PipeDef`** | the older `src`/`tgt` mapping; "pipe definition" on first use; on disk, a "serialized `PipeDef`" | not "v1 document" or "older pipe definition" |
+| **`PipeDag`** | the bare-bones DAG mapping; on disk, a "serialized `PipeDag`" | not "DAG document" |
+| **`WorkflowModule`** | the Python source `compile_workflow` returns; "workflow module" on first use | not "generated module", "pipeline module", "compiled pipeline", or "pipe module" |
+| **named workflow** | a workflow module or `WorkflowDocument` filed under a `pipe_<id>` name, found by `WorkflowResolver` | not "named/composed pipeline" or "sub-pipeline" |
+| **pipe script** | a hand-written Python file defining `pipe(test=False)` that `run-pipe` executes | not "pipe file" or "pipe module" |
 
 The `coroutine` collision is the one that actually bites: `iscoroutinefunction`
 sits right next to the code you are documenting, so "coroutine function" is the

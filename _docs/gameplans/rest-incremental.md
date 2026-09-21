@@ -101,7 +101,9 @@ resolved through declared `Context` resources and execution-owned connector sess
 REST is a first-class Riko module rather than an overload of RSS-oriented `fetch`:
 
 ```python
-flow = Pipeline("rest", conf={"base_url": "https://api.example.com/", "path": "events"})
+pipeline = Pipeline.from_module(
+    "rest", conf={"base_url": "https://api.example.com/", "path": "events"}
+)
 ```
 
 Serialized form:
@@ -182,6 +184,13 @@ Requirements:
 * cancellation closes active response/session resources;
 * pagination state is observable;
 * a paginator cannot silently override auth or other security-sensitive configuration.
+
+GraphQL-over-HTTP endpoints (added 2026-10-04 for the M3 monthly-invoicing release, which reads
+SuperOps `getAssetList`) are ordinary REST sources: a `POST` whose JSON body carries `query` and
+`variables`. `page_number`, `offset_limit`, and `cursor_param` may therefore target a body variable
+path (for example `"in": "body", "param": "variables.input.page"`) instead of a query parameter,
+and `stop_when` may read a response path such as `data.getAssetList.listInfo.hasMore`. GraphQL needs
+no separate source module or paginator family.
 
 An opaque incremental resume token is **not** automatically a pagination cursor and must not
 be compared merely to detect a loop. Pagination and source-resume state may be distinct.
@@ -336,7 +345,7 @@ Rules:
   workflow result compared with the declared source-selection semantics;
 * security-sensitive request fields cannot be introduced through an unvalidated filter;
 * a provider-specific executable filter language is not promoted into generic Riko core;
-* downstream `flow.filter(...)` remains available for transformations that cannot or should
+* downstream `pipeline.filter(...)` remains available for transformations that cannot or should
   not be pushed to the source.
 
 The plan/introspection layer should distinguish:
@@ -385,7 +394,7 @@ Requirements:
 * child generation is deterministically derived from parent/source identity;
 * N+1 behavior is visible in plans/metrics;
 * rate/concurrency limits are explicit;
-* dependencies serialize in workflow definitions.
+* dependencies serialize in `WorkflowDocument`s (workflow documents).
 
 ## 14. R8 — request rate limits and backpressure
 
@@ -540,10 +549,10 @@ business-level event when selected business fields did not change.
 Incremental extraction, source-emitted change identity, and business change detection are
 not synonyms.
 
-## 20. Interaction with workflow definitions
+## 20. Interaction with workflow documents
 
 REST plans, paginator configuration, endpoint dependencies, cursor configuration, and
-source-filter pushdown are serializable in full workflow definitions.
+source-filter pushdown are serializable in full `WorkflowDocument`s.
 
 Dependency extraction should report:
 
@@ -564,7 +573,7 @@ REST remains record-oriented by default. Batch mode is enabled through the ordin
 `Pipeline` contract rather than REST-specific frame conversion or a parallel `BatchPipe`:
 
 ```python
-flow = Pipeline("rest", conf=conf, batch=True, batch_size=1000)
+pipeline = Pipeline.from_module("rest", conf=conf, batch=True, batch_size=1000)
 ```
 
 The negotiated representation/backend and Pandas/Arrow/Polars conversion details belong
@@ -626,7 +635,7 @@ Frame/batch representation tests live in `tabular-interop.md`.
 R0   RestSourcePlan
 R1   first-class rest module
 R2   response data selection
-R3   pagination strategies
+R3   pagination strategies (incl. GraphQL body-variable pagination, required by M3)
 R4   connector credential/resource integration
 R5   FeedState incremental cursor extraction
 R6   compound/opaque cursor strategies
@@ -639,7 +648,7 @@ R9   schema observations/drift integration
 ## 25. Definition of done
 
 1. Common REST APIs can be ingested without custom pagination loops.
-2. `Pipeline("rest", ...)` and `{"type":"rest", ...}` are the canonical module forms.
+2. `Pipeline.from_module("rest", ...)` and `{"type":"rest", ...}` are the canonical module forms.
 3. Credentials remain references resolved through declared resources.
 4. REST cursor state uses `FeedState` / `StateStore` and commits only at valid lifecycle
    boundaries.
@@ -652,6 +661,6 @@ R9   schema observations/drift integration
 9. Dependent endpoints are represented as ordinary Riko topology with deterministic
    provenance.
 10. REST request concurrency and rate limits are bounded and observable.
-11. REST source configuration works in Python and serialized workflow definitions.
+11. REST source configuration works in Python and `WorkflowDocument`s.
 12. Pandas/Arrow/Polars behavior is referenced, not duplicated, from `tabular-interop.md`.
 13. Riko remains a record-processing library rather than a destination-first loader.

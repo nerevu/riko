@@ -56,9 +56,8 @@ DAG is deliberately not flattened into one linear stack: `bado`, `coercion`, and
 | `riko/io/` | `io` | sync/async I/O, serialization, re-encoding |
 | `riko/parsing/` | `parsing` | config parsing, `DotDict`, HTML/XML/document parsing |
 | `riko/rss/` | `rss` | feed discovery, entry normalization, RSS/Atom parsing |
-| `riko/runtime/context.py` | `execution` | execution context definition and resource binding surface |
-| `riko/runtime/_resources.py` | `execution` | concrete one-shot/reusable resource lifecycle implementations |
-| remaining `riko/runtime/` | `runtime` | collections, compiler, pipelines, resolver/registry, pub/sub, write sessions |
+| `riko/execution/` | `execution` | one-shot sync/async executions, lifetime primitives, execution-local resource acquisition, event sink, execution context (`context.py`) and resource lifecycle (`_resources.py`) |
+| `riko/runtime/` | `runtime` | collections, compiler, pipelines, resolver/registry, pub/sub, write sessions, the frozen `_execution_plan.py` |
 | `riko/modules/` | `modules` | built-in pipe implementations and module metadata/decorator internals |
 | `riko/ext/` | `modules` | supported extension-author facade and codegen helpers; same dependency layer as modules |
 | `riko/__init__.py` | `api` | stable application facade |
@@ -73,14 +72,16 @@ The folder split deliberately separates immutable declarations from mutable runt
 state:
 
 - `riko/definitions/` contains descriptions of what a module/resource/write is.
-- `riko/runtime/context.py` and `riko/runtime/_resources.py` are the `execution`
-  sublayer: they own execution-facing resource/context behavior.
-- the rest of `riko/runtime/` orchestrates streams, compilation, resolution,
-  pub/sub, and write sessions around those contracts.
+- `riko/execution/` is the `execution` layer: `context.py` and `_resources.py`
+  own execution-facing resource/context behavior alongside the one-shot
+  executions and lifetime primitives.
+- `riko/runtime/` orchestrates streams, compilation, resolution, pub/sub, and
+  write sessions around those contracts, and holds the frozen
+  `_execution_plan.py` that preparation produces.
 
-The `execution` label therefore cuts across two files physically housed under
-`runtime/`. This exception is explicit in `_EXACT_LAYERS`; do not infer a module's
-layer from its first package component when those exact mappings apply.
+The `execution` label maps to the `riko.execution` package by prefix, so no
+per-file exception is needed; `_EXACT_LAYERS` now covers only `riko` (api) and
+`riko._package` (base).
 
 ## Import kinds
 
@@ -146,43 +147,38 @@ printed report.
 ## Change rules
 
 When moving or adding source files:
-> 1. A module may not import (at runtime, module scope) from a package above it
->    in `leaf < values/bado < types < definition < parse < runtime < plugins < app`.
-> 2. Exception: `ext/_resolver` and `ext/_pipelines` reach `runtime.compile`
->    only via function-local imports; `runtime.collections` reaches
->    `modules.receive` (`register_receiver`) the same way (see below).
->
-> `cli/` is exempt from rule 1: it is the application entry point, above every
-> layer, and is the one place a module-scope `import riko.runtime.compile` /
-> `import riko.runtime.collections` is legitimate.
 
-## The `runtime -> modules.receive` deferred edge
+1. A module may not import, at runtime and module scope, from a layer that the
+   DAG above does not allow. `cli` is the top layer, so its module-scope imports of
+   `runtime` and `modules` are ordinary downward edges, not exceptions.
+2. An upward edge is allowed only as a **function-local** import (`noqa: PLC0415`)
+   that is a recorded seam below. Before adding one, check whether the shared
+   contract can move down to the owning layer; add a new seam here only when it
+   cannot.
+3. Every upward local-only edge shown in the architecture report must be listed
+   here. If the report shows one that isn't, either remove the edge or record it.
 
-`SyncPipe.subscribe`/`AsyncPipe.subscribe` in `runtime.collections` reach
-`register_receiver` in `modules.receive` through a **function-local** import
-(`noqa: PLC0415`) — an upward `runtime -> plugins` edge that the layer order
-forbids at module scope. Like rule 4's exception it is harmless because it is
-deferred: it never executes on import, so it creates no cycle.
+## Recorded seam: `Pipeline` composition (`definitions -> execution | runtime | bado`)
 
-Longer term this edge can disappear entirely. `register_receiver` is mostly
-pub/sub registration machinery built directly on `sync_hub` and `coroutine`,
-both already in `runtime._pubsub`. Split the low-level receiver-registration
-primitive down into `runtime._pubsub` and leave only the receive-module-specific
-callback/config adaptation in `modules.receive`. Then both call sites point
-*down*:
+`Pipeline` in `riko/definitions/_workflow.py` is an immutable, reusable
+definition, but it is also the user's entry point for running that definition.
+Three of its methods reach upward through function-local imports:
 
-```text
-runtime.collections -> runtime._pubsub
-modules.receive     -> runtime._pubsub
-```
+- `Pipeline.with_resource` builds a default `Context` from
+  `riko.execution.context` when the pipeline has none.
+- `Pipeline.__iter__` builds a fresh `ExecutionPlan`
+  (`riko.runtime._execution_plan.build_execution_plan`) and runs it in a one-shot
+  `SyncExecution` (`riko.execution._execution`).
+- `Pipeline.__aiter__` does the same with `AsyncExecution` and wraps the run in
+  `riko.bado._util.maybe_aclosing`.
 
-and the `runtime -> modules` edge is gone.
-
-Do this only if `runtime._pubsub` is where that primitive genuinely belongs —
-not to appease the boundary check. The check should model the architecture you
-actually want; it should not force code movement for a technically harmless
-deferred import. Until then, the edge stays function-local, on the same
-exemption rule 4 relies on.
+This is deliberate. The definition stays free of execution state: each call
+creates its own plan and execution, and nothing executes on import, so the seam
+creates no cycle. Moving these methods off `Pipeline` would break the
+`iter(pipeline)` / `async for item in pipeline` API, and moving `Pipeline` up to
+`runtime` would put a definition in the execution-owning layer. Keep the seam to
+these entry points. Any other execution behavior belongs in `execution` or
+`runtime` and should take a `Pipeline` or `Workflow` as input.
 
 ## Folder regrouping
 

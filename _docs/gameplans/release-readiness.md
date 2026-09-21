@@ -103,6 +103,8 @@ final public Pipeline API; legacy low-level names are migration inputs only unti
   values, portals, state-store adapters, and pub/sub hubs belong to the private execution.
 - **Validate module config early** — unknown keys, invalid enums/operators, conflicting options,
   wrong types — at Pipeline construction/preparation rather than after source consumption begins.
+  Scheduled as R4E ([implementation-sequence.md](implementation-sequence.md)), a prerequisite of the
+  M2 announcement release.
 - **Step config and execution config are separate.** Step configuration is fixed when a step is
   declared; execution-wide settings are derived with `with_execution(...)` and never mutate a step.
 
@@ -118,11 +120,11 @@ final public Pipeline API; legacy low-level names are migration inputs only unti
 > `with_execution(...)`.
 
 - **`Pipeline` is the sole public pipeline concept.** A reusable, immutable definition lives in
-  `riko/pipeline.py`, exported from `riko`. `Pipeline("fetch", source=...)` or
-  `Pipeline(source=...)` creates a definition; fluent composition returns new definitions and never
-  mutates the original.
-- **Definition vs execution — the full split.** `iter(flow)` builds a fresh private
-  `SyncExecution`; `aiter(flow)` builds a fresh private `AsyncExecution`. The same definition runs
+  `riko/pipeline.py`, exported from `riko`. `Pipeline.from_module("fetch")` seeds a module and
+  `Pipeline(source=...)` seeds an item stream; both create a definition, and fluent composition
+  returns new definitions and never mutates the original.
+- **Definition vs execution — the full split.** `iter(pipeline)` builds a fresh private
+  `SyncExecution`; `aiter(pipeline)` builds a fresh private `AsyncExecution`. The same definition runs
   under `for` or `async for`; each iteration is an independent one-shot execution. No public
   `Execution(...)` constructor is needed for normal use.
 - **`SyncPipe`/`AsyncPipe`/`SyncCollection`/`AsyncCollection` are not the target public surface.**
@@ -134,14 +136,16 @@ final public Pipeline API; legacy low-level names are migration inputs only unti
   follows the source itself: a list can replay, while a generator instance remains one-shot and is
   never secretly buffered.
 - **Rename the internal `Pipeline` callable alias first.** `riko/types/general.py` currently uses
-  `Pipeline` for parser callables; rename that internal alias to `PipeCallable` before the public
+  `Pipeline` for parser callables; rename that internal alias to `ModuleWrapper` before the public
   class lands.
-- **Iteration is the execution API.** Do not add executing `collect()` or `first()` terminals.
-  `list(flow)`, `for`, and `async for` execute; `take(n)` remains a transform. Side-effecting
+- **Iteration is the execution API.** Do not add an executing `collect()` terminal; `first()`/`afirst()`
+  are one-item convenience readers over iteration, and `open()` is iteration scoped by
+  `with`/`async with` for early exit.
+  `list(pipeline)`, `for`, and `async for` execute; `take(n)` remains a transform. Side-effecting
   operations such as `write` remain explicit pipeline nodes/effects rather than a second execution
   mechanism.
 - **One execution-configuration vocabulary.** Use
-  `flow.with_execution(executor=..., concurrency=..., ordered=..., ...)` for execution-wide
+  `pipeline.with_execution(executor=..., concurrency=..., ordered=..., ...)` for execution-wide
   settings. Do not overload `with_config()` with execution knobs and do not carry forward
   `parallel`/`threads`/`pool`/`pool_scope` as final Pipeline vocabulary.
 - **Execution-mode adaptation is owned by
@@ -162,10 +166,10 @@ final public Pipeline API; legacy low-level names are migration inputs only unti
 **Migration shape:**
 
 ```text
-SyncPipe(mod, ...)           → Pipeline(mod, source=...)
-AsyncPipe(mod, ...)          → Pipeline(mod, source=...)
-SyncCollection(mod, srcs)    → Pipeline(mod, source=srcs)
-AsyncCollection(mod, srcs)   → Pipeline(mod, source=srcs)
+SyncPipe(mod, ...)           → src | Pipeline.from_module(mod)
+AsyncPipe(mod, ...)          → src | Pipeline.from_module(mod)
+SyncCollection(mod, srcs)    → srcs | Pipeline.from_module(mod)
+AsyncCollection(mod, srcs)   → srcs | Pipeline.from_module(mod)
 ```
 
 ## 5. Error UX (owned by P12 / execution-semantics)
@@ -196,6 +200,10 @@ Same principle for optional parser/frame/finance/connector dependencies.
   `twine check dist/*` → install the **wheel** into a pristine venv → smoke-test `import riko`,
   `py.typed`, bundled data, core CLI (`riko --help`), async support, and one sync + one async
   Pipeline. Publish only that exact tested artifact.
+  *Today (2026-10-04):* `publish.yml` installs the wheel and the sdist as `riko[async]` into isolated
+  envs and runs the `-m smoke` tests in `test_imports.py` (surface + `py.typed`),
+  `test_sync_async_parity.py` (one sync + async chain), and the two lifecycle files (bundled
+  `feed.xml` fan-in, sync and async). `twine check` and `riko --help` (the CLI is `riko-cli`) remain.
 - **CI enforces formatting** — `ruff check` + `ruff format --check`, not an ephemeral `--fix` pass.
 - **Public dependency-graph lane** — add a job that ignores workspace/source overrides and tests the
   dependency graph users actually install, plus min-supported and latest-compatible lanes.
@@ -236,16 +244,25 @@ file maps remain in [MILESTONES.md](../MILESTONES.md).
 The correctness-audit P0 rows gate the merge because they silently alter data/laziness rather than
 failing loudly.
 
-R1 and R3 are fixed. **R2 remains open until the Pipeline/private-execution split actually lands.**
-Planning or documenting the replacement does not discharge the defect.
+R1, R2, and R3 are fixed. R2 was discharged by removal when the Pipeline/private-execution split
+landed (2026-10-02, `54b53c29`): the mutable `PyPipe.__call__` is gone and step configuration is fixed
+when declared. Its remaining corollary — `with_execution(...)` never reads an omitted argument as
+explicit clearing — landed with `Pipeline.with_execution(...)` on 2026-10-03 (`MISSING` keeps the
+current setting, explicit `None` restores the default), so R2 is discharged in full.
+
+**Merge sequencing** is the M1 v1-parity milestone in
+[implementation-sequence.md § 4](implementation-sequence.md#m1--v1-parity-merge-next--features):
+close R4B → R4C callable nodes → R4D workflow inputs → R5A → R7 → merge `next` → `features`. R5B,
+R5C, and later phases follow the merge. This section owns the defect half of the gate; that
+milestone owns the capability half.
 
 | Row | Merge status |
 |---|---|
 | ~~**R1** `_io.opener`~~ | fixed |
-| **R2** `PyPipe.__call__` | **blocks until the replacement lands**; omitted configuration currently erases constructor state, so the new immutable Pipeline must distinguish omitted from explicit `None` and keep one source of truth between definition and execution |
+| ~~**R2** `PyPipe.__call__`~~ | fixed by removal (`54b53c29`); the immutable `Pipeline` fixes step configuration at declaration and keeps one source of truth between definition and execution, and `with_execution(...)` must keep omitted distinct from explicit `None` |
 | ~~**R3** `join`~~ | fixed |
 
-After R2, continue the remaining audit in dependency order, including async send/fan-out,
+With the P0 rows closed, continue the remaining audit in dependency order, including async send/fan-out,
 canonicalization/cache correctness, compiler identifiers, gather/reencoder/source edges, and the
 remaining parser/date cases. Each repair lands with its matching regression test.
 

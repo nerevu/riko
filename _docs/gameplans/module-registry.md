@@ -13,12 +13,17 @@
   `ModuleDefinition` + `register(defn, *, replace=False)` / `resolve(name, interface)` / `names()`.
   Populated from built-ins + entry points + runtime registrations. **Never loads JSON, never invokes
   the compiler.**
-- **`PipelineResolver`** (`riko/ext/_pipelines.py`) — resolves named **composed pipelines** (`pipe_*`,
-  JSON defs, generated py) via an injected `ModuleStore(Protocol).load`, with
-  `Directory`/`Package`/`Mapping`/`Composite` stores. Core ships **no `tests.*` reference** — the
-  test suite injects its own stores via `conftest.py`.
-- **`PipeResolver`** (`riko/ext/_resolver.py`) — the single façade.
-  Precedence **runtime registration → entry-point → built-in → named pipeline** (`register` needs
+- **`WorkflowResolver`** (`riko/runtime/_workflows.py`, private per `PRIVATE_RESOLUTION`) — resolves
+  **named workflows** (`pipe_*` workflow modules or `WorkflowDocument`s) via an injected
+  `ModuleStore(Protocol).load`, with `Directory`/`Package`/`Mapping`/`Composite` stores. Sources are
+  registered through a `register(*, store, documents, replace=False)` / `reset()` lifecycle that
+  mirrors `Registry`'s (per-slot clobber guard via `_register_slot`). Core ships **no `tests.*`
+  reference** — the test suite registers its own sources via an autouse `conftest.py` fixture calling
+  `register_workflow_store(package=…, directory=…)`. The store classes and `WorkflowResolver` stay
+  private; only `register_workflow_store` (primitives) is on `riko.ext`, with `reset_workflow_resolver`
+  in the `riko.ext.registry` submodule.
+- **`PipeResolver`** (`riko/runtime/_resolver.py`) — the single façade.
+  Precedence **runtime registration → entry-point → built-in → named workflow** (`register` needs
   `replace=True` to shadow).
 
 **Lazy-import invariant (load-bearing).** Modules import **on demand**. Built-in population
@@ -60,9 +65,10 @@ implementation for the selected private execution mode and adapts only when that
   registration time or try registered modules first. See
   [extensibility.md §24](extensibility.md#24-module-registry-and-plugins) and
   [correctness-audit **R18**](correctness-audit.md#8-open-defect-register--features-branch-audit).
-- **P8.6 — compiler adopts the façade (deferred, low value).** `build_pipeline`/`_gen_steps` still
-  resolve sub-pipelines through `compile.resolve_module` (now a one-line delegate to the façade)
-  rather than an injected resolver; `pipe_*` resolution overloads the 2nd arg as the pipeline's own
+- **P8.6 — compiler adopts the façade (moot since v1-cutover step 5, 2026-10-03).** The v1
+  compiler's `build_pipeline`/`_gen_steps` resolved sub-pipelines through `compile.resolve_module`
+  (a one-line delegate to the façade) rather than an injected resolver until both were deleted;
+  plan build now resolves through the façade directly; `pipe_*` resolution overloads the 2nd arg as the pipeline's own
   name, which complicates the swap. The compiler already routes modules through the registry via the
   delegate, so this is cleanup, not a capability gap.
 - **CI gate** — a live `pip install -e` of `examples/riko-example-ext/` exercised in CI (proves the
