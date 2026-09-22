@@ -169,6 +169,9 @@ class PipeDef(TypedDict):
     terminaldata: NotRequired[list[TerminalDataEntry]]
 
 
+type PipeDefLike = PipeDef | Mapping[str, object]
+
+
 @dataclass(frozen=True, slots=True)
 class _Edge:
     """
@@ -290,6 +293,7 @@ __all__ = [
     "ParsedPipeDef",
     "PipeDag",
     "PipeDef",
+    "PipeDefLike",
     "PipeModule",
     "PipelineDescription",
     "Wire",
