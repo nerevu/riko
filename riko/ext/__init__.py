@@ -22,6 +22,7 @@ from riko.definitions._workflow import (
 from riko.definitions._write import WriteCapabilities
 from riko.definitions.modules import ModuleDefinition, normalize_module_name
 from riko.modules._decorators import operator, processor, splitter
+from riko.runtime._migrate import migrate_v1_to_v2
 from riko.runtime._module_registry import ModuleRegistry, register_module
 from riko.runtime._normalize import normalize_workflow
 from riko.runtime._target_registry import TargetRegistry, register_target
@@ -78,6 +79,7 @@ __all__ = [
     "WriteNode",
     "get_conf_type",
     "get_module_category",
+    "migrate_v1_to_v2",
     "normalize_module_name",
     "normalize_workflow",
     "operator",

@@ -125,6 +125,7 @@ EXTENSION = frozenset(
         "WriteNode",
         "get_module_category",
         "get_conf_type",
+        "migrate_v1_to_v2",
         "normalize_module_name",
         "normalize_workflow",
         "operator",
