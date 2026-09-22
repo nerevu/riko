@@ -54,81 +54,67 @@ _EMPTY_CONF: Mapping[str, object] = MappingProxyType({})
 _EMPTY_RESOURCES: Mapping[str, str] = MappingProxyType({})
 
 
-@dataclass(frozen=True, slots=True)
-class ModuleNode:
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _Node:
+    """The identity, resource bindings, and label every node family carries."""
+
+    id: NodeId
+    name: str
+    resources: Mapping[str, str] = _EMPTY_RESOURCES
+    label: str | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ModuleNode(_Node):
     """A registered transform/operator node (split/branch/route/union/join/loop too)."""
 
     family: ClassVar[NodeFamily] = "module"
-    id: NodeId
-    name: str
     conf: Mapping[str, object] = _EMPTY_CONF
-    resources: Mapping[str, str] = _EMPTY_RESOURCES
-    label: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class ReadNode:
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReadNode(_Node):
     """A node that acquires records from a backend, interpreting them via a format."""
 
     family: ClassVar[NodeFamily] = "read"
-    id: NodeId
-    name: str
     backend: Backends
     fmt: Formats | None = None
-    resources: Mapping[str, str] = _EMPTY_RESOURCES
-    label: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class WriteNode:
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WriteNode(_Node):
     """A node that writes a record stream to a backend with a format, mode, and keys."""
 
     family: ClassVar[NodeFamily] = "write"
-    id: NodeId
-    name: str
     backend: Backends
     fmt: Formats | None = None
     mode: WriteMode = WriteMode.REPLACE
     keys: tuple[str, ...] = ()
-    resources: Mapping[str, str] = _EMPTY_RESOURCES
-    label: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class ActionNode:
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ActionNode(_Node):
     """A node that runs a provider command that is not a data write."""
 
     family: ClassVar[NodeFamily] = "action"
-    id: NodeId
-    name: str
     backend: Backends
     params: Mapping[str, object] = _EMPTY_CONF
-    resources: Mapping[str, str] = _EMPTY_RESOURCES
-    label: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class CacheNode:
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CacheNode(_Node):
     """A node carrying cache identity and policy, never cache contents."""
 
     family: ClassVar[NodeFamily] = "cache"
-    id: NodeId
-    name: str
     policy: Mapping[str, object] = _EMPTY_CONF
-    resources: Mapping[str, str] = _EMPTY_RESOURCES
-    label: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class SubscribeNode:
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SubscribeNode(_Node):
     """A node owning subscription policy for a published stream."""
 
     family: ClassVar[NodeFamily] = "subscribe"
-    id: NodeId
-    name: str
     policy: Mapping[str, object] = _EMPTY_CONF
-    resources: Mapping[str, str] = _EMPTY_RESOURCES
-    label: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

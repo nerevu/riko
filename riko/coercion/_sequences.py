@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Self, TypeGuard, cast, overload
 from requests.structures import CaseInsensitiveDict
 
 from riko.base._iterutils import multi_try
+from riko.base.exceptions import InvalidPipelineError
 from riko.types._scalars import PrimitiveValueType
 
 if TYPE_CHECKING:
@@ -56,13 +57,21 @@ def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
 
     """
     if value is None or isinstance(
-        value, (PrimitiveValueType, dict, CaseInsensitiveDict, Mapping)
+        value, (PrimitiveValueType, bytes, dict, CaseInsensitiveDict, Mapping)
     ):
         result = False
     else:
-        result = isinstance(value, (Iterable, Sequence))
+        result = isinstance(value, Iterable)
 
     return result
+
+
+def require_sequence(value: object, what: str) -> Iterable[object]:
+    """Narrows a value to a non-string iterable or rejects it."""
+    if not is_listlike(value):
+        raise InvalidPipelineError(f"{what} must be a list")
+
+    return value
 
 
 # TODO: move back to meza

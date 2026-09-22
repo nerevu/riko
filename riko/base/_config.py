@@ -52,7 +52,12 @@ PREFIX_LAYERS: dict[str, str] = {
     "riko.types": "types",
 }
 
-SINK_NAMES: frozenset[str] = frozenset({"output", "write"})
+INPUT_PORT = "_INPUT"
+OUTPUT_PORT = "_OUTPUT"
+OTHER_PORT = "_OTHER"
+OUTPUT_MODULE = "output"
+
+SINK_NAMES: frozenset[str] = frozenset({OUTPUT_MODULE, "write"})
 
 SUBPIPE_TYPE = "pipe"
 
