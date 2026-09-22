@@ -24,7 +24,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, TypedDict, cast
+from typing import TYPE_CHECKING, Literal, TypedDict, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from ._enums import BackendLike, FmtLike, KeyLike
 
 type NodeId = str
 type Port = str
@@ -42,6 +47,55 @@ class InputRef(TypedDict):
     """A structural reference to a declared workflow input."""
 
     input: str
+
+
+class EndpointAuthoring(TypedDict, total=False):
+    """Authoring shorthand for an edge or output endpoint; ``node`` is required."""
+
+    node: str
+    port: str
+
+
+class EdgeAuthoring(TypedDict, total=False):
+    """Authoring shorthand for a stream or publish edge between two endpoints."""
+
+    source: EndpointAuthoring
+    target: EndpointAuthoring
+    family: EdgeFamily
+    type: EdgeFamily
+
+
+class NodeAuthoring(TypedDict, total=False):
+    """Authoring shorthand for a node of any family, with aliases and optional keys."""
+
+    id: str
+    name: str
+    type: NodeFamily
+    family: NodeFamily
+    label: str
+    conf: Mapping[str, object]
+    policy: Mapping[str, object]
+    params: Mapping[str, object]
+    backend: BackendLike
+    fmt: FmtLike
+    format: FmtLike
+    mode: str
+    keys: KeyLike
+    resources: str | Sequence[str] | Mapping[str, str]
+
+
+class WorkflowAuthoring(TypedDict, total=False):
+    """Flexible Workflow v2 authoring envelope normalized into a ``WorkflowSpec``."""
+
+    nodes: Sequence[NodeAuthoring] | Mapping[str, NodeAuthoring]
+    edges: Sequence[EdgeAuthoring]
+    outputs: Mapping[str, EndpointAuthoring]
+    inputs: Mapping[str, JSONSchema | str]
+    resources: str | Sequence[str] | Mapping[str, str]
+    version: str
+
+
+type WorkflowSpecLike = WorkflowAuthoring | Mapping[str, object]
 
 
 @dataclass(frozen=True, slots=True)

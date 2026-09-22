@@ -43,6 +43,8 @@ from typing import TYPE_CHECKING, Any, Literal, cast, overload
 from jinja2 import Environment, PackageLoader
 
 from riko.bado.itertools import as_async
+from riko.base._config import INPUT_PORT, OTHER_PORT, OUTPUT_MODULE, OUTPUT_PORT
+from riko.base._iterutils import partition
 from riko.base._source_format import ruff_format
 from riko.base._strutils import replacer
 from riko.base.exceptions import InvalidPipelineError
@@ -220,7 +222,7 @@ def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
     for module in modules:
         dep = module if isinstance(module, str) else module["type"]
 
-        if dep != "output":
+        if dep != OUTPUT_MODULE:
             yield dep
 
 
@@ -592,7 +594,7 @@ def _gen_string_modules(
 
         if is_collection := sources is not None:
             expr = f"SyncCollection({repr_args(*sources)}, context=context)"
-        elif module_name == "output":
+        elif module_name == OUTPUT_MODULE:
             expr = repr_arg(pyarg)
         elif is_sub_pipe:
             pykwargs = list(_gen_pykwargs(*args, steps=None, **kwargs))
@@ -668,6 +670,13 @@ def _get_pyarg(  # noqa: E302
     return _get_input_module(parsed_pipe_def, module_id, steps, **split_ids)
 
 
+def _gen_connections(*edges: _Edge, target_is_input=False) -> Iterator[_Edge]:
+    for edge in edges:
+        if edge.source_port.startswith(OUTPUT_PORT):  # noqa: SIM102
+            if target_is_input == (edge.target_port == INPUT_PORT):
+                yield edge
+
+
 @overload
 def _gen_pykwargs(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef, module_id: str, steps: None = ..., **kwargs: Any
@@ -698,20 +707,16 @@ def _gen_pykwargs(  # noqa: E302
     if steps and context.mode is not ExecutionMode.RUN:
         print("You must not specify both describe and steps. Assuming steps.")
 
-    others: list[StepValue | Id] = []
+    incoming = parsed_pipe_def["graph"].incoming.get(module_id, ())
+    get_source = lambda edge: Id(edge.source) if steps is None else steps[edge.source]
+    is_other = lambda edge: pythonise(edge.target_port).startswith(OTHER_PORT)
+    other_edges, named_edges = partition(_gen_connections(*incoming), is_other)
 
-    for edge in parsed_pipe_def["graph"].incoming.get(module_id, ()):
-        if edge.source_port.startswith("_OUTPUT") and edge.target_port != "_INPUT":
-            source = Id(edge.source) if steps is None else steps[edge.source]
-            pipe_id = pythonise(edge.target_port)
+    for edge in named_edges:
+        yield (pythonise(edge.target_port), get_source(edge))
 
-            if pipe_id.startswith("_OTHER"):
-                others.append(source)
-            else:
-                yield (pipe_id, source)
-
-    if others:
-        yield ("others", others)
+    if other_edges:
+        yield ("others", [get_source(edge) for edge in other_edges])
 
     if is_loop_module(module):
         embed = module["embed"]
@@ -801,7 +806,7 @@ def _gen_steps(  # noqa: E302  # pyright: ignore[reportInconsistentOverload]
     for module_id, module_name in zip(module_ids, module_names, strict=False):
         args = (parsed_pipe_def, module_id)
 
-        if module_name == "output":
+        if module_name == OUTPUT_MODULE:
             # Terminal sink marker: its result is just its input stream.
             pyarg = _get_pyarg(*args, steps=steps, context=context, **kwargs)
             step = (module_id, pyarg)
@@ -832,27 +837,24 @@ def _get_input_module(
     source = None if steps is None else iter([{"forever": True}])
 
     if module_id in parsed_pipe_def["embed"]:
-        source = "_INPUT"
+        source = INPUT_PORT
     else:
-        for edge in parsed_pipe_def["graph"].incoming.get(module_id, ()):
-            if edge.source_port.startswith("_OUTPUT") and edge.target_port == "_INPUT":
-                src_module_id = edge.source
+        edges = parsed_pipe_def["graph"].incoming.get(module_id, ())
 
-                if steps is None and src_module_id in split_ids:
-                    pos = split_ids[src_module_id]
-                    source = f"{src_module_id}_{pos}"
-                elif steps is None:
-                    source = src_module_id
-                else:
-                    source = steps[src_module_id]
-
-                break
+        if edge := next(_gen_connections(*edges, target_is_input=True), None):
+            if steps is None and edge.source in split_ids:
+                pos = split_ids[edge.source]
+                source = f"{edge.source}_{pos}"
+            elif steps is None:
+                source = edge.source
+            else:
+                source = steps[edge.source]
 
     return Id(source) if steps is None else source
 
 
 def get_wire(
-    src: str, tgt: str, wid: str, sid: str = "_OUTPUT", tid: str = "_INPUT"
+    src: str, tgt: str, wid: str, sid: str = OUTPUT_PORT, tid: str = INPUT_PORT
 ) -> Wire:
     return Wire(
         {
@@ -886,9 +888,9 @@ def build_pipe_def(dag: PipeDag) -> PipeDef:
     linear = list(pairwise(module_ids))
     wires = [tuple(wire) for wire in dag.get("wires") or linear]
     sources = {src for src, _ in wires}
-    output_edges = [(mid, "_OUTPUT") for mid in module_ids if mid not in sources]
+    output_edges = [(mid, OUTPUT_PORT) for mid in module_ids if mid not in sources]
     edges = [*wires, *output_edges]
-    output = PipeModule(id="_OUTPUT", type="output", conf={})
+    output = PipeModule(id=OUTPUT_PORT, type=OUTPUT_MODULE, conf={})
     zipped = zip(dag["modules"], module_ids, strict=False)
     modules = [PipeModule({**module, "id": mid}) for module, mid in zipped] + [output]
     edge_pairs = enumerate(edges, 1)
@@ -954,7 +956,7 @@ def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
     incoming = {node: tuple(group) for node, group in _incoming.items()}
     outgoing = {node: tuple(group) for node, group in _outgoing.items()}
 
-    if output_edges := incoming.get("_OUTPUT", ()):
+    if output_edges := incoming.get(OUTPUT_PORT, ()):
         outputs = {"default": _OutputRef(node=output_edges[-1].source, port="out")}
     else:
         outputs = {}
@@ -1072,7 +1074,7 @@ def _resolve_leaf_modules(parsed_pipe_def: ParsedPipeDef) -> None:
     for module in parsed_pipe_def["modules"].values():
         module_name = module["type"]
 
-        if module_name != "output" and not module_name.startswith("pipe"):
+        if module_name != OUTPUT_MODULE and not module_name.startswith("pipe"):
             resolve_module(module_name)
 
 
@@ -1210,7 +1212,7 @@ def stringify_pipe(
             "raw_confs": sorted(_used_raw_confs(parsed_pipe_def)),
             "use_collection": any(m["is_collection"] for m in string_modules),
             "needs_await": any(
-                m["name"] != "output" and not m["splits"] for m in string_modules
+                m["name"] != OUTPUT_MODULE and not m["splits"] for m in string_modules
             ),
             "subtype": "source" if not pyinput else "transformer",
         }

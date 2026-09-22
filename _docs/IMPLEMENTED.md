@@ -324,10 +324,51 @@ literals, `InputRef`, and the `parse_port` grammar helper); the immutable model 
 Each node/edge is a frozen slotted dataclass carrying a `family` `ClassVar` discriminant;
 `WriteNode`/`ActionNode` carry declarative `backend`/`fmt`/`mode`/`keys`/`params` intent only — no
 live resource or write session. `Pipeline` is STABLE (`riko`); the node/edge/`WorkflowSpec`/`Endpoint`
-model is EXTENSION (`riko.ext`). Structural validation, authoring-sugar normalization, and v1
-migration are later R4A slices. Tests: `tests/public/test_workflow.py` plus module doctests. Forward
-order and the clean-break deletion ledger:
-[implementation-sequence.md](gameplans/implementation-sequence.md) R4A.
+model is EXTENSION (`riko.ext`). Structural validation and v1 migration are later R4A slices.
+Tests: `tests/public/test_workflow.py` plus module doctests. Forward order and the clean-break
+deletion ledger: [implementation-sequence.md](gameplans/implementation-sequence.md) R4A.
+
+## Workflow v2 normalization — `normalize_workflow` (R4A.2, shipped)
+
+The single authoring-sugar normalization boundary: a flexible Workflow v2 authoring mapping in,
+one strict canonical `WorkflowSpec` out, so no other subsystem reinterprets shorthand. Lives in
+`riko/runtime/_normalize.py` (the runtime home the clean-break placement note assigns, superseding
+the original `riko/workflow/normalize.py` sketch); exported EXTENSION as `riko.ext.normalize_workflow`.
+
+It is the **structural, contract-free** pass — no `ModuleRegistry`/`TargetRegistry` lookup. It
+assigns node ids, dispatches node families with enum coercion, maps legacy ports to the canonical
+grammar, rejects the `src`/`tgt` and `from`/`to` edge shorthands, materializes a `default` output
+from a lone leaf, and normalizes shorthand inputs to JSON Schema; malformed structure raises
+`InvalidPipelineError`. It reuses the established `normalize_binding`/`normalize_resources`
+(a bare-string `resources: "db"` binds to itself as `{"db": "db"}`), `normalize_keys`, `listize`
+(top-level `resources`), and the `is_mapping`/`is_listlike` guards; legacy ports map through an
+open-ended `_normalize_port` (`_OTHER<n>`→`in:n`, `_OUTPUT<n>`→`out:n-1`), not a fixed table.
+Closed-schema rejection and the remaining contract-dependent sugar (format inference from a
+locator, registered conf/params/target-config validation) are R4A.3/later. The authoring grammar itself is owned by
+[extensibility § E3](gameplans/extensibility.md#e3-canonical-workflow-v2-specification).
+
+The input is typed `WorkflowSpecLike` (`riko.types`) — the `*Like` union of the precise
+`WorkflowAuthoring` `TypedDict` (with `NodeAuthoring`/`EdgeAuthoring`/`EndpointAuthoring`) and a loose
+`Mapping[str, object]`, so a literal gets editor key-completion while any dict still passes. The six
+node families share a frozen keyword-only `_Node` base (`id`/`name`/`resources`/`label`); `Node` stays
+the closed six-member union. Tests: `tests/public/test_normalize.py` plus module doctests.
+
+## Workflow v2 validation — `validate_workflow` (R4A.3, shipped)
+
+Strict structural validation of a canonical `WorkflowSpec`, raising `InvalidPipelineError` on the
+first violation. Lives in `riko/runtime/_validate.py`; exported EXTENSION as
+`riko.ext.validate_workflow`. It answers "is this a valid graph?", not "can this run here?" — a
+structurally valid node whose runtime capability has not landed still passes (E3.10).
+
+Checks, all determinable from the spec alone: unsupported workflow version; empty node set;
+node-id disagreeing with its map key; edge and output endpoints referencing a missing node; more
+than one `StreamEdge` into one target port; publish/subscribe edge-family coherence (a `PublishEdge`
+targets a `SubscribeNode`, a `StreamEdge` does not); node resource references resolving to declared
+top-level `resources`; and a non-empty graph exposing at least one output (closing
+`normalize_workflow`'s deferred ambiguous-leaf case). The contract-aware E3.9 rules — undeclared
+ports, fan-in arity, registered module/action/target schema validation — are **deferred** because
+the module and target contracts declare no ports or configuration schemas yet; they land with that
+metadata. Tests: `tests/public/test_validate.py` plus module doctests.
 
 ## Subscription lifecycle — `subscribe` / `publish` (F5a, partial)
 

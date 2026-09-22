@@ -126,11 +126,13 @@ EXTENSION = frozenset(
         "get_module_category",
         "get_conf_type",
         "normalize_module_name",
+        "normalize_workflow",
         "operator",
         "processor",
         "register_module",
         "register_target",
         "splitter",
+        "validate_workflow",
     }
 )
 
@@ -140,11 +142,16 @@ TYPES = frozenset(
         "AsyncItems",
         "AsyncPipeTuples",
         "Conf",
+        "EdgeAuthoring",
+        "EndpointAuthoring",
         "Feed",
         "Item",
         "Items",
+        "NodeAuthoring",
         "PipeTuples",
         "Stream",
         "SyncPipeTuples",
+        "WorkflowAuthoring",
+        "WorkflowSpecLike",
     }
 )

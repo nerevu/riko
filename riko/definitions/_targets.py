@@ -66,10 +66,9 @@ def normalize_keys(value: KeyLike | None) -> tuple[str, ...]:
     else:
         keys = (value,) if isinstance(value, str) else tuple(value)
 
-        if any(not key for key in keys):
+        if not all(keys):
             raise ValueError("write keys must be non-empty strings")
-
-        if len(set(keys)) != len(keys):
+        elif len(set(keys)) != len(keys):
             raise ValueError(f"duplicate write keys are not allowed: {keys!r}")
 
     return keys

@@ -23,7 +23,9 @@ from riko.definitions._write import WriteCapabilities
 from riko.definitions.modules import ModuleDefinition, normalize_module_name
 from riko.modules._decorators import operator, processor, splitter
 from riko.runtime._module_registry import ModuleRegistry, register_module
+from riko.runtime._normalize import normalize_workflow
 from riko.runtime._target_registry import TargetRegistry, register_target
+from riko.runtime._validate import validate_workflow
 from riko.types._enums import ModuleName, ModuleNameLike
 from riko.types._targets import SupportsActions, SupportsRead, SupportsWrite, Target
 from riko.types._workflow import Endpoint
@@ -77,9 +79,11 @@ __all__ = [
     "get_conf_type",
     "get_module_category",
     "normalize_module_name",
+    "normalize_workflow",
     "operator",
     "processor",
     "register_module",
     "register_target",
     "splitter",
+    "validate_workflow",
 ]

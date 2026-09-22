@@ -578,14 +578,24 @@ R4A.5  deterministic serialization + acceptance
   (E3.2/E3.6), inputs-as-JSON-Schema, and the public immutable `Pipeline[T]`. Structural only, no
   runtime. Files: `riko/types/_workflow.py`, `riko/definitions/_workflow.py` (placement supersedes
   the original `riko/workflow/` package note — see the clean-break policy below).
-- **R4A.2 — `normalize_workflow()`.** Authoring sugar → strict canonical (E3.1): omitted
-  outputs→`outputs.default`, inline `Target`/`Format`→explicit, singular `resource`→`resources`,
-  omitted ids→`<name>-<occurrence>`, port aliases, inferred formats made explicit.
-  `normalize(normalize(x))` is stable. File: `riko/workflow/normalize.py`.
-- **R4A.3 — `validate()`.** Closed-schema rejection (E3.9): unknown fields/ports/families, duplicate
-  ids, missing refs, >1 StreamEdge per stream port, fan-in positions, undeclared resource slots,
-  unresolved `Target`/`Resource`/`Input` refs, contract-aware conf/params validation. Structural
-  validity is not runtime capability. File: `riko/workflow/validate.py`.
+- **R4A.2 — `normalize_workflow()`. Landed** (see `IMPLEMENTED.md`). Authoring sugar → strict
+  canonical (E3.1): omitted outputs→`outputs.default` (lone leaf only; ambiguity deferred to
+  validate), omitted ids→`<name>-<occurrence>`, port aliases, family dispatch + `backend`/`fmt`/
+  `mode` enum coercion, `src`/`tgt`/`from`/`to` rejection, string inputs→JSON Schema. The
+  **structural, contract-free** pass: it reuses `normalize_binding`/`normalize_resources` (so a
+  bare-string `resources` self-binds, no contract needed), `normalize_keys`, `listize`, and the
+  `is_mapping`/`is_listlike` guards; only format-from-locator inference and closed-schema rejection
+  are deferred. Full `normalize∘serialize` idempotency is proven with the byte-stable serializer in
+  R4A.5. File: `riko/runtime/_normalize.py` (the clean-break placement note below supersedes the
+  original `riko/workflow/normalize.py` sketch).
+- **R4A.3 — `validate()`. Landed** (see `IMPLEMENTED.md`). Structural closed-schema rejection (E3.9):
+  unsupported version, empty node set, node-id/key mismatch, missing edge/output refs, >1 StreamEdge
+  per target port, publish/subscribe edge-family coherence, unresolved resource refs, and a non-empty
+  graph exposing an output (closing R4A.2's ambiguous-leaf case). The contract-aware E3.9 rules
+  (undeclared ports, fan-in arity, registered conf/params/target-config validation) are **deferred**:
+  `ModuleDefinition`/target contracts declare no ports or conf schemas yet, so they land with that
+  metadata. Structural validity is not runtime capability. File: `riko/runtime/_validate.py`
+  (placement per the clean-break note, superseding the `riko/workflow/validate.py` sketch).
 - **R4A.4 — `migrate_v1_to_v2()`.** Pure v1→v2 (E3.1/E3.11): `_INPUT`/`_OUTPUT`/`_OTHERn`→canonical
   ports, v1 `write` module→`WriteNode`+Target/Format, terminal `_OUTPUT` passthrough→`outputs.default`,
   orphan handling deferred to validation rather than silent erasure. Warn during 0.x, emit v2 only;
