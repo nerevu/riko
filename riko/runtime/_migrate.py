@@ -43,9 +43,10 @@ from riko.base._config import INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
 from riko.base._iterutils import partition
 from riko.coercion._mapping import require_mapping
 from riko.coercion._sequences import require_sequence
-from riko.runtime._compile import _lower_keys
-from riko.runtime._normalize import normalize_workflow, require_str
 from riko.types._workflow import WORKFLOW_VERSION
+
+from ._compile import _lower_keys
+from ._normalize import normalize_workflow, require_str
 
 if TYPE_CHECKING:
     from logging import Logger

@@ -65,6 +65,23 @@ class DuplicateReceiverError(PubSubError):
         self.name = name
 
 
+class IdentityError(RikoError):
+    """Base class for canonical-identity errors."""
+
+
+class IdentityEncodingError(IdentityError):
+    def __init__(self, obj_type: type):
+        super().__init__(
+            f"cannot canonically encode value of type {obj_type.__name__!r}"
+        )
+        self.obj_type = obj_type
+
+
+class CyclicIdentityError(IdentityError):
+    def __init__(self):
+        super().__init__("cannot canonically encode a cyclic structure")
+
+
 class ImportLintError(RikoError): ...  # noqa: E701
 
 
@@ -75,7 +92,10 @@ class InvalidArchitectureError(ImportLintError): ...  # noqa: E701
 
 
 __all__ = [
+    "CyclicIdentityError",
     "DuplicateReceiverError",
+    "IdentityEncodingError",
+    "IdentityError",
     "ImportAnalysisError",
     "ImportLintError",
     "InvalidArchitectureError",
