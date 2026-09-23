@@ -202,6 +202,14 @@ class Module[B: (Literal[True], Literal[False])]:
         ptype: BasicCastType = BasicCastType.PASS,
         **opts: object,
     ):
+        if callable(defaults):
+            name = type(self).__name__
+            raise TypeError(
+                f"@{name} must be called before decorating (use @{name}()); the "
+                f"bare form is not supported yet and would have taken "
+                f"{defaults!r} as the pipe defaults"
+            )
+
         # Only called once on pipe import
         self.defaults: Defaults = defaults or Defaults()
         self._opts: Opts = Opts(ftype=ftype, ptype=ptype)
