@@ -39,7 +39,6 @@ if TYPE_CHECKING:
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 TV_KEYS = ("type", "value")
-WIRE_KEYS = ("id", "src", "tgt")
 PASSTHROUGH_TYPES = (str, int, float, date, Decimal, Objectify)
 D = TypeVar("D")
 
@@ -252,17 +251,6 @@ def gen_dict(  # noqa: C901, E302
         yield data
 
 
-# def is_wire(val) -> TypeIs[Wire]:
-#     if is_mapping(val) and len(val) == 3 and all(s in val for s in WIRE_KEYS):
-#         x = val["src"]
-#         x
-#         success = is_mapping(val["src"]) and is_mapping(val["tgt"])
-#     else:
-#         success = False
-#
-#     return success
-#
-#
 class DotDict[VT](CaseInsensitiveDict[VT]):
     """
     A dictionary whose keys can be accessed using dot notation.

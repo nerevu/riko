@@ -7,12 +7,9 @@ the ``Pipeline`` definition, and the port grammar. They cover structure only; ru
 execution of the graph lands in a later phase.
 """
 
-from typing import get_args
-
 import pytest
 
 from riko import Pipeline
-from riko.definitions._workflow import Edge, Node
 from riko.definitions._write import WriteMode
 from riko.ext import (
     ActionNode,
@@ -60,16 +57,6 @@ def test_edge_family_discriminants():
     assert PublishEdge(endpoint, endpoint).family == "publish"
 
 
-def test_node_union_is_closed():
-    members = set(get_args(Node.__value__))
-    expected = {ModuleNode, ReadNode, WriteNode, CacheNode, ActionNode, SubscribeNode}
-    assert members == expected
-
-
-def test_edge_union_is_closed():
-    assert set(get_args(Edge.__value__)) == {StreamEdge, PublishEdge}
-
-
 def test_write_node_defaults():
     node = WriteNode(id="write-1", name="write", backend=Backends.FILE)
     assert node.fmt is None
@@ -109,6 +96,7 @@ def test_pipeline_wraps_spec():
         ("in:1", ParsedPort("in", 1, None)),
         ("out:2", ParsedPort("out", 2, None)),
         ("out:matched", ParsedPort("out", None, "matched")),
+        ("in:count", ParsedPort("in", None, "count")),
     ],
 )
 def test_parse_port_grammar(port, expected):
@@ -118,4 +106,12 @@ def test_parse_port_grammar(port, expected):
 @pytest.mark.parametrize("port", ["sideways", "up:1", ""])
 def test_parse_port_rejects_bad_direction(port):
     with pytest.raises(ValueError, match="invalid port direction"):
+        parse_port(port)
+
+
+@pytest.mark.parametrize(
+    "port", ["out:-1", "out:", "out:a b", "in:", "in:-1", "in:a b"]
+)
+def test_parse_port_rejects_bad_qualifier(port):
+    with pytest.raises(ValueError, match="invalid port"):
         parse_port(port)

@@ -10,8 +10,8 @@ import pytest
 
 from riko.base._dateutils import TZINFOS
 from riko.base._paths import get_path
+from riko.coercion._canonical import repr_cache
 from riko.coercion._dates import date_to_tt, parse_date_string, tt_to_datedict
-from riko.coercion._freeze import repr_cache
 from riko.io._sync import Fetch
 from riko.modules._prepare import get_pieces_or_conf
 from riko.modules.regex import pipe as regex

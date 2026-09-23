@@ -22,7 +22,7 @@ from dataclasses import asdict, is_dataclass
 from time import struct_time
 from typing import TYPE_CHECKING, cast
 
-from riko.coercion._freeze import repr_cache
+from riko.coercion._canonical import repr_cache
 from riko.coercion._sequences import listize
 from riko.types._collections import RikoValue
 from riko.types._guards import is_mapping, is_sentinel, is_type_value

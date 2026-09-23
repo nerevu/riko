@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from riko.coercion._freeze import repr_cache
+from riko.coercion._canonical import repr_cache
 
 try:
     import fcntl

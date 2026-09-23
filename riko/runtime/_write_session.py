@@ -23,7 +23,7 @@ from riko.definitions._write import (
 )
 from riko.io._reencode import IterStringIO, Reencoder, reencode
 from riko.io._serialization import serialize_records
-from riko.types._enums import FmtLike, Formats, KeyLike
+from riko.types._enums import FmtLike, Formats, StrLike
 from riko.types._guards import is_mapping
 
 from ._resources import OneShotResource, Resource
@@ -670,7 +670,7 @@ def mint_write_resource(
     *,
     mode: WriteMode | str = WriteMode.REPLACE,
     fmt: FmtLike | None = None,
-    keys: KeyLike | None = None,
+    keys: StrLike | None = None,
 ) -> OneShotResource[SyncWriteSession]:
     """
     Mints an anonymous, execution-local write-session resource from a destination.
