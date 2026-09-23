@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any
 import pygogo as gogo
 from dateutil.parser import ParserError
 
-from riko.coercion._freeze import repr_cache
+from riko.coercion._canonical import repr_cache
 from riko.coercion._objectify import Objectify
 from riko.coercion.cast import cast_date, cast_decimal
 from riko.parsing._dotdict import DotDict

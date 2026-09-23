@@ -22,19 +22,20 @@ Examples:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, TypedDict, cast
+from typing import TYPE_CHECKING, ClassVar, Literal, Required, TypedDict, cast
+
+from attrs import define
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
-    from ._enums import BackendLike, FmtLike, KeyLike
+    from ._collections import JSONSchema
+    from ._enums import BackendLike, FmtLike, StrLike
 
 type NodeId = str
 type Port = str
 type ResourceName = str
-type JSONSchema = Mapping[str, object]
 
 type NodeFamily = Literal["module", "read", "write", "cache", "action", "subscribe"]
 type EdgeFamily = Literal["stream", "publish"]
@@ -52,15 +53,15 @@ class InputRef(TypedDict):
 class EndpointAuthoring(TypedDict, total=False):
     """Authoring shorthand for an edge or output endpoint; ``node`` is required."""
 
-    node: str
+    node: Required[str]
     port: str
 
 
 class EdgeAuthoring(TypedDict, total=False):
     """Authoring shorthand for a stream or publish edge between two endpoints."""
 
-    source: EndpointAuthoring
-    target: EndpointAuthoring
+    source: Required[EndpointAuthoring]
+    target: Required[EndpointAuthoring]
     family: EdgeFamily
     type: EdgeFamily
 
@@ -69,7 +70,7 @@ class NodeAuthoring(TypedDict, total=False):
     """Authoring shorthand for a node of any family, with aliases and optional keys."""
 
     id: str
-    name: str
+    name: Required[str]
     type: NodeFamily
     family: NodeFamily
     label: str
@@ -77,10 +78,11 @@ class NodeAuthoring(TypedDict, total=False):
     policy: Mapping[str, object]
     params: Mapping[str, object]
     backend: BackendLike
+    dest: str
     fmt: FmtLike
     format: FmtLike
     mode: str
-    keys: KeyLike
+    keys: StrLike
     resources: str | Sequence[str] | Mapping[str, str]
 
 
@@ -88,22 +90,35 @@ class WorkflowAuthoring(TypedDict, total=False):
     """Flexible Workflow v2 authoring envelope normalized into a ``WorkflowSpec``."""
 
     nodes: Sequence[NodeAuthoring] | Mapping[str, NodeAuthoring]
-    edges: Sequence[EdgeAuthoring]
     outputs: Mapping[str, EndpointAuthoring]
-    inputs: Mapping[str, JSONSchema | str]
-    resources: str | Sequence[str] | Mapping[str, str]
+    inputs: JSONSchema
+    edges: Sequence[EdgeAuthoring]
+    resources: str | Sequence[str]
     version: str
 
 
 type WorkflowSpecLike = WorkflowAuthoring | Mapping[str, object]
 
 
-@dataclass(frozen=True, slots=True)
+@define(frozen=True, slots=True)
 class Endpoint:
     """A reference to one port on one node; edges and outputs point through it."""
 
     node: NodeId
     port: Port
+
+
+@define(frozen=True, slots=True)
+class Edge:
+    """A stream edge delivering records from a source port to a target port."""
+
+    family: ClassVar[EdgeFamily]
+    source: Endpoint
+    target: Endpoint
+
+    @property
+    def port(self) -> tuple[str, str]:
+        return self.target.node, self.target.port
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,8 +160,10 @@ def parse_port(port: Port) -> ParsedPort:
         index, name = None, None
     elif rest.isdigit():
         index, name = int(rest), None
-    else:
+    elif direction == "out" and rest.isidentifier():
         index, name = None, rest
+    else:
+        raise ValueError(f"invalid port: {port!r}")
 
     return ParsedPort(cast("PortDirection", direction), index, name)
 
@@ -156,7 +173,6 @@ __all__ = [
     "EdgeFamily",
     "Endpoint",
     "InputRef",
-    "JSONSchema",
     "NodeFamily",
     "NodeId",
     "ParsedPort",

@@ -2,21 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from riko.base.exceptions import InvalidPipelineError
 from riko.types._guards import is_mapping
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-
-def require_mapping(value: object, what: str) -> Mapping[str, object]:
-    """Narrows a value to a mapping or rejects it as malformed structure."""
-    if not is_mapping(value):
-        raise InvalidPipelineError(f"{what} must be a mapping")
-
-    return value
 
 
 def invert_dict[K, V](d: dict[K, V]) -> dict[V, K]:

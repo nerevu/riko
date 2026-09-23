@@ -129,11 +129,12 @@ EXTENSION = frozenset(
         "normalize_module_name",
         "normalize_workflow",
         "operator",
+        "parse_workflow",
         "processor",
         "register_module",
         "register_target",
+        "serialize_workflow",
         "splitter",
-        "validate_workflow",
     }
 )
 

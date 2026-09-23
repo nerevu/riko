@@ -37,7 +37,6 @@ from itertools import pairwise
 from json import JSONEncoder, dumps
 from pprint import PrettyPrinter
 from time import struct_time
-from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 from jinja2 import Environment, PackageLoader
@@ -51,6 +50,7 @@ from riko.base.exceptions import InvalidPipelineError
 from riko.coercion._graph import Graph, Nodes, NodeSet, SetGraph, topological_sort
 from riko.coercion._sequences import listize
 from riko.parsing._dotdict import DotDict
+from riko.types._collections import freeze_mapping
 from riko.types._compiler import (
     AbbrevStringModule,
     CountValues,
@@ -963,14 +963,14 @@ def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
 
     return _GraphIndex(
         edges=edges,
-        incoming=MappingProxyType(incoming),
-        outgoing=MappingProxyType(outgoing),
-        dependencies=MappingProxyType(dependencies),
-        dependents=MappingProxyType(dependents),
+        incoming=freeze_mapping(incoming),
+        outgoing=freeze_mapping(outgoing),
+        dependencies=freeze_mapping(dependencies),
+        dependents=freeze_mapping(dependents),
         order=order,
         roots=roots,
         leaves=leaves,
-        outputs=MappingProxyType(outputs),
+        outputs=freeze_mapping(outputs),
     )
 
 

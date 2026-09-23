@@ -4,19 +4,20 @@
 import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from enum import Enum, StrEnum
 from pathlib import PurePosixPath, PureWindowsPath
 from uuid import UUID
 
 import pytest
+from attrs import define
 
 from riko.base.exceptions import CyclicIdentityError, IdentityEncodingError
-from riko.coercion._freeze import (
+from riko.coercion._canonical import (
     IdentityDomain,
     canonical_bytes,
+    canonicalize,
     digest,
-    freeze,
     repr_cache,
 )
 
@@ -68,6 +69,12 @@ class Point:
     y: int
 
 
+@define(frozen=True)
+class Pin:
+    x: int
+    y: int
+
+
 @pytest.mark.parametrize(
     ("value", "expected"), GOLDEN_BYTES.values(), ids=GOLDEN_BYTES.keys()
 )
@@ -113,6 +120,14 @@ def test_set_is_order_independent():
     assert canonical_bytes({1, 2, 3}) == canonical_bytes({3, 2, 1})
 
 
+def test_distinct_nan_keys_sort_by_full_pair():
+    first, second = float("nan"), float("nan")
+    forward = {first: "x", second: "y"}
+    reverse = {second: "y", first: "x"}
+    assert len(forward) == len(reverse) == 2
+    assert canonical_bytes(forward) == canonical_bytes(reverse)
+
+
 def test_negative_zero_canonicalizes_with_positive_zero():
     assert canonical_bytes(-0.0) == canonical_bytes(0.0)
 
@@ -125,6 +140,20 @@ def test_float_infinities_and_nan_have_stable_tags():
 
 def test_decimal_equivalent_representations_normalize():
     assert canonical_bytes(Decimal("1.0")) == canonical_bytes(Decimal("1.000"))
+
+
+def test_decimal_encoding_ignores_ambient_context_precision():
+    value = Decimal("123456.789")
+
+    with localcontext() as ctx:
+        ctx.prec = 1
+        low = canonical_bytes(value)
+
+    with localcontext() as ctx:
+        ctx.prec = 60
+        high = canonical_bytes(value)
+
+    assert low == high == canonical_bytes(value)
 
 
 def test_naive_datetime_uses_utc_fallback():
@@ -161,6 +190,15 @@ def test_dataclass_freezes_by_type_and_fields():
     assert canonical_bytes(Point(1, 2)) != canonical_bytes(Point(2, 1))
 
 
+def test_attrs_freezes_by_type_and_fields():
+    assert canonical_bytes(Pin(1, 2)) == canonical_bytes(Pin(1, 2))
+    assert canonical_bytes(Pin(1, 2)) != canonical_bytes(Pin(2, 1))
+
+
+def test_attrs_and_dataclass_stay_distinct():
+    assert canonical_bytes(Pin(1, 2)) != canonical_bytes(Point(1, 2))
+
+
 def test_recursive_tuple_keys_are_supported():
     assert canonical_bytes((1, (2, (3, 4)))) == canonical_bytes((1, (2, (3, 4))))
 
@@ -181,12 +219,12 @@ def test_cyclic_structure_is_rejected():
     data.append(data)
 
     with pytest.raises(CyclicIdentityError):
-        freeze(data)
+        canonicalize(data)
 
 
 def test_unsupported_value_raises():
     with pytest.raises(IdentityEncodingError):
-        freeze(object())
+        canonicalize(object())
 
 
 def test_repr_cache_memoizes_supported_arguments():

@@ -23,6 +23,7 @@ from typing_extensions import TypeIs
 
 from riko.base._config import SUBPIPE_TYPE
 from riko.base._strutils import replacer
+from riko.base.exceptions import InvalidPipelineError
 
 from ._io import AsyncCloseable, SyncCloseable
 from ._scalars import BasicValueType
@@ -133,6 +134,14 @@ def is_mapping[K, V](val: Mapping[K, V] | object) -> TypeIs[Mapping[K, V]]:
         failure = isinstance(val, (str, int, float))
 
     return success or (False if failure else isinstance(val, Mapping))
+
+
+def require_mapping(value: object, what: str | None = "value") -> Mapping[str, object]:
+    """Narrows a value to a mapping or rejects it as malformed structure."""
+    if not is_mapping(value):
+        raise InvalidPipelineError(f"{what} must be a mapping")
+
+    return value
 
 
 def is_stateful_item(val: Item) -> TypeGuard[StatefulItem]:

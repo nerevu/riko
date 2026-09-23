@@ -175,7 +175,7 @@ class PipelineResolver:
 
     def load(self, name: str) -> ModuleType | None:
         """Loads the generated pipe module for ``name``, or ``None``."""
-        return self._store.load(name) if self._store is not None else None
+        return None if self._store is None else self._store.load(name)
 
     @overload
     def resolve(  # noqa: E704
@@ -213,7 +213,7 @@ class PipelineResolver:
 
         """
         store = self._definitions if directory is None else DirectoryStore(directory)
-        parsed = store.load(name) if store is not None else None
+        parsed = None if store is None else store.load(name)
 
         if parsed is None:
             raise UnsupportedPipelineError(name)

@@ -8,6 +8,8 @@ detection, omitted-outputs materialization, input shorthand, resource sugar, and
 idempotency over an already-canonical authoring mapping.
 """
 
+from types import MappingProxyType
+
 import pytest
 
 from riko.base.exceptions import InvalidPipelineError
@@ -17,6 +19,7 @@ from riko.definitions._workflow import (
     ReadNode,
     StreamEdge,
     SubscribeNode,
+    WorkflowSpec,
     WriteNode,
 )
 from riko.definitions._write import WriteMode
@@ -91,7 +94,7 @@ def test_family_dispatch_and_enum_coercion():
 
 
 def test_unknown_backend_raises():
-    with pytest.raises(InvalidPipelineError, match="unknown backend"):
+    with pytest.raises(ValueError, match="Invalid Backends"):
         normalize_workflow({"nodes": [{"name": "r", "type": "read", "backend": "ftp"}]})
 
 
@@ -232,21 +235,244 @@ def test_duplicate_ids_rejected():
         )
 
 
-def test_normalize_is_idempotent_over_canonical_input():
-    canonical = {
-        "nodes": [
-            {"id": "fetch-1", "name": "fetch"},
-            {"id": "write-1", "name": "write", "type": "write", "backend": "file"},
-        ],
-        "edges": [{"source": {"node": "fetch-1"}, "target": {"node": "write-1"}}],
-        "outputs": {"default": {"node": "write-1", "port": "out"}},
-        "inputs": {},
-        "resources": (),
-        "version": "2",
-    }
-    first = normalize_workflow(canonical)
-    second = normalize_workflow(canonical)
-    assert first == second
-    assert dict(first.nodes) == dict(second.nodes)
-    assert first.edges == second.edges
-    assert dict(first.outputs) == dict(second.outputs)
+def test_invalid_write_mode_rejected():
+    with pytest.raises(ValueError, match="Invalid WriteMode"):
+        normalize_workflow(
+            {
+                "nodes": [
+                    {"name": "w", "type": "write", "backend": "file", "mode": "apend"}
+                ]
+            }
+        )
+
+
+def test_invalid_format_rejected():
+    with pytest.raises(ValueError, match="Invalid Formats"):
+        normalize_workflow(
+            {"nodes": [{"name": "r", "type": "read", "backend": "file", "fmt": "xml"}]}
+        )
+
+
+def test_unknown_node_field_rejected():
+    with pytest.raises(InvalidPipelineError, match="unknown ModuleNode field"):
+        normalize_workflow({"nodes": [{"name": "fetch", "bogus": 1}]})
+
+
+def test_unknown_top_level_field_rejected():
+    with pytest.raises(InvalidPipelineError, match="unknown WorkflowSpec field"):
+        normalize_workflow({"nodes": [{"name": "fetch"}], "bogus": 1})
+
+
+def test_unknown_edge_field_rejected():
+    with pytest.raises(InvalidPipelineError, match="unknown Edge field"):
+        normalize_workflow(
+            {
+                "nodes": [{"id": "a", "name": "fetch"}],
+                "edges": [
+                    {"source": {"node": "a"}, "target": {"node": "a"}, "bogus": 1}
+                ],
+            }
+        )
+
+
+def test_unknown_edge_family_rejected():
+    with pytest.raises(InvalidPipelineError, match="unknown edge family"):
+        normalize_workflow(
+            {
+                "nodes": [{"id": "a", "name": "fetch"}, {"id": "b", "name": "filter"}],
+                "edges": [
+                    {
+                        "source": {"node": "a"},
+                        "target": {"node": "b"},
+                        "family": "broadcast",
+                    }
+                ],
+            }
+        )
+
+
+def test_explicit_stream_family_to_subscribe_is_preserved():
+    spec = normalize_workflow(
+        {
+            "nodes": [
+                {"id": "a", "name": "fetch"},
+                {"id": "s", "name": "sub", "type": "subscribe"},
+            ],
+            "edges": [
+                {"source": {"node": "a"}, "target": {"node": "s"}, "family": "stream"}
+            ],
+        }
+    )
+    assert isinstance(spec.edges[0], StreamEdge)
+
+
+@pytest.mark.parametrize("port", ["out:", "bogus:x", ""])
+def test_invalid_port_rejected(port):
+    with pytest.raises(InvalidPipelineError, match="port"):
+        normalize_workflow(
+            {
+                "nodes": [{"id": "a", "name": "fetch"}, {"id": "b", "name": "filter"}],
+                "edges": [
+                    {"source": {"node": "a"}, "target": {"node": "b", "port": port}}
+                ],
+            }
+        )
+
+
+def test_explicit_empty_outputs_not_materialized():
+    spec = normalize_workflow({"nodes": [{"id": "a", "name": "fetch"}], "outputs": {}})
+    assert spec.outputs == {}
+
+
+def test_falsey_conf_rejected_not_coerced():
+    with pytest.raises(InvalidPipelineError, match="ModuleNode 'conf'"):
+        normalize_workflow({"nodes": [{"name": "fetch", "conf": []}]})
+
+
+def test_write_dest_is_preserved():
+    spec = normalize_workflow(
+        {
+            "nodes": [
+                {"name": "w", "type": "write", "backend": "file", "dest": "out.json"}
+            ]
+        }
+    )
+    write = spec.nodes["w-1"]
+    assert isinstance(write, WriteNode)
+    assert write.dest == "out.json"
+
+
+def test_node_conf_is_isolated_from_caller_mutation():
+    conf = {"limit": 5}
+    spec = normalize_workflow({"nodes": [{"id": "a", "name": "fetch", "conf": conf}]})
+    node = spec.nodes["a"]
+    conf["limit"] = 99
+    assert isinstance(node, ModuleNode)
+    assert node.conf == {"limit": 5}
+
+
+def test_normalizing_a_spec_is_a_fixed_point():
+    first = normalize_workflow(
+        {
+            "nodes": [
+                {"name": "fetch"},
+                {"name": "write", "type": "write", "backend": "file"},
+            ],
+            "edges": [{"source": {"node": "fetch-1"}, "target": {"node": "write-1"}}],
+        }
+    )
+    assert normalize_workflow(first) == first
+    assert normalize_workflow(normalize_workflow(first)) == first
+
+
+def test_normalize_recanonicalizes_a_hand_built_spec():
+    a = ModuleNode(id="a", name="fetch")
+    b = ModuleNode(id="b", name="filter")
+    hand = WorkflowSpec(
+        nodes={"a": a, "b": b},
+        edges=(StreamEdge(Endpoint("a", "_OUTPUT"), Endpoint("b", "_OTHER2")),),
+        outputs={"default": Endpoint("b", "_OUTPUT")},
+        inputs={},
+    )
+    canon = normalize_workflow(hand)
+    assert canon.edges[0].source.port == "out"
+    assert canon.edges[0].target.port == "in:2"
+    assert canon.outputs["default"].port == "out"
+
+
+def test_mapping_key_conflicting_inner_id_rejected():
+    with pytest.raises(InvalidPipelineError, match="conflicts"):
+        normalize_workflow({"nodes": {"a": {"id": "b", "name": "fetch"}}})
+
+
+def test_mapping_key_matching_inner_id_allowed():
+    spec = normalize_workflow({"nodes": {"a": {"id": "a", "name": "fetch"}}})
+    assert list(spec.nodes) == ["a"]
+
+
+def test_unknown_endpoint_field_rejected():
+    with pytest.raises(InvalidPipelineError, match="unknown Endpoint field"):
+        normalize_workflow(
+            {
+                "nodes": [{"id": "a", "name": "f"}, {"id": "b", "name": "g"}],
+                "edges": [
+                    {"source": {"node": "a"}, "target": {"node": "b", "porrt": "in"}}
+                ],
+            }
+        )
+
+
+def test_format_alias_maps_to_fmt():
+    spec = normalize_workflow(
+        {
+            "nodes": [
+                {
+                    "id": "r",
+                    "name": "read",
+                    "type": "read",
+                    "backend": "file",
+                    "format": "csv",
+                }
+            ]
+        }
+    )
+    read = spec.nodes["r"]
+    assert isinstance(read, ReadNode)
+    assert read.fmt is Formats.CSV
+
+
+def test_format_and_fmt_together_rejected():
+    with pytest.raises(InvalidPipelineError, match="'fmt' or 'format'"):
+        normalize_workflow(
+            {
+                "nodes": [
+                    {
+                        "id": "r",
+                        "name": "read",
+                        "type": "read",
+                        "backend": "file",
+                        "fmt": "csv",
+                        "format": "jsonl",
+                    }
+                ]
+            }
+        )
+
+
+@pytest.mark.parametrize("port", ["in:name", "in:x", "out:-1"])
+def test_named_input_and_bad_index_ports_rejected(port):
+    with pytest.raises(InvalidPipelineError, match="port"):
+        normalize_workflow(
+            {
+                "nodes": [{"id": "a", "name": "f"}, {"id": "b", "name": "g"}],
+                "edges": [
+                    {"source": {"node": "a"}, "target": {"node": "b", "port": port}}
+                ],
+            }
+        )
+
+
+def test_legacy_prefix_with_non_numeric_suffix_is_not_misconverted():
+    spec = normalize_workflow(
+        {
+            "nodes": [{"id": "a", "name": "f"}, {"id": "b", "name": "g"}],
+            "edges": [
+                {"source": {"node": "a"}, "target": {"node": "b", "port": "count"}}
+            ],
+        }
+    )
+    assert spec.edges[0].target.port == "count"
+
+
+def test_nested_conf_is_deeply_frozen_and_isolated():
+    inner = {"k": 1}
+    spec = normalize_workflow(
+        {"nodes": [{"id": "a", "name": "f", "conf": {"nested": inner, "list": [1, 2]}}]}
+    )
+    inner["k"] = 99
+    node = spec.nodes["a"]
+    assert isinstance(node, ModuleNode)
+    assert node.conf is not None
+    assert node.conf["nested"] == {"k": 1}
+    assert node.conf["list"] == (1, 2)
+    assert isinstance(node.conf["nested"], MappingProxyType)

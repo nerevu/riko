@@ -21,16 +21,16 @@ Examples:
 
 from __future__ import annotations
 
-from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, NamedTuple, Self, overload
 
+from riko.types._collections import FrozenMap, freeze_mapping
 from riko.types._enums import ExecutionMode
 from riko.types._guards import is_lifecycle_factory
 
 from ._resources import Resource, ReusableResource
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable
 
     from riko.definitions._resource_types import ResourceDefinition, ReusableResources
     from riko.types._collections import Inputs
@@ -38,11 +38,6 @@ if TYPE_CHECKING:
 
 INPUT_MODES = {ExecutionMode.DESCRIBE_INPUTS, ExecutionMode.DESCRIBE}
 DEPENDENCY_MODES = {ExecutionMode.DESCRIBE_DEPENDENCIES, ExecutionMode.DESCRIBE}
-
-
-def _immutable_mapping[K, V](value: Mapping[K, V]) -> Mapping[K, V]:
-    """Copies ``value`` into a read-only mapping detached from its source."""
-    return MappingProxyType(dict(value))
 
 
 class ContextTuple(NamedTuple):
@@ -80,11 +75,11 @@ class Context:
         submodule: bool | None = False,
     ) -> None:
         self._mode = mode or ExecutionMode.RUN
-        self._inputs = MappingProxyType(dict(inputs or {}))
+        self._inputs = freeze_mapping(inputs or {})
         self._verbose = bool(verbose)
         self._test = bool(test)
         self._submodule = bool(submodule)
-        self._resources = MappingProxyType({})
+        self._resources: FrozenMap[ReusableResource] = freeze_mapping({})
 
     def __reduce__(self) -> tuple[Callable[[ContextTuple], Context], ContextTuple]:
         context_tuple = ContextTuple(
@@ -93,7 +88,7 @@ class Context:
             verbose=self.verbose,
             test=self.test,
             submodule=self.submodule,
-            resources=dict(self.resources),
+            resources=freeze_mapping(self.resources),
         )
         return (_restore_context, context_tuple)
 
@@ -123,8 +118,8 @@ class Context:
 
     @classmethod
     def _from_parts(cls, context_tuple: ContextTuple) -> Self:
-        resources = _immutable_mapping(context_tuple.resources)
-        inputs = _immutable_mapping(context_tuple.inputs)
+        resources = freeze_mapping(context_tuple.resources)
+        inputs = freeze_mapping(context_tuple.inputs)
 
         context = cls.__new__(cls)
         context._mode = context_tuple.mode
@@ -259,7 +254,7 @@ class Context:
             verbose=self.verbose,
             test=self.test,
             submodule=self.submodule,
-            resources={**self.resources, name: resource},
+            resources=freeze_mapping({**self.resources, name: resource}),
         )
         return type(self)._from_parts(context_tuple)
 

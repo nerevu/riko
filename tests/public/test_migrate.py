@@ -12,6 +12,7 @@ import pytest
 
 from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._workflow import ModuleNode, WriteNode
+from riko.definitions._write import WriteMode
 from riko.ext import migrate_v1_to_v2
 from riko.types._enums import Backends, Formats
 from riko.types._workflow import Endpoint
@@ -86,6 +87,90 @@ def test_write_module_becomes_write_node():
     assert isinstance(node, WriteNode)
     assert node.backend is Backends.FILE
     assert node.fmt is Formats.JSON
+
+
+def test_write_module_preserves_destination_mode_and_keys():
+    spec = migrate_v1_to_v2(
+        {
+            "modules": [
+                {
+                    "id": "w",
+                    "type": "write",
+                    "conf": {
+                        "dest": "out.jsonl",
+                        "fmt": "jsonl",
+                        "mode": "append",
+                        "keys": "id",
+                    },
+                }
+            ]
+        }
+    )
+    node = spec.nodes["w"]
+    assert isinstance(node, WriteNode)
+    assert node.dest == "out.jsonl"
+    assert node.fmt is Formats.JSONL
+    assert node.mode is WriteMode.APPEND
+    assert node.keys == ("id",)
+
+
+@pytest.mark.parametrize(
+    ("v1_mode", "canonical"),
+    [
+        ("wb+", WriteMode.REPLACE),
+        ("w", WriteMode.REPLACE),
+        ("ab", WriteMode.APPEND),
+        ("a+", WriteMode.APPEND),
+    ],
+)
+def test_v1_file_open_mode_translates(v1_mode, canonical):
+    spec = migrate_v1_to_v2(
+        {
+            "modules": [
+                {
+                    "id": "w",
+                    "type": "write",
+                    "conf": {"dest": "o.json", "mode": v1_mode},
+                }
+            ]
+        }
+    )
+    node = spec.nodes["w"]
+    assert isinstance(node, WriteNode)
+    assert node.mode is canonical
+
+
+def test_unmappable_v1_write_mode_rejected():
+    with pytest.raises(InvalidPipelineError, match="write mode"):
+        migrate_v1_to_v2(
+            {
+                "modules": [
+                    {"id": "w", "type": "write", "conf": {"dest": "o", "mode": "rb"}}
+                ]
+            }
+        )
+
+
+def test_v1_write_wrapper_option_rejected():
+    with pytest.raises(InvalidPipelineError, match="write option"):
+        migrate_v1_to_v2(
+            {
+                "modules": [
+                    {"id": "w", "type": "write", "conf": {"dest": "o"}, "emit": True}
+                ]
+            }
+        )
+
+
+def test_v1_write_unknown_conf_key_rejected():
+    with pytest.raises(InvalidPipelineError, match="write option"):
+        migrate_v1_to_v2(
+            {
+                "modules": [
+                    {"id": "w", "type": "write", "conf": {"dest": "o", "bogus": 1}}
+                ]
+            }
+        )
 
 
 def test_write_module_without_format_defaults_to_none():

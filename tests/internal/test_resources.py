@@ -25,6 +25,7 @@ from riko.runtime._resources import (
     classify_factory,
 )
 from riko.runtime.context import Context
+from riko.types._collections import freeze_mapping
 from tests import async_test
 
 if TYPE_CHECKING:
@@ -489,7 +490,7 @@ class TestResourceEcosystem:
 
     def test_bind_resources_missing_binding_raises(self):
         with pytest.raises(TypeError, match="is not bound"):
-            bind_resources("connection", {})
+            bind_resources("connection", freeze_mapping({}))
 
     def test_bind_resources_validates_all_names_before_opening(self):
         """Name validation must complete before resource acquisition."""
@@ -514,10 +515,10 @@ class TestResourceEcosystem:
         external = Resource.from_external(connection)
         owned = Resource.from_lifecycle(sync_gen_factory)
 
-        assert bind_resources("db", {"db": external}).db is connection
+        assert bind_resources("db", freeze_mapping({"db": external})).db is connection
 
         with pytest.raises(NotImplementedError, match="execution layer"):
-            bind_resources("db", {"db": owned})  # pyright: ignore[reportArgumentType]
+            bind_resources("db", freeze_mapping({"db": owned}))  # pyright: ignore[reportArgumentType]
 
         with pytest.raises(TypeError, match="Invalid resource factory"):
             Context().with_resource(  # pyright: ignore[reportCallIssue]

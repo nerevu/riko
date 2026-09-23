@@ -29,6 +29,7 @@ classifiers=[
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "attrs>=26.1.0",
     "babel>=2.8.0,<3.0.0",
     "chardet>=3.0.4,<8.0.0",
     "click>=8.4.0",

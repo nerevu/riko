@@ -60,7 +60,7 @@ from riko.definitions._targets import build_write
 from riko.definitions._write import Destination, ExportType, WriteMode, WriteResult
 from riko.definitions.modules import normalize_module_name
 from riko.io._serialization import CONVERSION_FUNCS, serialize_records
-from riko.types._enums import ExecutionMode, FmtLike, Formats, KeyLike, ModuleNameLike
+from riko.types._enums import ExecutionMode, FmtLike, Formats, ModuleNameLike, StrLike
 from riko.types._scalars import AnyStrType, BasicValue
 from riko.types.modules import Conf, ReceiveConf
 
@@ -564,7 +564,7 @@ def _sink(
     *,
     mode: WriteMode | str,
     fmt: FmtLike | None,
-    keys: KeyLike | None,
+    keys: StrLike | None,
 ) -> WriteResult:
     """Resolves ``dest``, validates the write, and delivers the whole stream to it."""
     prepared = build_write(dest, mode, fmt=fmt, keys=keys)
@@ -587,7 +587,7 @@ async def _asink(
     *,
     mode: WriteMode | str,
     fmt: FmtLike | None,
-    keys: KeyLike | None,
+    keys: StrLike | None,
 ) -> WriteResult:
     """Drains ``items`` and delivers the records through a sync file session."""
     prepared = build_write(dest, mode, fmt=fmt, keys=keys)
@@ -1312,7 +1312,7 @@ class SyncPipe(PyPipe):
         *,
         mode: WriteMode | str = WriteMode.REPLACE,
         fmt: FmtLike | None = None,
-        keys: KeyLike | None = None,
+        keys: StrLike | None = None,
     ) -> WriteResult:
         """
         Reconciles the stream into ``dest`` and reports the outcome (terminal sink).
@@ -1594,7 +1594,7 @@ class SyncCollection(PyCollection):
         *,
         mode: WriteMode | str = WriteMode.REPLACE,
         fmt: FmtLike | None = None,
-        keys: KeyLike | None = None,
+        keys: StrLike | None = None,
     ) -> WriteResult:
         """The collection counterpart of :meth:`SyncPipe.sink`."""
         return _sink(self, dest, mode=mode, fmt=fmt, keys=keys)
@@ -1868,7 +1868,7 @@ class AsyncPipe(PyPipe):
         dest: Destination,
         *,
         mode: WriteMode | str = WriteMode.REPLACE,
-        keys: KeyLike | None = None,
+        keys: StrLike | None = None,
         fmt: FmtLike | None = None,
     ) -> WriteResult:
         """The async counterpart of :meth:`SyncPipe.sink`."""
@@ -2104,7 +2104,7 @@ class AsyncCollection(PyCollection):
         *,
         mode: WriteMode | str = WriteMode.REPLACE,
         fmt: FmtLike | None = None,
-        keys: KeyLike | None = None,
+        keys: StrLike | None = None,
     ) -> WriteResult:
         """The async collection counterpart of :meth:`SyncPipe.sink`."""
         return await _asink(self, dest, mode=mode, fmt=fmt, keys=keys)

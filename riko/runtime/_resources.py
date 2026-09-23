@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, Never, Self, cast, overload
 from warnings import warn
 
 from riko.bado._util import maybe_deferred
 from riko.base.warnings import ResourceInterpretationWarning
 from riko.definitions._resources import VALUE_FACTORY_KINDS, classify_factory
+from riko.types._collections import freeze_mapping
 from riko.types._guards import (
     is_async_closeable,
     is_async_context_manager,
@@ -581,7 +581,7 @@ class _FactoryResource[T](ReusableResource[T]):
         self._factory = factory
         self._kind = classify_factory(factory, lifecycle=False)
         self._args = tuple(args)
-        self._kwargs = MappingProxyType(dict(kwargs))
+        self._kwargs = freeze_mapping(kwargs)
         self._credential = credential
         self._lazy = lazy
         self._cleanup = cleanup
