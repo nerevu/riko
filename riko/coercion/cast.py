@@ -64,18 +64,10 @@ if TYPE_CHECKING:
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 MATH_WORDS = {"seconds", "minutes", "hours", "days", "weeks", "months", "years"}
 TEXT_WORDS = {"last", "next", "week", "month", "year"}
-GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
-    "coordinates": lambda x: lookup_coordinates(x),  # noqa: PLW0108
-    "street_address": lambda x: lookup_street_address(x),  # noqa: PLW0108
-    "ip_address": lambda x: lookup_ip_address(x),  # noqa: PLW0108
-    "currency": lambda x: CURRENCY_CODES.get(x, {}),
-}
-
+KWARG_TYPES = {CastType.DATE, CastType.DATETIME, CastType.LOCATION}
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
-
-KWARG_TYPES = {CastType.DATE, CastType.DATETIME, CastType.LOCATION}
 SourceOpts: Opts = {"ftype": BasicCastType.NONE}
 
 
@@ -282,6 +274,14 @@ def lookup_coordinates(
     }
 
     return location
+
+
+GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
+    "coordinates": lookup_coordinates,  # noqa: PLW0108
+    "street_address": lookup_street_address,  # noqa: PLW0108
+    "ip_address": lookup_ip_address,  # noqa: PLW0108
+    "currency": lambda x: CURRENCY_CODES.get(x, {}),
+}
 
 
 def cast_location(

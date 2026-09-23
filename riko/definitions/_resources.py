@@ -15,8 +15,9 @@ import copyreg
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from inspect import unwrap
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
+from riko.types._collections import freeze_mapping
 from riko.types._guards import (
     is_async_callable,
     is_async_cm_factory,
@@ -27,27 +28,20 @@ from riko.types._guards import (
 )
 from riko.types._resource import FactoryKind, ResourceFactory
 
-from ._resource_types import ResourcesLike, ReusableResources, Values
+from ._resource_types import BindingLike, ResourcesLike, ReusableResources, Values
 
 if TYPE_CHECKING:
     from riko.types._io import Closeable
 
 
-def _rebuild_mappingproxy(
-    items: dict[object, object],
-) -> MappingProxyType[object, object]:
-    """Rebuilds a read-only mapping from its pickled contents."""
-    return MappingProxyType(items)
-
-
 def _reduce_mappingproxy(
     proxy: MappingProxyType[object, object],
 ) -> tuple[
-    Callable[[dict[object, object]], MappingProxyType[object, object]],
+    Callable[[Mapping[object, object]], MappingProxyType[object, object]],
     tuple[dict[object, object]],
 ]:
     """Reduces a read-only mapping so immutable containers survive pickling."""
-    return (_rebuild_mappingproxy, (dict(proxy),))
+    return (freeze_mapping, (dict(proxy),))
 
 
 copyreg.pickle(MappingProxyType, _reduce_mappingproxy)
@@ -122,6 +116,55 @@ def classify_factory[T](
     return kind
 
 
+@overload
+def resolve_binding(  # noqa: E704
+    raw: BindingLike,
+) -> ResourcesLike: ...
+@overload
+def resolve_binding(raw: None) -> None: ...  # noqa: E704
+def resolve_binding(  # noqa: E302
+    raw: BindingLike | None,
+) -> ResourcesLike | None:
+    """
+    Narrows an untyped decoration option into a resource binding, or ``None``.
+
+    Args:
+
+        raw: The ``resources`` value pulled from a module's opts.
+
+    Returns:
+
+        A ``ResourcesLike`` representation of raw, or ``None`` when unset.
+
+    Raises:
+
+        TypeError: When ``raw`` is neither a string, mapping, nor iterable.
+
+    Examples:
+
+        >>> from riko.definitions._resources import resolve_binding
+        >>>
+        >>> resolve_binding("client")
+        'client'
+        >>> resolve_binding(["db", "cache"])
+        ['db', 'cache']
+        >>> resolve_binding(None)
+
+    """
+    if raw is None:
+        binding: ResourcesLike | None = None
+    elif isinstance(raw, str):
+        binding = raw
+    elif isinstance(raw, Mapping):
+        binding = {str(key): str(value) for key, value in raw.items()}
+    elif isinstance(raw, Iterable):
+        binding = [str(name) for name in raw]
+    else:
+        raise TypeError(f"invalid 'resources' binding: {raw!r}")
+
+    return binding
+
+
 def normalize_resources(resources: ResourcesLike) -> Mapping[str, str]:
     """
     Normalizes a declared binding into local-alias-to-Context-name form.
@@ -152,48 +195,7 @@ def normalize_resources(resources: ResourcesLike) -> Mapping[str, str]:
     else:
         binding = {name: name for name in resources}
 
-    return MappingProxyType(binding)
-
-
-def normalize_binding(raw: object) -> ResourcesLike | None:
-    """
-    Narrows an untyped decoration option into a resource binding, or ``None``.
-
-    Args:
-
-        raw: The ``resources`` value pulled from a module's opts.
-
-    Returns:
-
-        A ``ResourcesLike`` representation of raw, or ``None`` when unset.
-
-    Raises:
-
-        TypeError: When ``raw`` is neither a string, mapping, nor iterable.
-
-    Examples:
-
-        >>> from riko.definitions._resources import normalize_binding
-        >>>
-        >>> normalize_binding("client")
-        'client'
-        >>> normalize_binding(["db", "cache"])
-        ['db', 'cache']
-        >>> normalize_binding(None)
-
-    """
-    if raw is None:
-        binding: ResourcesLike | None = None
-    elif isinstance(raw, str):
-        binding = raw
-    elif isinstance(raw, Mapping):
-        binding = {str(key): str(value) for key, value in raw.items()}
-    elif isinstance(raw, Iterable):
-        binding = [str(name) for name in raw]
-    else:
-        raise TypeError(f"invalid 'resources' binding: {raw!r}")
-
-    return binding
+    return freeze_mapping(binding)
 
 
 class ResourceView(Mapping[str, object]):
@@ -321,6 +323,6 @@ __all__ = [
     "ResourcesLike",
     "bind_resources",
     "classify_factory",
-    "normalize_binding",
     "normalize_resources",
+    "resolve_binding",
 ]

@@ -167,7 +167,7 @@ def parser(
         for target in others:
             target_id = sync_hub.send(target, item)
 
-            if ids is not None and target_id is not None:
+            if not (ids is None or target_id is None):
                 ids[target] = target_id
 
         yield item

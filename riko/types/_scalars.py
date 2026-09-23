@@ -46,4 +46,15 @@ PrimitiveValueType: tuple[type, ...] = (
     date,
     struct_time,
 )
-HashableType: tuple[type, ...] = (str, int, float, Decimal, date, struct_time, PurePath)
+HashableType: tuple[type, ...] = (
+    str,
+    int,
+    float,
+    Decimal,
+    date,
+    struct_time,
+    PurePath,
+    bytes,
+    UUID,
+    tuple,
+)

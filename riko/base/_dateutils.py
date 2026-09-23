@@ -195,10 +195,10 @@ def tzinfo_from_tt(
     """
     if tt.tm_zone and tt.tm_zone in TZINFOS:
         _tzinfo = TZINFOS[tt.tm_zone]
-    elif tt.tm_gmtoff is not None:
-        _tzinfo = timezone(timedelta(seconds=tt.tm_gmtoff), name=tt.tm_zone or "")
-    else:
+    elif tt.tm_gmtoff is None:
         _tzinfo = def_tzinfo
+    else:
+        _tzinfo = timezone(timedelta(seconds=tt.tm_gmtoff), name=tt.tm_zone or "")
 
     return _tzinfo
 

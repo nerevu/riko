@@ -18,7 +18,7 @@ from riko.base._paths import get_path
 from riko.definitions._targets import (
     FileTarget,
     build_write,
-    normalize_keys,
+    normalize_strs,
     resolve_format,
     resolve_target,
     validate_target_mode,
@@ -68,18 +68,27 @@ class TestResolveFormat:
         assert resolve_format("out.csv", "json") == "json"
 
     def test_invalid_format_raises(self):
-        with pytest.raises(ValueError, match="not a valid Formats"):
+        with pytest.raises(ValueError, match="Invalid Formats"):
             resolve_format("out.txt", None)
 
 
 class TestNormalizeKeys:
     def test_empty_key_rejected(self):
         with pytest.raises(ValueError, match="non-empty"):
-            normalize_keys(["id", ""])
+            normalize_strs(["id", ""])
 
     def test_duplicate_keys_rejected(self):
         with pytest.raises(ValueError, match="duplicate"):
-            normalize_keys(["id", "id"])
+            normalize_strs(["id", "id"])
+
+    @pytest.mark.parametrize("value", [[1, 2], ["a", 1], [None]])
+    def test_non_string_keys_rejected(self, value):
+        with pytest.raises(ValueError, match="non-empty strings"):
+            normalize_strs(value)
+
+    def test_non_iterable_rejected(self):
+        with pytest.raises(TypeError, match="string or iterable"):
+            normalize_strs(42)
 
 
 class TestFileCapabilities:

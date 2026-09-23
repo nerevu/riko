@@ -165,6 +165,6 @@ class ExecutionMode(StrEnum):
 
 
 type ModuleNameLike = str | ModuleName
-type KeyLike = str | Iterable[str]
+type StrLike = str | Iterable[str]
 type FmtLike = Formats | str
 type BackendLike = Backends | str

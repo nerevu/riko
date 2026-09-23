@@ -48,6 +48,15 @@ wheels = [
 ]
 
 [[package]]
+name = "attrs"
+version = "26.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9a/8e/82a0fe20a541c03148528be8cac2408564a6c9a0cc7e9171802bc1d26985/attrs-26.1.0.tar.gz", hash = "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32", size = 952055, upload-time = "2026-03-19T14:22:25.026Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl", hash = "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309", size = 67548, upload-time = "2026-03-19T14:22:23.645Z" },
+]
+
+[[package]]
 name = "babel"
 version = "2.18.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1432,6 +1441,7 @@ name = "riko"
 version = "0.77.3"
 source = { editable = "." }
 dependencies = [
+    { name = "attrs" },
     { name = "babel" },
     { name = "chardet" },
     { name = "click" },
@@ -1499,6 +1509,7 @@ test = [
 requires-dist = [
     { name = "anyio", marker = "extra == 'async'", specifier = ">=4.0.0" },
     { name = "asyncer", marker = "extra == 'async'", specifier = ">=0.0.18" },
+    { name = "attrs", specifier = ">=26.1.0" },
     { name = "babel", specifier = ">=2.8.0,<3.0.0" },
     { name = "chardet", specifier = ">=3.0.4,<8.0.0" },
     { name = "click", specifier = ">=8.4.0" },
