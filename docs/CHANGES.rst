@@ -92,6 +92,10 @@ Changes
 Fixes
 ~~~~~
 
+- Applying ``@processor``/``@operator``/``@splitter`` without calling it first now raises
+  ``TypeError`` at decoration time. Previously the decorated function was silently taken as
+  the pipe defaults and the mistake surfaced only as an opaque error on the first call.
+
 - Type checkers no longer flag ``async for item in async_pipe(...)``. The async
   ``processor`` and ``splitter`` call result is now typed as both awaitable and
   async-iterable, matching how it has always behaved at runtime.

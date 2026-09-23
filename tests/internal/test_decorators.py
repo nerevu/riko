@@ -246,6 +246,30 @@ class TestAsyncProcessorDualProtocol:
         assert not iscoroutinefunction(AsyncSubPipe.__call__)
 
 
+@pytest.mark.parametrize("decorator", [processor, operator, splitter])
+def test_bare_decorator_raises_at_decoration(decorator) -> None:
+    """
+    Decorating without calling the decorator first is an author error.
+
+    The decorated function would otherwise be swallowed as the positional
+    ``defaults`` and the mistake would surface only on the first call.
+    """
+    with pytest.raises(TypeError, match=rf"@{decorator.__name__}\(\)"):
+        decorator(shout)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="owned by the pending callable-pipes decorator work: a bare @processor "
+    "(no parentheses) is rejected at decoration instead of wrapping the function "
+    "as an unconfigured pipe",
+)
+def test_bare_processor_wraps_an_unconfigured_pipe() -> None:
+    pipe = processor(shout)  # pyright: ignore[reportArgumentType]
+    stream = pipe({"content": "hi"}, assign="content")  # pyright: ignore[reportCallIssue]
+    assert next(stream) == {"content": "HI"}
+
+
 @pytest.mark.xfail(
     strict=True,
     reason="owned by the pending execution-owned split fan-out work: the async "
