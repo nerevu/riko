@@ -7,34 +7,46 @@ v0.77.4 (Unreleased)
 New
 ~~~
 
-- Add ``jsonl`` file format as an export target. It serializes each item as a JSON object
-  on its own line. This ``Formats`` can also e used in the new ``write`` and ``sink``
-  methods.
+- Added the ``jsonl`` export format (one JSON object per line), accepted anywhere a
+  ``Formats`` member is.
 
-- A pipe may now declare ``resources`` and receive the resolved handles. Bind them with
-  ``Context.with_resource``; riko closes the resources it owns and never closes one
-  supplied by the caller.
+- A pipe may now declare ``resources`` and receive the resolved handles via
+  ``Context.with_resource``; riko closes only the resources it owns.
 
-- Added ``on_receive`` to ``subscribe`` which runs the callback on each item as it
-  arrives and yields nothing. It is a distinct operation from ``func`` (a map), so
-  passing both raises ``TypeError``.
+- Added ``on_receive`` to ``subscribe``: it runs a callback per item and yields nothing,
+  distinct from the ``func`` map (passing both raises ``TypeError``).
 
 - Added the ``Backends`` ``StrEnum`` (``file``/``http``/``s3``/``postgres``/``airtable``/
-  ``intune``) to the stable ``riko`` surface alongside ``Formats``. It names the kind of
-  backend a write reaches.
+  ``intune``) to the stable surface, naming the kind of backend a write reaches.
 
-- Extension authors can register target classes for their own backends. ``riko.ext``
-  exports the base ``Target`` protocol and its ``SupportsRead``/``SupportsWrite``/
-  ``SupportsActions`` refinements, ``WriteCapabilities``, ``FileTarget``, and a
-  ``TargetRegistry``/``register_target`` that key one self-describing target class per
-  ``backend``. ``FileTarget`` is the built-in.
+- Extension authors can register a target class per ``backend``. ``riko.ext`` exports the
+  ``Target`` protocol (``SupportsRead``/``SupportsWrite``/``SupportsActions``),
+  ``WriteCapabilities``, the built-in ``FileTarget``, and ``TargetRegistry``/
+  ``register_target``.
 
-- Added the canonical Workflow v2 definition model. The immutable ``Pipeline`` is on the
-  stable ``riko`` surface; ``riko.ext`` exports the graph model — the ``WorkflowSpec``
-  envelope, the node families (``ModuleNode``/``ReadNode``/``WriteNode``/``CacheNode``/
-  ``ActionNode``/``SubscribeNode``), the edge families (``StreamEdge``/``PublishEdge``),
-  and ``Endpoint``. This is the structural definition surface only; execution lands in a
-  later release.
+- Added the canonical Workflow v2 definition model: the immutable ``Pipeline`` and the
+  graph model (``WorkflowSpec``, node and edge families, and ``Endpoint``).
+
+- Added ``riko.ext.normalize_workflow``, which normalizes a flexible Workflow v2 authoring
+  mapping into a strict canonical ``WorkflowSpec``.
+
+- Added ``WorkflowSpec.validate()`` (and the ``isvalid`` property), which checks a canonical
+  workflow against the closed-schema graph rules, raising ``InvalidPipelineError`` on the first
+  violation.
+
+- Added ``riko.ext.migrate_v1_to_v2``, a one-shot offline conversion of a released
+  Workflow v1 pipe definition into a canonical ``WorkflowSpec`` (not a live loader).
+
+- Added the Workflow v2 authoring types to ``riko.types`` (``WorkflowSpecLike``,
+  ``WorkflowAuthoring``, ``NodeAuthoring``, ``EdgeAuthoring``, ``EndpointAuthoring``) for
+  editor completion when annotating a workflow literal.
+
+- Added the ``IdentityError`` family (``IdentityEncodingError``, ``CyclicIdentityError``)
+  to the ``RikoError`` tree, raised when a value cannot be canonically encoded for durable
+  identity.
+
+- Added ``riko.ext.serialize_workflow`` and ``riko.ext.parse_workflow``, a byte-stable
+  canonical Workflow v2 JSON serializer and its round-tripping parser.
 
 Changes
 ~~~~~~~
@@ -49,13 +61,10 @@ Changes
   ``convert-dag`` CLI command name is unchanged.
 
 - Added chainable ``write`` and terminal ``sink`` methods to ``SyncPipe`` and
-  ``SyncCollection``. They take the destination directly, e.g., ``write("out.csv")``)
-  and accept ``fmt`` (``Formats``/str, e.g., ``json``) and ``mode`` (``WriteMode``/str,
-  e.g., ``append``/``replace``). ``csv`` and ``jsonl`` formats are written
-  incrementally. Any other format buffers until completion. A chainable ``write`` opens
-  its destination lazily only once the resulting stream is consumed. These methods
-  shadow the ``write`` module, so use ``pipe("write", conf={"url": ...})`` when you need
-  the old module call shape.
+  ``SyncCollection``. They take the destination directly (e.g. ``write("out.csv")``) plus
+  ``fmt`` and ``mode``. ``csv``/``jsonl`` write incrementally, other formats buffer, and a
+  chainable ``write`` opens its destination lazily. They shadow the ``write`` module, so
+  use ``pipe("write", conf={"url": ...})`` for the old call shape.
 
 - A single ``write``/``sink`` destination now accepts one input shape only. Feeding it a
   whole stream after individual items, or a second stream, raises ``RuntimeError`` instead
