@@ -90,7 +90,7 @@ def normalize_strs(value: StrLike | None, what="keys") -> tuple[str, ...]:
     """
     Normalizes ``value`` into a tuple of keys.
 
-    A bare string is wrapped; any iterable is materialized as-is.
+    A bare string is wrapped; each item of an iterable must be a non-empty string.
 
     Args:
 
@@ -102,7 +102,9 @@ def normalize_strs(value: StrLike | None, what="keys") -> tuple[str, ...]:
 
     Raises:
 
-        ValueError: When a key is empty, or the keys contain a duplicate.
+        TypeError: When ``value`` is not a string or iterable of strings.
+        ValueError: When a key is empty or not a string, or the keys contain a
+            duplicate.
 
     Examples:
 
@@ -118,11 +120,11 @@ def normalize_strs(value: StrLike | None, what="keys") -> tuple[str, ...]:
         keys: tuple[str, ...] = ()
     else:
         try:
-            keys = (value,) if isinstance(value, str) else tuple(map(str, value))
+            keys = (value,) if isinstance(value, str) else tuple(value)
         except TypeError as e:
             raise TypeError(f"{what} must be a string or iterable of strings") from e
 
-        if not all(keys):
+        if not all(key and isinstance(key, str) for key in keys):
             raise ValueError(f"{what} must be non-empty strings")
         elif len(set(keys)) != len(keys):
             raise ValueError(f"duplicate {what} are not allowed: {keys!r}")

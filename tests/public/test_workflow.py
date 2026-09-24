@@ -96,6 +96,7 @@ def test_pipeline_wraps_spec():
         ("in:1", ParsedPort("in", 1, None)),
         ("out:2", ParsedPort("out", 2, None)),
         ("out:matched", ParsedPort("out", None, "matched")),
+        ("in:count", ParsedPort("in", None, "count")),
     ],
 )
 def test_parse_port_grammar(port, expected):
@@ -108,7 +109,9 @@ def test_parse_port_rejects_bad_direction(port):
         parse_port(port)
 
 
-@pytest.mark.parametrize("port", ["in:name", "in:x", "out:-1", "out:", "out:a b"])
+@pytest.mark.parametrize(
+    "port", ["out:-1", "out:", "out:a b", "in:", "in:-1", "in:a b"]
+)
 def test_parse_port_rejects_bad_qualifier(port):
     with pytest.raises(ValueError, match="invalid port"):
         parse_port(port)

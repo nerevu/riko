@@ -30,21 +30,23 @@ from riko.types._workflow import Endpoint
 
 
 @pytest.mark.parametrize(
-    ("legacy", "canonical"),
+    ("legacy", "direction", "canonical"),
     [
-        ("_INPUT", "in"),
-        ("_OTHER", "in:1"),
-        ("_OTHER2", "in:2"),
-        ("_OTHER5", "in:5"),
-        ("_OUTPUT", "out"),
-        ("_OUTPUT2", "out:1"),
-        ("_OUTPUT4", "out:3"),
-        ("out:matched", "out:matched"),
-        ("in", "in"),
+        ("_INPUT", "in", "in"),
+        ("_OTHER", "in", "in:1"),
+        ("_OTHER2", "in", "in:2"),
+        ("_OTHER5", "in", "in:5"),
+        ("_OUTPUT", "out", "out"),
+        ("_OUTPUT2", "out", "out:1"),
+        ("_OUTPUT4", "out", "out:3"),
+        ("out:matched", "out", "out:matched"),
+        ("in", "in", "in"),
+        ("count", "in", "in:count"),
+        ("matched", "out", "out:matched"),
     ],
 )
-def test_normalize_port_maps_open_ended_legacy_series(legacy, canonical):
-    assert _normalize_port(legacy) == canonical
+def test_normalize_port_maps_open_ended_legacy_series(legacy, direction, canonical):
+    assert _normalize_port(legacy, direction) == canonical
 
 
 def test_list_nodes_generate_occurrence_ids():
@@ -439,8 +441,8 @@ def test_format_and_fmt_together_rejected():
         )
 
 
-@pytest.mark.parametrize("port", ["in:name", "in:x", "out:-1"])
-def test_named_input_and_bad_index_ports_rejected(port):
+@pytest.mark.parametrize("port", ["out:-1", "in:-1", "out:a b"])
+def test_bad_index_ports_rejected(port):
     with pytest.raises(InvalidPipelineError, match="port"):
         normalize_workflow(
             {
@@ -452,6 +454,18 @@ def test_named_input_and_bad_index_ports_rejected(port):
         )
 
 
+def test_named_input_port_canonicalized():
+    spec = normalize_workflow(
+        {
+            "nodes": [{"id": "a", "name": "f"}, {"id": "b", "name": "g"}],
+            "edges": [
+                {"source": {"node": "a"}, "target": {"node": "b", "port": "in:count"}}
+            ],
+        }
+    )
+    assert spec.edges[0].target.port == "in:count"
+
+
 def test_legacy_prefix_with_non_numeric_suffix_is_not_misconverted():
     spec = normalize_workflow(
         {
@@ -461,7 +475,7 @@ def test_legacy_prefix_with_non_numeric_suffix_is_not_misconverted():
             ],
         }
     )
-    assert spec.edges[0].target.port == "count"
+    assert spec.edges[0].target.port == "in:count"
 
 
 def test_nested_conf_is_deeply_frozen_and_isolated():

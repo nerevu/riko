@@ -103,6 +103,7 @@ def parse_workflow(data: bytes | str) -> WorkflowSpec:
         The reconstructed :class:`~riko.definitions._workflow.WorkflowSpec`.
 
     Examples:
+
         >>> from json import dumps
         >>>
         >>> json = json.dumps({"nodes": [{"name": "fetch"}]})

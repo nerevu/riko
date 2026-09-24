@@ -56,7 +56,7 @@ def test_legacy_ports_map_to_canonical_grammar():
     assert edge.target == Endpoint("b", "in:1")
 
 
-def test_named_secondary_port_preserved():
+def test_named_secondary_port_canonicalized():
     spec = migrate_v1_to_v2(
         {
             "modules": [
@@ -66,7 +66,7 @@ def test_named_secondary_port_preserved():
             "wires": [_wire("_w1", "a", "b", tgt_port="count")],
         }
     )
-    assert spec.edges[0].target == Endpoint("b", "count")
+    assert spec.edges[0].target == Endpoint("b", "in:count")
 
 
 def test_write_module_becomes_write_node():

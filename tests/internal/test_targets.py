@@ -81,6 +81,15 @@ class TestNormalizeKeys:
         with pytest.raises(ValueError, match="duplicate"):
             normalize_strs(["id", "id"])
 
+    @pytest.mark.parametrize("value", [[1, 2], ["a", 1], [None]])
+    def test_non_string_keys_rejected(self, value):
+        with pytest.raises(ValueError, match="non-empty strings"):
+            normalize_strs(value)
+
+    def test_non_iterable_rejected(self):
+        with pytest.raises(TypeError, match="string or iterable"):
+            normalize_strs(42)
+
 
 class TestFileCapabilities:
     @pytest.mark.parametrize(

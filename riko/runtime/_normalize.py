@@ -91,9 +91,9 @@ def _is_legacy_port(port: str, prefix: str) -> bool:
     return not suffix or suffix.isdigit()
 
 
-def _normalize_port(port: str) -> str:
-    """Maps a legacy ``_INPUT``/``_OTHER``/``_OUTPUT`` port to the canonical grammar."""
-    if not port:
+def _normalize_port(port: str, direction: str) -> str:
+    """Maps a legacy or bare named port to the canonical grammar for ``direction``."""
+    if not port or port in {"in", "out"}:
         result = port
     elif port == INPUT_PORT:
         result = "in"
@@ -103,6 +103,8 @@ def _normalize_port(port: str) -> str:
         result = f"in:{_get_legacy_index(port, OTHER_PORT, 1)}"
     elif _is_legacy_port(port, OUTPUT_PORT):
         result = f"out:{_get_legacy_index(port, OUTPUT_PORT, 1) - 1}"
+    elif port.isidentifier():
+        result = f"{direction}:{port}"
     else:
         result = port
 
@@ -111,15 +113,10 @@ def _normalize_port(port: str) -> str:
 
 def _validate_port(port: str) -> None:
     """Rejects an empty port or a malformed ``in``/``out`` directional form."""
-    _, sep, _ = port.partition(":")
-
     try:
-        valid = bool(parse_port(port)) if sep else bool(port)
-    except ValueError:
-        valid = False
-
-    if not valid:
-        raise InvalidPipelineError(f"invalid port: {port!r}")
+        parse_port(port)
+    except ValueError as e:
+        raise InvalidPipelineError(f"invalid port: {port!r}") from e
 
 
 _NODE_BUILDERS: Mapping[str, type[Node]] = {
@@ -197,7 +194,7 @@ def _normalize_endpoint(raw: object, default_port: str) -> Endpoint:
     endpoint = require_mapping(raw, "endpoint")
     _reject_unknown(endpoint, Endpoint)
     node = require_str(endpoint.get("node"), "edge endpoint 'node'")
-    port = _normalize_port(str(endpoint.get("port", default_port)))
+    port = _normalize_port(str(endpoint.get("port", default_port)), default_port)
     _validate_port(port)
     return Endpoint(node, port)
 
@@ -310,6 +307,7 @@ def normalize_workflow(raw: WorkflowSpecLike | WorkflowSpec) -> WorkflowSpec:
         The canonical :class:`~riko.definitions._workflow.WorkflowSpec`.
 
     Examples:
+
         >>> spec = normalize_workflow(
         ...     {
         ...         "nodes": [
