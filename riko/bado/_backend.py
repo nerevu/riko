@@ -38,9 +38,12 @@ try:
     from httpx import Response as HTTPXResponse
 except ImportError:
     AsyncClient: Any = None
+    BlockingPortal: Any = None
+    CancelScope: type | None = None
     CapacityLimiter: type | None = None
     HTTPXResponse: Any = None
     Semaphore: type | None = None
+    start_blocking_portal: Callable[..., Any] | None = None
     MemoryObjectReceiveStream: Any = None
     MemoryObjectSendStream: Any = None
     NamedTemporaryFile: Any = None
@@ -72,6 +75,7 @@ except ImportError:
     run: Run = _run
 else:
     from anyio import (
+        CancelScope,
         CapacityLimiter,
         NamedTemporaryFile,
         Path,
@@ -83,6 +87,7 @@ else:
     )
     from anyio import open_file as async_open
     from anyio import sleep as async_sleep
+    from anyio.from_thread import BlockingPortal, start_blocking_portal
     from anyio.itertools import chain as async_chain
     from anyio.lowlevel import checkpoint
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
@@ -97,6 +102,8 @@ isasync: bool = not issync
 
 __all__ = [
     "AsyncClient",
+    "BlockingPortal",
+    "CancelScope",
     "CapacityLimiter",
     "HTTPXResponse",
     "MemoryObjectReceiveStream",
@@ -123,4 +130,5 @@ __all__ = [
     "issync",
     "lowlevel",
     "run",
+    "start_blocking_portal",
 ]

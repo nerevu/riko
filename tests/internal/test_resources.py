@@ -267,9 +267,7 @@ class TestValueFactory:
             )
 
         with pytest.raises(TypeError, match="Must provide a Closeable value"):
-            Resource(  # pyright: ignore[reportCallIssue]
-                factory  # pyright: ignore[reportArgumentType]
-            )
+            Resource(factory)
 
         with pytest.raises(TypeError, match="Invalid lifecycle factory"):
             Resource.from_lifecycle(factory)  # pyright: ignore[reportArgumentType]

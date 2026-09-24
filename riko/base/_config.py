@@ -49,6 +49,7 @@ PREFIX_LAYERS: dict[str, str] = {
     "riko.parsing": "parsing",
     "riko.rss": "rss",
     "riko.runtime": "runtime",
+    "riko.runtime._execution": "execution",
     "riko.types": "types",
 }
 
