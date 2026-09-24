@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Never, Self, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, Never, Self, cast, overload
 from warnings import warn
 
 from riko.bado._util import maybe_deferred
@@ -36,6 +36,11 @@ if TYPE_CHECKING:
 class Resource[T]:
     """
     An immutable execution-resource definition.
+
+    A resource is a resolved value, a caller-owned value, a value-producing
+    factory, or a generator/context-manager lifecycle. The variant is carried as
+    data rather than a subclass: ``external`` marks caller-owned lifecycles and
+    ``factory``/``kind`` mark declarations the execution layer enters.
 
     Attributes:
 
@@ -72,14 +77,21 @@ class Resource[T]:
 
     """
 
-    __slots__ = ("_cleanup", "_credential", "_kind", "_lazy", "_value")
-
-    _external: bool = False
-    _reusable: bool = False
+    __slots__ = (
+        "_args",
+        "_cleanup",
+        "_credential",
+        "_external",
+        "_factory",
+        "_kind",
+        "_kwargs",
+        "_lazy",
+        "_value",
+    )
 
     @overload
     def __new__(  # noqa: E704
-        cls,  # _OwnedResource
+        cls,
         value: Closeable,
         *,
         cleanup: Cleanup[T] | None = ...,
@@ -88,17 +100,7 @@ class Resource[T]:
     ) -> OneShotResource[T]: ...
     @overload  # noqa: E301
     def __new__(  # noqa: E704
-        cls,  # _FactoryResource
-        value: ResourceFactory[T],
-        *args: object,
-        cleanup: Cleanup[T] | Literal[False] | None = ...,
-        credential: str | None = ...,
-        lazy: bool = ...,
-        **kwargs: object,
-    ) -> ReusableResource[T]: ...
-    @overload  # noqa: E301
-    def __new__(  # noqa: E704
-        cls,  # _OwnedResource
+        cls,
         value: ResolvedValue[T],
         *,
         cleanup: Cleanup[T] | Literal[False],
@@ -106,29 +108,18 @@ class Resource[T]:
         lazy: bool = ...,
     ) -> OneShotResource[T]: ...
     @overload  # noqa: E301
-    def __new__(  # noqa: E704
-        cls,  # _LifecycleResource
-        value: LifecycleFactory[T] | AnyContextManager[T],
-        *,
-        credential: str | None = ...,
-        lazy: bool = ...,
-    ) -> OneShotResource[T]: ...
+    def __new__(cls, value: Self) -> Never: ...  # noqa: E704
     @overload  # noqa: E301
-    def __new__(  # noqa: E704
-        cls,  # _ExternalResource
-        value: ResolvedValue[T],
-    ) -> ReusableResource[T]: ...
+    def __new__(cls, value: LifecycleFactory[T]) -> Never: ...  # noqa: E704
+    @overload  # noqa: E301
+    def __new__(cls, value: AnyContextManager[T]) -> Never: ...  # noqa: E704
+    @overload  # noqa: E301
+    def __new__(cls, value: T) -> Never: ...  # noqa: E704
     def __new__(  # noqa: E301
         cls, *_: object, **_kw: object
     ) -> OneShotResource[T] | ReusableResource[T]:
-        cls_ = _OwnedResource if cls is Resource else cls
-
-        if cls_ in {_OwnedResource, _LifecycleResource}:
-            obj = cast("OneShotResource", object.__new__(cls_))
-        else:
-            obj = cast("ReusableResource", object.__new__(cls_))
-
-        return obj
+        target = OneShotResource if cls is Resource else cls
+        return cast("OneShotResource[T] | ReusableResource[T]", object.__new__(target))
 
     @overload  # noqa: E301
     def __init__(  # noqa: E704
@@ -140,7 +131,7 @@ class Resource[T]:
         lazy: bool = ...,
     ) -> None: ...
     @overload  # noqa: E301
-    def __init__(  # noqa: E704
+    def __init__(  # noqa: E704, F811
         self,
         value: Closeable,
         *,
@@ -178,21 +169,54 @@ class Resource[T]:
         self._lazy = lazy
         self._kind: FactoryKind | None = None
         self._cleanup: Cleanup[T] | Literal[False] | None = cleanup
+        self._factory: ResourceFactory[T] | AnyContextManager[T] | None = None
+        self._args: tuple[object, ...] = ()
+        self._kwargs: Mapping[str, object] = freeze_mapping({})
+        self._external = False
 
-        if (
-            isinstance(value, Resource)
-            or is_lifecycle_factory(value)
-            or is_context_manager(value)
-        ):
+        self._reject_non_value(value)
+
+        if cleanup is None and not is_closeable(value):
+            msg = "Must provide a Closeable value or cleanup function for riko owned "
+            msg += f"resources. Not a {type(value).__name__}. If this value's "
+            msg += "lifecycle is externally managed, use Resource.from_external(...) "
+            msg += "instead."
+            raise TypeError(msg)
+
+    @staticmethod
+    def _reject_non_value(value: object) -> None:
+        is_resource = isinstance(value, Resource)
+
+        if is_resource or is_lifecycle_factory(value) or is_context_manager(value):
             msg = f"Expected a resolved resource value but got a: {type(value)}."
             raise TypeError(msg)
-        elif self.external:
-            pass
-        elif cleanup is None and not is_closeable(value):
-            msg = "Must provide a Closeable value or cleanup function for riko owned "
-            msg += f"resources. Not a {type(value).__name__}. If this value's lifecycle"
-            msg += "is externally managed, use Resource.from_external(...) instead."
-            raise TypeError(msg)
+
+    @classmethod
+    def _from_data[R: Resource[Any]](
+        cls,
+        target: type[R],
+        *,
+        value: object,
+        factory: ResourceFactory[Any] | AnyContextManager[Any] | None = None,
+        kind: FactoryKind | None = None,
+        args: tuple[object, ...] = (),
+        kwargs: Mapping[str, object] | None = None,
+        cleanup: Cleanup[Any] | Literal[False] | None = None,
+        credential: str | None = None,
+        lazy: bool = False,
+        external: bool = False,
+    ) -> R:
+        resource = object.__new__(target)
+        resource._value = value
+        resource._factory = factory
+        resource._kind = kind
+        resource._args = args
+        resource._kwargs = freeze_mapping(dict(kwargs) if kwargs else {})
+        resource._cleanup = cleanup
+        resource._credential = credential
+        resource._lazy = lazy
+        resource._external = external
+        return resource
 
     @property
     def value(self) -> ResolvedValue[T]:
@@ -201,6 +225,10 @@ class Resource[T]:
     @property
     def credential(self) -> str | None:
         return self._credential
+
+    @property
+    def cleanup(self) -> Cleanup[T] | Literal[False] | None:
+        return self._cleanup
 
     @property
     def lazy(self) -> bool:
@@ -216,7 +244,23 @@ class Resource[T]:
 
     @property
     def reusable(self) -> bool:
-        return self._reusable
+        return isinstance(self, ReusableResource)
+
+    @property
+    def factory(self) -> ResourceFactory[T] | AnyContextManager[T] | None:
+        return self._factory
+
+    @property
+    def args(self) -> tuple[object, ...]:
+        return self._args
+
+    @property
+    def kwargs(self) -> Mapping[str, object]:
+        return self._kwargs
+
+    def _execution_error(self, action: str) -> str:
+        noun = "Factory" if self.reusable else "Lifecycle"
+        return f"{noun} resource {action} belongs to the execution layer"
 
     @overload
     @classmethod
@@ -251,8 +295,37 @@ class Resource[T]:
         **kwargs: object,
     ) -> ReusableResource[T]:
         """The alternate form of ``Context.with_resource(name, factory)``."""
-        return _FactoryResource[T](
-            factory, *args, cleanup=cleanup, credential=credential, lazy=lazy, **kwargs
+        kind = classify_factory(factory, lifecycle=False)
+
+        if kind in VALUE_FACTORY_KINDS:
+            if cleanup is None:
+                raise TypeError("ValueFactory requires an explicit cleanup function")
+        elif cleanup is not None:
+            msg = "Cleanup is not allowed for generator/context-manager factories. "
+            msg += "Use Resource.from_lifecycle(...) instead if you want riko to "
+            msg += "manage the lifecycle."
+            raise TypeError(msg)
+
+        if is_context_manager(factory):
+            warn(
+                "Resource.from_factory() received a context manager. It will be treated"
+                " as a ValueFactory and called normally; its context-manager lifecycle "
+                "will not be entered. Use Resource.from_lifecycle(...) to use "
+                "__enter__/__exit__ semantics.",
+                ResourceInterpretationWarning,
+                stacklevel=2,
+            )
+
+        return cls._from_data(
+            ReusableResource,
+            value=factory,
+            factory=factory,
+            kind=kind,
+            args=args,
+            kwargs=kwargs,
+            cleanup=cleanup,
+            credential=credential,
+            lazy=lazy,
         )
 
     @overload
@@ -290,8 +363,26 @@ class Resource[T]:
 
             A resource that always resolves to ``value`` and never closes it.
 
+        Examples:
+
+            >>> from riko.runtime._resources import Resource
+            >>>
+            >>> class Client:
+            ...     closed = False
+            ...     def close(self):
+            ...         self.closed = True
+            >>>
+            >>> value = Client()
+            >>> resource = Resource.from_external(value)
+            >>> resource.open() is value
+            True
+            >>> resource.close(value)
+            >>> value.closed
+            False
+
         """
-        return _ExternalResource[T](value)
+        cls._reject_non_value(value)
+        return cls._from_data(ReusableResource, value=value, external=True)
 
     @classmethod
     def from_lifecycle[T](  # pyright: ignore[reportGeneralTypeIssues]
@@ -343,7 +434,21 @@ class Resource[T]:
             False
 
         """
-        return _LifecycleResource[T](factory, credential=credential, lazy=lazy)
+        if is_sync_context_manager(factory):
+            kind = FactoryKind.SYNC_CONTEXTMANAGER
+        elif is_async_context_manager(factory):
+            kind = FactoryKind.ASYNC_CONTEXTMANAGER
+        else:
+            kind = classify_factory(factory)
+
+        return cls._from_data(
+            OneShotResource,
+            value=factory,
+            factory=factory,
+            kind=kind,
+            credential=credential,
+            lazy=lazy,
+        )
 
     def open(self) -> ResolvedValue[T]:
         """
@@ -353,7 +458,15 @@ class Resource[T]:
 
             The wrapped value.
 
+        Raises:
+
+            NotImplementedError: When the resource is a factory/lifecycle
+                declaration; the execution layer enters it instead.
+
         """
+        if self._factory is not None:
+            raise NotImplementedError(self._execution_error("entry"))
+
         return self.value
 
     async def aopen(self) -> ResolvedValue[T]:
@@ -364,7 +477,15 @@ class Resource[T]:
 
             The wrapped value.
 
+        Raises:
+
+            NotImplementedError: When the resource is a factory/lifecycle
+                declaration; the execution layer enters it instead.
+
         """
+        if self._factory is not None:
+            raise NotImplementedError(self._execution_error("entry"))
+
         return self.value
 
     def close(self, value: T) -> None:
@@ -372,18 +493,22 @@ class Resource[T]:
         Closes an owned ``handle``.
 
         A ``cleanup`` override supplies the return value; otherwise the value's own
-        ``close()`` is invoked for its side effect and ``None`` is returned.
+        ``close()`` is invoked for its side effect and ``None`` is returned. An
+        external resource is a caller-owned no-op.
 
         Args:
 
             value: The resource value to close.
 
-        Returns:
+        Raises:
 
-            The ``cleanup`` result, or ``None`` when there is no override.
+            NotImplementedError: When the resource is a factory/lifecycle
+                declaration; the execution layer tears it down instead.
 
         """
-        if self._cleanup is False:
+        if self._factory is not None:
+            raise NotImplementedError(self._execution_error("teardown"))
+        elif self._external or self._cleanup is False:
             pass
         elif self._cleanup is None:
             cast("SyncCloseable", value).close()
@@ -395,18 +520,22 @@ class Resource[T]:
         Closes an owned ``handle`` preferring ``aclose()`` then ``close()``.
 
         A ``cleanup`` override supplies the return value; otherwise the value's own
-        ``aclose()``/``close()`` is invoked for its side effect.
+        ``aclose()``/``close()`` is invoked for its side effect. An external
+        resource is a caller-owned no-op.
 
         Args:
 
             value: The resource value to close.
 
-        Returns:
+        Raises:
 
-            The ``cleanup`` result, or ``None`` when there is no override.
+            NotImplementedError: When the resource is a factory/lifecycle
+                declaration; the execution layer tears it down instead.
 
         """
-        if self._cleanup is False:
+        if self._factory is not None:
+            raise NotImplementedError(self._execution_error("teardown"))
+        elif self._external or self._cleanup is False:
             pass
         elif self._cleanup is not None:
             await maybe_deferred(self._cleanup, value)
@@ -426,210 +555,6 @@ class ReusableResource[T](Resource[T]):
     """A Resource that may be stored in a reusable Context."""
 
     __slots__ = ()
-    _reusable: bool = True
-
-
-class _OwnedResource[T](OneShotResource[T]):
-    __slots__ = ()
-
-
-class _LifecycleResource[T](OneShotResource[T]):
-    """
-    An owned resource declared as a generator/context-manager definition.
-
-    Entering (setup / ``yield`` / teardown) belongs to the execution layer. So
-    ``open``/``aopen``/``close``/``aclose`` raise ``NotImplementedError``.
-
-    Attributes:
-
-        factory: The generator/context-manager that yields the value.
-        kind: The :class:`FactoryKind` describing the factory's lifecycle shape.
-        credential: A credential reference resolved by the connector layer.
-        lazy: Whether entry is deferred until first use (validated eagerly regardless).
-
-    Examples:
-
-        >>> from riko.runtime._resources import _LifecycleResource, FactoryKind
-        >>>
-        >>> def db():
-        ...     yield object()
-        >>>
-        >>> resource = _LifecycleResource(db)
-        >>> resource.kind
-        <FactoryKind.SYNC_GEN_FACTORY: 'sync_gen_factory'>
-        >>> resource.external
-        False
-        >>> resource.reusable
-        False
-
-    """
-
-    __slots__ = ("_factory",)
-
-    def __init__(
-        self,
-        factory: LifecycleFactory[T] | AnyContextManager[T],
-        *,
-        credential: str | None = None,
-        lazy: bool = False,
-    ) -> None:
-        self._factory = factory
-        self._credential = credential
-        self._lazy = lazy
-        self._cleanup = None
-
-        if is_sync_context_manager(factory):
-            self._kind = FactoryKind.SYNC_CONTEXTMANAGER
-            self._value = factory
-        elif is_async_context_manager(factory):
-            self._kind = FactoryKind.ASYNC_CONTEXTMANAGER
-            self._value = factory
-        else:
-            self._kind = classify_factory(factory)
-            self._value = factory()
-
-    @property
-    def factory(self) -> LifecycleFactory[T] | AnyContextManager[T]:
-        return self._factory
-
-    def open(self) -> Never:
-        raise NotImplementedError(
-            "Lifecycle resource entry belongs to the execution layer; "
-            "the generator/context-manager is entered there, not here"
-        )
-
-    async def aopen(self) -> Never:
-        raise NotImplementedError(
-            "Lifecycle resource entry belongs to the execution layer; "
-            "the generator/context-manager is entered there, not here"
-        )
-
-    def close(self, value: T) -> Never:
-        raise NotImplementedError(
-            "Lifecycle resource teardown belongs to the execution layer; "
-            "it is the generator's post-yield body, not a close() call"
-        )
-
-    async def aclose(self, value: T) -> Never:
-        raise NotImplementedError(
-            "Lifecycle resource teardown belongs to the execution layer; "
-            "it is the generator's post-yield body, not an aclose() call"
-        )
-
-
-class _ExternalResource[T](ReusableResource[T]):
-    """
-    A caller-owned resource that resolves to a fixed value and never closes it.
-
-    ``open``/``aopen`` return the supplied value unchanged (inherited).
-    ``close``/``aclose`` are no-ops because the caller owns the lifecycle.
-
-    Examples:
-
-        >>> from riko.runtime._resources import Resource
-        >>>
-        >>> class Client:
-        ...     closed = False
-        ...     def close(self):
-        ...         self.closed = True
-        >>>
-        >>> value = Client()
-        >>> resource = Resource.from_external(value)
-        >>> resource.open() is value
-        True
-        >>> resource.close(value)
-        >>> value.closed
-        False
-        >>> resource.external
-        True
-        >>> resource.reusable
-        True
-
-    """
-
-    __slots__ = ()
-    _external: bool = True
-
-    def close(self, value: T) -> None:
-        return None
-
-    async def aclose(self, value: T) -> None:
-        return None
-
-
-class _FactoryResource[T](ReusableResource[T]):
-    """
-    Represent lifecycle factories stored by ``Context.with_resource``.
-
-    This applies to generator functions and context managers rather than resource
-    values. ``with_resource`` stores but does not enter the factory; setup,
-    ``yield``, and teardown belong to execution. Therefore ``open``, ``aopen``,
-    ``close``, and ``aclose`` raise ``NotImplementedError``.
-    """
-
-    __slots__ = ("_args", "_factory", "_kwargs")
-
-    def __init__(  # noqa: E301
-        self,
-        factory: ResourceFactory[T],
-        *args: object,
-        cleanup: Cleanup[T] | Literal[False] | None = None,
-        credential: str | None = None,
-        lazy: bool = False,
-        **kwargs: object,
-    ) -> None:
-        self._factory = factory
-        self._kind = classify_factory(factory, lifecycle=False)
-        self._args = tuple(args)
-        self._kwargs = freeze_mapping(kwargs)
-        self._credential = credential
-        self._lazy = lazy
-        self._cleanup = cleanup
-
-        if self._kind in VALUE_FACTORY_KINDS:
-            if cleanup is None:
-                raise TypeError("ValueFactory requires an explicit cleanup function")
-        elif cleanup is not None:
-            msg = "Cleanup is not allowed for generator/context-manager factories."
-            msg += "use Resource.from_lifecycle(...) instead if you want riko to manage"
-            msg += "the lifecycle."
-            raise TypeError(msg)
-
-        if is_context_manager(factory):
-            warn(
-                "Resource.from_factory() received a context manager. It will be treated"
-                " as a ValueFactory and called normally; its context-manager lifecycle "
-                "will not be entered. Use Resource.from_lifecycle(...) to use "
-                "__enter__/__exit__ semantics.",
-                ResourceInterpretationWarning,
-                stacklevel=2,
-            )
-
-    @property
-    def factory(self) -> ResourceFactory[T]:
-        return self._factory
-
-    @property
-    def args(self) -> tuple[object, ...]:
-        return self._args
-
-    @property
-    def kwargs(self) -> Mapping[str, object]:
-        return self._kwargs
-
-    def open(self) -> Never:
-        msg = "Factory resource entry belongs to the execution layer"
-        raise NotImplementedError(msg)
-
-    async def aopen(self) -> Never:
-        msg = "Factory resource entry belongs to the execution layer"
-        raise NotImplementedError(msg)
-
-    def close(self, value: T) -> None:
-        return None
-
-    async def aclose(self, value: T) -> None:
-        return None
 
 
 __all__ = ["OneShotResource", "Resource", "ReusableResource"]
