@@ -575,20 +575,29 @@ bridge — rather than deriving one from another.
 - **`AsyncExecution`** runs behind an `AsyncExitStack` with an eagerly entered root task group as the
   outermost cancel scope; blocking sync components run on a worker thread. Shutdown cancels owned
   tasks on failure, joins the group, then unwinds the stack behind a cancellation shield within an
-  optional teardown budget.
-- Shutdown order is explicit (stop spawning → cancel → join → shielded unwind → group failures as an
-  `ExceptionGroup`), not generic exit-stack LIFO.
+  optional teardown budget. The join and unwind are sequenced `try: join / finally: unwind` — not one
+  shield wrapping both — so ambient cancellation of the shutdown task can never skip teardown, and the
+  task group's own `__aexit__` is never nested inside a child cancel scope.
+- Shutdown order is explicit (stop spawning → cancel → join → shielded unwind), not generic exit-stack
+  LIFO. The primary execution error is threaded into the exit stack's `__exit__` / `__aexit__`, so a
+  resource context manager observes, replaces, or suppresses it under normal Python semantics and the
+  execution surfaces the returned suppression. A lone cleanup failure with no primary error is raised
+  bare; an `ExceptionGroup` is reserved for multiple independent failures.
 
 **Resource acquisition.** `acquire` / `aacquire` resolve a `Resource` at most once (single-flight,
 keyed by resource identity); a repeat returns the first value or replays the first failure.
+Concurrent first-use of one lazy resource under `aacquire` is single-flight too — a per-resource
+in-flight gate makes waiters await and replay the leader's outcome rather than resolving twice.
 `build_resource_plan(resource)` (in `_execution/_plan.py`) is the one boundary that turns a
 declaration into a `_ResourcePlan` carrying a `_ResourceStrategy` (`EXTERNAL` / `OWNED` /
 `VALUE_FACTORY` / `LIFECYCLE`); the runtime consumes the plan and never re-inspects the original
 generator/context-manager/instance shape. Teardown rides the exit stack: owned → `close`/`aclose`
 callback, value-factory → cleanup callback, lifecycle → `enter_context` / `enter_async_context`.
 Explicit `cleanup` is authoritative; async factory results are awaited once (portal on sync,
-`maybe_deferred` on async). Async-native lifecycle/cleanup under sync execution raises
-`InvalidPipelineError` — a permanent boundary (the portal closes before the stack).
+`maybe_deferred` on async). Async value *production* under sync execution bridges through the portal,
+but async-native *teardown* — an async cleanup callable, an async-native lifecycle, or an
+`aclose()`-only owned value — is a permanent boundary: sync execution raises `InvalidPipelineError`
+before the resource is acquired, so no value is produced and no lifecycle entered behind the rejection.
 
 **Resource-model shape.** The owned/external/lifecycle/factory distinction is data on `Resource` —
 the `external` flag plus `factory`/`kind`/`cleanup`/`args`/`kwargs` — not a private subclass
@@ -601,8 +610,11 @@ never a runtime ontology.
 genuinely external resource — a real HTTP client against the loopback server
 (`@pytest.mark.simulated_network`), not a synthetic object — under both sync and async execution,
 across eager open + teardown, the async-under-sync rejection boundary, mid-run failure rollback, and
-cancellation. Deferred until `iter(flow)` wiring: true lazy-open-on-first-use and early-consumer
-abandonment during iteration.
+failure-induced task cancellation. The foundation semantics are proven directly: ambient cancellation
+of the shutdown task still unwinds resources, a resource context manager receives and can suppress the
+primary error, a lone cleanup failure raises bare, concurrent first-use is single-flight, and
+async-native teardown is rejected before any value is produced. Deferred until `iter(flow)` wiring:
+true lazy-open-on-first-use and early-consumer abandonment during iteration.
 
 ## Write architecture — `write()` / `sink()` sessions (shipped)
 

@@ -82,7 +82,7 @@ potentially blocking sync acquisition or cleanup
     -> worker adaptation, then registered on the stack
 ```
 
-The same split applies in reverse for `SyncExecution`: an async-only context manager is entered through the execution portal, and its exit is registered on the sync `ExitStack`.
+The reverse direction under `SyncExecution` is asymmetric. Async value *production* — an async factory that yields a resolved value — is bridged through the execution portal and the produced value is owned on the sync `ExitStack`. Async-native *teardown* is not bridged: an async cleanup callable, an async-native context-manager lifecycle, or an owned value that only supports `aclose()` cannot be honored by a synchronous unwind and is permanently rejected with `InvalidPipelineError` before the resource is acquired, so the rejection never leaves a produced value or entered lifecycle behind. Run the pipeline under async execution to use async teardown.
 
 **Adaptation happens only at an execution boundary chosen during preparation.** Module, parser, factory, and extension code never creates event loops, portals, executors, worker threads, or task groups. Those belong to the execution that prepared the graph.
 

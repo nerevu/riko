@@ -723,11 +723,16 @@ and other consumers remain ecosystem/observability work.
 #### R4B external-resource proof
 
 Do not wait until R12 to discover that the execution lifecycle cannot hold a real client. R4B exit
-tests include at least one genuinely external async resource and one genuinely external sync
-resource, each proven under **both** sync and async Pipeline execution.
+tests prove a real sync lifecycle under **both** sync and async execution, a real async lifecycle
+under native async execution, and deterministic rejection of async-native teardown under sync
+execution. The fourth quadrant — async-native teardown on `SyncExecution` — is an explicit
+`InvalidPipelineError` raised before acquisition, not a bridged run, so async resources are never
+smuggled through the sync portal for cleanup.
 
-Covered cases: eager open, lazy open, mid-execution failure rollback, early consumer abandonment,
-cancellation, and cleanup-error grouping. R12 proves the **external package API**; R4B proves the
+Covered cases: eager open, mid-execution failure rollback, failure-induced task cancellation,
+ambient-cancellation-safe teardown, exception-aware `__exit__`/`__aexit__` teardown, and
+lone-versus-grouped cleanup-error reporting. Lazy open and early consumer abandonment are deferred
+past this foundation commit. R12 proves the **external package API**; R4B proves the
 **runtime architecture**.
 
 #### R4B resource-model cleanup
