@@ -25,6 +25,7 @@ _UNNAMEABLE_PIPES = frozenset({"<lambda>", "pipe", "async_pipe"})
 if TYPE_CHECKING:
     from riko.types._wrappers import (
         AsyncPipeCallable,
+        Interface,
         Pipe,
         PipeCallable,
         SyncPipeCallable,
@@ -151,6 +152,33 @@ class ModuleDefinition:
             pipe = getattr(self.module, interface, None)
 
         return pipe
+
+    @property
+    def interfaces(self) -> frozenset[Interface]:
+        """
+        The sync and async interfaces this definition provides.
+
+        Returns:
+
+            The subset of ``pipe``/``async_pipe`` with a bound callable.
+
+        Examples:
+
+            >>> def pipe(source, **kwargs):
+            ...     return source
+            >>> sorted(ModuleDefinition(name="example", sync_pipe=pipe).interfaces)
+            ['pipe']
+
+        """
+        available: set[Interface] = set()
+
+        if self.get_pipe(False) is not None:
+            available.add("pipe")
+
+        if self.get_pipe(True) is not None:
+            available.add("async_pipe")
+
+        return frozenset(available)
 
 
 def normalize_module_name(name: ModuleNameLike | None) -> str:

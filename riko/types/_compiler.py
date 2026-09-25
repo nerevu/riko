@@ -173,7 +173,7 @@ type PipeDefLike = PipeDef | Mapping[str, object]
 
 
 @dataclass(frozen=True, slots=True)
-class _Edge:
+class GraphEdge:
     """
     One directed connection between two module ports.
 
@@ -198,7 +198,7 @@ class _Edge:
 
 
 @dataclass(frozen=True, slots=True)
-class _OutputRef:
+class OutputRef:
     """
     A canonical pipeline output to replace the legacy ``_OUTPUT`` node.
 
@@ -214,7 +214,7 @@ class _OutputRef:
 
 
 @dataclass(frozen=True, slots=True)
-class _GraphIndex:
+class GraphIndex:
     """
     Immutable, runtime-neutral interpretation of a pipe's wiring.
 
@@ -237,22 +237,22 @@ class _GraphIndex:
 
     """
 
-    edges: tuple[_Edge, ...]
-    incoming: Mapping[str, tuple[_Edge, ...]]
-    outgoing: Mapping[str, tuple[_Edge, ...]]
+    edges: tuple[GraphEdge, ...]
+    incoming: Mapping[str, tuple[GraphEdge, ...]]
+    outgoing: Mapping[str, tuple[GraphEdge, ...]]
     dependencies: Mapping[str, frozenset[str]]
     dependents: Mapping[str, frozenset[str]]
     order: tuple[str, ...]
     roots: tuple[str, ...]
     leaves: tuple[str, ...]
-    outputs: Mapping[str, _OutputRef]
+    outputs: Mapping[str, OutputRef]
 
 
 class ParsedPipeDef(TypedDict):
     name: str
     modules: dict[str, PipeModule]
     embed: dict[str, PipeModule]
-    graph: _GraphIndex
+    graph: GraphIndex
 
 
 class PipelineDescription(TypedDict):

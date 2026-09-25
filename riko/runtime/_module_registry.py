@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Literal, overload
 from riko.base.exceptions import UnsupportedModuleError
 from riko.definitions.modules import ModuleDefinition
 
-from ._importutils import resolve_interface
+from ._importutils import load_interfaces, resolve_interface
 from ._registry import Registry
 
 if TYPE_CHECKING:
@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
     from riko.types._wrappers import (
         AsyncPipeWrapper,
+        Interface,
         Pipe,
         PipeCallable,
         SyncPipeWrapper,
@@ -188,6 +189,35 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
         """
         return self._registered(name)
+
+    def get_interfaces(self, name: str) -> frozenset[Interface]:
+        """
+        Resolves which of a module's sync and async interfaces are defined.
+
+        Args:
+
+            name: Canonical module name to inspect.
+
+        Returns:
+
+            The subset of ``pipe``/``async_pipe`` a caller may resolve.
+
+        Raises:
+
+            UnsupportedModuleError: If no tier defines ``name``.
+
+        Examples:
+
+            >>> registry = ModuleRegistry()
+            >>> registry.register(
+            ...     ModuleDefinition(name="example", sync_pipe=lambda s, **_: s)
+            ... )
+            >>> sorted(registry.get_interfaces("example"))
+            ['pipe']
+
+        """
+        definition = self._registered(name)
+        return definition.interfaces if definition else load_interfaces(name)
 
 
 module_registry: ModuleRegistry = ModuleRegistry()

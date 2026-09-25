@@ -32,7 +32,7 @@ from collections import defaultdict
 from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
-from functools import partial, reduce, update_wrapper
+from functools import partial, update_wrapper
 from itertools import pairwise
 from json import JSONEncoder, dumps
 from pprint import PrettyPrinter
@@ -45,7 +45,7 @@ from riko.bado.itertools import as_async
 from riko.base._config import INPUT_PORT, OTHER_PORT, OUTPUT_MODULE, OUTPUT_PORT
 from riko.base._iterutils import partition
 from riko.base._source_format import ruff_format
-from riko.base._strutils import replacer
+from riko.base._strutils import pythonise
 from riko.base.exceptions import InvalidPipelineError
 from riko.coercion._graph import Graph, Nodes, NodeSet, SetGraph, topological_sort
 from riko.coercion._sequences import listize
@@ -54,6 +54,9 @@ from riko.types._collections import freeze_mapping
 from riko.types._compiler import (
     AbbrevStringModule,
     CountValues,
+    GraphEdge,
+    GraphIndex,
+    OutputRef,
     ParsedPipeDef,
     PipeDag,
     PipeDef,
@@ -65,9 +68,6 @@ from riko.types._compiler import (
     StringModule,
     TemplateData,
     Wire,
-    _Edge,
-    _GraphIndex,
-    _OutputRef,
 )
 from riko.types._enums import ExecutionMode
 from riko.types._guards import is_loop_module, is_mapping
@@ -354,33 +354,6 @@ def get_pipeline_inputs(  # noqa: E302
         raise TypeError("Must supply at least one kwarg!")
 
     return drain(pyinput) if isinstance(pyinput, AsyncIterator) else sorted(pyinput)
-
-
-def pythonise(
-    content: str | Mapping[str, object],
-    encoding: str = "ascii",
-    replace: Sequence[str] = ("-", ":", "/", ""),
-    key: str | None = None,
-) -> str:
-    """Builds a Python-friendly id."""
-    if not isinstance(content, str):
-        if key:
-            resolved = DotDict(content).get(key)
-
-            if isinstance(resolved, str):
-                content = resolved
-            elif isinstance(resolved, (Mapping, Sequence)):
-                _type = type(resolved).__name__
-                raise TypeError(f"Key '{key}' resolved to unsupported type {_type}.")
-            else:
-                content = str(resolved)
-        else:
-            raise ValueError("Received a dict without a key.")
-    elif key:
-        raise ValueError("Received a key without a dict.")
-
-    reduced = reduce(replacer, replace, content)
-    return reduced.encode(encoding, "replace").decode(encoding)
 
 
 def gen_names(  # noqa: E302
@@ -670,7 +643,7 @@ def _get_pyarg(  # noqa: E302
     return _get_input_module(parsed_pipe_def, module_id, steps, **split_ids)
 
 
-def _gen_connections(*edges: _Edge, target_is_input=False) -> Iterator[_Edge]:
+def _gen_connections(*edges: GraphEdge, target_is_input=False) -> Iterator[GraphEdge]:
     for edge in edges:
         if edge.source_port.startswith(OUTPUT_PORT):  # noqa: SIM102
             if target_is_input == (edge.target_port == INPUT_PORT):
@@ -898,7 +871,7 @@ def build_pipe_def(dag: PipeDag) -> PipeDef:
     return PipeDef({"modules": modules, "wires": full_wires})
 
 
-def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
+def _index_pipe_def(pipe_def: PipeDef) -> GraphIndex:
     """
     Interprets a pipe's wiring into one immutable graph index.
 
@@ -913,7 +886,7 @@ def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
 
     Returns:
 
-        A frozen ``_GraphIndex`` describing the pipe's topology.
+        A frozen ``GraphIndex`` describing the pipe's topology.
 
     """
     successors: SetGraph[str] = defaultdict(set, gen_embed_graph(pipe_def))
@@ -937,7 +910,7 @@ def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
     leaves = tuple(node for node in order if not dependents.get(node))
 
     edges = tuple(
-        _Edge(
+        GraphEdge(
             source=pythonise(wire["src"]["moduleid"]),
             target=pythonise(wire["tgt"]["moduleid"]),
             source_port=wire["src"]["id"],
@@ -946,8 +919,8 @@ def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
         for wire in pipe_def["wires"]
     )
 
-    _incoming: dict[str, list[_Edge]] = defaultdict(list)
-    _outgoing: dict[str, list[_Edge]] = defaultdict(list)
+    _incoming: dict[str, list[GraphEdge]] = defaultdict(list)
+    _outgoing: dict[str, list[GraphEdge]] = defaultdict(list)
 
     for edge in edges:
         _outgoing[edge.source].append(edge)
@@ -957,11 +930,11 @@ def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
     outgoing = {node: tuple(group) for node, group in _outgoing.items()}
 
     if output_edges := incoming.get(OUTPUT_PORT, ()):
-        outputs = {"default": _OutputRef(node=output_edges[-1].source, port="out")}
+        outputs = {"default": OutputRef(node=output_edges[-1].source, port="out")}
     else:
         outputs = {}
 
-    return _GraphIndex(
+    return GraphIndex(
         edges=edges,
         incoming=freeze_mapping(incoming),
         outgoing=freeze_mapping(outgoing),

@@ -60,6 +60,7 @@ from ._write import WriteMode
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
+    from riko.types._streams import AsyncItemGenerator, ItemGenerator
     from riko.types._workflow import EdgeFamily, NodeFamily
 
 _EMPTY_CONF: Mapping[str, object] = MappingProxyType({})
@@ -289,6 +290,52 @@ class Pipeline[T]:
     """
 
     spec: WorkflowSpec
+
+    def __iter__(self) -> ItemGenerator:
+        """
+        Runs the pipeline synchronously, yielding its default output stream.
+
+        Each iteration creates a fresh one-shot execution that owns the run's
+        resources for the lifetime of the returned iterator.
+
+        Yields:
+
+            The items produced at the pipeline's default output.
+
+        """
+        from riko.runtime._execution._execution import SyncExecution  # noqa: PLC0415
+        from riko.runtime._prepare_execution import prepare_execution  # noqa: PLC0415
+
+        plan = prepare_execution(self.spec)
+
+        with SyncExecution() as execution:
+            yield from execution.run(plan)
+
+    def __aiter__(self) -> AsyncItemGenerator:
+        """
+        Runs the pipeline asynchronously, yielding its default output stream.
+
+        Each iteration creates a fresh one-shot execution that owns the run's
+        resources for the lifetime of the returned async iterator.
+
+        Yields:
+
+            The items produced at the pipeline's default output.
+
+        """
+        from riko.runtime._execution._execution import AsyncExecution  # noqa: PLC0415
+        from riko.runtime._prepare_execution import prepare_execution  # noqa: PLC0415
+
+        async def _run() -> AsyncItemGenerator:
+            plan = prepare_execution(self.spec, is_async=True)
+
+            async with AsyncExecution() as execution:
+                stream = await execution.run(plan)
+
+                async for item in stream:
+                    yield item
+
+        return _run()
 
 
 __all__ = [

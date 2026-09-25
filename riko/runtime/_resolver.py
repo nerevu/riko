@@ -19,16 +19,22 @@ from ._module_registry import module_registry
 from ._pipelines import pipeline_resolver
 
 if TYPE_CHECKING:
-    from riko.types._wrappers import AsyncPipeWrapper, Pipe, Resolver, SyncPipeWrapper
+    from riko.types._wrappers import (
+        AsyncPipeWrapper,
+        Interface,
+        Pipe,
+        Resolver,
+        SyncPipeWrapper,
+    )
 
 
 class PipeResolver:
     """
     Dispatches a pipe name to whichever of the two resolvers owns it.
 
-    Both sides share a ``resolve(name, interface)`` shape. The dispatch is a single
-    symmetric branch: :class:`ModuleRegistry` for leaf modules,
-    :class:`PipelineResolver` for composed ``pipe_*`` sub-pipelines.
+    Both sides share the ``Resolver`` contract. The dispatch is a single symmetric
+    branch: :class:`ModuleRegistry` for leaf modules, :class:`PipelineResolver` for
+    composed ``pipe_*`` sub-pipelines.
 
     Examples:
 
@@ -60,9 +66,31 @@ class PipeResolver:
             UnsupportedPipelineError: If a ``pipe_*`` name is unresolved.
 
         """
-        is_pipeline = name.startswith(("pipe_", "pipe:"))
-        resolver: Resolver = self._pipelines if is_pipeline else self._registry
+        is_pipe = name.startswith(("pipe_", "pipe:"))
+        resolver = self._pipelines if is_pipe else self._registry
         return resolver.resolve(name, is_async)
+
+    def get_interfaces(self, name: str) -> frozenset[Interface]:
+        """
+        Reports which of a pipe name's sync and async interfaces are defined.
+
+        Args:
+
+            name: Module or ``pipe_*`` pipeline name to inspect.
+
+        Returns:
+
+            The subset of ``pipe``/``async_pipe`` the name exposes.
+
+        Examples:
+
+            >>> "pipe" in pipe_resolver.get_interfaces("count")
+            True
+
+        """
+        is_pipe = name.startswith(("pipe_", "pipe:"))
+        resolver = self._pipelines if is_pipe else self._registry
+        return resolver.get_interfaces(name)
 
 
 pipe_resolver: PipeResolver = PipeResolver(module_registry, pipeline_resolver)

@@ -280,7 +280,7 @@ type ModuleParser = ProcessorParser | OperatorParser | SplitterParser
 
 class Resolver(Protocol):
     """
-    Resolve a pipe name and interface to its callable.
+    Resolve a pipe name to its callable and report its available interfaces.
 
     Leaf modules use ``ModuleRegistry``; ``pipe`` sub-pipelines use
     ``PipelineResolver``.
@@ -297,3 +297,5 @@ class Resolver(Protocol):
     def resolve(  # noqa: E301, E704
         self, name: str, is_async: bool = False
     ) -> Pipe: ...
+
+    def get_interfaces(self, name: str) -> frozenset[Interface]: ...  # noqa: E704

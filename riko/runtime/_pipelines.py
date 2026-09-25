@@ -18,10 +18,11 @@ from json import loads
 from typing import TYPE_CHECKING, Literal, Protocol, cast, overload
 
 from riko.base._imports import import_or_else
+from riko.base._strutils import pythonise
 from riko.base.exceptions import UnsupportedPipelineError
 from riko.types._guards import is_subpipe
 
-from ._importutils import resolve_interface
+from ._importutils import load_interfaces, resolve_interface
 from ._subpipe import mark_subpipe
 
 if TYPE_CHECKING:
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
     from riko.types._compiler import ParsedPipeDef
-    from riko.types._wrappers import AsyncPipeWrapper, Pipe, SyncPipeWrapper
+    from riko.types._wrappers import AsyncPipeWrapper, Interface, Pipe, SyncPipeWrapper
     from riko.types.modules import ModuleSubtype
 
 
@@ -195,11 +196,28 @@ class PipelineResolver:
                 has no ``interface`` callable.
 
         """
-        from ._compile import pythonise  # noqa: PLC0415
-
         kwargs = {"is_async": is_async, "builtin": False}
         pipe = resolve_interface(pythonise(name), loader=self.load, **kwargs)
         return _as_subpipe(pipe)
+
+    def get_interfaces(self, name: str) -> frozenset[Interface]:
+        """
+        Resolves which of a pipeline's sync and async interfaces are defined.
+
+        Args:
+
+            name: ``pipe_<id>`` / ``pipe:<id>`` name to inspect.
+
+        Returns:
+
+            The subset of ``pipe``/``async_pipe`` the pipeline exposes.
+
+        Raises:
+
+            UnsupportedPipelineError: If no store supplies ``name``.
+
+        """
+        return load_interfaces(pythonise(name), builtin=False, loader=self.load)
 
     def load_definition(
         self, name: str, *, directory: Path | None = None

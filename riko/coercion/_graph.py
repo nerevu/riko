@@ -246,7 +246,9 @@ def freeze_graph[T: Hashable](
     return MappingProxyType({k: frozenset(v) for k, v in items})
 
 
-def descendants[T: Hashable](source: T, graph: AnyGraph[T]) -> frozenset[T]:
+def descendants[T: Hashable](
+    source: T, graph: AnyGraph[T] = MappingProxyType({})
+) -> frozenset[T]:
     known = set(graph)
 
     for targets in graph.values():

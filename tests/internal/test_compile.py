@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from riko.base._strutils import pythonise
 from riko.base.exceptions import UnsupportedModuleError
 from riko.runtime._compile import (
     build_pipe_def,
@@ -24,18 +25,17 @@ from riko.runtime._compile import (
     compile_pipe,
     get_wire,
     parse_pipe_def,
-    pythonise,
     resolve_module,
     stringify_pipe,
 )
 from riko.runtime.context import Context
 from riko.types._compiler import (
     DagModule,
+    GraphIndex,
     LoopModule,
     PipeDag,
     PipeDef,
     PipeModule,
-    _GraphIndex,
 )
 from riko.types.modules import ItemBuilderRawConf, Param, TruncateRawConf
 from tests import TESTS_DIR, async_test
@@ -325,7 +325,7 @@ def test_parse_pipe_def_replaces_wires_with_graph_index():
     graph = parsed["graph"]
 
     assert "wires" not in parsed
-    assert isinstance(graph, _GraphIndex)
+    assert isinstance(graph, GraphIndex)
     assert graph.order == ("sw_1", "sw_2", "_OUTPUT")
     assert graph.roots == ("sw_1",)
     assert graph.leaves == ("_OUTPUT",)

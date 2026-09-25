@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Generator, Mapping
 
     from riko.runtime._resources import Resource
-    from riko.types._resource import AnyContextManager, Cleanup
+    from riko.types._resource import AnyContextManager, Cleanup, ValueFactory
     from riko.types._sentinels import MissingType
 
 
@@ -73,7 +73,7 @@ class _ResourcePlan[T]:
     resource: Resource[T]
     native_async: bool = False
     value: T | MissingType = MISSING
-    factory: Callable[..., object] | None = None
+    factory: ValueFactory[T] | None = None
     args: tuple[object, ...] = ()
     kwargs: Mapping[str, object] = field(factory=dict)
     cleanup: Cleanup[T] | Literal[False] | None = None
@@ -127,7 +127,7 @@ def build_resource_plan[T](resource: Resource[T]) -> _ResourcePlan[T]:
             _ResourceStrategy.VALUE_FACTORY,
             resource,
             native_async=kind is FactoryKind.ASYNC_CALLABLE_FACTORY,
-            factory=cast("Callable[..., object]", resource.factory),
+            factory=cast("ValueFactory[T]", resource.factory),
             args=resource.args,
             kwargs=resource.kwargs,
             cleanup=resource.cleanup,

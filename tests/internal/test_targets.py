@@ -88,7 +88,7 @@ class TestNormalizeKeys:
 
     def test_non_iterable_rejected(self):
         with pytest.raises(TypeError, match="string or iterable"):
-            normalize_strs(42)
+            normalize_strs(42)  # pyright: ignore[reportArgumentType]
 
 
 class TestFileCapabilities:
