@@ -52,7 +52,7 @@ class Resource[T]:
 
     Examples:
 
-        >>> from riko.runtime._resources import Resource
+        >>> from riko.execution._resources import Resource
         >>>
         >>> class _Connection:
         ...    def __init__(self):
@@ -365,7 +365,7 @@ class Resource[T]:
 
         Examples:
 
-            >>> from riko.runtime._resources import Resource
+            >>> from riko.execution._resources import Resource
             >>>
             >>> class Client:
             ...     closed = False
@@ -414,7 +414,7 @@ class Resource[T]:
 
         Examples:
 
-            >>> from riko.runtime._resources import (
+            >>> from riko.execution._resources import (
             ...     FactoryKind,
             ...     OneShotResource,
             ...     Resource,

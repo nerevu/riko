@@ -133,9 +133,9 @@ def gen_registry_catalog() -> Iterator[ModuleMetadata]:
     is_async = (True, False)
 
     for name in module_registry.catalog_names():
-        definition = module_registry.definition(name)
+        definition = module_registry.load_definition(name)
         pipes = map(definition.get_pipe, is_async) if definition else ()
-        targets = tuple(cast("ModuleWrapper", pipe) for pipe in pipes if callable(pipe))
+        targets = tuple(pipe for pipe in pipes if callable(pipe))
         args = (name, targets)
 
         try:
@@ -189,7 +189,7 @@ def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
 
     """
     if canonical := normalize_module_name(name):
-        definition: ModuleDefinition | None = module_registry.definition(canonical)
+        definition: ModuleDefinition | None = module_registry.load_definition(canonical)
 
         if definition is None:  # noqa: SIM102
             if module := import_or_else(f"{_PACKAGE}.{canonical}"):

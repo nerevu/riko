@@ -15,7 +15,7 @@ from riko.bado._backend import run as async_run
 if TYPE_CHECKING:
     from types import ModuleType
 
-    from riko.types._wrappers import AsyncPipeWrapper
+    from riko.types._wrappers import AsyncModuleWrapper
 
 io_error = FileNotFoundError
 
@@ -65,7 +65,7 @@ def file2name(_path: str) -> str:
 
 
 async def runner(
-    async_pipe: AsyncPipeWrapper, test: bool = False, cb: Callable | None = None
+    async_pipe: AsyncModuleWrapper, test: bool = False, cb: Callable | None = None
 ) -> None:
     stream = async_pipe(test=test)
     result = [item async for item in stream]

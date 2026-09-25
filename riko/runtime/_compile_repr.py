@@ -7,12 +7,12 @@ from collections.abc import Mapping
 from functools import total_ordering
 from typing import TYPE_CHECKING, cast
 
-from riko.types._compiler import CountValues
+from riko.types._compiler import LoopOptionValues
 from riko.types._pipeline import StepValue
 from riko.types.modules import AnyModuleRawConf, RawConfValues, Value
 
 if TYPE_CHECKING:
-    from .context import Context
+    from riko.execution.context import Context
 
 
 def cmp(a: object, b: object) -> int:
@@ -42,9 +42,7 @@ class Id:
             return False
 
 
-type PyKwargValue = (
-    AnyModuleRawConf | bool | str | CountValues | Context | list[StepValue | Id]
-)
+type PyKwargValue = AnyModuleRawConf | LoopOptionValues | Context | list[StepValue | Id]
 
 
 def repr_arg(

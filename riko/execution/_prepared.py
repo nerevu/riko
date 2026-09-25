@@ -1,0 +1,157 @@
+# vim: sw=4:ts=4:expandtab
+"""
+Immutable execution-plan data for a canonical workflow.
+
+The runtime build boundary resolves a workflow into these nodes; the sync/async
+executions then run them without re-inspecting the definition, resolver, or
+registry. This module carries data only and imports no resolution or graph
+machinery.
+"""
+
+from __future__ import annotations
+
+from enum import Enum, auto
+from typing import TYPE_CHECKING, NamedTuple, cast
+
+from attrs import Factory, define, field
+
+from riko.base.exceptions import UnsupportedModuleError
+from riko.definitions._workflow import (
+    Node,
+    conf_converters,
+    optional_binding,
+    optional_resources,
+    require_module_node,
+)
+from riko.types._collections import freeze_mapping, require_str, validator_from_require
+from riko.types.modules import AnyModuleConf, LoopConf, LoopOptions
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from riko.types._compiler import LoopOptionValues
+    from riko.types._workflow import NodeFamily, NodeId
+    from riko.types._wrappers import (
+        AsyncModuleWrapper,
+        ModuleWrapper,
+        SyncModuleWrapper,
+    )
+
+_LOOP_OPTION_KEYS = set(LoopOptions.__annotations__)
+conf_converter = conf_converters("PreparedNode 'conf'")
+resource_converter = [optional_binding, optional_resources]
+conf = lambda self: require_module_node(self.node).conf
+
+
+class ExecMode(Enum):
+    """How a prepared node's callable runs under the chosen execution mode."""
+
+    NATIVE = auto()
+    ADAPTER = auto()
+
+
+class Selection(NamedTuple):
+    """A resolved callable paired with how it runs under an execution mode."""
+
+    pipe: ModuleWrapper
+    mode: ExecMode
+
+
+def _require_pipe(pipe: ModuleWrapper | None, name: str) -> ModuleWrapper:
+    if pipe is None:
+        raise UnsupportedModuleError(f"{name!r} has no interfaces")
+
+    return pipe
+
+
+@define(frozen=True, slots=True)
+class PreparedNode:
+    """
+    One resolved graph node ready to run, with its callables already resolved.
+
+    Attributes:
+
+        node: The canonical definition node this was resolved from.
+        id: The canonical node id.
+        name: The registered implementation name.
+        resources: The node's resource-slot bindings, slot to resource name.
+        conf: The node's declarative configuration.
+        sync_pipe: The resolved synchronous callable, or ``None`` if unavailable.
+        async_pipe: The resolved asynchronous callable, or ``None`` if unavailable.
+        embed: The resolved embed submodule for a loop node, else ``None``.
+
+    """
+
+    node: Node = field(validator=validator_from_require(require_module_node))
+    id: NodeId = field(
+        default=Factory(lambda self: self.node.id, takes_self=True),
+        converter=require_str,
+    )
+    name: str = field(
+        default=Factory(lambda self: self.node.name, takes_self=True),
+        converter=require_str,
+    )
+    resources: Mapping[str, str] = field(
+        default=Factory(lambda self: self.node.resources, takes_self=True),
+        converter=resource_converter,
+    )
+    conf: AnyModuleConf | LoopConf = field(
+        default=Factory(conf, takes_self=True), converter=conf_converter
+    )
+    sync_pipe: SyncModuleWrapper | None = field(default=None)
+    async_pipe: AsyncModuleWrapper | None = field(default=None)
+    embed: PreparedNode | None = field(default=None)
+
+    def select(self, *, is_async: bool) -> Selection:
+        """
+        Chooses this node's native-or-adapted callable for an execution mode.
+
+        The callable was resolved when the plan was built, so no resolver or
+        registry is touched here.
+
+        Args:
+
+            is_async: Whether the node runs under asynchronous execution.
+
+        Returns:
+
+            The resolved pipe and whether it runs natively or adapted.
+
+        Examples:
+
+            >>> from riko.definitions._workflow import ModuleNode
+            >>> from riko.runtime._execution_plan import build_execution_plan
+            >>> from riko.definitions._workflow import WorkflowSpec
+            >>> from riko.types._workflow import Endpoint
+            >>> node = ModuleNode(id="count-1", name="count")
+            >>> spec = WorkflowSpec(
+            ...     nodes={"count-1": node},
+            ...     outputs={"default": Endpoint("count-1", "out")},
+            ...     inputs={},
+            ...     edges=(),
+            ...     resources=(),
+            ... )
+            >>> plan = build_execution_plan(spec)
+            >>> plan.nodes["count-1"].select(is_async=False).mode.name
+            'NATIVE'
+
+        """
+        native = self.async_pipe if is_async else self.sync_pipe
+        adapted = self.sync_pipe if is_async else self.async_pipe
+
+        if native is None:
+            result = Selection(_require_pipe(adapted, self.name), ExecMode.ADAPTER)
+        else:
+            result = Selection(native, ExecMode.NATIVE)
+
+        return result
+
+    @property
+    def family(self) -> NodeFamily:
+        return self.node.family
+
+    @property
+    def options(self) -> Mapping[str, LoopOptionValues]:
+        common = _LOOP_OPTION_KEYS.intersection(self.conf)
+        options = {k: cast("LoopOptionValues", self.conf[k]) for k in common}
+        return freeze_mapping(options)

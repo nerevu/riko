@@ -21,12 +21,11 @@ from riko.definitions._write import (
     WriteMode,
     WriteResult,
 )
+from riko.execution._resources import OneShotResource, Resource
 from riko.io._reencode import IterStringIO, Reencoder, reencode
 from riko.io._serialization import serialize_records
 from riko.types._enums import FmtLike, Formats, StrLike
 from riko.types._guards import is_mapping
-
-from ._resources import OneShotResource, Resource
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Generator
@@ -691,7 +690,7 @@ def mint_write_resource(
 
     Examples:
 
-        >>> from riko.runtime._resources import OneShotResource
+        >>> from riko.execution._resources import OneShotResource
         >>>
         >>> resource = mint_write_resource("report.csv")
         >>> isinstance(resource, OneShotResource)

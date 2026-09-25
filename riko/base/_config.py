@@ -30,12 +30,7 @@ LAYER_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "cli": ("api",),
 }
 
-EXACT_LAYERS: dict[str, str] = {
-    "riko": "api",
-    "riko._package": "base",
-    "riko.runtime._resources": "execution",
-    "riko.runtime.context": "execution",
-}
+EXACT_LAYERS: dict[str, str] = {"riko": "api", "riko._package": "base"}
 
 PREFIX_LAYERS: dict[str, str] = {
     "riko.bado": "bado",
@@ -49,7 +44,7 @@ PREFIX_LAYERS: dict[str, str] = {
     "riko.parsing": "parsing",
     "riko.rss": "rss",
     "riko.runtime": "runtime",
-    "riko.runtime._execution": "execution",
+    "riko.execution": "execution",
     "riko.types": "types",
 }
 

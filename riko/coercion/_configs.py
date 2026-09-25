@@ -3,7 +3,7 @@
 Generated parse-time module configuration classes.
 
 Edit ``riko.types.modules`` and regenerate with ``manage codegen -m config``;
-do not edit this module directly.
+**DO NOT edit this module directly!**.
 """
 
 from __future__ import annotations
@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from riko.types._enums import CastType, FmtLike, LocationType
     from riko.types._io import PathLike
     from riko.types.modules import (
+        CountValues,
+        Embed,
         FilterConfRule,
         FindConfRule,
         ParsedParam,
@@ -290,3 +292,9 @@ class XpathFetchPageObjconf(DynamicConf):
     xpath: str
     encoding: str
     html5: bool
+
+
+class LoopObjconf(DynamicConf):
+    embed: Embed
+    emit: bool
+    count: CountValues

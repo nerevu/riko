@@ -14,6 +14,7 @@ from __future__ import annotations
 import itertools as it
 import re
 from collections.abc import Mapping, Sequence
+from functools import reduce
 from operator import itemgetter
 from random import choice
 from typing import TYPE_CHECKING, cast
@@ -121,6 +122,27 @@ def replacer(content: str, old: str, new: str = "_") -> str:
         replaced = content
 
     return replaced
+
+
+def pythonise(
+    content: str, encoding: str = "ascii", replace: Sequence[str] = ("-", ":", "/", "")
+) -> str:
+    """
+    Builds a Python-friendly id from ``content``.
+
+    Args:
+
+        content: The raw id to sanitize.
+        encoding: The encoding used to drop non-representable characters.
+        replace: The substrings replaced with ``_``.
+
+    Returns:
+
+        The sanitized id.
+
+    """
+    reduced = reduce(replacer, replace, content)
+    return reduced.encode(encoding, "replace").decode(encoding)
 
 
 def multi_substitute(word: str, rules: Sequence[RegexRule]) -> str:

@@ -21,7 +21,7 @@ _DOCSTRING = '''# vim: sw=4:ts=4:expandtab
 Generated parse-time module configuration classes.
 
 Edit ``riko.types.modules`` and regenerate with ``manage codegen -m config``;
-do not edit this module directly.
+**DO NOT edit this module directly!**.
 """'''
 
 

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict
 
-from ._compiler import EmbedRef
+from ._compiler import EmbedRef, PipeModule
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from _typeshed import DataclassInstance
 
-    from ._compiler import PipeModule
+    from ._compiler import CountValues
     from ._enums import CastType, FmtLike, LocationType, SortableCastType
     from ._io import PathLike
     from ._scalars import BasicValue
@@ -916,6 +916,28 @@ type AnyModuleConf = (
 )
 
 type Conf = AnyModuleConf | AnyModuleRawConf
+
+
+class Embed(TypedDict):
+    """Kwargs a loop passes to its embed per parent — not a full module descriptor."""
+
+    id: NotRequired[str]
+    conf: AnyModuleConf
+    name: str
+
+
+class LoopConf(TypedDict, total=False):
+    embed: Required[Embed]
+    emit: bool
+    count: CountValues
+
+
+class LoopOptions(TypedDict, total=False):
+    emit: bool
+    assign: str
+    field: str
+    count: CountValues
+
 
 __all__ = [
     "AggregateConf",

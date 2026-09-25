@@ -42,12 +42,11 @@ import pygogo as gogo
 from riko.base._config import INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
 from riko.base._iterutils import partition
 from riko.base.exceptions import InvalidPipelineError
-from riko.coercion._sequences import require_sequence
+from riko.coercion._sequences import lower_keys, require_sequence
 from riko.types._collections import require_str
 from riko.types._guards import require_mapping
 from riko.types._workflow import WORKFLOW_VERSION
 
-from ._compile import _lower_keys
 from ._normalize import normalize_workflow
 
 if TYPE_CHECKING:
@@ -100,7 +99,7 @@ def _migrate_module(**module: object) -> dict[str, object]:
     """Translates one v1 module mapping into a v2 authoring node mapping."""
     module_id = require_str(module.get("id"), "module 'id'")
     name = require_str(module.get("type"), "module 'type'")
-    conf = _lower_keys(require_mapping(module.get("conf") or {}, "module conf"))
+    conf = lower_keys(require_mapping(module.get("conf") or {}, "module conf"))
     extra = {k: v for k, v in module.items() if k not in _STRUCTURAL_KEYS}
 
     if name == _WRITE_TYPE:

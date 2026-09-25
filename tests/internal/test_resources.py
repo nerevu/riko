@@ -17,15 +17,15 @@ import pytest
 
 from riko.base.warnings import ResourceInterpretationWarning
 from riko.definitions._resources import bind_resources
-from riko.modules import operator
-from riko.runtime._resources import (
+from riko.execution._resources import (
     FactoryKind,
     OneShotResource,
     Resource,
     ReusableResource,
     classify_factory,
 )
-from riko.runtime.context import Context
+from riko.execution.context import Context
+from riko.modules import operator
 from riko.types._collections import freeze_mapping
 from tests import async_test
 

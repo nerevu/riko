@@ -24,6 +24,7 @@ from riko.base._dateutils import get_tzname
 from riko.base._strutils import truncate_content
 from riko.base.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.coercion._sequences import listize
+from riko.execution.context import Context, ExecutionMode
 from riko.runtime._compile import (
     abuild_pipeline,
     build_pipeline,
@@ -32,7 +33,6 @@ from riko.runtime._compile import (
 )
 from riko.runtime._pipelines import pipeline_resolver
 from riko.runtime.collections import SyncPipe
-from riko.runtime.context import Context, ExecutionMode
 from riko.types._guards import is_mapping
 from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput

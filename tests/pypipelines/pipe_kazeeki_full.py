@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 from riko.base._paths import get_path
 from riko.coercion._dataclass import build_regex_conf_rule
+from riko.execution.context import Context
 from riko.runtime.collections import SyncPipe
-from riko.runtime.context import Context
 from riko.types.modules import (
     CurrencyFormatConf,
     CurrencyFormatRawConf,

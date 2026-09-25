@@ -10,6 +10,7 @@ are not part of any supported import surface.
 
 from __future__ import annotations
 
+from ._events import EventSink
 from ._execution import AsyncExecution, SyncExecution
 
-__all__ = ["AsyncExecution", "SyncExecution"]
+__all__ = ["AsyncExecution", "EventSink", "SyncExecution"]

@@ -33,7 +33,7 @@ from riko.types.modules import (
 from tests import skipif_issync
 
 if TYPE_CHECKING:
-    from riko.runtime.context import Context
+    from riko.execution.context import Context
     from riko.types._streams import Item, Stream
     from riko.types._wrappers import SyncOperatorWrapperOutput
 

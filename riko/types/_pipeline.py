@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ._wrappers import (
-        AsyncPipeWrapper,
+        AsyncModuleWrapper,
         AsyncSplitterWrapperOutput,
         AsyncWrapperOutput,
-        SyncPipeWrapper,
+        SyncModuleWrapper,
         SyncSplitterWrapperOutput,
         SyncWrapperOutput,
     )
@@ -23,12 +23,12 @@ type PipelineDependencies = SyncPipelineDependencies | AsyncPipelineDependencies
 
 # generated/executable steps
 type SyncStepOutput = SyncWrapperOutput | SyncSplitterWrapperOutput
-type SyncStepValue = SyncStepOutput | SyncPipeWrapper
+type SyncStepValue = SyncStepOutput | SyncModuleWrapper
 type SyncStep = tuple[str, SyncStepValue]
 type SyncSteps = dict[str, SyncStepValue]
 
 type AsyncStepOutput = AsyncWrapperOutput | AsyncSplitterWrapperOutput
-type AsyncStepValue = AsyncStepOutput | AsyncPipeWrapper
+type AsyncStepValue = AsyncStepOutput | AsyncModuleWrapper
 type AsyncStep = tuple[str, AsyncStepValue]
 type AsyncSteps = dict[str, AsyncStepValue]
 

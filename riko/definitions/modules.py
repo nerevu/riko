@@ -7,6 +7,7 @@ Examples:
     >>>
     >>> def pipe(*args, **kwargs):
     ...     return []
+    >>>
     >>> definition = ModuleDefinition(name="example", sync_pipe=pipe)
     >>> definition.get_pipe() is pipe
     True
@@ -24,10 +25,10 @@ _UNNAMEABLE_PIPES = frozenset({"<lambda>", "pipe", "async_pipe"})
 
 if TYPE_CHECKING:
     from riko.types._wrappers import (
-        AsyncPipeCallable,
-        Pipe,
-        PipeCallable,
-        SyncPipeCallable,
+        AsyncModuleWrapper,
+        Interface,
+        ModuleWrapper,
+        SyncModuleWrapper,
     )
 
 
@@ -65,6 +66,7 @@ class ModuleDefinition:
         >>>
         >>> def pipe(*args, **kwargs):
         ...     return []
+        >>>
         >>> definition = ModuleDefinition(name="example", sync_pipe=pipe)
         >>> definition.name
         'example'
@@ -74,8 +76,8 @@ class ModuleDefinition:
     """
 
     name: str = ""
-    sync_pipe: SyncPipeCallable | None = None
-    async_pipe: AsyncPipeCallable | None = None
+    sync_pipe: SyncModuleWrapper | None = None
+    async_pipe: AsyncModuleWrapper | None = None
     module: object | None = None
     description: str | None = None
 
@@ -118,7 +120,7 @@ class ModuleDefinition:
 
         return name
 
-    def get_pipe(self, is_async: bool = False) -> PipeCallable | Pipe | None:
+    def get_pipe(self, is_async: bool = False) -> ModuleWrapper | None:
         """
         Resolves this definition's sync or async pipe callable.
 
@@ -142,15 +144,41 @@ class ModuleDefinition:
             True
 
         """
-        pipe: PipeCallable | Pipe | None = (
-            self.async_pipe if is_async else self.sync_pipe
-        )
+        pipe: ModuleWrapper | None = self.async_pipe if is_async else self.sync_pipe
 
         if pipe is None and self.module is not None:
             interface = "async_pipe" if is_async else "pipe"
             pipe = getattr(self.module, interface, None)
 
         return pipe
+
+    @property
+    def interfaces(self) -> frozenset[Interface]:
+        """
+        The sync and async interfaces this definition provides.
+
+        Returns:
+
+            The subset of ``pipe``/``async_pipe`` with a bound callable.
+
+        Examples:
+
+            >>> def pipe(source, **kwargs):
+            ...     return source
+            >>>
+            >>> sorted(ModuleDefinition(name="example", sync_pipe=pipe).interfaces)
+            ['pipe']
+
+        """
+        available: set[Interface] = set()
+
+        if self.get_pipe(False) is not None:
+            available.add("pipe")
+
+        if self.get_pipe(True) is not None:
+            available.add("async_pipe")
+
+        return frozenset(available)
 
 
 def normalize_module_name(name: ModuleNameLike | None) -> str:

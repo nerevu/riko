@@ -9,9 +9,9 @@ import pytest
 from riko.bado import async_sleep
 from riko.bado._backend import Event, create_task_group
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
+from riko.execution import AsyncExecution, SyncExecution
+from riko.execution._resources import Resource
 from riko.io import async_url_open
-from riko.runtime._execution import AsyncExecution, SyncExecution
-from riko.runtime._resources import Resource
 from tests import async_test
 from tests._loopback import loopback_url
 
@@ -38,6 +38,14 @@ class _AsyncClient:
 class _BadClient:
     def close(self) -> None:
         raise RuntimeError("cleanup failed")
+
+
+class _RecordingSink:
+    def __init__(self) -> None:
+        self.events: list[object] = []
+
+    def emit(self, event: object) -> None:
+        self.events.append(event)
 
 
 def test_sync_exit_stack_unwinds_lifo() -> None:
@@ -141,6 +149,8 @@ def test_sync_lone_cleanup_error_raises_bare() -> None:
 
 @async_test
 async def test_sync_portal_bridges_to_async() -> None:
+    result = None
+
     async def double(value: int) -> int:
         return value * 2
 
@@ -244,6 +254,8 @@ async def test_async_ambient_cancellation_still_unwinds() -> None:
 
 @async_test
 async def test_async_run_sync_bridges_to_worker() -> None:
+    result = None
+
     async with AsyncExecution() as execution:
         result = await execution.run_sync(pow, 2, 10)
 
@@ -427,6 +439,8 @@ async def test_async_acquire_async_value_factory() -> None:
 
 @async_test
 async def test_sync_acquire_async_value_factory_bridges() -> None:
+    acquired = None
+
     async def make() -> str:
         return "value"
 
@@ -438,6 +452,7 @@ async def test_sync_acquire_async_value_factory_bridges() -> None:
 
 def test_sync_acquire_is_single_flight() -> None:
     calls: list[int] = []
+    first, second = float("nan"), float("nan")
 
     def make() -> object:
         calls.append(1)
@@ -714,3 +729,48 @@ async def test_async_external_http_client_torn_down_on_cancellation() -> None:
         await fail()
 
     assert events == ["closed"]
+
+
+def test_sync_default_event_sink_is_noop() -> None:
+    with SyncExecution() as execution:
+        execution.emit("ignored")
+
+
+def test_sync_execution_dispatches_to_event_sink() -> None:
+    sink = _RecordingSink()
+
+    with SyncExecution(events=sink) as execution:
+        execution.emit("a")
+        execution.emit("b")
+
+    assert sink.events == ["a", "b"]
+
+
+@async_test
+async def test_async_default_event_sink_is_noop() -> None:
+    async with AsyncExecution() as execution:
+        execution.emit("ignored")
+
+
+@async_test
+async def test_async_execution_dispatches_to_event_sink() -> None:
+    sink = _RecordingSink()
+
+    async with AsyncExecution(events=sink) as execution:
+        execution.emit("a")
+        execution.emit("b")
+
+    assert sink.events == ["a", "b"]
+
+
+def test_each_execution_owns_its_event_sink() -> None:
+    first = _RecordingSink()
+    second = _RecordingSink()
+
+    with SyncExecution(events=first) as execution:
+        execution.emit("one")
+
+    with SyncExecution(events=second) as execution:
+        execution.emit("two")
+
+    assert (first.events, second.events) == (["one"], ["two"])
