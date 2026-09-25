@@ -7,10 +7,10 @@ Exact metadata derivation is tested in ``tests/internal/test_metadata.py``.
 
 import pytest
 
+from riko.execution.context import Context
 from riko.ext.codegen import list_modules
 from riko.modules import describe_module
 from riko.modules.input import pipe as input_pipe
-from riko.runtime.context import Context
 from riko.types._enums import CastType
 from riko.types.modules import InputConf
 

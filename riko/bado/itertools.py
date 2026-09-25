@@ -43,7 +43,13 @@ from ._backend import (
 from ._util import maybe_deferred
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
+    from collections.abc import (
+        AsyncGenerator,
+        AsyncIterator,
+        Awaitable,
+        Callable,
+        Iterable,
+    )
 
 
 def _cap[T, S](
@@ -83,9 +89,9 @@ def _cap[T, S](
 
 def as_async[T](
     source: AsyncIterable[T] | Iterable[T], cooperative: bool = False
-) -> AsyncIterable[T]:
+) -> AsyncIterator[T]:
     """
-    Adapts *source* to an ``AsyncIterable``.
+    Adapts *source* to an ``AsyncIterator``.
 
     Args:
 
@@ -93,8 +99,8 @@ def as_async[T](
 
     Returns:
 
-        *source* unchanged when already async-iterable, else wrapped via
-            :func:`async_iter`.
+        The async iterator of an already-async *source*, else *source* wrapped
+            via :func:`async_iter`.
 
     Examples:
 
@@ -110,7 +116,7 @@ def as_async[T](
 
     """
     if isinstance(source, AsyncIterable):
-        result = source
+        result = aiter(source)
     else:
         result = async_iter(source, cooperative=cooperative)
 

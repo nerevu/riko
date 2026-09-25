@@ -32,9 +32,9 @@ from riko.bado.itertools import as_async, async_iter, async_map
 from riko.base._iterutils import dispatch
 from riko.coercion._sequences import is_listlike
 from riko.definitions._resources import bind_resources, resolve_binding
+from riko.execution.context import Context
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
-from riko.runtime.context import Context
 from riko.types._compiler import CountValues, EmbedKwargs
 from riko.types._enums import BasicCastType, ExecutionMode
 from riko.types._guards import is_mapping
@@ -75,6 +75,7 @@ if TYPE_CHECKING:
         AsyncProcessorWrapper,
         AsyncSplitterParser,
         AsyncSplitterWrapper,
+        AsyncSplitterWrapperInput,
         AsyncSubPipe,
         AwaitableOperatorParser,
         AwaitableProcessorParser,
@@ -100,9 +101,11 @@ if TYPE_CHECKING:
         SyncPipeTuples,
         SyncProcessorParser,
         SyncProcessorWrapper,
+        SyncProcessorWrapperInput,
         SyncProcessorWrapperInternalOutput,
         SyncSplitterParser,
         SyncSplitterWrapper,
+        SyncSplitterWrapperInput,
         SyncSplitterWrapperOutput,
         SyncSubPipe,
     )
@@ -149,7 +152,7 @@ class _AsyncWrapperStream[T]:
 
     async def __anext__(self) -> T:
         if self._agen is None:
-            self._agen = aiter(as_async(await self._make()))
+            self._agen = as_async(await self._make())
 
         return await self._agen.__anext__()
 
@@ -863,7 +866,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             return _AsyncWrapperStream(make)
 
         def sync_wrapper(
-            item: ProcessorWrapperInput | None = None,
+            item: SyncProcessorWrapperInput | None = None,
             conf: Conf | None = None,
             context: Context | None = None,
             *,
@@ -1667,7 +1670,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         op_module_name = pipe.__module__.split(".")[-1]
 
         async def _async_wrapper_impl(
-            items: SplitterWrapperInput | None = None,
+            items: AsyncSplitterWrapperInput | None = None,
             conf: Conf | None = None,
             *,
             assign: str | None = None,
@@ -1691,7 +1694,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             return _AsyncWrapperStream(make)
 
         def sync_wrapper(
-            items: SplitterWrapperInput | None = None,
+            items: SyncSplitterWrapperInput | None = None,
             conf: Conf | None = None,
             *,
             assign: str | None = None,

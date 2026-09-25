@@ -3,6 +3,7 @@
 
 import sys
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -22,9 +23,12 @@ from riko.runtime._pipelines import (
     PipelineResolver,
     pipeline_resolver,
 )
-from riko.runtime._resolver import PipeResolver, pipe_resolver
+from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime.collections import SyncPipe
 from riko.types._guards import is_mapping
+
+if TYPE_CHECKING:
+    from riko.types._wrappers import SyncModuleWrapper
 
 _META = {
     "type": "operator",
@@ -47,7 +51,7 @@ def fixed_registry():
     module_registry.reset()
 
 
-marker = lambda source, **_: source
+marker = cast("SyncModuleWrapper", lambda source, **_: source)
 MOD_DEFN = ModuleDefinition(name=_NAME, sync_pipe=marker)
 
 
@@ -59,7 +63,8 @@ def _patch_entry_points(monkeypatch, *eps):
 
 
 def _pipe_wrapper(**attrs):
-    wrapper = lambda source, **_: source
+    wrapper = cast("SyncModuleWrapper", lambda source, **_: source)
+
     for key, value in attrs.items():
         setattr(wrapper, key, value)
 
@@ -143,7 +148,7 @@ class TestModuleRegistry:
         assert fixed_registry.resolve(_NAME, True) is marker
 
     def test_explicit_callable_overrides_module(self, fixed_registry):
-        other = lambda source, **_: source
+        other = cast("SyncModuleWrapper", lambda source, **_: source)
         mod = SimpleNamespace(pipe=other, async_pipe=other)
         definition = ModuleDefinition(name=_NAME, sync_pipe=marker, module=mod)
         fixed_registry.register(definition)
@@ -157,7 +162,7 @@ class TestPublicRegister:
 
     def test_register_resolves_via_facade(self, fixed_registry):
         register_module(MOD_DEFN)
-        assert pipe_resolver.resolve(_NAME) is marker
+        assert dispatcher.resolve(_NAME) is marker
         assert module_registry.resolve(_NAME) is marker
 
     def test_register_runs_end_to_end(self, fixed_registry):
@@ -172,23 +177,23 @@ class TestPublicRegister:
         reset_module_registry()
 
         with pytest.raises(UnsupportedModuleError):
-            pipe_resolver.resolve(_NAME)
+            dispatcher.resolve(_NAME)
 
 
 class TestPipeResolver:
     def test_module_resolves_via_registry(self, fixed_registry):
-        assert pipe_resolver.resolve("tokenizer").__name__ == "pipe"
+        assert dispatcher.resolve("tokenizer").__name__ == "pipe"
 
     def test_non_pipeline_name_routes_to_module_registry(self, fixed_registry):
         # A plain (non ``pipe_*``) name resolves through the module registry, so a
         # miss surfaces as UnsupportedModuleError, not UnsupportedPipelineError.
         with pytest.raises(UnsupportedModuleError):
-            pipe_resolver.resolve(_MISSING_NAME)
+            dispatcher.resolve(_MISSING_NAME)
 
     def test_runtime_pipe_resolution_imports_no_compiler(self, fixed_registry):
         """Resolving an ordinary module must not pull in riko.runtime._compile."""
         sys.modules.pop("riko.runtime._compile", None)
-        PipeResolver(fixed_registry, pipeline_resolver).resolve("tokenizer")
+        ResolverDispatcher(fixed_registry, pipeline_resolver).resolve("tokenizer")
         assert "riko.runtime._compile" not in sys.modules
 
     @pytest.mark.xfail(
@@ -205,7 +210,7 @@ class TestPipeResolver:
         """
         name = "pipe_transform"
         fixed_registry.register(ModuleDefinition(name=name, sync_pipe=marker))
-        assert pipe_resolver.resolve(name) is marker
+        assert dispatcher.resolve(name) is marker
 
 
 class TestEntryPointModules:
@@ -233,7 +238,7 @@ class TestEntryPointModules:
 
     def test_entry_point_via_facade(self, monkeypatch, fixed_registry):
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, MOD_DEFN))
-        assert pipe_resolver.resolve(_NAME) is marker
+        assert dispatcher.resolve(_NAME) is marker
 
     def test_entry_point_may_name_a_bare_module(self, monkeypatch, fixed_registry):
         """The entry point resolves to a module, not a ModuleDefinition."""
@@ -249,7 +254,7 @@ class TestEntryPointModules:
         mod = SimpleNamespace(pipe=marker, __doc__=_DOC)
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, mod))
 
-        definition = fixed_registry.definition(_NAME)
+        definition = fixed_registry.load_definition(_NAME)
         assert definition.name == _NAME
         assert definition.description == "Shouts each item."
 
@@ -263,7 +268,7 @@ class TestEntryPointModules:
     def test_runtime_registration_shadows_entry_point(
         self, monkeypatch, fixed_registry
     ):
-        ep_marker = lambda source, **_: source
+        ep_marker = cast("SyncModuleWrapper", lambda source, **_: source)
         ep_defn = ModuleDefinition(name=_NAME, sync_pipe=ep_marker)
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
         fixed_registry.register(MOD_DEFN)

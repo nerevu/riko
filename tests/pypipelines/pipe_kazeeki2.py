@@ -1,8 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """Hand-written sync Kazeeki pipeline fixture (variant 2)."""
 
+from riko.execution.context import Context
 from riko.runtime.collections import SyncPipe
-from riko.runtime.context import Context
 from tests.pypipelines._pipe_kazeeki import itembuilder_conf, regex_conf, rename_conf
 
 

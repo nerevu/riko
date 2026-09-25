@@ -63,7 +63,7 @@ type AsyncCascade = AsyncIterator[Stream]
 type AsyncItemOrStream = ItemOrStream | AsyncStream
 
 type AsyncItems = AsyncIterable[Item]
-type AsyncStreams = Iterable[AsyncStream]
+type AsyncStreams = AsyncIterable[Stream]
 type AsyncItemsOrValues = AsyncIterable[ItemOrValue]
 
 type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
@@ -72,4 +72,4 @@ type StreamGenerator = Generator[Any, None, Stream]
 
 # Both
 type Feed = Items | AsyncItems
-type OthersLike = Iterable[str] | Streams | AsyncStreams
+type OthersLike = Iterable[str | AsyncStream] | Streams | AsyncStreams

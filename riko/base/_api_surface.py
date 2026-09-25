@@ -4,6 +4,7 @@
 BADO = frozenset(
     {
         "as_async",
+        "async_chain",
         "async_map",
         "async_map_stream",
         "async_read",
@@ -132,6 +133,7 @@ EXTENSION = frozenset(
         "parse_workflow",
         "processor",
         "register_module",
+        "register_pipeline_store",
         "register_target",
         "serialize_workflow",
         "splitter",

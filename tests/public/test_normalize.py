@@ -487,6 +487,6 @@ def test_nested_conf_is_deeply_frozen_and_isolated():
     node = spec.nodes["a"]
     assert isinstance(node, ModuleNode)
     assert node.conf is not None
-    assert node.conf["nested"] == {"k": 1}
-    assert node.conf["list"] == (1, 2)
-    assert isinstance(node.conf["nested"], MappingProxyType)
+    assert node.conf.get("nested") == {"k": 1}
+    assert node.conf.get("list") == (1, 2)
+    assert isinstance(node.conf.get("nested"), MappingProxyType)

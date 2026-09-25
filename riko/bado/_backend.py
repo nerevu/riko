@@ -43,18 +43,13 @@ except ImportError:
     CapacityLimiter: type | None = None
     Event: type | None = None
     HTTPXResponse: Any = None
-    Semaphore: type | None = None
-    start_blocking_portal: Callable[..., Any] | None = None
     MemoryObjectReceiveStream: Any = None
     MemoryObjectSendStream: Any = None
     NamedTemporaryFile: Any = None
     Path: Any = None
+    Semaphore: type | None = None
     async_chain: Callable[..., Any] = lambda *_, **_kw: None
-    async_get: Callable[..., Any] = lambda *_, **_kw: None
-    async_json: Callable[..., Any] = lambda *_, **_kw: None
-    async_read: Callable[..., Any] = lambda *_, **_kw: None
-    async_partial: Callable[..., Any] = lambda *_, **_kw: None
-    async_return: Callable[..., Any] = lambda *_, **_kw: None
+    async_open: Callable[..., Any] = lambda *_, **_kw: None
     async_sleep: Callable[..., Any] = lambda *_, **_kw: None
     asyncify: Callable[..., Any] = lambda *_, **_kw: None
     backend: AsyncBackend = "empty"
@@ -63,7 +58,7 @@ except ImportError:
     fail_after: Callable[..., Any] | None = None
     gather_results: Callable[..., Any] = lambda *_, **_kw: None
     lowlevel: Any = None
-    async_open: Callable[..., Any] = lambda *_, **_kw: None
+    start_blocking_portal: Callable[..., Any] = lambda *_, **_kw: None
 
     async def checkpoint() -> None:
         return None
@@ -115,12 +110,7 @@ __all__ = [
     "Path",
     "Semaphore",
     "async_chain",
-    "async_get",
-    "async_json",
     "async_open",
-    "async_partial",
-    "async_read",
-    "async_return",
     "async_sleep",
     "asyncify",
     "backend",

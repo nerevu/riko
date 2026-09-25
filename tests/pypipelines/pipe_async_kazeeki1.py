@@ -3,8 +3,8 @@
 
 from riko.bado import as_async
 from riko.bado._backend import run
+from riko.execution.context import Context
 from riko.runtime.collections import AsyncPipe
-from riko.runtime.context import Context
 from tests.pypipelines._pipe_kazeeki import fetchdata_conf, regex_conf, rename_conf
 
 

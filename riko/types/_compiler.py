@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from itertools import chain
 from typing import TYPE_CHECKING, Literal, NewType, NotRequired, Required, TypedDict
+
+from ._workflow import parse_port
 
 if TYPE_CHECKING:
     from ._module_ids import LoopableModuleId, ModuleId
@@ -170,10 +173,11 @@ class PipeDef(TypedDict):
 
 
 type PipeDefLike = PipeDef | Mapping[str, object]
+type LoopOptionValues = bool | str | CountValues
 
 
 @dataclass(frozen=True, slots=True)
-class _Edge:
+class GraphEdge:
     """
     One directed connection between two module ports.
 
@@ -196,9 +200,13 @@ class _Edge:
     source_port: str
     target_port: str
 
+    @property
+    def is_valid(self) -> bool:
+        return parse_port(self.target_port).is_positional
+
 
 @dataclass(frozen=True, slots=True)
-class _OutputRef:
+class OutputRef:
     """
     A canonical pipeline output to replace the legacy ``_OUTPUT`` node.
 
@@ -214,7 +222,7 @@ class _OutputRef:
 
 
 @dataclass(frozen=True, slots=True)
-class _GraphIndex:
+class GraphIndex:
     """
     Immutable, runtime-neutral interpretation of a pipe's wiring.
 
@@ -237,22 +245,42 @@ class _GraphIndex:
 
     """
 
-    edges: tuple[_Edge, ...]
-    incoming: Mapping[str, tuple[_Edge, ...]]
-    outgoing: Mapping[str, tuple[_Edge, ...]]
+    edges: tuple[GraphEdge, ...]
+    incoming: Mapping[str, tuple[GraphEdge, ...]]
+    outgoing: Mapping[str, tuple[GraphEdge, ...]]
     dependencies: Mapping[str, frozenset[str]]
     dependents: Mapping[str, frozenset[str]]
     order: tuple[str, ...]
     roots: tuple[str, ...]
     leaves: tuple[str, ...]
-    outputs: Mapping[str, _OutputRef]
+    outputs: Mapping[str, OutputRef]
+
+    def is_open(
+        self,
+        root: str | None = None,
+        attr: Literal["incoming", "outgoing", "edges"] = "incoming",
+    ) -> bool:
+        if attr == "edges" and root:
+            msg = "cannot validate edges by root; use 'incoming' or 'outgoing'"
+            raise ValueError(msg)
+        elif attr == "edges":
+            valid = all(edge.is_valid for edge in self.edges)
+        elif attr in {"incoming", "outgoing"}:
+            attr_: Mapping[str, tuple[GraphEdge, ...]] = getattr(self, attr)
+            edges = attr_.get(root, ()) if root else chain.from_iterable(attr_.values())
+            valid = all(edge.is_valid for edge in edges)
+        else:
+            msg = f"invalid {attr=}; must be 'incoming', 'outgoing', or 'edges'"
+            raise ValueError(msg)
+
+        return valid
 
 
 class ParsedPipeDef(TypedDict):
     name: str
     modules: dict[str, PipeModule]
     embed: dict[str, PipeModule]
-    graph: _GraphIndex
+    graph: GraphIndex
 
 
 class PipelineDescription(TypedDict):

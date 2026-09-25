@@ -32,7 +32,7 @@ from collections import defaultdict
 from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
-from functools import partial, reduce, update_wrapper
+from functools import partial, update_wrapper
 from itertools import pairwise
 from json import JSONEncoder, dumps
 from pprint import PrettyPrinter
@@ -45,15 +45,19 @@ from riko.bado.itertools import as_async
 from riko.base._config import INPUT_PORT, OTHER_PORT, OUTPUT_MODULE, OUTPUT_PORT
 from riko.base._iterutils import partition
 from riko.base._source_format import ruff_format
-from riko.base._strutils import replacer
+from riko.base._strutils import pythonise
 from riko.base.exceptions import InvalidPipelineError
 from riko.coercion._graph import Graph, Nodes, NodeSet, SetGraph, topological_sort
-from riko.coercion._sequences import listize
+from riko.coercion._sequences import listize, lower_keys
+from riko.execution.context import Context
 from riko.parsing._dotdict import DotDict
 from riko.types._collections import freeze_mapping
 from riko.types._compiler import (
     AbbrevStringModule,
-    CountValues,
+    GraphEdge,
+    GraphIndex,
+    LoopOptionValues,
+    OutputRef,
     ParsedPipeDef,
     PipeDag,
     PipeDef,
@@ -65,9 +69,6 @@ from riko.types._compiler import (
     StringModule,
     TemplateData,
     Wire,
-    _Edge,
-    _GraphIndex,
-    _OutputRef,
 )
 from riko.types._enums import ExecutionMode
 from riko.types._guards import is_loop_module, is_mapping
@@ -80,8 +81,6 @@ from riko.types.modules import (
 )
 
 from ._compile_repr import Id, PyKwargValue, repr_arg, repr_args
-from ._resolver import pipe_resolver
-from .context import Context
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Iterable
@@ -106,10 +105,17 @@ if TYPE_CHECKING:
     )
     from riko.types._streams import AsyncStream, Item, Stream
     from riko.types._wrappers import (
-        AsyncPipeWrapper,
+        AsyncModuleWrapper,
+        AsyncOperatorWrapper,
+        AsyncProcessorWrapper,
+        AsyncSplitterWrapper,
         AsyncWrapperOutput,
-        Pipe,
-        SyncPipeWrapper,
+        ModuleWrapper,
+        SplitterWrapper,
+        SyncModuleWrapper,
+        SyncOperatorWrapper,
+        SyncProcessorWrapper,
+        SyncSplitterWrapper,
         SyncWrapperOutput,
         WrapperOutput,
     )
@@ -193,18 +199,18 @@ class CustomEncoder(JSONEncoder):
 @overload
 def _as_named_pipe(  # noqa: E704
     module_name: str, module_id: str, is_async: Literal[False] = ...
-) -> SyncPipeWrapper: ...
+) -> SyncModuleWrapper: ...
 @overload  # noqa: E302
 def _as_named_pipe(  # noqa: E704
     module_name: str, module_id: str, is_async: Literal[True]
-) -> AsyncPipeWrapper: ...
+) -> AsyncModuleWrapper: ...
 def _as_named_pipe(  # noqa: E302
     module_name: str, module_id: str, is_async: bool = False
-) -> Pipe:
+) -> ModuleWrapper:
     """Builds a renamed wrapper without modifying the imported pipe."""
     pipe = resolve_module(module_name, is_async)
     name = str(f"pipe_{module_id}")
-    wrapper = cast("Pipe", partial(pipe))
+    wrapper = cast("ModuleWrapper", partial(pipe))
     update_wrapper(wrapper, pipe)
 
     wrapper.__name__ = name
@@ -356,33 +362,6 @@ def get_pipeline_inputs(  # noqa: E302
     return drain(pyinput) if isinstance(pyinput, AsyncIterator) else sorted(pyinput)
 
 
-def pythonise(
-    content: str | Mapping[str, object],
-    encoding: str = "ascii",
-    replace: Sequence[str] = ("-", ":", "/", ""),
-    key: str | None = None,
-) -> str:
-    """Builds a Python-friendly id."""
-    if not isinstance(content, str):
-        if key:
-            resolved = DotDict(content).get(key)
-
-            if isinstance(resolved, str):
-                content = resolved
-            elif isinstance(resolved, (Mapping, Sequence)):
-                _type = type(resolved).__name__
-                raise TypeError(f"Key '{key}' resolved to unsupported type {_type}.")
-            else:
-                content = str(resolved)
-        else:
-            raise ValueError("Received a dict without a key.")
-    elif key:
-        raise ValueError("Received a key without a dict.")
-
-    reduced = reduce(replacer, replace, content)
-    return reduced.encode(encoding, "replace").decode(encoding)
-
-
 def gen_names(  # noqa: E302
     module_ids: Sequence[str] | Sequence[tuple[str, ...]],
     parsed_pipe_def: ParsedPipeDef,
@@ -470,20 +449,6 @@ def _module_alias(module_name: str) -> str:
     return f"_{module_name}" if shadowed else module_name
 
 
-def _lower_keys[T](obj: T) -> T:
-    if is_mapping(obj):
-        result = {
-            (k.lower() if isinstance(k, str) and k.isupper() else k): _lower_keys(v)
-            for k, v in obj.items()
-        }
-    elif isinstance(obj, list):
-        result = [_lower_keys(v) for v in obj]
-    else:
-        result = obj
-
-    return cast("T", result)
-
-
 def _conf_source(module_name: str, conf: Id | PyKwargValue) -> str:
     raw = _RAW_CONFS.get(module_name)
     inner = repr_arg(conf)
@@ -491,7 +456,7 @@ def _conf_source(module_name: str, conf: Id | PyKwargValue) -> str:
 
 
 def _render_conf(module_name: str, conf: Id | PyKwargValue) -> str:
-    return _conf_source(module_name, _lower_keys(conf))
+    return _conf_source(module_name, lower_keys(conf))
 
 
 def _gen_embed_module_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
@@ -670,7 +635,7 @@ def _get_pyarg(  # noqa: E302
     return _get_input_module(parsed_pipe_def, module_id, steps, **split_ids)
 
 
-def _gen_connections(*edges: _Edge, target_is_input=False) -> Iterator[_Edge]:
+def _gen_connections(*edges: GraphEdge, target_is_input=False) -> Iterator[GraphEdge]:
     for edge in edges:
         if edge.source_port.startswith(OUTPUT_PORT):  # noqa: SIM102
             if target_is_input == (edge.target_port == INPUT_PORT):
@@ -699,7 +664,7 @@ def _gen_pykwargs(  # noqa: E302
 
     for key in ("emit", "assign", "field", "count"):
         if (setting := module.get(key)) is not None:
-            yield (key, cast("bool | str | CountValues", setting))
+            yield (key, cast("LoopOptionValues", setting))
 
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
     yield ("context", context)
@@ -734,18 +699,30 @@ def _gen_pykwargs(  # noqa: E302
 
 
 @overload
+def resolve_module(  # noqa: E704, # pyright: ignore[reportOverlappingOverload]
+    module_name: Literal["split"], is_async: Literal[False] = ...
+) -> SyncSplitterWrapper: ...
+@overload  # noqa: E302
 def resolve_module(  # noqa: E704
     module_name: str, is_async: Literal[False] = ...
-) -> SyncPipeWrapper: ...
+) -> SyncProcessorWrapper | SyncOperatorWrapper: ...
+@overload  # noqa: E302
+def resolve_module(  # noqa: E704, # pyright: ignore[reportOverlappingOverload]
+    module_name: Literal["split"], is_async: Literal[True]
+) -> AsyncSplitterWrapper: ...
 @overload  # noqa: E302
 def resolve_module(  # noqa: E704
     module_name: str, is_async: Literal[True]
-) -> AsyncPipeWrapper: ...
+) -> AsyncProcessorWrapper | AsyncOperatorWrapper: ...
 @overload  # noqa: E302
 def resolve_module(  # noqa: E704
-    module_name: str, is_async: bool = False
-) -> Pipe: ...
-def resolve_module(module_name: str, is_async: bool = False) -> Pipe:  # noqa: E302
+    module_name: Literal["split"], is_async: bool = ...
+) -> SplitterWrapper: ...
+@overload  # noqa: E302
+def resolve_module(  # noqa: E704
+    module_name: str, is_async: bool = ...
+) -> ModuleWrapper: ...
+def resolve_module(module_name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E302
     """
     Resolve a leaf module or generated sub-pipe to its callable.
 
@@ -766,7 +743,9 @@ def resolve_module(module_name: str, is_async: bool = False) -> Pipe:  # noqa: E
     ``tests/internal/test_resolver.py``.
 
     """
-    return pipe_resolver.resolve(module_name, is_async)
+    from ._resolver import dispatcher  # noqa: PLC0415
+
+    return dispatcher.resolve(module_name, is_async)
 
 
 @overload
@@ -898,7 +877,7 @@ def build_pipe_def(dag: PipeDag) -> PipeDef:
     return PipeDef({"modules": modules, "wires": full_wires})
 
 
-def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
+def _index_pipe_def(pipe_def: PipeDef) -> GraphIndex:
     """
     Interprets a pipe's wiring into one immutable graph index.
 
@@ -913,7 +892,7 @@ def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
 
     Returns:
 
-        A frozen ``_GraphIndex`` describing the pipe's topology.
+        A frozen ``GraphIndex`` describing the pipe's topology.
 
     """
     successors: SetGraph[str] = defaultdict(set, gen_embed_graph(pipe_def))
@@ -937,7 +916,7 @@ def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
     leaves = tuple(node for node in order if not dependents.get(node))
 
     edges = tuple(
-        _Edge(
+        GraphEdge(
             source=pythonise(wire["src"]["moduleid"]),
             target=pythonise(wire["tgt"]["moduleid"]),
             source_port=wire["src"]["id"],
@@ -946,8 +925,8 @@ def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
         for wire in pipe_def["wires"]
     )
 
-    _incoming: dict[str, list[_Edge]] = defaultdict(list)
-    _outgoing: dict[str, list[_Edge]] = defaultdict(list)
+    _incoming: dict[str, list[GraphEdge]] = defaultdict(list)
+    _outgoing: dict[str, list[GraphEdge]] = defaultdict(list)
 
     for edge in edges:
         _outgoing[edge.source].append(edge)
@@ -957,11 +936,11 @@ def _index_pipe_def(pipe_def: PipeDef) -> _GraphIndex:
     outgoing = {node: tuple(group) for node, group in _outgoing.items()}
 
     if output_edges := incoming.get(OUTPUT_PORT, ()):
-        outputs = {"default": _OutputRef(node=output_edges[-1].source, port="out")}
+        outputs = {"default": OutputRef(node=output_edges[-1].source, port="out")}
     else:
         outputs = {}
 
-    return _GraphIndex(
+    return GraphIndex(
         edges=edges,
         incoming=freeze_mapping(incoming),
         outgoing=freeze_mapping(outgoing),
@@ -990,11 +969,11 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPip
     """
     graph = _index_pipe_def(pipe_def)
     modules = {
-        key: PipeModule({**module, "conf": _lower_keys(module["conf"])})
+        key: PipeModule({**module, "conf": lower_keys(module["conf"])})
         for key, module in gen_modules(pipe_def)
     }
     embed = {
-        key: PipeModule({**module, "conf": _lower_keys(module["conf"])})
+        key: PipeModule({**module, "conf": lower_keys(module["conf"])})
         for key, module in gen_modules(pipe_def, embedded=True)
     }
     modules.update(embed)

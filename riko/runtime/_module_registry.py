@@ -34,17 +34,17 @@ from typing import TYPE_CHECKING, Literal, overload
 from riko.base.exceptions import UnsupportedModuleError
 from riko.definitions.modules import ModuleDefinition
 
-from ._importutils import resolve_interface
+from ._importutils import load_interfaces, resolve_interface
 from ._registry import Registry
 
 if TYPE_CHECKING:
     from importlib.metadata import EntryPoint
 
     from riko.types._wrappers import (
-        AsyncPipeWrapper,
-        Pipe,
-        PipeCallable,
-        SyncPipeWrapper,
+        AsyncModuleWrapper,
+        Interface,
+        ModuleWrapper,
+        SyncModuleWrapper,
     )
 
 
@@ -81,6 +81,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
         >>>
         >>> def pipe(*args, **kwargs):
         ...     return []
+        >>>
         >>> registry = ModuleRegistry()
         >>> registry.register(ModuleDefinition(name="example", sync_pipe=pipe))
         >>> registry.registered_names()
@@ -116,18 +117,21 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
         return definition
 
-    def _resolve_builtin(self, name: str, is_async: bool = False) -> Pipe:
+    def _resolve_builtin(self, name: str, is_async: bool = False) -> ModuleWrapper:
         return resolve_interface(name, is_async=is_async)
+
+    def is_compatible(self, name: str) -> bool:
+        return not name.startswith(("pipe_", "pipe:"))
 
     @overload
     def resolve(  # noqa: E704
         self, name: str, is_async: Literal[False] = ...
-    ) -> SyncPipeWrapper: ...
+    ) -> SyncModuleWrapper: ...
     @overload  # noqa: E301
     def resolve(  # noqa: E704
         self, name: str, is_async: Literal[True]
-    ) -> AsyncPipeWrapper: ...
-    def resolve(self, name: str, is_async: bool = False) -> Pipe | PipeCallable:  # noqa: E301
+    ) -> AsyncModuleWrapper: ...
+    def resolve(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
         """
         Resolves a module's sync or async callable, honoring tier precedence.
 
@@ -150,15 +154,14 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
             >>> def pipe(*args, **kwargs):
             ...     return []
+            >>>
             >>> registry = ModuleRegistry()
             >>> registry.register(ModuleDefinition(name="example", sync_pipe=pipe))
             >>> registry.resolve("example") is pipe
             True
 
         """
-        definition = self._registered(name)
-
-        if definition is None:
+        if (definition := self._registered(name)) is None:
             pipe = self._resolve_builtin(name, is_async)
         elif (pipe := definition.get_pipe(is_async)) is None:
             interface = "async_pipe" if is_async else "pipe"
@@ -166,7 +169,35 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
         return pipe
 
-    def definition(self, name: str) -> ModuleDefinition | None:
+    def get_interfaces(self, name: str) -> frozenset[Interface]:
+        """
+        Resolves which of a module's sync and async interfaces are defined.
+
+        Args:
+
+            name: Canonical module name to inspect.
+
+        Returns:
+
+            The subset of ``pipe``/``async_pipe`` a caller may resolve.
+
+        Raises:
+
+            UnsupportedModuleError: If no tier defines ``name``.
+
+        Examples:
+
+            >>> registry = ModuleRegistry()
+            >>> sync_pipe = lambda s, **_: s
+            >>> registry.register(ModuleDefinition(name="example", sync_pipe=sync_pipe))
+            >>> sorted(registry.get_interfaces("example"))
+            ['pipe']
+
+        """
+        definition = self._registered(name)
+        return definition.interfaces if definition else load_interfaces(name)
+
+    def load_definition(self, name: str) -> ModuleDefinition | None:
         """
         Resolves a runtime or entry-point definition by name.
 
@@ -183,7 +214,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             >>> registry = ModuleRegistry()
             >>> definition = ModuleDefinition(name="example", sync_pipe=lambda: [])
             >>> registry.register(definition)
-            >>> registry.definition("example") is definition
+            >>> registry.load_definition("example") is definition
             True
 
         """
@@ -215,7 +246,7 @@ def register_module(definition: ModuleDefinition, *, replace: bool = False) -> N
         >>> reset_module_registry()
         >>> definition = ModuleDefinition(name="__doctest__", sync_pipe=lambda: [])
         >>> register_module(definition)
-        >>> module_registry.definition("__doctest__") is definition
+        >>> module_registry.load_definition("__doctest__") is definition
         True
         >>> reset_module_registry()
 

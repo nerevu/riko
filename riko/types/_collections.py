@@ -7,10 +7,10 @@ from dataclasses import fields, is_dataclass
 from decimal import Decimal
 from math import isinf, isnan
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar, cast, get_origin, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast, get_origin, overload
 
 import attrs
-from attrs import Attribute, AttrsInstance
+from attrs import Attribute, AttrsInstance, validators
 
 from riko.base.exceptions import InvalidPipelineError
 
@@ -91,6 +91,23 @@ def def_from_require[T, D, R](  # noqa: E302
         return default if value is None else require(value, **kwargs)
 
     return optional
+
+
+@overload
+def validator_from_require[T](  # noqa: E704
+    require: Callable[[T, str | None], object], optional: Literal[False] = ...
+) -> AttrsValidator[T]: ...
+@overload  # noqa: E302
+def validator_from_require[T](  # noqa: E704
+    require: Callable[[T, str | None], object], optional: Literal[True] = True
+) -> AttrsValidator[T | None]: ...
+def validator_from_require[T](  # noqa: E302
+    require: Callable[[T, str | None], object], optional: bool = False
+) -> AttrsValidator[T] | AttrsValidator[T | None]:
+    def validator(instance: AttrsInstance, field: Attribute[Any], value: T) -> None:
+        require(value, f"{type(instance).__name__} '{field.name}'")
+
+    return validators.optional(validator) if optional else validator
 
 
 def require_str(value: object, what: str | None = "value") -> str:

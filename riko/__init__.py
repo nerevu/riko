@@ -6,7 +6,7 @@ Application code imports from this namespace; extension authors use ``riko.ext``
 ``riko.bado`` exposes the supported async-runtime namespace.
 """
 
-from riko.bado._backend import async_sleep, backend, isasync, issync, run
+from riko.bado._backend import async_chain, async_sleep, backend, isasync, issync, run
 from riko.bado._util import async_read, async_return
 from riko.bado.itertools import as_async, async_map, async_map_stream
 from riko.base._paths import get_path, get_temp_file
@@ -17,6 +17,7 @@ from riko.base.exceptions import (
     UnsupportedPipelineError,
 )
 from riko.definitions._workflow import Pipeline
+from riko.execution.context import Context
 from riko.ext.codegen import list_modules
 from riko.io._async import async_url_open, async_write, get_async_temp_file
 from riko.modules._metadata import describe_module, get_module_metadata
@@ -37,7 +38,6 @@ from riko.runtime.collections import (
     export,
     list_formats,
 )
-from riko.runtime.context import Context
 from riko.types._enums import Backends, ExecutionMode, Formats
 
 from ._package import PACKAGE_INFO
@@ -73,6 +73,7 @@ __all__ = [
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
     "as_async",
+    "async_chain",
     "async_map",
     "async_map_stream",
     "async_read",

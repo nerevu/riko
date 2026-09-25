@@ -15,7 +15,7 @@ from riko.parsing._dotdict import DotDict
 if TYPE_CHECKING:
     from logging import Logger
 
-    from riko.runtime.context import Context
+    from riko.execution.context import Context
     from riko.types._collections import RikoValue
     from riko.types._compiler import CountValues, EmbedKwargs
     from riko.types._scalars import PrimitiveValue

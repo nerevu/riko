@@ -18,10 +18,12 @@ from json import loads
 from typing import TYPE_CHECKING, Literal, Protocol, cast, overload
 
 from riko.base._imports import import_or_else
+from riko.base._strutils import pythonise
 from riko.base.exceptions import UnsupportedPipelineError
 from riko.types._guards import is_subpipe
 
-from ._importutils import resolve_interface
+from ._compile import parse_pipe_def
+from ._importutils import load_interfaces, resolve_interface
 from ._subpipe import mark_subpipe
 
 if TYPE_CHECKING:
@@ -30,11 +32,17 @@ if TYPE_CHECKING:
     from types import ModuleType
 
     from riko.types._compiler import ParsedPipeDef
-    from riko.types._wrappers import AsyncPipeWrapper, Pipe, SyncPipeWrapper
+    from riko.types._wrappers import (
+        AsyncModuleWrapper,
+        Interface,
+        ModuleWrapper,
+        SubPipe,
+        SyncModuleWrapper,
+    )
     from riko.types.modules import ModuleSubtype
 
 
-def _as_subpipe(pipe: Pipe) -> Pipe:
+def _as_subpipe(pipe: ModuleWrapper) -> SubPipe:
     """
     Builds a sub-pipe-marked wrapper around ``pipe``.
 
@@ -46,7 +54,7 @@ def _as_subpipe(pipe: Pipe) -> Pipe:
     if is_subpipe(pipe):
         subpipe = pipe
     else:
-        subpipe = cast("Pipe", partial(pipe))
+        subpipe = cast("SubPipe", partial(pipe))
         update_wrapper(subpipe, pipe)
         subtype = cast("ModuleSubtype", getattr(pipe, "subtype", "source"))
         loopable = cast("bool", getattr(pipe, "loopable", True))
@@ -113,8 +121,6 @@ class DirectoryStore:
         self._directory = directory
 
     def load(self, name: str) -> ParsedPipeDef | None:
-        from ._compile import parse_pipe_def  # noqa: PLC0415
-
         try:
             pipe_def = loads((self._directory / f"{name}.json").read_text())
         except OSError:
@@ -127,13 +133,9 @@ class DirectoryStore:
 
 class PipelineResolver:
     """
-    Resolves whole sub-pipelines, where the module registry resolves leaf modules.
+    Resolves whole pipelines.
 
-    Lookup has two independent halves: ``store`` supplies generated Python pipe
-    modules for ``resolve``, and ``definitions`` supplies JSON pipeline definitions
-    for ``load_definition``. Both are injected rather than hardcoded. This is what
-    keeps test-only locations out of the core compiler. The suite points the global
-    at its own package and directory via ``conftest``.
+    Use the module registry to resolves leaf modules.
 
     Examples:
 
@@ -156,22 +158,51 @@ class PipelineResolver:
         self._store = store
         self._definitions = definitions
 
-    def configure(
+    @staticmethod
+    def _register_slot[T](
+        current: T | None, value: T | None, kind: str, replace: bool
+    ) -> T | None:
+        if value is not None and current is not None and not replace:
+            raise ValueError(f"pipeline {kind} already registered")
+
+        return current if value is None else value
+
+    def register(
         self,
         *,
         store: ModuleStore | None = None,
         definitions: DirectoryStore | None = None,
+        replace: bool = False,
     ) -> None:
         """
-        Replaces both halves of the lookup.
+        Registers a module store and/or a JSON-definition directory.
 
-        This is a whole-state assignment, not a partial update: an omitted
-        argument is set to ``None`` rather than left alone. Passing only ``store``
-        also clears ``definitions``. Pass both to keep both.
+        Only the halves supplied are touched; an omitted half is left as it is.
+
+        Args:
+
+            store: Generated-pipe module store to register.
+            definitions: JSON-definition directory to register.
+            replace: Whether an already-registered half of the same kind may be
+                replaced.
+
+        Raises:
+
+            ValueError: If a supplied half is already registered and ``replace``
+                is False.
 
         """
-        self._store = store
-        self._definitions = definitions
+        register_slot = partial(self._register_slot, replace=replace)
+        self._store = register_slot(self._store, store, "store")
+        self._definitions = register_slot(self._definitions, definitions, "definitions")
+
+    def reset(self) -> None:
+        """Clears the registered store and definitions, chiefly for test isolation."""
+        self._store = None
+        self._definitions = None
+
+    def is_compatible(self, name: str) -> bool:
+        return name.startswith(("pipe_", "pipe:"))
 
     def load(self, name: str) -> ModuleType | None:
         """Loads the generated pipe module for ``name``, or ``None``."""
@@ -180,12 +211,12 @@ class PipelineResolver:
     @overload
     def resolve(  # noqa: E704
         self, name: str, is_async: Literal[False] = ...
-    ) -> SyncPipeWrapper: ...
+    ) -> SyncModuleWrapper: ...
     @overload  # noqa: E301
     def resolve(  # noqa: E704
         self, name: str, is_async: Literal[True]
-    ) -> AsyncPipeWrapper: ...
-    def resolve(self, name: str, is_async: bool = False) -> Pipe:  # noqa: E301
+    ) -> AsyncModuleWrapper: ...
+    def resolve(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
         """
         Resolves a ``pipe_<id>`` / ``pipe:<id>`` name to its marked callable.
 
@@ -195,11 +226,28 @@ class PipelineResolver:
                 has no ``interface`` callable.
 
         """
-        from ._compile import pythonise  # noqa: PLC0415
-
         kwargs = {"is_async": is_async, "builtin": False}
         pipe = resolve_interface(pythonise(name), loader=self.load, **kwargs)
         return _as_subpipe(pipe)
+
+    def get_interfaces(self, name: str) -> frozenset[Interface]:
+        """
+        Resolves which of a pipeline's sync and async interfaces are defined.
+
+        Args:
+
+            name: ``pipe_<id>`` / ``pipe:<id>`` name to inspect.
+
+        Returns:
+
+            The subset of ``pipe``/``async_pipe`` the pipeline exposes.
+
+        Raises:
+
+            UnsupportedPipelineError: If no store supplies ``name``.
+
+        """
+        return load_interfaces(pythonise(name), builtin=False, loader=self.load)
 
     def load_definition(
         self, name: str, *, directory: Path | None = None
@@ -213,12 +261,68 @@ class PipelineResolver:
 
         """
         store = self._definitions if directory is None else DirectoryStore(directory)
-        parsed = None if store is None else store.load(name)
 
-        if parsed is None:
+        if (parsed := None if store is None else store.load(name)) is None:
             raise UnsupportedPipelineError(name)
 
         return parsed
 
 
 pipeline_resolver: PipelineResolver = PipelineResolver()
+
+
+def register_pipeline_store(
+    *, package: str | None = None, directory: Path | None = None, replace: bool = False
+) -> None:
+    """
+    Registers pipeline sources on the process-global resolver.
+
+    Args:
+
+        package: Import path of a package holding generated ``pipe_*`` modules.
+        directory: Filesystem directory holding JSON pipeline definitions.
+        replace: Whether an already-registered source of the same kind may be
+            replaced.
+
+    Raises:
+
+        ValueError: If a supplied source is already registered and ``replace`` is
+            False.
+
+    Examples:
+
+        >>> reset_pipeline_resolver()
+        >>> register_pipeline_store(package="riko.modules")
+        >>> reset_pipeline_resolver()
+
+    """
+    store = None if package is None else PackageStore(package)
+    definitions = None if directory is None else DirectoryStore(directory)
+    pipeline_resolver.register(store=store, definitions=definitions, replace=replace)
+
+
+def reset_pipeline_resolver() -> None:
+    """
+    Resets the process-global resolver, chiefly for test isolation.
+
+    Examples:
+
+        >>> reset_pipeline_resolver()
+        >>> register_pipeline_store(package="riko.modules")
+        >>> reset_pipeline_resolver()
+        >>> pipeline_resolver.load("pipe_demo") is None
+        True
+
+    """
+    pipeline_resolver.reset()
+
+
+__all__ = [
+    "DirectoryStore",
+    "MappingStore",
+    "PackageStore",
+    "PipelineResolver",
+    "pipeline_resolver",
+    "register_pipeline_store",
+    "reset_pipeline_resolver",
+]

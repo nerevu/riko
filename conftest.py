@@ -7,16 +7,21 @@ import pytest
 from riko.bado._backend import issync
 from riko.base._paths import ROOT_DIR
 from riko.parsing.documents import IS_LXML
-from riko.runtime._pipelines import DirectoryStore, PackageStore, pipeline_resolver
+from riko.runtime._pipelines import register_pipeline_store, reset_pipeline_resolver
 from riko.runtime._pubsub import reset_pubsub
 
 PIPELINE_DIR = ROOT_DIR / "tests" / "pipelines"
 
-# The core compiler ships no named-pipeline locations; the suite supplies its
-# own generated-package store + JSON-definition directory (formerly hardcoded as
-# ``tests.pypipelines`` / ``tests/pipelines`` inside ``riko.runtime._compile``).
-store = PackageStore("tests.pypipelines")
-pipeline_resolver.configure(store=store, definitions=DirectoryStore(PIPELINE_DIR))
+
+@pytest.fixture(autouse=True)
+def pipeline_store():
+    # The core compiler ships no named-pipeline locations; the suite supplies its
+    # own generated-package store + JSON-definition directory (formerly hardcoded
+    # as ``tests.pypipelines`` / ``tests/pipelines`` inside ``riko.runtime._compile``).
+    reset_pipeline_resolver()
+    register_pipeline_store(package="tests.pypipelines", directory=PIPELINE_DIR)
+    yield
+    reset_pipeline_resolver()
 
 
 def _extra_missing(*modules: str) -> list[str]:

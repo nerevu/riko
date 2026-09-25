@@ -59,20 +59,20 @@ from riko.coercion._sequences import listize
 from riko.definitions._targets import build_write
 from riko.definitions._write import Destination, ExportType, WriteMode, WriteResult
 from riko.definitions.modules import normalize_module_name
+from riko.execution.context import Context
 from riko.io._serialization import CONVERSION_FUNCS, serialize_records
 from riko.types._enums import ExecutionMode, FmtLike, Formats, ModuleNameLike, StrLike
 from riko.types._scalars import AnyStrType, BasicValue
 from riko.types.modules import Conf, ReceiveConf
 
 from ._pubsub import sync_hub
-from ._resolver import pipe_resolver
+from ._resolver import dispatcher
 from ._write_session import (
     async_file_write_session,
     async_write_through,
     file_write_session,
     write_through,
 )
-from .context import Context
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -94,14 +94,15 @@ if TYPE_CHECKING:
         Streams,
     )
     from riko.types._wrappers import (
-        AsyncPipeWrapper,
+        AsyncModuleWrapper,
         AsyncSplitterWrapperOutput,
         ConversionOutput,
-        SyncPipeWrapper,
+        SyncModuleWrapper,
         SyncSplitterWrapperOutput,
     )
 
     from ._pubsub._types import ReceiveFunc
+
 type AnyPool = ThreadPoolType | CPUPoolType
 type PoolFactory = Callable[..., AnyPool]
 
@@ -819,13 +820,14 @@ class SyncPipe(PyPipe):
             self._pool_handle = _pool_handle
 
         if self.name:
-            self._pipe: SyncPipeWrapper = pipe_resolver.resolve(self.name)
+            self._pipe: SyncModuleWrapper = dispatcher.resolve(self.name)
             self.pollable: bool = getattr(self._pipe, "pollable")  # noqa: B009
             self.loopable: bool = getattr(self._pipe, "loopable")  # noqa: B009
             self.mapify: bool = self.loopable and self.source is not None
             self.parallelize: bool = self.parallel and self.mapify
         else:
-            self._pipe = lambda source, **_: source
+            sync_pipe = lambda source, **_: source
+            self._pipe = cast("SyncModuleWrapper", sync_pipe)
             self.pollable = self.loopable = self.mapify = self.parallelize = False
 
         if self.parallelize:
@@ -1189,7 +1191,7 @@ class SyncPipe(PyPipe):
             self._mapped = mapped
 
             if self._mapped is None:
-                yield from pipeline(self.source)
+                yield from cast("Stream", pipeline(self.source))
             else:
                 yield from chain.from_iterable(self._mapped)
         except GeneratorExit:
@@ -1673,12 +1675,13 @@ class AsyncPipe(PyPipe):
         self._aiter: AsyncItemGenerator | None = None
 
         if self.name:
-            self._async_pipe: AsyncPipeWrapper = pipe_resolver.resolve(self.name, True)
+            self._async_pipe: AsyncModuleWrapper = dispatcher.resolve(self.name, True)
             self.pollable: bool = getattr(self._async_pipe, "pollable")  # noqa: B009
             self.loopable: bool = getattr(self._async_pipe, "loopable")  # noqa: B009
             self.mapify: bool = self.loopable
         else:
-            self._async_pipe = lambda source, **_: aiter(as_async(source))
+            async_pipe = lambda source, **_: as_async(source)
+            self._async_pipe = cast("AsyncModuleWrapper", async_pipe)
             self.pollable = self.loopable = self.mapify = False
 
     def __getattr__(self, name: str) -> AsyncPipe:
@@ -1893,8 +1896,7 @@ class AsyncPipe(PyPipe):
         if self.source is None:
             resolved = None
         else:
-            _resolved = await as_awaitable(self.source)
-            resolved = aiter(as_async(_resolved))
+            resolved = as_async(await as_awaitable(self.source))
 
         return resolved
 
@@ -1960,7 +1962,9 @@ class AsyncPipe(PyPipe):
                         for item in _stream:
                             yield item
                 else:
-                    async for item in async_pipeline(source):
+                    stream = cast("AsyncStream", async_pipeline(source))
+
+                    async for item in stream:
                         yield item
         except BaseException:
             self._fail()
@@ -2167,7 +2171,7 @@ def get_worker_cnt(length: int, threads: bool | None = True) -> int:
 
 
 def listpipe(
-    args: tuple[Item, SyncPipeWrapper], **kwargs: BasicValue
+    args: tuple[Item, SyncModuleWrapper], **kwargs: BasicValue
 ) -> list[Item | Stream]:
     """Runs one item through a pipeline, materialized so it can cross a pool."""
     source, pipeline = args

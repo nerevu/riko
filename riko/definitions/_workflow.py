@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from functools import partial
 from itertools import chain
 from types import MappingProxyType
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from attrs import define, field
 
@@ -58,11 +58,13 @@ from ._targets import normalize_strs, resolve_enum
 from ._write import WriteMode
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Callable, Iterator, Mapping
 
+    from riko.types._streams import AsyncItemGenerator, ItemGenerator
     from riko.types._workflow import EdgeFamily, NodeFamily
+    from riko.types.modules import AnyModuleConf, LoopConf
 
-_EMPTY_CONF: Mapping[str, object] = MappingProxyType({})
+_EMPTY_CONF = cast("AnyModuleConf", MappingProxyType({}))
 _EMPTY_RESOURCES: Mapping[str, str] = MappingProxyType({})
 
 
@@ -70,18 +72,23 @@ def freeze_mapping_value(value: Mapping[object, object]) -> JSONSchema:
     return freeze_value(value)
 
 
-_optional_str = def_from_require(require_str)
-_optional_binding = def_from_require(require_binding)
-_optional_resources = def_from_require(normalize_resources, default=_EMPTY_RESOURCES)
+optional_binding = def_from_require(require_binding)
+optional_resources = def_from_require(normalize_resources, default=_EMPTY_RESOURCES)
+optional_str = def_from_require(require_str)
+
 _optional_freeze = def_from_require(freeze_mapping_value, default=_EMPTY_CONF)
 _normalize_backend = partial(resolve_enum, Backends)
 _normalize_format = partial(resolve_enum, Formats, strict=False)
 _normalize_mode = partial(resolve_enum, WriteMode, default=WriteMode.REPLACE)
 
 
-def conf_field(what: str | None = None) -> Mapping[str, object]:
-    converters = [def_from_require(require_mapping, what=what), _optional_freeze]
-    return field(default=_EMPTY_CONF, converter=converters)
+def conf_converters(
+    what: str | None = None,
+) -> list[
+    Callable[..., Mapping[str, object] | None]
+    | Callable[[Mapping], AnyModuleConf | JSONSchema]
+]:
+    return [def_from_require(require_mapping, what=what), _optional_freeze]
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -92,9 +99,9 @@ class Node:
     id: NodeId
     name: str = field(converter=require_str)
     resources: Mapping[str, str] = field(
-        default=_EMPTY_RESOURCES, converter=[_optional_binding, _optional_resources]
+        default=_EMPTY_RESOURCES, converter=[optional_binding, optional_resources]
     )
-    label: str | None = field(default=None, converter=_optional_str)
+    label: str | None = field(default=None, converter=optional_str)
 
     @property
     def declared_resources(self) -> set[str]:
@@ -107,7 +114,9 @@ class ModuleNode(Node):
     """A registered transform/operator node (split/branch/route/union/join/loop too)."""
 
     family: ClassVar[NodeFamily] = "module"
-    conf: Mapping[str, object] | None = conf_field("ModuleNode 'conf'")
+    conf: AnyModuleConf | LoopConf = field(
+        default=_EMPTY_CONF, converter=conf_converters("ModuleNode 'conf'")
+    )
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -125,7 +134,7 @@ class WriteNode(Node):
 
     family: ClassVar[NodeFamily] = "write"
     backend: Backends = field(converter=_normalize_backend)
-    dest: str | None = field(default=None, converter=_optional_str)
+    dest: str | None = field(default=None, converter=optional_str)
     fmt: Formats | None = field(default=None, converter=_normalize_format)
     mode: WriteMode = field(default=WriteMode.REPLACE, converter=_normalize_mode)
     keys: tuple[str, ...] = field(default=(), converter=normalize_strs)
@@ -137,7 +146,9 @@ class ActionNode(Node):
 
     family: ClassVar[NodeFamily] = "action"
     backend: Backends = field(converter=_normalize_backend)
-    params: Mapping[str, object] | None = conf_field("ActionNode 'params'")
+    params: AnyModuleConf = field(
+        default=_EMPTY_CONF, converter=conf_converters("ActionNode 'params'")
+    )
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -145,7 +156,9 @@ class CacheNode(Node):
     """A node carrying cache identity and policy, never cache contents."""
 
     family: ClassVar[NodeFamily] = "cache"
-    policy: Mapping[str, object] | None = conf_field("CacheNode 'policy'")
+    policy: AnyModuleConf = field(
+        default=_EMPTY_CONF, converter=conf_converters("CacheNode 'policy'")
+    )
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -153,7 +166,9 @@ class SubscribeNode(Node):
     """A node owning subscription policy for a published stream."""
 
     family: ClassVar[NodeFamily] = "subscribe"
-    policy: Mapping[str, object] | None = conf_field("SubscribeNode 'policy'")
+    policy: AnyModuleConf = field(
+        default=_EMPTY_CONF, converter=conf_converters("SubscribeNode 'policy'")
+    )
 
 
 @define(frozen=True, slots=True)
@@ -168,6 +183,14 @@ class PublishEdge(Edge):
     """A publish edge delivering a producer's output to a subscribe node."""
 
     family: ClassVar[EdgeFamily] = "publish"
+
+
+def require_module_node(value: Node, what: str | None = None) -> ModuleNode:
+    if not isinstance(value, ModuleNode):
+        what = what or value.family
+        raise InvalidPipelineError(f"{what} node execution is not yet supported")
+
+    return value
 
 
 @define(frozen=True, slots=True)
@@ -279,8 +302,9 @@ class Pipeline[T]:
     """
     A public immutable pipeline definition over a canonical Workflow v2 spec.
 
-    ``Pipeline`` is the stable definition surface; execution lands in a later phase.
-    The type parameter records the item type the pipeline's execution will yield.
+    ``Pipeline`` is the stable definition surface; iterating it (``iter``/``aiter``)
+    runs the workflow and yields its default output stream. The type parameter
+    records the item type the pipeline's execution yields.
 
     Attributes:
 
@@ -289,6 +313,52 @@ class Pipeline[T]:
     """
 
     spec: WorkflowSpec
+
+    def __iter__(self) -> ItemGenerator:
+        """
+        Synchronously runs the pipeline.
+
+        Each iteration creates a fresh one-shot execution that owns the run's
+        resources for the lifetime of the returned iterator.
+
+        Yields:
+
+            The items produced at the pipeline's default output.
+
+        """
+        from riko.execution._execution import SyncExecution  # noqa: PLC0415
+        from riko.runtime._execution_plan import build_execution_plan  # noqa: PLC0415
+
+        plan = build_execution_plan(self.spec)
+
+        with SyncExecution() as execution:
+            yield from execution.run(plan)
+
+    def __aiter__(self) -> AsyncItemGenerator:
+        """
+        Asynchronously runs the pipeline.
+
+        Each iteration creates a fresh one-shot execution that owns the run's
+        resources for the lifetime of the returned async iterator.
+
+        Yields:
+
+            The items produced at the pipeline's default output.
+
+        """
+        from riko.execution._execution import AsyncExecution  # noqa: PLC0415
+        from riko.runtime._execution_plan import build_execution_plan  # noqa: PLC0415
+
+        async def _run() -> AsyncItemGenerator:
+            plan = build_execution_plan(self.spec)
+
+            async with AsyncExecution() as execution:
+                stream = await execution.run(plan)
+
+                async for item in stream:
+                    yield item
+
+        return _run()
 
 
 __all__ = [

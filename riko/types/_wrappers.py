@@ -11,14 +11,30 @@ from collections.abc import (
     Iterator,
 )
 from io import StringIO
-from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, TypedDict, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    NamedTuple,
+    Protocol,
+    TypedDict,
+    overload,
+    runtime_checkable,
+)
 
 from ._options import ItemDispatch, Opts
-from ._streams import AsyncItems, AsyncStream, ItemOrValue, ItemValue, Stream
+from ._streams import (
+    AsyncItems,
+    AsyncStream,
+    ItemOrValue,
+    ItemsOrValues,
+    ItemValue,
+    Stream,
+)
 
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.runtime.context import Context
+    from riko.execution.context import Context
 
     from ._scalars import NumLike, PrimitiveValue
     from ._streams import Cascade, Feed, Item, Items
@@ -41,21 +57,6 @@ type ParserOutput[T: ItemOrValue] = (
     ProcessorParserOutput[T] | OperatorParserOutput[T] | SplitterParserOutput
 )
 type ParserMaterializedOutput = list[ItemOrValue]
-
-type SyncProcessorWrapperOutput = Stream
-type SyncProcessorWrapperInternalOutput = Iterator[ItemOrValue]
-type SyncOperatorWrapperOutput = Stream
-type SyncOperatorWrapperInternalOutput = Iterator[ItemOrValue]
-type SyncSplitterWrapperOutput = Cascade
-
-type ProcessorWrapperInput = (
-    Items | SyncProcessorWrapperOutput | SyncOperatorWrapperOutput | ItemOrValue
-)
-type SplitterWrapperInput = SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
-type WrapperInput = (
-    ProcessorWrapperInput | SyncOperatorWrapperInput | SplitterWrapperInput
-)
-
 type Caster[T] = Callable[[str | int], T]
 type NumericCaster = Callable[[str | NumLike], NumLike]
 type ArgCaster[T] = Callable[..., T]
@@ -67,14 +68,22 @@ class PreCaster[T](TypedDict):
 
 
 type Dispatcher[T, E] = Callable[[Item, Opts], ItemDispatch[T, E]]
-
 type ConversionOutput = Iterable[str] | StringIO
 type ConversionFunc = Callable[..., ConversionOutput]
 
 # Sync
+type SyncOperatorWrapperOutput = Stream
+type SyncOperatorWrapperInternalOutput = Iterator[ItemOrValue]
 type SyncOperatorWrapperInput = (
     Items | SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
 )
+type SyncProcessorWrapperOutput = Stream
+type SyncProcessorWrapperInternalOutput = Iterator[ItemOrValue]
+type SyncProcessorWrapperInput = ItemOrValue | ItemsOrValues
+
+type SyncSplitterWrapperOutput = Cascade
+type SyncSplitterWrapperInput = SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
+
 type SyncWrapperOutput = SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
 type SyncFieldParseFunc = Callable[..., ItemValue]
 type SyncConfCastFunc = Callable[..., DynamicConf]
@@ -87,7 +96,10 @@ type SyncOperatorParser[T: ItemOrValue, E] = Callable[
 ]
 type SyncSplitterParser[E] = Callable[[Stream, E, SyncPipeTuples], SplitterParserOutput]
 type SyncPipeParser[T: ItemOrValue] = Callable[..., ParserOutput[T]]
-type SyncPipeWrapper = Callable[..., SyncWrapperOutput]
+
+type SyncWrapperInput = (
+    SyncProcessorWrapperInput | SyncOperatorWrapperInput | SyncSplitterWrapperInput
+)
 
 
 class ParseFuncs(NamedTuple):
@@ -101,7 +113,15 @@ class CastFuncs[T, E](NamedTuple):
     conf_caster: SyncConfCastFunc
 
 
+@runtime_checkable
 class ModuleWrapper(Protocol):
+    __name__: str
+    __qualname__: str
+
+    def __call__(  # noqa: E301
+        self, *args: Any, **kwargs: Any
+    ) -> WrapperOutput | SplitterWrapperOutput: ...
+
     name: str
     type: ModuleType
     subtype: ModuleSubtype
@@ -111,17 +131,25 @@ class ModuleWrapper(Protocol):
     isasync: bool
 
 
-class SyncSubPipe(ModuleWrapper):
+class SyncModuleWrapper(ModuleWrapper, Protocol):
+    isasync = False
+
+    def __call__(  # noqa: E301
+        self, *args: Any, **kwargs: Any
+    ) -> SyncWrapperOutput | SyncSplitterWrapperOutput: ...
+
+
+class SyncSubPipe(SyncModuleWrapper):
     def __call__(  # noqa: E704
         self, *_: object, **__: object
     ) -> SyncProcessorWrapperOutput:
         return iter(())
 
 
-class SyncProcessorWrapper(ModuleWrapper):
+class SyncProcessorWrapper(SyncModuleWrapper):
     def __call__(  # noqa: E301
         self,
-        item: ProcessorWrapperInput | None = None,
+        item: SyncProcessorWrapperInput | None = None,
         conf: Conf | DynamicConf | None = None,
         context: Context | None = None,
         *,
@@ -132,7 +160,7 @@ class SyncProcessorWrapper(ModuleWrapper):
         return iter(())
 
 
-class SyncOperatorWrapper(ModuleWrapper):
+class SyncOperatorWrapper(SyncModuleWrapper):
     def __call__(  # noqa: E301
         self,
         items: SyncOperatorWrapperInput | None = None,
@@ -147,21 +175,18 @@ class SyncOperatorWrapper(ModuleWrapper):
         return iter(())
 
 
-class SyncSplitterWrapper(ModuleWrapper):
+class SyncSplitterWrapper(SyncModuleWrapper):
     def __call__(  # noqa: E704
         self,
-        items: SplitterWrapperInput | None = None,
+        items: SyncSplitterWrapperInput | None = None,
         conf: Conf | None = None,
+        context: Context | None = None,
+        *,
+        emit: bool = False,
         **__: object,
     ) -> SyncSplitterWrapperOutput:
         _ = (items, conf)
         return iter(())
-
-
-type SyncModuleWrapper = (
-    SyncProcessorWrapper | SyncOperatorWrapper | SyncSplitterWrapper
-)
-type SyncPipeCallable = SyncPipeWrapper | SyncModuleWrapper
 
 
 # Async
@@ -180,11 +205,17 @@ class AsyncWrapperStream[Y, A](Protocol):
     def __anext__(self) -> Awaitable[Y]: ...  # noqa: E301, E704
 
 
-type AsyncSplitterWrapperOutput = AsyncWrapperStream[Stream, SyncSplitterWrapperOutput]
-type AsyncProcessorWrapperOutput = AsyncWrapperStream[Item, SyncProcessorWrapperOutput]
 type AsyncOperatorWrapperOutput = AsyncStream
 type AsyncOperatorWrapperInternalOutput = AsyncIterator[ItemOrValue]
 type AsyncOperatorWrapperInput = AsyncItems | SyncOperatorWrapperInput
+
+type AsyncProcessorWrapperOutput = AsyncWrapperStream[Item, SyncProcessorWrapperOutput]
+type AsyncProcessorWrapperInternalOutput = SyncProcessorWrapperInternalOutput
+type AsyncProcessorWrapperInput = SyncProcessorWrapperInput
+
+type AsyncSplitterWrapperOutput = AsyncWrapperStream[Stream, SyncSplitterWrapperOutput]
+type AsyncSplitterWrapperInput = SyncSplitterWrapperInput
+
 type AsyncWrapperOutput = AsyncProcessorWrapperOutput | AsyncOperatorWrapperOutput
 type AwaitableProcessorParser[I, E, O: ItemOrValue] = Callable[
     [I, E, DynamicConf], Awaitable[ProcessorParserOutput[O]]
@@ -204,13 +235,20 @@ type AsyncOperatorParser[T: ItemOrValue, E] = (
 type AsyncSplitterParser[E] = SyncSplitterParser[E] | AwaitableSplitterParser[E]
 type AwaitableParserOutput[T: ItemOrValue] = Awaitable[ParserOutput[T]]
 type AsyncPipeParser[T: ItemOrValue] = Callable[..., AwaitableParserOutput[T]]
-type AsyncPipeWrapper = Callable[..., AsyncWrapperOutput]
 
 
-class AsyncProcessorWrapper(ModuleWrapper):
+class AsyncModuleWrapper(ModuleWrapper, Protocol):
+    isasync = True
+
+    def __call__(  # noqa: E301
+        self, *args: Any, **kwargs: Any
+    ) -> AsyncWrapperOutput | AsyncSplitterWrapperOutput: ...
+
+
+class AsyncProcessorWrapper(AsyncModuleWrapper):
     def __call__(  # noqa: E704
         self,
-        item: ProcessorWrapperInput | None = None,
+        item: AsyncProcessorWrapperInput | None = None,
         conf: Conf | DynamicConf | None = None,
         context: Context | None = None,
         *,
@@ -221,14 +259,14 @@ class AsyncProcessorWrapper(ModuleWrapper):
         raise NotImplementedError
 
 
-class AsyncSubPipe(ModuleWrapper):
+class AsyncSubPipe(AsyncModuleWrapper):
     def __call__(  # noqa: E704
         self, *_: object, **__: object
     ) -> AsyncProcessorWrapperOutput:
         raise NotImplementedError
 
 
-class AsyncOperatorWrapper(ModuleWrapper):
+class AsyncOperatorWrapper(AsyncModuleWrapper):
     def __call__(  # noqa: E301
         self,
         items: AsyncOperatorWrapperInput | None = None,
@@ -243,10 +281,10 @@ class AsyncOperatorWrapper(ModuleWrapper):
         raise NotImplementedError
 
 
-class AsyncSplitterWrapper(ModuleWrapper):
+class AsyncSplitterWrapper(AsyncModuleWrapper):
     def __call__(  # noqa: E704
         self,
-        items: SplitterWrapperInput | None = None,
+        items: AsyncSplitterWrapperInput | None = None,
         conf: Conf | None = None,
         **__: object,
     ) -> AsyncSplitterWrapperOutput:
@@ -254,33 +292,32 @@ class AsyncSplitterWrapper(ModuleWrapper):
         raise NotImplementedError
 
 
-type AsyncModuleWrapper = (
-    AsyncProcessorWrapper | AsyncOperatorWrapper | AsyncSplitterWrapper
-)
-type AsyncPipeCallable = AsyncPipeWrapper | AsyncModuleWrapper
-
 # Both
 type WrapperOutput = SyncWrapperOutput | AsyncWrapperOutput
-type SubPipe = SyncSubPipe | AsyncSubPipe
-type ProcessorParser[I, E, O: ItemOrValue] = (
-    SyncProcessorParser[I, E, O] | AsyncProcessorParser[I, E, O]
-)
-type ProcessorWrapper = SyncProcessorWrapper | AsyncProcessorWrapper
+
 type OperatorParser[T: ItemOrValue, E] = (
     SyncOperatorParser[T, E] | AsyncOperatorParser[T, E]
 )
 type OperatorWrapper = SyncOperatorWrapper | AsyncOperatorWrapper
+
+type ProcessorParser[I, E, O: ItemOrValue] = (
+    SyncProcessorParser[I, E, O] | AsyncProcessorParser[I, E, O]
+)
+type ProcessorWrapper = SyncProcessorWrapper | AsyncProcessorWrapper
+type ProcessorWrapperInput = SyncProcessorWrapperInput | AsyncProcessorWrapperInput
+
 type SplitterParser[E] = SyncSplitterParser[E] | AsyncSplitterParser[E]
 type SplitterWrapper = SyncSplitterWrapper | AsyncSplitterWrapper
-type PipeCallable = SyncPipeCallable | AsyncPipeCallable
-type Pipe = SyncPipeWrapper | AsyncPipeWrapper
-type Pipeline = Pipe
+type SplitterWrapperOutput = SyncSplitterWrapperOutput | AsyncSplitterWrapperOutput
+type SplitterWrapperInput = SyncSplitterWrapperInput | AsyncSplitterWrapperInput
+
+type SubPipe = SyncSubPipe | AsyncSubPipe
 type ModuleParser = ProcessorParser | OperatorParser | SplitterParser
 
 
 class Resolver(Protocol):
     """
-    Resolve a pipe name and interface to its callable.
+    Resolve a pipe name to its callable and report its available interfaces.
 
     Leaf modules use ``ModuleRegistry``; ``pipe`` sub-pipelines use
     ``PipelineResolver``.
@@ -289,11 +326,15 @@ class Resolver(Protocol):
     @overload
     def resolve(  # noqa: E704
         self, name: str, is_async: Literal[False] = ...
-    ) -> SyncPipeWrapper: ...
+    ) -> SyncModuleWrapper: ...
     @overload  # noqa: E301
     def resolve(  # noqa: E704
         self, name: str, is_async: Literal[True]
-    ) -> AsyncPipeWrapper: ...
+    ) -> AsyncModuleWrapper: ...
     def resolve(  # noqa: E301, E704
         self, name: str, is_async: bool = False
-    ) -> Pipe: ...
+    ) -> ModuleWrapper: ...
+
+    def is_compatible(self, name: str) -> bool: ...  # noqa: E704
+    def get_interfaces(self, name: str) -> frozenset[Interface]: ...  # noqa: E704
+    def load_definition(self, name: str) -> object: ...  # noqa: E704

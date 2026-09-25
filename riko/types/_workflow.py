@@ -129,6 +129,14 @@ class ParsedPort:
     index: int | None
     name: str | None
 
+    @property
+    def is_default(self) -> bool:
+        return self.index is None and self.name is None
+
+    @property
+    def is_positional(self) -> bool:
+        return self.index is not None
+
 
 def parse_port(port: Port) -> ParsedPort:
     """

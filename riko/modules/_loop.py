@@ -23,7 +23,7 @@ from ._assignment import get_subpipe
 if TYPE_CHECKING:
     from logging import Logger
 
-    from riko.runtime.context import Context
+    from riko.execution.context import Context
     from riko.types._compiler import CountValues, EmbedKwargs
     from riko.types._streams import AsyncItems, AsyncStream, Feed, Item, Items, Stream
     from riko.types._wrappers import (

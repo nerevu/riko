@@ -24,8 +24,8 @@ from riko.definitions._targets import (
     validate_target_mode,
 )
 from riko.definitions._write import WriteCapabilities, WriteMode, WriteResult
+from riko.execution._resources import FactoryKind, OneShotResource
 from riko.runtime import _write_session
-from riko.runtime._resources import FactoryKind, OneShotResource
 from riko.runtime._write_session import (
     _SessionState,
     _SyncFileWriteSession,
@@ -88,7 +88,7 @@ class TestNormalizeKeys:
 
     def test_non_iterable_rejected(self):
         with pytest.raises(TypeError, match="string or iterable"):
-            normalize_strs(42)
+            normalize_strs(42)  # pyright: ignore[reportArgumentType]
 
 
 class TestFileCapabilities:

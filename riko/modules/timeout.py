@@ -65,7 +65,7 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
     def __init__(
         self, elements: AsyncIterable[T] | Iterable[T], timeout_ms: int = 0
     ) -> None:
-        self.aiter = aiter(as_async(elements, cooperative=True))
+        self.aiter = as_async(elements, cooperative=True)
         self.timeout_ns = max(timeout_ms, 0) * NS_PER_MS
         self.deadline: int | None = None
 

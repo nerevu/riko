@@ -28,7 +28,7 @@ from riko.base.exceptions import InvalidPipelineError
 from ._io import AsyncCloseable, SyncCloseable
 from ._scalars import BasicValueType
 from ._sentinels import MISSING, SentinelValue, StreamState
-from ._wrappers import AsyncSubPipe, SyncSubPipe
+from ._wrappers import ModuleWrapper, SubPipe
 
 if TYPE_CHECKING:
     from ._collections import BasicList
@@ -186,7 +186,7 @@ def is_loop_module(module: PipeModule) -> TypeGuard[LoopModule]:
     return module["type"] == "loop" and "embed" in module
 
 
-def is_subpipe[T: SyncSubPipe | AsyncSubPipe](val: object | T) -> TypeGuard[T]:
+def is_subpipe[T: SubPipe](val: T | ModuleWrapper) -> TypeGuard[T]:
     return callable(val) and getattr(val, "type", None) == SUBPIPE_TYPE
 
 

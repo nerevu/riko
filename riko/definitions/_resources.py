@@ -218,7 +218,7 @@ class ResourceView(Mapping[str, object]):
 
     Examples:
 
-        >>> from riko.runtime._resources import Resource
+        >>> from riko.execution._resources import Resource
         >>>
         >>> resource = Resource.from_external(object())
         >>> resource.external
@@ -295,7 +295,7 @@ def bind_resources(
     Examples:
 
         >>> from riko.definitions._resources import bind_resources
-        >>> from riko.runtime._resources import Resource
+        >>> from riko.execution._resources import Resource
         >>>
         >>> value = object()
         >>> resources = {"primary": Resource.from_external(value)}
