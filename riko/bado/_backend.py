@@ -41,6 +41,7 @@ except ImportError:
     BlockingPortal: Any = None
     CancelScope: type | None = None
     CapacityLimiter: type | None = None
+    Event: type | None = None
     HTTPXResponse: Any = None
     Semaphore: type | None = None
     start_blocking_portal: Callable[..., Any] | None = None
@@ -77,6 +78,7 @@ else:
     from anyio import (
         CancelScope,
         CapacityLimiter,
+        Event,
         NamedTemporaryFile,
         Path,
         Semaphore,
@@ -105,6 +107,7 @@ __all__ = [
     "BlockingPortal",
     "CancelScope",
     "CapacityLimiter",
+    "Event",
     "HTTPXResponse",
     "MemoryObjectReceiveStream",
     "MemoryObjectSendStream",

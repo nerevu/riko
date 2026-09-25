@@ -18,6 +18,7 @@ from attrs import define
 
 from riko.bado._backend import (
     CancelScope,
+    Event,
     asyncify,
     create_task_group,
     fail_after,
@@ -25,7 +26,7 @@ from riko.bado._backend import (
 )
 from riko.bado._util import as_awaitable, maybe_deferred
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
-from riko.types._guards import is_async_callable
+from riko.types._guards import is_async_callable, is_async_closeable, is_sync_closeable
 
 from ._plan import _ResourcePlan, _ResourceStrategy, build_resource_plan
 
@@ -76,6 +77,16 @@ class _BaseExecution:
         if self._closing:
             raise PipelineStateError("closing", action)
 
+    def _report_shutdown(
+        self, exc_type: type[BaseException] | None, errors: list[Exception]
+    ) -> None:
+        if not errors:
+            pass
+        elif exc_type is None and len(errors) == 1:
+            raise errors[0]
+        else:
+            raise ExceptionGroup("Execution shutdown failed", errors)
+
 
 class SyncExecution(_BaseExecution):
     """
@@ -119,11 +130,11 @@ class SyncExecution(_BaseExecution):
 
     def __exit__(
         self,
-        _exc_type: type[BaseException] | None,
-        _exc: BaseException | None,
-        _traceback: TracebackType | None,
-    ) -> None:
-        self.close()
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> bool:
+        return self.close(exc_type, exc, traceback)
 
     @property
     def portal(self) -> BlockingPortal:
@@ -234,6 +245,8 @@ class SyncExecution(_BaseExecution):
         return entry
 
     def _open[T](self, plan: _ResourcePlan[T]) -> object:
+        self._reject_async_teardown(plan)
+
         if plan.strategy is _ResourceStrategy.EXTERNAL:
             value: object = plan.value
         elif plan.strategy is _ResourceStrategy.OWNED:
@@ -246,6 +259,37 @@ class SyncExecution(_BaseExecution):
 
         return value
 
+    def _reject_async_teardown[T](self, plan: _ResourcePlan[T]) -> None:
+        resource = plan.resource
+        native_lifecycle = (
+            plan.strategy is _ResourceStrategy.LIFECYCLE and plan.native_async
+        )
+        cleanup = (
+            plan.cleanup
+            if plan.strategy is _ResourceStrategy.VALUE_FACTORY
+            else resource.cleanup
+        )
+        async_owned_value = (
+            plan.strategy is _ResourceStrategy.OWNED
+            and not resource.external
+            and resource.cleanup is None
+            and is_async_closeable(plan.value)
+            and not is_sync_closeable(plan.value)
+        )
+
+        if native_lifecycle:
+            raise InvalidPipelineError(
+                "async-native resource lifecycle requires async execution"
+            )
+        elif is_async_callable(cleanup):
+            raise InvalidPipelineError(
+                "async resource cleanup requires async execution"
+            )
+        elif async_owned_value:
+            raise InvalidPipelineError(
+                "async-native resource teardown requires async execution"
+            )
+
     def _call_factory[T](self, plan: _ResourcePlan[T]) -> object:
         if (factory := plan.factory) is None:
             raise InvalidPipelineError("resource factory is required")
@@ -253,31 +297,26 @@ class SyncExecution(_BaseExecution):
             raw = factory(*plan.args, **plan.kwargs)
             value = self.run_async(as_awaitable, raw) if isawaitable(raw) else raw
 
-        self._register_cleanup(plan, value)
+            if cleanup := plan.cleanup:
+                self.callback(cleanup, value)
+
         return value
 
-    def _register_cleanup[T](self, plan: _ResourcePlan[T], value: object) -> None:
-        if not (cleanup := plan.cleanup):
-            pass
-        elif is_async_callable(cleanup):
-            msg = "async resource cleanup requires async execution"
-            raise InvalidPipelineError(msg)
-        else:
-            self.callback(cleanup, value)
-
     def _enter_lifecycle[T](self, plan: _ResourcePlan[T]) -> object:
-        if plan.native_async:
-            msg = "async-native resource lifecycle requires async execution"
-            raise InvalidPipelineError(msg)
-
         return self.enter_context(
             cast("AbstractContextManager[object]", plan.context_manager)
         )
 
-    def close(self) -> None:
-        """Stops the portal, then unwinds the exit stack, grouping any failures."""
+    def close(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc: BaseException | None = None,
+        traceback: TracebackType | None = None,
+    ) -> bool:
+        """Stops the portal, then unwinds the exit stack under the primary error."""
         self._closing = True
         errors: list[Exception] = []
+        suppressed = False
 
         if self._portal_cm is not None:
             try:
@@ -289,12 +328,12 @@ class SyncExecution(_BaseExecution):
                 self._portal_cm = None
 
         try:
-            self._stack.close()
+            suppressed = bool(self._stack.__exit__(exc_type, exc, traceback))
         except Exception as error:  # noqa: BLE001
             errors.append(error)
 
-        if errors:
-            raise ExceptionGroup("Execution shutdown failed", errors)
+        self._report_shutdown(exc_type, errors)
+        return suppressed
 
 
 class AsyncExecution(_BaseExecution):
@@ -304,7 +343,7 @@ class AsyncExecution(_BaseExecution):
     Blocking sync components run on a worker thread through the bridge.
     """
 
-    __slots__ = ("_resolved", "_shutdown_timeout", "_stack", "_task_group")
+    __slots__ = ("_inflight", "_resolved", "_shutdown_timeout", "_stack", "_task_group")
 
     def __init__(
         self, context: Context | None = None, *, shutdown_timeout: float | None = None
@@ -314,6 +353,7 @@ class AsyncExecution(_BaseExecution):
         self._task_group: TaskGroup | None = None
         self._shutdown_timeout = shutdown_timeout
         self._resolved: dict[Resource[Any], _Acquired | _FailedAcquisition] = {}
+        self._inflight: dict[Resource[Any], Event] = {}
 
     async def __aenter__(self) -> Self:
         self._task_group = create_task_group()
@@ -323,10 +363,10 @@ class AsyncExecution(_BaseExecution):
     async def __aexit__(
         self,
         exc_type: type[BaseException] | None,
-        _exc: BaseException | None,
-        _traceback: TracebackType | None,
-    ) -> None:
-        await self._shutdown(cancel=exc_type is not None)
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> bool:
+        return await self._shutdown(exc_type, exc, traceback)
 
     def enter_context[T](self, cm: AbstractContextManager[T]) -> T:
         """
@@ -441,17 +481,33 @@ class AsyncExecution(_BaseExecution):
 
         """
         self._require_open("acquire a resource in")
-
-        if resource in self._resolved:
-            entry = self._resolved[resource]
-        else:
-            entry = await self._aresolve(resource)
-            self._resolved[resource] = entry
+        entry = await self._aresolve_once(resource)
 
         if isinstance(entry, _FailedAcquisition):
             raise entry.error
 
         return cast("T", entry.value)
+
+    async def _aresolve_once[T](
+        self, resource: Resource[T]
+    ) -> _Acquired | _FailedAcquisition:
+        if resource in self._resolved:
+            entry = self._resolved[resource]
+        elif (event := self._inflight.get(resource)) is not None:
+            await event.wait()
+            entry = await self._aresolve_once(resource)
+        else:
+            event = Event()
+            self._inflight[resource] = event
+
+            try:
+                entry = await self._aresolve(resource)
+                self._resolved[resource] = entry
+            finally:
+                del self._inflight[resource]
+                event.set()
+
+        return entry
 
     async def _aresolve[T](
         self, resource: Resource[T]
@@ -503,16 +559,25 @@ class AsyncExecution(_BaseExecution):
 
     async def aclose(self) -> None:
         """Joins the task group, then unwinds the exit stack behind a shield."""
-        await self._shutdown(cancel=False)
+        await self._shutdown()
 
-    async def _shutdown(self, *, cancel: bool) -> None:
+    async def _shutdown(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc: BaseException | None = None,
+        traceback: TracebackType | None = None,
+    ) -> bool:
         self._closing = True
         errors: list[Exception] = []
-        await self._join_tasks(cancel=cancel, errors=errors)
-        await self._unwind(errors=errors)
+        suppressed = False
 
-        if errors:
-            raise ExceptionGroup("Execution shutdown failed", errors)
+        try:
+            await self._join_tasks(cancel=exc_type is not None, errors=errors)
+        finally:
+            suppressed = await self._unwind(exc_type, exc, traceback, errors=errors)
+
+        self._report_shutdown(exc_type, errors)
+        return suppressed
 
     async def _join_tasks(self, *, cancel: bool, errors: list[Exception]) -> None:
         if self._task_group is not None:
@@ -526,7 +591,15 @@ class AsyncExecution(_BaseExecution):
             finally:
                 self._task_group = None
 
-    async def _unwind(self, *, errors: list[Exception]) -> None:
+    async def _unwind(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+        *,
+        errors: list[Exception],
+    ) -> bool:
+        suppressed = False
         bound = (
             fail_after(self._shutdown_timeout)
             if self._shutdown_timeout is not None
@@ -535,9 +608,11 @@ class AsyncExecution(_BaseExecution):
 
         with CancelScope(shield=True), bound:
             try:
-                await self._stack.aclose()
+                suppressed = bool(await self._stack.__aexit__(exc_type, exc, traceback))
             except Exception as error:  # noqa: BLE001
                 errors.append(error)
+
+        return suppressed
 
 
 __all__ = ["AsyncExecution", "SyncExecution"]

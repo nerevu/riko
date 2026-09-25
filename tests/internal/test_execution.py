@@ -7,6 +7,7 @@ from urllib.request import urlopen
 import pytest
 
 from riko.bado import async_sleep
+from riko.bado._backend import Event, create_task_group
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
 from riko.io import async_url_open
 from riko.runtime._execution import AsyncExecution, SyncExecution
@@ -79,6 +80,46 @@ def test_sync_exit_stack_unwinds_on_error() -> None:
     assert events == ["open a", "close a"]
 
 
+def test_sync_resource_sees_primary_error() -> None:
+    seen: list[str] = []
+
+    @contextmanager
+    def watcher():
+        try:
+            yield
+        except RuntimeError:
+            seen.append("saw RuntimeError")
+            raise
+
+    def run() -> None:
+        with SyncExecution() as execution:
+            execution.enter_context(watcher())
+            raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        run()
+
+    assert seen == ["saw RuntimeError"]
+
+
+def test_sync_resource_can_suppress_primary_error() -> None:
+    reached: list[str] = []
+
+    @contextmanager
+    def swallow():
+        try:
+            yield
+        except RuntimeError:
+            pass
+
+    with SyncExecution() as execution:
+        execution.enter_context(swallow())
+        raise RuntimeError("boom")
+
+    reached.append("after")
+    assert reached == ["after"]
+
+
 def test_sync_enter_after_close_raises() -> None:
     execution = SyncExecution()
     execution.close()
@@ -87,17 +128,15 @@ def test_sync_enter_after_close_raises() -> None:
         execution.enter_context(nullcontext(1))
 
 
-def test_sync_cleanup_error_is_grouped() -> None:
+def test_sync_lone_cleanup_error_raises_bare() -> None:
     def boom() -> None:
         raise RuntimeError("cleanup failed")
 
     execution = SyncExecution()
     execution.callback(boom)
 
-    with pytest.raises(ExceptionGroup) as caught:
+    with pytest.raises(RuntimeError, match="cleanup failed"):
         execution.close()
-
-    assert isinstance(caught.value.exceptions[0], RuntimeError)
 
 
 @async_test
@@ -173,6 +212,32 @@ async def test_async_failure_cancels_tasks_and_unwinds() -> None:
 
     with pytest.raises(ValueError, match="boom"):
         await fail()
+
+    assert events == ["resource-closed"]
+
+
+@async_test
+async def test_async_ambient_cancellation_still_unwinds() -> None:
+    events: list[str] = []
+    ready = Event()
+
+    @contextmanager
+    def resource():
+        try:
+            yield
+        finally:
+            events.append("resource-closed")
+
+    async def body() -> None:
+        async with AsyncExecution() as execution:
+            execution.enter_context(resource())
+            ready.set()
+            await async_sleep(3600)
+
+    async with create_task_group() as tg:
+        tg.start_soon(body)
+        await ready.wait()
+        tg.cancel_scope.cancel()
 
     assert events == ["resource-closed"]
 
@@ -387,6 +452,33 @@ def test_sync_acquire_is_single_flight() -> None:
     assert len(calls) == 1
 
 
+@async_test
+async def test_async_acquire_is_single_flight() -> None:
+    calls: list[int] = []
+    results: list[object] = []
+    gate = Event()
+
+    async def make() -> object:
+        calls.append(1)
+        await gate.wait()
+        return object()
+
+    async with AsyncExecution() as execution:
+        resource = Resource.from_factory(make, cleanup=False)
+
+        async def grab() -> None:
+            results.append(await execution.aacquire(resource))
+
+        async with create_task_group() as tg:
+            tg.start_soon(grab)
+            tg.start_soon(grab)
+            await async_sleep(0)
+            gate.set()
+
+    assert len(calls) == 1
+    assert results[0] is results[1]
+
+
 def test_sync_acquire_memoizes_failure() -> None:
     calls: list[int] = []
 
@@ -423,14 +515,12 @@ def test_sync_partial_acquisition_unwinds() -> None:
     assert client.closed is True
 
 
-def test_sync_acquire_cleanup_error_is_grouped() -> None:
+def test_sync_acquire_lone_cleanup_error_raises_bare() -> None:
     execution = SyncExecution()
     execution.acquire(Resource(_BadClient()))
 
-    with pytest.raises(ExceptionGroup) as caught:
+    with pytest.raises(RuntimeError, match="cleanup failed"):
         execution.close()
-
-    assert isinstance(caught.value.exceptions[0], RuntimeError)
 
 
 def test_sync_acquire_async_lifecycle_rejected() -> None:
@@ -439,6 +529,33 @@ def test_sync_acquire_async_lifecycle_rejected() -> None:
 
     with SyncExecution() as execution, pytest.raises(InvalidPipelineError):
         execution.acquire(Resource.from_lifecycle(db))
+
+
+def test_sync_async_cleanup_rejected_before_producer() -> None:
+    produced: list[int] = []
+
+    def make() -> object:
+        produced.append(1)
+        return object()
+
+    async def cleanup(_value: object) -> None:
+        pass
+
+    with SyncExecution() as execution:
+        resource = Resource.from_factory(make, cleanup=cleanup)
+
+        with pytest.raises(InvalidPipelineError, match="async"):
+            execution.acquire(resource)
+
+    assert produced == []
+
+
+def test_sync_owned_async_only_value_rejected() -> None:
+    with (
+        SyncExecution() as execution,
+        pytest.raises(InvalidPipelineError, match="async"),
+    ):
+        execution.acquire(Resource(_AsyncClient()))
 
 
 @async_test
@@ -489,10 +606,11 @@ def _sync_http_client(url: str, events: list[str]):
 
 def _async_http_client(url: str, events: list[str]):
     async def connect():
-        async with async_url_open(url) as stream:
-            yield stream
-
-        events.append("closed")
+        try:
+            async with async_url_open(url) as stream:
+                yield stream
+        finally:
+            events.append("closed")
 
     return connect
 
