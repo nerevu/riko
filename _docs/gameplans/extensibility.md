@@ -484,13 +484,13 @@ compatibility, deployment, or drift semantics. Those stay in `operations-as-code
 ### E3.11 Reuse of the shipped graph index
 
 R4A does not reinterpret topology from scratch. The compiler already builds one immutable,
-runtime-neutral graph index (`_GraphIndex` in `riko/types/compile.py`, constructed once by
+runtime-neutral graph index (`GraphIndex` in `riko/types/_compiler.py`, constructed once by
 `parse_pipe_def`) that both the legacy compiler and future execution planning consume: wire-level
 `edges`/`incoming`/`outgoing` carry full port identity, while node-level
 `order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs` carry scheduling facts. Topology is
 interpreted once, deterministically, and frozen. This is the structural substrate for
 `migrate_v1_to_v2()` / `normalize_workflow()` / `validate` (E3.1) and, downstream, R4B's
-`_ExecutionPlan`.
+`ExecutionPlan`.
 
 Shipped: the index replaces the old `ParsedPipeDef` `graph`+`wires` fields; `_get_input_module`,
 `_gen_pykwargs`, and topological ordering read the index instead of rescanning wires; `order` uses a
@@ -510,7 +510,7 @@ itself:
   begins with every declared node and treats disconnection as a validation question (E3.9), never
   silent erasure.
 
-R4B's `_ExecutionPlan` consumes the same structural facts (`order`/`edges`/`dependencies`) and adds
+R4B's `ExecutionPlan` consumes the same structural facts (`order`/`edges`/`dependencies`) and adds
 execution interpretation — resolved implementations, resource bindings, sync/async policy. The index
 holds structural facts only; execution concepts (resolved callables, portals, resource values, task
 groups) never move onto it.

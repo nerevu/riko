@@ -310,7 +310,7 @@ the suite, forcing the marker's removal) the moment its owner lands:
   **Workflow v2 spec** ([extensibility § E3](extensibility.md#e3-canonical-workflow-v2-specification) —
   the E3.1 `normalize_workflow() -> validate` boundary; CLI surface: cli.md `riko pipeline validate`);
   recalibrate the tripwire from `IndexError` to the spec's error when it lands. The topology both paths
-  share is now the immutable `_GraphIndex` built by `parse_pipe_def` — the structural seam that
+  share is now the immutable `GraphIndex` built by `parse_pipe_def` — the structural seam that
   front-door validates over ([E3.11](extensibility.md#e311-reuse-of-the-shipped-graph-index)).
 
 **Shipped (§ 2b open-question rows).** R19's characterization test was **updated, not deleted**, into

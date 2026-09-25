@@ -297,7 +297,7 @@ generated `Modules` tree (P9A) shipped — `pipe | Transforms.FILTER` resolves i
 
 ## Compiler graph index (shipped)
 
-`parse_pipe_def` interprets a pipe's wiring into one immutable `_GraphIndex`
+`parse_pipe_def` interprets a pipe's wiring into one immutable `GraphIndex`
 (`riko/types/_compiler.py`) in place of the former `ParsedPipeDef` `graph`+`wires` mappings.
 Wire-level `edges`/`incoming`/`outgoing` keep full port identity (ports verbatim — `_INPUT`/`_OTHER`/
 `_OUTPUT` or a named kwarg); node-level `order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs`
@@ -560,10 +560,14 @@ serializes the same `Formats` at a destination. Meza owns conversion work. The B
 
 ## Private execution runtime — `SyncExecution` / `AsyncExecution` (R4B, partial)
 
-> **Partial.** The private execution package, its lifetime primitives, and execution-local resource
-> acquisition ship now. Not yet wired: `iter(flow)`/`aiter(flow)`, source normalization, native-wins
-> resolution, `with_execution(...)`, `EventSink`, the P10 migration out of `collections.py`, and the
-> `SyncPipe`/`AsyncPipe`/v1-compiler clean-break cutover.
+> **Partial.** The private execution package, its lifetime primitives, execution-local resource
+> acquisition, the `EventSink` transport, canonical-workflow preparation (`index_workflow` /
+> `prepare_execution` with native-wins mode selection), and both the **sync** `iter(flow)` and **async**
+> `aiter(flow)` runners — with multi-input port wiring, execution-owned resource injection, loop-`embed`
+> node wiring, and cross-mode adaptation (async-only under sync via the portal, sync-only under async on a
+> worker) — ship now.
+> Not yet wired: `with_execution(...)` plus resource provisioning into the `Pipeline` surface, the P10
+> migration out of `collections.py`, and the `SyncPipe`/`AsyncPipe`/v1-compiler clean-break cutover.
 
 `riko/runtime/_execution/` (the `execution` layer) hosts the one-shot executions a pipeline run
 creates. Each owns three sibling lifetime primitives — a task group, an exit stack, and a sync/async
@@ -613,8 +617,52 @@ across eager open + teardown, the async-under-sync rejection boundary, mid-run f
 failure-induced task cancellation. The foundation semantics are proven directly: ambient cancellation
 of the shutdown task still unwinds resources, a resource context manager receives and can suppress the
 primary error, a lone cleanup failure raises bare, concurrent first-use is single-flight, and
-async-native teardown is rejected before any value is produced. Deferred until `iter(flow)` wiring:
+async-native teardown is rejected before any value is produced. Deferred until lazy-resource wiring:
 true lazy-open-on-first-use and early-consumer abandonment during iteration.
+
+**EventSink transport.** Each execution owns an `EventSink` (`_execution/_events.py`) with a no-op
+default; `execution.emit(event)` dispatches opaque event values. R4B owns dispatch and lifetime only;
+later phases define the semantic events they carry (e.g. R5C `WriteResult` / `ActionResult`).
+
+**Preparation and the sync runner.** A canonical `WorkflowSpec` is prepared once into an immutable
+`ExecutionPlan`, then run:
+
+- `index_workflow(spec)` builds the shared `GraphIndex` through `build_graph_index`. The v1 compiler's
+  `_index_pipe_def` still inlines its own equivalent assembly (deleted wholesale at the cutover, not
+  refactored to delegate), so only the v2 path uses the shared core today. Every declared node is kept
+  (disconnected nodes retained) and all named outputs preserved.
+- `prepare_execution(spec, *, is_async, resolver)` (runtime layer) validates, indexes, resolves each
+  `ModuleNode`, and selects native-or-adapted execution once, producing a frozen `ExecutionPlan` (nodes
+  + index + per-output required-node subgraphs computed via `descendants`). No node runs and no resource
+  is acquired here; node families without a runtime yet raise `InvalidPipelineError`.
+- Native-wins reads capabilities before committing: `Resolver.get_interfaces(name)` reports the
+  available `pipe` / `async_pipe` interfaces (`ModuleDefinition.interfaces` for registered modules,
+  `load_interfaces` for built-ins), and the chosen callable comes from the existing `resolve`.
+- `SyncExecution.run(plan, output="default")` runs only the selected output's dependency subgraph in
+  topological order and returns that output's stream, seeding source nodes at one normalization
+  boundary. An `ASYNC_VIA_PORTAL` node (async-only pipe under sync execution) runs through the execution's
+  blocking portal: `_drain_async` pulls the async stream one `__anext__` at a time on the portal loop and
+  re-exposes it as a lazy sync `Stream`.
+- `AsyncExecution.run(plan, output="default")` is the async counterpart, returning an `AsyncStream`.
+  `NATIVE_ASYNC` nodes chain natively; a `SYNC_VIA_WORKER` node (sync-only pipe under async execution)
+  runs off the event loop through the bridge — its async source is materialized, the sync pipe is drained
+  on a worker thread, and the result is re-exposed via `as_async`. Async source/inputs are typed
+  `AsyncItems` (`AsyncIterable[Item]`) and outputs `AsyncStream`, matching `runtime/collections.py`.
+- Loop `embed` is nested in the loop `ModuleNode`'s `conf` (`conf["embed"] = {"name", "conf"}`, with
+  `emit`/`count`/`assign`/`field` as siblings). `prepare_execution` resolves the embed into a
+  `PreparedNode.embed` (same direction as the execution; an async-only embed under sync rejects via the
+  resolver) and captures the call-site `options`; the runner forwards `embed=<callable>` plus those
+  options to the loop wrapper. Loop stays a registered module — there is no `LoopNode` (R9 forbids one).
+- Each node's incoming edges are wired by port grammar: bare `in` is the positional source, `in:N` ports
+  become the ordered `others=[...]` list, and `in:<name>` ports pass as the named stream kwarg.
+- A node's declared `{slot: name}` resource binding is injected as a `resources` view whose values come
+  from execution-owned `acquire`/`aacquire` (single-flight + exit-stack teardown), resolved against the
+  execution Context; a name absent from the Context raises before any sibling is acquired. Providing
+  resources into the `Pipeline` surface itself is deferred.
+- `iter(flow)` (`Pipeline.__iter__`, returning an `ItemGenerator`) and `aiter(flow)`
+  (`Pipeline.__aiter__`, returning an `AsyncItemGenerator`) own the execution lifetime
+  (`with SyncExecution() as e: yield from e.run(plan)` / the `async with AsyncExecution()` analogue), so
+  early close, exhaustion, or failure unwinds upstream feeds and the exit stack.
 
 ## Write architecture — `write()` / `sink()` sessions (shipped)
 

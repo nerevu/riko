@@ -64,22 +64,22 @@ Their current home in `collections.py` is temporary. Move reusable mechanics int
 modules rather than preserving `collections.py` as architecture.
 
 **Compiler graph index** is a retained foundation. `parse_pipe_def` builds one immutable
-`_GraphIndex` (`riko/types/compile.py`) that interprets a pipe's wiring exactly once — wire-level
+`GraphIndex` (`riko/types/_compiler.py`) that interprets a pipe's wiring exactly once — wire-level
 `edges`/`incoming`/`outgoing` (ports kept verbatim) plus node-level
 `order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs`. It replaces the old `ParsedPipeDef`
 `graph`+`wires` fields; R4A's `migrate_v1_to_v2()`/`normalize_workflow()`/`validate` build on it and
-R4B's `_ExecutionPlan` reuses its structural facts. The v1-behavior-preserving deltas it still
+R4B's `ExecutionPlan` reuses its structural facts. The v1-behavior-preserving deltas it still
 carries (`_OUTPUT` as a node, verbatim ports, dropped orphans) are resolved at the R4A boundary, not
 in the index — see [extensibility § E3.11](extensibility.md#e311-reuse-of-the-shipped-graph-index).
 Keep execution concepts (resolved callables, portals, resource values, task groups) off it.
 
 The reuse seam runs *through* the compiler, not around it. Graph parsing/validation/ordering/resolution
 is kept and adapted; the legacy generator-construction tail is replaced. Concretely: `topological_sort`
-(strict for canonical workflows), `ModuleRegistry`/`PipeResolver`/`PipelineResolver`, the `_GraphIndex`,
+(strict for canonical workflows), `ModuleRegistry`/`PipeResolver`/`PipelineResolver`, the `GraphIndex`,
 and the argument-binding *concepts* in `_get_input_module`/`_gen_pykwargs` all survive into R4B
 preparation. What is replaced is `_gen_steps`/`_build_pipeline`/`build_pipeline`, which today resolve,
 wire, invoke, and construct a running generator in one pass keyed off "the last topologically-sorted
-module." R4B splits that boundary one step later — preparation produces an immutable `_ExecutionPlan`
+module." R4B splits that boundary one step later — preparation produces an immutable `ExecutionPlan`
 of prepared nodes (no invocation), and a separate run step executes it against explicit `outputs`
 rather than a terminal-module assumption. `convert_dag` and `gen_parented_graph`'s orphan-dropping stay
 on the v1 authoring/migration side and do not feed canonical v2 preparation.
@@ -639,8 +639,8 @@ counterpart to delete yet. Paired deletions begin once a consumer can flip:
 | v1 construct | Deleted at |
 |---|---|
 | (nothing — pure foundation) | R4A.1 |
-| verbatim `_INPUT`/`_OTHER`/`_OUTPUT` ports, `_OUTPUT`-as-node | R4A.2/.4 (normalize/migrate resolve the `_GraphIndex` legacy artifacts) |
-| v1 `write` module → `WriteNode`; **`SINK_NAMES` + the `Sinks` discovery bucket**; v1 `PipeDef`/`wires` compiler consumption; the `tests/pypipelines` + `tests/pipelines` fixtures | R4B cutover (first commit v2 executes) |
+| verbatim `_INPUT`/`_OTHER`/`_OUTPUT` ports, `_OUTPUT`-as-node | R4A.2/.4 (normalize/migrate resolve the `GraphIndex` legacy artifacts) |
+| v1 `write` module → `WriteNode`; **`SINK_NAMES` + the `Sinks` discovery bucket**; v1 `PipeDef`/`wires` compiler consumption (`_index_pipe_def` and its inlined `GraphIndex` assembly, `parse_pipe_def`, `_gen_steps`/`build_pipeline`); the `tests/pypipelines` + `tests/pipelines` fixtures | R4B cutover (first commit v2 executes) |
 
 `SINK_NAMES` (`riko/base/_config.py`, `{"output","write"}` → the P9A `sink` category) has no v2 role —
 E3.3 defines no `SinkNode`, terminality is a consumption behavior — so it is removed in the same commit
