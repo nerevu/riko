@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from riko.modules.fetchdata import pipe as fetchdata
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.types.modules import FetchDataRawConf, RegexRawConf, RenameRawConf
 
 if TYPE_CHECKING:

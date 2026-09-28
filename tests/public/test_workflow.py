@@ -83,7 +83,7 @@ def test_spec_version_defaults_to_v2():
 
 def test_pipeline_wraps_spec():
     spec = _spec()
-    pipeline: Pipeline[dict[str, object]] = Pipeline(spec)
+    pipeline = Pipeline(spec)
     assert pipeline.spec is spec
     assert pipeline.spec.outputs["default"] == Endpoint("fetch-1", "out")
 

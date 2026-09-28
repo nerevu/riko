@@ -30,14 +30,13 @@ import pygogo as gogo
 from riko.bado._util import as_awaitable
 from riko.bado.itertools import as_async, async_iter, async_map
 from riko.base._iterutils import dispatch
-from riko.coercion._sequences import is_listlike
 from riko.definitions._resources import bind_resources, resolve_binding
 from riko.execution.context import Context
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
 from riko.types._compiler import CountValues, EmbedKwargs
 from riko.types._enums import BasicCastType, ExecutionMode
-from riko.types._guards import is_mapping
+from riko.types._guards import is_listlike, is_mapping
 from riko.types._options import Casted, Defaults, Opts
 from riko.types._streams import (
     AsyncItemsOrValues,

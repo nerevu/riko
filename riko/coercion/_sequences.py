@@ -4,21 +4,21 @@ from __future__ import annotations
 
 import builtins
 import itertools
-from collections.abc import Callable, Iterable, Mapping, Sequence
 from functools import partial
 from inspect import signature
 from itertools import repeat
 from time import struct_time
-from typing import TYPE_CHECKING, Any, Self, TypeGuard, cast, overload
+from typing import TYPE_CHECKING, Any, Self, cast, overload
 
 from requests.structures import CaseInsensitiveDict
 
 from riko.base._iterutils import multi_try
 from riko.base.exceptions import InvalidPipelineError
-from riko.types._guards import is_mapping
-from riko.types._scalars import PrimitiveValueType
+from riko.types._guards import is_listlike, is_mapping
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Mapping, Sequence
+
     from riko.types._collections import BasicDict, RikoValue, StringyDict
     from riko.types._streams import Item, Stream, StreamOrValueStream, ValueStream
 
@@ -35,50 +35,6 @@ def lower_keys[T](obj: T) -> T:
         result = obj
 
     return cast("T", result)
-
-
-def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
-    """
-    Reports whether a value is listlike (a multi-item iterable).
-
-    A listlike value is any iterable that is not a mapping, primitive, or ``None``.
-
-    Args:
-
-        value: The object to classify.
-
-    Returns:
-
-        True when ``value`` maps over items, False when it is one item.
-
-    Examples:
-
-        >>> is_listlike([1, 2])
-        True
-        >>> is_listlike((1, 2))
-        True
-        >>> is_listlike(iter([1, 2]))
-        True
-        >>> is_listlike(range(3))
-        True
-        >>> is_listlike({"a": 1})
-        False
-        >>> is_listlike("ab")
-        False
-        >>> is_listlike(0)
-        False
-        >>> is_listlike(None)
-        False
-
-    """
-    if value is None or isinstance(
-        value, (PrimitiveValueType, bytes, dict, CaseInsensitiveDict, Mapping)
-    ):
-        result = False
-    else:
-        result = isinstance(value, Iterable)
-
-    return result
 
 
 def require_sequence(value: object, what: str) -> Iterable[object]:

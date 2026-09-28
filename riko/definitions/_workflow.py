@@ -31,13 +31,13 @@ Examples:
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
 from functools import partial
 from itertools import chain
 from types import MappingProxyType
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeGuard, cast
 
 from attrs import define, field
+from typing_extensions import TypeVar
 
 from riko.base.exceptions import InvalidPipelineError
 from riko.types._collections import (
@@ -46,11 +46,13 @@ from riko.types._collections import (
     deep_freeze_mapping,
     def_from_require,
     freeze_value,
+    narrow_def_from_require,
+    narrow_from_require,
     require_binding,
     require_str,
 )
-from riko.types._enums import Backends, Formats
-from riko.types._guards import require_mapping
+from riko.types._enums import Backends, Formats, ModuleNameLike
+from riko.types._guards import is_listlike, is_mapping, require_mapping
 from riko.types._workflow import WORKFLOW_VERSION, Edge, Endpoint, NodeId
 
 from ._resources import normalize_resources
@@ -60,12 +62,13 @@ from ._write import WriteMode
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
-    from riko.types._streams import AsyncItemGenerator, ItemGenerator
+    from riko.types._streams import AsyncItemGenerator, ItemGenerator, Items
     from riko.types._workflow import EdgeFamily, NodeFamily
     from riko.types.modules import AnyModuleConf, LoopConf
 
 _EMPTY_CONF = cast("AnyModuleConf", MappingProxyType({}))
 _EMPTY_RESOURCES: Mapping[str, str] = MappingProxyType({})
+T = TypeVar("T", default=Any)
 
 
 def freeze_mapping_value(value: Mapping[object, object]) -> JSONSchema:
@@ -74,12 +77,27 @@ def freeze_mapping_value(value: Mapping[object, object]) -> JSONSchema:
 
 optional_binding = def_from_require(require_binding)
 optional_resources = def_from_require(normalize_resources, default=_EMPTY_RESOURCES)
-optional_str = def_from_require(require_str)
+optional_str = narrow_def_from_require(require_str)
 
 _optional_freeze = def_from_require(freeze_mapping_value, default=_EMPTY_CONF)
 _normalize_backend = partial(resolve_enum, Backends)
 _normalize_format = partial(resolve_enum, Formats, strict=False)
 _normalize_mode = partial(resolve_enum, WriteMode, default=WriteMode.REPLACE)
+
+
+def _is_items(value: object) -> TypeGuard[Items]:
+    """A stream of items on the left of ``|``, never a string, mapping, or pipeline."""
+    return is_listlike(value) and not isinstance(value, Pipeline)
+
+
+def _is_pipe_spec(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
+    """A ``(name, conf)`` pair on the right of ``|``."""
+    return (
+        isinstance(value, tuple)
+        and len(value) == 2
+        and isinstance(value[0], str)
+        and is_mapping(value[1])
+    )
 
 
 def conf_converters(
@@ -97,11 +115,11 @@ class Node:
 
     family: ClassVar[NodeFamily]
     id: NodeId
-    name: str = field(converter=require_str)
+    name: str = field(converter=narrow_from_require(require_str))
     resources: Mapping[str, str] = field(
         default=_EMPTY_RESOURCES, converter=[optional_binding, optional_resources]
     )
-    label: str | None = field(default=None, converter=optional_str)
+    label: str = field(default=None, converter=optional_str)
 
     @property
     def declared_resources(self) -> set[str]:
@@ -189,6 +207,15 @@ def require_module_node(value: Node, what: str | None = None) -> ModuleNode:
     if not isinstance(value, ModuleNode):
         what = what or value.family
         raise InvalidPipelineError(f"{what} node execution is not yet supported")
+
+    return value
+
+
+def require_spec(value: object) -> WorkflowSpec:
+    if not isinstance(value, WorkflowSpec):
+        msg = "Pipeline() takes a WorkflowSpec or None; use Pipeline.from_module(name) "
+        msg += "for a module or Pipeline(source=items) to seed an item stream"
+        raise TypeError(msg)
 
     return value
 
@@ -297,22 +324,233 @@ class WorkflowSpec:
         return result
 
 
-@dataclass(frozen=True, slots=True)
-class Pipeline[T]:
+_EMPTY_SPEC = WorkflowSpec(nodes={}, outputs={}, inputs={})
+
+
+def _mint_node_id(spec: WorkflowSpec, name: str) -> NodeId:
+    """Mints a ``<name>-<occurrence>`` node id unused by the spec's existing nodes."""
+    count = len([node for node in spec.nodes.values() if node.name == name]) + 1
+    candidate = f"{name}-{count}"
+
+    while candidate in spec.nodes:
+        count += 1
+        candidate = f"{name}-{count}"
+
+    return candidate
+
+
+def _build_chained_spec(
+    name: str,
+    spec: WorkflowSpec | None = None,
+    conf: AnyModuleConf | LoopConf | None = None,
+) -> WorkflowSpec:
+    """Builds a spec that appends a module node and re-points the default output."""
+    spec = _EMPTY_SPEC if spec is None else spec
+    node_id = _mint_node_id(spec, name)
+    conf = {} if conf is None else conf
+    node = ModuleNode(id=node_id, name=name, conf=conf)
+
+    if (tail := spec.outputs.get("default")) is None:
+        edges = spec.edges
+    else:
+        edges = (*spec.edges, StreamEdge(tail, Endpoint(node_id, "in")))
+
+    return WorkflowSpec(
+        nodes={**spec.nodes, node_id: node},
+        outputs={**spec.outputs, "default": Endpoint(node_id, "out")},
+        inputs=spec.inputs,
+        edges=edges,
+        resources=spec.resources,
+        version=spec.version,
+    )
+
+
+optional_spec = narrow_def_from_require(require_spec, default=_EMPTY_SPEC)
+
+
+@define(frozen=True, slots=True)
+class Pipeline(Generic[T]):
     """
     A public immutable pipeline definition over a canonical Workflow v2 spec.
 
-    ``Pipeline`` is the stable definition surface; iterating it (``iter``/``aiter``)
-    runs the workflow and yields its default output stream. The type parameter
-    records the item type the pipeline's execution yields.
+    ``Pipeline`` is the stable definition surface. Iterating it yields its default
+    output stream which is generic over T.
+
+    ``Pipeline(spec)`` wraps a built graph. ``Pipeline.from_module(name)`` seeds a
+    module by name, ``Pipeline(source=items)`` seeds an item stream, and ``Pipeline()``
+    starts an empty template to compose with ``|``.
 
     Attributes:
 
         spec: The canonical workflow this pipeline defines.
+        source: The seeded input stream, or ``None`` when the graph supplies its own.
+
+    Examples:
+
+        >>> flow = Pipeline.from_module("fetch").pipe("sort", conf={"combine": "a"})
+        >>> sorted(flow.spec.nodes)
+        ['fetch-1', 'sort-1']
+        >>> flow.spec.outputs["default"]
+        Endpoint(node='sort-1', port='out')
+        >>> Pipeline(source=[{"x": 1}]).source
+        [{'x': 1}]
 
     """
 
-    spec: WorkflowSpec
+    spec: WorkflowSpec = field(default=_EMPTY_SPEC, converter=optional_spec)
+    source: Items | None = field(default=None, repr=False)
+
+    @classmethod
+    def from_module(
+        cls, name: ModuleNameLike, *, conf: AnyModuleConf | None = None
+    ) -> Pipeline:
+        """
+        Builds a pipeline seeded with a single named module node.
+
+        Module existence is not checked here, so a typo surfaces as a
+        module-resolution failure when the pipeline runs rather than now.
+
+        Args:
+
+            name: The seeding module's name.
+            conf: The module's configuration, if any.
+
+        Returns:
+
+            A new pipeline whose sole node is the named module.
+
+        Examples:
+
+            >>> flow = Pipeline.from_module("fetch").pipe("sort", conf={"combine": "a"})
+            >>> sorted(flow.spec.nodes)
+            ['fetch-1', 'sort-1']
+            >>> flow.spec.outputs["default"]
+            Endpoint(node='sort-1', port='out')
+
+        """
+        return cls(_build_chained_spec(str(name), conf=conf))
+
+    def _derive(self, spec: WorkflowSpec, source: Items | None) -> Pipeline:
+        """Builds a sibling pipeline over a derived spec."""
+        return type(self)(spec, source)
+
+    def pipe(
+        self, name: ModuleNameLike, *, conf: AnyModuleConf | LoopConf | None = None
+    ) -> Pipeline:
+        """
+        Chains the next module by name by re-pointing the default output to it.
+
+        Module existence is not checked here, so a typo surfaces as a
+        module-resolution failure when the pipeline runs rather than now.
+
+        Args:
+
+            name: The module to append.
+            conf: The module's configuration, if any.
+
+        Returns:
+
+            A new pipeline whose default output is the appended module.
+
+        Examples:
+
+            >>> flow = Pipeline.from_module("fetch").pipe("sort", conf={"combine": "a"})
+            >>> sorted(flow.spec.nodes)
+            ['fetch-1', 'sort-1']
+            >>> flow.spec.outputs["default"]
+            Endpoint(node='sort-1', port='out')
+
+        """
+        spec = _build_chained_spec(str(name), self.spec, conf)
+        return self._derive(spec, self.source)
+
+    def __getattr__(self, name: str) -> Callable[..., Pipeline]:
+        """
+        Chains any module by attribute, so ``.sort()`` appends the sort module.
+
+        Every unknown non-underscore attribute is treated as a module name, so a
+        typo surfaces as a module-resolution failure rather than ``AttributeError``.
+        Mapping names are excluded to keep a pipeline from looking dict-like to
+        duck-typed callers.
+        """
+        if name.startswith("_") or name in {"keys", "values", "items", "get"}:
+            raise AttributeError(name)
+
+        return partial(self.pipe, name)
+
+    def __or__(self, other: object) -> Pipeline:
+        """
+        Chains a module name, config pair, or single-module template using ``|``.
+
+        Args:
+
+            other: A module name, a ``(name, conf)`` pair, or a one-module pipeline.
+
+        Returns:
+
+            A new pipeline with the module appended.
+
+        Examples:
+
+            >>> flow = Pipeline.from_module("fetch") | "sort"
+            >>> sorted(flow.spec.nodes)
+            ['fetch-1', 'sort-1']
+            >>> flow = Pipeline.from_module("fetch") | ("sort", {"combine": "a"})
+            >>> dict(flow.spec.nodes["sort-1"].conf)
+            {'combine': 'a'}
+
+        """
+        if isinstance(other, str):
+            chained = self.pipe(other)
+        elif _is_pipe_spec(other):
+            name, conf = other
+            chained = self.pipe(name, conf=conf)
+        elif isinstance(other, Pipeline):
+            chained = self._or_template(other)
+        else:
+            chained = NotImplemented
+
+        return chained
+
+    def _or_template(self, other: Pipeline) -> Pipeline:
+        """Chains a single-module, source-less pipeline used as a reusable template."""
+        nodes = list(other.spec.nodes.values())
+        node = nodes[0] if len(nodes) == 1 else None
+
+        if other.source is None and isinstance(node, ModuleNode):
+            chained = self.pipe(node.name, conf=node.conf)
+        else:
+            msg = "pipeline template must define exactly one module"
+            raise InvalidPipelineError(msg)
+
+        return chained
+
+    def __ror__(self, other: object) -> Pipeline:
+        """
+        Seeds an item stream on the left of ``|``.
+
+        Args:
+
+            other: The item stream to bind as this pipeline's source.
+
+        Returns:
+
+            A new pipeline bound to the seeded source.
+
+        Examples:
+
+            >>> items = [{"x": 1}, {"x": 2}]
+            >>> flow = items | Pipeline.from_module("sort")
+            >>> flow.source is items
+            True
+
+        """
+        if self.source is None and _is_items(other):
+            primed = self._derive(self.spec, other)
+        else:
+            primed = NotImplemented
+
+        return primed
 
     def __iter__(self) -> ItemGenerator:
         """
@@ -332,7 +570,7 @@ class Pipeline[T]:
         plan = build_execution_plan(self.spec)
 
         with SyncExecution() as execution:
-            yield from execution.run(plan)
+            yield from execution.run(plan, source=self.source)
 
     def __aiter__(self) -> AsyncItemGenerator:
         """
@@ -353,7 +591,7 @@ class Pipeline[T]:
             plan = build_execution_plan(self.spec)
 
             async with AsyncExecution() as execution:
-                stream = await execution.run(plan)
+                stream = await execution.run(plan, source=self.source)
 
                 async for item in stream:
                     yield item

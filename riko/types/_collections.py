@@ -3,16 +3,27 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import fields, is_dataclass
+from dataclasses import asdict, fields, is_dataclass
 from decimal import Decimal
 from math import isinf, isnan
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast, get_origin, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Literal,
+    Protocol,
+    cast,
+    get_origin,
+    overload,
+)
 
 import attrs
 from attrs import Attribute, AttrsInstance, validators
 
 from riko.base.exceptions import InvalidPipelineError
+
+from ._guards import is_dataclass_inst
 
 if TYPE_CHECKING:
     from riko.parsing._dotdict import DotDict
@@ -65,28 +76,64 @@ type RikoDict = (
 )
 type RikoList = BasicList | list[BasicDict] | StringyList
 type RikoValue = PrimitiveValue | RikoList
+type DefFunc[T, R] = Callable[[T | None], R]
+
+
+class Require[T, R](Protocol):
+    def __call__(self, value: T, *args, **kwargs) -> R: ...  # noqa: E704
+
+
+def narrow_from_require[R](require: Require[object, R]) -> Callable[[R], R]:
+    """Advertises R to callers but validates any object at runtime."""
+    return cast("Callable[[R], R]", require)
 
 
 @overload
 def def_from_require[T, R](  # noqa: E704
-    require: Callable[[T], R], default: None = ...
-) -> Callable[[T], R | None]: ...
+    require: Require[T, R], default: None = ...
+) -> DefFunc[T, R]: ...
 @overload  # noqa: E302
 def def_from_require[T, D, R](  # noqa: E704
-    require: Callable[[T], R], default: D
-) -> Callable[[T], R | D]: ...
+    require: Require[T, R], default: D
+) -> DefFunc[T, R | D]: ...
 @overload  # noqa: E302
 def def_from_require[T, R](  # noqa: E704
-    require: Callable[[T], R], default: None = ..., what: str | None = ...
-) -> Callable[[T], R | None]: ...
+    require: Require[T, R], default: None = ..., what: str | None = ...
+) -> DefFunc[T, R]: ...
 @overload  # noqa: E302
 def def_from_require[T, D, R](  # noqa: E704
-    require: Callable[[T], R], default: D, what: str | None = ...
-) -> Callable[[T], R | D]: ...
+    require: Require[T, R], default: D, what: str | None = ...
+) -> DefFunc[T, R | D]: ...
 def def_from_require[T, D, R](  # noqa: E302
-    require: Callable[[T], R], default: D | None = None, what: str | None = None
-) -> Callable[[T], R | D | None]:
-    def optional(value: T) -> R | D | None:
+    require: Require[T, R], default: D | None = None, what: str | None = None
+) -> DefFunc[T, R | D | None]:
+    def optional(value: T | None) -> R | D | None:
+        kwargs = {} if what is None else {"what": what}
+        return default if value is None else require(value, **kwargs)
+
+    return optional
+
+
+@overload
+def narrow_def_from_require[R](  # noqa: E704
+    require: Require[R, R], default: None = ...
+) -> DefFunc[R, R]: ...
+@overload  # noqa: E302
+def narrow_def_from_require[D, R](  # noqa: E704
+    require: Require[R, R], default: D
+) -> DefFunc[R, R | D]: ...
+@overload  # noqa: E302
+def narrow_def_from_require[R](  # noqa: E704
+    require: Require[R, R], default: None = ..., what: str | None = ...
+) -> DefFunc[R, R]: ...
+@overload  # noqa: E302
+def narrow_def_from_require[D, R](  # noqa: E704
+    require: Require[R, R], default: D, what: str | None = ...
+) -> DefFunc[R, R | D]: ...
+def narrow_def_from_require[D, R](  # noqa: E302
+    require: Require[R, R], default: D | None = None, what: str | None = None
+) -> DefFunc[R, R | D | None]:
+    def optional(value: R | None) -> R | D | None:
         kwargs = {} if what is None else {"what": what}
         return default if value is None else require(value, **kwargs)
 
@@ -95,14 +142,14 @@ def def_from_require[T, D, R](  # noqa: E302
 
 @overload
 def validator_from_require[T](  # noqa: E704
-    require: Callable[[T, str | None], object], optional: Literal[False] = ...
+    require: Require[T, object], optional: Literal[False] = ...
 ) -> AttrsValidator[T]: ...
 @overload  # noqa: E302
 def validator_from_require[T](  # noqa: E704
-    require: Callable[[T, str | None], object], optional: Literal[True] = True
+    require: Require[T, object], optional: Literal[True] = True
 ) -> AttrsValidator[T | None]: ...
 def validator_from_require[T](  # noqa: E302
-    require: Callable[[T, str | None], object], optional: bool = False
+    require: Require[T, object], optional: bool = False
 ) -> AttrsValidator[T] | AttrsValidator[T | None]:
     def validator(instance: AttrsInstance, field: Attribute[Any], value: T) -> None:
         require(value, f"{type(instance).__name__} '{field.name}'")
@@ -186,6 +233,8 @@ def freeze_value(value: object) -> FrozenJSON:  # noqa: E302
         (1, mappingproxy({'b': 2}))
 
     """
+    type_name = type(value).__name__
+
     if value is None or isinstance(value, (str, bool, int)):
         result: FrozenJSON = value
     elif isinstance(value, float):
@@ -195,8 +244,10 @@ def freeze_value(value: object) -> FrozenJSON:  # noqa: E302
         result = freeze_mapping({require_str(k): freeze_value(v) for k, v in items})
     elif isinstance(value, (list, tuple)):
         result = tuple(map(freeze_value, value))
+    elif is_dataclass_inst(value) and type_name.endswith("ConfRule"):
+        result = freeze_value(asdict(value))
     else:
-        raise InvalidPipelineError(f"value is not JSON-native: {type(value).__name__}")
+        raise InvalidPipelineError(f"{type_name} is not JSON-native")
 
     return result
 

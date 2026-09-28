@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from riko.modules.fetchpage import pipe as fetchpage
 from riko.modules.truncate import pipe as truncate
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.types.modules import FetchPageRawConf, TruncateRawConf
 
 if TYPE_CHECKING:

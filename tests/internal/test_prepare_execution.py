@@ -668,8 +668,9 @@ def test_pipeline_source_seed_runs_end_to_end() -> None:
     register_module(ModuleDefinition(name="doubler", sync_pipe=sync_pipe))
 
     try:
-        assert list([{"x": 1}, {"x": 2}] | Pipeline("doubler")) == [{"x": 2}, {"x": 4}]
-        assert list(Pipeline([{"x": 10}]).pipe("doubler")) == [{"x": 20}]
+        expected = [{"x": 2}, {"x": 4}]
+        assert list([{"x": 1}, {"x": 2}] | Pipeline.from_module("doubler")) == expected
+        assert list(Pipeline(source=[{"x": 10}]).pipe("doubler")) == [{"x": 20}]
     finally:
         reset_module_registry()
 
@@ -846,7 +847,7 @@ async def test_pipeline_source_seed_aruns_end_to_end() -> None:
     register_module(ModuleDefinition(name="adoubler", async_pipe=async_pipe))
 
     try:
-        flow = [{"x": 1}, {"x": 2}] | Pipeline("adoubler")
+        flow = [{"x": 1}, {"x": 2}] | Pipeline.from_module("adoubler")
         assert [x async for x in flow] == [{"x": 2}, {"x": 4}]
     finally:
         reset_module_registry()

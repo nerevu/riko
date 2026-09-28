@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from riko.modules.datebuilder import pipe as datebuilder
 from riko.modules.dateformat import pipe as dateformat
 from riko.modules.itembuilder import pipe as itembuilder
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.types.modules import DateFormatRawConf, ItemBuilderRawConf
 
 if TYPE_CHECKING:

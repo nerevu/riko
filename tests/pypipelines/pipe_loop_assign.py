@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.loop import pipe as loop
 from riko.modules.tokenizer import pipe as tokenizer
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.types.modules import ItemBuilderRawConf, TokenizerRawConf
 
 if TYPE_CHECKING:

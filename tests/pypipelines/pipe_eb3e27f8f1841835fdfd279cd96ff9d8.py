@@ -11,7 +11,7 @@ from riko.modules.filter import pipe as _filter
 from riko.modules.input import pipe as _input
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.types.modules import (
     FetchDataRawConf,
     FilterRawConf,
