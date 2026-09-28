@@ -6,6 +6,7 @@ from collections.abc import (
     AsyncIterator,
     Awaitable,
     Callable,
+    Coroutine,
     Generator,
     Iterable,
     Iterator,
@@ -50,6 +51,9 @@ type PipeTuples = SyncPipeTuples | AsyncPipeTuples
 type Interface = Literal["pipe", "async_pipe"]
 
 # Input/Output
+type Func = Callable[..., object]
+type AysncFunc = Callable[..., Awaitable[object]]
+type CoroutineFunc = Callable[..., Coroutine[object, object, object]]
 type ProcessorParserOutput[O: ItemOrValue] = O | Iterator[O]
 type OperatorParserOutput[T: ItemOrValue] = T | Iterator[T] | Stream
 type SplitterParserOutput = Cascade

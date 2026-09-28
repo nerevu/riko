@@ -10,7 +10,7 @@ from riko.modules.fetchdata import pipe as fetchdata
 from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as sort
 from riko.modules.uniq import pipe as uniq
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.types.modules import FetchDataRawConf, FilterRawConf, SortRawConf, UniqRawConf
 
 if TYPE_CHECKING:

@@ -14,12 +14,10 @@ from typing import TYPE_CHECKING, Any, TypedDict
 
 from riko.base._locations import AnyLocation
 
-from ._collections import StringyDict
-
 if TYPE_CHECKING:
     from riko.parsing._dotdict import DotDict
 
-    from ._collections import RikoDict, RikoValue
+    from ._collections import RikoDict, RikoValue, StringyDict
     from ._rss import RSSEntry
     from ._sentinels import StreamState
 

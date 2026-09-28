@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as sort
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.runtime.collections import SyncCollection
 from riko.types.modules import FilterRawConf, SortRawConf
 

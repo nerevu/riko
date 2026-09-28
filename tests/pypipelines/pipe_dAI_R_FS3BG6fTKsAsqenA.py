@@ -10,7 +10,7 @@ from riko.modules.fetchdata import pipe as fetchdata
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
 from riko.modules.strconcat import pipe as strconcat
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.types.modules import FetchDataRawConf, RenameRawConf, StrconcatRawConf
 
 if TYPE_CHECKING:

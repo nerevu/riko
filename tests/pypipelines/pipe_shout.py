@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from riko.modules.strconcat import pipe as strconcat
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.types.modules import StrconcatRawConf
 
 if TYPE_CHECKING:

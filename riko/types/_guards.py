@@ -3,8 +3,16 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Awaitable, Callable, Generator, Mapping
+from collections.abc import (
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    Generator,
+    Iterable,
+    Mapping,
+)
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
+from dataclasses import is_dataclass
 from inspect import (
     Parameter,
     Signature,
@@ -26,11 +34,12 @@ from riko.base._strutils import replacer
 from riko.base.exceptions import InvalidPipelineError
 
 from ._io import AsyncCloseable, SyncCloseable
-from ._scalars import BasicValueType
+from ._scalars import BasicValueType, PrimitiveValueType
 from ._sentinels import MISSING, SentinelValue, StreamState
-from ._wrappers import ModuleWrapper, SubPipe
 
 if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
+
     from ._collections import BasicList
     from ._compiler import LoopModule, PipeModule
     from ._io import Closeable
@@ -44,6 +53,7 @@ if TYPE_CHECKING:
     from ._scalars import BasicValue
     from ._sentinels import MissingType, Sentinel
     from ._streams import Item, StatefulItem
+    from ._wrappers import ModuleWrapper, SubPipe
     from .modules import ConfArg
 
 
@@ -136,6 +146,10 @@ def is_mapping[K, V](val: Mapping[K, V] | object) -> TypeIs[Mapping[K, V]]:
     return success or (False if failure else isinstance(val, Mapping))
 
 
+def is_dataclass_inst(value: object) -> TypeIs[DataclassInstance]:
+    return is_dataclass(value) and not isinstance(value, type)
+
+
 def require_mapping(value: object, what: str | None = "value") -> Mapping[str, object]:
     """Narrows a value to a mapping or rejects it as malformed structure."""
     if not is_mapping(value):
@@ -166,6 +180,50 @@ def is_value_seq(
     val: list[Any] | tuple[Any, ...],
 ) -> TypeGuard[BasicList | tuple[BasicValue, BasicValue]]:
     return bool(val and isinstance(val[0], BasicValueType))
+
+
+def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
+    """
+    Reports whether a value is listlike (a multi-item iterable).
+
+    A listlike value is any iterable that is not a mapping, primitive, or ``None``.
+
+    Args:
+
+        value: The object to classify.
+
+    Returns:
+
+        True when ``value`` maps over items, False when it is one item.
+
+    Examples:
+
+        >>> is_listlike([1, 2])
+        True
+        >>> is_listlike((1, 2))
+        True
+        >>> is_listlike(iter([1, 2]))
+        True
+        >>> is_listlike(range(3))
+        True
+        >>> is_listlike({"a": 1})
+        False
+        >>> is_listlike("ab")
+        False
+        >>> is_listlike(0)
+        False
+        >>> is_listlike(None)
+        False
+
+    """
+    if value is None or isinstance(
+        value, (PrimitiveValueType, bytes, dict, CaseInsensitiveDict, Mapping)
+    ):
+        result = False
+    else:
+        result = isinstance(value, Iterable)
+
+    return result
 
 
 def is_sentinel[VT](val: Mapping[str, VT], **kwargs: object) -> TypeGuard[Sentinel]:

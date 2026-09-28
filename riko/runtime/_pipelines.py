@@ -17,6 +17,7 @@ from functools import partial, update_wrapper
 from json import loads
 from typing import TYPE_CHECKING, Literal, Protocol, cast, overload
 
+from riko.base._config import SUBPIPE_TYPE
 from riko.base._imports import import_or_else
 from riko.base._strutils import pythonise
 from riko.base.exceptions import UnsupportedPipelineError
@@ -24,7 +25,6 @@ from riko.types._guards import is_subpipe
 
 from ._compile import parse_pipe_def
 from ._importutils import load_interfaces, resolve_interface
-from ._subpipe import mark_subpipe
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -34,12 +34,36 @@ if TYPE_CHECKING:
     from riko.types._compiler import ParsedPipeDef
     from riko.types._wrappers import (
         AsyncModuleWrapper,
+        AsyncSubPipe,
+        AysncFunc,
+        Func,
         Interface,
         ModuleWrapper,
         SubPipe,
         SyncModuleWrapper,
+        SyncSubPipe,
     )
     from riko.types.modules import ModuleSubtype
+
+
+@overload
+def mark_subpipe(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+    pipe: AysncFunc, *, subtype: ModuleSubtype = ..., loopable: bool = ...
+) -> AsyncSubPipe: ...
+@overload  # noqa: E302
+def mark_subpipe(  # noqa: E704
+    pipe: Func, *, subtype: ModuleSubtype = ..., loopable: bool = ...
+) -> SyncSubPipe: ...
+def mark_subpipe(  # noqa: E302
+    pipe: Func, *, subtype: ModuleSubtype = "transformer", loopable: bool = True
+) -> SubPipe:
+    setattr(pipe, "name", getattr(pipe, "__name__", SUBPIPE_TYPE))  # noqa: B010
+    setattr(pipe, "type", SUBPIPE_TYPE)  # noqa: B010
+    setattr(pipe, "subtype", subtype)  # noqa: B010
+    setattr(pipe, "subtypes", {subtype})  # noqa: B010
+    setattr(pipe, "loopable", loopable)  # noqa: B010
+    setattr(pipe, "pollable", False)  # noqa: B010
+    return cast("SubPipe", pipe)
 
 
 def _as_subpipe(pipe: ModuleWrapper) -> SubPipe:

@@ -165,7 +165,7 @@ def resolve_binding(  # noqa: E302
     return binding
 
 
-def normalize_resources(resources: ResourcesLike) -> Mapping[str, str]:
+def normalize_resources(value: ResourcesLike) -> Mapping[str, str]:
     """
     Normalizes a declared binding into local-alias-to-Context-name form.
 
@@ -188,12 +188,12 @@ def normalize_resources(resources: ResourcesLike) -> Mapping[str, str]:
         mappingproxy({'db': 'primary_db'})
 
     """
-    if isinstance(resources, str):
-        binding = {resources: resources}
-    elif isinstance(resources, Mapping):
-        binding = dict(resources)
+    if isinstance(value, str):
+        binding = {value: value}
+    elif isinstance(value, Mapping):
+        binding = dict(value)
     else:
-        binding = {name: name for name in resources}
+        binding = {name: name for name in value}
 
     return freeze_mapping(binding)
 

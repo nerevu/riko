@@ -11,7 +11,7 @@ from riko.modules.filter import pipe as _filter
 from riko.modules.regex import pipe as regex
 from riko.modules.split import pipe as split
 from riko.modules.union import pipe as union
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.types.modules import FetchRawConf, FilterRawConf, RegexRawConf, SplitRawConf
 
 if TYPE_CHECKING:

@@ -18,20 +18,18 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict
 from time import struct_time
 from typing import TYPE_CHECKING, cast
 
 from riko.coercion._canonical import repr_cache
 from riko.coercion._sequences import listize
 from riko.types._collections import RikoValue
-from riko.types._guards import is_mapping, is_sentinel, is_type_value
+from riko.types._guards import is_dataclass_inst, is_mapping, is_sentinel, is_type_value
 
 from ._dotdict import DotDict
 
 if TYPE_CHECKING:
-    from _typeshed import DataclassInstance
-
     from riko.types._options import SkipIf
     from riko.types._streams import Item, ItemOrValue, ItemValue
 
@@ -103,8 +101,8 @@ def _parse_conf_uncached[T](
     parsed = default
     dd_conf = DotDict.dictize([])
 
-    if is_dataclass(conf):
-        d_conf: dict[str, T] | T | None = asdict(cast("DataclassInstance", conf))
+    if is_dataclass_inst(conf):
+        d_conf: dict[str, T] | T | None = asdict(conf)
     else:
         d_conf = conf
 

@@ -2,6 +2,7 @@
 """Tests for the private execution lifetime primitives."""
 
 from contextlib import asynccontextmanager, contextmanager, nullcontext
+from threading import get_ident
 from urllib.request import urlopen
 
 import pytest
@@ -375,6 +376,68 @@ async def test_async_acquire_sync_lifecycle_on_async_execution() -> None:
         assert acquired == "value"
 
     assert events == ["close"]
+
+
+@async_test
+async def test_async_worker_adapts_sync_lifecycle_off_loop() -> None:
+    threads: dict[str, int] = {}
+
+    def db():
+        threads["enter"] = get_ident()
+        try:
+            yield "value"
+        finally:
+            threads["exit"] = get_ident()
+
+    loop_thread = get_ident()
+
+    async with AsyncExecution() as execution:
+        acquired = await execution.aacquire(Resource.from_lifecycle(db))
+        assert acquired == "value"
+
+    assert threads["enter"] != loop_thread
+    assert threads["exit"] != loop_thread
+
+
+@async_test
+async def test_async_worker_adapts_sync_factory_and_cleanup_off_loop() -> None:
+    threads: dict[str, int] = {}
+
+    def make() -> str:
+        threads["factory"] = get_ident()
+        return "value"
+
+    def cleanup(value: str) -> None:
+        threads["cleanup"] = get_ident()
+
+    loop_thread = get_ident()
+
+    async with AsyncExecution() as execution:
+        acquired = await execution.aacquire(
+            Resource.from_factory(make, cleanup=cleanup)
+        )
+        assert acquired == "value"
+
+    assert threads["factory"] != loop_thread
+    assert threads["cleanup"] != loop_thread
+
+
+@async_test
+async def test_async_worker_adapts_owned_sync_close_off_loop() -> None:
+    threads: dict[str, int] = {}
+
+    class _Recording:
+        def close(self) -> None:
+            threads["close"] = get_ident()
+
+    client = _Recording()
+    loop_thread = get_ident()
+
+    async with AsyncExecution() as execution:
+        acquired = await execution.aacquire(Resource(client))
+        assert acquired is client
+
+    assert threads["close"] != loop_thread
 
 
 def test_sync_acquire_value_factory_runs_cleanup() -> None:

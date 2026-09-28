@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from riko.modules.fetch import pipe as fetch
 from riko.modules.input import pipe as _input
 from riko.modules.urlbuilder import pipe as urlbuilder
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.types.modules import FetchRawConf, InputRawConf, UrlBuilderRawConf
 
 if TYPE_CHECKING:

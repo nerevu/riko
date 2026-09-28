@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.strreplace import pipe as strreplace
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.types.modules import ItemBuilderRawConf, StrReplaceRawConf
 
 if TYPE_CHECKING:

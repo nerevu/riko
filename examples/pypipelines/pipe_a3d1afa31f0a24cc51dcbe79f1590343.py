@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.regex import pipe as regex
-from riko.runtime._subpipe import mark_subpipe
+from riko.runtime._pipelines import mark_subpipe
 from riko.types.modules import ItemBuilderRawConf, RegexRawConf
 
 if TYPE_CHECKING:
