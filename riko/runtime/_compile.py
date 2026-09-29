@@ -56,7 +56,7 @@ from riko.types._compiler import (
     AbbrevStringModule,
     GraphEdge,
     GraphIndex,
-    LoopOptionValues,
+    ModuleOptionValues,
     OutputRef,
     ParsedPipeDef,
     PipeDag,
@@ -664,7 +664,7 @@ def _gen_pykwargs(  # noqa: E302
 
     for key in ("emit", "assign", "field", "count"):
         if (setting := module.get(key)) is not None:
-            yield (key, cast("LoopOptionValues", setting))
+            yield (key, cast("ModuleOptionValues", setting))
 
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
     yield ("context", context)

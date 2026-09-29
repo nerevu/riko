@@ -15,9 +15,8 @@ PIPELINE_DIR = ROOT_DIR / "tests" / "pipelines"
 
 @pytest.fixture(autouse=True)
 def pipeline_store():
-    # The core compiler ships no named-pipeline locations; the suite supplies its
-    # own generated-package store + JSON-definition directory (formerly hardcoded
-    # as ``tests.pypipelines`` / ``tests/pipelines`` inside ``riko.runtime._compile``).
+    # Core ships no named-pipeline locations; the suite supplies its own probe
+    # package plus the directory of canonical Workflow v2 documents.
     reset_pipeline_resolver()
     register_pipeline_store(package="tests.pypipelines", directory=PIPELINE_DIR)
     yield

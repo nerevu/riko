@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from riko.types._enums import CastType, FmtLike, LocationType
     from riko.types._io import PathLike
     from riko.types.modules import (
-        CountValues,
         Embed,
         FilterConfRule,
         FindConfRule,
@@ -296,5 +295,3 @@ class XpathFetchPageObjconf(DynamicConf):
 
 class LoopObjconf(DynamicConf):
     embed: Embed
-    emit: bool
-    count: CountValues

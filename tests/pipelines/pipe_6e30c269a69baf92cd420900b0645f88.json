@@ -1,91 +1,101 @@
 {
-    "layout": [
+    "edges": [
         {
-            "id": "sw-135",
-            "xy": [
-                189,
-                85
-            ]
+            "source": {
+                "node": "sw-135",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-154",
+                "port": "in:1"
+            },
+            "type": "stream"
         },
         {
-            "id": "_OUTPUT",
-            "xy": [
-                399,
-                948
-            ]
+            "source": {
+                "node": "sw-154",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-173",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-154",
-            "xy": [
-                399,
-                203
-            ]
+            "source": {
+                "node": "sw-173",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-180",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-173",
-            "xy": [
-                300,
-                277
-            ]
+            "source": {
+                "node": "sw-180",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-210",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-180",
-            "xy": [
-                261,
-                378
-            ]
+            "source": {
+                "node": "sw-195",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-191",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-191",
-            "xy": [
-                311,
-                827
-            ]
+            "source": {
+                "node": "sw-210",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-195",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-195",
-            "xy": [
-                177,
-                672
-            ]
-        },
-        {
-            "id": "sw-210",
-            "xy": [
-                284,
-                551
-            ]
-        },
-        {
-            "id": "sw-233",
-            "xy": [
-                496,
-                85
-            ]
+            "source": {
+                "node": "sw-233",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-154",
+                "port": "in:3"
+            },
+            "type": "stream"
         }
     ],
-    "modules": [
-        {
+    "nodes": {
+        "sw-135": {
             "conf": {
-                "URL": {
+                "url": {
                     "type": "url",
                     "value": "file://riko/data/rss.sueddeutsche.de_rss_Topthemen.xml"
                 }
             },
             "id": "sw-135",
-            "type": "fetch"
+            "name": "fetch",
+            "type": "module"
         },
-        {
-            "conf": {},
-            "id": "_OUTPUT",
-            "type": "output"
-        },
-        {
-            "conf": {},
+        "sw-154": {
             "id": "sw-154",
-            "type": "union"
+            "name": "union",
+            "type": "module"
         },
-        {
+        "sw-173": {
             "conf": {
                 "uniq_key": {
                     "type": "text",
@@ -93,19 +103,20 @@
                 }
             },
             "id": "sw-173",
-            "type": "uniq"
+            "name": "uniq",
+            "type": "module"
         },
-        {
+        "sw-180": {
             "conf": {
-                "COMBINE": {
+                "combine": {
                     "type": "text",
                     "value": "or"
                 },
-                "PERMIT": {
+                "permit": {
                     "type": "bool",
                     "value": false
                 },
-                "RULE": [
+                "rule": [
                     {
                         "field": {
                             "type": "text",
@@ -137,9 +148,10 @@
                 ]
             },
             "id": "sw-180",
-            "type": "filter"
+            "name": "filter",
+            "type": "module"
         },
-        {
+        "sw-191": {
             "conf": {
                 "rule": [
                     {
@@ -155,33 +167,32 @@
                 ]
             },
             "id": "sw-191",
-            "type": "sort"
+            "name": "sort",
+            "type": "module"
         },
-        {
-            "id": "sw-195",
-            "type": "regex",
+        "sw-195": {
             "conf": {
-                "RULE": [
+                "rule": [
                     {
-                        "singlelinematch": {
+                        "casematch": {
                             "type": "bool",
                             "value": true
-                        },
-                        "replace": {
-                            "type": "text",
-                            "value": ""
                         },
                         "field": {
                             "type": "text",
                             "value": "description"
                         },
-                        "casematch": {
-                            "type": "bool",
-                            "value": true
-                        },
                         "match": {
                             "type": "text",
                             "value": "</div>.*$"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": ""
+                        },
+                        "singlelinematch": {
+                            "type": "bool",
+                            "value": true
                         }
                     },
                     {
@@ -200,23 +211,26 @@
                     }
                 ]
             },
-            "assign": "loop:regex",
-            "emit": true,
-            "count": "all"
+            "id": "sw-195",
+            "name": "regex",
+            "options": {
+                "assign": "loop:regex",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
         },
-        {
-            "id": "sw-210",
-            "type": "rename",
+        "sw-210": {
             "conf": {
-                "RULE": [
+                "rule": [
                     {
-                        "field": {
-                            "type": "text",
-                            "value": "y:id.value"
-                        },
                         "copy": {
                             "type": "bool",
                             "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "y:id.value"
                         },
                         "newval": {
                             "type": "text",
@@ -225,899 +239,32 @@
                     }
                 ]
             },
-            "assign": "loop:rename",
-            "emit": true,
-            "count": "all"
+            "id": "sw-210",
+            "name": "rename",
+            "options": {
+                "assign": "loop:rename",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
         },
-        {
+        "sw-233": {
             "conf": {
-                "URL": {
+                "url": {
                     "type": "url",
                     "value": "file://riko/data/rss.sueddeutsche.de_rss_Politik.xml"
                 }
             },
             "id": "sw-233",
-            "type": "fetch"
+            "name": "fetch",
+            "type": "module"
         }
-    ],
-    "terminaldata": [
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "guid": {
-                        "_attr": {
-                            "content": {
-                                "_count": "9",
-                                "_type": "url"
-                            },
-                            "isPermaLink": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "link": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "pubDate": {
-                        "_count": "9",
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "permalink": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "value": {
-                                "_count": "9",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "9",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:title": {
-                        "_count": "9",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-135"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "guid": {
-                        "_attr": {
-                            "content": {
-                                "_count": "9",
-                                "_type": "url"
-                            },
-                            "isPermaLink": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "link": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "pubDate": {
-                        "_count": "9",
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "permalink": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "value": {
-                                "_count": "9",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "9",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:title": {
-                        "_count": "9",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-154"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "guid": {
-                        "_attr": {
-                            "content": {
-                                "_count": "9",
-                                "_type": "url"
-                            },
-                            "isPermaLink": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "link": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "pubDate": {
-                        "_count": "9",
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "permalink": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "value": {
-                                "_count": "9",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "9",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:repeatcount": {
-                        "_count": "9",
-                        "_type": "number"
-                    },
-                    "y:title": {
-                        "_count": "9",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-173"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "guid": {
-                        "_attr": {
-                            "content": {
-                                "_count": "9",
-                                "_type": "url"
-                            },
-                            "isPermaLink": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "link": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "pubDate": {
-                        "_count": "9",
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "permalink": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "value": {
-                                "_count": "9",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "9",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:repeatcount": {
-                        "_count": "9",
-                        "_type": "number"
-                    },
-                    "y:title": {
-                        "_count": "9",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-180"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "guid": {
-                        "_attr": {
-                            "content": {
-                                "_count": "9",
-                                "_type": "url"
-                            },
-                            "isPermaLink": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "link": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "pubDate": {
-                        "_count": "9",
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "permalink": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "value": {
-                                "_count": "9",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "9",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:repeatcount": {
-                        "_count": "9",
-                        "_type": "number"
-                    },
-                    "y:title": {
-                        "_count": "9",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-191"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "guid": {
-                        "_attr": {
-                            "content": {
-                                "_count": "9",
-                                "_type": "url"
-                            },
-                            "isPermaLink": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "link": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "pubDate": {
-                        "_count": "9",
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "permalink": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "value": {
-                                "_count": "9",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "9",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:repeatcount": {
-                        "_count": "9",
-                        "_type": "number"
-                    },
-                    "y:title": {
-                        "_count": "9",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-195"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "guid": {
-                        "_attr": {
-                            "content": {
-                                "_count": "9",
-                                "_type": "url"
-                            },
-                            "isPermaLink": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "link": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "pubDate": {
-                        "_count": "9",
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "permalink": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "value": {
-                                "_count": "9",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "9",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:repeatcount": {
-                        "_count": "9",
-                        "_type": "number"
-                    },
-                    "y:title": {
-                        "_count": "9",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-210"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "guid": {
-                        "_attr": {
-                            "content": {
-                                "_count": "9",
-                                "_type": "url"
-                            },
-                            "isPermaLink": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "link": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "pubDate": {
-                        "_count": "9",
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "permalink": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "value": {
-                                "_count": "9",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "9",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:title": {
-                        "_count": "9",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-233"
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-191",
+            "port": "out"
         }
-    ],
-    "wires": [
-        {
-            "id": "_w0",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-135"
-            },
-            "tgt": {
-                "id": "_OTHER",
-                "moduleid": "sw-154"
-            }
-        },
-        {
-            "id": "_w1",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-154"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-173"
-            }
-        },
-        {
-            "id": "_w2",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-173"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-180"
-            }
-        },
-        {
-            "id": "_w3",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-180"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-210"
-            }
-        },
-        {
-            "id": "_w4",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-191"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
-        },
-        {
-            "id": "_w5",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-195"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-191"
-            }
-        },
-        {
-            "id": "_w6",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-210"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-195"
-            }
-        },
-        {
-            "id": "_w7",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-233"
-            },
-            "tgt": {
-                "id": "_OTHER3",
-                "moduleid": "sw-154"
-            }
-        }
-    ]
+    },
+    "version": "2"
 }

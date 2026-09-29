@@ -1,105 +1,95 @@
 {
-    "layout": [
+    "edges": [
         {
-            "id": "sw-61",
-            "xy": [
-                177,
-                394
-            ]
+            "source": {
+                "node": "sw-61",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-142",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "_OUTPUT",
-            "xy": [
-                293,
-                1001
-            ]
+            "source": {
+                "node": "sw-142",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-351",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-142",
-            "xy": [
-                177,
-                655
-            ]
+            "source": {
+                "node": "sw-467",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-61",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-467",
-            "xy": [
-                236.5,
-                276
-            ]
-        },
-        {
-            "id": "sw-479",
-            "xy": [
-                288,
-                85
-            ]
-        },
-        {
-            "id": "sw-351",
-            "xy": [
-                196.5,
-                881
-            ]
+            "source": {
+                "node": "sw-479",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-467",
+                "port": "in:attrs_1_value"
+            },
+            "type": "stream"
         }
     ],
-    "modules": [
-        {
-            "id": "sw-61",
-            "type": "loop",
+    "nodes": {
+        "sw-142": {
             "conf": {
-                "BASE": {
-                    "type": "text",
-                    "value": "api.github.com_search_users"
-                },
-                "PARAM": [
-                    {
-                        "key": {
-                            "type": "text",
-                            "value": "q"
-                        },
-                        "value": {
-                            "subkey": "title",
-                            "type": "text"
-                        }
-                    }
-                ],
-                "EXT": {
-                    "type": "text",
-                    "value": "json"
-                }
-            },
-            "embed": {
-                "id": "sw-72",
-                "type": "urlbuilder"
-            },
-            "assign": "api",
-            "emit": false,
-            "count": "all"
-        },
-        {
-            "conf": {},
-            "id": "_OUTPUT",
-            "type": "output"
-        },
-        {
-            "id": "sw-142",
-            "type": "fetchdata",
-            "conf": {
-                "URL": {
-                    "subkey": "api",
-                    "type": "url"
-                },
                 "path": {
                     "type": "text",
                     "value": "items"
+                },
+                "url": {
+                    "subkey": "api",
+                    "type": "url"
                 }
             },
-            "assign": "info",
-            "emit": false,
-            "count": "first"
+            "id": "sw-142",
+            "name": "fetchdata",
+            "options": {
+                "assign": "info",
+                "count": "first",
+                "emit": false
+            },
+            "type": "module"
         },
-        {
+        "sw-351": {
+            "conf": {
+                "rule": [
+                    {
+                        "copy": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "info.user_view_type"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "description"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-351",
+            "name": "rename",
+            "type": "module"
+        },
+        "sw-467": {
             "conf": {
                 "attrs": [
                     {
@@ -115,9 +105,10 @@
                 ]
             },
             "id": "sw-467",
-            "type": "itembuilder"
+            "name": "itembuilder",
+            "type": "module"
         },
-        {
+        "sw-479": {
             "conf": {
                 "debug": {
                     "type": "text",
@@ -141,164 +132,52 @@
                 }
             },
             "id": "sw-479",
-            "type": "input"
+            "name": "input",
+            "type": "module"
         },
-        {
+        "sw-61": {
             "conf": {
-                "RULE": [
-                    {
-                        "field": {
+                "embed": {
+                    "conf": {
+                        "base": {
                             "type": "text",
-                            "value": "info.user_view_type"
+                            "value": "api.github.com_search_users"
                         },
-                        "newval": {
+                        "ext": {
                             "type": "text",
-                            "value": "description"
+                            "value": "json"
                         },
-                        "copy": {
-                            "type": "bool",
-                            "value": true
-                        }
-                    }
-                ]
+                        "param": [
+                            {
+                                "key": {
+                                    "type": "text",
+                                    "value": "q"
+                                },
+                                "value": {
+                                    "subkey": "title",
+                                    "type": "text"
+                                }
+                            }
+                        ]
+                    },
+                    "name": "urlbuilder"
+                }
             },
-            "id": "sw-351",
-            "type": "rename"
+            "id": "sw-61",
+            "name": "loop",
+            "options": {
+                "assign": "api",
+                "count": "all",
+                "emit": false
+            },
+            "type": "module"
         }
-    ],
-    "terminaldata": [
-        {
-            "data": {
-                "_attr": {
-                    "api": {
-                        "_count": "1",
-                        "_type": "url"
-                    },
-                    "title": {
-                        "_count": "1",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-61"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "api": {
-                        "_count": "1",
-                        "_type": "url"
-                    },
-                    "title": {
-                        "_count": "1",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-142"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "title": {
-                        "_count": "1",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-467"
-        },
-        {
-            "data": {
-                "_count": "1",
-                "_type": "text"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-479"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "api": {
-                        "_count": "1",
-                        "_type": "url"
-                    },
-                    "title": {
-                        "_count": "1",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-351"
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-351",
+            "port": "out"
         }
-    ],
-    "wires": [
-        {
-            "id": "_w0",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-61"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-142"
-            }
-        },
-        {
-            "id": "_w1",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-142"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-351"
-            }
-        },
-        {
-            "id": "_w2",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-467"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-61"
-            }
-        },
-        {
-            "id": "_w3",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-479"
-            },
-            "tgt": {
-                "id": "attrs_1_value",
-                "moduleid": "sw-467"
-            }
-        },
-        {
-            "id": "_w4",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-351"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
-        }
-    ]
+    },
+    "version": "2"
 }

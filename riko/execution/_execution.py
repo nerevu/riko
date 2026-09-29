@@ -10,7 +10,7 @@ private to the runtime and belong to no supported surface.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable
+from collections.abc import AsyncIterable, Mapping
 from contextlib import AsyncExitStack, ExitStack, nullcontext
 from functools import cached_property, partial
 from inspect import isawaitable
@@ -31,7 +31,7 @@ from riko.bado._backend import (
 from riko.bado.itertools import as_async
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._resources import ResourceView
-from riko.types._compiler import LoopOptionValues
+from riko.types._compiler import ModuleOptionValues
 from riko.types._guards import is_async_callable, is_async_closeable, is_sync_closeable
 from riko.types._workflow import parse_port
 from riko.types._wrappers import CoroutineFunc, ModuleWrapper
@@ -49,7 +49,7 @@ from ._plan import _ResourcePlan, _ResourceStrategy, build_resource_plan
 from ._prepared import ExecMode, PreparedNode
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Mapping
+    from collections.abc import Awaitable, Callable
     from contextlib import AbstractAsyncContextManager, AbstractContextManager
     from types import TracebackType
 
@@ -79,7 +79,7 @@ if TYPE_CHECKING:
 
 type SyncExecSteps = dict[str, Stream]
 type AsyncExecSteps = dict[str, AsyncStream]
-type ExtraObjects = ResourceView | ModuleWrapper | LoopOptionValues
+type ExtraObjects = ResourceView | ModuleWrapper | ModuleOptionValues
 type ExtraStreams = AsyncItems | list[AsyncItems] | Stream | Streams
 type ExtraValues = ExtraObjects | ExtraStreams
 type ExtraInput = Mapping[str, ExtraValues]
@@ -566,15 +566,17 @@ class SyncExecution(_BaseExecution):
 
         if node.embed is not None:
             extra["embed"] = self._select_embed(node.embed, host_async=host_async)
-            extra.update(node.options)
+
+        extra.update(cast("Mapping[str, ModuleOptionValues]", node.options))
+        conf = node.embed_or_self_conf
 
         if mode is ExecMode.ADAPTER:
             async_pipe = cast("AsyncModuleWrapper", _pipe)
-            _stream = async_pipe(source, conf=node.conf, context=self.context, **extra)
+            _stream = async_pipe(source, conf=conf, context=self.context, **extra)
             stream = self._drain_async(require_async_stream(_stream, async_pipe))
         else:
             pipe = cast("SyncModuleWrapper", _pipe)
-            _stream = pipe(source, conf=node.conf, context=self.context, **extra)
+            _stream = pipe(source, conf=conf, context=self.context, **extra)
             stream = require_stream(_stream, pipe)
 
         return stream
@@ -597,7 +599,8 @@ class SyncExecution(_BaseExecution):
             plan: The prepared workflow to run.
             output: The named output to produce.
             source: Items to seed the output's open input in place of the default
-                empty seed. When omitted, every open input receives that default.
+                empty seed. When omitted, only a node with no default or
+                positional input receives that default.
 
         Returns:
 
@@ -647,7 +650,7 @@ class SyncExecution(_BaseExecution):
         steps: SyncExecSteps,
         seed: Items | None = None,
     ) -> tuple[Stream, ExtraOutput]:
-        source = self._normalize_source() if seed is None else iter(seed)
+        source: Stream | None = None if seed is None else iter(seed)
         indexed: list[tuple[int, Stream]] = []
         extra: ExtraOutput = {}
 
@@ -667,10 +670,13 @@ class SyncExecution(_BaseExecution):
             ordered = sorted(indexed, key=lambda item: item[0])
             extra["others"] = [stream for _, stream in ordered]
 
+        if source is None:
+            source = iter(()) if indexed else self._normalize_source()
+
         return source, extra
 
     def _normalize_source(self) -> Stream:
-        """Produces the seed stream fed to a source node with no stream input."""
+        """Produces the seed fed to a node with no default or positional input."""
         return iter([{"forever": True}])
 
     def close(
@@ -941,7 +947,8 @@ class AsyncExecution(_BaseExecution):
             plan: The prepared workflow to run.
             output: The named output to produce.
             source: Items to seed the output's open input in place of the default
-                empty seed. When omitted, every open input receives that default.
+                empty seed. When omitted, only a node with no default or
+                positional input receives that default.
 
         Returns:
 
@@ -999,9 +1006,10 @@ class AsyncExecution(_BaseExecution):
         """
         bridged = _bridge_inputs(extra)
         worker_source = drain_async(source, run_from_thread)
+        conf = node.embed_or_self_conf
 
         def start() -> tuple[object, Stream]:
-            raw = pipe(worker_source, conf=node.conf, context=self.context, **bridged)
+            raw = pipe(worker_source, conf=conf, context=self.context, **bridged)
             return raw, require_stream(raw, pipe)
 
         raw, iterator = await self.run_sync(start)
@@ -1056,14 +1064,16 @@ class AsyncExecution(_BaseExecution):
 
         if node.embed is not None:
             extra["embed"] = self._select_embed(node.embed, host_async=host_async)
-            extra.update(node.options)
+
+        extra.update(cast("Mapping[str, ModuleOptionValues]", node.options))
 
         if mode is ExecMode.ADAPTER:
             pipe = cast("SyncModuleWrapper", _pipe)
             stream = await self._run_sync_node(pipe, node, source, extra)
         else:
+            conf = node.embed_or_self_conf
             async_pipe = cast("AsyncModuleWrapper", _pipe)
-            _stream = async_pipe(source, conf=node.conf, context=self.context, **extra)
+            _stream = async_pipe(source, conf=conf, context=self.context, **extra)
             stream = require_async_stream(_stream, async_pipe)
 
         return stream
@@ -1086,7 +1096,7 @@ class AsyncExecution(_BaseExecution):
         steps: AsyncExecSteps,
         seed: Items | None = None,
     ) -> tuple[AsyncItems, ExtraOutput]:
-        source = self._anormalize_source() if seed is None else as_async(seed)
+        source: AsyncItems | None = None if seed is None else as_async(seed)
         indexed: list[tuple[int, AsyncStream]] = []
         extra: ExtraOutput = {}
 
@@ -1106,10 +1116,14 @@ class AsyncExecution(_BaseExecution):
             ordered = sorted(indexed, key=lambda item: item[0])
             extra["others"] = [stream for _, stream in ordered]
 
+        if source is None:
+            items: Items = []
+            source = as_async(items) if indexed else self._anormalize_source()
+
         return source, extra
 
     def _anormalize_source(self) -> AsyncItems:
-        """Produces the seed stream fed to a source node with no stream input."""
+        """Produces the seed fed to a node with no default or positional input."""
         seed: list[Item] = [{"forever": True}]
         return as_async(seed)
 

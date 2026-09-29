@@ -478,6 +478,25 @@ def test_legacy_prefix_with_non_numeric_suffix_is_not_misconverted():
     assert spec.edges[0].target.port == "in:count"
 
 
+def test_authoring_call_options_are_accepted():
+    spec = normalize_workflow(
+        {
+            "nodes": [
+                {"name": "tokenizer", "options": {"field": "title", "count": "first"}}
+            ]
+        }
+    )
+    node = spec.nodes["tokenizer-1"]
+    assert isinstance(node, ModuleNode)
+    assert node.options == {"field": "title", "count": "first"}
+    assert node.conf == {}
+
+
+def test_unknown_call_option_is_rejected():
+    with pytest.raises(InvalidPipelineError, match="unknown module option"):
+        normalize_workflow({"nodes": [{"name": "tokenizer", "options": {"bogus": 1}}]})
+
+
 def test_nested_conf_is_deeply_frozen_and_isolated():
     inner = {"k": 1}
     spec = normalize_workflow(

@@ -1,64 +1,74 @@
 {
-    "layout": [
+    "edges": [
         {
-            "id": "sw-565",
-            "xy": [
-                604,
-                111
-            ]
+            "source": {
+                "node": "sw-565",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in:pubdate"
+            },
+            "type": "stream"
         },
         {
-            "id": "_OUTPUT",
-            "xy": [
-                262,
-                609
-            ]
+            "source": {
+                "node": "sw-572",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in:description"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-572",
-            "xy": [
-                636,
-                287
-            ]
+            "source": {
+                "node": "sw-576",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in:guid"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-576",
-            "xy": [
-                868,
-                106
-            ]
+            "source": {
+                "node": "sw-580",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in:author"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-580",
-            "xy": [
-                901,
-                266
-            ]
+            "source": {
+                "node": "sw-584",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in:title"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-584",
-            "xy": [
-                939,
-                461
-            ]
-        },
-        {
-            "id": "sw-588",
-            "xy": [
-                575,
-                459
-            ]
-        },
-        {
-            "id": "sw-592",
-            "xy": [
-                238,
-                102
-            ]
+            "source": {
+                "node": "sw-588",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in:link"
+            },
+            "type": "stream"
         }
     ],
-    "modules": [
-        {
+    "nodes": {
+        "sw-565": {
             "conf": {
                 "debug": {
                     "type": "datetime",
@@ -68,10 +78,6 @@
                     "type": "datetime",
                     "value": "10/14/2010"
                 },
-                "type": {
-                    "type": "text",
-                    "value": "date"
-                },
                 "name": {
                     "type": "text",
                     "value": "dateinput1"
@@ -83,17 +89,17 @@
                 "prompt": {
                     "type": "text",
                     "value": "dateinput1"
+                },
+                "type": {
+                    "type": "text",
+                    "value": "date"
                 }
             },
             "id": "sw-565",
-            "type": "input"
+            "name": "input",
+            "type": "module"
         },
-        {
-            "conf": {},
-            "id": "_OUTPUT",
-            "type": "output"
-        },
-        {
+        "sw-572": {
             "conf": {
                 "debug": {
                     "type": "location",
@@ -103,10 +109,6 @@
                     "type": "location",
                     "value": "isle of wight, uk"
                 },
-                "type": {
-                    "type": "text",
-                    "value": "location"
-                },
                 "name": {
                     "type": "text",
                     "value": "locationinput1"
@@ -118,12 +120,17 @@
                 "prompt": {
                     "type": "text",
                     "value": "locationinput1"
+                },
+                "type": {
+                    "type": "text",
+                    "value": "location"
                 }
             },
             "id": "sw-572",
-            "type": "input"
+            "name": "input",
+            "type": "module"
         },
-        {
+        "sw-576": {
             "conf": {
                 "debug": {
                     "type": "float",
@@ -133,10 +140,6 @@
                     "type": "float",
                     "value": "12121"
                 },
-                "type": {
-                    "type": "text",
-                    "value": "int"
-                },
                 "name": {
                     "type": "text",
                     "value": "numberinput1"
@@ -148,12 +151,17 @@
                 "prompt": {
                     "type": "text",
                     "value": "numberinput1"
+                },
+                "type": {
+                    "type": "text",
+                    "value": "int"
                 }
             },
             "id": "sw-576",
-            "type": "input"
+            "name": "input",
+            "type": "module"
         },
-        {
+        "sw-580": {
             "conf": {
                 "debug": {
                     "type": "text",
@@ -181,9 +189,10 @@
                 }
             },
             "id": "sw-580",
-            "type": "input"
+            "name": "input",
+            "type": "module"
         },
-        {
+        "sw-584": {
             "conf": {
                 "debug": {
                     "type": "text",
@@ -207,9 +216,10 @@
                 }
             },
             "id": "sw-584",
-            "type": "input"
+            "name": "input",
+            "type": "module"
         },
-        {
+        "sw-588": {
             "conf": {
                 "debug": {
                     "type": "url",
@@ -218,10 +228,6 @@
                 "default": {
                     "type": "url",
                     "value": "file://riko/data/example.html"
-                },
-                "type": {
-                    "type": "text",
-                    "value": "url"
                 },
                 "name": {
                     "type": "text",
@@ -234,12 +240,17 @@
                 "prompt": {
                     "type": "text",
                     "value": "urlinput1"
+                },
+                "type": {
+                    "type": "text",
+                    "value": "url"
                 }
             },
             "id": "sw-588",
-            "type": "input"
+            "name": "input",
+            "type": "module"
         },
-        {
+        "sw-592": {
             "conf": {
                 "author": {
                     "terminal": "author",
@@ -298,357 +309,15 @@
                 }
             },
             "id": "sw-592",
-            "type": "rssitembuilder"
+            "name": "rssitembuilder",
+            "type": "module"
         }
-    ],
-    "terminaldata": [
-        {
-            "data": {
-                "_attr": {
-                    "day": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "day_of_week": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "hour": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "minute": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "month": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "second": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "timezone": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "utime": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "year": {
-                        "_count": "1",
-                        "_type": "number"
-                    }
-                },
-                "_type": "datetime"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-565"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "city": {
-                        "_type": "blank"
-                    },
-                    "country": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "lat": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "lon": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "postal": {
-                        "_type": "blank"
-                    },
-                    "quality": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "state": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "street": {
-                        "_type": "blank"
-                    }
-                },
-                "_type": "location"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-572"
-        },
-        {
-            "data": {
-                "_count": "1",
-                "_type": "number"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-576"
-        },
-        {
-            "data": {
-                "_count": "1",
-                "_type": "text"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-580"
-        },
-        {
-            "data": {
-                "_count": "1",
-                "_type": "text"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-584"
-        },
-        {
-            "data": {
-                "_count": "1",
-                "_type": "url"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-588"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "author": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "description": {
-                        "_attr": {
-                            "city": {
-                                "_type": "blank"
-                            },
-                            "country": {
-                                "_count": "1",
-                                "_type": "text"
-                            },
-                            "lat": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "lon": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "postal": {
-                                "_type": "blank"
-                            },
-                            "quality": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "state": {
-                                "_count": "1",
-                                "_type": "text"
-                            },
-                            "street": {
-                                "_type": "blank"
-                            }
-                        },
-                        "_type": "location"
-                    },
-                    "guid": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "link": {
-                        "_count": "1",
-                        "_type": "url"
-                    },
-                    "pubDate": {
-                        "_attr": {
-                            "day": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "1",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "1",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "value": {
-                                "_count": "1",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "1",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "1",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:title": {
-                        "_count": "1",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-592"
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-592",
+            "port": "out"
         }
-    ],
-    "wires": [
-        {
-            "id": "_w0",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-565"
-            },
-            "tgt": {
-                "id": "pubdate",
-                "moduleid": "sw-592"
-            }
-        },
-        {
-            "id": "_w7",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-572"
-            },
-            "tgt": {
-                "id": "description",
-                "moduleid": "sw-592"
-            }
-        },
-        {
-            "id": "_w1",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-576"
-            },
-            "tgt": {
-                "id": "guid",
-                "moduleid": "sw-592"
-            }
-        },
-        {
-            "id": "_w2",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-580"
-            },
-            "tgt": {
-                "id": "author",
-                "moduleid": "sw-592"
-            }
-        },
-        {
-            "id": "_w3",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-584"
-            },
-            "tgt": {
-                "id": "title",
-                "moduleid": "sw-592"
-            }
-        },
-        {
-            "id": "_w4",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-588"
-            },
-            "tgt": {
-                "id": "link",
-                "moduleid": "sw-592"
-            }
-        },
-        {
-            "id": "_w5",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-592"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
-        }
-    ]
+    },
+    "version": "2"
 }

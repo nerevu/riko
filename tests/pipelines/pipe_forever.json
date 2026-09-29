@@ -1,34 +1,24 @@
 {
-    "layout": [
+    "edges": [
         {
-            "id": "sw-1",
-            "xy": [
-                100,
-                60
-            ]
-        },
-        {
-            "id": "sw-2",
-            "xy": [
-                100,
-                180
-            ]
-        },
-        {
-            "id": "_OUTPUT",
-            "xy": [
-                100,
-                300
-            ]
+            "source": {
+                "node": "sw-1",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-2",
+                "port": "in"
+            },
+            "type": "stream"
         }
     ],
-    "modules": [
-        {
-            "conf": {},
+    "nodes": {
+        "sw-1": {
             "id": "sw-1",
-            "type": "forever"
+            "name": "forever",
+            "type": "module"
         },
-        {
+        "sw-2": {
             "conf": {
                 "count": {
                     "type": "int",
@@ -36,37 +26,15 @@
                 }
             },
             "id": "sw-2",
-            "type": "truncate"
-        },
-        {
-            "conf": {},
-            "id": "_OUTPUT",
-            "type": "output"
+            "name": "truncate",
+            "type": "module"
         }
-    ],
-    "terminaldata": [],
-    "wires": [
-        {
-            "id": "_w1",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-1"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-2"
-            }
-        },
-        {
-            "id": "_w2",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-2"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-2",
+            "port": "out"
         }
-    ]
+    },
+    "version": "2"
 }

@@ -926,13 +926,15 @@ class Embed(TypedDict):
     name: str
 
 
-class LoopConf(TypedDict, total=False):
-    embed: Required[Embed]
-    emit: bool
-    count: CountValues
+class LoopConf(TypedDict):
+    """The declarative configuration of a loop: the embed it runs per item."""
+
+    embed: Embed
 
 
-class LoopOptions(TypedDict, total=False):
+class ModuleOptions(TypedDict, total=False):
+    """Call options forwarded to a module callable alongside its configuration."""
+
     emit: bool
     assign: str
     field: str
@@ -965,6 +967,7 @@ __all__ = [
     "ModuleCategory",
     "ModuleClass",
     "ModuleMetadata",
+    "ModuleOptions",
     "ModuleSubtype",
     "ModuleSubtypes",
     "ModuleType",

@@ -10,7 +10,6 @@ or a codegen regression — fails here.
 
 from __future__ import annotations
 
-from difflib import unified_diff
 from json import loads
 from keyword import iskeyword
 from typing import TYPE_CHECKING
@@ -35,6 +34,7 @@ from riko.types._compiler import (
     LoopModule,
     PipeDag,
     PipeDef,
+    PipeId,
     PipeModule,
 )
 from riko.types.modules import ItemBuilderRawConf, Param, TruncateRawConf
@@ -43,68 +43,67 @@ from tests import TESTS_DIR, async_test
 if TYPE_CHECKING:
     from riko.types._streams import Item
 
-PIPELINE_DIR = TESTS_DIR / "pipelines"
-PYPIPELINE_DIR = TESTS_DIR / "pypipelines"
 DAG_DIR = TESTS_DIR / "dags"
 
-FOREVER = PipeDef(
-    {
-        "modules": [
-            PipeModule({"id": "sw-1", "type": "forever", "conf": {}}),
-            PipeModule(
+
+def _itembuilder_src(title: str, module_id: str = "sw-1") -> PipeModule:
+    """Builds a single-item itembuilder source module carrying ``title``."""
+    return PipeModule(
+        {
+            "id": module_id,
+            "type": "itembuilder",
+            "conf": ItemBuilderRawConf(
                 {
-                    "id": "sw-2",
-                    "type": "truncate",
-                    "conf": TruncateRawConf({"count": {"type": "int", "value": "2"}}),
+                    "attrs": Param(
+                        {
+                            "key": {"type": "text", "value": "title"},
+                            "value": {"type": "text", "value": title},
+                        }
+                    )
                 }
             ),
-            PipeModule({"id": "_OUTPUT", "type": "output", "conf": {}}),
-        ],
-        "wires": [get_wire("sw-1", "sw-2", "_w1"), get_wire("sw-2", "_OUTPUT", "_w2")],
-    }
-)
+        }
+    )
+
+
+def _forever_def(count: str) -> PipeDef:
+    """Builds an endless source truncated to ``count`` items."""
+    return PipeDef(
+        {
+            "modules": [
+                PipeModule({"id": "sw-1", "type": "forever", "conf": {}}),
+                PipeModule(
+                    {
+                        "id": "sw-2",
+                        "type": "truncate",
+                        "conf": TruncateRawConf(
+                            {"count": {"type": "int", "value": count}}
+                        ),
+                    }
+                ),
+                PipeModule({"id": "_OUTPUT", "type": "output", "conf": {}}),
+            ],
+            "wires": [
+                get_wire("sw-1", "sw-2", "_w1"),
+                get_wire("sw-2", "_OUTPUT", "_w2"),
+            ],
+        }
+    )
+
+
+FOREVER = _forever_def("2")
 
 ITEMBUILDER = PipeDef(
     {
         "modules": [
-            PipeModule(
-                {
-                    "id": "sw-1",
-                    "type": "itembuilder",
-                    "conf": ItemBuilderRawConf(
-                        {
-                            "attrs": Param(
-                                {
-                                    "key": {"type": "text", "value": "title"},
-                                    "value": {"type": "text", "value": "hello"},
-                                }
-                            )
-                        }
-                    ),
-                }
-            ),
+            _itembuilder_src("hello"),
             PipeModule({"id": "_OUTPUT", "type": "output", "conf": {}}),
         ],
         "wires": [get_wire("sw-1", "_OUTPUT", "_w1")],
     }
 )
 
-ITEMBUILDER_SRC = PipeModule(
-    {
-        "id": "sw-1",
-        "type": "itembuilder",
-        "conf": ItemBuilderRawConf(
-            {
-                "attrs": Param(
-                    {
-                        "key": {"type": "text", "value": "title"},
-                        "value": {"type": "text", "value": "a b c"},
-                    }
-                )
-            }
-        ),
-    }
-)
+ITEMBUILDER_SRC = _itembuilder_src("a b c")
 
 # A canonical direct-processor node with a first-class top-level `count`.
 DIRECT_COUNT = PipeDef(
@@ -177,14 +176,46 @@ def _compile_and_run(pipe_def, pipe_name) -> list[Item]:
     return _run_executor(parse_pipe_def(pipe_def, pipe_name))
 
 
-def _compact_loop_def(loop_module: PipeModule) -> PipeDef:
+def _compact_loop_def(
+    loop_module: PipeModule, source: PipeModule = ITEMBUILDER_SRC
+) -> PipeDef:
     modules = [
-        ITEMBUILDER_SRC,
+        source,
         loop_module,
         PipeModule({"id": "_OUTPUT", "type": "output", "conf": {}}),
     ]
     wires = [get_wire("sw-1", "sw-2", "_w1"), get_wire("sw-2", "_OUTPUT", "_w2")]
     return PipeDef({"modules": modules, "wires": wires})
+
+
+LOOP_SUBPIPE = _compact_loop_def(
+    LoopModule(
+        {
+            "id": "sw-2",
+            "type": "loop",
+            "conf": {},
+            "embed": {"id": "sw-3", "type": PipeId("pipe:shout")},
+            "count": "all",
+            "emit": True,
+        }
+    ),
+    _itembuilder_src("hello"),
+)
+
+LOOP_ASSIGN = _compact_loop_def(
+    LoopModule(
+        {
+            "id": "sw-2",
+            "type": "loop",
+            "conf": {"delimiter": {"type": "text", "value": " "}},
+            "embed": {"id": "sw-3", "type": "tokenizer"},
+            "count": "all",
+            "assign": "tokens",
+            "emit": False,
+            "field": "title",
+        }
+    )
+)
 
 
 @pytest.mark.parametrize("pipe_name", list(PIPES))
@@ -205,22 +236,6 @@ def test_direct_count_node_applies_count():
     assert _compile_and_run(DIRECT_COUNT, "pipe_gen_direct_count") == [{"content": "a"}]
 
 
-def _codegen_pairs():
-    pipe_files = sorted(PIPELINE_DIR.glob("pipe_*.json"))
-    exists = lambda pfile: (PYPIPELINE_DIR / f"{pfile.stem}.py").exists()
-    return list(filter(exists, pipe_files))
-
-
-@pytest.mark.parametrize("pipe_name", _codegen_pairs())
-def test_codegen_matches_expected_file(pipe_name):
-    pipe_def = loads((PIPELINE_DIR / f"{pipe_name.stem}.json").read_text())
-    expected = (PYPIPELINE_DIR / f"{pipe_name.stem}.py").read_text()
-    source = stringify_pipe(parse_pipe_def(pipe_def, pipe_name.stem))
-    args = (expected.splitlines(keepends=True), source.splitlines(keepends=True))
-    diff = "".join(unified_diff(*args, "expected", "got"))
-    assert not diff, f"Generated source for {pipe_name.stem} diverged:\n{diff}"
-
-
 @pytest.mark.parametrize("case", list(MALFORMED))
 def test_malformed_pipeline_syntax(case):
     pipe_def, expected = MALFORMED[case]
@@ -230,10 +245,10 @@ def test_malformed_pipeline_syntax(case):
 
 
 def test_compile_wraps_parse_and_stringify():
-    pipe_def = loads((PIPELINE_DIR / "pipe_gigs.json").read_text())
-    expected = stringify_pipe(parse_pipe_def(pipe_def, "pipe_gigs"))
+    name = "pipe_gen_itembuilder"
+    expected = stringify_pipe(parse_pipe_def(ITEMBUILDER, name))
 
-    assert compile_pipe(pipe_def, "pipe_gigs") == expected
+    assert compile_pipe(ITEMBUILDER, name) == expected
 
 
 def test_unresolved_subpipeline_raises():
@@ -254,7 +269,7 @@ def test_convert_dag_appends_output():
 
 def test_convert_dag_matches_full_pipeline():
     dag = loads((DAG_DIR / "pipe_forever.json").read_text())
-    full = loads((PIPELINE_DIR / "pipe_forever.json").read_text())
+    full = _forever_def("3")
     converted = _compile_and_run(build_pipe_def(dag), "pipe_forever")
     expected = _compile_and_run(full, "pipe_forever")
     assert converted == expected
@@ -344,13 +359,22 @@ def test_graph_index_indexes_wire_ports():
 
 
 def test_graph_index_orders_embed_before_its_loop():
-    # sw_710 is an embedded module owned by the loop sw_688; the embed relationship
-    # keeps the embed ahead of its loop even though no wire connects them.
-    stem = "pipe_1166de33b0ea6936d96808717355beaa"
-    pipe_def = loads((PIPELINE_DIR / f"{stem}.json").read_text())
-    order = parse_pipe_def(pipe_def, "x")["graph"].order
+    # sw-9 is embedded in the loop sw-2; the embed relationship keeps the embed
+    # ahead of its loop even though no wire connects them and its id sorts later.
+    loop = LoopModule(
+        {
+            "id": "sw-2",
+            "type": "loop",
+            "conf": {"delimiter": {"type": "text", "value": " "}},
+            "embed": {"id": "sw-9", "type": "tokenizer"},
+            "count": "all",
+            "emit": True,
+            "field": "title",
+        }
+    )
+    order = parse_pipe_def(_compact_loop_def(loop), "x")["graph"].order
 
-    assert order.index("sw_710") < order.index("sw_688")
+    assert order.index("sw_9") < order.index("sw_2")
 
 
 @async_test
@@ -360,13 +384,13 @@ async def test_async_codegen_matches_sync():
 
     The async path emits a runnable AnyIO pipeline.
     """
-    pipe_def = loads((PIPELINE_DIR / "pipe_gigs.json").read_text())
-    async_src = compile_pipe(pipe_def, "pipe_gigs", is_async=True)
+    name = "pipe_gen_itembuilder"
+    async_src = compile_pipe(ITEMBUILDER, name, is_async=True)
     async_ns: dict = {}
     exec(async_src, async_ns)
     async_result = [item async for item in async_ns["async_pipe"]()]
 
-    sync_src = compile_pipe(pipe_def, "pipe_gigs", is_async=False)
+    sync_src = compile_pipe(ITEMBUILDER, name, is_async=False)
     sync_ns: dict = {}
     exec(sync_src, sync_ns)
     sync_result = list(sync_ns["pipe"]())
@@ -424,31 +448,26 @@ class TestNecessaryLoopFixtures:
     """
     Keep non-collapsible loops in compact-loop form.
 
-    These two cases remain compact loops backed by JSON fixtures.
+    These two cases remain compact loops.
     """
 
     def test_subpipe_loop_via_top_level_embed(self):
         # A `pipe:` sub-pipeline embed (the top-level EmbedRef confarg) can't be
-        # inlined, so it stays a loop and runs once per parent. This is the only
-        # fixture that *executes* a pipe:-embed inside a loop (b3d43 raises on an
-        # unsupported leaf; c1cfa's pipe: is a top-level node, not looped).
-        pipe_def = loads((PIPELINE_DIR / "pipe_loop_subpipe.json").read_text())
-        assert _compile_and_run(pipe_def, "pipe_loop_subpipe") == [
+        # inlined, so it stays a loop and runs once per parent.
+        assert _compile_and_run(LOOP_SUBPIPE, "pipe_loop_subpipe") == [
             {"title": "hello", "strconcat": "hello!"}
         ]
 
     def test_subpipe_loop_codegen_imports_embed(self):
         # codegen must import the sub-pipeline used as a loop embed
-        pipe_def = loads((PIPELINE_DIR / "pipe_loop_subpipe.json").read_text())
-        source = stringify_pipe(parse_pipe_def(pipe_def, "pipe_loop_subpipe"))
+        source = stringify_pipe(parse_pipe_def(LOOP_SUBPIPE, "pipe_loop_subpipe"))
         assert "import pipe as pipe_shout" in source
         assert "embed=pipe_shout" in source
 
     def test_count_all_assign_yields_per_parent_copies(self):
         # count=all + assign keeps one preserved-parent copy per child result — a
         # direct node would list-wrap into a single item, so this stays a loop.
-        pipe_def = loads((PIPELINE_DIR / "pipe_loop_assign.json").read_text())
-        assert _compile_and_run(pipe_def, "pipe_loop_assign") == [
+        assert _compile_and_run(LOOP_ASSIGN, "pipe_loop_assign") == [
             {"title": "a b c", "tokens": {"content": "a"}},
             {"title": "a b c", "tokens": {"content": "b"}},
             {"title": "a b c", "tokens": {"content": "c"}},

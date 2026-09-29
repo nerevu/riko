@@ -1,50 +1,81 @@
 {
-    "layout": [
+    "edges": [
         {
-            "id": "sw-261",
-            "xy": [
-                "309",
-                "648"
-            ]
+            "source": {
+                "node": "sw-507",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-303",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-443",
-            "xy": [
-                "267",
-                "299"
-            ]
+            "source": {
+                "node": "sw-327",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-507",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-507",
-            "xy": [
-                "177",
-                "-188"
-            ]
-        },
-        {
-            "id": "sw-327",
-            "xy": [
-                "248",
-                "-349"
-            ]
-        },
-        {
-            "id": "sw-303",
-            "xy": [
-                "255",
-                "76"
-            ]
+            "source": {
+                "node": "sw-303",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-443",
+                "port": "in"
+            },
+            "type": "stream"
         }
     ],
-    "modules": [
-        {
-            "conf": null,
-            "id": "sw-261",
-            "type": "output"
+    "nodes": {
+        "sw-303": {
+            "conf": {
+                "rule": {
+                    "field": {
+                        "type": "text",
+                        "value": "href"
+                    },
+                    "newval": {
+                        "type": "text",
+                        "value": "link"
+                    },
+                    "op": {
+                        "type": "text",
+                        "value": "rename"
+                    }
+                }
+            },
+            "id": "sw-303",
+            "name": "rename",
+            "options": {
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
         },
-        {
-            "id": "sw-443",
-            "type": "rssitembuilder",
+        "sw-327": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/edition.cnn.html"
+                },
+                "xpath": {
+                    "type": "text",
+                    "value": "//a[img]"
+                }
+            },
+            "id": "sw-327",
+            "name": "xpathfetchpage",
+            "type": "module"
+        },
+        "sw-443": {
             "conf": {
                 "author": {
                     "type": "text",
@@ -99,117 +130,51 @@
                     "type": "text"
                 }
             },
-            "emit": true,
-            "count": "all"
+            "id": "sw-443",
+            "name": "rssitembuilder",
+            "options": {
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
         },
-        {
+        "sw-507": {
+            "conf": {
+                "embed": {
+                    "conf": {
+                        "part": [
+                            {
+                                "type": "text",
+                                "value": "<img src=\""
+                            },
+                            {
+                                "subkey": "img.src",
+                                "type": "text"
+                            },
+                            {
+                                "type": "text",
+                                "value": "\">"
+                            }
+                        ]
+                    },
+                    "name": "strconcat"
+                }
+            },
             "id": "sw-507",
-            "type": "loop",
-            "conf": {
-                "part": [
-                    {
-                        "type": "text",
-                        "value": "<img src=\""
-                    },
-                    {
-                        "subkey": "img.src",
-                        "type": "text"
-                    },
-                    {
-                        "type": "text",
-                        "value": "\">"
-                    }
-                ]
+            "name": "loop",
+            "options": {
+                "assign": "description",
+                "count": "all",
+                "emit": false
             },
-            "embed": {
-                "id": "sw-515",
-                "type": "strconcat"
-            },
-            "assign": "description",
-            "emit": false,
-            "count": "all"
-        },
-        {
-            "conf": {
-                "URL": {
-                    "type": "url",
-                    "value": "file://riko/data/edition.cnn.html"
-                },
-                "xpath": {
-                    "type": "text",
-                    "value": "//a[img]"
-                }
-            },
-            "id": "sw-327",
-            "type": "xpathfetchpage"
-        },
-        {
-            "id": "sw-303",
-            "type": "rename",
-            "conf": {
-                "RULE": {
-                    "field": {
-                        "type": "text",
-                        "value": "href"
-                    },
-                    "newval": {
-                        "type": "text",
-                        "value": "link"
-                    },
-                    "op": {
-                        "type": "text",
-                        "value": "rename"
-                    }
-                }
-            },
-            "emit": true,
-            "count": "all"
+            "type": "module"
         }
-    ],
-    "wires": [
-        {
-            "id": "_w0",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-443"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-261"
-            }
-        },
-        {
-            "id": "_w5",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-507"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-303"
-            }
-        },
-        {
-            "id": "_w3",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-327"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-507"
-            }
-        },
-        {
-            "id": "_w7",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-303"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-443"
-            }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-443",
+            "port": "out"
         }
-    ]
+    },
+    "version": "2"
 }

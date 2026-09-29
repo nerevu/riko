@@ -185,11 +185,122 @@ def test_write_module_without_format_defaults_to_none():
 
 def test_module_extras_fold_into_conf():
     spec = migrate_v1_to_v2(
-        {"modules": [{"id": "c", "type": "count", "conf": {"x": 1}, "emit": True}]}
+        {"modules": [{"id": "c", "type": "count", "conf": {"x": 1}, "bogus": True}]}
     )
     node = spec.nodes["c"]
     assert isinstance(node, ModuleNode)
-    assert node.conf == {"emit": True, "x": 1}
+    assert node.conf == {"bogus": True, "x": 1}
+
+
+def test_module_call_options_become_node_options():
+    spec = migrate_v1_to_v2(
+        {
+            "modules": [
+                {
+                    "id": "c",
+                    "type": "count",
+                    "conf": {"x": 1},
+                    "emit": True,
+                    "assign": "total",
+                    "field": "title",
+                    "count": "first",
+                }
+            ]
+        }
+    )
+    node = spec.nodes["c"]
+    assert isinstance(node, ModuleNode)
+    assert node.conf == {"x": 1}
+    assert node.options == {
+        "emit": True,
+        "assign": "total",
+        "field": "title",
+        "count": "first",
+    }
+
+
+def test_call_option_does_not_collide_with_a_same_named_conf_key():
+    spec = migrate_v1_to_v2(
+        {
+            "modules": [
+                {
+                    "id": "t",
+                    "type": "truncate",
+                    "conf": {"count": {"value": 3}},
+                    "count": "first",
+                }
+            ]
+        }
+    )
+    node = spec.nodes["t"]
+    assert isinstance(node, ModuleNode)
+    assert node.conf == {"count": {"value": 3}}
+    assert node.options == {"count": "first"}
+
+
+def test_loop_embed_and_its_configuration_become_the_nested_embed():
+    spec = migrate_v1_to_v2(
+        {
+            "modules": [
+                {
+                    "id": "sw-2",
+                    "type": "loop",
+                    "embed": {"id": "sw-3", "type": "tokenizer"},
+                    "conf": {"delimiter": {"value": ","}},
+                    "count": "first",
+                    "assign": "words",
+                    "emit": True,
+                    "field": "title",
+                }
+            ]
+        }
+    )
+    node = spec.nodes["sw-2"]
+    assert isinstance(node, ModuleNode)
+    assert node.conf == {
+        "embed": {"name": "tokenizer", "conf": {"delimiter": {"value": ","}}}
+    }
+    assert node.options == {
+        "count": "first",
+        "assign": "words",
+        "emit": True,
+        "field": "title",
+    }
+
+
+def test_loop_embedded_subpipe_keeps_its_prefixed_name():
+    spec = migrate_v1_to_v2(
+        {
+            "modules": [
+                {
+                    "id": "sw-2",
+                    "type": "loop",
+                    "embed": {"id": "sw-3", "type": "pipe:shout"},
+                    "conf": {},
+                }
+            ]
+        }
+    )
+    node = spec.nodes["sw-2"]
+    assert isinstance(node, ModuleNode)
+    assert node.conf == {"embed": {"name": "pipe:shout", "conf": {}}}
+
+
+@pytest.mark.parametrize(
+    ("v1_port", "canonical"),
+    [("1_URL", "in:_1_URL"), ("PARAM_5_value", "in:PARAM_5_value")],
+)
+def test_wire_target_port_is_sanitized_like_a_module_terminal(v1_port, canonical):
+    spec = migrate_v1_to_v2(
+        {
+            "modules": [
+                {"id": "a", "type": "fetch", "conf": {}},
+                {"id": "b", "type": "urlbuilder", "conf": {}},
+            ],
+            "wires": [_wire("_w1", "a", "b", tgt_port=v1_port)],
+        }
+    )
+    assert spec.edges[0].target == Endpoint("b", canonical)
 
 
 def test_uppercase_conf_keys_are_lowered():

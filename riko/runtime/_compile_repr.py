@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from functools import total_ordering
 from typing import TYPE_CHECKING, cast
 
-from riko.types._compiler import LoopOptionValues
+from riko.types._compiler import ModuleOptionValues
 from riko.types._pipeline import StepValue
 from riko.types.modules import AnyModuleRawConf, RawConfValues, Value
 
@@ -42,7 +42,9 @@ class Id:
             return False
 
 
-type PyKwargValue = AnyModuleRawConf | LoopOptionValues | Context | list[StepValue | Id]
+type PyKwargValue = (
+    AnyModuleRawConf | ModuleOptionValues | Context | list[StepValue | Id]
+)
 
 
 def repr_arg(

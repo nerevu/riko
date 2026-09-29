@@ -173,7 +173,7 @@ class PipeDef(TypedDict):
 
 
 type PipeDefLike = PipeDef | Mapping[str, object]
-type LoopOptionValues = bool | str | CountValues
+type ModuleOptionValues = bool | str | CountValues
 
 
 @dataclass(frozen=True, slots=True)

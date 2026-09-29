@@ -9,6 +9,10 @@ from importlib import import_module
 import pytest
 
 from riko.base._paths import ROOT_DIR
+from riko.execution._execution import SyncExecution
+from riko.execution.context import Context
+from riko.runtime._execution_plan import build_execution_plan
+from riko.runtime._serialize import parse_workflow
 from tests import async_test
 
 
@@ -171,9 +175,15 @@ class TestExamples:
         ],
     )
     def test_compiled_pipe(self, pipe_name, expected):
-        """Tests the JSON-compiled example pipes produce the expected stream."""
-        module = import_module(f"examples.pypipelines.{pipe_name}")
-        assert list(module.pipe(test=True)) == expected
+        """Tests the example workflow documents produce the expected stream."""
+        document = ROOT_DIR / "examples" / "pipelines" / f"{pipe_name}.json"
+        spec = parse_workflow(document.read_text())
+        items = []
+
+        with SyncExecution(context=Context(test=True)) as execution:
+            items = list(execution.run(build_execution_plan(spec)))
+
+        assert items == expected
 
     @pytest.mark.parametrize(
         ("script", "expected"),
