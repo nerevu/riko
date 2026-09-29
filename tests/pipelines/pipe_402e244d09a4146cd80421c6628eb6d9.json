@@ -1,67 +1,55 @@
 {
-    "layout": [
+    "edges": [
         {
-            "id": "sw-572",
-            "xy": [
-                278,
-                99
-            ]
+            "source": {
+                "node": "sw-572",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-587",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "_OUTPUT",
-            "xy": [
-                511,
-                483
-            ]
-        },
-        {
-            "id": "sw-587",
-            "xy": [
-                279,
-                200
-            ]
-        },
-        {
-            "id": "sw-598",
-            "xy": [
-                365,
-                306
-            ]
+            "source": {
+                "node": "sw-587",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-598",
+                "port": "in"
+            },
+            "type": "stream"
         }
     ],
-    "modules": [
-        {
+    "nodes": {
+        "sw-572": {
             "conf": {
-                "URL": {
-                    "type": "url",
-                    "value": "file://riko/data/www.bbc.co.uk_programmes_b006mvlc_episodes_player.xml"
-                },
                 "path": {
                     "type": "text",
                     "value": "episode"
+                },
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/www.bbc.co.uk_programmes_b006mvlc_episodes_player.xml"
                 }
             },
             "id": "sw-572",
-            "type": "fetchdata"
+            "name": "fetchdata",
+            "type": "module"
         },
-        {
-            "conf": {},
-            "id": "_OUTPUT",
-            "type": "output"
-        },
-        {
-            "id": "sw-587",
-            "type": "rename",
+        "sw-587": {
             "conf": {
-                "RULE": [
+                "rule": [
                     {
-                        "field": {
-                            "type": "text",
-                            "value": "programme.title"
-                        },
                         "copy": {
                             "type": "bool",
                             "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "programme.title"
                         },
                         "newval": {
                             "type": "text",
@@ -69,13 +57,13 @@
                         }
                     },
                     {
-                        "field": {
-                            "type": "text",
-                            "value": "programme.pid"
-                        },
                         "copy": {
                             "type": "bool",
                             "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "programme.pid"
                         },
                         "newval": {
                             "type": "text",
@@ -83,13 +71,13 @@
                         }
                     },
                     {
-                        "field": {
-                            "type": "text",
-                            "value": "programme.short_synopsis"
-                        },
                         "copy": {
                             "type": "bool",
                             "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "programme.short_synopsis"
                         },
                         "newval": {
                             "type": "text",
@@ -98,15 +86,18 @@
                     }
                 ]
             },
-            "assign": "loop:rename",
-            "emit": true,
-            "count": "all"
+            "id": "sw-587",
+            "name": "rename",
+            "options": {
+                "assign": "loop:rename",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
         },
-        {
-            "id": "sw-598",
-            "type": "regex",
+        "sw-598": {
             "conf": {
-                "RULE": [
+                "rule": [
                     {
                         "field": {
                             "type": "text",
@@ -123,622 +114,21 @@
                     }
                 ]
             },
-            "assign": "loop:regex",
-            "emit": true,
-            "count": "all"
+            "id": "sw-598",
+            "name": "regex",
+            "options": {
+                "assign": "loop:regex",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
         }
-    ],
-    "terminaldata": [
-        {
-            "data": {
-                "_attr": {
-                    "programme": {
-                        "_attr": {
-                            "actual_start": {
-                                "_count": "6",
-                                "_type": "datetime"
-                            },
-                            "available_until": {
-                                "_count": "6",
-                                "_type": "datetime"
-                            },
-                            "display_titles": {
-                                "_attr": {
-                                    "subtitle": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    },
-                                    "title": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "duration": {
-                                "_count": "6",
-                                "_type": "number"
-                            },
-                            "is_available_mediaset_pc_sd": {
-                                "_count": "6",
-                                "_type": "number"
-                            },
-                            "is_legacy_media": {
-                                "_count": "6",
-                                "_type": "number"
-                            },
-                            "media": {
-                                "_attr": {
-                                    "availability": {
-                                        "_count": "6",
-                                        "_type": "datetime"
-                                    },
-                                    "expires": {
-                                        "_count": "6",
-                                        "_type": "datetime"
-                                    },
-                                    "format": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "ownership": {
-                                "_attr": {
-                                    "service": {
-                                        "_attr": {
-                                            "id": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "key": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "title": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "type": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            }
-                                        },
-                                        "_type": ""
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "pid": {
-                                "_count": "6",
-                                "_type": "text"
-                            },
-                            "position": {
-                                "_count": "4",
-                                "_type": "number"
-                            },
-                            "programme": {
-                                "_attr": {
-                                    "expected_child_count": {
-                                        "_count": "3",
-                                        "_type": "number"
-                                    },
-                                    "pid": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    },
-                                    "position": {
-                                        "_count": "4",
-                                        "_type": "number"
-                                    },
-                                    "programme": {
-                                        "_attr": {
-                                            "expected_child_count": {
-                                                "_type": "blank"
-                                            },
-                                            "ownership": {
-                                                "_attr": {
-                                                    "service": {
-                                                        "_attr": {
-                                                            "id": {
-                                                                "_count": "6",
-                                                                "_type": "text"
-                                                            },
-                                                            "key": {
-                                                                "_count": "6",
-                                                                "_type": "text"
-                                                            },
-                                                            "title": {
-                                                                "_count": "6",
-                                                                "_type": "text"
-                                                            },
-                                                            "type": {
-                                                                "_count": "6",
-                                                                "_type": "text"
-                                                            }
-                                                        },
-                                                        "_type": ""
-                                                    }
-                                                },
-                                                "_type": ""
-                                            },
-                                            "pid": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "position": {
-                                                "_type": "blank"
-                                            },
-                                            "title": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "type": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            }
-                                        },
-                                        "_type": ""
-                                    },
-                                    "title": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    },
-                                    "type": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "short_synopsis": {
-                                "_count": "6",
-                                "_type": "text"
-                            },
-                            "title": {
-                                "_count": "6",
-                                "_type": "text"
-                            },
-                            "type": {
-                                "_count": "6",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-572"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "6",
-                        "_type": "text"
-                    },
-                    "link": {
-                        "_count": "6",
-                        "_type": "text"
-                    },
-                    "programme": {
-                        "_attr": {
-                            "actual_start": {
-                                "_count": "6",
-                                "_type": "datetime"
-                            },
-                            "available_until": {
-                                "_count": "6",
-                                "_type": "datetime"
-                            },
-                            "display_titles": {
-                                "_attr": {
-                                    "subtitle": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    },
-                                    "title": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "duration": {
-                                "_count": "6",
-                                "_type": "number"
-                            },
-                            "is_available_mediaset_pc_sd": {
-                                "_count": "6",
-                                "_type": "number"
-                            },
-                            "is_legacy_media": {
-                                "_count": "6",
-                                "_type": "number"
-                            },
-                            "media": {
-                                "_attr": {
-                                    "availability": {
-                                        "_count": "6",
-                                        "_type": "datetime"
-                                    },
-                                    "expires": {
-                                        "_count": "6",
-                                        "_type": "datetime"
-                                    },
-                                    "format": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "ownership": {
-                                "_attr": {
-                                    "service": {
-                                        "_attr": {
-                                            "id": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "key": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "title": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "type": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            }
-                                        },
-                                        "_type": ""
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "pid": {
-                                "_count": "6",
-                                "_type": "text"
-                            },
-                            "position": {
-                                "_count": "4",
-                                "_type": "number"
-                            },
-                            "programme": {
-                                "_attr": {
-                                    "expected_child_count": {
-                                        "_count": "3",
-                                        "_type": "number"
-                                    },
-                                    "pid": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    },
-                                    "position": {
-                                        "_count": "4",
-                                        "_type": "number"
-                                    },
-                                    "programme": {
-                                        "_attr": {
-                                            "expected_child_count": {
-                                                "_type": "blank"
-                                            },
-                                            "ownership": {
-                                                "_attr": {
-                                                    "service": {
-                                                        "_attr": {
-                                                            "id": {
-                                                                "_count": "6",
-                                                                "_type": "text"
-                                                            },
-                                                            "key": {
-                                                                "_count": "6",
-                                                                "_type": "text"
-                                                            },
-                                                            "title": {
-                                                                "_count": "6",
-                                                                "_type": "text"
-                                                            },
-                                                            "type": {
-                                                                "_count": "6",
-                                                                "_type": "text"
-                                                            }
-                                                        },
-                                                        "_type": ""
-                                                    }
-                                                },
-                                                "_type": ""
-                                            },
-                                            "pid": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "position": {
-                                                "_type": "blank"
-                                            },
-                                            "title": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "type": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            }
-                                        },
-                                        "_type": ""
-                                    },
-                                    "title": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    },
-                                    "type": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "short_synopsis": {
-                                "_count": "6",
-                                "_type": "text"
-                            },
-                            "title": {
-                                "_count": "6",
-                                "_type": "text"
-                            },
-                            "type": {
-                                "_count": "6",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "title": {
-                        "_count": "6",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-587"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "6",
-                        "_type": "text"
-                    },
-                    "link": {
-                        "_count": "6",
-                        "_type": "url"
-                    },
-                    "programme": {
-                        "_attr": {
-                            "actual_start": {
-                                "_count": "6",
-                                "_type": "datetime"
-                            },
-                            "available_until": {
-                                "_count": "6",
-                                "_type": "datetime"
-                            },
-                            "display_titles": {
-                                "_attr": {
-                                    "subtitle": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    },
-                                    "title": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "duration": {
-                                "_count": "6",
-                                "_type": "number"
-                            },
-                            "is_available_mediaset_pc_sd": {
-                                "_count": "6",
-                                "_type": "number"
-                            },
-                            "is_legacy_media": {
-                                "_count": "6",
-                                "_type": "number"
-                            },
-                            "media": {
-                                "_attr": {
-                                    "availability": {
-                                        "_count": "6",
-                                        "_type": "datetime"
-                                    },
-                                    "expires": {
-                                        "_count": "6",
-                                        "_type": "datetime"
-                                    },
-                                    "format": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "ownership": {
-                                "_attr": {
-                                    "service": {
-                                        "_attr": {
-                                            "id": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "key": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "title": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "type": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            }
-                                        },
-                                        "_type": ""
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "pid": {
-                                "_count": "6",
-                                "_type": "text"
-                            },
-                            "position": {
-                                "_count": "4",
-                                "_type": "number"
-                            },
-                            "programme": {
-                                "_attr": {
-                                    "expected_child_count": {
-                                        "_count": "3",
-                                        "_type": "number"
-                                    },
-                                    "pid": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    },
-                                    "position": {
-                                        "_count": "4",
-                                        "_type": "number"
-                                    },
-                                    "programme": {
-                                        "_attr": {
-                                            "expected_child_count": {
-                                                "_type": "blank"
-                                            },
-                                            "ownership": {
-                                                "_attr": {
-                                                    "service": {
-                                                        "_attr": {
-                                                            "id": {
-                                                                "_count": "6",
-                                                                "_type": "text"
-                                                            },
-                                                            "key": {
-                                                                "_count": "6",
-                                                                "_type": "text"
-                                                            },
-                                                            "title": {
-                                                                "_count": "6",
-                                                                "_type": "text"
-                                                            },
-                                                            "type": {
-                                                                "_count": "6",
-                                                                "_type": "text"
-                                                            }
-                                                        },
-                                                        "_type": ""
-                                                    }
-                                                },
-                                                "_type": ""
-                                            },
-                                            "pid": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "position": {
-                                                "_type": "blank"
-                                            },
-                                            "title": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            },
-                                            "type": {
-                                                "_count": "6",
-                                                "_type": "text"
-                                            }
-                                        },
-                                        "_type": ""
-                                    },
-                                    "title": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    },
-                                    "type": {
-                                        "_count": "6",
-                                        "_type": "text"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "short_synopsis": {
-                                "_count": "6",
-                                "_type": "text"
-                            },
-                            "title": {
-                                "_count": "6",
-                                "_type": "text"
-                            },
-                            "type": {
-                                "_count": "6",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "title": {
-                        "_count": "6",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-598"
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-598",
+            "port": "out"
         }
-    ],
-    "wires": [
-        {
-            "id": "_w1",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-572"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-587"
-            }
-        },
-        {
-            "id": "_w3",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-587"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-598"
-            }
-        },
-        {
-            "id": "_w5",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-598"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
-        }
-    ]
+    },
+    "version": "2"
 }

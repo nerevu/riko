@@ -1,1 +1,1 @@
-"""Runnable Python pipeline examples executed via ``run-pipe`` and the tests."""
+"""Holds hand-maintained Python pipeline probes runnable via ``run-pipe``."""

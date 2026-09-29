@@ -1,70 +1,62 @@
 {
-    "layout": [
+    "edges": [
         {
-            "id": "sw-565",
-            "xy": [
-                177,
-                85
-            ]
+            "source": {
+                "node": "sw-565",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-626",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "_OUTPUT",
-            "xy": [
-                910,
-                437
-            ]
+            "source": {
+                "node": "sw-592",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-636",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-592",
-            "xy": [
-                748,
-                180
-            ]
-        },
-        {
-            "id": "sw-626",
-            "xy": [
-                196,
-                184
-            ]
-        },
-        {
-            "id": "sw-636",
-            "xy": [
-                691,
-                335
-            ]
+            "source": {
+                "node": "sw-626",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in"
+            },
+            "type": "stream"
         }
     ],
-    "modules": [
-        {
+    "nodes": {
+        "sw-565": {
             "conf": {
-                "URL": {
+                "url": {
                     "type": "url",
                     "value": "file://riko/data/urlbuilder_feed.xml"
                 }
             },
             "id": "sw-565",
-            "type": "fetch"
+            "name": "fetch",
+            "type": "module"
         },
-        {
-            "conf": {},
-            "id": "_OUTPUT",
-            "type": "output"
-        },
-        {
-            "id": "sw-592",
-            "type": "rename",
+        "sw-592": {
             "conf": {
-                "RULE": [
+                "rule": [
                     {
-                        "field": {
-                            "type": "text",
-                            "value": "media:content.url"
-                        },
                         "copy": {
                             "type": "bool",
                             "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "media:content.url"
                         },
                         "newval": {
                             "type": "text",
@@ -73,68 +65,75 @@
                     }
                 ]
             },
-            "assign": "loop:rename",
-            "emit": true,
-            "count": "all"
+            "id": "sw-592",
+            "name": "rename",
+            "options": {
+                "assign": "loop:rename",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
         },
-        {
+        "sw-626": {
+            "conf": {
+                "embed": {
+                    "conf": {
+                        "base": {
+                            "type": "text",
+                            "value": "https://example.invalid/chart"
+                        },
+                        "param": [
+                            {
+                                "key": {
+                                    "type": "text",
+                                    "value": "cht"
+                                },
+                                "value": {
+                                    "type": "text",
+                                    "value": "qr"
+                                }
+                            },
+                            {
+                                "key": {
+                                    "type": "text",
+                                    "value": "chs"
+                                },
+                                "value": {
+                                    "type": "text",
+                                    "value": "200x200"
+                                }
+                            },
+                            {
+                                "key": {
+                                    "type": "text",
+                                    "value": "chl"
+                                },
+                                "value": {
+                                    "subkey": "link",
+                                    "type": "text"
+                                }
+                            }
+                        ],
+                        "path": {
+                            "type": "text",
+                            "value": ""
+                        }
+                    },
+                    "name": "urlbuilder"
+                }
+            },
             "id": "sw-626",
-            "type": "loop",
-            "conf": {
-                "PATH": {
-                    "type": "text",
-                    "value": ""
-                },
-                "BASE": {
-                    "type": "text",
-                    "value": "https://example.invalid/chart"
-                },
-                "PARAM": [
-                    {
-                        "value": {
-                            "type": "text",
-                            "value": "qr"
-                        },
-                        "key": {
-                            "type": "text",
-                            "value": "cht"
-                        }
-                    },
-                    {
-                        "value": {
-                            "type": "text",
-                            "value": "200x200"
-                        },
-                        "key": {
-                            "type": "text",
-                            "value": "chs"
-                        }
-                    },
-                    {
-                        "value": {
-                            "type": "text",
-                            "subkey": "link"
-                        },
-                        "key": {
-                            "type": "text",
-                            "value": "chl"
-                        }
-                    }
-                ]
+            "name": "loop",
+            "options": {
+                "assign": "media:content.url",
+                "count": "all",
+                "emit": false
             },
-            "embed": {
-                "id": "sw-634",
-                "type": "urlbuilder"
-            },
-            "assign": "media:content.url",
-            "emit": false,
-            "count": "all"
+            "type": "module"
         },
-        {
-            "id": "sw-636",
-            "type": "regex",
+        "sw-636": {
             "conf": {
-                "RULE": [
+                "rule": [
                     {
                         "field": {
                             "type": "text",
@@ -151,550 +150,21 @@
                     }
                 ]
             },
-            "assign": "loop:regex",
-            "emit": true,
-            "count": "all"
+            "id": "sw-636",
+            "name": "regex",
+            "options": {
+                "assign": "loop:regex",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
         }
-    ],
-    "terminaldata": [
-        {
-            "data": {
-                "_attr": {
-                    "category": {
-                        "_attr": {
-                            "content": {
-                                "_count": "11",
-                                "_type": "text"
-                            },
-                            "domain": {
-                                "_count": "11",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "comments": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "dc:creator": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "description": {
-                        "_type": "blank"
-                    },
-                    "guid": {
-                        "_attr": {
-                            "content": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "isPermaLink": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "link": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "pubDate": {
-                        "_count": "9",
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "permalink": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "value": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "9",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:title": {
-                        "_count": "9",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-565"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "category": {
-                        "_attr": {
-                            "content": {
-                                "_count": "11",
-                                "_type": "text"
-                            },
-                            "domain": {
-                                "_count": "11",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "comments": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "dc:creator": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "description": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "guid": {
-                        "_attr": {
-                            "content": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "isPermaLink": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "link": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "media:content": {
-                        "_attr": {
-                            "url": {
-                                "_count": "9",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "pubDate": {
-                        "_count": "9",
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "permalink": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "value": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "9",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:title": {
-                        "_count": "9",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-592"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "category": {
-                        "_attr": {
-                            "content": {
-                                "_count": "11",
-                                "_type": "text"
-                            },
-                            "domain": {
-                                "_count": "11",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "comments": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "dc:creator": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "description": {
-                        "_type": "blank"
-                    },
-                    "guid": {
-                        "_attr": {
-                            "content": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "isPermaLink": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "link": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "media:content": {
-                        "_attr": {
-                            "url": {
-                                "_count": "9",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "pubDate": {
-                        "_count": "9",
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "permalink": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "value": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "9",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:title": {
-                        "_count": "9",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-626"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "category": {
-                        "_attr": {
-                            "content": {
-                                "_count": "11",
-                                "_type": "text"
-                            },
-                            "domain": {
-                                "_count": "11",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "comments": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "dc:creator": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "description": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "guid": {
-                        "_attr": {
-                            "content": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "isPermaLink": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "link": {
-                        "_count": "9",
-                        "_type": "url"
-                    },
-                    "media:content": {
-                        "_attr": {
-                            "url": {
-                                "_count": "9",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "pubDate": {
-                        "_count": "9",
-                        "_type": "datetime"
-                    },
-                    "title": {
-                        "_count": "9",
-                        "_type": "text"
-                    },
-                    "y:id": {
-                        "_attr": {
-                            "permalink": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "value": {
-                                "_count": "9",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "y:published": {
-                        "_attr": {
-                            "day": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "day_of_week": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "hour": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "minute": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "month": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "second": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "timezone": {
-                                "_count": "9",
-                                "_type": "text"
-                            },
-                            "utime": {
-                                "_count": "9",
-                                "_type": "number"
-                            },
-                            "year": {
-                                "_count": "9",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": "datetime"
-                    },
-                    "y:title": {
-                        "_count": "9",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-636"
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-636",
+            "port": "out"
         }
-    ],
-    "wires": [
-        {
-            "id": "_w4",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-565"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-626"
-            }
-        },
-        {
-            "id": "_w10",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-592"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-636"
-            }
-        },
-        {
-            "id": "_w6",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-626"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-592"
-            }
-        },
-        {
-            "id": "_w12",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-636"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
-        }
-    ]
+    },
+    "version": "2"
 }

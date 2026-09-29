@@ -7,8 +7,6 @@ from logging import getLogger
 from os import environ
 from typing import TYPE_CHECKING
 
-from ._paths import ROOT_DIR
-
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -56,11 +54,6 @@ OUTPUT_MODULE = "output"
 SINK_NAMES: frozenset[str] = frozenset({OUTPUT_MODULE, "write"})
 
 SUBPIPE_TYPE = "pipe"
-
-PIPELINE_DIRS = (
-    (ROOT_DIR / "tests" / "pipelines", ROOT_DIR / "tests" / "pypipelines"),
-    (ROOT_DIR / "examples" / "pipelines", ROOT_DIR / "examples" / "pypipelines"),
-)
 
 
 @dataclass(frozen=True, slots=True)

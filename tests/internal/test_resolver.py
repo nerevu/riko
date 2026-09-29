@@ -9,6 +9,7 @@ import pytest
 
 from riko.base._paths import ROOT_DIR
 from riko.base.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.definitions._workflow import WorkflowSpec
 from riko.definitions.modules import ModuleDefinition
 from riko.ext import register_module
 from riko.ext.codegen import list_modules
@@ -312,10 +313,10 @@ class TestPipelineResolver:
         resolver = PipelineResolver(store=PackageStore("tests.pypipelines"))
         assert resolver.load("pipe_missing") is None
 
-    def test_directory_store_compiles_definition(self):
+    def test_directory_store_parses_definition(self):
         directory = ROOT_DIR / "tests" / "pipelines"
         resolver = PipelineResolver(definitions=DirectoryStore(directory))
-        assert "modules" in resolver.load_definition("pipe_gigs")
+        assert isinstance(resolver.load_definition("pipe_gigs"), WorkflowSpec)
 
         with pytest.raises(UnsupportedPipelineError):
             resolver.load_definition("pipe_missing")

@@ -1,42 +1,36 @@
 {
-    "layout": [
+    "edges": [
         {
-            "id": "sw-579",
-            "xy": [
-                501,
-                -83
-            ]
+            "source": {
+                "node": "sw-579",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-610",
+                "port": "in:URL"
+            },
+            "type": "stream"
         },
         {
-            "id": "_OUTPUT",
-            "xy": [
-                555,
-                386
-            ]
-        },
-        {
-            "id": "sw-606",
-            "xy": [
-                819,
-                -39
-            ]
-        },
-        {
-            "id": "sw-610",
-            "xy": [
-                189,
-                -2
-            ]
+            "source": {
+                "node": "sw-606",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-579",
+                "port": "in:_1_PATH"
+            },
+            "type": "stream"
         }
     ],
-    "modules": [
-        {
+    "nodes": {
+        "sw-579": {
             "conf": {
-                "BASE": {
+                "base": {
                     "type": "text",
                     "value": ""
                 },
-                "PARAM": [
+                "param": [
                     {
                         "key": {
                             "type": "text",
@@ -48,7 +42,7 @@
                         }
                     }
                 ],
-                "PATH": [
+                "path": [
                     {
                         "terminal": "1_PATH",
                         "type": "text"
@@ -60,14 +54,10 @@
                 ]
             },
             "id": "sw-579",
-            "type": "urlbuilder"
+            "name": "urlbuilder",
+            "type": "module"
         },
-        {
-            "conf": {},
-            "id": "_OUTPUT",
-            "type": "output"
-        },
-        {
+        "sw-606": {
             "conf": {
                 "debug": {
                     "type": "text",
@@ -91,284 +81,30 @@
                 }
             },
             "id": "sw-606",
-            "type": "input"
+            "name": "input",
+            "type": "module"
         },
-        {
+        "sw-610": {
             "conf": {
-                "URL": {
-                    "terminal": "URL",
-                    "type": "url"
-                },
                 "path": {
                     "type": "text",
                     "value": "person"
+                },
+                "url": {
+                    "terminal": "URL",
+                    "type": "url"
                 }
             },
             "id": "sw-610",
-            "type": "fetchdata"
+            "name": "fetchdata",
+            "type": "module"
         }
-    ],
-    "terminaldata": [
-        {
-            "data": {
-                "_count": "1",
-                "_type": "url"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-579"
-        },
-        {
-            "data": {
-                "_count": "1",
-                "_type": "number"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-606"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "aristotle-id": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "aristotle-url": {
-                        "_count": "1",
-                        "_type": "url"
-                    },
-                    "candidacies": {
-                        "_attr": {
-                            "constituency": {
-                                "_attr": {
-                                    "aristotle-id": {
-                                        "_count": "4",
-                                        "_type": "number"
-                                    },
-                                    "aristotle-url": {
-                                        "_count": "4",
-                                        "_type": "url"
-                                    },
-                                    "json-url": {
-                                        "_count": "4",
-                                        "_type": "url"
-                                    },
-                                    "name": {
-                                        "_count": "4",
-                                        "_type": "text"
-                                    },
-                                    "pa_code": {
-                                        "_count": "4",
-                                        "_type": "number"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "election": {
-                                "_attr": {
-                                    "json-url": {
-                                        "_count": "4",
-                                        "_type": "url"
-                                    },
-                                    "polling-date": {
-                                        "_count": "4",
-                                        "_type": "datetime"
-                                    },
-                                    "type": {
-                                        "_count": "4",
-                                        "_type": "text"
-                                    },
-                                    "web-url": {
-                                        "_count": "1",
-                                        "_type": "blank"
-                                    },
-                                    "year": {
-                                        "_count": "4",
-                                        "_type": "number"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "party": {
-                                "_attr": {
-                                    "abbreviation": {
-                                        "_count": "4",
-                                        "_type": "text"
-                                    },
-                                    "aristotle-id": {
-                                        "_count": "4",
-                                        "_type": "number"
-                                    },
-                                    "json-url": {
-                                        "_count": "4",
-                                        "_type": "url"
-                                    },
-                                    "name": {
-                                        "_count": "4",
-                                        "_type": "text"
-                                    },
-                                    "web-url": {
-                                        "_count": "4",
-                                        "_type": "url"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "position": {
-                                "_count": "4",
-                                "_type": "number"
-                            },
-                            "votes-as-percentage": {
-                                "_count": "4",
-                                "_type": "number"
-                            },
-                            "votes-as-quantity": {
-                                "_count": "4",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "constituency": {
-                        "_attr": {
-                            "aristotle-id": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "aristotle-url": {
-                                "_count": "1",
-                                "_type": "url"
-                            },
-                            "json-url": {
-                                "_count": "1",
-                                "_type": "url"
-                            },
-                            "name": {
-                                "_count": "1",
-                                "_type": "text"
-                            },
-                            "pa_code": {
-                                "_count": "1",
-                                "_type": "number"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "contact-details": {
-                        "_attr": {
-                            "email-addresses": {
-                                "_attr": {
-                                    "email": {
-                                        "_count": "1",
-                                        "_type": "text"
-                                    },
-                                    "type": {
-                                        "_count": "1",
-                                        "_type": "text"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "websites": {
-                                "_attr": {
-                                    "name": {
-                                        "_count": "2",
-                                        "_type": "text"
-                                    },
-                                    "url": {
-                                        "_count": "2",
-                                        "_type": "url"
-                                    }
-                                },
-                                "_type": ""
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "image": {
-                        "_count": "1",
-                        "_type": "url"
-                    },
-                    "is-incumbent": {
-                        "_count": "1",
-                        "_type": "number"
-                    },
-                    "name": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "party": {
-                        "_attr": {
-                            "abbreviation": {
-                                "_count": "1",
-                                "_type": "text"
-                            },
-                            "aristotle-id": {
-                                "_count": "1",
-                                "_type": "number"
-                            },
-                            "json-url": {
-                                "_count": "1",
-                                "_type": "url"
-                            },
-                            "name": {
-                                "_count": "1",
-                                "_type": "text"
-                            },
-                            "web-url": {
-                                "_count": "1",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "school": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "university": {
-                        "_count": "1",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-610"
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-610",
+            "port": "out"
         }
-    ],
-    "wires": [
-        {
-            "id": "_w3",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-579"
-            },
-            "tgt": {
-                "id": "URL",
-                "moduleid": "sw-610"
-            }
-        },
-        {
-            "id": "_w1",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-606"
-            },
-            "tgt": {
-                "id": "1_PATH",
-                "moduleid": "sw-579"
-            }
-        },
-        {
-            "id": "_w5",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-610"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
-        }
-    ]
+    },
+    "version": "2"
 }

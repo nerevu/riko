@@ -75,6 +75,7 @@ class NodeAuthoring(TypedDict, total=False):
     family: NodeFamily
     label: str
     conf: Mapping[str, object]
+    options: Mapping[str, object]
     policy: Mapping[str, object]
     params: Mapping[str, object]
     backend: BackendLike

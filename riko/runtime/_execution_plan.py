@@ -97,6 +97,7 @@ def _build_embed(
             id=f"{base.id}::embed",
             name=embed["name"],
             conf=embed["conf"],
+            options={},
             resources={},
             sync_pipe=sync_pipe,
             async_pipe=async_pipe,

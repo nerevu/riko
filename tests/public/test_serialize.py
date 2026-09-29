@@ -121,6 +121,16 @@ TOPOLOGIES = {
         "nodes": [{"name": "fetch"}],
         "inputs": {"limit": {"type": "integer", "minimum": 1}},
     },
+    "call-options": {
+        "nodes": [
+            {
+                "id": "n",
+                "name": "tokenizer",
+                "conf": {"delimiter": {"value": ","}},
+                "options": {"emit": True, "count": "first"},
+            }
+        ]
+    },
     "positional-ports": {
         "nodes": [{"id": "a", "name": "union"}, {"id": "b", "name": "fetch"}],
         "edges": [{"source": {"node": "b"}, "target": {"node": "a", "port": "in:1"}}],
@@ -216,6 +226,12 @@ def test_migration_then_serialization_emits_no_v1_structure():
     assert b'"version":"2"' in data
     for token in ("_OUTPUT", "_INPUT", "wires", '"src"', '"tgt"', '"type":"output"'):
         assert token not in text
+
+
+def test_call_options_are_serialized_apart_from_conf():
+    data = serialize_workflow(normalize_workflow(TOPOLOGIES["call-options"]))
+    assert b'"options":{"count":"first","emit":true}' in data
+    assert b'"conf":{"delimiter":{"value":","}}' in data
 
 
 def test_json_native_conf_round_trips_by_equality():

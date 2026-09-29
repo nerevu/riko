@@ -1,76 +1,58 @@
 {
-    "layout": [
+    "edges": [
         {
-            "id": "_OUTPUT",
-            "xy": [
-                "657",
-                "576"
-            ]
+            "source": {
+                "node": "sw-111",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-287",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-287",
-            "xy": [
-                "634",
-                "462"
-            ]
-        },
-        {
-            "id": "sw-111",
-            "xy": [
-                "538",
-                "236"
-            ]
-        },
-        {
-            "id": "sw-163",
-            "xy": [
-                "486",
-                "87"
-            ]
+            "source": {
+                "node": "sw-163",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-111",
+                "port": "in"
+            },
+            "type": "stream"
         }
     ],
-    "modules": [
-        {
-            "conf": null,
-            "id": "_OUTPUT",
-            "type": "output"
-        },
-        {
+    "nodes": {
+        "sw-111": {
             "conf": {
-                "count": {
-                    "type": "float",
-                    "value": "100"
-                }
-            },
-            "id": "sw-287",
-            "type": "truncate"
-        },
-        {
-            "id": "sw-111",
-            "type": "fetchpage",
-            "conf": {
-                "URL": {
-                    "subkey": "url",
-                    "type": "url"
+                "end": {
+                    "type": "text",
+                    "value": "</tr>"
                 },
                 "start": {
                     "type": "text",
                     "value": "One Way</span>"
                 },
-                "end": {
-                    "type": "text",
-                    "value": "</tr>"
-                },
                 "token": {
                     "type": "text",
                     "value": "<td style=\"text-align: center;\">"
+                },
+                "url": {
+                    "subkey": "url",
+                    "type": "url"
                 }
             },
-            "assign": "loop:fetchpage",
-            "emit": true,
-            "count": "all"
+            "id": "sw-111",
+            "name": "fetchpage",
+            "options": {
+                "assign": "loop:fetchpage",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
         },
-        {
+        "sw-163": {
             "conf": {
                 "attrs": {
                     "key": {
@@ -84,83 +66,26 @@
                 }
             },
             "id": "sw-163",
-            "type": "itembuilder"
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-287": {
+            "conf": {
+                "count": {
+                    "type": "float",
+                    "value": "100"
+                }
+            },
+            "id": "sw-287",
+            "name": "truncate",
+            "type": "module"
         }
-    ],
-    "terminaldata": [
-        {
-            "data": {
-                "_attr": {
-                    "content": {
-                        "_count": "7",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-287"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "content": {
-                        "_count": "7",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-111"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "url": {
-                        "_count": "1",
-                        "_type": "url"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-163"
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-287",
+            "port": "out"
         }
-    ],
-    "wires": [
-        {
-            "id": "_w6",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-287"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
-        },
-        {
-            "id": "_w4",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-111"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-287"
-            }
-        },
-        {
-            "id": "_w9",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-163"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-111"
-            }
-        }
-    ]
+    },
+    "version": "2"
 }

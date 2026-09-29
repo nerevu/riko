@@ -1,8 +1,19 @@
 {
-    "modules": [
+    "edges": [
         {
-            "id": "sw-1",
-            "type": "itembuilder",
+            "source": {
+                "node": "sw-1",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-2",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-1": {
             "conf": {
                 "attrs": [
                     {
@@ -16,47 +27,32 @@
                         }
                     }
                 ]
-            }
+            },
+            "id": "sw-1",
+            "name": "itembuilder",
+            "type": "module"
         },
-        {
+        "sw-2": {
+            "conf": {
+                "embed": {
+                    "conf": {},
+                    "name": "pipe:shout"
+                }
+            },
             "id": "sw-2",
-            "type": "loop",
-            "conf": {},
-            "embed": {
-                "id": "sw-3",
-                "type": "pipe:shout"
+            "name": "loop",
+            "options": {
+                "count": "all",
+                "emit": true
             },
-            "count": "all",
-            "emit": true
-        },
-        {
-            "id": "_OUTPUT",
-            "type": "output",
-            "conf": {}
+            "type": "module"
         }
-    ],
-    "wires": [
-        {
-            "id": "_w1",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-1"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-2"
-            }
-        },
-        {
-            "id": "_w2",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-2"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-2",
+            "port": "out"
         }
-    ]
+    },
+    "version": "2"
 }

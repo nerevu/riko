@@ -1,66 +1,61 @@
 {
-  "modules": [
-    {
-      "id": "sw-1",
-      "type": "itembuilder",
-      "conf": {
-        "attrs": [
-          {
-            "key": {
-              "type": "text",
-              "value": "date"
+    "edges": [
+        {
+            "source": {
+                "node": "sw-1",
+                "port": "out"
             },
-            "value": {
-              "type": "text",
-              "value": "5/4/1982"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "id": "sw-2",
-      "type": "dateformat",
-      "conf": {
-        "format": {
-          "type": "text",
-          "value": "%B %d, %Y %Z"
-        },
-        "timezone": {
-          "type": "text",
-          "value": "EST"
+            "target": {
+                "node": "sw-2",
+                "port": "in"
+            },
+            "type": "stream"
         }
-      },
-      "field": "date"
+    ],
+    "nodes": {
+        "sw-1": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "date"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "5/4/1982"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-1",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-2": {
+            "conf": {
+                "format": {
+                    "type": "text",
+                    "value": "%B %d, %Y %Z"
+                },
+                "timezone": {
+                    "type": "text",
+                    "value": "EST"
+                }
+            },
+            "id": "sw-2",
+            "name": "dateformat",
+            "options": {
+                "field": "date"
+            },
+            "type": "module"
+        }
     },
-    {
-      "id": "_OUTPUT",
-      "type": "output",
-      "conf": {}
-    }
-  ],
-  "wires": [
-    {
-      "id": "_w1",
-      "src": {
-        "id": "_OUTPUT",
-        "moduleid": "sw-1"
-      },
-      "tgt": {
-        "id": "_INPUT",
-        "moduleid": "sw-2"
-      }
+    "outputs": {
+        "default": {
+            "node": "sw-2",
+            "port": "out"
+        }
     },
-    {
-      "id": "_w2",
-      "src": {
-        "id": "_OUTPUT",
-        "moduleid": "sw-2"
-      },
-      "tgt": {
-        "id": "_INPUT",
-        "moduleid": "_OUTPUT"
-      }
-    }
-  ]
+    "version": "2"
 }

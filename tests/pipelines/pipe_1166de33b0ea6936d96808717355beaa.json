@@ -1,64 +1,74 @@
 {
-    "layout": [
+    "edges": [
         {
-            "id": "sw-554",
-            "xy": [
-                206,
-                90
-            ]
+            "source": {
+                "node": "sw-554",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-637",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "_OUTPUT",
-            "xy": [
-                386,
-                460
-            ]
+            "source": {
+                "node": "sw-569",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-637",
+                "port": "in:2"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-569",
-            "xy": [
-                579,
-                85
-            ]
+            "source": {
+                "node": "sw-637",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-656",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-637",
-            "xy": [
-                279,
-                178
-            ]
+            "source": {
+                "node": "sw-656",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-688",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-656",
-            "xy": [
-                152,
-                225
-            ]
+            "source": {
+                "node": "sw-688",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-730",
+                "port": "in:2"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-688",
-            "xy": [
-                625,
-                218
-            ]
-        },
-        {
-            "id": "sw-674",
-            "xy": [
-                1083,
-                67
-            ]
-        },
-        {
-            "id": "sw-730",
-            "xy": [
-                614,
-                455
-            ]
+            "source": {
+                "node": "sw-674",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-730",
+                "port": "in"
+            },
+            "type": "stream"
         }
     ],
-    "modules": [
-        {
+    "nodes": {
+        "sw-554": {
             "conf": {
                 "attrs": [
                     {
@@ -74,14 +84,10 @@
                 ]
             },
             "id": "sw-554",
-            "type": "itembuilder"
+            "name": "itembuilder",
+            "type": "module"
         },
-        {
-            "conf": {},
-            "id": "_OUTPUT",
-            "type": "output"
-        },
-        {
+        "sw-569": {
             "conf": {
                 "attrs": [
                     {
@@ -117,16 +123,15 @@
                 ]
             },
             "id": "sw-569",
-            "type": "itembuilder"
+            "name": "itembuilder",
+            "type": "module"
         },
-        {
-            "conf": {},
+        "sw-637": {
             "id": "sw-637",
-            "type": "union"
+            "name": "union",
+            "type": "module"
         },
-        {
-            "id": "sw-656",
-            "type": "itembuilder",
+        "sw-656": {
             "conf": {
                 "attrs": [
                     {
@@ -151,46 +156,16 @@
                     }
                 ]
             },
-            "assign": "loop:itembuilder",
-            "emit": true,
-            "count": "all"
-        },
-        {
-            "id": "sw-688",
-            "type": "loop",
-            "conf": {
-                "attrs": [
-                    {
-                        "key": {
-                            "type": "text",
-                            "value": "title"
-                        },
-                        "value": {
-                            "subkey": "newtitle",
-                            "type": "text"
-                        }
-                    },
-                    {
-                        "key": {
-                            "type": "text",
-                            "value": "description.content"
-                        },
-                        "value": {
-                            "type": "text",
-                            "value": "DESCRIPTION"
-                        }
-                    }
-                ]
+            "id": "sw-656",
+            "name": "itembuilder",
+            "options": {
+                "assign": "loop:itembuilder",
+                "count": "all",
+                "emit": true
             },
-            "embed": {
-                "id": "sw-710",
-                "type": "itembuilder"
-            },
-            "assign": "loop:itembuilder",
-            "emit": false,
-            "count": "all"
+            "type": "module"
         },
-        {
+        "sw-674": {
             "conf": {
                 "author": {
                     "type": "text",
@@ -246,290 +221,59 @@
                 }
             },
             "id": "sw-674",
-            "type": "rssitembuilder"
+            "name": "rssitembuilder",
+            "type": "module"
         },
-        {
-            "conf": {},
+        "sw-688": {
+            "conf": {
+                "embed": {
+                    "conf": {
+                        "attrs": [
+                            {
+                                "key": {
+                                    "type": "text",
+                                    "value": "title"
+                                },
+                                "value": {
+                                    "subkey": "newtitle",
+                                    "type": "text"
+                                }
+                            },
+                            {
+                                "key": {
+                                    "type": "text",
+                                    "value": "description.content"
+                                },
+                                "value": {
+                                    "type": "text",
+                                    "value": "DESCRIPTION"
+                                }
+                            }
+                        ]
+                    },
+                    "name": "itembuilder"
+                }
+            },
+            "id": "sw-688",
+            "name": "loop",
+            "options": {
+                "assign": "loop:itembuilder",
+                "count": "all",
+                "emit": false
+            },
+            "type": "module"
+        },
+        "sw-730": {
             "id": "sw-730",
-            "type": "union"
+            "name": "union",
+            "type": "module"
         }
-    ],
-    "terminaldata": [
-        {
-            "data": {
-                "_attr": {
-                    "title": {
-                        "_count": "1",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-554"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "lostattribute": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "title": {
-                        "_count": "1",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-569"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "lostattribute": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "title": {
-                        "_count": "2",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-637"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "newtitle": {
-                        "_count": "2",
-                        "_type": "text"
-                    },
-                    "title": {
-                        "_count": "2",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-656"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "loop:itembuilder": {
-                        "_attr": {
-                            "description": {
-                                "_attr": {
-                                    "content": {
-                                        "_count": "2",
-                                        "_type": "text"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "title": {
-                                "_count": "2",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": "item"
-                    },
-                    "newtitle": {
-                        "_count": "2",
-                        "_type": "text"
-                    },
-                    "title": {
-                        "_count": "2",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-688"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "link": {
-                        "_count": "1",
-                        "_type": "url"
-                    },
-                    "media:thumbnail": {
-                        "_attr": {
-                            "url": {
-                                "_count": "1",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "title": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "y:title": {
-                        "_count": "1",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-674"
-        },
-        {
-            "data": {
-                "_attr": {
-                    "description": {
-                        "_count": "1",
-                        "_type": "text"
-                    },
-                    "link": {
-                        "_count": "1",
-                        "_type": "url"
-                    },
-                    "loop:itembuilder": {
-                        "_attr": {
-                            "description": {
-                                "_attr": {
-                                    "content": {
-                                        "_count": "2",
-                                        "_type": "text"
-                                    }
-                                },
-                                "_type": ""
-                            },
-                            "title": {
-                                "_count": "2",
-                                "_type": "text"
-                            }
-                        },
-                        "_type": "item"
-                    },
-                    "media:thumbnail": {
-                        "_attr": {
-                            "url": {
-                                "_count": "1",
-                                "_type": "url"
-                            }
-                        },
-                        "_type": ""
-                    },
-                    "newtitle": {
-                        "_count": "2",
-                        "_type": "text"
-                    },
-                    "title": {
-                        "_count": "3",
-                        "_type": "text"
-                    },
-                    "y:title": {
-                        "_count": "1",
-                        "_type": "text"
-                    }
-                },
-                "_type": "item"
-            },
-            "id": "_OUTPUT",
-            "moduleid": "sw-730"
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-730",
+            "port": "out"
         }
-    ],
-    "wires": [
-        {
-            "id": "_w0",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-554"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-637"
-            }
-        },
-        {
-            "id": "_w8",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-569"
-            },
-            "tgt": {
-                "id": "_OTHER2",
-                "moduleid": "sw-637"
-            }
-        },
-        {
-            "id": "_w2",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-637"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-656"
-            }
-        },
-        {
-            "id": "_w3",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-656"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-688"
-            }
-        },
-        {
-            "id": "_w10",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-688"
-            },
-            "tgt": {
-                "id": "_OTHER2",
-                "moduleid": "sw-730"
-            }
-        },
-        {
-            "id": "_w12",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-674"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-730"
-            }
-        },
-        {
-            "id": "_w14",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-730"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
-        }
-    ]
+    },
+    "version": "2"
 }

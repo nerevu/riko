@@ -1,8 +1,19 @@
 {
-    "modules": [
+    "edges": [
         {
-            "id": "sw-1",
-            "type": "itembuilder",
+            "source": {
+                "node": "sw-1",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-2",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-1": {
             "conf": {
                 "attrs": [
                     {
@@ -16,54 +27,39 @@
                         }
                     }
                 ]
-            }
+            },
+            "id": "sw-1",
+            "name": "itembuilder",
+            "type": "module"
         },
-        {
-            "id": "sw-2",
-            "type": "loop",
+        "sw-2": {
             "conf": {
-                "delimiter": {
-                    "type": "text",
-                    "value": " "
+                "embed": {
+                    "conf": {
+                        "delimiter": {
+                            "type": "text",
+                            "value": " "
+                        }
+                    },
+                    "name": "tokenizer"
                 }
             },
-            "embed": {
-                "id": "sw-3",
-                "type": "tokenizer"
+            "id": "sw-2",
+            "name": "loop",
+            "options": {
+                "assign": "tokens",
+                "count": "all",
+                "emit": false,
+                "field": "title"
             },
-            "count": "all",
-            "assign": "tokens",
-            "emit": false,
-            "field": "title"
-        },
-        {
-            "id": "_OUTPUT",
-            "type": "output",
-            "conf": {}
+            "type": "module"
         }
-    ],
-    "wires": [
-        {
-            "id": "_w1",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-1"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-2"
-            }
-        },
-        {
-            "id": "_w2",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-2"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-2",
+            "port": "out"
         }
-    ]
+    },
+    "version": "2"
 }

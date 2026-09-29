@@ -1,127 +1,122 @@
 {
-    "modules": [
+    "edges": [
         {
-            "id": "_OUTPUT",
-            "type": "output",
-            "conf": {}
+            "source": {
+                "node": "sw-1",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-2",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-1",
-            "type": "fetchdata",
+            "source": {
+                "node": "sw-2",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-3",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-3",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-4",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-1": {
             "conf": {
-                "URL": {
-                    "type": "url",
-                    "value": "file://riko/data/gigs.json"
-                },
                 "path": {
                     "type": "text",
                     "value": "value.items"
+                },
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/gigs.json"
                 }
-            }
+            },
+            "id": "sw-1",
+            "name": "fetchdata",
+            "type": "module"
         },
-        {
-            "id": "sw-2",
-            "type": "uniq",
+        "sw-2": {
             "conf": {
                 "uniq_key": {
                     "type": "text",
                     "value": "link"
                 }
-            }
+            },
+            "id": "sw-2",
+            "name": "uniq",
+            "type": "module"
         },
-        {
-            "id": "sw-3",
-            "type": "filter",
+        "sw-3": {
             "conf": {
-                "COMBINE": {
+                "combine": {
                     "type": "text",
                     "value": "or"
                 },
-                "PERMIT": {
+                "permit": {
                     "type": "bool",
                     "value": false
                 },
-                "RULE": [
+                "rule": [
                     {
                         "field": {
                             "type": "text",
                             "value": "title"
                         },
-                        "value": {
-                            "type": "text",
-                            "value": "php"
-                        },
                         "op": {
                             "type": "text",
                             "value": "contains"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "php"
                         }
                     }
                 ]
-            }
+            },
+            "id": "sw-3",
+            "name": "filter",
+            "type": "module"
         },
-        {
-            "id": "sw-4",
-            "type": "sort",
+        "sw-4": {
             "conf": {
-                "RULE": [
+                "rule": [
                     {
-                        "field": {
-                            "type": "text",
-                            "value": "pubDate"
-                        },
                         "dir": {
                             "type": "text",
                             "value": "DESC"
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "pubDate"
                         }
                     }
                 ]
-            }
+            },
+            "id": "sw-4",
+            "name": "sort",
+            "type": "module"
         }
-    ],
-    "wires": [
-        {
-            "id": "_w1",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-1"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-2"
-            }
-        },
-        {
-            "id": "_w2",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-2"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-3"
-            }
-        },
-        {
-            "id": "_w3",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-3"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-4"
-            }
-        },
-        {
-            "id": "_w4",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-4"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-4",
+            "port": "out"
         }
-    ]
+    },
+    "version": "2"
 }

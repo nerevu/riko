@@ -41,11 +41,13 @@ import pygogo as gogo
 
 from riko.base._config import INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
 from riko.base._iterutils import partition
+from riko.base._strutils import pythonise
 from riko.base.exceptions import InvalidPipelineError
 from riko.coercion._sequences import lower_keys, require_sequence
 from riko.types._collections import require_str
-from riko.types._guards import require_mapping
+from riko.types._guards import is_mapping, require_mapping
 from riko.types._workflow import WORKFLOW_VERSION
+from riko.types.modules import ModuleOptions
 
 from ._normalize import normalize_workflow
 
@@ -57,9 +59,11 @@ if TYPE_CHECKING:
     from riko.types._compiler import PipeDefLike
 
 _WRITE_TYPE = "write"
+_LOOP_TYPE = "loop"
 _WRITE_CONF_KEYS = frozenset({"dest", "fmt", "mode", "keys"})
 _WRITE_MODES = {"w": "replace", "a": "append"}
 _STRUCTURAL_KEYS = frozenset({"id", "type", "conf"})
+_OPTION_KEYS = frozenset(ModuleOptions.__annotations__)
 _WARNING = "migrating a released Workflow v1 pipe definition to canonical v2"
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -95,6 +99,39 @@ def _migrate_write(
     }
 
 
+def _migrate_conf(
+    name: str, conf: Mapping[str, object], **extra: object
+) -> dict[str, object]:
+    """Translates a v1 module's configuration and leftover keys into a v2 conf."""
+    embed = extra.get("embed")
+
+    if name == _LOOP_TYPE and is_mapping(embed):
+        embed_name = require_str(embed.get("type"), "loop embed 'type'")
+        leftover = {k: v for k, v in extra.items() if k != "embed"}
+        merged = {"embed": {"name": embed_name, "conf": conf}, **leftover}
+    else:
+        merged = {**extra, **conf}
+
+    return merged
+
+
+def _migrate_pipe(
+    module_id: str, name: str, conf: Mapping[str, object], **extra: object
+) -> dict[str, object]:
+    """Translates a v1 pipe module into a v2 module-node authoring mapping."""
+    options = {k: extra.pop(k) for k in _OPTION_KEYS.intersection(extra)}
+    node: dict[str, object] = {
+        "id": module_id,
+        "name": name,
+        "conf": _migrate_conf(name, conf, **extra),
+    }
+
+    if options:
+        node["options"] = options
+
+    return node
+
+
 def _migrate_module(**module: object) -> dict[str, object]:
     """Translates one v1 module mapping into a v2 authoring node mapping."""
     module_id = require_str(module.get("id"), "module 'id'")
@@ -105,9 +142,14 @@ def _migrate_module(**module: object) -> dict[str, object]:
     if name == _WRITE_TYPE:
         node = _migrate_write(module_id, name, conf, **extra)
     else:
-        node = {"id": module_id, "name": name, "conf": {**extra, **conf}}
+        node = _migrate_pipe(module_id, name, conf, **extra)
 
     return node
+
+
+def _migrate_target_port(port: str) -> str:
+    """Sanitizes a v1 target port into the id the receiving module looks up."""
+    return port if port.startswith("_") else pythonise(port)
 
 
 def _migrate_wires(
@@ -131,7 +173,8 @@ def _migrate_wires(
             name = "default" if not outputs else f"default-{len(outputs) + 1}"
             outputs[name] = source
         else:
-            target = {"node": tgt_node, "port": str(tgt.get("id", INPUT_PORT))}
+            port = _migrate_target_port(str(tgt.get("id", INPUT_PORT)))
+            target = {"node": tgt_node, "port": port}
             edges.append({"source": source, "target": target})
 
     return edges, outputs
@@ -143,9 +186,12 @@ def migrate_v1_to_v2(pipe_def: PipeDefLike) -> WorkflowSpec:
 
     Warns that a v1 document was migrated, then returns the canonical spec. Legacy
     ports, the ``write`` module, and the terminal ``_OUTPUT`` node are translated to
-    their v2 equivalents; orphan and empty-graph rejection is left to validation. A v1
-    ``write`` file-open mode maps to a canonical reconcile mode, and a ``write``
-    carrying an option with no v2 equivalent is rejected rather than silently dropped.
+    their v2 equivalents; orphan and empty-graph rejection is left to validation. A
+    module's call options become the node's ``options``, a loop's embedded module and
+    its configuration become the nested embed the loop runs, and any other module-level
+    key folds into the node's configuration. A v1 ``write`` file-open mode maps to a
+    canonical reconcile mode, and a ``write`` carrying an option with no v2 equivalent
+    is rejected rather than silently dropped.
 
     Args:
 

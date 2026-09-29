@@ -50,10 +50,12 @@ from riko.types._collections import (
     narrow_from_require,
     require_binding,
     require_str,
+    validator_from_require,
 )
 from riko.types._enums import Backends, Formats, ModuleNameLike
 from riko.types._guards import is_listlike, is_mapping, require_mapping
 from riko.types._workflow import WORKFLOW_VERSION, Edge, Endpoint, NodeId
+from riko.types.modules import ModuleOptions
 
 from ._resources import normalize_resources
 from ._targets import normalize_strs, resolve_enum
@@ -67,6 +69,8 @@ if TYPE_CHECKING:
     from riko.types.modules import AnyModuleConf, LoopConf
 
 _EMPTY_CONF = cast("AnyModuleConf", MappingProxyType({}))
+_EMPTY_OPTIONS = cast("ModuleOptions", MappingProxyType({}))
+_MODULE_OPTION_KEYS = frozenset(ModuleOptions.__annotations__)
 _EMPTY_INPUTS: JSONSchema = MappingProxyType({})
 _EMPTY_RESOURCES: Mapping[str, str] = MappingProxyType({})
 T = TypeVar("T", default=Any)
@@ -110,6 +114,21 @@ def conf_converters(
     return [def_from_require(require_mapping, what=what), _optional_freeze]
 
 
+def require_options(
+    value: Mapping[str, object], what: str = "options"
+) -> ModuleOptions:
+    """Confirms every key of ``value`` names a supported module call option."""
+    if unknown := set(value).difference(_MODULE_OPTION_KEYS):
+        msg = f"unknown module option(s) in {what}: {sorted(unknown)}"
+        raise InvalidPipelineError(msg)
+
+    return cast("ModuleOptions", value)
+
+
+_normalize_options = conf_converters("ModuleNode 'options'")
+_validate_options = validator_from_require(require_options)
+
+
 @define(frozen=True, slots=True, kw_only=True)
 class Node:
     """The identity, resource bindings, and label every node family carries."""
@@ -130,11 +149,23 @@ class Node:
 
 @define(frozen=True, slots=True, kw_only=True)
 class ModuleNode(Node):
-    """A registered transform/operator node (split/branch/route/union/join/loop too)."""
+    """
+    A registered transform/operator node (split/branch/route/union/join/loop too).
+
+    ``conf`` is the module's declarative configuration. ``options`` are the call
+    options forwarded to the module callable itself, such as ``emit``, ``assign``,
+    ``field``, and ``count``.
+
+    """
 
     family: ClassVar[NodeFamily] = "module"
     conf: AnyModuleConf | LoopConf = field(
         default=_EMPTY_CONF, converter=conf_converters("ModuleNode 'conf'")
+    )
+    options: ModuleOptions = field(
+        default=_EMPTY_OPTIONS,
+        converter=_normalize_options,
+        validator=_validate_options,
     )
 
 

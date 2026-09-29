@@ -11,6 +11,7 @@ machinery.
 from __future__ import annotations
 
 from enum import Enum, auto
+from types import MappingProxyType
 from typing import TYPE_CHECKING, NamedTuple, cast
 
 from attrs import Factory, define, field
@@ -24,22 +25,22 @@ from riko.definitions._workflow import (
     require_module_node,
 )
 from riko.types._collections import freeze_mapping, require_str, validator_from_require
+from riko.types._compiler import ModuleOptionValues
 from riko.types._guards import require_single_output
-from riko.types.modules import AnyModuleConf, LoopConf, LoopOptions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from riko.types._compiler import LoopOptionValues
     from riko.types._workflow import NodeFamily, NodeId
     from riko.types._wrappers import (
         AsyncModuleWrapper,
         ModuleWrapper,
         SyncModuleWrapper,
     )
-    from riko.types.modules import ModuleType
+    from riko.types.modules import AnyModuleConf, LoopConf, ModuleOptions, ModuleType
 
-_LOOP_OPTION_KEYS = set(LoopOptions.__annotations__)
+type FrozenOptions = MappingProxyType[str, ModuleOptionValues]
+
 conf_converter = conf_converters("PreparedNode 'conf'")
 resource_converter = [optional_binding, optional_resources]
 single_output = validator_from_require(require_single_output, optional=True)
@@ -63,11 +64,13 @@ def _conf(value: PreparedNode) -> AnyModuleConf | LoopConf:
     return require_module_node(value.node).conf
 
 
-def _require_pipe(pipe: ModuleWrapper | None, name: str) -> ModuleWrapper:
-    if pipe is None:
-        raise UnsupportedModuleError(f"{name!r} has no interfaces")
+def _options(value: PreparedNode) -> FrozenOptions:
+    options = require_module_node(value.node).options
+    return freeze_mapping(cast("dict[str, ModuleOptionValues]", options))
 
-    return pipe
+
+def _freeze_options(value: ModuleOptions) -> FrozenOptions:
+    return freeze_mapping(cast("dict[str, ModuleOptionValues]", value))
 
 
 @define(frozen=True, slots=True)
@@ -82,6 +85,7 @@ class PreparedNode:
         name: The registered implementation name.
         resources: The node's resource-slot bindings, slot to resource name.
         conf: The node's declarative configuration.
+        options: The call options forwarded to the node's module callable.
         sync_pipe: The resolved synchronous callable, or ``None`` if unavailable.
         async_pipe: The resolved asynchronous callable, or ``None`` if unavailable.
         embed: The resolved embed submodule for a loop node, else ``None``.
@@ -108,6 +112,9 @@ class PreparedNode:
     )
     conf: AnyModuleConf | LoopConf = field(
         default=Factory(_conf, takes_self=True), converter=conf_converter
+    )
+    options: FrozenOptions = field(
+        default=Factory(_options, takes_self=True), converter=_freeze_options
     )
     sync_pipe: SyncModuleWrapper | None = field(default=None, validator=single_output)
     async_pipe: AsyncModuleWrapper | None = field(default=None, validator=single_output)
@@ -148,8 +155,10 @@ class PreparedNode:
         native = self.async_pipe if is_async else self.sync_pipe
         adapted = self.sync_pipe if is_async else self.async_pipe
 
-        if native is None:
-            result = Selection(_require_pipe(adapted, self.name), ExecMode.ADAPTER)
+        if native is None and adapted is not None:
+            result = Selection(adapted, ExecMode.ADAPTER)
+        elif native is None:
+            raise UnsupportedModuleError(f"{self.name!r} has no interfaces")
         else:
             result = Selection(native, ExecMode.NATIVE)
 
@@ -158,6 +167,10 @@ class PreparedNode:
     @property
     def family(self) -> NodeFamily:
         return self.node.family
+
+    @property
+    def embed_or_self_conf(self) -> AnyModuleConf | LoopConf:
+        return self.conf if self.embed is None else self.embed.conf
 
     @property
     def module_type(self) -> ModuleType | None:
@@ -172,9 +185,3 @@ class PreparedNode:
         """
         pipe = self.sync_pipe if self.async_pipe is None else self.async_pipe
         return None if pipe is None else getattr(pipe, "type", None)
-
-    @property
-    def options(self) -> Mapping[str, LoopOptionValues]:
-        common = _LOOP_OPTION_KEYS.intersection(self.conf)
-        options = {k: cast("LoopOptionValues", self.conf[k]) for k in common}
-        return freeze_mapping(options)

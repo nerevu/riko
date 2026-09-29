@@ -1,74 +1,79 @@
 {
-    "layout": [
+    "edges": [
         {
-            "id": "sw-479",
-            "xy": [
-                214,
-                74
-            ]
+            "source": {
+                "node": "sw-481",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-485",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "_OUTPUT",
-            "xy": [
-                251,
-                459
-            ]
+            "source": {
+                "node": "sw-483",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-485",
+                "port": "in:1"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-481",
-            "xy": [
-                467,
-                40
-            ]
+            "source": {
+                "node": "sw-485",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-486",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-483",
-            "xy": [
-                607,
-                40
-            ]
+            "source": {
+                "node": "sw-479",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-506",
+                "port": "in"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-485",
-            "xy": [
-                537,
-                140
-            ]
+            "source": {
+                "node": "sw-486",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-506",
+                "port": "in:1"
+            },
+            "type": "stream"
         },
         {
-            "id": "sw-486",
-            "xy": [
-                467,
-                71
-            ]
-        },
-        {
-            "id": "sw-506",
-            "xy": [
-                234,
-                268
-            ]
-        },
-        {
-            "id": "sw-519",
-            "xy": [
-                452,
-                280
-            ]
+            "source": {
+                "node": "sw-506",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-519",
+                "port": "in"
+            },
+            "type": "stream"
         }
     ],
-    "modules": [
-        {
-            "conf": {},
+    "nodes": {
+        "sw-479": {
             "id": "sw-479",
-            "type": "pipe:2de0e4517ed76082dcddf66f7b218057"
+            "name": "pipe:2de0e4517ed76082dcddf66f7b218057",
+            "type": "module"
         },
-        {
-            "conf": {},
-            "id": "_OUTPUT",
-            "type": "output"
-        },
-        {
+        "sw-481": {
             "conf": {
                 "attrs": {
                     "key": {
@@ -82,9 +87,10 @@
                 }
             },
             "id": "sw-481",
-            "type": "itembuilder"
+            "name": "itembuilder",
+            "type": "module"
         },
-        {
+        "sw-483": {
             "conf": {
                 "attrs": {
                     "key": {
@@ -98,42 +104,46 @@
                 }
             },
             "id": "sw-483",
-            "type": "itembuilder"
+            "name": "itembuilder",
+            "type": "module"
         },
-        {
-            "conf": {},
+        "sw-485": {
             "id": "sw-485",
-            "type": "union"
+            "name": "union",
+            "type": "module"
         },
-        {
-            "id": "sw-486",
-            "type": "fetch",
+        "sw-486": {
             "conf": {
-                "URL": {
+                "url": {
                     "subkey": "link",
                     "type": "url"
                 }
             },
-            "assign": "loop:fetch",
-            "emit": true,
-            "count": "all"
+            "id": "sw-486",
+            "name": "fetch",
+            "options": {
+                "assign": "loop:fetch",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
         },
-        {
-            "conf": {},
+        "sw-506": {
             "id": "sw-506",
-            "type": "union"
+            "name": "union",
+            "type": "module"
         },
-        {
+        "sw-519": {
             "conf": {
-                "COMBINE": {
+                "combine": {
                     "type": "text",
                     "value": "or"
                 },
-                "PERMIT": {
+                "permit": {
                     "type": "bool",
                     "value": true
                 },
-                "RULE": [
+                "rule": [
                     {
                         "field": {
                             "type": "text",
@@ -165,87 +175,15 @@
                 ]
             },
             "id": "sw-519",
-            "type": "filter"
+            "name": "filter",
+            "type": "module"
         }
-    ],
-    "terminaldata": [],
-    "wires": [
-        {
-            "id": "_w1",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-481"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-485"
-            }
-        },
-        {
-            "id": "_w2",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-483"
-            },
-            "tgt": {
-                "id": "_OTHER1",
-                "moduleid": "sw-485"
-            }
-        },
-        {
-            "id": "_w3",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-485"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-486"
-            }
-        },
-        {
-            "id": "_w4",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-479"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-506"
-            }
-        },
-        {
-            "id": "_w5",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-486"
-            },
-            "tgt": {
-                "id": "_OTHER1",
-                "moduleid": "sw-506"
-            }
-        },
-        {
-            "id": "_w6",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-506"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "sw-519"
-            }
-        },
-        {
-            "id": "_w7",
-            "src": {
-                "id": "_OUTPUT",
-                "moduleid": "sw-519"
-            },
-            "tgt": {
-                "id": "_INPUT",
-                "moduleid": "_OUTPUT"
-            }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-519",
+            "port": "out"
         }
-    ]
+    },
+    "version": "2"
 }

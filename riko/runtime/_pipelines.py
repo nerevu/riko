@@ -2,7 +2,8 @@
 """
 Provides resolution for named pipelines.
 
-Pipelines can be loaded from generated modules or JSON definitions.
+Pipelines can be loaded from generated or hand-written modules, or from canonical
+Workflow v2 JSON documents.
 
 Attributes:
 
@@ -14,7 +15,6 @@ Attributes:
 from __future__ import annotations
 
 from functools import partial, update_wrapper
-from json import loads
 from typing import TYPE_CHECKING, Literal, Protocol, cast, overload
 
 from riko.base._config import SUBPIPE_TYPE
@@ -23,15 +23,15 @@ from riko.base._strutils import pythonise
 from riko.base.exceptions import UnsupportedPipelineError
 from riko.types._guards import is_subpipe
 
-from ._compile import parse_pipe_def
 from ._importutils import load_interfaces, resolve_interface
+from ._serialize import parse_workflow
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
     from types import ModuleType
 
-    from riko.types._compiler import ParsedPipeDef
+    from riko.definitions._workflow import WorkflowSpec
     from riko.types._wrappers import (
         AsyncModuleWrapper,
         AsyncSubPipe,
@@ -131,26 +131,25 @@ class CompositeStore:
 
 class DirectoryStore:
     """
-    Loads pipeline definitions from a directory of JSON files.
+    Loads canonical Workflow v2 JSON documents from a directory.
 
     Despite the shared ``load`` name, this is not a ``ModuleStore``. It yields a
-    ``ParsedPipeDef`` rather than a module. This is why ``PipelineResolver`` keeps
+    ``WorkflowSpec`` rather than a module. This is why ``PipelineResolver`` keeps
     it in its own slot instead of chaining it into a ``CompositeStore``. A loaded
-    definition is interface-agnostic; the caller builds it with ``build_pipeline``
-    or ``abuild_pipeline``.
+    spec is interface-agnostic; the caller runs it with the execution layer.
 
     """
 
     def __init__(self, directory: Path) -> None:
         self._directory = directory
 
-    def load(self, name: str) -> ParsedPipeDef | None:
+    def load(self, name: str) -> WorkflowSpec | None:
         try:
-            pipe_def = loads((self._directory / f"{name}.json").read_text())
+            text = (self._directory / f"{name}.json").read_text()
         except OSError:
             parsed = None
         else:
-            parsed = parse_pipe_def(pipe_def, name)
+            parsed = parse_workflow(text)
 
         return parsed
 
@@ -199,14 +198,14 @@ class PipelineResolver:
         replace: bool = False,
     ) -> None:
         """
-        Registers a module store and/or a JSON-definition directory.
+        Registers a module store and/or a workflow-document directory.
 
         Only the halves supplied are touched; an omitted half is left as it is.
 
         Args:
 
             store: Generated-pipe module store to register.
-            definitions: JSON-definition directory to register.
+            definitions: Canonical Workflow v2 document directory to register.
             replace: Whether an already-registered half of the same kind may be
                 replaced.
 
@@ -275,9 +274,18 @@ class PipelineResolver:
 
     def load_definition(
         self, name: str, *, directory: Path | None = None
-    ) -> ParsedPipeDef:
+    ) -> WorkflowSpec:
         """
-        Load a named JSON pipeline with an optional directory override.
+        Loads a named canonical Workflow v2 document, optionally from ``directory``.
+
+        Args:
+
+            name: ``pipe_<id>`` / ``pipe:<id>`` name to load.
+            directory: Directory to read from instead of the registered one.
+
+        Returns:
+
+            The canonical workflow spec the document describes.
 
         Raises:
 
@@ -304,7 +312,8 @@ def register_pipeline_store(
     Args:
 
         package: Import path of a package holding generated ``pipe_*`` modules.
-        directory: Filesystem directory holding JSON pipeline definitions.
+        directory: Filesystem directory holding canonical Workflow v2 JSON
+            documents.
         replace: Whether an already-registered source of the same kind may be
             replaced.
 

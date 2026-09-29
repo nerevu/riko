@@ -44,7 +44,7 @@ from riko.runtime._pipelines import mark_subpipe, pipeline_resolver
 from riko.runtime._resolver import ResolverDispatcher
 from riko.types._enums import BasicCastType
 from riko.types._workflow import Endpoint
-from riko.types.modules import LoopConf
+from riko.types.modules import LoopConf, ModuleOptions
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
@@ -229,6 +229,31 @@ def test_run_chains_nodes_through_stream_edge() -> None:
     assert _run(spec, dispatcher) == [{"x": 2}, {"x": 4}]
 
 
+def test_module_node_rejects_an_unknown_option() -> None:
+    options = cast("ModuleOptions", {"bogus": 1})
+
+    with pytest.raises(InvalidPipelineError, match="unknown module option"):
+        ModuleNode(id="n", name="m", options=options)
+
+
+def test_run_forwards_node_options_as_call_kwargs() -> None:
+    seen: dict[str, object] = {}
+
+    def probe(source, **kwargs):
+        seen["emit"] = kwargs.get("emit")
+        seen["conf"] = dict(kwargs["conf"])
+        return iter(())
+
+    sync_pipe = cast("SyncModuleWrapper", probe)
+    dispatcher = _dispatcher(ModuleDefinition(name="probe", sync_pipe=sync_pipe))
+    node = ModuleNode(id="n", name="probe", options={"emit": True})
+    spec = _spec([node], {"default": Endpoint("n", "out")})
+
+    assert _run(spec, dispatcher) == []
+    assert seen["emit"] is True
+    assert seen["conf"] == {}
+
+
 def _tagged_source(tag):
     def src(_items=None, **_):
         yield {"t": tag}
@@ -283,6 +308,52 @@ def test_run_wires_named_input_port_as_kwarg() -> None:
     spec = _spec([a, s, j], {"default": Endpoint("j", "out")}, edges=edges)
 
     assert _run(spec, dispatcher) == [{"t": "a"}, {"t": "side"}]
+
+
+def test_run_leaves_the_default_input_empty_when_only_indexed_ports_are_wired() -> None:
+    # An operator whose default input is unconnected but whose secondary inputs are
+    # wired must not receive the seed item as data.
+    seen: dict[str, object] = {}
+
+    def merge(source, others=None, **_):
+        seen["source"] = list(source)
+
+        for other in others or ():
+            yield from other
+
+    dispatcher = _dispatcher(
+        ModuleDefinition(name="src", sync_pipe=_tagged_source("a")),
+        ModuleDefinition(name="merge", sync_pipe=cast("SyncModuleWrapper", merge)),
+    )
+    a = ModuleNode(id="a", name="src")
+    m = ModuleNode(id="m", name="merge")
+    edge = StreamEdge(Endpoint("a", "out"), Endpoint("m", "in:1"))
+    spec = _spec([a, m], {"default": Endpoint("m", "out")}, edges=(edge,))
+
+    assert _run(spec, dispatcher) == [{"t": "a"}]
+    assert seen["source"] == []
+
+
+def test_run_still_seeds_a_node_wired_only_through_a_named_value_port() -> None:
+    seen: dict[str, object] = {}
+
+    def probe(source, count=None, **_):
+        seen["source"] = list(source)
+        seen["count"] = list(count or ())
+        return iter(())
+
+    dispatcher = _dispatcher(
+        ModuleDefinition(name="src", sync_pipe=_tagged_source("a")),
+        ModuleDefinition(name="probe", sync_pipe=cast("SyncModuleWrapper", probe)),
+    )
+    a = ModuleNode(id="a", name="src")
+    b = ModuleNode(id="b", name="probe")
+    edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in:count"))
+    spec = _spec([a, b], {"default": Endpoint("b", "out")}, edges=(edge,))
+
+    assert _run(spec, dispatcher) == []
+    assert seen["source"] == [{"forever": True}]
+    assert seen["count"] == [{"t": "a"}]
 
 
 def test_run_rejects_nondefault_source_output_port() -> None:
@@ -610,13 +681,8 @@ def _prepare_loop(embed_conf=None):
     loop = ModuleNode(
         id="loop",
         name="fakeloop",
-        conf=LoopConf(
-            {
-                "embed": {"name": "up", "conf": embed_conf or {}},
-                "emit": True,
-                "count": "first",
-            }
-        ),
+        conf=LoopConf({"embed": {"name": "up", "conf": embed_conf or {}}}),
+        options={"emit": True, "count": "first"},
     )
     return _spec([loop], {"default": Endpoint("loop", "out")})
 
@@ -635,6 +701,7 @@ def test_prepare_resolves_nested_embed() -> None:
     assert node.embed.select(is_async=False).pipe is up
     assert node.embed.conf == {"case": "upper"}
     assert dict(node.options) == {"emit": True, "count": "first"}
+    assert dict(node.embed.options) == {}
 
 
 def test_prepare_adapts_async_only_embed_under_sync() -> None:
@@ -680,9 +747,8 @@ def test_run_adapts_async_only_embed_under_sync() -> None:
     loop = ModuleNode(
         id="loop",
         name="fakeloop",
-        conf=LoopConf(
-            {"embed": {"name": "up", "conf": {}}, "emit": True, "count": "first"}
-        ),
+        conf=LoopConf({"embed": {"name": "up", "conf": {}}}),
+        options={"emit": True, "count": "first"},
     )
     edge = StreamEdge(Endpoint("s", "out"), Endpoint("loop", "in"))
     spec = _spec([src, loop], {"default": Endpoint("loop", "out")}, edges=(edge,))
@@ -713,9 +779,8 @@ def test_run_forwards_embed_and_options_to_loop() -> None:
     loop = ModuleNode(
         id="loop",
         name="fakeloop",
-        conf=LoopConf(
-            {"embed": {"name": "up", "conf": {}}, "emit": True, "count": "first"}
-        ),
+        conf=LoopConf({"embed": {"name": "up", "conf": {}}}),
+        options={"emit": True, "count": "first"},
     )
     edge = StreamEdge(Endpoint("s", "out"), Endpoint("loop", "in"))
     spec = _spec([src, loop], {"default": Endpoint("loop", "out")}, edges=(edge,))
@@ -730,9 +795,8 @@ def _loop_spec(loop_name="fakeloop", embed_name="up"):
     loop = ModuleNode(
         id="loop",
         name=loop_name,
-        conf=LoopConf(
-            {"embed": {"name": embed_name, "conf": {}}, "emit": True, "count": "first"}
-        ),
+        conf=LoopConf({"embed": {"name": embed_name, "conf": {}}}),
+        options={"emit": True, "count": "first"},
     )
     edge = StreamEdge(Endpoint("s", "out"), Endpoint("loop", "in"))
     return _spec([src, loop], {"default": Endpoint("loop", "out")}, edges=(edge,))
@@ -929,6 +993,54 @@ async def test_arun_chains_async_and_sync_worker_nodes() -> None:
     spec = _spec([a, b, c], {"default": Endpoint("c", "out")}, edges=edges)
 
     assert await _arun(spec, dispatcher) == [{"n": 2, "seen": True}]
+
+
+@async_test
+async def test_arun_forwards_node_options_as_call_kwargs() -> None:
+    seen: dict[str, object] = {}
+
+    async def aprobe(source, **kwargs):
+        seen["emit"] = kwargs.get("emit")
+        seen["conf"] = dict(kwargs["conf"])
+
+        for item in ():
+            yield item
+
+    async_pipe = cast("AsyncModuleWrapper", aprobe)
+    dispatcher = _dispatcher(ModuleDefinition(name="aprobe", async_pipe=async_pipe))
+    node = ModuleNode(id="n", name="aprobe", options={"emit": True})
+    spec = _spec([node], {"default": Endpoint("n", "out")})
+
+    assert await _arun(spec, dispatcher) == []
+    assert seen["emit"] is True
+    assert seen["conf"] == {}
+
+
+@async_test
+async def test_arun_leaves_the_default_input_empty_for_indexed_ports() -> None:
+    seen: dict[str, object] = {}
+
+    async def asrc(_items=None, **_):
+        yield {"t": "a"}
+
+    async def amerge(source, others=None, **_):
+        seen["source"] = [row async for row in source]
+
+        for other in others or ():
+            async for row in other:
+                yield row
+
+    dispatcher = _dispatcher(
+        ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", asrc)),
+        ModuleDefinition(name="amerge", async_pipe=cast("AsyncModuleWrapper", amerge)),
+    )
+    a = ModuleNode(id="a", name="asrc")
+    m = ModuleNode(id="m", name="amerge")
+    edge = StreamEdge(Endpoint("a", "out"), Endpoint("m", "in:1"))
+    spec = _spec([a, m], {"default": Endpoint("m", "out")}, edges=(edge,))
+
+    assert await _arun(spec, dispatcher) == [{"t": "a"}]
+    assert seen["source"] == []
 
 
 @async_test

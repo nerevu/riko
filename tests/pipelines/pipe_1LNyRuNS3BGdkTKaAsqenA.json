@@ -1,41 +1,74 @@
 {
-  "modules": [
-    {"conf": null, "id": "_OUTPUT", "type": "output"},
-    {
-      "conf": {
-        "test": {"type": "bool", "value": "true"},
-        "name": {"type": "text", "value": "textinput1"},
-        "input_key": {"type": "text", "value": "textinput1"},
-        "prompt": {"type": "text", "value": "Stock Symbol:"},
-        "default": {"type": "text", "value": "yhoo"},
-        "type": {"type": "text", "value": "text"}
-      },
-      "id": "sw-1",
-      "type": "input"
+    "edges": [
+        {
+            "source": {
+                "node": "sw-1",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-2",
+                "port": "in:symbol_in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-1": {
+            "conf": {
+                "default": {
+                    "type": "text",
+                    "value": "yhoo"
+                },
+                "input_key": {
+                    "type": "text",
+                    "value": "textinput1"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "textinput1"
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "Stock Symbol:"
+                },
+                "test": {
+                    "type": "bool",
+                    "value": "true"
+                },
+                "type": {
+                    "type": "text",
+                    "value": "text"
+                }
+            },
+            "id": "sw-1",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-2": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "symbol"
+                        },
+                        "value": {
+                            "terminal": "symbol_in",
+                            "type": "text"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-2",
+            "name": "itembuilder",
+            "type": "module"
+        }
     },
-    {
-      "conf": {
-        "attrs": [
-          {
-            "key": {"type": "text", "value": "symbol"},
-            "value": {"terminal": "symbol_in", "type": "text"}
-          }
-        ]
-      },
-      "id": "sw-2",
-      "type": "itembuilder"
-    }
-  ],
-  "wires": [
-    {
-      "id": "_w1",
-      "src": {"id": "_OUTPUT", "moduleid": "sw-1"},
-      "tgt": {"id": "symbol_in", "moduleid": "sw-2"}
+    "outputs": {
+        "default": {
+            "node": "sw-2",
+            "port": "out"
+        }
     },
-    {
-      "id": "_w2",
-      "src": {"id": "_OUTPUT", "moduleid": "sw-2"},
-      "tgt": {"id": "_INPUT", "moduleid": "_OUTPUT"}
-    }
-  ]
+    "version": "2"
 }

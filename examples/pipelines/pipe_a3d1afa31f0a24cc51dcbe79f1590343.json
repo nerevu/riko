@@ -1,73 +1,66 @@
 {
-  "modules": [
-    {
-      "id": "sw-1",
-      "type": "itembuilder",
-      "conf": {
-        "attrs": [
-          {
-            "key": {
-              "type": "text",
-              "value": "url"
+    "edges": [
+        {
+            "source": {
+                "node": "sw-1",
+                "port": "out"
             },
-            "value": {
-              "type": "text",
-              "value": "http://www.caltrain.com/Fares/farechart.html"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "id": "sw-2",
-      "type": "regex",
-      "conf": {
-        "rule": [
-          {
-            "field": {
-              "type": "text",
-              "value": "url"
+            "target": {
+                "node": "sw-2",
+                "port": "in"
             },
-            "match": {
-              "type": "text",
-              "value": "http.*html"
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-1": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "url"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "http://www.caltrain.com/Fares/farechart.html"
+                        }
+                    }
+                ]
             },
-            "replace": {
-              "type": "text",
-              "value": "farechart"
-            }
-          }
-        ]
-      }
+            "id": "sw-1",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-2": {
+            "conf": {
+                "rule": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "url"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "http.*html"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": "farechart"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-2",
+            "name": "regex",
+            "type": "module"
+        }
     },
-    {
-      "id": "_OUTPUT",
-      "type": "output",
-      "conf": {}
-    }
-  ],
-  "wires": [
-    {
-      "id": "_w1",
-      "src": {
-        "id": "_OUTPUT",
-        "moduleid": "sw-1"
-      },
-      "tgt": {
-        "id": "_INPUT",
-        "moduleid": "sw-2"
-      }
+    "outputs": {
+        "default": {
+            "node": "sw-2",
+            "port": "out"
+        }
     },
-    {
-      "id": "_w2",
-      "src": {
-        "id": "_OUTPUT",
-        "moduleid": "sw-2"
-      },
-      "tgt": {
-        "id": "_INPUT",
-        "moduleid": "_OUTPUT"
-      }
-    }
-  ]
+    "version": "2"
 }
