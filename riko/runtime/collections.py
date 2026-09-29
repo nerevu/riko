@@ -22,11 +22,6 @@ from enum import StrEnum
 from functools import partial
 from io import StringIO
 from itertools import chain, repeat
-from multiprocessing import Pool as CPUPool
-from multiprocessing import cpu_count
-from multiprocessing.dummy import Pool as ThreadPool
-from multiprocessing.pool import Pool as CPUPoolType
-from multiprocessing.pool import ThreadPool as ThreadPoolType
 from operator import length_hint
 from typing import (
     TYPE_CHECKING,
@@ -59,6 +54,15 @@ from riko.coercion._sequences import listize
 from riko.definitions._targets import build_write
 from riko.definitions._write import Destination, ExportType, WriteMode, WriteResult
 from riko.definitions.modules import normalize_module_name
+from riko.execution._pools import (
+    Executor,
+    PoolHandle,
+    borrow_pool,
+    get_chunksize,
+    get_worker_cnt,
+    open_pool,
+    resolve_executor,
+)
 from riko.execution.context import Context
 from riko.io._serialization import CONVERSION_FUNCS, serialize_records
 from riko.types._enums import ExecutionMode, FmtLike, Formats, ModuleNameLike, StrLike
@@ -78,6 +82,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from logging import Logger
 
+    from riko.execution._pools import AnyPool
     from riko.types._collections import Inputs, InputSource
     from riko.types._io import PathLike
     from riko.types._options import SkipIf
@@ -102,9 +107,6 @@ if TYPE_CHECKING:
     )
 
     from ._pubsub._types import ReceiveFunc
-
-type AnyPool = ThreadPoolType | CPUPoolType
-type PoolFactory = Callable[..., AnyPool]
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -189,25 +191,6 @@ class PipeState(StrEnum):
     FAILED = "failed"
 
 
-class Executor(StrEnum):
-    """
-    Where a pipe's per-item work runs.
-
-    Derived from ``parallel``/``threads`` rather than set directly: ``INLINE``
-    when ``parallel`` is off, otherwise ``THREAD`` or ``PROCESS``.
-    """
-
-    INLINE = "inline"
-    THREAD = "thread"
-    PROCESS = "process"
-
-
-_POOLS: dict[Executor, PoolFactory] = {
-    Executor.THREAD: ThreadPool,
-    Executor.PROCESS: CPUPool,
-}
-
-
 class _Lifecycle:
     """
     Tracks one-shot execution state for pipes and collections.
@@ -255,29 +238,6 @@ class _Lifecycle:
     def _require_usable(self, action: str) -> None:
         if self._state in {PipeState.CLOSED, PipeState.FAILED}:
             raise PipelineStateError(self._state.value, action)
-
-
-class _PoolHandle:
-    """Shared pool state, including whether riko owns the pool."""
-
-    def __init__(self, pool: AnyPool, *, owned: bool) -> None:
-        self.pool: AnyPool | None = pool
-        self.owned = owned
-
-    def __bool__(self) -> bool:
-        return self.pool is not None
-
-    def close(self) -> None:
-        if self.owned and (pool := self.pool):
-            pool.close()
-            pool.join()
-            self.pool = None
-
-    def terminate(self) -> None:
-        if self.owned and (pool := self.pool):
-            pool.terminate()
-            pool.join()
-            self.pool = None
 
 
 class _SendDispatcher:
@@ -485,7 +445,7 @@ def _passthrough_pipe(
     pool_scope: PoolScope = getattr(template, "pool_scope", PoolScope.PIPELINE)
 
     if pool_scope == PoolScope.PIPELINE:
-        shared: _PoolHandle | None = getattr(template, "_pool_handle", None)
+        shared: PoolHandle | None = getattr(template, "_pool_handle", None)
     else:
         shared = None
 
@@ -754,7 +714,7 @@ class SyncPipe(PyPipe):
         source: Items | None = None,
         conf: Conf | None = None,
         *,
-        _pool_handle: _PoolHandle | None = None,
+        _pool_handle: PoolHandle | None = None,
         assign: str | None = None,
         chunksize: int | None = None,
         context: Context | None = None,
@@ -794,12 +754,8 @@ class SyncPipe(PyPipe):
             **kwargs,
         )
         self.threads: bool = bool(threads)
-
-        if parallel:
-            self.executor = Executor.THREAD if self.threads else Executor.PROCESS
-        else:
-            self.executor = Executor.INLINE
-
+        executor = resolve_executor(parallel=parallel, threads=self.threads)
+        self.executor: Executor = executor
         self._in_context: bool = False
         self._iter: Stream | None = None
         self._mapped: Streams | None = None
@@ -815,7 +771,7 @@ class SyncPipe(PyPipe):
         if pool and _pool_handle:
             raise TypeError("pool and _pool_handle cannot both be provided")
         elif pool:
-            self._pool_handle: _PoolHandle | None = _PoolHandle(pool, owned=False)
+            self._pool_handle: PoolHandle | None = borrow_pool(pool)
         else:
             self._pool_handle = _pool_handle
 
@@ -832,18 +788,13 @@ class SyncPipe(PyPipe):
 
         if self.parallelize:
             length = length_hint(self.source)
-            def_pool = _POOLS[self.executor]
             self.workers: int | None = workers or get_worker_cnt(length, self.threads)
             self.chunksize: int = chunksize or get_chunksize(length, self.workers)
 
             if not self._pool_handle:
-                new_pool = def_pool(self.workers)
-                self._pool_handle = _PoolHandle(new_pool, owned=True)
+                self._pool_handle = open_pool(self.executor, self.workers)
 
-            if not (pool := self.pool):
-                raise RuntimeError("Cannot reuse a closed worker pool")
-
-            self.map = pool.map if ordered else pool.imap_unordered
+            self.map = self._pool_handle.map(bool(ordered))
         else:
             self.workers = workers
             self.chunksize = chunksize or 1
@@ -1417,32 +1368,21 @@ class SyncCollection(PyCollection):
             sources, conf=conf, workers=workers, parallel=parallel, **kwargs
         )
         self.threads: bool = bool(threads)
-
-        if parallel:
-            self.executor = Executor.THREAD if self.threads else Executor.PROCESS
-        else:
-            self.executor = Executor.INLINE
-
+        executor = resolve_executor(parallel=parallel, threads=self.threads)
+        self.executor: Executor = executor
         self.ordered: bool = bool(ordered)
         self._iter: Stream | None = None
         self.map: Callable[..., Streams]
         self._in_context: bool = False
-        self._pool_handle: _PoolHandle | None = (
-            _PoolHandle(pool, owned=False) if pool else None
-        )
+        self._pool_handle: PoolHandle | None = borrow_pool(pool) if pool else None
 
         if self.parallel:
             self.chunksize: int = get_chunksize(self.length, self.workers)
-            def_pool = _POOLS[self.executor]
 
-            if not self._pool_handle and def_pool:
-                new_pool = def_pool(self.workers)
-                self._pool_handle = _PoolHandle(new_pool, owned=True)
+            if not self._pool_handle:
+                self._pool_handle = open_pool(self.executor, self.workers)
 
-            if not (pool := self.pool):
-                raise RuntimeError("Cannot reuse a closed worker pool")
-
-            self.map = pool.map if ordered else pool.imap_unordered
+            self.map = self._pool_handle.map(self.ordered)
         else:
             self.map = map
 
@@ -2156,18 +2096,6 @@ class AsyncCollection(PyCollection):
             raise
         finally:
             self._end()
-
-
-def get_chunksize(length: int, workers: int) -> int:
-    """Computes items per worker task, targeting four batches per worker."""
-    return (length // (workers * 4)) or 1
-
-
-def get_worker_cnt(length: int, threads: bool | None = True) -> int:
-    """Computes a pool size, capped at the core count (doubled for threads)."""
-    multiplier = 2 if threads else 1
-    maximum = cpu_count() * multiplier
-    return min(length, maximum) if length else maximum
 
 
 def listpipe(
