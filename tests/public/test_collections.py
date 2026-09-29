@@ -16,11 +16,11 @@ from riko.bado._util import gather_results
 from riko.base._paths import get_path
 from riko.base.exceptions import ReceiverUnavailableError
 from riko.definitions.modules import normalize_module_name
+from riko.execution._pools import Executor
 from riko.runtime._pubsub import async_hub, sync_hub
 from riko.runtime.collections import (
     CONVERSION_FUNCS,
     AsyncPipe,
-    Executor,
     Formats,
     PipeState,
     SyncCollection,

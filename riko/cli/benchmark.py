@@ -15,6 +15,7 @@ from riko.bado._backend import async_sleep, isasync
 from riko.bado._backend import run as async_run
 from riko.bado.itertools import async_map
 from riko.base._paths import get_path
+from riko.execution._pools import get_chunksize, get_worker_cnt
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
 from riko.runtime.collections import (
@@ -22,8 +23,6 @@ from riko.runtime.collections import (
     AsyncPipe,
     SyncCollection,
     SyncPipe,
-    get_chunksize,
-    get_worker_cnt,
 )
 from riko.types._rss import RSSEntry
 from riko.types._streams import ItemOrValue
