@@ -10,7 +10,6 @@ or a codegen regression — fails here.
 
 from __future__ import annotations
 
-from json import loads
 from keyword import iskeyword
 from typing import TYPE_CHECKING
 
@@ -20,30 +19,19 @@ from riko.base._strutils import pythonise
 from riko.base.exceptions import UnsupportedModuleError
 from riko.execution.context import Context
 from riko.runtime._compile import (
-    build_pipe_def,
     build_pipeline,
-    compile_pipe,
+    compile_pipe_def,
     get_wire,
     parse_pipe_def,
     resolve_module,
     stringify_pipe,
 )
-from riko.types._compiler import (
-    DagModule,
-    GraphIndex,
-    LoopModule,
-    PipeDag,
-    PipeDef,
-    PipeId,
-    PipeModule,
-)
+from riko.types._compiler import GraphIndex, LoopModule, PipeDef, PipeId, PipeModule
 from riko.types.modules import ItemBuilderRawConf, Param, TruncateRawConf
-from tests import TESTS_DIR, async_test
+from tests import async_test
 
 if TYPE_CHECKING:
     from riko.types._streams import Item
-
-DAG_DIR = TESTS_DIR / "dags"
 
 
 def _itembuilder_src(title: str, module_id: str = "sw-1") -> PipeModule:
@@ -248,91 +236,12 @@ def test_compile_wraps_parse_and_stringify():
     name = "pipe_gen_itembuilder"
     expected = stringify_pipe(parse_pipe_def(ITEMBUILDER, name))
 
-    assert compile_pipe(ITEMBUILDER, name) == expected
+    assert compile_pipe_def(ITEMBUILDER, name) == expected
 
 
 def test_unresolved_subpipeline_raises():
     with pytest.raises(UnsupportedModuleError):
         resolve_module("pipe_missing")
-
-
-def test_convert_dag_appends_output():
-    dag = loads((DAG_DIR / "pipe_forever.json").read_text())
-    pipe_def = build_pipe_def(dag)
-    module_ids = [module["id"] for module in pipe_def["modules"]]
-    output_wire = pipe_def["wires"][-1]
-
-    assert module_ids == ["sw-1", "sw-2", "_OUTPUT"]
-    assert output_wire["src"]["moduleid"] == "sw-2"
-    assert output_wire["tgt"]["moduleid"] == "_OUTPUT"
-
-
-def test_convert_dag_matches_full_pipeline():
-    dag = loads((DAG_DIR / "pipe_forever.json").read_text())
-    full = _forever_def("3")
-    converted = _compile_and_run(build_pipe_def(dag), "pipe_forever")
-    expected = _compile_and_run(full, "pipe_forever")
-    assert converted == expected
-
-
-def test_convert_dag_linear_default_matches_explicit_wires():
-    modules = [
-        DagModule({"id": "sw-1", "type": "forever", "conf": {}}),
-        DagModule(
-            {
-                "id": "sw-2",
-                "type": "truncate",
-                "conf": {"count": {"type": "int", "value": "3"}},
-            }
-        ),
-    ]
-    linear = build_pipe_def({"modules": modules})
-    wired = build_pipe_def({"modules": modules, "wires": [("sw-1", "sw-2")]})
-    assert linear == wired
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="An empty module list never reaches ``module_ids[-1]`` because the terminal "
-    "``output`` node is appended unconditionally. So ``build_pipe_def`` returns just "
-    "that node with no wires rather than raising.",
-)
-def test_convert_dag_empty_modules_raises():
-    with pytest.raises(IndexError):
-        build_pipe_def({"modules": []})
-
-
-def test_convert_dag_wires_override_listing_order():
-    dag = loads((DAG_DIR / "pipe_reordered.json").read_text())
-    wires = build_pipe_def(dag)["wires"]
-    edges = [(wire["src"]["moduleid"], wire["tgt"]["moduleid"]) for wire in wires]
-
-    assert edges == [("gen", "trunc"), ("trunc", "_OUTPUT")]
-    assert len(_compile_and_run(build_pipe_def(dag), "pipe_reordered")) == 2
-
-
-def test_convert_dag_generates_ids_when_omitted():
-    dag = PipeDag(
-        {
-            "modules": [
-                DagModule({"type": "forever", "conf": {}}),
-                DagModule(
-                    {
-                        "type": "truncate",
-                        "conf": {"count": {"type": "int", "value": "3"}},
-                    }
-                ),
-            ]
-        }
-    )
-    pipe_def = build_pipe_def(dag)
-    module_ids = [module["id"] for module in pipe_def["modules"]]
-    edges = [
-        (wire["src"]["moduleid"], wire["tgt"]["moduleid"]) for wire in pipe_def["wires"]
-    ]
-
-    assert module_ids == ["sw-1", "sw-2", "_OUTPUT"]
-    assert edges == [("sw-1", "sw-2"), ("sw-2", "_OUTPUT")]
 
 
 def test_parse_pipe_def_replaces_wires_with_graph_index():
@@ -385,12 +294,12 @@ async def test_async_codegen_matches_sync():
     The async path emits a runnable AnyIO pipeline.
     """
     name = "pipe_gen_itembuilder"
-    async_src = compile_pipe(ITEMBUILDER, name, is_async=True)
+    async_src = compile_pipe_def(ITEMBUILDER, name, is_async=True)
     async_ns: dict = {}
     exec(async_src, async_ns)
     async_result = [item async for item in async_ns["async_pipe"]()]
 
-    sync_src = compile_pipe(ITEMBUILDER, name, is_async=False)
+    sync_src = compile_pipe_def(ITEMBUILDER, name, is_async=False)
     sync_ns: dict = {}
     exec(sync_src, sync_ns)
     sync_result = list(sync_ns["pipe"]())

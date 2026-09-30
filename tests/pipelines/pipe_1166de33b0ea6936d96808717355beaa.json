@@ -225,34 +225,32 @@
             "type": "module"
         },
         "sw-688": {
-            "conf": {
-                "embed": {
-                    "conf": {
-                        "attrs": [
-                            {
-                                "key": {
-                                    "type": "text",
-                                    "value": "title"
-                                },
-                                "value": {
-                                    "subkey": "newtitle",
-                                    "type": "text"
-                                }
+            "embed": {
+                "conf": {
+                    "attrs": [
+                        {
+                            "key": {
+                                "type": "text",
+                                "value": "title"
                             },
-                            {
-                                "key": {
-                                    "type": "text",
-                                    "value": "description.content"
-                                },
-                                "value": {
-                                    "type": "text",
-                                    "value": "DESCRIPTION"
-                                }
+                            "value": {
+                                "subkey": "newtitle",
+                                "type": "text"
                             }
-                        ]
-                    },
-                    "name": "itembuilder"
-                }
+                        },
+                        {
+                            "key": {
+                                "type": "text",
+                                "value": "description.content"
+                            },
+                            "value": {
+                                "type": "text",
+                                "value": "DESCRIPTION"
+                            }
+                        }
+                    ]
+                },
+                "name": "itembuilder"
             },
             "id": "sw-688",
             "name": "loop",

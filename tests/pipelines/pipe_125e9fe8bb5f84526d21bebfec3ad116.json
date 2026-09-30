@@ -136,32 +136,30 @@
             "type": "module"
         },
         "sw-61": {
-            "conf": {
-                "embed": {
-                    "conf": {
-                        "base": {
-                            "type": "text",
-                            "value": "api.github.com_search_users"
-                        },
-                        "ext": {
-                            "type": "text",
-                            "value": "json"
-                        },
-                        "param": [
-                            {
-                                "key": {
-                                    "type": "text",
-                                    "value": "q"
-                                },
-                                "value": {
-                                    "subkey": "title",
-                                    "type": "text"
-                                }
-                            }
-                        ]
+            "embed": {
+                "conf": {
+                    "base": {
+                        "type": "text",
+                        "value": "api.github.com_search_users"
                     },
-                    "name": "urlbuilder"
-                }
+                    "ext": {
+                        "type": "text",
+                        "value": "json"
+                    },
+                    "param": [
+                        {
+                            "key": {
+                                "type": "text",
+                                "value": "q"
+                            },
+                            "value": {
+                                "subkey": "title",
+                                "type": "text"
+                            }
+                        }
+                    ]
+                },
+                "name": "urlbuilder"
             },
             "id": "sw-61",
             "name": "loop",

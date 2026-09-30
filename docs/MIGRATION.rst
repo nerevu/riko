@@ -97,9 +97,11 @@ Workflow call options and stored pipelines
 A workflow node now separates the configuration a module parses (``conf``) from the
 options handed to the module itself (``options``). The typing name ``LoopOptions`` in
 ``riko.types.modules`` is now ``ModuleOptions``, since those options apply to every
-module rather than to ``loop`` alone, and ``LoopConf`` holds only ``embed``.
+module rather than to ``loop`` alone. ``LoopConf`` is removed: a loop's embedded module
+is the node's ``embed``.
 
-Move a loop's ``emit``, ``assign``, ``field``, and ``count`` out of its ``conf``:
+Move a loop's ``emit``, ``assign``, ``field``, and ``count`` out of its ``conf`` into
+``options``, and its embedded module out of ``conf`` into ``embed``:
 
 .. code-block:: python
 
@@ -107,10 +109,10 @@ Move a loop's ``emit``, ``assign``, ``field``, and ``count`` out of its ``conf``
     ModuleNode(id="loop", name="loop", conf={"embed": embed, "emit": True})
 
     # after
-    ModuleNode(id="loop", name="loop", conf={"embed": embed}, options={"emit": True})
+    ModuleNode(id="loop", name="loop", embed=embed, options={"emit": True})
 
-The same ``options`` mapping is accepted in an authoring mapping and is serialized only
-when it is non-empty.
+Both ``options`` and ``embed`` are accepted in an authoring mapping and are serialized
+only when present.
 
 A directory registered with ``riko.ext.register_pipeline_store(directory=…)``, and the
 files ``PipelineResolver.load_definition`` reads from it, must now hold canonical
@@ -122,8 +124,35 @@ workflow JSON. Convert stored definitions in the released pipe-definition format
 
     canonical = serialize_workflow(migrate_v1_to_v2(old_definition))
 
+``convert-dag`` does the same conversion from the command line, so stored definitions can
+be brought forward without writing a script:
+
+.. code-block:: bash
+
+    convert-dag old_definition.json -o flow.json
+
+It now emits a canonical workflow document rather than a pipe definition, and reads a
+bare-bones DAG, a released pipe definition, or a canonical document, detecting which
+unless ``--format {dag,v1,v2}`` pins it. ``compile-pipe`` takes canonical documents only
+and exits with a message naming ``convert-dag`` when handed an older one; the module it
+generates rebuilds the workflow from typed configuration classes and runs it through
+riko's execution. ``run-pipe -p flow.json`` runs a canonical document directly.
+
+In Python, ``build_pipe_def`` is replaced by ``build_workflow``, which expands the same
+bare-bones DAG into a canonical ``WorkflowSpec`` instead of a pipe definition, and
+``compile_pipe`` takes a workflow (or an authoring mapping for one) rather than a pipe
+definition.
+
+.. code-block:: python
+
+    # before
+    definition = build_pipe_def(dag)
+
+    # after
+    spec = build_workflow(dag)
+    source = compile_pipe(spec, "flow")
+
 The ``gen-pipelines`` console script and the ``manage codegen --pipes`` selector were
-removed along with the generated fixture trees they produced. ``compile-pipe`` and
-``convert-dag`` are unchanged and still take the older pipe-definition format.
+removed along with the generated fixture trees they produced.
 
 .. _CHANGES: CHANGES.rst

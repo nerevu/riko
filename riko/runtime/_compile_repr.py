@@ -1,15 +1,14 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides function pretty printing."""
+"""Provides the unquoted identifier placeholder rendered into generated source."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from functools import total_ordering
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from riko.types._compiler import ModuleOptionValues
 from riko.types._pipeline import StepValue
-from riko.types.modules import AnyModuleRawConf, RawConfValues, Value
+from riko.types.modules import AnyModuleRawConf
 
 if TYPE_CHECKING:
     from riko.execution.context import Context
@@ -45,32 +44,3 @@ class Id:
 type PyKwargValue = (
     AnyModuleRawConf | ModuleOptionValues | Context | list[StepValue | Id]
 )
-
-
-def repr_arg(
-    arg: PyKwargValue | RawConfValues | Id | Value | dict[str, str] | None,
-) -> str:
-    """
-    Formats a function argument prettily but as working code.
-
-    unicode encodable as ascii is formatted as str
-    """
-    if arg is None:
-        value = ""
-    elif isinstance(arg, str):
-        value = repr(arg)
-    elif isinstance(arg, (dict, Mapping)):
-        joined = ", ".join(
-            f"{repr_arg(k)}: {repr_arg(cast('RawConfValues', v))}"
-            for k, v in arg.items()
-        )
-        value = f"{{{joined}}}"
-    else:
-        value = str(arg)
-
-    return value
-
-
-def repr_args(*args: dict[str, str]) -> str:
-    """Formats a list of function arguments prettily but as working code."""
-    return f"[{', '.join(map(repr_arg, args))}]"

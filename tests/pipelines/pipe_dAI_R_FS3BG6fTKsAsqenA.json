@@ -25,30 +25,28 @@
     ],
     "nodes": {
         "sw-138": {
-            "conf": {
-                "embed": {
-                    "conf": {
-                        "part": [
-                            {
-                                "subkey": "headline",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": " ("
-                            },
-                            {
-                                "subkey": "severity",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": ")"
-                            }
-                        ]
-                    },
-                    "name": "strconcat"
-                }
+            "embed": {
+                "conf": {
+                    "part": [
+                        {
+                            "subkey": "headline",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": " ("
+                        },
+                        {
+                            "subkey": "severity",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": ")"
+                        }
+                    ]
+                },
+                "name": "strconcat"
             },
             "id": "sw-138",
             "name": "loop",

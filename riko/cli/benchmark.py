@@ -15,23 +15,19 @@ from riko.bado._backend import async_sleep, isasync
 from riko.bado._backend import run as async_run
 from riko.bado.itertools import async_map
 from riko.base._paths import get_path
+from riko.definitions._workflow import Pipeline
 from riko.execution._pools import get_chunksize, get_worker_cnt
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
-from riko.runtime.collections import (
-    AsyncCollection,
-    AsyncPipe,
-    SyncCollection,
-    SyncPipe,
-)
+from riko.runtime._normalize import normalize_workflow
 from riko.types._rss import RSSEntry
-from riko.types._streams import ItemOrValue
 from riko.types.modules import FetchConf
 
 if TYPE_CHECKING:
+    from riko.definitions._workflow import WorkflowSpec
     from riko.types._streams import Item, Items
+    from riko.types._workflow import EdgeAuthoring, NodeAuthoring, WorkflowAuthoring
     from riko.types._wrappers import (
-        AsyncPipeParser,
         ParserMaterializedOutput,
         SyncProcessorWrapperOutput,
     )
@@ -39,6 +35,7 @@ if TYPE_CHECKING:
 NUMBER = 1
 LOOPS = 1
 DELAY = 0.1
+UNION_ID = "union-1"
 
 files: list[str] = [
     "ouseful.xml",
@@ -59,11 +56,36 @@ files: list[str] = [
 
 urls: list[str] = [get_path(f) for f in files]
 confs: list[FetchConf] = [FetchConf({"url": url}) for url in urls]
-sources: list[dict[str, str]] = [{"url": url} for url in urls]
 length: int = len(files)
 iterable: list[float] = [DELAY for _ in files]
 
 type AsyncFunc = Callable[..., Awaitable[Iterator[RSSEntry]]]
+type AsyncTest = Callable[[], Awaitable[object]]
+
+
+def build_fanin_spec() -> WorkflowSpec:
+    """Builds one workflow fanning a fetch of every feed into a single union."""
+    nodes: list[NodeAuthoring] = [
+        {"id": f"fetch-{pos}", "name": "fetch", "conf": conf}
+        for pos, conf in enumerate(confs)
+    ]
+    edges: list[EdgeAuthoring] = [
+        {
+            "source": {"node": f"fetch-{pos}", "port": "out"},
+            "target": {"node": UNION_ID, "port": "in" if pos == 0 else f"in:{pos}"},
+        }
+        for pos in range(length)
+    ]
+    nodes.append({"id": UNION_ID, "name": "union"})
+    workflow: WorkflowAuthoring = {
+        "nodes": nodes,
+        "edges": edges,
+        "outputs": {"default": {"node": UNION_ID, "port": "out"}},
+    }
+    return normalize_workflow(workflow)
+
+
+fanin_spec: WorkflowSpec = build_fanin_spec()
 
 
 def baseline_sync() -> list[None]:
@@ -93,18 +115,13 @@ def sync_pipe() -> Items:
     results: list[Item] = []
 
     for conf in confs:
-        stream = SyncPipe("fetch", conf=conf)
-        results.extend(stream)
+        results.extend(Pipeline.from_module("fetch", conf=conf))
 
     return results
 
 
-def sync_collection() -> Items:
-    return list(SyncCollection(sources, sleep=DELAY))
-
-
-def par_sync_collection() -> Items:
-    return list(SyncCollection(sources, parallel=True, sleep=DELAY))
+def sync_workflow() -> Items:
+    return list(Pipeline(fanin_spec))
 
 
 async def baseline_async() -> list[None]:
@@ -120,18 +137,18 @@ async def async_pipeline() -> list[SyncProcessorWrapperOutput]:
     return await async_map(delayed_fetch, confs)
 
 
-async def async_pipe2() -> Items:
+async def async_pipe() -> Items:
     results: list[Item] = []
 
     for conf in confs:
-        stream = AsyncPipe("fetch", conf=conf)
-        results.extend([item async for item in stream])
+        pipeline = Pipeline.from_module("fetch", conf=conf)
+        results.extend([item async for item in pipeline])
 
     return results
 
 
-async def async_collection() -> list[Item]:
-    return [item async for item in AsyncCollection(sources, sleep=DELAY)]
+async def async_workflow() -> Items:
+    return [item async for item in Pipeline(fanin_spec)]
 
 
 def parse_results(results: Sequence[float]) -> tuple[float, str]:
@@ -152,9 +169,7 @@ def print_time(test: str, max_chars: int, run_time: float, units: str) -> None:
     print(msg.format(padded, NUMBER, LOOPS, run_time, units))
 
 
-async def run_async[T: ItemOrValue](
-    tests: Sequence[AsyncPipeParser[T]], max_chars: int
-) -> None:
+async def run_async(tests: Sequence[AsyncTest], max_chars: int) -> None:
     for test in tests:
         results = []
 
@@ -180,12 +195,11 @@ def main() -> None:
         "baseline_procs",
         "sync_pipeline",
         "sync_pipe",
-        "sync_collection",
-        "par_sync_collection",
+        "sync_workflow",
     ]
 
     if isasync:
-        async_tests = [baseline_async, async_pipeline, async_pipe2, async_collection]
+        async_tests = [baseline_async, async_pipeline, async_pipe, async_workflow]
         combined_tests = sync_tests + [f.__name__ for f in async_tests]
     else:
         async_tests = []

@@ -44,12 +44,12 @@ from riko.runtime._pipelines import mark_subpipe, pipeline_resolver
 from riko.runtime._resolver import ResolverDispatcher
 from riko.types._enums import BasicCastType
 from riko.types._workflow import Endpoint
-from riko.types.modules import LoopConf, ModuleOptions
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
     from riko.types._streams import AsyncItemGenerator, Cascade
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
+    from riko.types.modules import ModuleOptions
 
 _sync_pipe = cast("SyncModuleWrapper", lambda source, **_: iter(source or {}))
 _async_pipe = cast("AsyncModuleWrapper", lambda source, **_: as_async(source or {}))
@@ -681,7 +681,7 @@ def _prepare_loop(embed_conf=None):
     loop = ModuleNode(
         id="loop",
         name="fakeloop",
-        conf=LoopConf({"embed": {"name": "up", "conf": embed_conf or {}}}),
+        embed={"name": "up", "conf": embed_conf or {}},
         options={"emit": True, "count": "first"},
     )
     return _spec([loop], {"default": Endpoint("loop", "out")})
@@ -747,7 +747,7 @@ def test_run_adapts_async_only_embed_under_sync() -> None:
     loop = ModuleNode(
         id="loop",
         name="fakeloop",
-        conf=LoopConf({"embed": {"name": "up", "conf": {}}}),
+        embed={"name": "up", "conf": {}},
         options={"emit": True, "count": "first"},
     )
     edge = StreamEdge(Endpoint("s", "out"), Endpoint("loop", "in"))
@@ -779,7 +779,7 @@ def test_run_forwards_embed_and_options_to_loop() -> None:
     loop = ModuleNode(
         id="loop",
         name="fakeloop",
-        conf=LoopConf({"embed": {"name": "up", "conf": {}}}),
+        embed={"name": "up", "conf": {}},
         options={"emit": True, "count": "first"},
     )
     edge = StreamEdge(Endpoint("s", "out"), Endpoint("loop", "in"))
@@ -795,7 +795,7 @@ def _loop_spec(loop_name="fakeloop", embed_name="up"):
     loop = ModuleNode(
         id="loop",
         name=loop_name,
-        conf=LoopConf({"embed": {"name": embed_name, "conf": {}}}),
+        embed={"name": embed_name, "conf": {}},
         options={"emit": True, "count": "first"},
     )
     edge = StreamEdge(Endpoint("s", "out"), Endpoint("loop", "in"))

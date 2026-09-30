@@ -92,6 +92,11 @@ class Context:
         )
         return (_restore_context, context_tuple)
 
+    def __repr__(self) -> str:
+        content = f"mode={self.mode}, verbose={self.verbose}, test={self.test}, "
+        content += f"inputs={dict(self.inputs)}, submodule={self.submodule}"
+        return f"Context({content})"
+
     @property
     def mode(self) -> ExecutionMode:
         return self._mode
@@ -267,11 +272,6 @@ class Context:
     def describe_dependencies(self) -> bool:
         """Whether the run reports the pipeline's module dependencies."""
         return self.mode in DEPENDENCY_MODES
-
-    def __repr__(self) -> str:
-        content = f"mode={self.mode}, verbose={self.verbose}, test={self.test}, "
-        content += f"inputs={dict(self.inputs)}, submodule={self.submodule}"
-        return f"Context({content})"
 
 
 def _restore_context(*args) -> Context:

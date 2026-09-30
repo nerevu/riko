@@ -11,21 +11,24 @@ machinery.
 from __future__ import annotations
 
 from enum import Enum, auto
-from types import MappingProxyType
-from typing import TYPE_CHECKING, NamedTuple, cast
+from typing import TYPE_CHECKING, NamedTuple
 
 from attrs import Factory, define, field
 
 from riko.base.exceptions import UnsupportedModuleError
 from riko.definitions._workflow import (
     Node,
-    conf_converters,
-    optional_binding,
-    optional_resources,
+    conf_converter,
+    options_converter,
     require_module_node,
+    resource_converter,
 )
-from riko.types._collections import freeze_mapping, require_str, validator_from_require
-from riko.types._compiler import ModuleOptionValues
+from riko.types._collections import (
+    FrozenConf,
+    FrozenOptions,
+    require_str,
+    validator_from_require,
+)
 from riko.types._guards import require_single_output
 
 if TYPE_CHECKING:
@@ -37,12 +40,9 @@ if TYPE_CHECKING:
         ModuleWrapper,
         SyncModuleWrapper,
     )
-    from riko.types.modules import AnyModuleConf, LoopConf, ModuleOptions, ModuleType
+    from riko.types.modules import ModuleType
 
-type FrozenOptions = MappingProxyType[str, ModuleOptionValues]
 
-conf_converter = conf_converters("PreparedNode 'conf'")
-resource_converter = [optional_binding, optional_resources]
 single_output = validator_from_require(require_single_output, optional=True)
 
 
@@ -58,19 +58,6 @@ class Selection(NamedTuple):
 
     pipe: ModuleWrapper
     mode: ExecMode
-
-
-def _conf(value: PreparedNode) -> AnyModuleConf | LoopConf:
-    return require_module_node(value.node).conf
-
-
-def _options(value: PreparedNode) -> FrozenOptions:
-    options = require_module_node(value.node).options
-    return freeze_mapping(cast("dict[str, ModuleOptionValues]", options))
-
-
-def _freeze_options(value: ModuleOptions) -> FrozenOptions:
-    return freeze_mapping(cast("dict[str, ModuleOptionValues]", value))
 
 
 @define(frozen=True, slots=True)
@@ -97,7 +84,7 @@ class PreparedNode:
 
     """
 
-    node: Node = field(validator=validator_from_require(require_module_node))
+    node: Node = field(converter=require_module_node)
     id: NodeId = field(
         default=Factory(lambda self: self.node.id, takes_self=True),
         converter=require_str,
@@ -110,11 +97,13 @@ class PreparedNode:
         default=Factory(lambda self: self.node.resources, takes_self=True),
         converter=resource_converter,
     )
-    conf: AnyModuleConf | LoopConf = field(
-        default=Factory(_conf, takes_self=True), converter=conf_converter
+    conf: FrozenConf = field(
+        default=Factory(lambda self: self.node.conf, takes_self=True),
+        converter=conf_converter("PreparedNode"),
     )
     options: FrozenOptions = field(
-        default=Factory(_options, takes_self=True), converter=_freeze_options
+        default=Factory(lambda self: self.node.options, takes_self=True),
+        converter=options_converter("PreparedNode"),
     )
     sync_pipe: SyncModuleWrapper | None = field(default=None, validator=single_output)
     async_pipe: AsyncModuleWrapper | None = field(default=None, validator=single_output)
@@ -169,7 +158,7 @@ class PreparedNode:
         return self.node.family
 
     @property
-    def embed_or_self_conf(self) -> AnyModuleConf | LoopConf:
+    def embed_or_self_conf(self) -> FrozenConf:
         return self.conf if self.embed is None else self.embed.conf
 
     @property

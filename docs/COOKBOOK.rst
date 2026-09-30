@@ -810,16 +810,17 @@ to the branched items without touching the main flow.
 Compiling JSON pipelines
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-In addition to writing ``pipelines`` in Python, ``riko`` can load and compile
-``pipelines`` stored as JSON pipe definitions (the Yahoo! Pipes-style
-``{"modules": [...], "wires": [...]}`` format). The simplest way to author one
-is as a *bare-bones DAG* — a list of ``modules`` plus optional
-``[source, target]`` wire pairs. When ``wires`` are omitted the modules are
-chained linearly, and a missing ``id`` defaults to ``sw-{n}``.
+In addition to writing ``pipelines`` in Python, ``riko`` can load and run
+``pipelines`` stored as JSON workflow documents. The simplest way to author one
+is as a *bare-bones DAG* — a list of ``modules`` plus optional wires. When
+``wires`` are omitted the modules are chained linearly, and a missing ``id``
+defaults to ``sw-{n}``. Each wire is a ``[source, target]`` pair, optionally
+followed by the port it enters, so fan-in operators such as ``union``/``join``
+are expressible too.
 
 .. code-block:: python
 
-    >>> from riko import Context, build_pipe_def, build_pipeline, parse_pipe_def
+    >>> from riko import Pipeline, build_workflow
     >>>
     >>> ### Author a terse, linear DAG (no wires, no ids) ###
     >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
@@ -831,54 +832,63 @@ chained linearly, and a missing ``id`` defaults to ``sw-{n}``.
     ...     ]
     ... }
     >>>
-    >>> ### Expand it into a full JSON pipe definition ###
-    >>> #
-    >>> # `build_pipe_def` appends the terminal `output` node, wires the modules in
-    >>> # listing order, and connects the final sink to `_OUTPUT`.
-    >>> pipe_def = build_pipe_def(dag)
-    >>>
-    >>> ### Execute it in-process ###
-    >>> stream = build_pipeline(parse_pipe_def(pipe_def, 'pipe_demo'), context=Context())
+    >>> ### Expand it into a validated workflow and run it ###
+    >>> spec = build_workflow(dag)
+    >>> list(Pipeline(spec))
+    [{'salutation': 'hello'}]
 
-To instead emit a standalone, runnable Python module (equivalent to the
-``compile-pipe`` CLI), use ``compile_pipe``:
+``compile_pipe`` turns the same workflow into Python source. The generated module
+declares the graph with typed configuration classes — a ``sort`` node's ``conf``
+becomes a ``SortRawConf``, so a type checker catches a bad option — and exposes a
+single ``pipe`` (or, with ``is_async=True``, an ``async_pipe``) callable that runs
+the workflow through riko's execution with the ``Context`` you hand it. It is
+ordinary importable Python: edit it, check it in, or embed it in a ``loop`` as a
+sub-pipeline.
 
 .. code-block:: python
 
     >>> from riko import compile_pipe
     >>>
-    >>> source = compile_pipe(pipe_def, 'pipe_demo')
-    >>> 'def pipe' in source
-    True
+    >>> source = compile_pipe(spec, 'pipe_demo')
+    >>> print(next(l for l in source.splitlines() if l.startswith('DEPENDENCIES')))
+    DEPENDENCIES: list[str] = ["itembuilder", "rename"]
+    >>> print(next(l for l in source.splitlines() if l.startswith('def pipe')))
+    def pipe(item=None, context: Context | None = None, **_):
 
-Or use the command-line tools:
+The ``convert-dag``, ``compile-pipe``, and ``run-pipe`` commands work on these
+same documents: ``convert-dag`` expands a bare-bones DAG into a canonical
+workflow document, ``run-pipe -p flow.json`` executes one, and ``compile-pipe``
+emits the Python module above.
 
 .. code-block:: bash
 
-    convert-dag flow.dag.json -o flow.json
+    convert-dag dag.json -o flow.json
     compile-pipe flow.json -o flow.py
+    run-pipe -p flow.json
 
-Or chain them, since ``compile-pipe`` reads stdin when given ``-`` (or no path):
+Or chain the first two, since ``compile-pipe`` reads stdin when given ``-`` (or no
+path):
 
 .. code-block:: bash
 
-    convert-dag flow.dag.json | compile-pipe - -o flow.py -v
+    convert-dag dag.json | compile-pipe - -o flow.py -v
 
-Note that fan-in operators such as ``union``/``join`` cannot be expressed with
-the ``[source, target]`` pair format (their secondary inputs need ``_OTHER{n}``
-targets) and must be authored as a full JSON pipe definition instead. See the
-`DAG format doc`_ for the complete schema and expansion rules.
+``convert-dag`` also converts a stored pipe definition in the older
+``{"src": ..., "tgt": ...}`` wire format, so it is the way to bring old JSON
+forward. ``compile-pipe`` and ``run-pipe`` take canonical documents only.
+
+See the `DAG format doc`_ for the complete schema and expansion rules.
 
 Inspecting a pipeline
 ^^^^^^^^^^^^^^^^^^^^^
 
-You can introspect a JSON pipe definition *without running it*.
-``get_pipeline_dependencies`` returns the sorted set of modules a ``pipeline`` uses —
-handy for validating that every required ``pipe`` is installed before execution.
+You can introspect a workflow *without running it*. Its nodes name the modules
+the ``pipeline`` uses — handy for validating that every required ``pipe`` is
+installed before execution.
 
 .. code-block:: python
 
-    >>> from riko import build_pipe_def, get_pipeline_dependencies
+    >>> from riko import build_workflow
     >>>
     >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hi'}}
     >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
@@ -888,7 +898,8 @@ handy for validating that every required ``pipe`` is installed before execution.
     ...         {'type': 'rename', 'conf': rename_conf},
     ...     ]
     ... }
-    >>> get_pipeline_dependencies(build_pipe_def(dag))
+    >>> spec = build_workflow(dag)
+    >>> sorted(node.name for node in spec.nodes.values())
     ['itembuilder', 'rename']
 
 A *compiled* pipeline (see `Compiling JSON pipelines`_) can additionally report

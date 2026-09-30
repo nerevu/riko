@@ -1,10 +1,11 @@
 # vim: sw=4:ts=4:expandtab
 """
-Offline migration of released Workflow v1 pipe definitions to canonical v2.
+Construction of canonical Workflow v2 specs from terser authoring documents.
 
-``migrate_v1_to_v2`` converts a legacy ``PipeDef`` into a canonical ``WorkflowSpec``.
-It is a rescue/conversion tool, not a live loader: v1 is not a maintained runtime
-ingress, so migration warns and emits v2 only.
+``build_workflow`` expands a bare-bones DAG (``modules`` plus optional ``wires``)
+into a validated canonical ``WorkflowSpec``. ``migrate_v1_to_v2`` converts a legacy
+``PipeDef`` into the same canonical form; it is a rescue/conversion tool, not a live
+loader, so migration warns and emits v2 only.
 
 Examples:
 
@@ -35,6 +36,7 @@ Examples:
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import TYPE_CHECKING
 
 import pygogo as gogo
@@ -45,7 +47,7 @@ from riko.base._strutils import pythonise
 from riko.base.exceptions import InvalidPipelineError
 from riko.coercion._sequences import lower_keys, require_sequence
 from riko.types._collections import require_str
-from riko.types._guards import is_mapping, require_mapping
+from riko.types._guards import require_mapping
 from riko.types._workflow import WORKFLOW_VERSION
 from riko.types.modules import ModuleOptions
 
@@ -56,7 +58,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.definitions._workflow import WorkflowSpec
-    from riko.types._compiler import PipeDefLike
+    from riko.types._compiler import PipeDag, PipeDefLike
 
 _WRITE_TYPE = "write"
 _LOOP_TYPE = "loop"
@@ -99,20 +101,11 @@ def _migrate_write(
     }
 
 
-def _migrate_conf(
-    name: str, conf: Mapping[str, object], **extra: object
-) -> dict[str, object]:
-    """Translates a v1 module's configuration and leftover keys into a v2 conf."""
-    embed = extra.get("embed")
-
-    if name == _LOOP_TYPE and is_mapping(embed):
-        embed_name = require_str(embed.get("type"), "loop embed 'type'")
-        leftover = {k: v for k, v in extra.items() if k != "embed"}
-        merged = {"embed": {"name": embed_name, "conf": conf}, **leftover}
-    else:
-        merged = {**extra, **conf}
-
-    return merged
+def _migrate_embed(embed: object, conf: Mapping[str, object]) -> dict[str, object]:
+    """Translates a v1 loop's embedded module reference into the v2 node embed."""
+    mapping = require_mapping(embed, "loop 'embed'")
+    name = require_str(mapping.get("type"), "loop embed 'type'")
+    return {"name": name, "conf": conf}
 
 
 def _migrate_pipe(
@@ -120,11 +113,14 @@ def _migrate_pipe(
 ) -> dict[str, object]:
     """Translates a v1 pipe module into a v2 module-node authoring mapping."""
     options = {k: extra.pop(k) for k in _OPTION_KEYS.intersection(extra)}
-    node: dict[str, object] = {
-        "id": module_id,
-        "name": name,
-        "conf": _migrate_conf(name, conf, **extra),
-    }
+    embed = extra.pop("embed", None) if name == _LOOP_TYPE else None
+    node: dict[str, object] = {"id": module_id, "name": name}
+
+    if embed is None:
+        node["conf"] = {**extra, **conf}
+    else:
+        node["conf"] = extra
+        node["embed"] = _migrate_embed(embed, conf)
 
     if options:
         node["options"] = options
@@ -188,8 +184,8 @@ def migrate_v1_to_v2(pipe_def: PipeDefLike) -> WorkflowSpec:
     ports, the ``write`` module, and the terminal ``_OUTPUT`` node are translated to
     their v2 equivalents; orphan and empty-graph rejection is left to validation. A
     module's call options become the node's ``options``, a loop's embedded module and
-    its configuration become the nested embed the loop runs, and any other module-level
-    key folds into the node's configuration. A v1 ``write`` file-open mode maps to a
+    its configuration become the node's ``embed``, and any other module-level key folds
+    into the node's configuration. A v1 ``write`` file-open mode maps to a
     canonical reconcile mode, and a ``write`` carrying an option with no v2 equivalent
     is rejected rather than silently dropped.
 
@@ -246,4 +242,98 @@ def migrate_v1_to_v2(pipe_def: PipeDefLike) -> WorkflowSpec:
     return normalize_workflow(authoring)
 
 
-__all__ = ["migrate_v1_to_v2"]
+def _build_dag_node(index: int, **module: object) -> dict[str, object]:
+    """Translates one bare-bones DAG module into a v2 authoring node mapping."""
+    raw_id = module.pop("id", None)
+    node_id = f"sw-{index}" if raw_id is None else require_str(raw_id, "module 'id'")
+    name = require_str(module.pop("type", None), "module 'type'")
+    return {"id": node_id, "name": name, **module}
+
+
+def _build_dag_edge(*wire: object) -> dict[str, object]:
+    """Translates one bare-bones DAG wire into a v2 authoring edge mapping."""
+    if len(wire) not in {2, 3}:
+        msg = "a wire must list a source id, a target id, and optionally a target "
+        msg += f"port; got {len(wire)} of them"
+        raise InvalidPipelineError(msg)
+
+    source = require_str(wire[0], "wire source id")
+    target = require_str(wire[1], "wire target id")
+    port = "in" if len(wire) == 2 else require_str(wire[2], "wire target port")
+
+    return {
+        "source": {"node": source, "port": "out"},
+        "target": {"node": target, "port": port},
+    }
+
+
+def build_workflow(dag: PipeDag) -> WorkflowSpec:
+    """
+    Builds a validated canonical workflow spec from a bare-bones DAG.
+
+    A DAG lists ``modules`` and, optionally, ``wires``. Each module carries its module
+    ``type``, an optional ``id`` defaulting to ``sw-{n}`` in listing order, an optional
+    opaque ``conf``, and optional call ``options``; anything else it carries is offered
+    to the workflow node as-is, so an unknown key is reported rather than dropped. When
+    ``wires`` is omitted or empty the modules are chained in listing order, and the
+    single leaf becomes the workflow's default output. A wire's optional third entry
+    names the port it enters, so a fan-in operator such as ``union`` is expressible.
+
+    Args:
+
+        dag: A bare-bones DAG with ``modules`` and optional ``wires``, each wire a
+            ``[source_id, target_id]`` or ``[source_id, target_id, target_port]``
+            sequence.
+
+    Returns:
+
+        The canonical :class:`~riko.definitions._workflow.WorkflowSpec`.
+
+    Raises:
+
+        InvalidPipelineError: If ``modules`` is empty, a wire has the wrong number of
+            entries, or the resulting workflow does not validate.
+
+    Examples:
+
+        >>> count = {"count": {"type": "int", "value": "3"}}
+        >>> dag = {
+        ...     "modules": [
+        ...         {"type": "forever"},
+        ...         {"type": "truncate", "conf": count},
+        ...     ]
+        ... }
+        >>> spec = build_workflow(dag)
+        >>> list(spec.nodes)
+        ['sw-1', 'sw-2']
+        >>> spec.outputs["default"]
+        Endpoint(node='sw-2', port='out')
+        >>>
+        >>> # A fan-in wire naming the port it enters:
+        >>>
+        >>> dag = {
+        ...     "modules": [
+        ...         {"id": "a", "type": "fetch"},
+        ...         {"id": "b", "type": "fetch"},
+        ...         {"id": "u", "type": "union"},
+        ...     ],
+        ...     "wires": [["a", "u"], ["b", "u", "in:1"]],
+        ... }
+        >>> [edge.target.port for edge in build_workflow(dag).edges]
+        ['in', 'in:1']
+
+    """
+    mapping = require_mapping(dag, "dag")
+    _modules = require_sequence(mapping.get("modules", ()), "modules")
+    modules = [require_mapping(m, "module") for m in _modules]
+    nodes = [_build_dag_node(i, **m) for i, m in enumerate(modules, 1)]
+    node_ids = [str(node["id"]) for node in nodes]
+    linear = list(pairwise(node_ids))
+    wires = require_sequence(mapping.get("wires") or linear, "wires")
+    edges = [_build_dag_edge(*require_sequence(wire, "wire")) for wire in wires]
+    spec = normalize_workflow({"nodes": nodes, "edges": edges})
+    spec.validate()
+    return spec
+
+
+__all__ = ["build_workflow", "migrate_v1_to_v2"]

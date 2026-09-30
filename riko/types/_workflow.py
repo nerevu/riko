@@ -76,6 +76,7 @@ class NodeAuthoring(TypedDict, total=False):
     label: str
     conf: Mapping[str, object]
     options: Mapping[str, object]
+    embed: Mapping[str, object]
     policy: Mapping[str, object]
     params: Mapping[str, object]
     backend: BackendLike
@@ -108,6 +109,9 @@ class Endpoint:
     node: NodeId
     port: Port
 
+    def __str__(self) -> str:
+        return f"Endpoint({self.node!r}, {self.port!r})"
+
 
 @define(frozen=True, slots=True)
 class Edge:
@@ -116,6 +120,9 @@ class Edge:
     family: ClassVar[EdgeFamily]
     source: Endpoint
     target: Endpoint
+
+    def __str__(self) -> str:
+        return f"{type(self).__name__}({self.source}, {self.target})"
 
     @property
     def port(self) -> tuple[str, str]:

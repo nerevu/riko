@@ -74,7 +74,7 @@ Which imports are public?
 - **Stable**: the top-level ``riko`` package holds the SemVer-guaranteed API: the
   ``SyncPipe``/``AsyncPipe``/``SyncCollection``/
   ``AsyncCollection`` classes, ``Context``, ``ExecutionMode``, ``PipeState``,
-  ``backend``, ``build_pipeline``, ``compile_pipe``, ``build_pipe_def``, ``export``,
+  ``backend``, ``build_pipeline``, ``compile_pipe``, ``build_workflow``, ``export``,
   ``get_pipeline_dependencies``, ``get_module_metadata``, ``get_path``, ``isasync``,
   ``issync``, ``list_modules``, ``describe_module``, ``list_formats``,
   ``parse_pipe_def``, ``run``, the typed discovery surface (``Modules``/``Sources``/
@@ -655,16 +655,19 @@ The `Cookbook`_ fan-out section includes complete recipes for both approaches.
 Can I define a pipeline as JSON?
 --------------------------------
 
-``riko`` ships two commands for working with JSON pipe definitions (the
-Yahoo! Pipes-style ``{"modules": [...], "wires": [...]}`` format):
+Yes. A ``pipeline`` stored as a JSON *workflow document* is a first-class input, and
+``riko`` ships three commands for working with them:
 
-- ``compile-pipe`` translates a JSON pipe definition into a runnable Python module.
-- ``convert-dag`` expands a *bare-bones DAG* into a full JSON pipe definition.
+- ``convert-dag`` converts any supported authoring form into a canonical workflow
+  document.
+- ``compile-pipe`` translates a canonical workflow document into a runnable Python
+  module.
+- ``run-pipe -p flow.json`` executes a canonical workflow document directly.
 
-A bare-bones DAG is a minimal authoring format: a list of ``modules``
-(``id``/``type``/``conf``) plus optional ``[source, target]`` wire pairs. When
-``wires`` are omitted the modules are chained linearly, and a missing ``id``
-defaults to ``sw-{n}``, so the terse form is just:
+The tersest way to author one is a *bare-bones DAG*: a list of ``modules``
+(``type`` plus optional ``id``/``conf``/``options``) and optional
+``[source, target]`` wires. When ``wires`` are omitted the modules are chained
+linearly, and a missing ``id`` defaults to ``sw-{n}``, so the terse form is just:
 
 .. code-block:: json
 
@@ -681,14 +684,34 @@ from a string. E.g., ``{"count": {"type": "int", "value": "3"}}``. A **bare**
 ``{"value": "3"}`` is neither: it carries no ``type``, so it stays an ordinary
 nested mapping rather than being unwrapped to ``3``.
 
-Compact ``[source, target]`` pairs can't represent the secondary fan-in ports
-for modules such as ``join`` and ``union``. Use the full format for those. Chaining
-``compile-pipe`` and ``convert-dag`` turns a DAG straight into runnable Python (both
-write to stdout, or to a file via ``-o``):
+A wire may carry a third entry naming the port it enters, so the secondary inputs of
+a fan-in operator such as ``join`` or ``union`` are expressible too — the first input
+is ``in``, the rest are ``in:1``, ``in:2``, and so on:
+
+.. code-block:: json
+
+    {
+        "modules": [
+            {"id": "a", "type": "fetch", "conf": {"url": "feed_a.xml"}},
+            {"id": "b", "type": "fetch", "conf": {"url": "feed_b.xml"}},
+            {"id": "u", "type": "union"}
+        ],
+        "wires": [["a", "u"], ["b", "u", "in:1"]]
+    }
+
+``convert-dag`` detects which form it was handed — a bare-bones DAG, a released pipe
+definition in the older ``{"src": ..., "tgt": ...}`` wire format, or a canonical
+document — and always emits a canonical one, so it is also how stored definitions are
+brought forward. Pass ``--format {dag,v1,v2}`` to pin the reading, and
+``-c``/``--compact`` for the byte-stable single-line form instead of the readable one.
+``compile-pipe`` takes canonical documents only.
+
+Chaining the two turns a DAG straight into runnable Python (both write to stdout, or
+to a file via ``-o``):
 
 .. code-block:: bash
 
-    convert-dag flow.dag.json -o flow.json
+    convert-dag dag.json -o flow.json
     compile-pipe flow.json -o flow.py
 
 Since ``compile-pipe`` reads stdin when given ``-`` (or no path at all), the two
@@ -696,7 +719,7 @@ compose directly. Add ``-v`` to report the modules used and bytes written to std
 
 .. code-block:: bash
 
-    convert-dag flow.dag.json | compile-pipe - -o flow.py -v
+    convert-dag dag.json | compile-pipe - -o flow.py -v
 
 
 See the `DAG format`_ doc and the `Cookbook`_ for the full format/expansion rules and

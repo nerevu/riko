@@ -108,10 +108,9 @@ def _node_names(node: Node) -> set[str]:
 
     if isinstance(node, ModuleNode):
         names.add(node.name)
-        embed = node.conf.get("embed")
 
-        if is_mapping(embed):
-            names.add(str(embed.get("name")))
+        if node.embed is not None:
+            names.add(node.embed["name"])
 
     return names
 

@@ -33,16 +33,14 @@
             "type": "module"
         },
         "sw-2": {
-            "conf": {
-                "embed": {
-                    "conf": {
-                        "delimiter": {
-                            "type": "text",
-                            "value": " "
-                        }
-                    },
-                    "name": "tokenizer"
-                }
+            "embed": {
+                "conf": {
+                    "delimiter": {
+                        "type": "text",
+                        "value": " "
+                    }
+                },
+                "name": "tokenizer"
             },
             "id": "sw-2",
             "name": "loop",

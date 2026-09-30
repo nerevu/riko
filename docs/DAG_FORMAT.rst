@@ -1,10 +1,11 @@
 Bare-bones DAG format
 =====================
 
-A full riko **pipe definition** is verbose JSON: every wire is a full ``src``/``tgt``
-endpoint record, and a terminal ``output`` module is always present. The **bare-bones
-DAG** is a minimal authoring format that captures only the essentials and expands to a
-full pipe definition via ``build_pipe_def``.
+A canonical ``riko`` **workflow document** is explicit JSON: every node is named and
+identified, every edge names the port it leaves and the port it enters, and the
+workflow's outputs are listed. The **bare-bones DAG** is a minimal authoring format
+that captures only the essentials and expands into a validated canonical workflow via
+``build_workflow``.
 
 Schema
 ------
@@ -21,14 +22,17 @@ Schema
         ]
     }
 
-- **``modules``**: the same ``id``/``type``/``conf`` triples used in a full pipe definition.
-  ``conf`` is **opaque**: it is copied through verbatim, so any module's native
-  configuration is valid without transformation. ``id`` is *optional* and defaults to
-  ``sw-{n}`` (1-based listing order); supply ids only when ``wires`` reference them.
-- **``wires``**: *optional* list of ``[source_id, target_id]`` pairs. The verbose
-  ``{"src": {...}, "tgt": {...}}`` endpoints and wire ids are generated for you.
-  When ``wires`` is omitted or empty, the modules are chained **linearly in listing
-  order**, so the concise form drops both ``wires`` and ``id``
+- **``modules``**: each entry names the module ``type`` to run. ``conf`` is **opaque**:
+  it is copied through verbatim, so any module's native configuration is valid without
+  transformation. ``id`` is *optional* and defaults to ``sw-{n}`` (1-based listing
+  order); supply ids only when ``wires`` reference them. A module may also carry
+  ``options`` — the call options handed to the module itself (``emit``, ``assign``,
+  ``field``, ``count``) as opposed to the configuration it parses. Any other key is
+  offered to the workflow node as-is, so a typo is reported rather than dropped.
+- **``wires``**: *optional* list of ``[source_id, target_id]`` pairs, or
+  ``[source_id, target_id, target_port]`` triples when the edge enters a port other
+  than the default ``in``. When ``wires`` is omitted or empty, the modules are chained
+  **linearly in listing order**, so the concise form drops both ``wires`` and ``id``
   (see `pipe_forever`_):
 
 .. code-block:: json
@@ -56,59 +60,109 @@ e.g. the source is listed after the operator it feeds
         ]
     }
 
-Expansion rules (``build_pipe_def``)
+Fan-in
+------
+
+A wire's optional third entry names the port it enters, so an operator that takes more
+than one stream — ``union``, ``join`` — is expressible directly. The first input is
+``in``; the additional ones are ``in:1``, ``in:2``, and so on:
+
+.. code-block:: json
+
+    {
+        "modules": [
+            {"id": "a", "type": "fetch", "conf": {"url": "feed_a.xml"}},
+            {"id": "b", "type": "fetch", "conf": {"url": "feed_b.xml"}},
+            {"id": "u", "type": "union"}
+        ],
+        "wires": [
+            ["a", "u"],
+            ["b", "u", "in:1"]
+        ]
+    }
+
+Expansion rules (``build_workflow``)
 ------------------------------------
 
-``riko.runtime.compile.build_pipe_def(dag)`` returns a full pipe definition:
+``riko.build_workflow(dag)`` returns a validated canonical workflow:
 
 1. Modules missing an ``id`` are assigned ``sw-{n}`` in 1-based listing order.
 2. When ``wires`` is omitted or empty, consecutive modules are wired in listing order.
-3. A terminal ``{"id": "_OUTPUT", "type": "output", "conf": {}}`` module is appended.
-4. Every ``[src, tgt]`` pair becomes a ``_INPUT``/``_OUTPUT`` wire.
-5. Every **sink** (a module that never appears as a wire source) is connected to
-   ``_OUTPUT``.
+3. Each wire becomes an edge leaving the source's ``out`` port and entering the
+   target's ``in`` port, or the port named by the wire's third entry.
+4. There is **no** terminal output module. The workflow's default output is its single
+   leaf — the one module that never appears as a wire source.
+5. The result is validated: an empty ``modules`` list, a wire referencing an unknown
+   module, a cycle, a wire with the wrong number of entries, or more than one leaf all
+   raise ``InvalidPipelineError``.
 
-The expanded definition is accepted directly by ``parse_pipe_def`` / ``build_pipeline``
-and produces the same stream as the equivalent hand-written pipeline.
+.. code-block:: python
 
-Limitation
-----------
+    >>> from riko import Pipeline, build_workflow
+    >>>
+    >>> dag = {
+    ...     'modules': [
+    ...         {'type': 'forever'},
+    ...         {'type': 'truncate', 'conf': {'count': {'type': 'int', 'value': '3'}}},
+    ...     ]
+    ... }
+    >>> spec = build_workflow(dag)
+    >>> list(spec.nodes)
+    ['sw-1', 'sw-2']
+    >>> spec.outputs['default']
+    Endpoint(node='sw-2', port='out')
+    >>> len(list(Pipeline(spec)))
+    3
 
-Every expanded wire targets ``_INPUT``, so fan-in operators such as ``union``/``join``
-— whose secondary inputs need ``_OTHER{n}`` targets in a full pipe definition —
-cannot be expressed by the ``[source, target]`` pair format. Author those as a full
-pipe definition instead.
+The expanded workflow is an ordinary canonical document: run it with ``Pipeline``,
+serialize it with ``riko.ext.serialize_workflow``, or hand it to ``compile_pipe``.
 
 Commands
 --------
 
-Both are registered in ``[project.scripts]``:
+Three console scripts work on these documents:
 
 .. code-block:: bash
 
-    # bare-bones DAG -> full JSON pipeline (stdout, or -o path)
-    convert-dag tests/dags/pipe_forever.json -o pipe_forever.json
+    # any supported form -> canonical workflow document (stdout, or -o path)
+    convert-dag tests/dags/pipe_forever.json -o flow.json
 
-    # JSON pipeline -> generated Python module (stdout, or -o path)
-    compile-pipe pipe_forever.json -o pipe_forever.py
+    # canonical workflow document -> generated Python module (stdout, or -o path)
+    compile-pipe flow.json -o flow.py
 
-Chaining them turns a DAG straight into runnable Python:
+    # run a canonical workflow document directly
+    run-pipe -p flow.json
+
+``convert-dag`` is the lenient one. It reads a bare-bones DAG, a released pipe
+definition in the older ``{"src": ..., "tgt": ...}`` wire format, or a canonical
+workflow document, and always emits a validated canonical workflow. It detects which
+form it was given; pass ``--format {dag,v1,v2}`` to pin the reading instead. The output
+is indented for reading by default; ``-c``/``--compact`` writes the byte-stable
+single-line form. A document it cannot read or cannot validate is reported on stderr
+and exits non-zero.
+
+``compile-pipe`` takes canonical documents only — hand it an older form and it exits
+with a message telling you to run ``convert-dag`` first. It emits a Python module that
+rebuilds the workflow from typed configuration classes and exposes a ``pipe`` (or,
+with ``-a``/``--async``, an ``async_pipe``) callable over it. ``-v``/``--verbose``
+reports the modules used and the bytes written to stderr.
+
+Both read stdin when given ``-`` or no path at all, so they compose:
 
 .. code-block:: bash
 
-    convert-dag tests/dags/pipe_forever.json -o pipe_forever.json
-    compile-pipe pipe_forever.json
+    convert-dag dag.json | compile-pipe - -o flow.py
 
-
-See `pipe_forever`_ for a runnable example and `test_compile`_
-(``test_convert_dag_*``) for the round-trip guarantees.
+See `pipe_forever`_ for a runnable example, and `test_build_workflow`_ and
+`test_script`_ for the expansion and command guarantees.
 
 For fuller worked pipelines, see the `example pipelines`_
 (``examples/pipelines/*.json``). Those are canonical workflow documents run directly by
-riko rather than pipe definitions, and the ``examples/pypipelines/*.py`` modules beside
-them are hand-written Python equivalents, not ``compile-pipe`` output.
+riko, and the ``examples/pypipelines/*.py`` modules beside them are hand-written Python
+equivalents, not ``compile-pipe`` output.
 
 .. _pipe_forever: ../tests/dags/pipe_forever.json
 .. _pipe_reordered: ../tests/dags/pipe_reordered.json
-.. _test_compile: ../tests/internal/test_compile.py
+.. _test_build_workflow: ../tests/public/test_build_workflow.py
+.. _test_script: ../tests/functional/test_script.py
 .. _example pipelines: ../examples/pipelines

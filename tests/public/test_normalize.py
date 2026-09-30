@@ -509,3 +509,50 @@ def test_nested_conf_is_deeply_frozen_and_isolated():
     assert node.conf.get("nested") == {"k": 1}
     assert node.conf.get("list") == (1, 2)
     assert isinstance(node.conf.get("nested"), MappingProxyType)
+
+
+def test_authoring_embed_becomes_a_read_only_node_field():
+    spec = normalize_workflow(
+        {
+            "nodes": [
+                {"name": "loop", "embed": {"name": "tokenizer", "conf": {"d": " "}}}
+            ]
+        }
+    )
+    node = spec.nodes["loop-1"]
+    assert isinstance(node, ModuleNode)
+    assert node.embed == {"name": "tokenizer", "conf": {"d": " "}}
+    assert isinstance(node.embed, MappingProxyType)
+    assert node.conf == {}
+
+
+def test_embed_conf_defaults_to_empty_when_omitted():
+    spec = normalize_workflow(
+        {"nodes": [{"name": "loop", "embed": {"name": "tokenizer"}}]}
+    )
+    node = spec.nodes["loop-1"]
+    assert isinstance(node, ModuleNode)
+    assert node.embed == {"name": "tokenizer", "conf": {}}
+
+
+def test_unknown_embed_key_is_rejected():
+    with pytest.raises(InvalidPipelineError, match="unknown embed key"):
+        normalize_workflow(
+            {"nodes": [{"name": "loop", "embed": {"name": "tokenizer", "bogus": 1}}]}
+        )
+
+
+def test_embed_without_a_name_is_rejected():
+    with pytest.raises(InvalidPipelineError, match="missing embed key"):
+        normalize_workflow({"nodes": [{"name": "loop", "embed": {"conf": {}}}]})
+
+
+def test_normalizing_a_spec_with_an_embed_is_a_fixed_point():
+    spec = normalize_workflow(
+        {
+            "nodes": [
+                {"name": "loop", "embed": {"name": "tokenizer", "conf": {"d": " "}}}
+            ]
+        }
+    )
+    assert normalize_workflow(spec) == spec

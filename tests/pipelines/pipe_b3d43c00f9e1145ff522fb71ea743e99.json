@@ -62,16 +62,14 @@
             "type": "module"
         },
         "sw-595": {
-            "conf": {
-                "embed": {
-                    "conf": {
-                        "gid": {
-                            "subkey": "result.winning-mp.aristotle-id",
-                            "type": "text"
-                        }
-                    },
-                    "name": "pipe:bd0834cfe6cdacb0bea5569505d330b8"
-                }
+            "embed": {
+                "conf": {
+                    "gid": {
+                        "subkey": "result.winning-mp.aristotle-id",
+                        "type": "text"
+                    }
+                },
+                "name": "pipe:bd0834cfe6cdacb0bea5569505d330b8"
             },
             "id": "sw-595",
             "name": "loop",

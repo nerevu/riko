@@ -10,7 +10,6 @@ Python probes beside them producing the same items as the documents they mirror.
 
 from __future__ import annotations
 
-import json
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
@@ -48,8 +47,7 @@ PROBE_MARKS = {"pipe_zKJifuNS3BGLRQK_GsevXg": (SPLIT_PENDING,)}
 
 def _render(spec: WorkflowSpec) -> str:
     """Renders a spec as the indented canonical JSON the fixtures are stored in."""
-    document = json.loads(serialize_workflow(spec))
-    return json.dumps(document, indent=4, sort_keys=True, ensure_ascii=False) + "\n"
+    return serialize_workflow(spec).decode("utf-8")
 
 
 def _fixtures() -> list[Any]:

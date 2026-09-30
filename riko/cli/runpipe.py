@@ -1,4 +1,4 @@
-"""Command for loading and running a compiled pipe module from the CLI."""
+"""Command for running a pipe script or a canonical workflow document from the CLI."""
 
 from __future__ import annotations
 
@@ -7,14 +7,21 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from collections.abc import Callable, Iterable, Mapping
 from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
-from os.path import basename, splitext
+from os.path import basename, isfile, splitext
 from typing import TYPE_CHECKING
 
 from riko.bado._backend import run as async_run
+from riko.base.exceptions import InvalidPipelineError
+from riko.execution._execution import AsyncExecution, SyncExecution
+from riko.execution.context import Context
+from riko.runtime._execution_plan import build_execution_plan
+
+from ._workflow import read_document, require_workflow
 
 if TYPE_CHECKING:
     from types import ModuleType
 
+    from riko.runtime._execution_plan import ExecutionPlan
     from riko.types._wrappers import AsyncModuleWrapper
 
 io_error = FileNotFoundError
@@ -72,10 +79,107 @@ async def runner(
     cb(result) if callable(cb) else None
 
 
+async def plan_runner(plan: ExecutionPlan, test: bool = False) -> None:
+    """Runs a prepared workflow asynchronously and prints the items it produces."""
+    async with AsyncExecution(context=Context(test=test)) as execution:
+        stream = await execution.run(plan)
+        items = [item async for item in stream]
+        emit_result(items)
+
+
+def run_document(path: str, isasync: bool = False, test: bool = False) -> None:
+    """
+    Runs the canonical workflow document at ``path`` and prints what it produces.
+
+    Args:
+
+        path: The path to the workflow document.
+        isasync: Whether to run the workflow through the asynchronous execution.
+        test: Whether to run with the modules' default inputs.
+
+    """
+    document, _ = read_document(path)
+
+    if document is None:
+        sys.exit(f"Workflow document {path} not found!")
+
+    try:
+        plan = build_execution_plan(require_workflow(document))
+    except InvalidPipelineError as e:
+        sys.exit(str(e))
+
+    if isasync:
+        async_run(plan_runner, plan, test)
+    else:
+        with SyncExecution(context=Context(test=test)) as execution:
+            emit_result(execution.run(plan))
+
+
+def resolve_example(pipeid: str) -> str | ModuleType | None:
+    """
+    Resolves an example id to the pipe module or workflow document it names.
+
+    Args:
+
+        pipeid: The name of a pipeline in the examples directory.
+
+    Returns:
+
+        The loaded pipe module, or the path to the workflow document of that name.
+
+    """
+    try:
+        name = file2name(f"{pipeid}.py")
+        target: str | ModuleType | None = load_file(name, f"examples/{pipeid}.py")
+    except io_error:
+        document = f"examples/pipelines/{pipeid}.json"
+
+        if isfile(document):
+            target = document
+        else:
+            try:
+                target = import_module(f"examples.{pipeid}")
+            except ImportError:
+                sys.exit(f"Pipe examples.{pipeid} not found!")
+
+    return target
+
+
+def resolve_target(
+    path: str | None = None, pipeid: str | None = None
+) -> str | ModuleType | None:
+    """
+    Resolves what a run refers to: a workflow document, or a pipe module.
+
+    Args:
+
+        path: The path to a pipe script or a workflow document.
+        pipeid: The name of a pipeline in the examples directory.
+
+    Returns:
+
+        The loaded pipe module, or the path to a workflow document.
+
+    """
+    if path is not None and path.endswith(".json"):
+        target: str | ModuleType | None = path
+    elif path is not None:
+        try:
+            target = load_file(file2name(path), path)
+        except io_error:
+            sys.exit(f"Pipe file {path} not found!")
+    elif pipeid is not None:
+        target = resolve_example(pipeid)
+    else:
+        sys.exit("Please provide a pipeid or path to a pipe file.")
+
+    return target
+
+
 def run() -> None:
     """CLI runner."""
     parser = ArgumentParser(
-        description="description: Runs a riko pipe",
+        description="description: Runs a riko pipe or a canonical workflow document",
         prog="run-pipe",
         usage="%(prog)s [pipeid] [-p PATH]",
         formatter_class=RawTextHelpFormatter,
@@ -93,7 +197,7 @@ def run() -> None:
         "--path",
         dest="path",
         default=None,
-        help="Path to a pipe file to run, e.g. flow.py.\n\n",
+        help="Path to a pipe file to run, e.g. flow.py or flow.json.\n\n",
     )
 
     parser.add_argument(
@@ -114,34 +218,19 @@ def run() -> None:
     )
 
     args = parser.parse_args()
+    target = resolve_target(args.path, args.pipeid)
 
-    if args.path:
-        name = file2name(args.path)
-
-        try:
-            module = load_file(name, args.path)
-        except io_error:
-            sys.exit(f"Pipe file {args.path} not found!")
-    elif args.pipeid:
-        try:
-            name = file2name(f"{args.pipeid}.py")
-            module = load_file(name, f"examples/{args.pipeid}.py")
-        except io_error:
-            try:
-                module = import_module(f"examples.{args.pipeid}")
-            except ImportError:
-                sys.exit(f"Pipe examples.{args.pipeid} not found!")
+    if isinstance(target, str):
+        run_document(target, args.isasync, args.test)
     else:
-        sys.exit("Please provide a pipeid or path to a pipe file.")
+        printer = getattr(target, "print_results", emit_result)
 
-    printer = getattr(module, "print_results", emit_result)
-
-    if args.isasync and (async_pipe := getattr(module, "async_pipe", None)):
-        async_run(runner, async_pipe, args.test, printer)
-    elif main := getattr(module, "main", None):
-        main(test=args.test)
-    elif module:
-        emit_result(module.pipe(test=args.test))
+        if args.isasync and (async_pipe := getattr(target, "async_pipe", None)):
+            async_run(runner, async_pipe, args.test, printer)
+        elif main := getattr(target, "main", None):
+            main(test=args.test)
+        elif target:
+            emit_result(target.pipe(test=args.test))
 
 
 if __name__ == "__main__":

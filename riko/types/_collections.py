@@ -28,6 +28,7 @@ from ._guards import is_dataclass_inst
 if TYPE_CHECKING:
     from riko.parsing._dotdict import DotDict
 
+    from ._compiler import CountValues
     from ._scalars import BasicValue, PrimitiveValue
 
 type FrozenJSON = (
@@ -40,7 +41,20 @@ type FrozenJSON = (
     | None
 )
 
+type FrozenConfValues = (
+    str
+    | int
+    | bool
+    | tuple[FrozenConfValues, ...]
+    | MappingProxyType[str, FrozenConfValues]
+)
+
+type FrozenOptionValues = bool | str | CountValues
 type FrozenMap[T] = MappingProxyType[str, T]
+type FrozenConf = FrozenMap[FrozenConfValues]
+type FrozenOptions = FrozenMap[FrozenOptionValues]
+type FrozenParams = FrozenMap[FrozenOptionValues]
+type FrozenPolicy = FrozenMap[FrozenOptionValues]
 type JSONSchema = FrozenMap[FrozenJSON]
 type Inputs = Mapping[str, str | int | bool]
 type InputSource = Mapping[str, str]
@@ -91,7 +105,7 @@ def narrow_from_require[R](require: Require[object, R]) -> Callable[[R], R]:
 @overload
 def def_from_require[T, R](  # noqa: E704
     require: Require[T, R], default: None = ...
-) -> DefFunc[T, R]: ...
+) -> DefFunc[T, R | None]: ...
 @overload  # noqa: E302
 def def_from_require[T, D, R](  # noqa: E704
     require: Require[T, R], default: D
@@ -99,7 +113,7 @@ def def_from_require[T, D, R](  # noqa: E704
 @overload  # noqa: E302
 def def_from_require[T, R](  # noqa: E704
     require: Require[T, R], default: None = ..., what: str | None = ...
-) -> DefFunc[T, R]: ...
+) -> DefFunc[T, R | None]: ...
 @overload  # noqa: E302
 def def_from_require[T, D, R](  # noqa: E704
     require: Require[T, R], default: D, what: str | None = ...

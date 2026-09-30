@@ -75,52 +75,50 @@
             "type": "module"
         },
         "sw-626": {
-            "conf": {
-                "embed": {
-                    "conf": {
-                        "base": {
-                            "type": "text",
-                            "value": "https://example.invalid/chart"
-                        },
-                        "param": [
-                            {
-                                "key": {
-                                    "type": "text",
-                                    "value": "cht"
-                                },
-                                "value": {
-                                    "type": "text",
-                                    "value": "qr"
-                                }
-                            },
-                            {
-                                "key": {
-                                    "type": "text",
-                                    "value": "chs"
-                                },
-                                "value": {
-                                    "type": "text",
-                                    "value": "200x200"
-                                }
-                            },
-                            {
-                                "key": {
-                                    "type": "text",
-                                    "value": "chl"
-                                },
-                                "value": {
-                                    "subkey": "link",
-                                    "type": "text"
-                                }
-                            }
-                        ],
-                        "path": {
-                            "type": "text",
-                            "value": ""
-                        }
+            "embed": {
+                "conf": {
+                    "base": {
+                        "type": "text",
+                        "value": "https://example.invalid/chart"
                     },
-                    "name": "urlbuilder"
-                }
+                    "param": [
+                        {
+                            "key": {
+                                "type": "text",
+                                "value": "cht"
+                            },
+                            "value": {
+                                "type": "text",
+                                "value": "qr"
+                            }
+                        },
+                        {
+                            "key": {
+                                "type": "text",
+                                "value": "chs"
+                            },
+                            "value": {
+                                "type": "text",
+                                "value": "200x200"
+                            }
+                        },
+                        {
+                            "key": {
+                                "type": "text",
+                                "value": "chl"
+                            },
+                            "value": {
+                                "subkey": "link",
+                                "type": "text"
+                            }
+                        }
+                    ],
+                    "path": {
+                        "type": "text",
+                        "value": ""
+                    }
+                },
+                "name": "urlbuilder"
             },
             "id": "sw-626",
             "name": "loop",

@@ -19,16 +19,14 @@
             "type": "module"
         },
         "sw-500": {
-            "conf": {
-                "embed": {
-                    "conf": {
-                        "listize": {
-                            "type": "bool",
-                            "value": true
-                        }
-                    },
-                    "name": "termextractor"
-                }
+            "embed": {
+                "conf": {
+                    "listize": {
+                        "type": "bool",
+                        "value": true
+                    }
+                },
+                "name": "termextractor"
             },
             "id": "sw-500",
             "name": "loop",
