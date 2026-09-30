@@ -10,7 +10,7 @@ private to the runtime and belong to no supported surface.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, Iterable, Iterator
+from collections.abc import AsyncIterable
 from contextlib import AsyncExitStack, ExitStack, nullcontext
 from functools import cached_property, partial
 from inspect import isawaitable
@@ -22,13 +22,13 @@ from attrs import define, field
 from riko.bado._backend import (
     CancelScope,
     Event,
-    async_chain,
     asyncify,
     create_task_group,
     fail_after,
+    run_from_thread,
     start_blocking_portal,
 )
-from riko.bado.itertools import as_async, async_map
+from riko.bado.itertools import as_async
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._resources import ResourceView
 from riko.types._compiler import LoopOptionValues
@@ -36,6 +36,14 @@ from riko.types._guards import is_async_callable, is_async_closeable, is_sync_cl
 from riko.types._workflow import parse_port
 from riko.types._wrappers import CoroutineFunc, ModuleWrapper
 
+from ._adapt import (
+    adapt_embed_for_async,
+    adapt_embed_for_sync,
+    arequire_items,
+    drain_async,
+    pull_stream,
+    require_items,
+)
 from ._events import _NULL_EVENT_SINK, EventSink
 from ._plan import _ResourcePlan, _ResourceStrategy, build_resource_plan
 from ._prepared import ExecMode, PreparedNode
@@ -55,7 +63,6 @@ if TYPE_CHECKING:
         AsyncItems,
         AsyncStream,
         AsyncStreams,
-        Feed,
         Item,
         Items,
         Stream,
@@ -73,44 +80,77 @@ if TYPE_CHECKING:
 
 type SyncExecSteps = dict[str, Stream]
 type AsyncExecSteps = dict[str, AsyncStream]
-type ExtraValues1 = ResourceView | ModuleWrapper | LoopOptionValues
-type ExtraValues2 = AsyncItems | list[AsyncItems] | Stream | Streams
-type ExtraValues = ExtraValues1 | ExtraValues2
-type Extra = dict[str, ExtraValues]
+type ExtraObjects = ResourceView | ModuleWrapper | LoopOptionValues
+type ExtraStreams = AsyncItems | list[AsyncItems] | Stream | Streams
+type ExtraValues = ExtraObjects | ExtraStreams
+type ExtraInput = Mapping[str, ExtraValues]
+type ExtraOutput = dict[str, ExtraValues]
 type Resolution = _Acquired | _FailedAcquisition
 type Resolved = dict[Resource[Any], Resolution]
 
 
-def require_items(value: Items | Streams | Iterable[Item | Items]) -> Stream:
-    stream = iter(value)
+@overload
+def _bridge_inputs(  # noqa: E704
+    extra: Mapping[str, AsyncItems | Stream],
+) -> Mapping[str, Stream]: ...
+@overload  # noqa: E302
+def _bridge_inputs(  # noqa: E704
+    extra: Mapping[str, ExtraObjects],
+) -> Mapping[str, ExtraObjects]: ...
+@overload  # noqa: E302
+def _bridge_inputs(  # noqa: E704
+    extra: Mapping[str, list[AsyncItems] | Streams],
+) -> Mapping[str, Streams]: ...
+@overload  # noqa: E302
+def _bridge_inputs(  # noqa: E704
+    extra: ExtraInput,
+) -> Mapping[str, ExtraObjects | Stream | Streams]: ...
+def _bridge_inputs(  # noqa: E302
+    extra: ExtraInput,
+) -> Mapping[str, ExtraObjects | Stream | Streams]:
+    """
+    Re-exposes a worker-run node's async inputs as lazy synchronous streams.
 
-    try:
-        first = next(stream)
-    except StopIteration:
-        result = iter(())
-    else:
-        if isinstance(first, Iterator):
-            raise InvalidPipelineError("Splitter nodes not yet implemented")
+    Args:
 
-        result = cast("Stream", chain((first,), stream))
+        extra: The secondary inputs wired for the node, mixed with the non-stream
+            values a node may also receive.
 
-    return result
+    Returns:
+
+        The same mapping with every async stream replaced by a lazy synchronous
+        stream over it, and every other value left as it is.
+
+    """
+    bridged: dict[str, ExtraObjects | Stream | Streams] = {}
+
+    for key, value in extra.items():
+        if isinstance(value, AsyncIterable):
+            bridged[key] = drain_async(value, run_from_thread)
+        elif isinstance(value, list):
+            _bridged = (_bridge_inputs({key: v}).values() for v in value)
+            bridged[key] = list(chain.from_iterable(_bridged))
+        else:
+            bridged[key] = value
+
+    return bridged
 
 
-async def arequire_items(value: AsyncIterable[Item | Items]) -> AsyncStream:
-    stream = aiter(value)
+async def _asyncify_call[T](func: Callable[..., T], *args: object) -> T:
+    """
+    Runs a blocking callable on a worker thread from the current event loop.
 
-    try:
-        first = await anext(stream)
-    except StopAsyncIteration:
-        result = as_async(iter(()))
-    else:
-        if isinstance(first, Iterator):
-            raise InvalidPipelineError("Splitter nodes not yet implemented")
+    Args:
 
-        result = cast("AsyncStream", async_chain((first,), stream))
+        func: The blocking callable to offload.
+        args: Positional arguments forwarded to ``func``.
 
-    return result
+    Returns:
+
+        The value ``func`` returns.
+
+    """
+    return await asyncify(func)(*args)
 
 
 def _seed_target(plan: ExecutionPlan, required: frozenset[str]) -> str:
@@ -480,6 +520,34 @@ class SyncExecution(_BaseExecution):
         cm = cast("AbstractContextManager[T]", plan.context_manager)
         return self.enter_context(cm)
 
+    def _select_embed(self, embed: PreparedNode, *, host_async: bool) -> ModuleWrapper:
+        """
+        Chooses a loop embed's callable in the mode its host pipe actually runs in.
+
+        Args:
+
+            embed: The embed node resolved alongside the loop node.
+            host_async: Whether the loop pipe itself runs asynchronously.
+
+        Returns:
+
+            The embed's native callable for that mode, or a host-mode wrapper
+            around its other-mode callable.
+
+        """
+        pipe, mode = embed.select(is_async=host_async)
+
+        if mode is ExecMode.NATIVE:
+            result = pipe
+        elif host_async:
+            sync_pipe = cast("SyncModuleWrapper", pipe)
+            result = adapt_embed_for_async(sync_pipe, _asyncify_call)
+        else:
+            async_pipe = cast("AsyncModuleWrapper", pipe)
+            result = adapt_embed_for_sync(async_pipe, self._drain_async)
+
+        return result
+
     def _build_stream(
         self,
         plan: ExecutionPlan,
@@ -489,6 +557,7 @@ class SyncExecution(_BaseExecution):
     ) -> Stream:
         node = plan.nodes[node_id]
         _pipe, mode = node.select(is_async=False)
+        host_async = mode is ExecMode.ADAPTER
 
         incoming = plan.index.incoming.get(node_id, ())
         source, extra = self._resolve_inputs(incoming, steps, seed)
@@ -497,7 +566,7 @@ class SyncExecution(_BaseExecution):
             extra["resources"] = self._bind_resources(node.resources)
 
         if node.embed is not None:
-            extra["embed"] = node.embed.select(is_async=False).pipe
+            extra["embed"] = self._select_embed(node.embed, host_async=host_async)
             extra.update(node.options)
 
         if mode is ExecMode.ADAPTER:
@@ -560,13 +629,7 @@ class SyncExecution(_BaseExecution):
 
     def _drain_async(self, source: AsyncItems | AsyncStreams) -> Stream:
         """Pulls an async stream item by item through the execution portal."""
-        while True:
-            try:
-                item = self.run_async(aiter(source).__anext__)
-            except StopAsyncIteration:
-                break
-            else:
-                yield next(require_items([item]))
+        return drain_async(source, self.run_async)
 
     def _bind_resources(self, binding: Mapping[str, str]) -> ResourceView:
         context = self.context
@@ -584,10 +647,10 @@ class SyncExecution(_BaseExecution):
         incoming: tuple[GraphEdge, ...],
         steps: SyncExecSteps,
         seed: Items | None = None,
-    ) -> tuple[Stream, Extra]:
+    ) -> tuple[Stream, ExtraOutput]:
         source = self._normalize_source() if seed is None else iter(seed)
         indexed: list[tuple[int, Stream]] = []
-        extra: Extra = {}
+        extra: ExtraOutput = {}
 
         for edge in incoming:
             _require_default_output_port(edge.source_port, f"edge from {edge.source!r}")
@@ -909,75 +972,71 @@ class AsyncExecution(_BaseExecution):
 
         return steps[endpoint.node]
 
-    async def _drain_sync(self, value: Item | Feed) -> Item | Items:
-        """
-        Materializes ``value`` to a list when it is an async stream.
-
-        Args:
-
-            value: A prepared input that may be an async stream.
-
-        Returns:
-
-            A list of the stream's items, or ``value`` unchanged when it is not
-            an async stream.
-
-        """
-        if isinstance(value, AsyncIterable):
-            drained = [item async for item in value]
-        else:
-            drained = value
-
-        return drained
-
-    async def _adapt_worker_inputs(
-        self, extra: Extra
-    ) -> dict[str, ExtraValues1 | Items]:
-        """
-        Materializes async secondary streams for a worker-run sync pipe.
-
-        A sync-only node adapted onto a worker thread cannot iterate an async
-        stream, so every async input beside the primary source is drained to a
-        list before the pipe runs.
-
-        Args:
-
-            extra: The secondary inputs wired for the node (``others`` plus any
-                named-port streams), possibly mixed with non-stream values.
-
-        Returns:
-
-            The same mapping with async streams replaced by materialized lists.
-
-        """
-        adapted: dict[str, ExtraValues1 | Items] = {}
-
-        for key, value in extra.items():
-            if isinstance(value, (str, bool, ResourceView, ModuleWrapper)):
-                adapted[key] = value
-            elif isinstance(value, AsyncIterable):
-                adapted[key] = [item async for item in value]
-            elif isinstance(value, Iterable):
-                result = await async_map(self._drain_sync, value)
-                adapted[key] = require_items(result)
-
-        return adapted
-
     async def _run_sync_node(
         self,
         pipe: SyncModuleWrapper,
         node: PreparedNode,
         source: AsyncItems,
-        extra: Extra,
+        extra: ExtraInput,
     ) -> AsyncStream:
-        items = [item async for item in source]
-        adapted = await self._adapt_worker_inputs(extra)
+        """
+        Streams a sync-only node's output without materializing it.
 
-        def work() -> list[Item]:
-            stream = pipe(items, conf=node.conf, context=self.context, **adapted)
-            return list(require_items(stream))
+        The pipe runs on a worker thread, reads its async inputs lazily from
+        there, and its output is pulled one item at a time as the consumer asks
+        for it.
 
-        return as_async(await self.run_sync(work))
+        Args:
+
+            pipe: The node's synchronous pipe.
+            node: The prepared node being run.
+            source: The node's primary async input stream.
+            extra: The node's secondary inputs and non-stream arguments.
+
+        Returns:
+
+            The async item stream produced by the node.
+
+        """
+        bridged = _bridge_inputs(extra)
+        worker_source = drain_async(source, run_from_thread)
+
+        def start() -> tuple[object, Stream]:
+            raw = pipe(worker_source, conf=node.conf, context=self.context, **bridged)
+            return raw, require_items(raw)
+
+        raw, iterator = await self.run_sync(start)
+        return pull_stream(iterator, raw, self.run_sync, self._arun_sync)
+
+    def _select_embed(self, embed: PreparedNode, *, host_async: bool) -> ModuleWrapper:
+        """
+        Chooses a loop embed's callable in the mode its host pipe actually runs in.
+
+        Args:
+
+            embed: The embed node resolved alongside the loop node.
+            host_async: Whether the loop pipe itself runs asynchronously.
+
+        Returns:
+
+            The embed's native callable for that mode, or a host-mode wrapper
+            around its other-mode callable.
+
+        """
+        pipe, mode = embed.select(is_async=host_async)
+
+        if mode is ExecMode.NATIVE:
+            result = pipe
+        elif host_async:
+            sync_pipe = cast("SyncModuleWrapper", pipe)
+            result = adapt_embed_for_async(sync_pipe, self.run_sync)
+        else:
+            async_pipe = cast("AsyncModuleWrapper", pipe)
+            result = adapt_embed_for_sync(
+                async_pipe, partial(drain_async, call=run_from_thread)
+            )
+
+        return result
 
     async def _abuild_stream(
         self,
@@ -988,6 +1047,7 @@ class AsyncExecution(_BaseExecution):
     ) -> AsyncStream:
         node = plan.nodes[node_id]
         _pipe, mode = node.select(is_async=True)
+        host_async = mode is ExecMode.NATIVE
 
         incoming = plan.index.incoming.get(node_id, ())
         source, extra = self._aresolve_inputs(incoming, steps, seed)
@@ -996,7 +1056,7 @@ class AsyncExecution(_BaseExecution):
             extra["resources"] = await self._abind_resources(node.resources)
 
         if node.embed is not None:
-            extra["embed"] = node.embed.select(is_async=True).pipe
+            extra["embed"] = self._select_embed(node.embed, host_async=host_async)
             extra.update(node.options)
 
         if mode is ExecMode.ADAPTER:
@@ -1026,10 +1086,10 @@ class AsyncExecution(_BaseExecution):
         incoming: tuple[GraphEdge, ...],
         steps: AsyncExecSteps,
         seed: Items | None = None,
-    ) -> tuple[AsyncItems, Extra]:
+    ) -> tuple[AsyncItems, ExtraOutput]:
         source = self._anormalize_source() if seed is None else as_async(seed)
         indexed: list[tuple[int, AsyncStream]] = []
-        extra: Extra = {}
+        extra: ExtraOutput = {}
 
         for edge in incoming:
             _require_default_output_port(edge.source_port, f"edge from {edge.source!r}")

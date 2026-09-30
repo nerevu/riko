@@ -58,6 +58,7 @@ except ImportError:
     fail_after: Callable[..., Any] | None = None
     gather_results: Callable[..., Any] = lambda *_, **_kw: None
     lowlevel: Any = None
+    run_from_thread: Callable[..., Any] = lambda *_, **_kw: None
     start_blocking_portal: Callable[..., Any] = lambda *_, **_kw: None
 
     async def checkpoint() -> None:
@@ -85,6 +86,7 @@ else:
     from anyio import open_file as async_open
     from anyio import sleep as async_sleep
     from anyio.from_thread import BlockingPortal, start_blocking_portal
+    from anyio.from_thread import run as run_from_thread
     from anyio.itertools import chain as async_chain
     from anyio.lowlevel import checkpoint
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
@@ -123,5 +125,6 @@ __all__ = [
     "issync",
     "lowlevel",
     "run",
+    "run_from_thread",
     "start_blocking_portal",
 ]
