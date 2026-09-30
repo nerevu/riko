@@ -1,10 +1,13 @@
 # vim: sw=4:ts=4:expandtab
 """Tests for canonical workflow indexing and execution preparation."""
 
+from threading import get_ident
 from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from riko.bado._backend import fail_after
+from riko.bado._util import maybe_deferred
 from riko.bado.itertools import as_async
 from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
 from riko.definitions._workflow import (
@@ -15,10 +18,14 @@ from riko.definitions._workflow import (
     WorkflowSpec,
 )
 from riko.definitions.modules import ModuleDefinition
+from riko.execution._adapt import adapt_embed_for_async, adapt_embed_for_sync
 from riko.execution._execution import AsyncExecution, SyncExecution
 from riko.execution._prepared import ExecMode
 from riko.execution._resources import Resource
 from riko.execution.context import Context
+from riko.modules._decorators import processor
+from riko.modules.loop import async_pipe as async_loop
+from riko.modules.loop import pipe as loop_pipe
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._graph_index import index_workflow
 from riko.runtime._module_registry import (
@@ -26,13 +33,15 @@ from riko.runtime._module_registry import (
     register_module,
     reset_module_registry,
 )
-from riko.runtime._pipelines import pipeline_resolver
+from riko.runtime._pipelines import mark_subpipe, pipeline_resolver
 from riko.runtime._resolver import ResolverDispatcher
+from riko.types._enums import BasicCastType
 from riko.types._workflow import Endpoint
 from riko.types.modules import LoopConf
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
+    from riko.types._streams import AsyncItemGenerator
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 _sync_pipe = cast("SyncModuleWrapper", lambda source, **_: iter(source or {}))
@@ -573,14 +582,7 @@ def test_prepare_adapts_sync_only_embed_under_async() -> None:
     assert embed.select(is_async=True).mode is ExecMode.ADAPTER
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="owned by the pending loop-embed cross-mode adaptation work: "
-    "preparation selects the adapter mode for a cross-mode embed, but execution "
-    "discards that mode and forwards the raw wrapper to the loop, so an "
-    "async-only embed under sync execution is never portal-adapted and the sync "
-    "loop cannot iterate it",
-)
+@skipif_issync
 def test_run_adapts_async_only_embed_under_sync() -> None:
     async def up(item, **_):
         yield {"up": item["t"].upper()}
@@ -645,6 +647,95 @@ def test_run_forwards_embed_and_options_to_loop() -> None:
     assert seen["options"] == {"emit": True, "count": "first"}
 
 
+def _loop_spec(loop_name="fakeloop", embed_name="up"):
+    src = ModuleNode(id="s", name="src")
+    loop = ModuleNode(
+        id="loop",
+        name=loop_name,
+        conf=LoopConf(
+            {"embed": {"name": embed_name, "conf": {}}, "emit": True, "count": "first"}
+        ),
+    )
+    edge = StreamEdge(Endpoint("s", "out"), Endpoint("loop", "in"))
+    return _spec([src, loop], {"default": Endpoint("loop", "out")}, edges=(edge,))
+
+
+def _build_async_embed():
+    """Decorate a fresh async processor parser so it carries real pipe metadata."""
+
+    async def shout(item, extraction, objconf, **kwargs):
+        return {"up": str(item["t"]).upper()}
+
+    return cast(
+        "AsyncModuleWrapper", processor(isasync=True, ptype=BasicCastType.NONE)(shout)
+    )
+
+
+class _EmbedStub:
+    """Carries the discovery metadata an adapter must copy onto its wrapper."""
+
+    name = "up"
+    type = "processor"
+    subtype = "transformer"
+    subtypes = frozenset({"transformer"})
+    pollable = False
+    loopable = True
+    isasync = True
+
+    def __call__(self, item=None, **kwargs):
+        return iter(())
+
+
+def _unused_drain(source):
+    return iter(())
+
+
+async def _unused_worker(func, *args):
+    return func(*args)
+
+
+@skipif_issync
+def test_run_loops_async_only_embed_through_the_real_loop() -> None:
+    embed = _build_async_embed()
+    dispatcher = _dispatcher(
+        ModuleDefinition(name="src", sync_pipe=_tagged_source("x")),
+        ModuleDefinition(name="loop", sync_pipe=loop_pipe, async_pipe=async_loop),
+        ModuleDefinition(name=embed.name, async_pipe=embed),
+    )
+    spec = _loop_spec(loop_name="loop", embed_name=embed.name)
+
+    assert _run(spec, dispatcher) == [{"up": "X"}]
+
+
+def test_adapt_embed_for_sync_copies_metadata() -> None:
+    stub = _EmbedStub()
+    adapted = adapt_embed_for_sync(cast("AsyncModuleWrapper", stub), _unused_drain)
+
+    assert adapted.name == "up"
+    assert adapted.type == "processor"
+    assert adapted.subtype == "transformer"
+    assert adapted.subtypes == frozenset({"transformer"})
+    assert adapted.pollable is False
+    assert adapted.loopable is True
+    assert adapted.isasync is False
+    assert not hasattr(adapted, "__wrapped__")
+
+
+def test_adapt_embed_for_async_copies_metadata() -> None:
+    stub = _EmbedStub()
+    stub.isasync = False
+    adapted = adapt_embed_for_async(cast("SyncModuleWrapper", stub), _unused_worker)
+
+    assert adapted.name == "up"
+    assert adapted.type == "processor"
+    assert adapted.subtype == "transformer"
+    assert adapted.subtypes == frozenset({"transformer"})
+    assert adapted.pollable is False
+    assert adapted.loopable is True
+    assert adapted.isasync is True
+    assert not hasattr(adapted, "__wrapped__")
+
+
 def test_pipeline_iter_runs_end_to_end() -> None:
     def src(_items=None, **_):
         yield {"x": 1}
@@ -696,6 +787,11 @@ def test_pipeline_iter_closes_upstream_on_early_break() -> None:
         assert closed == [True]
     finally:
         reset_module_registry()
+
+
+async def _acollect(stream, seen):
+    async for item in stream:
+        seen.append(item)
 
 
 async def _arun(spec, dispatcher, output="default"):
@@ -797,12 +893,6 @@ async def test_arun_sync_worker_node_adapts_secondary_inputs() -> None:
     assert await _arun(spec, dispatcher) == [{"t": "a"}, {"t": "b"}, {"labeled": "c"}]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="owned by the pending bounded sync-under-async bridge work: a sync-only "
-    "source under async execution is drained eagerly, so run() raises a later "
-    "error before yielding the first already-produced item",
-)
 @async_test
 async def test_arun_sync_only_source_streams_lazily() -> None:
     def src(_items=None, **_):
@@ -819,6 +909,139 @@ async def test_arun_sync_only_source_streams_lazily() -> None:
         first = await anext(aiter(stream))
 
     assert first == {"x": 1}
+
+
+@async_test
+async def test_arun_sync_only_source_raises_after_yielding_earlier_items() -> None:
+    def src(_items=None, **_):
+        yield {"x": 1}
+        yield {"x": 2}
+        raise RuntimeError("later")
+
+    sync_pipe = cast("SyncModuleWrapper", src)
+    dispatcher = _dispatcher(ModuleDefinition(name="src", sync_pipe=sync_pipe))
+    plan = build_execution_plan(_module_spec("src"), dispatcher=dispatcher)
+    seen = []
+
+    async with AsyncExecution() as execution:
+        stream = await execution.run(plan)
+
+        with pytest.raises(RuntimeError, match="later"):
+            await _acollect(stream, seen)
+
+    assert seen == [{"x": 1}, {"x": 2}]
+
+
+@async_test
+async def test_arun_sync_only_source_closes_on_early_exit() -> None:
+    closed = []
+
+    def src(_items=None, **_):
+        index = 0
+
+        try:
+            while True:
+                yield {"x": index}
+                index += 1
+        finally:
+            closed.append(True)
+
+    sync_pipe = cast("SyncModuleWrapper", src)
+    dispatcher = _dispatcher(ModuleDefinition(name="src", sync_pipe=sync_pipe))
+    plan = build_execution_plan(_module_spec("src"), dispatcher=dispatcher)
+    seen = []
+
+    with fail_after(5):
+        async with AsyncExecution() as execution:
+            stream = cast("AsyncItemGenerator", await execution.run(plan))
+
+            async for item in stream:
+                seen.append(item)
+
+                if len(seen) == 3:
+                    break
+
+            await stream.aclose()
+
+    assert seen == [{"x": 0}, {"x": 1}, {"x": 2}]
+    assert closed == [True]
+
+
+@async_test
+async def test_arun_unconsumed_sync_only_source_does_not_block_exit() -> None:
+    def src(_items=None, **_):
+        index = 0
+
+        while True:
+            yield {"x": index}
+            index += 1
+
+    sync_pipe = cast("SyncModuleWrapper", src)
+    dispatcher = _dispatcher(ModuleDefinition(name="src", sync_pipe=sync_pipe))
+    plan = build_execution_plan(_module_spec("src"), dispatcher=dispatcher)
+
+    with fail_after(5):
+        async with AsyncExecution() as execution:
+            stream = await execution.run(plan)
+            assert stream is not None
+
+
+@async_test
+async def test_arun_sync_worker_node_reads_secondary_inputs_lazily() -> None:
+    async def asrc(_items=None, **_):
+        yield {"t": "a"}
+
+    async def bsrc(_items=None, **_):
+        yield {"t": "b"}
+        raise RuntimeError("secondary later")
+
+    def merge(items, others=None, **_):
+        yield from items
+
+        for other in others or ():
+            yield from other
+
+    dispatcher = _dispatcher(
+        ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", asrc)),
+        ModuleDefinition(name="bsrc", async_pipe=cast("AsyncModuleWrapper", bsrc)),
+        ModuleDefinition(name="merge", sync_pipe=cast("SyncModuleWrapper", merge)),
+    )
+    a = ModuleNode(id="a", name="asrc")
+    b = ModuleNode(id="b", name="bsrc")
+    m = ModuleNode(id="m", name="merge")
+    edges = (
+        StreamEdge(Endpoint("a", "out"), Endpoint("m", "in")),
+        StreamEdge(Endpoint("b", "out"), Endpoint("m", "in:1")),
+    )
+    spec = _spec([a, b, m], {"default": Endpoint("m", "out")}, edges=edges)
+    plan = build_execution_plan(spec, dispatcher=dispatcher)
+    seen = []
+
+    async with AsyncExecution() as execution:
+        stream = await execution.run(plan)
+
+        with pytest.raises(RuntimeError, match="secondary later"):
+            await _acollect(stream, seen)
+
+    assert seen == [{"t": "a"}, {"t": "b"}]
+
+
+@async_test
+async def test_arun_sync_worker_node_runs_off_the_event_loop() -> None:
+    threads = []
+
+    def src(_items=None, **_):
+        threads.append(get_ident())
+        yield {"x": 1}
+        threads.append(get_ident())
+
+    sync_pipe = cast("SyncModuleWrapper", src)
+    dispatcher = _dispatcher(ModuleDefinition(name="src", sync_pipe=sync_pipe))
+    loop_thread = get_ident()
+
+    assert await _arun(_module_spec("src"), dispatcher) == [{"x": 1}]
+    assert threads
+    assert loop_thread not in threads
 
 
 @async_test
@@ -851,3 +1074,140 @@ async def test_pipeline_source_seed_aruns_end_to_end() -> None:
         assert [x async for x in flow] == [{"x": 2}, {"x": 4}]
     finally:
         reset_module_registry()
+
+
+@async_test
+async def test_arun_runs_sync_only_embed_off_the_event_loop() -> None:
+    threads: list[int] = []
+
+    def up(item, **_):
+        threads.append(get_ident())
+        yield {"up": item["t"].upper()}
+
+    async def fakeloop(items, embed=_sync_pipe, **_):
+        async for row in as_async(items):
+            for value in await maybe_deferred(embed, row):
+                yield value
+
+    dispatcher = _dispatcher(
+        ModuleDefinition(name="src", sync_pipe=_tagged_source("x")),
+        ModuleDefinition(
+            name="fakeloop", async_pipe=cast("AsyncModuleWrapper", fakeloop)
+        ),
+        ModuleDefinition(name="up", sync_pipe=cast("SyncModuleWrapper", up)),
+    )
+    plan = build_execution_plan(_loop_spec(), dispatcher=dispatcher)
+    embed = plan.nodes["loop"].embed
+    loop_thread = get_ident()
+
+    assert embed is not None
+    assert embed.select(is_async=True).mode is ExecMode.ADAPTER
+
+    async with AsyncExecution() as execution:
+        stream = await execution.run(plan)
+        assert [item async for item in stream] == [{"up": "X"}]
+
+    assert threads
+    assert loop_thread not in threads
+
+
+@async_test
+async def test_arun_adapts_async_only_embed_for_a_sync_loop_on_a_worker() -> None:
+    async def up(item, **_):
+        yield {"up": item["t"].upper()}
+
+    def fakeloop(items, embed=_sync_pipe, **_):
+        for row in items:
+            yield from embed(row)
+
+    dispatcher = _dispatcher(
+        ModuleDefinition(name="src", sync_pipe=_tagged_source("x")),
+        ModuleDefinition(
+            name="fakeloop", sync_pipe=cast("SyncModuleWrapper", fakeloop)
+        ),
+        ModuleDefinition(name="up", async_pipe=cast("AsyncModuleWrapper", up)),
+    )
+
+    assert await _arun(_loop_spec(), dispatcher) == [{"up": "X"}]
+
+
+def _titled_source(_items=None, **_):
+    yield {"title": "a"}
+    yield {"title": "b"}
+
+
+def _real_loop_spec(embed_name="child"):
+    return _loop_spec(loop_name="loop", embed_name=embed_name)
+
+
+def _sync_child(produced: list[int], closed: list[str]):
+    def child(tag: str):
+        try:
+            for index in range(50):
+                produced.append(index)
+                yield {"content": f"{tag}{index}"}
+        finally:
+            closed.append(tag)
+
+    def _sub(item, context=None, **_):
+        return child(str(item["title"]))
+
+    return mark_subpipe(_sub)
+
+
+def _async_child(produced: list[int], closed: list[str]):
+    async def child(tag: str):
+        try:
+            for index in range(50):
+                produced.append(index)
+                yield {"content": f"{tag}{index}"}
+        finally:
+            closed.append(tag)
+
+    def _sub(item, context=None, **_):
+        return child(str(item["title"]))
+
+    return cast("AsyncModuleWrapper", mark_subpipe(_sub))
+
+
+@skipif_issync
+def test_run_count_first_stays_lazy_for_an_async_only_embed() -> None:
+    produced: list[int] = []
+    closed: list[str] = []
+    dispatcher = _dispatcher(
+        ModuleDefinition(
+            name="src", sync_pipe=cast("SyncModuleWrapper", _titled_source)
+        ),
+        ModuleDefinition(name="loop", sync_pipe=loop_pipe, async_pipe=async_loop),
+        ModuleDefinition(name="child", async_pipe=_async_child(produced, closed)),
+    )
+
+    assert _run(_real_loop_spec(), dispatcher) == [{"content": "a0"}, {"content": "b0"}]
+    assert produced == [0, 0]
+    assert closed == ["a", "b"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="owned by the pending lazy cross-mode embed work: a sync-only embed under "
+    "an async loop is collected to a list on the worker before the loop takes "
+    "its first result, so count='first' cannot stop the child early",
+)
+@async_test
+async def test_arun_count_first_stays_lazy_for_a_sync_only_embed() -> None:
+    produced: list[int] = []
+    closed: list[str] = []
+    dispatcher = _dispatcher(
+        ModuleDefinition(
+            name="src", sync_pipe=cast("SyncModuleWrapper", _titled_source)
+        ),
+        ModuleDefinition(name="loop", sync_pipe=loop_pipe, async_pipe=async_loop),
+        ModuleDefinition(name="child", sync_pipe=_sync_child(produced, closed)),
+    )
+
+    assert await _arun(_real_loop_spec(), dispatcher) == [
+        {"content": "a0"},
+        {"content": "b0"},
+    ]
+    assert produced == [0, 0]
+    assert closed == ["a", "b"]
