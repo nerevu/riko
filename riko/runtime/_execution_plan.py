@@ -10,13 +10,13 @@ without touching the resolver or registry.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from functools import partial
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from attrs import Factory, define, field
 
 from riko.coercion._graph import descendants
+from riko.definitions._workflow import require_module_node
 from riko.execution._prepared import PreparedNode
 from riko.types._collections import freeze_mapping
 
@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from riko.types._compiler import GraphIndex
     from riko.types._workflow import NodeId
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
-    from riko.types.modules import Embed
 
     from ._resolver import ResolverDispatcher
 
@@ -87,10 +86,11 @@ def _resolve_pipes(name: str, dispatcher: ResolverDispatcher) -> ResolvedPipes:
 def _build_embed(
     base: PreparedNode, dispatcher: ResolverDispatcher
 ) -> PreparedNode | None:
-    ref = base.conf.get("embed")
+    embed = require_module_node(base.node).embed
 
-    if isinstance(ref, Mapping) and "name" in ref:
-        embed = cast("Embed", ref)
+    if embed is None:
+        result = None
+    else:
         sync_pipe, async_pipe = _resolve_pipes(embed["name"], dispatcher)
         result = PreparedNode(
             node=base.node,
@@ -102,8 +102,6 @@ def _build_embed(
             sync_pipe=sync_pipe,
             async_pipe=async_pipe,
         )
-    else:
-        result = None
 
     return result
 

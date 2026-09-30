@@ -1,6 +1,7 @@
 # vim: sw=4:ts=4:expandtab
 """Tests deterministic Workflow v2 serialization, round-trips, and v1-free output."""
 
+import json
 from datetime import date
 from decimal import Decimal
 from types import MappingProxyType
@@ -160,7 +161,14 @@ V1_PIPE_DEF = {
 
 
 def test_golden_bytes():
-    assert serialize_workflow(normalize_workflow(RICH_AUTHORING)) == RICH_GOLDEN
+    spec = normalize_workflow(RICH_AUTHORING)
+    assert serialize_workflow(spec, indent=None) == RICH_GOLDEN
+
+
+def test_default_form_is_indented():
+    spec = normalize_workflow(RICH_AUTHORING)
+    assert serialize_workflow(spec) == serialize_workflow(spec, indent=4)
+    assert serialize_workflow(spec) != serialize_workflow(spec, indent=None)
 
 
 @pytest.mark.parametrize("authoring", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
@@ -174,6 +182,23 @@ def test_serialization_is_idempotent(authoring):
     spec = normalize_workflow(authoring)
     once = serialize_workflow(spec)
     assert serialize_workflow(parse_workflow(once)) == once
+
+
+@pytest.mark.parametrize("authoring", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
+def test_indented_output_round_trips(authoring):
+    spec = normalize_workflow(authoring)
+    assert parse_workflow(serialize_workflow(spec, indent=4)) == spec
+
+
+def test_indented_output_is_readable_and_sorted():
+    spec = normalize_workflow(RICH_AUTHORING)
+    document = serialize_workflow(spec, indent=2).decode("utf-8")
+    top_level = [line[2:] for line in document.splitlines() if line.startswith('  "')]
+    keys = [line.split('"')[1] for line in top_level]
+
+    assert document.endswith("\n")
+    assert keys == sorted(keys)
+    assert '\n  "version": "2"\n' in document
 
 
 def test_serialization_is_order_independent():
@@ -221,7 +246,7 @@ def test_write_node_destination_survives():
 
 
 def test_migration_then_serialization_emits_no_v1_structure():
-    data = serialize_workflow(migrate_v1_to_v2(V1_PIPE_DEF))
+    data = serialize_workflow(migrate_v1_to_v2(V1_PIPE_DEF), indent=None)
     text = data.decode("utf-8")
     assert b'"version":"2"' in data
     for token in ("_OUTPUT", "_INPUT", "wires", '"src"', '"tgt"', '"type":"output"'):
@@ -229,7 +254,8 @@ def test_migration_then_serialization_emits_no_v1_structure():
 
 
 def test_call_options_are_serialized_apart_from_conf():
-    data = serialize_workflow(normalize_workflow(TOPOLOGIES["call-options"]))
+    spec = normalize_workflow(TOPOLOGIES["call-options"])
+    data = serialize_workflow(spec, indent=None)
     assert b'"options":{"count":"first","emit":true}' in data
     assert b'"conf":{"delimiter":{"value":","}}' in data
 
@@ -277,3 +303,22 @@ def test_migrated_output_pseudo_node_is_not_a_node():
     spec = migrate_v1_to_v2(V1_PIPE_DEF)
     assert "_OUTPUT" not in spec.nodes
     assert spec.outputs["default"].node == "sw-2"
+
+
+def test_loop_embed_serializes_as_a_node_field():
+    authoring = {
+        "nodes": [
+            {
+                "id": "loop-1",
+                "name": "loop",
+                "embed": {"name": "tokenizer", "conf": {"delimiter": {"value": " "}}},
+            }
+        ]
+    }
+    spec = normalize_workflow(authoring)
+    document = json.loads(serialize_workflow(spec))
+    node = document["nodes"]["loop-1"]
+
+    assert node["embed"] == {"name": "tokenizer", "conf": {"delimiter": {"value": " "}}}
+    assert "conf" not in node
+    assert parse_workflow(serialize_workflow(spec)) == spec

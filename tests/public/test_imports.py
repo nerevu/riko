@@ -20,7 +20,9 @@ import riko.base.exceptions
 import riko.ext
 import riko.modules
 import riko.modules._names
+import riko.runtime._codegen
 import riko.runtime._compile
+import riko.runtime._migrate
 import riko.runtime.collections
 import riko.types
 from riko.base._api_surface import (
@@ -38,7 +40,9 @@ from riko.base._api_surface import (
 SURFACE_MODULES = (
     riko.bado,
     riko.runtime.collections,
+    riko.runtime._codegen,
     riko.runtime._compile,
+    riko.runtime._migrate,
     riko.ext,
     riko.modules,
     riko.base.exceptions,
@@ -52,10 +56,19 @@ PARTIAL_SURFACES = (
 CONF_TYPES = riko.types.modules.__all__
 
 
+CODEGEN = (COMPILE & {"compile_pipe"}) | {
+    "RAW_CONFS",
+    "compile_workflow",
+    "render_value",
+}
+V1_COMPILE = (COMPILE - {"build_workflow", "compile_pipe"}) | {"compile_pipe_def"}
+
 EQUAL_SURFACES = (
     (riko.bado, BADO),
     (riko.runtime.collections, COLLECTIONS),
-    (riko.runtime._compile, COMPILE),
+    (riko.runtime._codegen, CODEGEN),
+    (riko.runtime._compile, V1_COMPILE),
+    (riko.runtime._migrate, {"build_workflow", "migrate_v1_to_v2"}),
     (riko.ext, EXTENSION),
     (riko, STABLE),
     (riko.types, TYPES),

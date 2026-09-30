@@ -114,17 +114,21 @@ def parse_workflow(data: bytes | str) -> WorkflowSpec:
     return normalize_workflow(json.loads(data))
 
 
-def serialize_workflow(spec: WorkflowSpec) -> bytes:
+def serialize_workflow(spec: WorkflowSpec, *, indent: int | None = 4) -> bytes:
     """
     Serializes a canonical workflow spec into byte-stable canonical JSON.
 
     Map keys are sorted at every level and node/edge fields use a fixed shape, so the
     same spec always yields identical bytes for golden-fixture comparison. Edge order
     follows the spec; semantic wiring lives in the endpoints, not the array order.
+    The default is the readable indented form committed documents are stored in.
 
     Args:
 
         spec: The canonical :class:`~riko.definitions._workflow.WorkflowSpec`.
+        indent: Number of spaces to indent each nesting level by. The readable form
+            ends with a trailing newline; pass ``None`` for the compact single-line
+            form.
 
     Returns:
 
@@ -135,19 +139,35 @@ def serialize_workflow(spec: WorkflowSpec) -> bytes:
         >>> from riko.ext import normalize_workflow
         >>>
         >>> spec = normalize_workflow({"nodes": [{"name": "fetch"}]})
-        >>> serialize_workflow(spec)
-        b'{"edges":[],"nodes":{"fetch-1":{"id":"fetch-1","name":"fetch","type":"module"}},"outputs":{"default":{"node":"fetch-1","port":"out"}},"version":"2"}'
+        >>> document = serialize_workflow(spec).decode("utf-8")
+        >>> document.splitlines()[1]
+        '    "edges": [],'
+        >>> document.endswith("\\n")
+        True
+
+        Compact form::
+
+            >>> serialize_workflow(spec, indent=None)
+            b'{"edges":[],"nodes":{"fetch-1":{"id":"fetch-1","name":"fetch","type":"module"}},"outputs":{"default":{"node":"fetch-1","port":"out"}},"version":"2"}'
 
     """
+    if indent is None:
+        separators = (",", ":")
+        suffix = ""
+    else:
+        separators = None
+        suffix = "\n"
+
     dumped = json.dumps(
         spec,
         cls=WorkflowEncoder,
         sort_keys=True,
-        separators=(",", ":"),
+        indent=indent,
+        separators=separators,
         ensure_ascii=False,
         allow_nan=False,
     )
-    return dumped.encode("utf-8")
+    return (dumped + suffix).encode("utf-8")
 
 
 __all__ = ["parse_workflow", "serialize_workflow"]

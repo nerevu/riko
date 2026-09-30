@@ -840,9 +840,8 @@ class XpathFetchPageConf(TypedDict, total=False):
 
 # General
 type ConfDictValues = PipeModule | ParsedParam
-
 type RawConfValues = dict[str, str | int | bool]
-
+type OptionValues = bool | str | CountValues
 
 type ConfValues = (
     BasicValue
@@ -919,17 +918,16 @@ type Conf = AnyModuleConf | AnyModuleRawConf
 
 
 class Embed(TypedDict):
-    """Kwargs a loop passes to its embed per parent — not a full module descriptor."""
+    """
+    A loop's embedded module: the registered name run once per parent item.
+
+    ``conf`` is the configuration that module parses.
+
+    """
 
     id: NotRequired[str]
-    conf: AnyModuleConf
+    conf: Conf
     name: str
-
-
-class LoopConf(TypedDict):
-    """The declarative configuration of a loop: the embed it runs per item."""
-
-    embed: Embed
 
 
 class ModuleOptions(TypedDict, total=False):
@@ -949,6 +947,7 @@ __all__ = [
     "CsvConf",
     "CurrencyFormatConf",
     "DateFormatConf",
+    "Embed",
     "ExchangeRateConf",
     "FeedAutoDiscoveryConf",
     "FetchConf",

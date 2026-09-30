@@ -280,94 +280,92 @@
             "type": "module"
         },
         "sw-400": {
-            "conf": {
-                "embed": {
-                    "conf": {
-                        "part": [
-                            {
-                                "type": "text",
-                                "value": "Total allowances claimed, inc travel: "
-                            },
-                            {
-                                "subkey": "TotalAllowancesClaimedIncTravel",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": "<br>Total basic allowances claimed, ex travel: "
-                            },
-                            {
-                                "subkey": "TotalBasicAllowancesExcTravel",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": "<br>Total Travel claimed: "
-                            },
-                            {
-                                "subkey": "TotalTravelClaimed",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": "<br>MP Mileage: "
-                            },
-                            {
-                                "subkey": "Mileage",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": "<br>MP Rail Travel: "
-                            },
-                            {
-                                "subkey": "MPRail",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": "<br>MP Air Travel: "
-                            },
-                            {
-                                "subkey": "MPAir",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": "<br>Cost of staying away from main home: "
-                            },
-                            {
-                                "subkey": "CostofStayingAwayFromMainHome",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": "<br>London Supplement: "
-                            },
-                            {
-                                "subkey": "LondonSupplement",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": "<br>Office Running Costs: "
-                            },
-                            {
-                                "subkey": "OfficeRunningCosts",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": "<br>Staffing Costs: "
-                            },
-                            {
-                                "subkey": "StaffingCosts",
-                                "type": "text"
-                            }
-                        ]
-                    },
-                    "name": "strconcat"
-                }
+            "embed": {
+                "conf": {
+                    "part": [
+                        {
+                            "type": "text",
+                            "value": "Total allowances claimed, inc travel: "
+                        },
+                        {
+                            "subkey": "TotalAllowancesClaimedIncTravel",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": "<br>Total basic allowances claimed, ex travel: "
+                        },
+                        {
+                            "subkey": "TotalBasicAllowancesExcTravel",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": "<br>Total Travel claimed: "
+                        },
+                        {
+                            "subkey": "TotalTravelClaimed",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": "<br>MP Mileage: "
+                        },
+                        {
+                            "subkey": "Mileage",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": "<br>MP Rail Travel: "
+                        },
+                        {
+                            "subkey": "MPRail",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": "<br>MP Air Travel: "
+                        },
+                        {
+                            "subkey": "MPAir",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": "<br>Cost of staying away from main home: "
+                        },
+                        {
+                            "subkey": "CostofStayingAwayFromMainHome",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": "<br>London Supplement: "
+                        },
+                        {
+                            "subkey": "LondonSupplement",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": "<br>Office Running Costs: "
+                        },
+                        {
+                            "subkey": "OfficeRunningCosts",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": "<br>Staffing Costs: "
+                        },
+                        {
+                            "subkey": "StaffingCosts",
+                            "type": "text"
+                        }
+                    ]
+                },
+                "name": "strconcat"
             },
             "id": "sw-400",
             "name": "loop",
@@ -379,26 +377,24 @@
             "type": "module"
         },
         "sw-573": {
-            "conf": {
-                "embed": {
-                    "conf": {
-                        "part": [
-                            {
-                                "subkey": "firstName",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": " "
-                            },
-                            {
-                                "subkey": "Member",
-                                "type": "text"
-                            }
-                        ]
-                    },
-                    "name": "strconcat"
-                }
+            "embed": {
+                "conf": {
+                    "part": [
+                        {
+                            "subkey": "firstName",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": " "
+                        },
+                        {
+                            "subkey": "Member",
+                            "type": "text"
+                        }
+                    ]
+                },
+                "name": "strconcat"
             },
             "id": "sw-573",
             "name": "loop",

@@ -26,8 +26,10 @@ import pytest
 
 from riko.bado.itertools import as_async
 from riko.ext import operator, processor, splitter
+from riko.modules.forever import async_pipe as async_forever
 from riko.modules.split import async_pipe as async_split
 from riko.modules.timeout import async_pipe as timeout_async_pipe
+from riko.modules.truncate import async_pipe as async_truncate
 from riko.types._wrappers import (
     AsyncProcessorWrapper,
     AsyncSplitterWrapper,
@@ -282,3 +284,18 @@ async def test_async_splitter_accepts_an_async_input_stream() -> None:
     branches = async_split(source)  # pyright: ignore[reportArgumentType]
     first = await anext(branches)
     assert next(first) == {"x": 1}
+
+
+@pytest.mark.timeout(10)
+@pytest.mark.xfail(
+    strict=True,
+    reason="owned by the pending Feed-native streaming migration of truncate and the "
+    "final legacy-seam cleanup: an async operator whose parser is synchronous "
+    "materializes its whole async input before parsing, so truncate over an "
+    "endless async source never yields its first item",
+)
+@async_test
+async def test_async_truncate_stays_lazy_over_an_endless_source() -> None:
+    source = as_async(await async_forever(None, conf={}))
+    stream = async_truncate(source, conf={"count": 3})
+    assert await anext(stream) == {"forever": True}

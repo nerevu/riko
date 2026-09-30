@@ -33,11 +33,9 @@
             "type": "module"
         },
         "sw-2": {
-            "conf": {
-                "embed": {
-                    "conf": {},
-                    "name": "pipe:shout"
-                }
+            "embed": {
+                "conf": {},
+                "name": "pipe:shout"
             },
             "id": "sw-2",
             "name": "loop",

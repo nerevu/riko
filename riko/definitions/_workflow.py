@@ -42,6 +42,13 @@ from typing_extensions import TypeVar
 from riko.base.exceptions import InvalidPipelineError
 from riko.types._collections import (
     FreezeMapping,
+    FrozenConf,
+    FrozenConfValues,
+    FrozenMap,
+    FrozenOptions,
+    FrozenOptionValues,
+    FrozenParams,
+    FrozenPolicy,
     JSONSchema,
     deep_freeze_mapping,
     def_from_require,
@@ -55,7 +62,14 @@ from riko.types._collections import (
 from riko.types._enums import Backends, Formats, ModuleNameLike
 from riko.types._guards import is_listlike, is_mapping, require_mapping
 from riko.types._workflow import WORKFLOW_VERSION, Edge, Endpoint, NodeId
-from riko.types.modules import ModuleOptions
+from riko.types.modules import (
+    AnyModuleConf,
+    Conf,
+    ConfValues,
+    Embed,
+    ModuleOptions,
+    OptionValues,
+)
 
 from ._resources import normalize_resources
 from ._targets import normalize_strs, resolve_enum
@@ -66,25 +80,36 @@ if TYPE_CHECKING:
 
     from riko.types._streams import AsyncItemGenerator, ItemGenerator, Items
     from riko.types._workflow import EdgeFamily, NodeFamily
-    from riko.types.modules import AnyModuleConf, LoopConf
 
-_EMPTY_CONF = cast("AnyModuleConf", MappingProxyType({}))
-_EMPTY_OPTIONS = cast("ModuleOptions", MappingProxyType({}))
+_FROZEN_OPTIONS: FrozenMap[FrozenOptionValues] = MappingProxyType({})
+_FROZEN_PARAMS: FrozenMap[FrozenOptionValues] = MappingProxyType({})
+_FROZEN_POLICY: FrozenMap[FrozenOptionValues] = MappingProxyType({})
+_FROZEN_CONF: FrozenMap[FrozenConfValues] = MappingProxyType({})
 _MODULE_OPTION_KEYS = frozenset(ModuleOptions.__annotations__)
+_EMBED_KEYS = frozenset(Embed.__annotations__)
 _EMPTY_INPUTS: JSONSchema = MappingProxyType({})
-_EMPTY_RESOURCES: Mapping[str, str] = MappingProxyType({})
+_EMPTY_RESOURCES: FrozenMap[str] = MappingProxyType({})
+
 T = TypeVar("T", default=Any)
 
 
-def freeze_mapping_value(value: Mapping[object, object]) -> JSONSchema:
+def freeze_mapping_value(value: Mapping[str, object]) -> JSONSchema:
     return freeze_value(value)
+
+
+def freeze_conf(value: Mapping[str, ConfValues]) -> FrozenConf:
+    return cast("FrozenConf", freeze_value(value))
+
+
+def freeze_options(value: Mapping[str, OptionValues]) -> FrozenOptions:
+    return cast("FrozenOptions", freeze_value(value))
 
 
 optional_binding = def_from_require(require_binding)
 optional_resources = def_from_require(normalize_resources, default=_EMPTY_RESOURCES)
 optional_str = narrow_def_from_require(require_str)
+resource_converter = [optional_binding, optional_resources]
 
-_optional_freeze = def_from_require(freeze_mapping_value, default=_EMPTY_CONF)
 _normalize_backend = partial(resolve_enum, Backends)
 _normalize_format = partial(resolve_enum, Formats, strict=False)
 _normalize_mode = partial(resolve_enum, WriteMode, default=WriteMode.REPLACE)
@@ -105,13 +130,42 @@ def _is_pipe_spec(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
     )
 
 
-def conf_converters(
+def mapping_converter[V, FV](
+    freezer: Callable[[Mapping[str, V]], FrozenMap[FV]], what: str | None = None
+) -> Callable[[FrozenMap[FV] | Mapping[str, V] | object], FrozenMap[FV]]:
+    optional_mapping = def_from_require(require_mapping, default={}, what=what)
+
+    def converter(value: object | None) -> FrozenMap[FV]:
+        return freezer(cast("Mapping[str, V]", optional_mapping(value)))
+
+    return converter
+
+
+def conf_converter(
     what: str | None = None,
-) -> list[
-    Callable[..., Mapping[str, object] | None]
-    | Callable[[Mapping], AnyModuleConf | JSONSchema]
+) -> Callable[[FrozenConf | Conf | Mapping[str, ConfValues] | None], FrozenConf]:
+    return mapping_converter(freeze_conf, f"{what} 'conf'" if what else "conf")
+
+
+def options_converter(
+    what: str | None = None,
+) -> Callable[
+    [FrozenOptions | ModuleOptions | Mapping[str, OptionValues] | None], FrozenOptions
 ]:
-    return [def_from_require(require_mapping, what=what), _optional_freeze]
+    return mapping_converter(freeze_options, f"{what} 'options'" if what else "options")
+
+
+def params_converter(
+    what: str | None = None,
+) -> Callable[[FrozenParams | Mapping[str, OptionValues] | None], FrozenParams]:
+    return mapping_converter(freeze_options, f"{what} 'params'" if what else "params")
+
+
+def policy_converter(
+    what: str | None = None,
+) -> Callable[[FrozenPolicy | Mapping[str, OptionValues] | None], FrozenPolicy]:
+    what = f"{what} 'policy'" if what else "policy"
+    return mapping_converter(freeze_options, what)
 
 
 def require_options(
@@ -125,8 +179,23 @@ def require_options(
     return cast("ModuleOptions", value)
 
 
-_normalize_options = conf_converters("ModuleNode 'options'")
-_validate_options = validator_from_require(require_options)
+def normalize_embed(value: Mapping[str, object], what: str = "embed") -> Embed:
+    """Confirms an embed names its module and carries only its supported keys."""
+    if unknown := set(value).difference(_EMBED_KEYS):
+        raise InvalidPipelineError(f"unknown embed key(s) in {what}: {sorted(unknown)}")
+    elif "name" not in value:
+        raise InvalidPipelineError(f"missing embed key in {what}: 'name'")
+    else:
+        _conf = value.get("conf", {})
+        _id = value.get("id")
+        name = require_str(value["name"], f"{what} 'name'")
+        conf = cast("Conf", require_mapping(_conf, f"{what} 'conf'"))
+        embed = Embed(name=name, conf=conf)
+
+        if (_id := value.get("id")) is not None:
+            embed["id"] = require_str(_id, f"{what} 'id'")
+
+    return embed
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -137,7 +206,7 @@ class Node:
     id: NodeId
     name: str = field(converter=narrow_from_require(require_str))
     resources: Mapping[str, str] = field(
-        default=_EMPTY_RESOURCES, converter=[optional_binding, optional_resources]
+        default=_EMPTY_RESOURCES, converter=resource_converter
     )
     label: str = field(default=None, converter=optional_str)
 
@@ -152,20 +221,29 @@ class ModuleNode(Node):
     """
     A registered transform/operator node (split/branch/route/union/join/loop too).
 
-    ``conf`` is the module's declarative configuration. ``options`` are the call
-    options forwarded to the module callable itself, such as ``emit``, ``assign``,
-    ``field``, and ``count``.
+    ``conf`` is the configuration the node's own module parses. ``options`` are the
+    call options forwarded to the module callable itself, such as ``emit``,
+    ``assign``, ``field``, and ``count``. ``embed`` names the module a ``loop`` runs
+    once per item, together with that module's own configuration.
 
     """
 
     family: ClassVar[NodeFamily] = "module"
-    conf: AnyModuleConf | LoopConf = field(
-        default=_EMPTY_CONF, converter=conf_converters("ModuleNode 'conf'")
+    conf: FrozenConf = field(
+        default=_FROZEN_CONF, converter=conf_converter("ModuleNode")
     )
-    options: ModuleOptions = field(
-        default=_EMPTY_OPTIONS,
-        converter=_normalize_options,
-        validator=_validate_options,
+    options: FrozenOptions = field(
+        default=_FROZEN_OPTIONS,
+        converter=options_converter("ModuleNode"),
+        validator=validator_from_require(require_options),
+    )
+    embed: Embed | None = field(
+        default=None,
+        converter=[
+            def_from_require(require_mapping, what="ModuleNode 'embed'"),
+            def_from_require(normalize_embed, what="ModuleNode 'embed'"),
+            def_from_require(freeze_mapping_value),
+        ],
     )
 
 
@@ -196,8 +274,8 @@ class ActionNode(Node):
 
     family: ClassVar[NodeFamily] = "action"
     backend: Backends = field(converter=_normalize_backend)
-    params: AnyModuleConf = field(
-        default=_EMPTY_CONF, converter=conf_converters("ActionNode 'params'")
+    params: FrozenParams = field(
+        default=_FROZEN_PARAMS, converter=params_converter("ActionNode")
     )
 
 
@@ -206,8 +284,8 @@ class CacheNode(Node):
     """A node carrying cache identity and policy, never cache contents."""
 
     family: ClassVar[NodeFamily] = "cache"
-    policy: AnyModuleConf = field(
-        default=_EMPTY_CONF, converter=conf_converters("CacheNode 'policy'")
+    policy: FrozenPolicy = field(
+        default=_FROZEN_POLICY, converter=policy_converter("CacheNode")
     )
 
 
@@ -216,8 +294,8 @@ class SubscribeNode(Node):
     """A node owning subscription policy for a published stream."""
 
     family: ClassVar[NodeFamily] = "subscribe"
-    policy: AnyModuleConf = field(
-        default=_EMPTY_CONF, converter=conf_converters("SubscribeNode 'policy'")
+    policy: FrozenPolicy = field(
+        default=_FROZEN_POLICY, converter=policy_converter("SubscribeNode")
     )
 
 
@@ -373,13 +451,15 @@ def _mint_node_id(spec: WorkflowSpec, name: str) -> NodeId:
 def _build_chained_spec(
     name: str,
     spec: WorkflowSpec | None = None,
-    conf: AnyModuleConf | LoopConf | None = None,
+    *,
+    conf: FrozenConf | Conf | None = None,
+    options: FrozenOptions | ModuleOptions | None = None,
+    embed: Embed | None = None,
 ) -> WorkflowSpec:
     """Builds a spec that appends a module node and re-points the default output."""
     spec = _EMPTY_SPEC if spec is None else spec
     node_id = _mint_node_id(spec, name)
-    conf = {} if conf is None else conf
-    node = ModuleNode(id=node_id, name=name, conf=conf)
+    node = ModuleNode(id=node_id, name=name, conf=conf, options=options, embed=embed)
 
     if (tail := spec.outputs.get("default")) is None:
         edges = spec.edges
@@ -433,7 +513,12 @@ class Pipeline(Generic[T]):
 
     @classmethod
     def from_module(
-        cls, name: ModuleNameLike, *, conf: AnyModuleConf | None = None
+        cls,
+        name: ModuleNameLike,
+        *,
+        conf: Conf | None = None,
+        options: ModuleOptions | None = None,
+        embed: Embed | None = None,
     ) -> Pipeline:
         """
         Builds a pipeline seeded with a single named module node.
@@ -445,6 +530,8 @@ class Pipeline(Generic[T]):
 
             name: The seeding module's name.
             conf: The module's configuration, if any.
+            options: The call options forwarded to the module, if any.
+            embed: The module a loop runs per item, with its configuration, if any.
 
         Returns:
 
@@ -459,14 +546,20 @@ class Pipeline(Generic[T]):
             Endpoint(node='sort-1', port='out')
 
         """
-        return cls(_build_chained_spec(str(name), conf=conf))
+        spec = _build_chained_spec(str(name), conf=conf, options=options, embed=embed)
+        return cls(spec)
 
     def _derive(self, spec: WorkflowSpec, source: Items | None) -> Pipeline:
         """Builds a sibling pipeline over a derived spec."""
         return type(self)(spec, source)
 
     def pipe(
-        self, name: ModuleNameLike, *, conf: AnyModuleConf | LoopConf | None = None
+        self,
+        name: ModuleNameLike,
+        *,
+        conf: FrozenConf | Conf | None = None,
+        options: FrozenOptions | ModuleOptions | None = None,
+        embed: Embed | None = None,
     ) -> Pipeline:
         """
         Chains the next module by name by re-pointing the default output to it.
@@ -478,6 +571,8 @@ class Pipeline(Generic[T]):
 
             name: The module to append.
             conf: The module's configuration, if any.
+            options: The call options forwarded to the module, if any.
+            embed: The module a loop runs per item, with its configuration, if any.
 
         Returns:
 
@@ -490,9 +585,18 @@ class Pipeline(Generic[T]):
             ['fetch-1', 'sort-1']
             >>> flow.spec.outputs["default"]
             Endpoint(node='sort-1', port='out')
+            >>> delimiter = {"type": "text", "value": " "}
+            >>> embed = {"name": "tokenizer", "conf": {"delimiter": delimiter}}
+            >>> flow = Pipeline.from_module("itembuilder")
+            >>> flow = flow.loop(embed=embed, options={"emit": True})
+            >>> flow.spec.nodes["loop-1"].embed["name"]
+            'tokenizer'
+            >>> dict(flow.spec.nodes["loop-1"].options)
+            {'emit': True}
 
         """
-        spec = _build_chained_spec(str(name), self.spec, conf)
+        args = str(name), self.spec
+        spec = _build_chained_spec(*args, conf=conf, options=options, embed=embed)
         return self._derive(spec, self.source)
 
     def __getattr__(self, name: str) -> Callable[..., Pipeline]:
@@ -545,11 +649,13 @@ class Pipeline(Generic[T]):
 
     def _or_template(self, other: Pipeline) -> Pipeline:
         """Chains a single-module, source-less pipeline used as a reusable template."""
-        nodes = list(other.spec.nodes.values())
-        node = nodes[0] if len(nodes) == 1 else None
+        nodes = other.spec.nodes.values()
+        node = next(iter(nodes)) if len(nodes) == 1 else None
 
         if other.source is None and isinstance(node, ModuleNode):
-            chained = self.pipe(node.name, conf=node.conf)
+            chained = self.pipe(
+                node.name, conf=node.conf, options=node.options, embed=node.embed
+            )
         else:
             msg = "pipeline template must define exactly one module"
             raise InvalidPipelineError(msg)

@@ -17,11 +17,22 @@ from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._workflow import ModuleNode, StreamEdge, WorkflowSpec
 from riko.types._guards import is_mapping
 from riko.types._workflow import Endpoint
-from riko.types.modules import SortConf, SortConfRule
+from riko.types.modules import (
+    ConfArg,
+    Embed,
+    ModuleOptions,
+    SortConf,
+    SortConfRule,
+    TokenizerRawConf,
+)
 from tests import async_test
 
 _SORT_CONF_RULE = SortConfRule(dir="desc")
 _SORT_CONF = SortConf({"rule": _SORT_CONF_RULE})
+_OPTIONS = ModuleOptions(emit=True, field="title")
+
+tokenizer_conf = TokenizerRawConf(delimiter=ConfArg(type="text", value=" "))
+_EMBED = Embed(name="tokenizer", conf=tokenizer_conf)
 
 
 def _spec():
@@ -128,6 +139,29 @@ def test_or_chains_name_conf_pair():
     node_conf_rule = node.conf.get("rule")
     assert is_mapping(node_conf_rule)
     assert dict(node_conf_rule) == asdict(_SORT_CONF_RULE)
+
+
+def _assert_embed(node):
+    """Confirms a node carries the tokenizer embed and its typed configuration."""
+    assert isinstance(node, ModuleNode)
+    assert node.embed is not None
+    assert node.embed["name"] == "tokenizer"
+    assert dict(node.embed["conf"]) == {"delimiter": {"type": "text", "value": " "}}
+    assert node.options == _OPTIONS
+
+
+def test_chained_loop_carries_its_embed_and_options():
+    flow = Pipeline.from_module("itembuilder").loop(embed=_EMBED, options=_OPTIONS)
+    node = flow.spec.nodes["loop-1"]
+    _assert_embed(node)
+    assert isinstance(node, ModuleNode)
+    assert node.conf == {}
+
+
+def test_or_copies_a_loop_template_embed_and_options():
+    template = Pipeline.from_module("loop", embed=_EMBED, options=_OPTIONS)
+    flow = Pipeline.from_module("itembuilder") | template
+    _assert_embed(flow.spec.nodes["loop-1"])
 
 
 def test_or_chains_single_module_template():

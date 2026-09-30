@@ -12,7 +12,7 @@ from ._workflow import parse_port
 if TYPE_CHECKING:
     from ._module_ids import LoopableModuleId, ModuleId
     from ._pipeline import PyInput
-    from .modules import AnyModuleRawConf, Conf
+    from .modules import AnyModuleRawConf, Conf, ModuleOptions
 
 
 PipeId = NewType("PipeId", str)
@@ -291,24 +291,25 @@ class PipelineDescription(TypedDict):
 class DagModule(TypedDict):
     id: NotRequired[str]
     type: ModuleId | PipeId
-    conf: AnyModuleRawConf
+    conf: NotRequired[AnyModuleRawConf]
+    options: NotRequired[ModuleOptions]
 
 
 class PipeDag(TypedDict):
     """
-    Bare-bones DAG expanded by ``riko.runtime._compile.build_pipe_def``.
+    Bare-bones DAG expanded by ``riko.runtime._migrate.build_workflow``.
 
     ``wires`` is optional (omit for a linear chain in module listing order) and
-    holds ``(source_id, target_id)`` pairs. A module ``id`` is also optional and
-    defaults to ``sw-{n}`` (1-based listing order) — practical for the concise
-    wireless form; supply ids when ``wires`` reference them. Every expanded wire
-    targets ``_INPUT``, so fan-in operators such as ``union``/``join`` (whose
-    secondary inputs need ``_OTHER{n}`` targets) cannot be expressed here and
-    must be authored as a full ``PipeDef``.
+    holds ``(source_id, target_id)`` entries, optionally followed by the port the
+    wire enters — so a fan-in operator such as ``union``/``join`` is expressible
+    as ``("b", "union-1", "in:1")``. A module ``id`` is also optional and defaults
+    to ``sw-{n}`` (1-based listing order) — practical for the concise wireless
+    form; supply ids when ``wires`` reference them. The expansion adds no terminal
+    output node: the workflow's default output is its single leaf.
     """
 
     modules: list[DagModule]
-    wires: NotRequired[list[tuple[str, str]]]
+    wires: NotRequired[Sequence[Sequence[str]]]
 
 
 type PipelineDescriptionLike = PipelineDescription | str | tuple[str, ...]

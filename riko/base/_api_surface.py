@@ -36,7 +36,7 @@ COMPILE = frozenset(
     {
         "build_pipeline",
         "compile_pipe",
-        "build_pipe_def",
+        "build_workflow",
         "get_pipeline_dependencies",
         "parse_pipe_def",
     }

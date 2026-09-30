@@ -238,7 +238,7 @@ def test_call_option_does_not_collide_with_a_same_named_conf_key():
     assert node.options == {"count": "first"}
 
 
-def test_loop_embed_and_its_configuration_become_the_nested_embed():
+def test_loop_embed_and_its_configuration_become_the_node_embed():
     spec = migrate_v1_to_v2(
         {
             "modules": [
@@ -257,9 +257,8 @@ def test_loop_embed_and_its_configuration_become_the_nested_embed():
     )
     node = spec.nodes["sw-2"]
     assert isinstance(node, ModuleNode)
-    assert node.conf == {
-        "embed": {"name": "tokenizer", "conf": {"delimiter": {"value": ","}}}
-    }
+    assert node.conf == {}
+    assert node.embed == {"name": "tokenizer", "conf": {"delimiter": {"value": ","}}}
     assert node.options == {
         "count": "first",
         "assign": "words",
@@ -283,7 +282,8 @@ def test_loop_embedded_subpipe_keeps_its_prefixed_name():
     )
     node = spec.nodes["sw-2"]
     assert isinstance(node, ModuleNode)
-    assert node.conf == {"embed": {"name": "pipe:shout", "conf": {}}}
+    assert node.conf == {}
+    assert node.embed == {"name": "pipe:shout", "conf": {}}
 
 
 @pytest.mark.parametrize(

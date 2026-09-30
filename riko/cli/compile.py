@@ -1,20 +1,26 @@
 """
-Compiles a Riko pipeline definition into a Python module.
+Compiles a canonical workflow document into a Python module.
 
 Examples:
 
     Basic usage::
 
-        >>> from riko import compile_pipe, build_pipe_def
+        >>> from riko import compile_pipe
         >>>
-        >>> dag = {"modules": [{"type": "forever", "conf": {}}]}
-        >>> source = compile_pipe(build_pipe_def(dag), "pipe_demo")
-        >>> print(next(line for line in source.splitlines() if line.startswith("def ")))
+        >>> workflow = {
+        ...     "nodes": [
+        ...         {"id": "gen", "name": "forever"},
+        ...         {"id": "trunc", "name": "truncate", "conf": {"count": 3}},
+        ...     ],
+        ...     "edges": [{"source": {"node": "gen"}, "target": {"node": "trunc"}}],
+        ... }
+        >>> source = compile_pipe(workflow, "pipe_demo")
+        >>> print(next(l for l in source.splitlines() if l.startswith("def pipe")))
         def pipe(item=None, context: Context | None = None, **_):
 
     CLI composition::
 
-        $ convert-dag flow.dag | compile-pipe - -o flow.py
+        $ convert-dag dag.json | compile-pipe - -o flow.py
 
 """
 
@@ -22,39 +28,18 @@ from __future__ import annotations
 
 import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
-from json import loads
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from riko.base._logging import logger
-from riko.runtime._compile import compile_pipe, get_pipeline_dependencies
+from riko.base.exceptions import InvalidPipelineError
+from riko.runtime._codegen import compile_pipe
 
-if TYPE_CHECKING:
-    from riko.types._compiler import PipeDef
-
-
-def _load_pipe_def(path: str) -> tuple[PipeDef | None, str]:
-    """Reads a pipe definition from `path`, or from stdin when it is ``-``."""
-    stdin = path == "-"
-    name = "anonymous" if stdin else Path(path).stem
-
-    try:
-        text = sys.stdin.read() if stdin else Path(path).read_text(encoding="utf-8")
-        pipe_def = loads(text)
-    except OSError as e:
-        logger.warning("Unable to read pipe definition: %s", e)
-        pipe_def = None
-    except ValueError as e:
-        logger.warning("Invalid JSON in pipe definition: %s", e)
-        pipe_def = None
-
-    return pipe_def, name
+from ._workflow import read_document, require_workflow
 
 
 def run() -> None:
     """CLI compiler."""
     parser = ArgumentParser(
-        description="description: Compiles a riko JSON pipeline into a Python module",
+        description="description: Compiles a canonical workflow into a Python module",
         prog="compile",
         usage="%(prog)s [path]",
         formatter_class=RawTextHelpFormatter,
@@ -64,7 +49,7 @@ def run() -> None:
         dest="path",
         nargs="?",
         default="-",
-        help="Path to the JSON pipeline definition ('-' or omitted reads stdin).",
+        help="Path to the canonical workflow ('-' or omitted reads stdin).",
     )
 
     parser.add_argument(
@@ -94,26 +79,31 @@ def run() -> None:
     )
 
     args = parser.parse_args()
-    pipe_def, name = _load_pipe_def(args.path)
+    document, name = read_document(args.path)
 
-    if pipe_def is None:
+    if document is None:
         return_code = 1
     else:
-        source = compile_pipe(pipe_def, name, is_async=args.is_async)
-
-        if args.output:
-            size = Path(args.output).write_text(source, encoding="utf-8")
-            dest = args.output
+        try:
+            spec = require_workflow(document)
+            source = compile_pipe(spec, name, is_async=args.is_async)
+        except InvalidPipelineError as e:
+            print(e, file=sys.stderr)
+            return_code = 1
         else:
-            size = sys.stdout.write(source)
-            dest = "stdout"
+            if args.output is None:
+                size = sys.stdout.write(source)
+                dest = "stdout"
+            else:
+                size = Path(args.output).write_text(source, encoding="utf-8")
+                dest = args.output
 
-        if args.verbose:
-            deps = ", ".join(get_pipeline_dependencies(pipe_def))
-            print(f"Modules used in {name}: {deps}", file=sys.stderr)
-            print(f"wrote {size} bytes to {dest}", file=sys.stderr)
+            if args.verbose:
+                deps = ", ".join(sorted({node.name for node in spec.nodes.values()}))
+                print(f"Modules used in {name}: {deps}", file=sys.stderr)
+                print(f"wrote {size} bytes to {dest}", file=sys.stderr)
 
-        return_code = 0
+            return_code = 0
 
     sys.exit(return_code)
 

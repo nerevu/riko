@@ -139,26 +139,24 @@
             "type": "module"
         },
         "sw-507": {
-            "conf": {
-                "embed": {
-                    "conf": {
-                        "part": [
-                            {
-                                "type": "text",
-                                "value": "<img src=\""
-                            },
-                            {
-                                "subkey": "img.src",
-                                "type": "text"
-                            },
-                            {
-                                "type": "text",
-                                "value": "\">"
-                            }
-                        ]
-                    },
-                    "name": "strconcat"
-                }
+            "embed": {
+                "conf": {
+                    "part": [
+                        {
+                            "type": "text",
+                            "value": "<img src=\""
+                        },
+                        {
+                            "subkey": "img.src",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": "\">"
+                        }
+                    ]
+                },
+                "name": "strconcat"
             },
             "id": "sw-507",
             "name": "loop",
