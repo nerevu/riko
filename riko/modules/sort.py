@@ -5,6 +5,10 @@ Sorts a stream by one or more item fields.
 Not lazy: ranking needs every item, so the source is materialized and cannot be
 unbounded.
 
+Items lacking the sort field group first ascending (last descending) whatever the
+rule ``type``, rather than being compared with the values the other items carry.
+A rule ``default`` makes them sort as that value instead.
+
 Examples:
 
     Basic usage::
@@ -34,7 +38,7 @@ from riko.types._enums import SortableCastType
 from riko.types.modules import SortConfRule
 
 from ._decorators import operator
-from ._iterutils import def_itemgetter
+from ._iterutils import build_sort_key
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -52,7 +56,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 def reducer(stream: Stream, rule: SortConfRule) -> Stream:
     reverse = rule.dir.lower() == "desc" if rule.dir else False
-    keyfunc = def_itemgetter(rule.field, type_=rule.type)
+    keyfunc = build_sort_key(rule.field, rule.default, type_=rule.type)
     return iter(sorted(stream, key=keyfunc, reverse=reverse))
 
 
@@ -167,6 +171,10 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
                     Values compare as strings when unset, so "10" sorts before
                     "9" (default: "text").
 
+                default (scalar): Value an item lacking ``field`` sorts by, cast
+                    like any other value. When unset such items group first
+                    ascending and last descending (default: None).
+
         context (Context): the execution context
 
     Kwargs:
@@ -225,6 +233,10 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
                     "datetime", "decimal", "float", "int", "pass", "text", "url".
                     Values compare as strings when unset, so "10" sorts before
                     "9" (default: "text").
+
+                default (scalar): Value an item lacking ``field`` sorts by, cast
+                    like any other value. When unset such items group first
+                    ascending and last descending (default: None).
 
         context (Context): the execution context
 

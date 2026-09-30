@@ -3,10 +3,12 @@
 
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
+from time import struct_time
 from typing import cast
 from zoneinfo import ZoneInfo
 
 import pytest
+from feedparser import FeedParserDict
 
 from riko.base._dateutils import TZINFOS
 from riko.base._paths import get_path
@@ -19,7 +21,7 @@ from riko.modules.rename import pipe as rename
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.parsing.config import get_skip
 from riko.parsing.documents import XML_PARSER, any2dict
-from riko.rss.entries import augment_entries
+from riko.rss.entries import augment_entries, resolve_date
 from riko.types._rss import FeedParserRSSEntry
 from riko.types.modules import (
     Conf,
@@ -202,6 +204,59 @@ class TestRSSUtils:
         item = next(augment_entries([FeedParserRSSEntry(entry)]))
         assert item.get("summary") == expected
         assert item.get("description") == expected
+
+    def test_augment_entries_parses_date_the_parser_could_not(self):
+        """A present-but-``None`` parsed date falls back to the raw date string."""
+        raw = cast(
+            "FeedParserRSSEntry",
+            {
+                "link": "https://example.com/feed-item",
+                "published": "May 11, 2012 10:01:00 EST",
+                "published_parsed": None,
+                "updated": "May 12, 2012 08:30:00 EST",
+                "updated_parsed": None,
+            },
+        )
+        item: dict[str, object] = dict(next(augment_entries([raw])))
+
+        for key in ("pubDate", "published_parsed", "y:published"):
+            value = item.get(key)
+            assert isinstance(value, struct_time), key
+            assert value[:5] == (2012, 5, 11, 10, 1)
+
+        updated = item.get("updated_parsed")
+        assert isinstance(updated, struct_time)
+        assert updated[:5] == (2012, 5, 12, 8, 30)
+
+    def test_resolve_date_skips_blank_and_unparseable_values(self):
+        """A blank or unparseable candidate never raises; the next key is tried."""
+        raw = cast(
+            "FeedParserRSSEntry",
+            {
+                "published_parsed": None,
+                "published": "not a date",
+                "updated_parsed": None,
+                "updated": "",
+                "created": "2021-03-04",
+            },
+        )
+        keys = ("published_parsed", "published", "updated_parsed", "updated")
+        assert resolve_date(raw, *keys) is None
+        resolved = resolve_date(raw, *keys, "created")
+        assert isinstance(resolved, struct_time)
+        assert resolved[:3] == (2021, 3, 4)
+
+    @pytest.mark.filterwarnings("error::DeprecationWarning")
+    def test_resolve_date_does_not_trigger_feedparser_updated_fallback(self):
+        """Asking a feedparser entry for a missing ``updated`` key stays silent."""
+        raw = FeedParserDict({"published": "2020-01-02", "published_parsed": None})
+        entry = cast("FeedParserRSSEntry", raw)
+        keys = ("updated_parsed", "updated", "published_parsed", "published")
+        resolved = resolve_date(entry, *keys)
+        assert isinstance(resolved, struct_time)
+        assert resolved[:3] == (2020, 1, 2)
+        item = dict(next(augment_entries([entry])))
+        assert item["updated_parsed"] == resolved
 
 
 class TestPrepare:

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from itertools import count
+from time import struct_time
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -62,22 +63,58 @@ def _counting_source(consumed: list[int]) -> Any:
     ],
 )
 def test_sort_fillers_stay_orderable(dir_, type_, vals: list[str]):
-    """A missing or unparseable numeric field must not poison the sort with NaN."""
+    """
+    An unparseable numeric field degrades to an orderable filler, not NaN.
+
+    A missing field groups apart from it: first ascending, last descending,
+    regardless of where either sat in the input.
+    """
     rule = SortConfRule(field="n", dir=dir_, type=type_)
     conf = SortConf(rule=rule)
 
     if dir_ == "asc":
-        expected_mid = [None, "abc", *vals]
-        expected_first = ["abc", None, *vals]
+        expected = [None, "abc", *vals]
     else:
-        expected_mid = [*reversed(vals), None, "abc"]
-        expected_first = [*reversed(vals), "abc", None]
+        expected = [*reversed(vals), "abc", None]
 
     mid = [{"n": vals[2]}, {"x": "abc"}, {"n": "abc"}, {"n": vals[0]}, {"n": vals[1]}]
     first = [{"n": "abc"}, {"x": "abc"}, {"n": vals[2]}, {"n": vals[0]}, {"n": vals[1]}]
 
-    assert _values(sort_pipe(mid, conf=conf), "n") == expected_mid
-    assert _values(sort_pipe(first, conf=conf), "n") == expected_first
+    assert _values(sort_pipe(mid, conf=conf), "n") == expected
+    assert _values(sort_pipe(first, conf=conf), "n") == expected
+
+
+def test_sort_missing_field_is_not_the_cast_default():
+    """A missing numeric field groups first instead of sorting as ``0``."""
+    items = [{"n": "3"}, {"x": "no number"}, {"n": "-5"}]
+    conf = SortConf(rule=SortConfRule(field="n", type=SortableCastType.INT))
+
+    assert _values(sort_pipe(items, conf=conf), "n") == [None, "-5", "3"]
+
+
+def test_sort_rule_default_sorts_missing_field_as_that_value():
+    """A rule ``default`` stands in for the missing field and is cast like a value."""
+    items = [{"n": "3"}, {"x": "no number"}, {"n": "-5"}]
+    rule = SortConfRule(field="n", type=SortableCastType.INT, default="0")
+    conf = SortConf(rule=rule)
+
+    assert _values(sort_pipe(items, conf=conf), "n") == ["-5", None, "3"]
+
+
+@pytest.mark.parametrize("dir_", ["asc", "desc"])
+def test_untyped_sort_groups_items_lacking_the_field(dir_):
+    """An untyped rule never compares a missing-field filler with real values."""
+    early = struct_time((2012, 5, 11, 10, 1, 0, 4, 132, 1))
+    late = struct_time((2014, 8, 27, 2, 2, 12, 2, 239, 0))
+    items = [{"d": late}, {"x": "no date"}, {"d": None}, {"d": early}]
+    conf = SortConf(rule=SortConfRule(field="d", dir=dir_))
+
+    if dir_ == "asc":
+        expected = [None, None, early, late]
+    else:
+        expected = [late, early, None, None]
+
+    assert _values(sort_pipe(items, conf=conf), "d") == expected
 
 
 def test_keyed_join_does_not_materialize_its_primary():

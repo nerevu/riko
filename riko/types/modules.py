@@ -143,6 +143,7 @@ class SortRawRule(TypedDict, total=False):
     field: Required[Value]
     dir: Value
     type: str
+    default: Value
 
 
 class SortRawConf(TypedDict):
@@ -522,6 +523,7 @@ class SortConfRule:
     dir: Literal["asc", "desc"] = "asc"
     cast: bool = False  # Not implemented
     type: SortableCastType | None = None
+    default: BasicValue | None = None
 
 
 @dataclass
