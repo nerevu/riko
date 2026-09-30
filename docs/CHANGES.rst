@@ -7,67 +7,89 @@ v0.77.4 (Unreleased)
 New
 ~~~
 
-- Add ``jsonl`` file format as an export target. It serializes each item as a JSON object
-  on its own line. This ``Formats`` can also e used in the new ``write`` and ``sink``
-  methods.
+- Added the ``jsonl`` export format (one JSON object per line), accepted anywhere a
+  ``Formats`` member is.
 
-- A pipe may now declare ``resources`` and receive the resolved handles. Bind them with
-  ``Context.with_resource``; riko closes the resources it owns and never closes one
-  supplied by the caller.
+- A pipe may now declare ``resources`` and receive the resolved handles via
+  ``Context.with_resource``; riko closes only the resources it owns.
 
-- Added ``on_receive`` to ``subscribe`` which runs the callback on each item as it
-  arrives and yields nothing. It is a distinct operation from ``func`` (a map), so
-  passing both raises ``TypeError``.
+- Added ``on_receive`` to ``subscribe``: it runs a callback per item and yields nothing,
+  distinct from the ``func`` map (passing both raises ``TypeError``).
 
 - Added the ``Backends`` ``StrEnum`` (``file``/``http``/``s3``/``postgres``/``airtable``/
-  ``intune``) to the stable ``riko`` surface alongside ``Formats``. It names the kind of
-  backend a write reaches.
+  ``intune``) to the stable surface. It names the kind of backend a write reaches.
 
-- Extension authors can register target classes for their own backends. ``riko.ext``
-  exports the base ``Target`` protocol and its ``SupportsRead``/``SupportsWrite``/
-  ``SupportsActions`` refinements, ``WriteCapabilities``, ``FileTarget``, and a
-  ``TargetRegistry``/``register_target`` that key one self-describing target class per
-  ``backend``. ``FileTarget`` is the built-in.
+- Extension authors can now register ``Target``s via ``register_target``.
 
-- Added the canonical Workflow v2 definition model. The immutable ``Pipeline`` is on the
-  stable ``riko`` surface; ``riko.ext`` exports the graph model — the ``WorkflowSpec``
-  envelope, the node families (``ModuleNode``/``ReadNode``/``WriteNode``/``CacheNode``/
-  ``ActionNode``/``SubscribeNode``), the edge families (``StreamEdge``/``PublishEdge``),
-  and ``Endpoint``. This is the structural definition surface only; execution lands in a
-  later release.
+- Extension authors can register directories that hold ``WorkflowDocument``s (serialized
+  ``Workflow``s) via ``register_pipeline_store``.
+
+- Added the ``Workflow`` graph, immutable ``Pipeline`` model, ``Node``, ``Edge``, and
+  ``Endpoint``. A ``Node`` carries its module's call options (``ModuleOptions``) under
+  ``options`` and a loop's embedded module (``Embed``) under ``embed``.
+
+- A ``Pipeline`` can be iterated via both ``for`` and ``async for``
+
+- Added new functions to ``riko.ext``: ``migrate_v1_to_v2`` (converts a ``PipeDef``
+  to a ``Workflow``), ``serialize_workflow`` (writes a ``Workflow`` to a
+  ``WorkflowDocument``), and ``parse_document`` (reads a ``WorkflowDocument`` to produce
+  a ``Workflow``).
 
 - A ``sort`` rule accepts a ``default``: the value an item lacking the sort field sorts
   by, cast like any other value (``{"field": "n", "type": "int", "default": 0}``).
 
+- A ``PipeDag`` wire can now name an entry port as the third list item, e.g.,
+  (``["b", "u", "in:1"]``). This removes the need for hand-written ``Workflow``s for
+  fan-in operators such as ``union`` and ``join``.
+
+- ``run-pipe`` can now run a ``WorkflowDocument`` directly (``run-pipe -p flow.json``,
+  or an example id), sync or with ``-a``/``--async``, alongside the Python script path
+  it already took.
+
 Changes
 ~~~~~~~
 
-- Renamed the ``riko.Targets`` export enum to ``riko.Formats``, since its members name
-  serialization formats; ``export``/``write`` accept the same members under the new name.
+- The async transport helpers ``async_url_open``, ``async_write`` are no longer
+  re-exported from ``riko.bado``. Import them from ``riko`` (or ``riko.io``).
+  ``riko.bado`` now covers only the async iteration and runtime helpers.
 
-- Renamed several functions to a consistent verb vocabulary. Stable ``riko``:
-  ``convert_dag`` → ``build_pipe_def`` and ``extract_dependencies`` →
-  ``get_pipeline_dependencies``. Extension ``riko.ext``: ``resolve_module_name`` →
-  ``normalize_module_name`` and ``derive_category`` → ``get_module_category``. The
-  ``convert-dag`` CLI command name is unchanged.
+- Renamed ``get_abspath`` to ``get_url``, and ``riko.bado.get_async_temp_file`` to
+  ``riko.async_get_temp_file``.
+
+- Renamed ``convert_dag`` to ``parse_dag`` which now emits a ``Workflow`` instead of a
+  ``PipeDef``. It still takes a ``PipeDag``.
+
+- Renamed ``convert-dag`` to ``build-workflow`` which now emits a ``Workflow``
+  instead of a ``PipeDef``. It reads a path to a ``WorkflowDocument`` (serialized
+  ``Workflow``), or a serialized ``PipeDag`` or ``PipeDef``. Unreadable or invalid input
+  is reported on stderr with a non-zero exit.
+
+- Renamed ``extract_dependencies`` to ``get_pipeline_dependencies``,
+  ``resolve_module_name`` to ``normalize_module_name``, and ``derive_category`` to
+  ``get_module_category``.
+
+- Renamed ``riko.Targets`` to ``riko.Formats``, since its members name serialization
+  formats; ``export``/``write`` accept the same members under the new name.
+
+- ``compile-pipe`` now takes a ``WorkflowDocument`` instead of a serialized ``PipeDef``,
+  and ``riko.compile_pipe`` now takes a ``Workflow`` instead of a ``PipeDef``. Passing a
+  serialized ``PipeDef`` to ``compile-pipe`` exits with a message naming
+  ``build-workflow``.
+
+- The ``examples/pipelines/*.json`` files are now ``WorkflowDocument``s instead of
+  serialized ``PipeDef``s. Convert a stored ``PipeDef`` with ``build-workflow`` (or
+  ``migrate_v1_to_v2`` in Python) before handing it to ``compile-pipe``, ``run-pipe``,
+  or a registered pipeline store.
 
 - Added chainable ``write`` and terminal ``sink`` methods to ``SyncPipe`` and
-  ``SyncCollection``. They take the destination directly, e.g., ``write("out.csv")``)
-  and accept ``fmt`` (``Formats``/str, e.g., ``json``) and ``mode`` (``WriteMode``/str,
-  e.g., ``append``/``replace``). ``csv`` and ``jsonl`` formats are written
-  incrementally. Any other format buffers until completion. A chainable ``write`` opens
-  its destination lazily only once the resulting stream is consumed. These methods
-  shadow the ``write`` module, so use ``pipe("write", conf={"url": ...})`` when you need
-  the old module call shape.
+  ``SyncCollection``. They take the destination directly (e.g. ``write("out.csv")``) plus
+  ``fmt`` and ``mode``. ``csv``/``jsonl`` write incrementally, other formats buffer, and a
+  chainable ``write`` opens its destination lazily. They shadow the ``write`` module, so
+  use ``pipe("write", conf={"url": ...})`` for the old call shape.
 
 - A single ``write``/``sink`` destination now accepts one input shape only. Feeding it a
   whole stream after individual items, or a second stream, raises ``RuntimeError`` instead
   of silently interleaving or overwriting the earlier records.
-
-- The async transport helpers ``async_url_open``, ``async_write``, and
-  ``get_async_temp_file`` are no longer re-exported from ``riko.bado``. Import them from
-  ``riko`` (or ``riko.io``); ``riko.bado`` now covers only the async iteration and
-  runtime helpers.
 
 - ``Context`` is now a fully immutable snapshot and ``Resource`` definitions are
   structurally immutable. Derive a changed context with ``augment``/``with_resource``
@@ -92,6 +114,9 @@ Changes
 - ``DynamicConf`` is no longer exported from ``riko.types``. Extension authors should
   import it from ``riko.ext``.
 
+- The ``benchmark`` script now times the ``Pipeline`` definition and workflow
+  execution instead of the ``PyPipe``/``PyCollection`` classes.
+
 - ``sort`` now places items lacking the sort field together. Previously a missing field
   sorted using the type's default (``0`` for ``int``, ``-inf`` for ``float`` and dates,
   ``""`` for ``text``). Use the ``default`` option to restore this behavior.
@@ -103,9 +128,8 @@ Fixes
   ``TypeError`` at decoration time. Previously the decorated function was silently taken as
   the pipe defaults and the mistake surfaced only as an opaque error on the first call.
 
-- Type checkers no longer flag ``async for item in async_pipe(...)``. The async
-  ``processor`` and ``splitter`` call result is now typed as both awaitable and
-  async-iterable, matching how it has always behaved at runtime.
+- Typed async ``processor`` and ``splitter`` result as both awaitable and async-iterable
+  to match runtime behavior. ``async for item in async_pipe(...)`` no longer type errors.
 
 - An ``AsyncPipe`` passed as a terminal sub-source (``format``, ``formatted``, or
   ``union``'s ``others``) is now drained before parsing, so an async pipe yields the
@@ -145,6 +169,18 @@ Fixes
 - Time-zone lookup now captures both the standard and daylight names regardless of the
   current date and resolves ambiguous abbreviations (e.g. ``CST``) toward US zones.
 
+Removed
+~~~~~~~
+
+- Removed ``SyncPipe``, ``AsyncPipe``, ``SyncCollection``, and ``AsyncCollection``,
+  and ``PipeState`` from ``riko``. ``Pipeline`` replaces them. ``list(flow)`` replaces
+  ``.list``, and ``riko.export(flow, …)`` replaces ``.export()``.
+
+- Multi-source fetching is a ``union`` fan-in built with ``parse_dag``.
+
+- The ``parallel``/``workers``/``threads``/``pool`` arguments, ``subscribe``/``publish``,
+  ``split``, and ``udf(func=…)`` through a pipeline have no replacement yet.
+
 Documentation
 ~~~~~~~~~~~~~
 
@@ -152,6 +188,9 @@ Documentation
 
 Dev
 ~~~
+
+- Removed the ``gen-pipelines`` console script and the ``manage codegen --pipes`` option.
+  ``manage codegen --all`` now covers the config, name, and API-surface generators.
 
 - Added ``manage codegen -m api`` plus drift-guards to generate API content in
   ``_docs/API_SURFACE.md``  via ``gen-api-surface``.
@@ -316,9 +355,9 @@ New
 - ``cast_datetime`` exposes its keyword-only ``try_local_tz``, so a relative date can
   resolve in the local timezone instead of UTC.
 
-- ``compile-pipe`` now reads the pipe definition from stdin when the path is ``-`` or
-  omitted. It also composes with ``convert-dag`` in a shell pipeline. An unreadable or
-  malformed definition now logs a warning and exits non-zero.
+- ``compile-pipe`` now reads the ``PipeDef`` (pipe definition) from stdin when the path
+  is ``-`` or omitted. It also composes with ``convert-dag`` in a shell pipeline. An
+  unreadable or malformed ``PipeDef`` now logs a warning and exits non-zero.
 
 - Added ``-v``/``--verbose`` to ``compile-pipe`` to report the modules used and bytes
   written to stderr.
@@ -795,8 +834,11 @@ New
 
 - Dynamically generated modules and metadata (derived module catalog).
 
-- Added bare-bones DAG format with ``convert-dag``/``compile`` CLIs; refactor
-  codegen.
+- Added ``PipeDag`` (bare-bones DAG) format with ``convert-dag``/``compile`` CLIs, and
+  refactored codegen.
+
+- Added ``riko.convert_dag`` as the programmatic API for expanding ``PipeDag``
+  into a full ``PipeDef`` pipeline definitions.
 
 Changes
 ~~~~~~~
