@@ -39,10 +39,10 @@ from riko.types._wrappers import CoroutineFunc, ModuleWrapper
 from ._adapt import (
     adapt_embed_for_async,
     adapt_embed_for_sync,
-    arequire_items,
     drain_async,
     pull_stream,
-    require_items,
+    require_async_stream,
+    require_stream,
 )
 from ._events import _NULL_EVENT_SINK, EventSink
 from ._plan import _ResourcePlan, _ResourceStrategy, build_resource_plan
@@ -62,7 +62,6 @@ if TYPE_CHECKING:
     from riko.types._streams import (
         AsyncItems,
         AsyncStream,
-        AsyncStreams,
         Item,
         Items,
         Stream,
@@ -572,11 +571,11 @@ class SyncExecution(_BaseExecution):
         if mode is ExecMode.ADAPTER:
             async_pipe = cast("AsyncModuleWrapper", _pipe)
             _stream = async_pipe(source, conf=node.conf, context=self.context, **extra)
-            stream = self._drain_async(_stream)
+            stream = self._drain_async(require_async_stream(_stream, async_pipe))
         else:
             pipe = cast("SyncModuleWrapper", _pipe)
             _stream = pipe(source, conf=node.conf, context=self.context, **extra)
-            stream = require_items(_stream)
+            stream = require_stream(_stream, pipe)
 
         return stream
 
@@ -627,7 +626,7 @@ class SyncExecution(_BaseExecution):
 
         return steps[endpoint.node]
 
-    def _drain_async(self, source: AsyncItems | AsyncStreams) -> Stream:
+    def _drain_async(self, source: AsyncItems) -> Stream:
         """Pulls an async stream item by item through the execution portal."""
         return drain_async(source, self.run_async)
 
@@ -1003,7 +1002,7 @@ class AsyncExecution(_BaseExecution):
 
         def start() -> tuple[object, Stream]:
             raw = pipe(worker_source, conf=node.conf, context=self.context, **bridged)
-            return raw, require_items(raw)
+            return raw, require_stream(raw, pipe)
 
         raw, iterator = await self.run_sync(start)
         return pull_stream(iterator, raw, self.run_sync, self._arun_sync)
@@ -1065,7 +1064,7 @@ class AsyncExecution(_BaseExecution):
         else:
             async_pipe = cast("AsyncModuleWrapper", _pipe)
             _stream = async_pipe(source, conf=node.conf, context=self.context, **extra)
-            stream = await arequire_items(_stream)
+            stream = require_async_stream(_stream, async_pipe)
 
         return stream
 

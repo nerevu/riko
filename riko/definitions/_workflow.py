@@ -67,6 +67,7 @@ if TYPE_CHECKING:
     from riko.types.modules import AnyModuleConf, LoopConf
 
 _EMPTY_CONF = cast("AnyModuleConf", MappingProxyType({}))
+_EMPTY_INPUTS: JSONSchema = MappingProxyType({})
 _EMPTY_RESOURCES: Mapping[str, str] = MappingProxyType({})
 T = TypeVar("T", default=Any)
 
@@ -245,7 +246,6 @@ class WorkflowSpec:
         >>> spec = WorkflowSpec(
         ...     nodes={node.id: node},
         ...     outputs={"default": Endpoint(node.id, "out")},
-        ...     inputs={},
         ...     resources="db",
         ... )
         >>> spec.resources
@@ -257,7 +257,7 @@ class WorkflowSpec:
 
     nodes: Mapping[NodeId, Node] = field(converter=FreezeMapping[NodeId, Node]())
     outputs: Mapping[str, Endpoint] = field(converter=FreezeMapping[str, Endpoint]())
-    inputs: JSONSchema = field(converter=deep_freeze_mapping)
+    inputs: JSONSchema = field(default=_EMPTY_INPUTS, converter=deep_freeze_mapping)
     edges: tuple[Edge, ...] = field(factory=tuple, converter=tuple)
     resources: tuple[str, ...] = field(factory=tuple, converter=normalize_strs)
     version: str = WORKFLOW_VERSION
