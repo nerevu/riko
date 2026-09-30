@@ -4,7 +4,7 @@ Sort-key construction and grouping helpers used by built-in pipeline modules.
 
 Attributes:
 
-    SORT_FILLER: Orderable stand-in (``-inf``) for a missing sort key.
+    SORT_FILLER: Orderable stand-in (``-inf``) for a sort value that cannot be cast.
     DATELIKE_TYPES: Cast types reduced to epoch timestamps for sorting.
     INVALID_DEF_TYPES: Cast types with no usable typed default.
     INVALID_TYPES: Cast types that cannot be cast at all.
@@ -207,6 +207,59 @@ def def_itemgetter(
         return casted
 
     return keyfunc
+
+
+def build_sort_key(
+    attr: str,
+    default: PrimitiveValue | None = None,
+    type_: str | None = None,
+    fallback_tzinfo: tzinfo = UTC,
+) -> Callable[[Mapping | PrimitiveValue], tuple[bool, SortableValue]]:
+    """
+    Builds a sort key that tracks whether the sorted item contains the sort field.
+
+    The key is a ``(present, value)`` pair, so an item without the field never
+    has its filler compared against real values and sorts first ascending (last
+    descending) whatever the cast type. A ``default`` stands in for the missing
+    field instead, cast like any other value, so the item sorts among the rest.
+    A present but uncastable value still degrades to the orderable filler
+    ``def_itemgetter`` supplies.
+
+    Args:
+
+        attr: The key read from each item.
+        default: The value an item lacking ``attr`` sorts by, if any.
+        type_: Optional cast type applied to the value.
+        fallback_tzinfo: Fallback timezone assigned to naive datetimes
+
+    Returns:
+
+        A key function mapping an item to a ``(present, value)`` pair.
+
+    Examples:
+
+        >>> keyfunc = build_sort_key("n", type_="int")
+        >>> keyfunc({"n": "-5"}), keyfunc({}), keyfunc({"n": "abc"})
+        ((True, -5), (False, 0), (True, 0))
+        >>> sorted([{"n": 3}, {}, {"n": -5}], key=build_sort_key("n"))
+        [{}, {'n': -5}, {'n': 3}]
+        >>> sorted([{"n": 3}, {}, {"n": -5}], key=build_sort_key("n", 0))
+        [{'n': -5}, {}, {'n': 3}]
+
+    """
+    keyfunc = def_itemgetter(attr, type_=type_, fallback_tzinfo=fallback_tzinfo)
+
+    def key(item: Mapping | PrimitiveValue) -> tuple[bool, SortableValue]:
+        value = item.get(attr) if isinstance(item, Mapping) else item
+
+        if value is None and default is not None:
+            keyed = (True, keyfunc(default))
+        else:
+            keyed = (value is not None, keyfunc(item))
+
+        return keyed
+
+    return key
 
 
 # TODO: move this to meza.process.group

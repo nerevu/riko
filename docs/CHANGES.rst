@@ -36,6 +36,9 @@ New
   and ``Endpoint``. This is the structural definition surface only; execution lands in a
   later release.
 
+- A ``sort`` rule accepts a ``default``: the value an item lacking the sort field sorts
+  by, cast like any other value (``{"field": "n", "type": "int", "default": 0}``).
+
 Changes
 ~~~~~~~
 
@@ -89,6 +92,10 @@ Changes
 - ``DynamicConf`` is no longer exported from ``riko.types``. Extension authors should
   import it from ``riko.ext``.
 
+- ``sort`` now places items lacking the sort field together. Previously a missing field
+  sorted using the type's default (``0`` for ``int``, ``-inf`` for ``float`` and dates,
+  ``""`` for ``text``). Use the ``default`` option to restore this behavior.
+
 Fixes
 ~~~~~
 
@@ -126,6 +133,14 @@ Fixes
 - ``sort`` now orders numeric strings numerically instead of lexicographically.
 
 - Pure-Python ``feedparser``-based feeds now correctly populate ``description``.
+
+- A ``sort`` rule without a ``type`` no longer raises ``TypeError`` when some items lack
+  the field and the rest hold dates or numbers.
+
+- Unparsable ``feedparser`` feed entry dates (e.g., ``May 11, 2012 10:01:00 EST``) are
+  now parsed internally. Sorting on ``pubDate``/``y:published``/``updated_parsed`` no
+  longer raises ``TypeError``. If the internal parsers fails to parse, the value is
+  skipped with a warning.
 
 - Time-zone lookup now captures both the standard and daylight names regardless of the
   current date and resolves ambiguous abbreviations (e.g. ``CST``) toward US zones.
