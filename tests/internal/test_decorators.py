@@ -24,7 +24,9 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from riko.bado.itertools import as_async
 from riko.ext import operator, processor, splitter
+from riko.modules.split import async_pipe as async_split
 from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.types._wrappers import (
     AsyncProcessorWrapper,
@@ -242,3 +244,17 @@ class TestAsyncProcessorDualProtocol:
         assert not iscoroutinefunction(AsyncProcessorWrapper.__call__)
         assert not iscoroutinefunction(AsyncSplitterWrapper.__call__)
         assert not iscoroutinefunction(AsyncSubPipe.__call__)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="owned by the pending execution-owned split fan-out work: the async "
+    "splitter wrapper reads its input synchronously, so handing it an async "
+    "stream raises TypeError instead of yielding the branches",
+)
+@async_test
+async def test_async_splitter_accepts_an_async_input_stream() -> None:
+    source = as_async(iter([{"x": 1}]))
+    branches = async_split(source)  # pyright: ignore[reportArgumentType]
+    first = await anext(branches)
+    assert next(first) == {"x": 1}

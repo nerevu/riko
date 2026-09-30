@@ -24,6 +24,7 @@ from riko.definitions._workflow import (
     require_module_node,
 )
 from riko.types._collections import freeze_mapping, require_str, validator_from_require
+from riko.types._guards import require_single_output
 from riko.types.modules import AnyModuleConf, LoopConf, LoopOptions
 
 if TYPE_CHECKING:
@@ -36,11 +37,12 @@ if TYPE_CHECKING:
         ModuleWrapper,
         SyncModuleWrapper,
     )
+    from riko.types.modules import ModuleType
 
 _LOOP_OPTION_KEYS = set(LoopOptions.__annotations__)
 conf_converter = conf_converters("PreparedNode 'conf'")
 resource_converter = [optional_binding, optional_resources]
-conf = lambda self: require_module_node(self.node).conf
+single_output = validator_from_require(require_single_output, optional=True)
 
 
 class ExecMode(Enum):
@@ -55,6 +57,10 @@ class Selection(NamedTuple):
 
     pipe: ModuleWrapper
     mode: ExecMode
+
+
+def _conf(value: PreparedNode) -> AnyModuleConf | LoopConf:
+    return require_module_node(value.node).conf
 
 
 def _require_pipe(pipe: ModuleWrapper | None, name: str) -> ModuleWrapper:
@@ -80,6 +86,11 @@ class PreparedNode:
         async_pipe: The resolved asynchronous callable, or ``None`` if unavailable.
         embed: The resolved embed submodule for a loop node, else ``None``.
 
+    Raises:
+
+        InvalidPipelineError: If either resolved callable is a multi-output
+            splitter, which no execution can run yet.
+
     """
 
     node: Node = field(validator=validator_from_require(require_module_node))
@@ -96,10 +107,10 @@ class PreparedNode:
         converter=resource_converter,
     )
     conf: AnyModuleConf | LoopConf = field(
-        default=Factory(conf, takes_self=True), converter=conf_converter
+        default=Factory(_conf, takes_self=True), converter=conf_converter
     )
-    sync_pipe: SyncModuleWrapper | None = field(default=None)
-    async_pipe: AsyncModuleWrapper | None = field(default=None)
+    sync_pipe: SyncModuleWrapper | None = field(default=None, validator=single_output)
+    async_pipe: AsyncModuleWrapper | None = field(default=None, validator=single_output)
     embed: PreparedNode | None = field(default=None)
 
     def select(self, *, is_async: bool) -> Selection:
@@ -123,13 +134,11 @@ class PreparedNode:
             >>> from riko.runtime._execution_plan import build_execution_plan
             >>> from riko.definitions._workflow import WorkflowSpec
             >>> from riko.types._workflow import Endpoint
+            >>>
             >>> node = ModuleNode(id="count-1", name="count")
             >>> spec = WorkflowSpec(
             ...     nodes={"count-1": node},
             ...     outputs={"default": Endpoint("count-1", "out")},
-            ...     inputs={},
-            ...     edges=(),
-            ...     resources=(),
             ... )
             >>> plan = build_execution_plan(spec)
             >>> plan.nodes["count-1"].select(is_async=False).mode.name
@@ -149,6 +158,20 @@ class PreparedNode:
     @property
     def family(self) -> NodeFamily:
         return self.node.family
+
+    @property
+    def module_type(self) -> ModuleType | None:
+        """
+        Reports the declared module type of this node's resolved implementation.
+
+        Returns:
+
+            The ``processor``/``operator``/``splitter`` type its pipe was decorated
+            with, or ``None`` when no resolved pipe carries one.
+
+        """
+        pipe = self.sync_pipe if self.async_pipe is None else self.async_pipe
+        return None if pipe is None else getattr(pipe, "type", None)
 
     @property
     def options(self) -> Mapping[str, LoopOptionValues]:

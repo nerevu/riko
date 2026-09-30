@@ -18,6 +18,7 @@ from riko.definitions._workflow import ModuleNode, StreamEdge, WorkflowSpec
 from riko.types._guards import is_mapping
 from riko.types._workflow import Endpoint
 from riko.types.modules import SortConf, SortConfRule
+from tests import async_test
 
 _SORT_CONF_RULE = SortConfRule(dir="desc")
 _SORT_CONF = SortConf({"rule": _SORT_CONF_RULE})
@@ -165,6 +166,33 @@ def test_duplicate_names_mint_unique_ids():
 def test_iterating_source_only_pipeline_raises():
     with pytest.raises(InvalidPipelineError):
         list(Pipeline(source=[{"x": 1}]))
+
+
+def test_iterating_a_split_pipeline_raises_before_running():
+    consumed = []
+
+    def source():
+        consumed.append(1)
+        yield {"x": 1}
+
+    with pytest.raises(InvalidPipelineError, match="splitter"):
+        list(source() | Pipeline.from_module("split"))
+
+    assert consumed == []
+
+
+@async_test
+async def test_async_iterating_a_split_pipeline_raises_before_running():
+    consumed = []
+
+    def source():
+        consumed.append(1)
+        yield {"x": 1}
+
+    with pytest.raises(InvalidPipelineError, match="splitter"):
+        _ = [item async for item in source() | Pipeline.from_module("split")]
+
+    assert consumed == []
 
 
 def test_pipeline_is_generic_over_item_type():

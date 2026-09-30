@@ -18,14 +18,21 @@ from riko.definitions._workflow import (
     WorkflowSpec,
 )
 from riko.definitions.modules import ModuleDefinition
-from riko.execution._adapt import adapt_embed_for_async, adapt_embed_for_sync
+from riko.execution._adapt import (
+    adapt_embed_for_async,
+    adapt_embed_for_sync,
+    require_async_stream,
+    require_stream,
+)
 from riko.execution._execution import AsyncExecution, SyncExecution
-from riko.execution._prepared import ExecMode
+from riko.execution._prepared import ExecMode, PreparedNode
 from riko.execution._resources import Resource
 from riko.execution.context import Context
-from riko.modules._decorators import processor
+from riko.modules._decorators import processor, splitter
 from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop_pipe
+from riko.modules.split import async_pipe as async_split
+from riko.modules.split import pipe as split_pipe
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._graph_index import index_workflow
 from riko.runtime._module_registry import (
@@ -41,7 +48,7 @@ from riko.types.modules import LoopConf
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
-    from riko.types._streams import AsyncItemGenerator
+    from riko.types._streams import AsyncItemGenerator, Cascade
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 _sync_pipe = cast("SyncModuleWrapper", lambda source, **_: iter(source or {}))
@@ -309,6 +316,77 @@ def test_run_rejects_nondefault_selected_output_port() -> None:
 
     with pytest.raises(InvalidPipelineError, match="non-default output port"):
         _run(spec, dispatcher)
+
+
+def test_build_plan_rejects_splitter_node_before_any_node_runs() -> None:
+    # A multi-output (splitter) node is refused when the plan is built, so its
+    # upstream is never consumed first. This is removed once port-keyed
+    # fan-out/split delivery becomes executable.
+    consumed: list[int] = []
+
+    def src(_items=None, **_):
+        consumed.append(1)
+        yield {"t": "a"}
+
+    dispatcher = _dispatcher(
+        ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
+        ModuleDefinition(name="split", sync_pipe=split_pipe, async_pipe=async_split),
+    )
+    a = ModuleNode(id="a", name="src")
+    s = ModuleNode(id="s", name="split")
+    edge = StreamEdge(Endpoint("a", "out"), Endpoint("s", "in"))
+    spec = _spec([a, s], {"default": Endpoint("s", "out")}, edges=(edge,))
+
+    with pytest.raises(InvalidPipelineError, match="splitter"):
+        build_execution_plan(spec, dispatcher=dispatcher)
+
+    assert consumed == []
+
+
+def test_build_plan_rejects_splitter_by_declared_type_not_output_shape() -> None:
+    # The refusal keys on the module type the pipe was decorated with, not on the
+    # shape of what it yields, so a splitter whose branches are lists rather than
+    # iterators is refused too instead of delivering whole lists as items.
+    @splitter(objectify=False)
+    def listy(stream, _objconf, _tuples, **_):
+        items = list(stream)
+        return cast("Cascade", iter([list(items), list(items)]))
+
+    dispatcher = _dispatcher(ModuleDefinition(name="listy", sync_pipe=listy))
+
+    with pytest.raises(InvalidPipelineError, match="splitter"):
+        build_execution_plan(_module_spec("listy"), dispatcher=dispatcher)
+
+
+def test_prepared_node_refuses_a_splitter_pipe_on_construction() -> None:
+    # The invariant lives on the node itself, so every construction path (plan
+    # build, embeds, direct construction) is covered, not only the plan builder.
+    node = ModuleNode(id="s", name="split")
+
+    with pytest.raises(InvalidPipelineError, match=r"'sync_pipe'.*splitter"):
+        PreparedNode(node, sync_pipe=split_pipe)
+
+    with pytest.raises(InvalidPipelineError, match=r"'async_pipe'.*splitter"):
+        PreparedNode(node, async_pipe=async_split)
+
+
+def test_require_stream_refuses_a_splitter_pipe_without_consuming() -> None:
+    # The execution-side boundary earns its narrowing from the pipe's declared
+    # type, so a splitter's output is refused before any of it is read.
+    consumed: list[int] = []
+
+    def src():
+        consumed.append(1)
+        yield {"x": 1}
+
+    with pytest.raises(InvalidPipelineError, match="splitter"):
+        require_stream(split_pipe(src()), split_pipe)
+
+    with pytest.raises(InvalidPipelineError, match="splitter"):
+        require_async_stream(async_split(src()), async_split)
+
+    assert consumed == []
+    assert list(require_stream(_sync_pipe([{"x": 1}]), _sync_pipe)) == [{"x": 1}]
 
 
 def test_run_injects_bound_resource() -> None:

@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from ._scalars import BasicValue
     from ._sentinels import MissingType, Sentinel
     from ._streams import Item, StatefulItem
-    from ._wrappers import ModuleWrapper, SubPipe
+    from ._wrappers import ModuleWrapper, SplitterWrapper, SubPipe
     from .modules import ConfArg
 
 
@@ -368,6 +368,59 @@ def is_lifecycle_factory(
 
 def is_value_factory(val: object) -> TypeGuard[ValueFactory]:
     return callable(val)
+
+
+def is_splitter(pipe: ModuleWrapper) -> TypeIs[SplitterWrapper]:
+    """
+    Reports whether ``pipe`` was decorated as a multi-output splitter.
+
+    The check reads the module type stamped on the wrapper at decoration, not
+    the shape of anything the pipe yields.
+
+    Args:
+
+        pipe: A resolved pipe wrapper.
+
+    Returns:
+
+        ``True`` when the pipe yields a stream of streams.
+
+    Examples:
+
+        >>> from riko.modules.count import pipe as count
+        >>> from riko.modules.split import pipe as split
+        >>> is_splitter(split), is_splitter(count)
+        (True, False)
+
+    """
+    return getattr(pipe, "type", None) == "splitter"
+
+
+def require_single_output(
+    value: ModuleWrapper, what: str | None = "pipe"
+) -> ModuleWrapper:
+    """
+    Rejects a multi-output splitter until port-keyed fan-out delivery is executable.
+
+    Args:
+
+        value: A resolved pipe wrapper.
+        what: How to name the pipe's holder in the error.
+
+    Returns:
+
+        ``value`` unchanged.
+
+    Raises:
+
+        InvalidPipelineError: If ``value`` is a splitter.
+
+    """
+    if is_splitter(value):
+        msg = f"{what} contains splitter: {value.name!r}. These are not yet executable."
+        raise InvalidPipelineError(msg)
+
+    return value
 
 
 def is_sync_closeable(val: object) -> TypeIs[SyncCloseable]:

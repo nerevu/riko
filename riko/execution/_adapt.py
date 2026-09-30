@@ -2,107 +2,96 @@
 """
 Adapts streams and callables across the synchronous/asynchronous boundary.
 
-Both the sync and the async execution share these helpers to enforce the item
-stream contract at a node boundary and to re-expose one side's stream to the
-other without materializing it. They are private to the runtime and belong to
-no supported surface.
+Both the sync and the async execution share these helpers to type a node's raw
+output as the item stream the execution plan guarantees it to be and to
+re-expose one side's stream to the other without materializing it. They are
+private to the runtime and belong to no supported surface.
 """
 
 from __future__ import annotations
 
-from collections.abc import Generator, Iterable, Iterator
+from collections.abc import Generator
 from itertools import chain
 from typing import TYPE_CHECKING, Any, cast
 
-from riko.bado._backend import async_chain
-from riko.bado.itertools import as_async
-from riko.base.exceptions import InvalidPipelineError
+from riko.types._guards import require_single_output
 from riko.types._sentinels import MISSING
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterable, Awaitable, Callable
+    from collections.abc import Awaitable, Callable
 
-    from riko.types._streams import (
-        AsyncItems,
-        AsyncStream,
-        AsyncStreams,
-        Item,
-        Items,
-        Stream,
-        Streams,
+    from riko.types._streams import AsyncItems, AsyncStream, Item, Items, Stream
+    from riko.types._wrappers import (
+        AsyncModuleWrapper,
+        AsyncSplitterWrapperOutput,
+        AsyncWrapperOutput,
+        ModuleWrapper,
+        SyncModuleWrapper,
+        SyncSplitterWrapperOutput,
+        SyncWrapperOutput,
     )
-    from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 type LoopCall = Callable[[Callable[[], Any]], Any]
 type WorkerCall = Callable[..., Awaitable[Any]]
-type Drain = Callable[[AsyncItems | AsyncStreams], Stream]
+type Drain = Callable[[AsyncItems], Stream]
 
 _WRAPPER_META = ("name", "type", "subtype", "subtypes", "pollable", "loopable")
 _FUNC_META = ("__name__", "__qualname__", "__doc__")
 
 
-def require_items(value: Items | Streams | Iterable[Item | Items]) -> Stream:
+def require_stream(
+    value: SyncWrapperOutput | SyncSplitterWrapperOutput, pipe: ModuleWrapper
+) -> Stream:
     """
-    Re-chains ``value`` as an item stream, rejecting a stream of streams.
+    Narrows a synchronous pipe's raw output to the item stream it produces.
+
+    A pipe's call signature admits a stream of streams, so the narrowing is
+    earned by checking the pipe's declared module type rather than by reading
+    what it yields; nothing is consumed here.
 
     Args:
 
-        value: The raw output of a pipe, which must yield items.
+        value: The raw output of ``pipe``.
+        pipe: The wrapper that produced ``value``.
 
     Returns:
 
-        An item stream equivalent to ``value``, including its first item.
+        ``value`` as a lazy item stream.
 
     Raises:
 
-        InvalidPipelineError: If the first value produced is itself a stream.
+        InvalidPipelineError: If ``pipe`` is a multi-output splitter.
 
     """
-    stream = iter(value)
-
-    try:
-        first = next(stream)
-    except StopIteration:
-        result = iter(())
-    else:
-        if isinstance(first, Iterator):
-            raise InvalidPipelineError("Splitter nodes not yet implemented")
-
-        result = cast("Stream", chain((first,), stream))
-
-    return result
+    require_single_output(pipe)
+    return cast("Stream", iter(value))
 
 
-async def arequire_items(value: AsyncIterable[Item | Items]) -> AsyncStream:
+def require_async_stream(
+    value: AsyncWrapperOutput | AsyncSplitterWrapperOutput, pipe: ModuleWrapper
+) -> AsyncStream:
     """
-    Re-chains ``value`` as an async item stream, rejecting a stream of streams.
+    Narrows an asynchronous pipe's raw output to the async item stream it produces.
+
+    The async counterpart of ``require_stream``: the pipe's declared module type
+    earns the narrowing, and nothing is consumed here.
 
     Args:
 
-        value: The raw output of an async pipe, which must yield items.
+        value: The raw output of ``pipe``.
+        pipe: The wrapper that produced ``value``.
 
     Returns:
 
-        An async item stream equivalent to ``value``, including its first item.
+        ``value`` as a lazy async item stream.
 
     Raises:
 
-        InvalidPipelineError: If the first value produced is itself a stream.
+        InvalidPipelineError: If ``pipe`` is a multi-output splitter.
 
     """
-    stream = aiter(value)
-
-    try:
-        first = await anext(stream)
-    except StopAsyncIteration:
-        result = as_async(iter(()))
-    else:
-        if isinstance(first, Iterator):
-            raise InvalidPipelineError("Splitter nodes not yet implemented")
-
-        result = cast("AsyncStream", async_chain((first,), stream))
-
-    return result
+    require_single_output(pipe)
+    return cast("AsyncStream", aiter(value))
 
 
 def _close_generator(value: object) -> None:
@@ -111,7 +100,7 @@ def _close_generator(value: object) -> None:
         value.close()
 
 
-def drain_async(source: AsyncItems | AsyncStreams, call: LoopCall) -> Stream:
+def drain_async(source: AsyncItems, call: LoopCall) -> Stream:
     """
     Re-exposes an async stream as a lazy synchronous item stream.
 
@@ -125,10 +114,6 @@ def drain_async(source: AsyncItems | AsyncStreams, call: LoopCall) -> Stream:
 
         Each item ``source`` produces, in order.
 
-    Raises:
-
-        InvalidPipelineError: If an item produced is itself a stream.
-
     """
     iterator = aiter(source)
 
@@ -138,7 +123,7 @@ def drain_async(source: AsyncItems | AsyncStreams, call: LoopCall) -> Stream:
         except StopAsyncIteration:
             break
         else:
-            yield next(require_items([item]))
+            yield item
 
 
 async def pull_stream(
@@ -195,7 +180,7 @@ def _materialize(
     embed: SyncModuleWrapper, item: Item | None, kwargs: dict[str, object]
 ) -> list[Item]:
     """Runs a blocking embed for one parent item and collects everything it yields."""
-    return cast("list[Item]", list(embed(item, **kwargs)))
+    return list(require_stream(embed(item, **kwargs), embed))
 
 
 def adapt_embed_for_sync(embed: AsyncModuleWrapper, drain: Drain) -> SyncModuleWrapper:
@@ -218,7 +203,7 @@ def adapt_embed_for_sync(embed: AsyncModuleWrapper, drain: Drain) -> SyncModuleW
     """
 
     def wrapper(item: Item | None = None, **kwargs: object) -> Stream:
-        return drain(cast("AsyncItems", embed(item, **kwargs)))
+        return drain(require_async_stream(embed(item, **kwargs), embed))
 
     _copy_wrapper_meta(wrapper, embed, isasync=False)
     return cast("SyncModuleWrapper", wrapper)
@@ -247,7 +232,8 @@ def adapt_embed_for_async(
     """
 
     async def wrapper(item: Item | None = None, **kwargs: object) -> Items:
-        return cast("Items", await run_sync(_materialize, embed, item, kwargs))
+        materialized: list[Item] = await run_sync(_materialize, embed, item, kwargs)
+        return materialized
 
     _copy_wrapper_meta(wrapper, embed, isasync=True)
     return cast("AsyncModuleWrapper", wrapper)
@@ -256,8 +242,8 @@ def adapt_embed_for_async(
 __all__ = [
     "adapt_embed_for_async",
     "adapt_embed_for_sync",
-    "arequire_items",
     "drain_async",
     "pull_stream",
-    "require_items",
+    "require_async_stream",
+    "require_stream",
 ]
