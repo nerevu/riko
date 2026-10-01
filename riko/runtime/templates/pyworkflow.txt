@@ -20,7 +20,6 @@ from riko.execution._execution import SyncExecution
 {%- endif %}
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._pipelines import mark_subpipe
-from riko.types._guards import is_listlike
 from riko.types._workflow import Endpoint
 {%- if raw_confs %}
 from riko.types.modules import (
@@ -50,14 +49,10 @@ spec = WorkflowSpec(
 {%- endif %}
 )
 
-
-def _source(item):
-    return None if item is None else (item if is_listlike(item) else [item])
-
 {% if is_async %}
 async def _run(item, context):
     async with AsyncExecution(context=context) as execution:
-        stream = await execution.run(build_execution_plan(spec), source=_source(item))
+        stream = await execution.run(build_execution_plan(spec), source=item)
 
         async for value in stream:
             yield value
@@ -88,7 +83,7 @@ if __name__ == "__main__":
 {%- else %}
 def _run(item, context):
     with SyncExecution(context=context) as execution:
-        yield from execution.run(build_execution_plan(spec), source=_source(item))
+        yield from execution.run(build_execution_plan(spec), source=item)
 
 
 def pipe(item=None, context: Context | None = None, **_):

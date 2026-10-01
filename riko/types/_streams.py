@@ -6,6 +6,7 @@ from collections.abc import (
     AsyncGenerator,
     AsyncIterable,
     AsyncIterator,
+    Awaitable,
     Generator,
     Iterable,
     Iterator,
@@ -70,4 +71,5 @@ type StreamGenerator = Generator[Any, None, Stream]
 
 # Both
 type Feed = Items | AsyncItems
+type SourceLike = Item | Feed | Awaitable[Item | Feed]
 type OthersLike = Iterable[str | AsyncStream] | Streams | AsyncStreams

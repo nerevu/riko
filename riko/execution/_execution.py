@@ -28,6 +28,7 @@ from riko.bado._backend import (
     run_from_thread,
     start_blocking_portal,
 )
+from riko.bado._util import as_awaitable
 from riko.bado.itertools import as_async
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._resources import ResourceView
@@ -43,6 +44,7 @@ from ._adapt import (
     pull_stream,
     require_async_stream,
     require_stream,
+    resolve_items,
 )
 from ._events import _NULL_EVENT_SINK, EventSink
 from ._plan import _ResourcePlan, _ResourceStrategy, build_resource_plan
@@ -62,8 +64,10 @@ if TYPE_CHECKING:
     from riko.types._streams import (
         AsyncItems,
         AsyncStream,
+        Feed,
         Item,
         Items,
+        SourceLike,
         Stream,
         Streams,
     )
@@ -586,7 +590,7 @@ class SyncExecution(_BaseExecution):
         plan: ExecutionPlan,
         output: str = "default",
         *,
-        source: Items | None = None,
+        source: SourceLike | None = None,
     ) -> Stream:
         """
         Builds the item stream for one of the plan's named outputs.
@@ -598,9 +602,10 @@ class SyncExecution(_BaseExecution):
 
             plan: The prepared workflow to run.
             output: The named output to produce.
-            source: Items to seed the output's open input in place of the default
-                empty seed. When omitted, only a node with no default or
-                positional input receives that default.
+            source: A seed for the output's open input in place of the default
+                empty seed: one item, an item stream, an async item stream, or an
+                awaitable resolving to one of those. When omitted, only a node
+                with no default or positional input receives that default.
 
         Returns:
 
@@ -620,14 +625,26 @@ class SyncExecution(_BaseExecution):
         steps: SyncExecSteps = {}
         _require_default_output_port(endpoint.port, f"output {output!r}")
         required = plan.required[output]
-        seed_target = None if source is None else _seed_target(plan, required)
+        seed = None if source is None else self._resolve_source(source)
+        seed_target = None if seed is None else _seed_target(plan, required)
 
         for node_id in plan.index.order:
             if node_id in required:
-                _source = source if node_id == seed_target else None
-                steps[node_id] = self._build_stream(plan, node_id, steps, _source)
+                _seed = seed if node_id == seed_target else None
+                steps[node_id] = self._build_stream(plan, node_id, steps, _seed)
 
         return steps[endpoint.node]
+
+    def _resolve_source(self, value: SourceLike) -> Stream:
+        """Resolves a seed of any accepted shape to one lazy item stream."""
+        resolved = self.run_async(value) if isawaitable(value) else value
+
+        if isinstance(resolved, AsyncIterable):
+            stream = self._drain_async(resolved)
+        else:
+            stream = iter(resolve_items(resolved))
+
+        return stream
 
     def _drain_async(self, source: AsyncItems) -> Stream:
         """Pulls an async stream item by item through the execution portal."""
@@ -671,11 +688,11 @@ class SyncExecution(_BaseExecution):
             extra["others"] = [stream for _, stream in ordered]
 
         if source is None:
-            source = iter(()) if indexed else self._normalize_source()
+            source = iter(()) if indexed else self._default_seed()
 
         return source, extra
 
-    def _normalize_source(self) -> Stream:
+    def _default_seed(self) -> Stream:
         """Produces the seed fed to a node with no default or positional input."""
         return iter([{"forever": True}])
 
@@ -934,7 +951,7 @@ class AsyncExecution(_BaseExecution):
         plan: ExecutionPlan,
         output: str = "default",
         *,
-        source: Items | None = None,
+        source: SourceLike | None = None,
     ) -> AsyncStream:
         """
         Builds the async item stream for one of the plan's named outputs.
@@ -946,9 +963,10 @@ class AsyncExecution(_BaseExecution):
 
             plan: The prepared workflow to run.
             output: The named output to produce.
-            source: Items to seed the output's open input in place of the default
-                empty seed. When omitted, only a node with no default or
-                positional input receives that default.
+            source: A seed for the output's open input in place of the default
+                empty seed: one item, an item stream, an async item stream, or an
+                awaitable resolving to one of those. When omitted, only a node
+                with no default or positional input receives that default.
 
         Returns:
 
@@ -968,15 +986,27 @@ class AsyncExecution(_BaseExecution):
         steps: AsyncExecSteps = {}
         _require_default_output_port(endpoint.port, f"output {output!r}")
         required = plan.required[output]
-        seed_target = None if source is None else _seed_target(plan, required)
+        seed = None if source is None else await self._aresolve_source(source)
+        seed_target = None if seed is None else _seed_target(plan, required)
 
         for node_id in plan.index.order:
             if node_id in required:
-                _source = source if node_id == seed_target else None
-                args = (plan, node_id, steps, _source)
+                _seed = seed if node_id == seed_target else None
+                args = (plan, node_id, steps, _seed)
                 steps[node_id] = await self._abuild_stream(*args)
 
         return steps[endpoint.node]
+
+    async def _aresolve_source(self, value: SourceLike) -> AsyncItems:
+        """Resolves a seed of any accepted shape to one lazy async item stream."""
+        resolved = await as_awaitable(value)
+
+        if isinstance(resolved, AsyncIterable):
+            stream: AsyncItems = resolved
+        else:
+            stream = as_async(resolve_items(resolved))
+
+        return stream
 
     async def _run_sync_node(
         self,
@@ -1050,7 +1080,7 @@ class AsyncExecution(_BaseExecution):
         plan: ExecutionPlan,
         node_id: str,
         steps: AsyncExecSteps,
-        seed: Items | None = None,
+        seed: Feed | None = None,
     ) -> AsyncStream:
         node = plan.nodes[node_id]
         _pipe, mode = node.select(is_async=True)
@@ -1094,7 +1124,7 @@ class AsyncExecution(_BaseExecution):
         self,
         incoming: tuple[GraphEdge, ...],
         steps: AsyncExecSteps,
-        seed: Items | None = None,
+        seed: Feed | None = None,
     ) -> tuple[AsyncItems, ExtraOutput]:
         source: AsyncItems | None = None if seed is None else as_async(seed)
         indexed: list[tuple[int, AsyncStream]] = []
@@ -1117,12 +1147,12 @@ class AsyncExecution(_BaseExecution):
             extra["others"] = [stream for _, stream in ordered]
 
         if source is None:
-            items: Items = []
-            source = as_async(items) if indexed else self._anormalize_source()
+            items: list[Item] = []
+            source = as_async(items) if indexed else self._adefault_seed()
 
         return source, extra
 
-    def _anormalize_source(self) -> AsyncItems:
+    def _adefault_seed(self) -> AsyncItems:
         """Produces the seed fed to a node with no default or positional input."""
         seed: list[Item] = [{"forever": True}]
         return as_async(seed)

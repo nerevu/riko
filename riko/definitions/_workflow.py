@@ -32,6 +32,7 @@ from __future__ import annotations
 
 from collections import Counter
 from functools import partial
+from inspect import isawaitable
 from itertools import chain
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeGuard, cast
@@ -60,7 +61,7 @@ from riko.types._collections import (
     validator_from_require,
 )
 from riko.types._enums import Backends, Formats, ModuleNameLike
-from riko.types._guards import is_listlike, is_mapping, require_mapping
+from riko.types._guards import is_mapping, is_streamlike, require_mapping
 from riko.types._workflow import WORKFLOW_VERSION, Edge, Endpoint, NodeId
 from riko.types.modules import (
     AnyModuleConf,
@@ -78,7 +79,7 @@ from ._write import WriteMode
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
-    from riko.types._streams import AsyncItemGenerator, ItemGenerator, Items
+    from riko.types._streams import AsyncItemGenerator, ItemGenerator, SourceLike
     from riko.types._workflow import EdgeFamily, NodeFamily
 
 _FROZEN_OPTIONS: FrozenMap[FrozenOptionValues] = MappingProxyType({})
@@ -115,9 +116,10 @@ _normalize_format = partial(resolve_enum, Formats, strict=False)
 _normalize_mode = partial(resolve_enum, WriteMode, default=WriteMode.REPLACE)
 
 
-def _is_items(value: object) -> TypeGuard[Items]:
-    """A stream of items on the left of ``|``, never a string, mapping, or pipeline."""
-    return is_listlike(value) and not isinstance(value, Pipeline)
+def _is_source(value: object) -> TypeGuard[SourceLike]:
+    """A seed on the left of ``|``: a stream, an async stream, or an awaitable."""
+    seedlike = is_streamlike(value) or isawaitable(value)
+    return seedlike and not isinstance(value, Pipeline)
 
 
 def _is_pipe_spec(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
@@ -488,13 +490,15 @@ class Pipeline(Generic[T]):
     output stream which is generic over T.
 
     ``Pipeline(spec)`` wraps a built graph. ``Pipeline.from_module(name)`` seeds a
-    module by name, ``Pipeline(source=items)`` seeds an item stream, and ``Pipeline()``
-    starts an empty template to compose with ``|``.
+    module by name, ``Pipeline(source=items)`` seeds a source, and ``Pipeline()``
+    starts an empty template to compose with ``|``. A source is one item, an item
+    stream, an async item stream, or an awaitable resolving to one of those; each
+    execution resolves it at the same boundary.
 
     Attributes:
 
         spec: The canonical workflow this pipeline defines.
-        source: The seeded input stream, or ``None`` when the graph supplies its own.
+        source: The seeded source, or ``None`` when the graph supplies its own.
 
     Examples:
 
@@ -509,7 +513,7 @@ class Pipeline(Generic[T]):
     """
 
     spec: WorkflowSpec = field(default=_EMPTY_SPEC, converter=optional_spec)
-    source: Items | None = field(default=None, repr=False)
+    source: SourceLike | None = field(default=None, repr=False)
 
     @classmethod
     def from_module(
@@ -549,7 +553,7 @@ class Pipeline(Generic[T]):
         spec = _build_chained_spec(str(name), conf=conf, options=options, embed=embed)
         return cls(spec)
 
-    def _derive(self, spec: WorkflowSpec, source: Items | None) -> Pipeline:
+    def _derive(self, spec: WorkflowSpec, source: SourceLike | None) -> Pipeline:
         """Builds a sibling pipeline over a derived spec."""
         return type(self)(spec, source)
 
@@ -664,11 +668,12 @@ class Pipeline(Generic[T]):
 
     def __ror__(self, other: object) -> Pipeline:
         """
-        Seeds an item stream on the left of ``|``.
+        Seeds a source on the left of ``|``.
 
         Args:
 
-            other: The item stream to bind as this pipeline's source.
+            other: The item stream, async item stream, or awaitable to bind as
+                this pipeline's source.
 
         Returns:
 
@@ -682,7 +687,7 @@ class Pipeline(Generic[T]):
             True
 
         """
-        if self.source is None and _is_items(other):
+        if self.source is None and _is_source(other):
             primed = self._derive(self.spec, other)
         else:
             primed = NotImplemented

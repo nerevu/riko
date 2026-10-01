@@ -187,6 +187,15 @@ def test_ror_seeds_source():
     assert sorted(flow.spec.nodes) == ["sort-1"]
 
 
+def test_ror_seeds_async_stream():
+    async def stream():
+        yield {"x": 1}
+
+    source = stream()
+    flow = source | Pipeline.from_module("sort")
+    assert flow.source is source
+
+
 def test_ror_rejects_reseeding():
     with pytest.raises(TypeError):
         _ = [{"x": 1}] | Pipeline(source=[{"y": 1}])

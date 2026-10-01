@@ -14,7 +14,7 @@ from collections.abc import Generator
 from itertools import chain
 from typing import TYPE_CHECKING, Any, cast
 
-from riko.types._guards import require_single_output
+from riko.types._guards import is_listlike, require_single_output
 from riko.types._sentinels import MISSING
 
 if TYPE_CHECKING:
@@ -92,6 +92,32 @@ def require_async_stream(
     """
     require_single_output(pipe)
     return cast("AsyncStream", aiter(value))
+
+
+def resolve_items(value: Item | Items) -> Items:
+    """
+    Resolves a synchronous seed to the item stream it denotes.
+
+    A mapping or primitive is one item; any other iterable already is the stream.
+    Async and awaitable seeds are resolved by the execution that owns the loop.
+
+    Args:
+
+        value: One item or an item stream.
+
+    Returns:
+
+        The item stream ``value`` denotes.
+
+    Examples:
+
+        >>> resolve_items({"x": 1})
+        [{'x': 1}]
+        >>> resolve_items([{"x": 1}, {"x": 2}])
+        [{'x': 1}, {'x': 2}]
+
+    """
+    return cast("Items", value) if is_listlike(value) else [cast("Item", value)]
 
 
 def _close_generator(value: object) -> None:
@@ -246,4 +272,5 @@ __all__ = [
     "pull_stream",
     "require_async_stream",
     "require_stream",
+    "resolve_items",
 ]
