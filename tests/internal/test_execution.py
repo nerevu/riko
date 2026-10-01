@@ -148,6 +148,46 @@ def test_sync_lone_cleanup_error_raises_bare() -> None:
         execution.close()
 
 
+def test_sync_cleanup_error_is_grouped_with_primary_error() -> None:
+    # A plain cleanup callback cannot replace the execution's own error: both
+    # survive, the primary first.
+    def boom() -> None:
+        raise RuntimeError("cleanup failed")
+
+    def run() -> None:
+        with SyncExecution() as execution:
+            execution.callback(boom)
+            raise ValueError("primary")
+
+    with pytest.raises(ExceptionGroup) as info:
+        run()
+
+    primary, cleanup = info.value.exceptions
+    assert isinstance(primary, ValueError)
+    assert isinstance(cleanup, RuntimeError)
+
+
+def test_sync_native_context_manager_may_replace_primary_error() -> None:
+    # A real __exit__ keeps its Python semantics: it may raise a different
+    # exception in place of the primary one, and that replacement is raised bare.
+    @contextmanager
+    def replace():
+        try:
+            yield
+        except ValueError as error:
+            raise KeyError("replaced") from error
+
+    def run() -> None:
+        with SyncExecution() as execution:
+            execution.enter_context(replace())
+            raise ValueError("primary")
+
+    with pytest.raises(KeyError, match="replaced") as info:
+        run()
+
+    assert isinstance(info.value.__cause__, ValueError)
+
+
 @async_test
 async def test_sync_portal_bridges_to_async() -> None:
     result = None
@@ -251,6 +291,44 @@ async def test_async_ambient_cancellation_still_unwinds() -> None:
         tg.cancel_scope.cancel()
 
     assert events == ["resource-closed"]
+
+
+@async_test
+async def test_async_cleanup_error_is_grouped_with_primary_error() -> None:
+    async def boom() -> None:
+        raise RuntimeError("cleanup failed")
+
+    async def run() -> None:
+        async with AsyncExecution() as execution:
+            execution.push_async_callback(boom)
+            raise ValueError("primary")
+
+    with pytest.raises(ExceptionGroup) as info:
+        await run()
+
+    primary, cleanup = info.value.exceptions
+    assert isinstance(primary, ValueError)
+    assert isinstance(cleanup, RuntimeError)
+
+
+@async_test
+async def test_async_shutdown_budget_expiry_is_grouped_with_primary_error() -> None:
+    # Exhausting the shutdown budget during teardown is a cleanup failure
+    # reported beside the execution's own error, not a replacement for it.
+    async def slow() -> None:
+        await async_sleep(3600)
+
+    async def run() -> None:
+        async with AsyncExecution(shutdown_timeout=0.05) as execution:
+            execution.push_async_callback(slow)
+            raise ValueError("primary")
+
+    with pytest.raises(ExceptionGroup) as info:
+        await run()
+
+    primary, expired = info.value.exceptions
+    assert isinstance(primary, ValueError)
+    assert isinstance(expired, TimeoutError)
 
 
 @async_test
