@@ -28,7 +28,12 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast, overload
 import pygogo as gogo
 
 from riko.bado._util import as_awaitable
-from riko.bado.itertools import as_async, async_iter, async_map
+from riko.bado.itertools import (
+    as_async,
+    async_iter,
+    async_map,
+    async_map_ordered_stream,
+)
 from riko.base._iterutils import dispatch
 from riko.definitions._resources import bind_resources, resolve_binding
 from riko.execution.context import Context
@@ -36,7 +41,7 @@ from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
 from riko.types._compiler import CountValues, EmbedKwargs
 from riko.types._enums import BasicCastType, ExecutionMode
-from riko.types._guards import is_listlike, is_mapping
+from riko.types._guards import is_listlike, is_mapping, is_streamlike
 from riko.types._options import Casted, Defaults, Opts
 from riko.types._streams import (
     AsyncItemsOrValues,
@@ -72,6 +77,7 @@ if TYPE_CHECKING:
         AsyncPipeTuples,
         AsyncProcessorParser,
         AsyncProcessorWrapper,
+        AsyncProcessorWrapperInternalOutput,
         AsyncSplitterParser,
         AsyncSplitterWrapper,
         AsyncSplitterWrapperInput,
@@ -111,6 +117,10 @@ if TYPE_CHECKING:
     from riko.types.modules import Conf, ModuleType
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+
+type AsyncItemProcessor = Callable[
+    [ItemOrValue], Awaitable[SyncProcessorWrapperInternalOutput]
+]
 
 _PROCESSOR_FORBIDDEN_OPTS: frozenset[str] = frozenset({"embed"})
 _OPERATOR_FORBIDDEN_OPTS: frozenset[str] = frozenset({"skip_if"})
@@ -457,6 +467,27 @@ async def _materialize_terminal[T](value: object) -> object:  # noqa: E302
         materialized = cast("T", value)
 
     return materialized
+
+
+async def _aprocess_stream[T](
+    wrapper: Callable[[T], Awaitable[Iterable[ItemOrValue]]], stream: AsyncIterable[T]
+) -> AsyncIterator[ItemOrValue]:
+    """
+    Maps a processor over an async stream lazily, in order, flattening its results.
+
+    Args:
+
+        wrapper: The per-item processor call, returning that item's results.
+        stream: The async stream of items to process.
+
+    Yields:
+
+        Each result of every item, in stream order.
+
+    """
+    async for processed in async_map_ordered_stream(wrapper, stream):
+        for value in processed:
+            yield value
 
 
 async def _materialize_terminals(**kwargs: object) -> dict[str, object]:
@@ -808,13 +839,14 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             test: bool | None = None,
             submodule: bool | None = None,
             **kwargs: object,
-        ) -> SyncProcessorWrapperInternalOutput:
+        ) -> AsyncProcessorWrapperInternalOutput:
             kwargs = await _materialize_terminals(**kwargs)
             process = self.process
             prepare = self.prepare
+            processed: AsyncProcessorWrapperInternalOutput
 
-            if is_listlike(item):
-                _wrapper = partial(
+            if is_streamlike(item):
+                _partial = partial(
                     _async_wrapper_impl,
                     conf=conf,
                     context=context,
@@ -825,9 +857,13 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                     inputs=inputs,
                     **kwargs,
                 )
+                _wrapper = cast("AsyncItemProcessor", _partial)
 
-                mapped = await async_map(_wrapper, item)
-                processed = chain.from_iterable(mapped)
+                if isinstance(item, AsyncIterable):
+                    processed = _aprocess_stream(_wrapper, item)
+                else:
+                    mapped = await async_map(_wrapper, item)
+                    processed = chain.from_iterable(mapped)
             else:
                 input_ = self.parse(cast("ItemOrValue", item), module_name)
                 prepared = prepare(

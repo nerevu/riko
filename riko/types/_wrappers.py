@@ -214,7 +214,9 @@ type AsyncOperatorWrapperInternalOutput = AsyncIterator[ItemOrValue]
 type AsyncOperatorWrapperInput = AsyncItems | SyncOperatorWrapperInput
 
 type AsyncProcessorWrapperOutput = AsyncWrapperStream[Item, SyncProcessorWrapperOutput]
-type AsyncProcessorWrapperInternalOutput = SyncProcessorWrapperInternalOutput
+type AsyncProcessorWrapperInternalOutput = (
+    SyncProcessorWrapperInternalOutput | AsyncIterator[ItemOrValue]
+)
 type AsyncProcessorWrapperInput = SyncProcessorWrapperInput
 
 type AsyncSplitterWrapperOutput = AsyncWrapperStream[Stream, SyncSplitterWrapperOutput]
