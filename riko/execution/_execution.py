@@ -266,6 +266,7 @@ class _BaseExecution:
     context: Context | None = None
     events: EventSink = field(default=_NULL_EVENT_SINK, kw_only=True)
     _closing: bool = field(default=False, init=False)
+    _cleanup_errors: list[Exception] = field(factory=list, init=False)
 
     def emit(self, event: object) -> None:
         """
@@ -286,15 +287,44 @@ class _BaseExecution:
         if self._closing:
             raise PipelineStateError("closing", action)
 
+    def _record_cleanup_error(self, func: Func, *args: object) -> None:
+        """Runs a cleanup callback and saves its failure for the shutdown report."""
+        try:
+            func(*args)
+        except Exception as error:  # noqa: BLE001
+            self._cleanup_errors.append(error)
+
     def _report_shutdown(
-        self, exc_type: type[BaseException] | None, errors: list[Exception]
+        self, exc: BaseException | None, raised: BaseException | None, suppressed: bool
     ) -> None:
-        if not errors:
-            pass
-        elif exc_type is None and len(errors) == 1:
-            raise errors[0]
+        """
+        Raises the shutdown outcome once cleanup has been attempted in full.
+
+        ``raised`` is an exception that a native context manager replaced the primary
+        error with. That replacement, or the unsuppressed primary error, stays the
+        primary outcome. Cleanup callback and task failures group alongside it rather
+        than replace it. They are raised on their own only when no primary outcome
+        remains.
+        """
+        errors = self._cleanup_errors
+
+        if raised is not None:
+            primary: BaseException | None = raised
+        elif suppressed:
+            primary = None
         else:
+            primary = exc
+
+        if not errors and raised is not None:
+            raise raised
+        elif not errors:
+            pass
+        elif primary is None and len(errors) == 1:
+            raise errors[0]
+        elif primary is None:
             raise ExceptionGroup("Execution shutdown failed", errors)
+        else:
+            raise BaseExceptionGroup("Execution shutdown failed", [primary, *errors])
 
 
 @define(eq=False)
@@ -375,7 +405,7 @@ class SyncExecution(_BaseExecution):
 
         """
         self._require_open("add a callback to")
-        self._stack.callback(func, *args)
+        self._stack.callback(self._record_cleanup_error, func, *args)
 
     @overload
     def run_async[T](self, func: Awaitable[T], /) -> T: ...  # noqa: E704
@@ -702,17 +732,17 @@ class SyncExecution(_BaseExecution):
         exc: BaseException | None = None,
         traceback: TracebackType | None = None,
     ) -> bool:
-        """Unwinds the exit stack, stopping the portal, under the primary error."""
+        """Unwinds the exit stack and stops the portal under the primary error."""
         self._closing = True
-        errors: list[Exception] = []
+        raised: BaseException | None = None
         suppressed = False
 
         try:
             suppressed = bool(self._stack.__exit__(exc_type, exc, traceback))
         except Exception as error:  # noqa: BLE001
-            errors.append(error)
+            raised = error
 
-        self._report_shutdown(exc_type, errors)
+        self._report_shutdown(exc, raised, suppressed)
         return suppressed
 
 
@@ -724,7 +754,7 @@ class AsyncExecution(_BaseExecution):
     Blocking sync components run on a worker thread through the bridge.
     """
 
-    _shutdown_timeout: float | None = field(default=None, kw_only=True)
+    shutdown_timeout: float | None = field(default=None, kw_only=True)
     _stack: AsyncExitStack = field(factory=AsyncExitStack, init=False)
     _task_group: TaskGroup | None = field(default=None, init=False)
     _resolved: Resolved = field(factory=dict, init=False)
@@ -786,7 +816,7 @@ class AsyncExecution(_BaseExecution):
 
         """
         self._require_open("add a callback to")
-        self._stack.callback(func, *args)
+        self._stack.callback(self._record_cleanup_error, func, *args)
 
     def push_async_callback(self, func: AysncFunc, *args: object) -> None:
         """
@@ -799,7 +829,14 @@ class AsyncExecution(_BaseExecution):
 
         """
         self._require_open("add an async callback to")
-        self._stack.push_async_callback(func, *args)
+        self._stack.push_async_callback(self._arecord_cleanup_error, func, *args)
+
+    async def _arecord_cleanup_error(self, func: AysncFunc, *args: object) -> None:
+        """Awaits a cleanup callback and saves its failure for the shutdown report."""
+        try:
+            await func(*args)
+        except Exception as error:  # noqa: BLE001
+            self._cleanup_errors.append(error)
 
     def spawn(self, func: CoroutineFunc, *args: object) -> None:
         """
@@ -1168,18 +1205,18 @@ class AsyncExecution(_BaseExecution):
         traceback: TracebackType | None = None,
     ) -> bool:
         self._closing = True
-        errors: list[Exception] = []
+        raised: BaseException | None = None
         suppressed = False
 
         try:
-            await self._join_tasks(cancel=exc_type is not None, errors=errors)
+            await self._join_tasks(cancel=exc_type is not None)
         finally:
-            suppressed = await self._unwind(exc_type, exc, traceback, errors=errors)
+            raised, suppressed = await self._unwind(exc_type, exc, traceback)
 
-        self._report_shutdown(exc_type, errors)
+        self._report_shutdown(exc, raised, suppressed)
         return suppressed
 
-    async def _join_tasks(self, *, cancel: bool, errors: list[Exception]) -> None:
+    async def _join_tasks(self, *, cancel: bool) -> None:
         if self._task_group is not None:
             if cancel:
                 self._task_group.cancel_scope.cancel()
@@ -1187,7 +1224,7 @@ class AsyncExecution(_BaseExecution):
             try:
                 await self._task_group.__aexit__(None, None, None)
             except Exception as error:  # noqa: BLE001
-                errors.append(error)
+                self._cleanup_errors.append(error)
             finally:
                 self._task_group = None
 
@@ -1196,20 +1233,31 @@ class AsyncExecution(_BaseExecution):
         exc_type: type[BaseException] | None,
         exc: BaseException | None,
         traceback: TracebackType | None,
-        *,
-        errors: list[Exception],
-    ) -> bool:
+    ) -> tuple[BaseException | None, bool]:
+        """
+        Unwinds the exit stack behind a cancellation shield within the budget.
+
+        Returns the exception a native context manager replaced the primary error
+        with, if any, and whether the primary error was suppressed. Exhausting the
+        shutdown budget is recorded as a cleanup failure rather than replacing the
+        primary outcome.
+        """
+        raised: BaseException | None = None
         suppressed = False
-        missing_timeout = self._shutdown_timeout is None
-        bound = nullcontext() if missing_timeout else fail_after(self._shutdown_timeout)
+        missing_timeout = self.shutdown_timeout is None
+        bound = nullcontext() if missing_timeout else fail_after(self.shutdown_timeout)
 
-        with CancelScope(shield=True), bound:
-            try:
-                suppressed = bool(await self._stack.__aexit__(exc_type, exc, traceback))
-            except Exception as error:  # noqa: BLE001
-                errors.append(error)
+        try:
+            with CancelScope(shield=True), bound:
+                try:
+                    unwound = await self._stack.__aexit__(exc_type, exc, traceback)
+                    suppressed = bool(unwound)
+                except Exception as error:  # noqa: BLE001
+                    raised = error
+        except TimeoutError as error:
+            self._cleanup_errors.append(error)
 
-        return suppressed
+        return raised, suppressed
 
 
 __all__ = ["AsyncExecution", "SyncExecution"]
