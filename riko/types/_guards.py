@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections.abc import (
     AsyncGenerator,
+    AsyncIterable,
     Awaitable,
     Callable,
     Generator,
@@ -224,6 +225,41 @@ def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
         result = isinstance(value, Iterable)
 
     return result
+
+
+def is_streamlike[T](
+    value: Iterable[T] | AsyncIterable[T] | object,
+) -> TypeGuard[Iterable[T] | AsyncIterable[T]]:
+    """
+    Reports whether a value represents a sync or async stream of values.
+
+    A streamlike value is listlike or any async iterable. Mappings, primitives, and
+    ``None`` are one item.
+
+    Args:
+
+        value: The object to classify.
+
+    Returns:
+
+        True when ``value`` streams values in either mode, False when it is one value.
+
+    Examples:
+
+        >>> async def agen():
+        ...     yield 1
+        >>>
+        >>> is_streamlike(agen())
+        True
+        >>> is_streamlike([1, 2])
+        True
+        >>> is_streamlike({"a": 1})
+        False
+        >>> is_streamlike("ab")
+        False
+
+    """
+    return is_listlike(value) or isinstance(value, AsyncIterable)
 
 
 def is_sentinel[VT](val: Mapping[str, VT], **kwargs: object) -> TypeGuard[Sentinel]:

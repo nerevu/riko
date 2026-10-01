@@ -656,6 +656,84 @@ async def test_arun_seeds_root_with_supplied_source() -> None:
         assert [item async for item in stream] == [{"x": 2}, {"x": 4}]
 
 
+def _doubler_dispatcher():
+    def double(source, **_):
+        return ({"x": row["x"] * 2} for row in source)
+
+    async def adouble(source, **_):
+        async for row in source:
+            yield {"x": row["x"] * 2}
+
+    sync_pipe = cast("SyncModuleWrapper", double)
+    async_pipe = cast("AsyncModuleWrapper", adouble)
+    definition = ModuleDefinition(name="double", sync_pipe=sync_pipe)
+    adefinition = ModuleDefinition(name="adouble", async_pipe=async_pipe)
+    return _dispatcher(definition, adefinition)
+
+
+async def _agen_source():
+    yield {"x": 1}
+    yield {"x": 2}
+
+
+async def _awaitable_source():
+    return [{"x": 1}, {"x": 2}]
+
+
+def test_run_seeds_one_item_as_a_single_item_stream() -> None:
+    plan = build_execution_plan(_module_spec("double"), _doubler_dispatcher())
+
+    with SyncExecution() as execution:
+        assert list(execution.run(plan, source={"x": 5})) == [{"x": 10}]
+
+
+@skipif_issync
+def test_run_seeds_an_async_stream_through_the_portal() -> None:
+    plan = build_execution_plan(_module_spec("double"), _doubler_dispatcher())
+
+    with SyncExecution() as execution:
+        stream = execution.run(plan, source=_agen_source())
+        assert list(stream) == [{"x": 2}, {"x": 4}]
+
+
+@skipif_issync
+def test_run_awaits_an_awaitable_seed_once() -> None:
+    plan = build_execution_plan(_module_spec("double"), _doubler_dispatcher())
+
+    with SyncExecution() as execution:
+        stream = execution.run(plan, source=_awaitable_source())
+        assert list(stream) == [{"x": 2}, {"x": 4}]
+
+
+@async_test
+async def test_arun_seeds_one_item_as_a_single_item_stream() -> None:
+    plan = build_execution_plan(_module_spec("adouble"), _doubler_dispatcher())
+
+    async with AsyncExecution() as execution:
+        stream = await execution.run(plan, source={"x": 5})
+        assert [item async for item in stream] == [{"x": 10}]
+
+
+@async_test
+async def test_arun_seeds_an_async_stream_without_wrapping_it() -> None:
+    # An async stream seed is the stream itself, never one item holding the
+    # stream object.
+    plan = build_execution_plan(_module_spec("adouble"), _doubler_dispatcher())
+
+    async with AsyncExecution() as execution:
+        stream = await execution.run(plan, source=_agen_source())
+        assert [item async for item in stream] == [{"x": 2}, {"x": 4}]
+
+
+@async_test
+async def test_arun_awaits_an_awaitable_seed_once() -> None:
+    plan = build_execution_plan(_module_spec("adouble"), _doubler_dispatcher())
+
+    async with AsyncExecution() as execution:
+        stream = await execution.run(plan, source=_awaitable_source())
+        assert [item async for item in stream] == [{"x": 2}, {"x": 4}]
+
+
 @async_test
 async def test_arun_without_seed_keeps_forever_source() -> None:
     seen: list[object] = []
@@ -904,6 +982,25 @@ def test_pipeline_source_seed_runs_end_to_end() -> None:
         expected = [{"x": 2}, {"x": 4}]
         assert list([{"x": 1}, {"x": 2}] | Pipeline.from_module("doubler")) == expected
         assert list(Pipeline(source=[{"x": 10}]).pipe("doubler")) == [{"x": 20}]
+    finally:
+        reset_module_registry()
+
+
+@async_test
+async def test_pipeline_async_source_seed_runs_end_to_end() -> None:
+    async def adouble(source, **_):
+        async for item in source:
+            yield {"x": item["x"] * 2}
+
+    reset_module_registry()
+    async_pipe = cast("AsyncModuleWrapper", adouble)
+    register_module(ModuleDefinition(name="adoubler", async_pipe=async_pipe))
+
+    try:
+        streamed = _agen_source() | Pipeline.from_module("adoubler")
+        assert [item async for item in streamed] == [{"x": 2}, {"x": 4}]
+        awaited = _awaitable_source() | Pipeline.from_module("adoubler")
+        assert [item async for item in awaited] == [{"x": 2}, {"x": 4}]
     finally:
         reset_module_registry()
 
