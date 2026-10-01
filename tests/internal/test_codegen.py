@@ -185,6 +185,20 @@ def test_generated_pipe_accepts_a_stream(tmp_path: Path):
     assert list(module.pipe(items)) == expected
 
 
+@async_test
+async def test_generated_async_pipe_accepts_an_async_stream(tmp_path: Path):
+    """A generated async transformer maps every item of an async stream."""
+    spec = Pipeline.from_module("rename", conf=RENAME_CONF).spec
+    module = _build(spec, "pipe_arename", tmp_path, is_async=True)
+
+    async def source():
+        yield {"content": "hello"}
+        yield {"content": "bye"}
+
+    expected = [{"greeting": "hello"}, {"greeting": "bye"}]
+    assert [item async for item in module.async_pipe(source())] == expected
+
+
 def test_generated_pipe_describes_dependencies(tmp_path: Path):
     """Describing dependencies reports the workflow's module names, sorted."""
     flow = Pipeline.from_module("itembuilder").pipe("rename", conf=RENAME_CONF)
