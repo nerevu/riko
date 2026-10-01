@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from riko.base.exceptions import InvalidPipelineError
 from riko.execution._execution import SyncExecution
 from riko.execution.context import Context
 from riko.runtime._execution_plan import build_execution_plan
@@ -100,7 +101,13 @@ def _run_probe(package: str, name: str) -> list[object]:
 def test_fixture_is_canonical(path: Path):
     """Every committed fixture parses, validates, and is stored canonically."""
     spec = parse_workflow(path.read_text())
-    spec.validate()
+
+    if spec.family_sources().get(("sw-243", "out")):
+        with pytest.raises(InvalidPipelineError, match=r"fan-out.*\('sw-243', 'out'\)"):
+            spec.validate()
+    else:
+        spec.validate()
+
     assert path.read_text() == _render(spec)
 
 

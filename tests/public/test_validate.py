@@ -4,7 +4,8 @@ Tests for ``spec.validate`` structural graph validation.
 
 These build canonical ``WorkflowSpec`` graphs directly and assert the closed-schema
 rules: version, non-empty nodes, id/key agreement, endpoint references, stream fan-in,
-publish/subscribe edge coherence, resource references, and exposed outputs.
+publish/subscribe edge coherence, port direction, acyclicity, resource references, and
+exposed outputs.
 """
 
 import pytest
@@ -144,3 +145,68 @@ def test_non_empty_graph_without_output_rejected():
     node = ModuleNode(id="a", name="fetch")
     with pytest.raises(InvalidPipelineError, match="exposes no output"):
         _spec([node]).validate()
+
+
+def test_edge_source_on_input_port_rejected():
+    a = ModuleNode(id="a", name="fetch")
+    b = ModuleNode(id="b", name="sort")
+    edges = [StreamEdge(Endpoint("a", "in"), Endpoint("b", "in"))]
+    spec = _spec([a, b], edges=edges, outputs={"default": Endpoint("b", "out")})
+    with pytest.raises(InvalidPipelineError, match=r"'a', 'in'.*not an 'out' port"):
+        spec.validate()
+
+
+def test_edge_target_on_output_port_rejected():
+    a = ModuleNode(id="a", name="fetch")
+    b = ModuleNode(id="b", name="sort")
+    edges = [StreamEdge(Endpoint("a", "out"), Endpoint("b", "out"))]
+    spec = _spec([a, b], edges=edges, outputs={"default": Endpoint("b", "out")})
+    with pytest.raises(InvalidPipelineError, match=r"'b', 'out'.*not an 'in' port"):
+        spec.validate()
+
+
+def test_output_on_input_port_rejected():
+    node = ModuleNode(id="a", name="fetch")
+    spec = _spec([node], outputs={"default": Endpoint("a", "in")})
+    with pytest.raises(InvalidPipelineError, match="not an 'out' port"):
+        spec.validate()
+
+
+def test_malformed_port_rejected():
+    node = ModuleNode(id="a", name="fetch")
+    spec = _spec([node], outputs={"default": Endpoint("a", "sideways")})
+    with pytest.raises(InvalidPipelineError, match="invalid port direction"):
+        spec.validate()
+
+
+def test_cycle_rejected():
+    a = ModuleNode(id="a", name="sort")
+    b = ModuleNode(id="b", name="sort")
+    edges = [
+        StreamEdge(Endpoint("a", "out"), Endpoint("b", "in")),
+        StreamEdge(Endpoint("b", "out"), Endpoint("a", "in")),
+    ]
+    spec = _spec([a, b], edges=edges, outputs={"default": Endpoint("b", "out")})
+    with pytest.raises(InvalidPipelineError, match=r"cycle.*\['a', 'b'\]"):
+        spec.validate()
+
+
+def test_self_loop_rejected():
+    node = ModuleNode(id="a", name="sort")
+    edges = [StreamEdge(Endpoint("a", "out"), Endpoint("a", "in"))]
+    spec = _spec([node], edges=edges, outputs={"default": Endpoint("a", "out")})
+    with pytest.raises(InvalidPipelineError, match=r"cycle.*\['a'\]"):
+        spec.validate()
+
+
+def test_cycle_names_only_the_unrunnable_nodes():
+    src = ModuleNode(id="src", name="fetch")
+    a = ModuleNode(id="a", name="sort")
+    b = ModuleNode(id="b", name="sort")
+    edges = [
+        StreamEdge(Endpoint("src", "out"), Endpoint("a", "in")),
+        StreamEdge(Endpoint("a", "out"), Endpoint("b", "in")),
+        StreamEdge(Endpoint("b", "out"), Endpoint("a", "in:1")),
+    ]
+    spec = _spec([src, a, b], edges=edges, outputs={"default": Endpoint("b", "out")})
+    assert spec.cyclic_nodes == ["a", "b"]

@@ -389,6 +389,56 @@ def test_run_rejects_nondefault_selected_output_port() -> None:
         _run(spec, dispatcher)
 
 
+def test_build_plan_rejects_fan_out_from_one_source_port() -> None:
+    # Two stream edges leaving the same source port would hand both consumers
+    # one shared one-shot iterator, so whichever drained first would steal the
+    # other's items. The plan refuses the shape before any node runs. This
+    # guard is removed once port-keyed fan-out delivery becomes executable.
+    dispatcher = _dispatcher(
+        ModuleDefinition(name="src", sync_pipe=_tagged_source("a")),
+        ModuleDefinition(name="sink", sync_pipe=_sync_pipe),
+    )
+    a = ModuleNode(id="a", name="src")
+    b = ModuleNode(id="b", name="sink")
+    c = ModuleNode(id="c", name="sink")
+    edges = (
+        StreamEdge(Endpoint("a", "out"), Endpoint("b", "in")),
+        StreamEdge(Endpoint("a", "out"), Endpoint("c", "in")),
+    )
+    spec = _spec([a, b, c], {"default": Endpoint("b", "out")}, edges=edges)
+
+    with pytest.raises(InvalidPipelineError, match=r"fan-out.*\('a', 'out'\)"):
+        build_execution_plan(spec, dispatcher=dispatcher)
+
+
+@pytest.mark.parametrize(
+    "ports",
+    [
+        pytest.param(("in", "in:2"), id="gap-after-default"),
+        pytest.param(("in:1", "in:3"), id="gap-between-positions"),
+        pytest.param(("in:0",), id="zero-index"),
+    ],
+)
+def test_build_plan_rejects_sparse_positional_inputs(ports) -> None:
+    # Positional inputs reach a node as one contiguous list, so a gap or a zero
+    # index would silently renumber the operands. The plan refuses the shape
+    # until module port contracts say what each position means.
+    dispatcher = _dispatcher(
+        ModuleDefinition(name="src", sync_pipe=_tagged_source("a")),
+        ModuleDefinition(name="merge", sync_pipe=_sync_pipe),
+    )
+    sources = [ModuleNode(id=f"s{n}", name="src") for n in range(len(ports))]
+    m = ModuleNode(id="m", name="merge")
+    edges = tuple(
+        StreamEdge(Endpoint(source.id, "out"), Endpoint("m", port))
+        for source, port in zip(sources, ports, strict=True)
+    )
+    spec = _spec([*sources, m], {"default": Endpoint("m", "out")}, edges=edges)
+
+    with pytest.raises(InvalidPipelineError, match="without gaps"):
+        build_execution_plan(spec, dispatcher=dispatcher)
+
+
 def test_build_plan_rejects_splitter_node_before_any_node_runs() -> None:
     # A multi-output (splitter) node is refused when the plan is built, so its
     # upstream is never consumed first. This is removed once port-keyed
