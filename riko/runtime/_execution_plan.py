@@ -131,8 +131,10 @@ def build_execution_plan(
 
     Raises:
 
-        InvalidPipelineError: If the graph is invalid, a node family has no
-            execution runtime yet, or a node runs a multi-output splitter.
+        InvalidPipelineError: If the graph is invalid, a source port fans out to
+            more than one edge, a node's positional inputs have gaps, a node
+            family has no execution runtime yet, or a node runs a multi-output
+            splitter.
         UnsupportedModuleError: If a node's implementation is unresolved.
 
     Examples:

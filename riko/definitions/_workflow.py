@@ -30,7 +30,7 @@ Examples:
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from functools import partial
 from inspect import isawaitable
 from itertools import chain
@@ -62,7 +62,7 @@ from riko.types._collections import (
 )
 from riko.types._enums import Backends, Formats, ModuleNameLike
 from riko.types._guards import is_mapping, is_streamlike, require_mapping
-from riko.types._workflow import WORKFLOW_VERSION, Edge, Endpoint, NodeId
+from riko.types._workflow import WORKFLOW_VERSION, Edge, Endpoint, NodeId, parse_port
 from riko.types.modules import (
     AnyModuleConf,
     Conf,
@@ -373,8 +373,24 @@ class WorkflowSpec:
     resources: tuple[str, ...] = field(factory=tuple, converter=normalize_strs)
     version: str = WORKFLOW_VERSION
 
-    def ports(self, family: EdgeFamily = "stream") -> Counter[tuple[str, str]]:
-        return Counter(edge.port for edge in self.edges if edge.family == family)
+    def family_edges(self, family: EdgeFamily = "stream") -> list[Edge]:
+        return [edge for edge in self.edges if edge.family == family]
+
+    def family_sources(self, family: EdgeFamily = "stream") -> Counter[tuple[str, str]]:
+        edges = self.family_edges(family)
+        return Counter((edge.source.node, edge.source.port) for edge in edges)
+
+    def family_ports(self, family: EdgeFamily = "stream") -> Counter[tuple[str, str]]:
+        return Counter(edge.port for edge in self.family_edges(family))
+
+    def family_indices(self, family: EdgeFamily = "stream") -> dict[str, list[int]]:
+        indexed: dict[str, list[int]] = defaultdict(list)
+
+        for edge in self.family_edges(family):
+            if (index := parse_port(edge.target.port).index) is not None:
+                indexed[edge.target.node].append(index)
+
+        return indexed
 
     def _gen_edge_target_mismatches(self) -> Iterator[str]:
         """Detects a publish/subscribe mismatch between an edge and its target node."""
@@ -383,6 +399,44 @@ class WorkflowSpec:
 
             if (edge.family == "publish") != isinstance(node, SubscribeNode):
                 yield edge.target.node
+
+    def _gen_misdirected_ports(self) -> Iterator[str]:
+        """Describes each endpoint whose port faces the wrong way for its role."""
+        sources = ((edge.source, "out") for edge in self.edges)
+        targets = ((edge.target, "in") for edge in self.edges)
+        outputs = ((ref, "out") for ref in self.outputs.values())
+
+        for endpoint, direction in chain(sources, targets, outputs):
+            try:
+                parsed = parse_port(endpoint.port)
+            except ValueError as error:
+                raise InvalidPipelineError(str(error)) from error
+
+            if parsed.direction != direction:
+                yield f"{endpoint} is not an {direction!r} port"
+
+    @property
+    def cyclic_nodes(self) -> list[NodeId]:
+        """Collect the nodes no edge order can run because edges form a cycle."""
+        dependencies: dict[NodeId, set[NodeId]] = {node: set() for node in self.nodes}
+        dependents: dict[NodeId, set[NodeId]] = defaultdict(set)
+
+        for edge in self.edges:
+            dependencies[edge.target.node].add(edge.source.node)
+            dependents[edge.source.node].add(edge.target.node)
+
+        ready = [node for node, deps in dependencies.items() if not deps]
+
+        while ready:
+            node = ready.pop()
+
+            for dependent in dependents[node]:
+                dependencies[dependent].discard(node)
+
+                if not dependencies[dependent]:
+                    ready.append(dependent)
+
+        return sorted(node for node, deps in dependencies.items() if deps)
 
     @property
     def endpoints(self) -> list[Endpoint]:
@@ -397,10 +451,29 @@ class WorkflowSpec:
         return set(chain.from_iterable(node.declared_resources for node in nodes))
 
     def validate(self) -> None:
-        """Validate workflow graph structure and references."""
-        endpoints = {endpoint.node for endpoint in self.endpoints}
+        """
+        Validate workflow graph structure and references.
 
-        if self.version != WORKFLOW_VERSION:
+        Raises:
+
+            InvalidPipelineError: If a source port feeds more than one stream edge,
+                or a node's positional inputs are not exactly ``in:1`` to ``in:N``.
+
+        """
+        endpoints = {endpoint.node for endpoint in self.endpoints}
+        family_ports = self.family_ports().items()
+        family_sources = self.family_sources().items()
+
+        gapped = {
+            node: sorted(f"in:{index}" for index in indices)
+            for node, indices in self.family_indices().items()
+            if sorted(indices) != list(range(1, len(indices) + 1))
+        }
+
+        if gapped:
+            msg = f"positional inputs must run from in:1 without gaps, got {gapped}"
+            raise InvalidPipelineError(msg)
+        elif self.version != WORKFLOW_VERSION:
             msg = f"unsupported workflow version: {self.version!r}"
             raise InvalidPipelineError(msg)
         elif not self.nodes:
@@ -410,11 +483,20 @@ class WorkflowSpec:
         elif missing := endpoints.difference(self.nodes):
             msg = f"references to missing node(s): {sorted(missing)}"
             raise InvalidPipelineError(msg)
-        elif crowded := [port for port, count in self.ports().items() if count > 1]:
-            msg = f"multiple stream edges into port(s): {sorted(crowded)}"
+        elif fan_in := [port for port, count in family_ports if count > 1]:
+            msg = f"multiple stream edges into port(s): {sorted(fan_in)}"
+            raise InvalidPipelineError(msg)
+        elif fan_out := sorted(source for source, count in family_sources if count > 1):
+            msg = f"un-supported fan-out from source(s): {fan_out}"
             raise InvalidPipelineError(msg)
         elif mismatches := sorted(self._gen_edge_target_mismatches()):
             msg = f"edge family disagrees with target node: {mismatches}"
+            raise InvalidPipelineError(msg)
+        elif misdirected := list(self._gen_misdirected_ports()):
+            msg = f"port direction does not match its role: {misdirected}"
+            raise InvalidPipelineError(msg)
+        elif cyclic := self.cyclic_nodes:
+            msg = f"edges form a cycle through node(s): {cyclic}"
             raise InvalidPipelineError(msg)
         elif undeclared := sorted(self.declared_resources.difference(self.resources)):
             msg = f"unresolved resource reference(s): {undeclared}"
