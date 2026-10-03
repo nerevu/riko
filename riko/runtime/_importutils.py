@@ -28,7 +28,7 @@ def _load_module(
     return module
 
 
-def resolve_interface(
+def require_interface(
     name: str,
     is_async: bool = False,
     builtin: bool = True,

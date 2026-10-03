@@ -10,6 +10,7 @@ These tests exercise public imports rather than implementation details.
 """
 
 from importlib import import_module
+from importlib.resources import files
 from types import BuiltinFunctionType, FunctionType
 
 import pytest
@@ -61,14 +62,14 @@ CODEGEN = (COMPILE & {"compile_pipe"}) | {
     "compile_workflow",
     "render_value",
 }
-V1_COMPILE = (COMPILE - {"build_workflow", "compile_pipe"}) | {"compile_pipe_def"}
+V1_COMPILE = (COMPILE - {"parse_dag", "compile_pipe"}) | {"compile_pipe_def"}
 
 EQUAL_SURFACES = (
     (riko.bado, BADO),
     (riko.runtime.collections, COLLECTIONS),
     (riko.runtime._codegen, CODEGEN),
     (riko.runtime._compile, V1_COMPILE),
-    (riko.runtime._migrate, {"build_workflow", "migrate_v1_to_v2"}),
+    (riko.runtime._migrate, {"parse_dag", "migrate_v1_to_v2"}),
     (riko.ext, EXTENSION),
     (riko, STABLE),
     (riko.types, TYPES),
@@ -80,6 +81,11 @@ def id_func(val):
         return val.__name__
     else:
         return "vs-set"
+
+
+@pytest.mark.smoke
+def test_package_ships_py_typed():
+    assert files("riko").joinpath("py.typed").is_file()
 
 
 @pytest.mark.smoke

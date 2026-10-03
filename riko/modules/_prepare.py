@@ -165,7 +165,7 @@ def require_conf[T](  # noqa: E704
     return cast("T", value)
 
 
-def get_pieces_or_conf(
+def build_conf(
     parsed_conf: AnyModuleConf | Conf | None,
     defaults: Defaults,
     opts: Opts,
@@ -296,7 +296,7 @@ def parse_and_cast[T, E](  # noqa: E302
     Parses and casts one item's field and conf into a dispatch record.
 
     Runs the field/conf parsers over the item, resolves the extract-or-conf via
-    ``get_pieces_or_conf``, applies the casters, and wraps the result as an item
+    ``build_conf``, applies the casters, and wraps the result as an item
     or value dispatch depending on whether the input is a mapping.
 
     Args:
@@ -324,7 +324,7 @@ def parse_and_cast[T, E](  # noqa: E302
     else:
         parsed_field, parsed_conf = item, conf
 
-    pieces_or_conf, merged_conf = get_pieces_or_conf(parsed_conf, defaults, opts, pipe)
+    pieces_or_conf, merged_conf = build_conf(parsed_conf, defaults, opts, pipe)
     parsed = (parsed_field, pieces_or_conf, merged_conf)
     casted = dispatch(parsed, *casters) if casters else parsed
 

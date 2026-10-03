@@ -13,11 +13,15 @@ Examples:
 
 """
 
-from typing import cast
+from __future__ import annotations
 
-from riko.base._paths import get_path
-from riko.runtime.collections import AsyncPipe, SyncPipe
+from typing import TYPE_CHECKING, cast
+
+from riko import Pipeline, get_path
 from riko.types.modules import FetchPageConf, StrReplaceConf, StrReplaceConfRule
+
+if TYPE_CHECKING:
+    from riko.types import AsyncStream, Item, Items
 
 replace_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="\n", replace=" ")})
 health = get_path("health.xml")
@@ -28,32 +32,35 @@ fetch_conf = FetchPageConf(
 )
 
 
-def pipe(test=False):
-    s1 = SyncPipe("fetch", test=test, conf={"url": health})
+def pipe(test: bool = False) -> list[Item]:
+    s1 = Pipeline.from_module("fetch", conf={"url": health})
     s2 = (
-        SyncPipe("fetchpage", test=test, conf=fetch_conf)
-        .strreplace(conf=replace_conf, assign="content")
-        .tokenizer(conf={"delimiter": " "}, emit=True)
+        Pipeline.from_module("fetchpage", conf=fetch_conf)
+        .strreplace(conf=replace_conf, options={"assign": "content"})
+        .tokenizer(conf={"delimiter": " "}, options={"emit": True})
         .count()
     )
 
-    return [next(s1), next(s2)]
+    return [next(iter(s1)), next(iter(s2))]
 
 
-async def async_pipe(test=False):
-    s1 = AsyncPipe("fetch", test=test, conf={"url": health})
+async def async_pipe(test: bool = False) -> AsyncStream:
+    s1 = Pipeline.from_module("fetch", conf={"url": health})
     s2 = (
-        AsyncPipe("fetchpage", test=test, conf=fetch_conf)
-        .strreplace(conf=replace_conf, assign="content")
-        .tokenizer(conf={"delimiter": " "}, emit=True)
+        Pipeline.from_module("fetchpage", conf=fetch_conf)
+        .strreplace(conf=replace_conf, options={"assign": "content"})
+        .tokenizer(conf={"delimiter": " "}, options={"emit": True})
         .count()
     )
 
-    yield await anext(s1)
-    yield await anext(s2)
+    for pipeline in (s1, s2):
+        stream = aiter(pipeline)
+        first = await anext(stream)
+        await stream.aclose()
+        yield first
 
 
-def print_results(result) -> None:
+def print_results(result: Items) -> None:
     feed, count = result
     print(cast("dict", feed)["title"])
     print(cast("dict", count)["count"])

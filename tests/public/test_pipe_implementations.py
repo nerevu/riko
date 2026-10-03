@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from riko import Pipeline
 from riko.bado._backend import create_task_group
 from riko.base.exceptions import ReceiverUnavailableError
 from riko.modules.aggregate import pipe as aggregate_pipe
@@ -232,6 +233,18 @@ def test_send_populates_ids_when_given():
     ids: dict[str, int] = {}
     list(send_pipe([{"x": 0}], others=["id-target"], ids=ids))
     assert isinstance(ids.get("id-target"), int)
+
+
+@pytest.mark.xfail(
+    strict=True, reason="Pipeline.subscribe()/publish() are not available yet"
+)
+def test_closing_a_publisher_completes_its_subscription():
+    """A sender abandoned after one item still completes what it published."""
+    events = Pipeline.subscribe("r")
+    stream = iter(Pipeline(source=[{"x": 0}, {"x": 1}]).publish(events))
+    first = next(stream)
+    stream.close()
+    assert list(events) == [first]
 
 
 def _finite_source(consumed: list[int]) -> Stream:

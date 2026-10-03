@@ -27,7 +27,7 @@ def _wire(wid, src_mod, tgt_mod, src_port="_OUTPUT", tgt_port="_INPUT"):
 
 
 def test_terminal_output_becomes_default_output():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {"id": "sw-1", "type": "fetch", "conf": {}},
@@ -36,13 +36,13 @@ def test_terminal_output_becomes_default_output():
             "wires": [_wire("_w1", "sw-1", "_OUTPUT")],
         }
     )
-    assert list(spec.nodes) == ["sw-1"]
-    assert spec.outputs["default"] == Endpoint("sw-1", "out")
-    assert spec.edges == ()
+    assert list(workflow.nodes) == ["sw-1"]
+    assert workflow.outputs["default"] == Endpoint("sw-1", "out")
+    assert workflow.edges == ()
 
 
 def test_legacy_ports_map_to_canonical_grammar():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {"id": "a", "type": "fetch", "conf": {}},
@@ -51,13 +51,34 @@ def test_legacy_ports_map_to_canonical_grammar():
             "wires": [_wire("_w1", "a", "b", src_port="_OUTPUT", tgt_port="_OTHER1")],
         }
     )
-    edge = spec.edges[0]
+    edge = workflow.edges[0]
     assert edge.source == Endpoint("a", "out")
     assert edge.target == Endpoint("b", "in:1")
 
 
+def test_null_wire_ports_take_the_default_ports():
+    workflow = migrate_v1_to_v2(
+        {
+            "modules": [
+                {"id": "a", "type": "fetch", "conf": {}},
+                {"id": "b", "type": "union", "conf": {}},
+            ],
+            "wires": [
+                {
+                    "id": "_w1",
+                    "src": {"id": None, "moduleid": "a"},
+                    "tgt": {"id": None, "moduleid": "b"},
+                }
+            ],
+        }
+    )
+    edge = workflow.edges[0]
+    assert edge.source == Endpoint("a", "out")
+    assert edge.target == Endpoint("b", "in")
+
+
 def test_named_secondary_port_canonicalized():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {"id": "a", "type": "count", "conf": {}},
@@ -66,11 +87,11 @@ def test_named_secondary_port_canonicalized():
             "wires": [_wire("_w1", "a", "b", tgt_port="count")],
         }
     )
-    assert spec.edges[0].target == Endpoint("b", "in:count")
+    assert workflow.edges[0].target == Endpoint("b", "in:count")
 
 
 def test_write_module_becomes_write_node():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {"id": "sw-1", "type": "fetch", "conf": {}},
@@ -83,14 +104,14 @@ def test_write_module_becomes_write_node():
             "wires": [_wire("_w1", "sw-1", "sw-2")],
         }
     )
-    node = spec.nodes["sw-2"]
+    node = workflow.nodes["sw-2"]
     assert isinstance(node, WriteNode)
     assert node.backend is Backends.FILE
     assert node.fmt is Formats.JSON
 
 
 def test_write_module_preserves_destination_mode_and_keys():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {
@@ -106,7 +127,7 @@ def test_write_module_preserves_destination_mode_and_keys():
             ]
         }
     )
-    node = spec.nodes["w"]
+    node = workflow.nodes["w"]
     assert isinstance(node, WriteNode)
     assert node.dest == "out.jsonl"
     assert node.fmt is Formats.JSONL
@@ -124,7 +145,7 @@ def test_write_module_preserves_destination_mode_and_keys():
     ],
 )
 def test_v1_file_open_mode_translates(v1_mode, canonical):
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {
@@ -135,7 +156,7 @@ def test_v1_file_open_mode_translates(v1_mode, canonical):
             ]
         }
     )
-    node = spec.nodes["w"]
+    node = workflow.nodes["w"]
     assert isinstance(node, WriteNode)
     assert node.mode is canonical
 
@@ -174,26 +195,26 @@ def test_v1_write_unknown_conf_key_rejected():
 
 
 def test_write_module_without_format_defaults_to_none():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {"modules": [{"id": "w", "type": "write", "conf": {"dest": "out.dat"}}]}
     )
-    node = spec.nodes["w"]
+    node = workflow.nodes["w"]
     assert isinstance(node, WriteNode)
     assert node.backend is Backends.FILE
     assert node.fmt is None
 
 
 def test_module_extras_fold_into_conf():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {"modules": [{"id": "c", "type": "count", "conf": {"x": 1}, "bogus": True}]}
     )
-    node = spec.nodes["c"]
+    node = workflow.nodes["c"]
     assert isinstance(node, ModuleNode)
     assert node.conf == {"bogus": True, "x": 1}
 
 
 def test_module_call_options_become_node_options():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {
@@ -208,7 +229,7 @@ def test_module_call_options_become_node_options():
             ]
         }
     )
-    node = spec.nodes["c"]
+    node = workflow.nodes["c"]
     assert isinstance(node, ModuleNode)
     assert node.conf == {"x": 1}
     assert node.options == {
@@ -220,7 +241,7 @@ def test_module_call_options_become_node_options():
 
 
 def test_call_option_does_not_collide_with_a_same_named_conf_key():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {
@@ -232,14 +253,14 @@ def test_call_option_does_not_collide_with_a_same_named_conf_key():
             ]
         }
     )
-    node = spec.nodes["t"]
+    node = workflow.nodes["t"]
     assert isinstance(node, ModuleNode)
     assert node.conf == {"count": {"value": 3}}
     assert node.options == {"count": "first"}
 
 
 def test_loop_embed_and_its_configuration_become_the_node_embed():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {
@@ -255,7 +276,7 @@ def test_loop_embed_and_its_configuration_become_the_node_embed():
             ]
         }
     )
-    node = spec.nodes["sw-2"]
+    node = workflow.nodes["sw-2"]
     assert isinstance(node, ModuleNode)
     assert node.conf == {}
     assert node.embed == {"name": "tokenizer", "conf": {"delimiter": {"value": ","}}}
@@ -268,7 +289,7 @@ def test_loop_embed_and_its_configuration_become_the_node_embed():
 
 
 def test_loop_embedded_subpipe_keeps_its_prefixed_name():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {
@@ -280,7 +301,7 @@ def test_loop_embedded_subpipe_keeps_its_prefixed_name():
             ]
         }
     )
-    node = spec.nodes["sw-2"]
+    node = workflow.nodes["sw-2"]
     assert isinstance(node, ModuleNode)
     assert node.conf == {}
     assert node.embed == {"name": "pipe:shout", "conf": {}}
@@ -291,7 +312,7 @@ def test_loop_embedded_subpipe_keeps_its_prefixed_name():
     [("1_URL", "in:_1_URL"), ("PARAM_5_value", "in:PARAM_5_value")],
 )
 def test_wire_target_port_is_sanitized_like_a_module_terminal(v1_port, canonical):
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {"id": "a", "type": "fetch", "conf": {}},
@@ -300,20 +321,20 @@ def test_wire_target_port_is_sanitized_like_a_module_terminal(v1_port, canonical
             "wires": [_wire("_w1", "a", "b", tgt_port=v1_port)],
         }
     )
-    assert spec.edges[0].target == Endpoint("b", canonical)
+    assert workflow.edges[0].target == Endpoint("b", canonical)
 
 
 def test_uppercase_conf_keys_are_lowered():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {"modules": [{"id": "f", "type": "fetch", "conf": {"URL": {"value": "x"}}}]}
     )
-    node = spec.nodes["f"]
+    node = workflow.nodes["f"]
     assert isinstance(node, ModuleNode)
     assert node.conf == {"url": {"value": "x"}}
 
 
 def test_orphan_module_is_retained_not_erased():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {"id": "a", "type": "fetch", "conf": {}},
@@ -323,11 +344,11 @@ def test_orphan_module_is_retained_not_erased():
             "wires": [_wire("_w1", "a", "_OUTPUT")],
         }
     )
-    assert "orphan" in spec.nodes
+    assert "orphan" in workflow.nodes
 
 
 def test_omitted_output_node_defaults_to_lone_leaf():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {"id": "a", "type": "fetch", "conf": {}},
@@ -336,16 +357,16 @@ def test_omitted_output_node_defaults_to_lone_leaf():
             "wires": [_wire("_w1", "a", "b")],
         }
     )
-    assert spec.outputs == {"default": Endpoint("b", "out")}
+    assert workflow.outputs == {"default": Endpoint("b", "out")}
 
 
 def test_migration_warns(caplog):
     migrate_v1_to_v2({"modules": [{"id": "a", "type": "fetch", "conf": {}}]})
-    assert any("v1" in record.message for record in caplog.records)
+    assert any("PipeDef to Workflow" in record.message for record in caplog.records)
 
 
 def test_migrated_spec_carries_no_v1_structure():
-    spec = migrate_v1_to_v2(
+    workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {"id": "sw-1", "type": "fetch", "conf": {}},
@@ -354,10 +375,10 @@ def test_migrated_spec_carries_no_v1_structure():
             "wires": [_wire("_w1", "sw-1", "_OUTPUT")],
         }
     )
-    assert "_OUTPUT" not in spec.nodes
-    assert spec.version == "2"
-    ports = {edge.source.port for edge in spec.edges}
-    ports |= {edge.target.port for edge in spec.edges}
+    assert "_OUTPUT" not in workflow.nodes
+    assert workflow.version == "2"
+    ports = {edge.source.port for edge in workflow.edges}
+    ports |= {edge.target.port for edge in workflow.edges}
     assert not any(port.startswith("_") for port in ports)
 
 

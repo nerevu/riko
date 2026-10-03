@@ -13,7 +13,7 @@ from riko.definitions._workflow import WriteNode
 from riko.ext import (
     migrate_v1_to_v2,
     normalize_workflow,
-    parse_workflow,
+    parse_document,
     serialize_workflow,
 )
 
@@ -161,38 +161,38 @@ V1_PIPE_DEF = {
 
 
 def test_golden_bytes():
-    spec = normalize_workflow(RICH_AUTHORING)
-    assert serialize_workflow(spec, indent=None) == RICH_GOLDEN
+    workflow = normalize_workflow(RICH_AUTHORING)
+    assert serialize_workflow(workflow, indent=None) == RICH_GOLDEN
 
 
 def test_default_form_is_indented():
-    spec = normalize_workflow(RICH_AUTHORING)
-    assert serialize_workflow(spec) == serialize_workflow(spec, indent=4)
-    assert serialize_workflow(spec) != serialize_workflow(spec, indent=None)
+    workflow = normalize_workflow(RICH_AUTHORING)
+    assert serialize_workflow(workflow) == serialize_workflow(workflow, indent=4)
+    assert serialize_workflow(workflow) != serialize_workflow(workflow, indent=None)
 
 
 @pytest.mark.parametrize("authoring", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
 def test_topologies_round_trip(authoring):
-    spec = normalize_workflow(authoring)
-    assert parse_workflow(serialize_workflow(spec)) == spec
+    workflow = normalize_workflow(authoring)
+    assert parse_document(serialize_workflow(workflow)) == workflow
 
 
 @pytest.mark.parametrize("authoring", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
 def test_serialization_is_idempotent(authoring):
-    spec = normalize_workflow(authoring)
-    once = serialize_workflow(spec)
-    assert serialize_workflow(parse_workflow(once)) == once
+    workflow = normalize_workflow(authoring)
+    once = serialize_workflow(workflow)
+    assert serialize_workflow(parse_document(once)) == once
 
 
 @pytest.mark.parametrize("authoring", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
 def test_indented_output_round_trips(authoring):
-    spec = normalize_workflow(authoring)
-    assert parse_workflow(serialize_workflow(spec, indent=4)) == spec
+    workflow = normalize_workflow(authoring)
+    assert parse_document(serialize_workflow(workflow, indent=4)) == workflow
 
 
 def test_indented_output_is_readable_and_sorted():
-    spec = normalize_workflow(RICH_AUTHORING)
-    document = serialize_workflow(spec, indent=2).decode("utf-8")
+    workflow = normalize_workflow(RICH_AUTHORING)
+    document = serialize_workflow(workflow, indent=2).decode("utf-8")
     top_level = [line[2:] for line in document.splitlines() if line.startswith('  "')]
     keys = [line.split('"')[1] for line in top_level]
 
@@ -218,15 +218,15 @@ def test_serialization_is_order_independent():
 
 
 def test_write_node_keys_and_mode_survive():
-    spec = normalize_workflow(TOPOLOGIES["read-write"])
-    restored = parse_workflow(serialize_workflow(spec)).nodes["w"]
+    workflow = normalize_workflow(TOPOLOGIES["read-write"])
+    restored = parse_document(serialize_workflow(workflow)).nodes["w"]
     assert isinstance(restored, WriteNode)
     assert restored.keys == ("k",)
     assert restored.mode.value == "replace"
 
 
 def test_write_node_destination_survives():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [
                 {
@@ -240,7 +240,7 @@ def test_write_node_destination_survives():
             ]
         }
     )
-    restored = parse_workflow(serialize_workflow(spec)).nodes["w"]
+    restored = parse_document(serialize_workflow(workflow)).nodes["w"]
     assert isinstance(restored, WriteNode)
     assert restored.dest == "out.jsonl"
 
@@ -254,8 +254,8 @@ def test_migration_then_serialization_emits_no_v1_structure():
 
 
 def test_call_options_are_serialized_apart_from_conf():
-    spec = normalize_workflow(TOPOLOGIES["call-options"])
-    data = serialize_workflow(spec, indent=None)
+    workflow = normalize_workflow(TOPOLOGIES["call-options"])
+    data = serialize_workflow(workflow, indent=None)
     assert b'"options":{"count":"first","emit":true}' in data
     assert b'"conf":{"delimiter":{"value":","}}' in data
 
@@ -277,8 +277,8 @@ def test_json_native_conf_round_trips_by_equality():
             }
         ]
     }
-    spec = normalize_workflow(authoring)
-    assert parse_workflow(serialize_workflow(spec)) == spec
+    workflow = normalize_workflow(authoring)
+    assert parse_document(serialize_workflow(workflow)) == workflow
 
 
 @pytest.mark.parametrize(
@@ -300,9 +300,9 @@ def test_non_json_native_conf_value_rejected(value):
 
 
 def test_migrated_output_pseudo_node_is_not_a_node():
-    spec = migrate_v1_to_v2(V1_PIPE_DEF)
-    assert "_OUTPUT" not in spec.nodes
-    assert spec.outputs["default"].node == "sw-2"
+    workflow = migrate_v1_to_v2(V1_PIPE_DEF)
+    assert "_OUTPUT" not in workflow.nodes
+    assert workflow.outputs["default"].node == "sw-2"
 
 
 def test_loop_embed_serializes_as_a_node_field():
@@ -315,10 +315,10 @@ def test_loop_embed_serializes_as_a_node_field():
             }
         ]
     }
-    spec = normalize_workflow(authoring)
-    document = json.loads(serialize_workflow(spec))
+    workflow = normalize_workflow(authoring)
+    document = json.loads(serialize_workflow(workflow))
     node = document["nodes"]["loop-1"]
 
     assert node["embed"] == {"name": "tokenizer", "conf": {"delimiter": {"value": " "}}}
     assert "conf" not in node
-    assert parse_workflow(serialize_workflow(spec)) == spec
+    assert parse_document(serialize_workflow(workflow)) == workflow

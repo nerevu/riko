@@ -172,7 +172,7 @@ def validator_from_require[T](  # noqa: E302
 
 
 def require_str(value: object, what: str | None = "value") -> str:
-    """Reads the required registered-name field off a node's authoring mapping."""
+    """Reads the required registered-name field off a node's RawWorkflow."""
     if not isinstance(value, str):
         raise InvalidPipelineError(f"{what} must be a str")
 
@@ -180,7 +180,7 @@ def require_str(value: object, what: str | None = "value") -> str:
 
 
 def require_strlike(value: object, what: str | None = "value") -> str | tuple[str, ...]:
-    """Reads the required registered-name field off a node's authoring mapping."""
+    """Reads the required registered-name field off a node's RawWorkflow."""
     if isinstance(value, str):
         valid = True
     elif isinstance(value, Iterable):
@@ -262,7 +262,7 @@ def freeze_value(value: object) -> FrozenJSON:  # noqa: E302
     Mappings become read-only string-keyed mappings and sequences become tuples,
     recursively, detached from their source. A value with no JSON-native form (a set,
     ``Decimal``, date, bytes, non-finite float, or non-string key) is rejected so a
-    canonical spec never carries a value that cannot round-trip through JSON.
+    workflow never carries a value that cannot round-trip through JSON.
 
     Returns:
 

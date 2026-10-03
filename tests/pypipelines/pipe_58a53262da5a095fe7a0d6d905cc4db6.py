@@ -13,7 +13,6 @@ from riko.modules.truncate import pipe as truncate
 from riko.modules.union import pipe as union
 from riko.modules.urlbuilder import pipe as urlbuilder
 from riko.runtime._pipelines import mark_subpipe
-from riko.runtime.collections import SyncCollection
 from riko.types.modules import (
     FetchRawConf,
     SortRawConf,
@@ -56,13 +55,31 @@ def pipe(item=None, context: Context | None = None, **_):
             context=context,
             _1_URL=sw_606,
         )
-        sw_550 = SyncCollection(
-            [
-                {"url": "file://riko/data/blog.ouseful.info_feed.xml"},
-                {"url": "file://riko/data/feeds.feedburner.com_TheEdTechie.xml"},
-            ],
+        sw_550_1 = fetch(
+            None,
+            conf=FetchRawConf(
+                {
+                    "url": {
+                        "type": "url",
+                        "value": "file://riko/data/blog.ouseful.info_feed.xml",
+                    }
+                }
+            ),
             context=context,
         )
+        sw_550_2 = fetch(
+            None,
+            conf=FetchRawConf(
+                {
+                    "url": {
+                        "type": "url",
+                        "value": "file://riko/data/feeds.feedburner.com_TheEdTechie.xml",
+                    }
+                }
+            ),
+            context=context,
+        )
+        sw_550 = union(sw_550_1, conf={}, context=context, others=[sw_550_2])
         sw_580 = union(sw_550, conf={}, context=context, others=[sw_572])
         sw_565 = sort(
             sw_580,

@@ -35,7 +35,7 @@ from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
 from functools import partial, update_wrapper
-from json import JSONEncoder, dumps
+from json import JSONEncoder
 from pprint import PrettyPrinter
 from time import struct_time
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
@@ -85,7 +85,6 @@ from ._compile_repr import Id, PyKwargValue
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Iterable
-    from pathlib import Path
 
     from riko.types._collections import Inputs
     from riko.types._pipeline import (
@@ -372,30 +371,6 @@ def gen_parented_graph[T: str | int](graph: Graph[T]) -> Iterator[tuple[T, Nodes
     for node, value in graph.items():
         if value or any(node in v for v in graph.values()):
             yield (node, value)
-
-
-def write_file(
-    data: object, path: Path | str | None, pretty: bool = False
-) -> int | None:
-    if data and path:
-        with open(path, "w", encoding="utf-8") as f:
-            if hasattr(data, "keys") and pretty:
-                kwargs = {
-                    "cls": CustomEncoder,
-                    "sort_keys": True,
-                    "indent": 4,
-                    "ensure_ascii": False,
-                }
-
-                result = dumps(data, **kwargs)
-            elif hasattr(data, "keys"):
-                result = dumps(data, ensure_ascii=False)
-            elif pretty:
-                result = MyPrettyPrinter().pformat(data)
-            else:
-                result = str(data)
-
-            return f.write(result)
 
 
 def _module_alias(module_name: str) -> str:
@@ -703,7 +678,7 @@ def resolve_module(module_name: str, is_async: bool = False) -> ModuleWrapper:  
     """
     from ._resolver import dispatcher  # noqa: PLC0415
 
-    return dispatcher.resolve(module_name, is_async)
+    return dispatcher.require(module_name, is_async)
 
 
 @overload

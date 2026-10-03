@@ -36,7 +36,7 @@ _FILE_INCREMENTAL_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.
 
 
 @overload
-def resolve_enum[E: StrEnum](  # noqa: E704
+def normalize_enum[E: StrEnum](  # noqa: E704
     enum: type[E],
     value: E | str | None,
     what: str | None = ...,
@@ -45,7 +45,7 @@ def resolve_enum[E: StrEnum](  # noqa: E704
     strict: Literal[True] = ...,
 ) -> E: ...
 @overload  # noqa: E302
-def resolve_enum[E: StrEnum](  # noqa: E704
+def normalize_enum[E: StrEnum](  # noqa: E704
     enum: type[E],
     value: E | str | None,
     what: str | None = ...,
@@ -54,7 +54,7 @@ def resolve_enum[E: StrEnum](  # noqa: E704
     strict: Literal[False],
 ) -> E | None: ...
 @overload  # noqa: E302
-def resolve_enum[E: StrEnum](  # noqa: E704
+def normalize_enum[E: StrEnum](  # noqa: E704
     enum: type[E],
     value: E | str | None,
     what: str | None = ...,
@@ -62,7 +62,7 @@ def resolve_enum[E: StrEnum](  # noqa: E704
     default: E | None = ...,
     strict: bool,
 ) -> E | None: ...
-def resolve_enum[E: StrEnum](  # noqa: E302
+def normalize_enum[E: StrEnum](  # noqa: E302
     enum: type[E],
     value: E | str | None,
     what: str | None = None,
@@ -214,7 +214,7 @@ def build_write(
         <Formats.CSV: 'csv'>
 
     """
-    target = resolve_target(dest)
+    target = normalize_target(dest)
     resolved_mode = WriteMode(mode)
     capabilities = target.capabilities(fmt)
     normalized_keys = normalize_strs(keys)
@@ -224,7 +224,7 @@ def build_write(
     return PreparedWrite(target, operation, capabilities)
 
 
-def resolve_target(dest: Destination, **kwargs: str) -> SupportsWrite:
+def normalize_target(dest: Destination, **kwargs: str) -> SupportsWrite:
     """
     Normalizes a destination argument into a ``SupportsWrite`` target.
 
@@ -247,9 +247,9 @@ def resolve_target(dest: Destination, **kwargs: str) -> SupportsWrite:
 
     Examples:
 
-        >>> from riko.definitions._targets import resolve_target
+        >>> from riko.definitions._targets import normalize_target
         >>>
-        >>> resolve_target("out.csv")
+        >>> normalize_target("out.csv")
         FileTarget(dest='out.csv', fmt=None)
 
     """
@@ -298,7 +298,7 @@ def resolve_format(dest: PathLike | None, fmt: FmtLike | None) -> Formats:
     else:
         resolved = Path(str(dest)).suffix.lstrip(".").lower() or None
 
-    return resolve_enum(Formats, resolved, default=Formats.JSON)
+    return normalize_enum(Formats, resolved, default=Formats.JSON)
 
 
 @dataclass(frozen=True, slots=True)
@@ -378,7 +378,7 @@ __all__ = [
     "FileTarget",
     "build_write",
     "normalize_strs",
+    "normalize_target",
     "resolve_format",
-    "resolve_target",
     "validate_target_mode",
 ]

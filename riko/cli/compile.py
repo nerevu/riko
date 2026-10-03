@@ -20,7 +20,7 @@ Examples:
 
     CLI composition::
 
-        $ convert-dag dag.json | compile-pipe - -o flow.py
+        $ build-workflow dag.json | compile-pipe - -o flow.py
 
 """
 
@@ -85,8 +85,8 @@ def run() -> None:
         return_code = 1
     else:
         try:
-            spec = require_workflow(document)
-            source = compile_pipe(spec, name, is_async=args.is_async)
+            workflow = require_workflow(document)
+            source = compile_pipe(workflow, name, is_async=args.is_async)
         except InvalidPipelineError as e:
             print(e, file=sys.stderr)
             return_code = 1
@@ -99,7 +99,9 @@ def run() -> None:
                 dest = args.output
 
             if args.verbose:
-                deps = ", ".join(sorted({node.name for node in spec.nodes.values()}))
+                deps = ", ".join(
+                    sorted({node.name for node in workflow.nodes.values()})
+                )
                 print(f"Modules used in {name}: {deps}", file=sys.stderr)
                 print(f"wrote {size} bytes to {dest}", file=sys.stderr)
 

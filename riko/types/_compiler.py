@@ -291,13 +291,13 @@ class PipelineDescription(TypedDict):
 class DagModule(TypedDict):
     id: NotRequired[str]
     type: ModuleId | PipeId
-    conf: NotRequired[AnyModuleRawConf]
+    conf: NotRequired[Conf]
     options: NotRequired[ModuleOptions]
 
 
 class PipeDag(TypedDict):
     """
-    Bare-bones DAG expanded by ``riko.runtime._migrate.build_workflow``.
+    Bare-bones DAG expanded by ``riko.runtime._migrate.parse_dag``.
 
     ``wires`` is optional (omit for a linear chain in module listing order) and
     holds ``(source_id, target_id)`` entries, optionally followed by the port the

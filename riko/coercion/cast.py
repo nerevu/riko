@@ -37,7 +37,7 @@ from urllib.parse import quote, urlparse
 
 import pygogo as gogo
 
-from riko.base._dateutils import get_local_tz
+from riko.base._dateutils import load_local_tz
 from riko.base.currencies import CURRENCY_CODES
 from riko.base.locations import LOCATIONS
 from riko.types._enums import BasicCastType, CastType, LocationType
@@ -403,7 +403,7 @@ def cast_datetime(  # noqa: E302
         count = words[0].lstrip("+-")
         unit = f"{words[-1].rstrip('s')}s" if len(words) == 2 else ""
         textish = set(words).intersection(TEXT_WORDS)
-        now = dt.now(get_local_tz(try_local_tz=try_local_tz))
+        now = dt.now(load_local_tz(try_local_tz=try_local_tz))
         today = now.date()
         named = {
             "today": today,

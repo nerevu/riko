@@ -17,8 +17,8 @@ from riko.base._dateutils import (
     AwareST,
     NaiveDT,
     NaiveST,
-    get_local_tz,
     get_tzname,
+    load_local_tz,
     tzinfo_from_tt,
 )
 
@@ -99,7 +99,7 @@ def date_to_datetime(  # noqa: E302
     fallback_tzinfo: tzinfo = UTC,
 ) -> AwareDT | None:
     if content:
-        _tzinfo = get_local_tz(try_local_tz, fallback_tzinfo)
+        _tzinfo = load_local_tz(try_local_tz, fallback_tzinfo)
         _date = dt(content.year, content.month, content.day, tzinfo=_tzinfo)
     else:
         _date = None
@@ -240,7 +240,7 @@ def normalize_tzinfo(  # noqa: E302
     if get_tzname(_date):
         new_date = _date
     else:
-        _tzinfo = get_local_tz(try_local_tz, fallback_tzinfo)
+        _tzinfo = load_local_tz(try_local_tz, fallback_tzinfo)
 
         if isinstance(_date, struct_time):
             new_date = tt_to_datetime(_date, def_tzinfo=_tzinfo)

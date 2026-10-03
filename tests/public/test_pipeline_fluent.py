@@ -1,10 +1,10 @@
 # vim: sw=4:ts=4:expandtab
 """
-Structural tests for the immutable fluent authoring surface on ``Pipeline``.
+Tests the immutable fluent authoring surface on ``Pipeline``.
 
-These cover spec derivation only: each fluent operation returns a new ``Pipeline``
-whose spec shares the prior structure. No node runs here except the deferred-``map``
-tripwire, which is expected to fail until callable pipes land.
+Most cases cover workflow derivation only: each fluent operation returns a new
+``Pipeline`` whose workflow shares the prior structure. A handful run the derived
+pipeline where the point is that two authoring forms produce the same items.
 """
 
 from dataclasses import asdict
@@ -14,7 +14,9 @@ import pytest
 
 from riko import Pipeline
 from riko.base.exceptions import InvalidPipelineError
-from riko.definitions._workflow import ModuleNode, StreamEdge, WorkflowSpec
+from riko.definitions._workflow import ModuleNode, StreamEdge, Workflow
+from riko.definitions.modules import normalize_module_name
+from riko.types._enums import ModuleName
 from riko.types._guards import is_mapping
 from riko.types._workflow import Endpoint
 from riko.types.modules import (
@@ -23,6 +25,7 @@ from riko.types.modules import (
     ModuleOptions,
     SortConf,
     SortConfRule,
+    TokenizerConf,
     TokenizerRawConf,
 )
 from tests import async_test
@@ -31,44 +34,52 @@ _SORT_CONF_RULE = SortConfRule(dir="desc")
 _SORT_CONF = SortConf({"rule": _SORT_CONF_RULE})
 _OPTIONS = ModuleOptions(emit=True, field="title")
 
+SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
+
+
+class _Mod(ModuleName):
+    HASH = "hash"
+    TRUNCATE = "truncate"
+
+
 tokenizer_conf = TokenizerRawConf(delimiter=ConfArg(type="text", value=" "))
 _EMBED = Embed(name="tokenizer", conf=tokenizer_conf)
 
 
 def _spec():
-    node = Pipeline.from_module("fetch").spec.nodes["fetch-1"]
-    return WorkflowSpec(
+    node = Pipeline.from_module("fetch").workflow.nodes["fetch-1"]
+    return Workflow(
         nodes={node.id: node}, outputs={"default": Endpoint(node.id, "out")}, inputs={}
     )
 
 
 def test_module_seed_builds_single_node_spec():
-    flow = Pipeline.from_module("fetch")
-    assert sorted(flow.spec.nodes) == ["fetch-1"]
-    assert flow.spec.outputs["default"] == Endpoint("fetch-1", "out")
-    assert flow.spec.edges == ()
-    assert flow.spec.isvalid
-    assert flow.source is None
+    pipeline = Pipeline.from_module("fetch")
+    assert sorted(pipeline.workflow.nodes) == ["fetch-1"]
+    assert pipeline.workflow.outputs["default"] == Endpoint("fetch-1", "out")
+    assert pipeline.workflow.edges == ()
+    assert pipeline.workflow.isvalid
+    assert pipeline.source is None
 
 
 def test_spec_constructor_is_canonical():
-    spec = _spec()
-    assert Pipeline(spec).spec is spec
+    workflow = _spec()
+    assert Pipeline(workflow).workflow is workflow
 
 
 def test_empty_seed_builds_template():
-    flow = Pipeline()
-    assert dict(flow.spec.nodes) == {}
-    assert flow.source is None
-    assert not flow.spec.isvalid
+    pipeline = Pipeline()
+    assert dict(pipeline.workflow.nodes) == {}
+    assert pipeline.source is None
+    assert not pipeline.workflow.isvalid
 
 
 def test_items_seed_builds_template():
     items = [{"x": 1}]
-    flow = Pipeline(source=items)
-    assert dict(flow.spec.nodes) == {}
-    assert flow.source is items
-    assert not flow.spec.isvalid
+    pipeline = Pipeline(source=items)
+    assert dict(pipeline.workflow.nodes) == {}
+    assert pipeline.source is items
+    assert not pipeline.workflow.isvalid
 
 
 @pytest.mark.parametrize(
@@ -89,36 +100,36 @@ def test_pipe_appends_node_and_edge():
     p1 = Pipeline.from_module("fetch")
     p2 = p1.pipe("sort", conf=_SORT_CONF)
 
-    assert sorted(p2.spec.nodes) == ["fetch-1", "sort-1"]
-    assert p2.spec.outputs["default"] == Endpoint("sort-1", "out")
+    assert sorted(p2.workflow.nodes) == ["fetch-1", "sort-1"]
+    assert p2.workflow.outputs["default"] == Endpoint("sort-1", "out")
     expected = StreamEdge(Endpoint("fetch-1", "out"), Endpoint("sort-1", "in"))
-    assert p2.spec.edges == (expected,)
-    p2.spec.validate()
+    assert p2.workflow.edges == (expected,)
+    p2.workflow.validate()
 
 
 def test_pipe_leaves_prior_pipeline_unchanged():
     p1 = Pipeline.from_module("fetch")
     p2 = p1.pipe("sort")
 
-    assert sorted(p1.spec.nodes) == ["fetch-1"]
-    assert p1.spec.outputs["default"] == Endpoint("fetch-1", "out")
+    assert sorted(p1.workflow.nodes) == ["fetch-1"]
+    assert p1.workflow.outputs["default"] == Endpoint("fetch-1", "out")
     assert p2 is not p1
 
 
 def test_pipe_shares_prior_node_identity():
     p1 = Pipeline.from_module("fetch")
     p2 = p1.pipe("sort")
-    assert p2.spec.nodes["fetch-1"] is p1.spec.nodes["fetch-1"]
+    assert p2.workflow.nodes["fetch-1"] is p1.workflow.nodes["fetch-1"]
 
 
 def test_getattr_chains_sort():
-    flow = Pipeline.from_module("fetch").sort(conf=_SORT_CONF)
-    assert flow.spec.nodes["sort-1"].name == "sort"
+    pipeline = Pipeline.from_module("fetch").sort(conf=_SORT_CONF)
+    assert pipeline.workflow.nodes["sort-1"].name == "sort"
 
 
 def test_getattr_chains_filter():
-    flow = Pipeline.from_module("fetch").filter(conf={"rule": []})
-    assert flow.spec.nodes["filter-1"].name == "filter"
+    pipeline = Pipeline.from_module("fetch").filter(conf={"rule": []})
+    assert pipeline.workflow.nodes["filter-1"].name == "filter"
 
 
 @pytest.mark.parametrize("name", ["_hidden", "keys", "values", "items", "get"])
@@ -128,13 +139,13 @@ def test_getattr_rejects_reserved_names(name):
 
 
 def test_or_chains_str():
-    flow = Pipeline.from_module("fetch") | "sort"
-    assert sorted(flow.spec.nodes) == ["fetch-1", "sort-1"]
+    pipeline = Pipeline.from_module("fetch") | "sort"
+    assert sorted(pipeline.workflow.nodes) == ["fetch-1", "sort-1"]
 
 
 def test_or_chains_name_conf_pair():
-    flow = Pipeline.from_module("fetch") | ("sort", _SORT_CONF)
-    node = flow.spec.nodes["sort-1"]
+    pipeline = Pipeline.from_module("fetch") | ("sort", _SORT_CONF)
+    node = pipeline.workflow.nodes["sort-1"]
     assert isinstance(node, ModuleNode)
     node_conf_rule = node.conf.get("rule")
     assert is_mapping(node_conf_rule)
@@ -151,8 +162,8 @@ def _assert_embed(node):
 
 
 def test_chained_loop_carries_its_embed_and_options():
-    flow = Pipeline.from_module("itembuilder").loop(embed=_EMBED, options=_OPTIONS)
-    node = flow.spec.nodes["loop-1"]
+    pipeline = Pipeline.from_module("itembuilder").loop(embed=_EMBED, options=_OPTIONS)
+    node = pipeline.workflow.nodes["loop-1"]
     _assert_embed(node)
     assert isinstance(node, ModuleNode)
     assert node.conf == {}
@@ -160,13 +171,13 @@ def test_chained_loop_carries_its_embed_and_options():
 
 def test_or_copies_a_loop_template_embed_and_options():
     template = Pipeline.from_module("loop", embed=_EMBED, options=_OPTIONS)
-    flow = Pipeline.from_module("itembuilder") | template
-    _assert_embed(flow.spec.nodes["loop-1"])
+    pipeline = Pipeline.from_module("itembuilder") | template
+    _assert_embed(pipeline.workflow.nodes["loop-1"])
 
 
 def test_or_chains_single_module_template():
-    flow = Pipeline.from_module("fetch") | Pipeline.from_module("sort")
-    assert sorted(flow.spec.nodes) == ["fetch-1", "sort-1"]
+    pipeline = Pipeline.from_module("fetch") | Pipeline.from_module("sort")
+    assert sorted(pipeline.workflow.nodes) == ["fetch-1", "sort-1"]
 
 
 def test_or_rejects_multi_node_template():
@@ -180,11 +191,29 @@ def test_or_rejects_unsupported_operand():
         _ = Pipeline.from_module("fetch") | 3
 
 
+def test_or_string_matches_attribute_chaining():
+    via_or = list(Pipeline(source=SRC) | "hash")
+    via_attr = list(Pipeline(source=SRC).hash())
+    assert via_or == via_attr
+    assert len(via_or) == 3
+
+
+def test_ror_preserves_definitional_conf_and_options():
+    conf = TokenizerConf({"delimiter": " "})
+    template = Pipeline.from_module("tokenizer", conf=conf, options={"emit": False})
+    primed = SRC | template
+    node = primed.workflow.nodes["tokenizer-1"]
+    assert isinstance(node, ModuleNode)
+    assert primed.source is SRC
+    assert dict(node.conf) == conf
+    assert node.options == {"emit": False}
+
+
 def test_ror_seeds_source():
     items = [{"x": 1}]
-    flow = items | Pipeline.from_module("sort")
-    assert flow.source is items
-    assert sorted(flow.spec.nodes) == ["sort-1"]
+    pipeline = items | Pipeline.from_module("sort")
+    assert pipeline.source is items
+    assert sorted(pipeline.workflow.nodes) == ["sort-1"]
 
 
 def test_ror_seeds_async_stream():
@@ -192,8 +221,8 @@ def test_ror_seeds_async_stream():
         yield {"x": 1}
 
     source = stream()
-    flow = source | Pipeline.from_module("sort")
-    assert flow.source is source
+    pipeline = source | Pipeline.from_module("sort")
+    assert pipeline.source is source
 
 
 def test_ror_rejects_reseeding():
@@ -202,8 +231,8 @@ def test_ror_rejects_reseeding():
 
 
 def test_duplicate_names_mint_unique_ids():
-    flow = Pipeline.from_module("sort").pipe("sort")
-    assert sorted(flow.spec.nodes) == ["sort-1", "sort-2"]
+    pipeline = Pipeline.from_module("sort").pipe("sort")
+    assert sorted(pipeline.workflow.nodes) == ["sort-1", "sort-2"]
 
 
 def test_iterating_source_only_pipeline_raises():
@@ -259,7 +288,31 @@ def test_map_chains_a_callable_node() -> None:
     def double(item):
         return {"x": item["x"] * 2}
 
-    flow = Pipeline(source=[{"x": 1}, {"x": 2}]).map(double)
+    pipeline = Pipeline(source=[{"x": 1}, {"x": 2}]).map(double)
 
-    assert isinstance(flow, Pipeline)
-    assert list(flow) == [{"x": 2}, {"x": 4}]
+    assert isinstance(pipeline, Pipeline)
+    assert list(pipeline) == [{"x": 2}, {"x": 4}]
+
+
+class TestModuleNameEnum:
+    """A ``ModuleName`` enum is accepted anywhere a name string is."""
+
+    def test_resolve_module_name(self):
+        assert normalize_module_name(_Mod.HASH) == "hash"
+        assert normalize_module_name("hash") == "hash"
+        assert normalize_module_name(None) == ""
+
+    def test_seed_stores_plain_string(self):
+        node = Pipeline.from_module(_Mod.HASH).workflow.nodes["hash-1"]
+        assert node.name == "hash"
+        assert type(node.name) is str
+
+    def test_enum_through_operator(self):
+        pipeline = Pipeline(source=SRC) | _Mod.HASH
+        assert pipeline.workflow.nodes["hash-1"].name == "hash"
+        assert len(list(pipeline)) == 3
+
+    def test_enum_through_method(self):
+        pipeline = Pipeline(source=SRC).pipe(_Mod.TRUNCATE, conf={"count": 1})
+        assert pipeline.workflow.nodes["truncate-1"].name == "truncate"
+        assert len(list(pipeline)) == 1

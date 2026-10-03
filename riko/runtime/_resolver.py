@@ -67,14 +67,14 @@ class ResolverDispatcher:
         return resolver
 
     @overload
-    def resolve(  # noqa: E704
+    def require(  # noqa: E704
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
     @overload  # noqa: E301
-    def resolve(  # noqa: E704
+    def require(  # noqa: E704
         self, name: str, is_async: Literal[True]
     ) -> AsyncModuleWrapper: ...
-    def resolve(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
+    def require(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
         """
         Resolves ``name``'s callable for ``interface``.
 
@@ -84,9 +84,9 @@ class ResolverDispatcher:
             UnsupportedPipelineError: If a ``pipe_*`` name is unresolved.
 
         """
-        return self.resolver_for(name).resolve(name, is_async)
+        return self.resolver_for(name).require(name, is_async)
 
-    def get_interfaces(self, name: str) -> frozenset[Interface]:
+    def require_interfaces(self, name: str) -> frozenset[Interface]:
         """
         Reports which of a pipe name's sync and async interfaces are defined.
 
@@ -100,14 +100,14 @@ class ResolverDispatcher:
 
         Examples:
 
-            >>> "pipe" in dispatcher.get_interfaces("count")
+            >>> "pipe" in dispatcher.require_interfaces("count")
             True
 
         """
-        return self.resolver_for(name).get_interfaces(name)
+        return self.resolver_for(name).require_interfaces(name)
 
     def validate(self, name: str) -> None:
-        if not self.get_interfaces(name):
+        if not self.require_interfaces(name):
             raise UnsupportedModuleError(f"{name!r} has no interfaces")
 
     def is_capable(self, name: str, is_async: bool = False) -> bool:
@@ -132,17 +132,17 @@ class ResolverDispatcher:
 
         """
         interface = "async_pipe" if is_async else "pipe"
-        return interface in self.resolver_for(name).get_interfaces(name)
+        return interface in self.resolver_for(name).require_interfaces(name)
 
     @overload
-    def resolve_if_capable(  # noqa: E704
+    def resolve(  # noqa: E704
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper | None: ...
     @overload  # noqa: E301
-    def resolve_if_capable(  # noqa: E704
+    def resolve(  # noqa: E704
         self, name: str, is_async: Literal[True]
     ) -> AsyncModuleWrapper | None: ...
-    def resolve_if_capable(  # noqa: E301
+    def resolve(  # noqa: E301
         self, name: str, is_async: bool = False
     ) -> ModuleWrapper | None:
         """
@@ -155,7 +155,7 @@ class ResolverDispatcher:
 
         """
         if self.is_capable(name, is_async=is_async):
-            return self.resolve(name, is_async=is_async)
+            return self.require(name, is_async=is_async)
 
 
 dispatcher: ResolverDispatcher = ResolverDispatcher(module_registry, pipeline_resolver)

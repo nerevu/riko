@@ -18,7 +18,7 @@ from riko.bado._util import maybe_deferred
 from riko.bado.itertools import as_async
 from riko.types._guards import is_subpipe
 
-from ._assignment import get_subpipe
+from ._assignment import bind_subpipe
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -127,7 +127,7 @@ def _run_loop_sync(
     emit: bool,
     count: CountValues | None,
 ) -> Stream:
-    embedder = get_subpipe(embed, context, embedded_kwargs, field=field)
+    embedder = bind_subpipe(embed, context, embedded_kwargs, field=field)
 
     for parent in source:
         stream = _take(embedder(parent), count)
@@ -145,7 +145,7 @@ async def _run_loop_async(
     emit: bool,
     count: CountValues | None,
 ) -> AsyncStream:
-    embedder = get_subpipe(embed, context, embedded_kwargs, field=field)
+    embedder = bind_subpipe(embed, context, embedded_kwargs, field=field)
 
     async for parent in as_async(source):
         items = await maybe_deferred(embedder, parent)

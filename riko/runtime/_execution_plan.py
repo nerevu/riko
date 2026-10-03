@@ -26,7 +26,7 @@ from ._resolver import dispatcher
 if TYPE_CHECKING:
     from types import MappingProxyType
 
-    from riko.definitions._workflow import Node, WorkflowSpec
+    from riko.definitions._workflow import Node, Workflow
     from riko.types._compiler import GraphIndex
     from riko.types._workflow import NodeId
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
@@ -40,7 +40,7 @@ type ResolvedPipes = tuple[SyncModuleWrapper | None, AsyncModuleWrapper | None]
 
 
 def _index(self: ExecutionPlan) -> GraphIndex:
-    return index_workflow(self.spec)
+    return index_workflow(self.workflow)
 
 
 def _required(self: ExecutionPlan) -> RequiredNodes:
@@ -59,19 +59,19 @@ class ExecutionPlan:
     A prepared workflow: its graph index, resolved nodes, and per-output subgraphs.
 
     Only ``nodes`` is supplied — it carries the once-resolved callables. The graph
-    index and per-output subgraphs derive from ``spec``, so a plan is consistent
+    index and per-output subgraphs derive from ``workflow``, so a plan is consistent
     however it is constructed.
 
     Attributes:
 
-        spec: The canonical workflow that was prepared.
+        workflow: The canonical workflow that was prepared.
         nodes: The resolved nodes, keyed by canonical node id.
         index: The structural graph index shared with the compiler.
         required: For each named output, the node ids its subgraph must run.
 
     """
 
-    spec: WorkflowSpec = field(validator=lambda inst, field, value: value.validate())
+    workflow: Workflow = field(validator=lambda inst, field, value: value.validate())
     nodes: PreparedNodes = field(converter=freeze_mapping)
     index: GraphIndex = field(init=False, default=Factory(_index, takes_self=True))
     required: RequiredNodes = field(init=False, default=required)
@@ -79,7 +79,7 @@ class ExecutionPlan:
 
 def _resolve_pipes(name: str, dispatcher: ResolverDispatcher) -> ResolvedPipes:
     dispatcher.validate(name)
-    resolve = partial(dispatcher.resolve_if_capable, name)
+    resolve = partial(dispatcher.resolve, name)
     return resolve(), resolve(is_async=True)
 
 
@@ -114,14 +114,14 @@ def _build_node(node: Node, dispatcher: ResolverDispatcher) -> PreparedNode:
 
 
 def build_execution_plan(
-    spec: WorkflowSpec, dispatcher: ResolverDispatcher = dispatcher
+    workflow: Workflow, dispatcher: ResolverDispatcher = dispatcher
 ) -> ExecutionPlan:
     """
-    Builds an executable snapshot of ``spec`` with every node resolved once.
+    Builds an executable snapshot of ``workflow`` with every node resolved once.
 
     Args:
 
-        spec: The canonical workflow to prepare.
+        workflow: The canonical workflow to prepare.
         dispatcher: The pipe resolver supplying node implementations.
 
     Returns:
@@ -139,23 +139,23 @@ def build_execution_plan(
 
     Examples:
 
-        >>> from riko.definitions._workflow import ModuleNode, WorkflowSpec
+        >>> from riko.definitions._workflow import ModuleNode, Workflow
         >>> from riko.types._workflow import Endpoint
         >>> node = ModuleNode(id="count-1", name="count")
-        >>> spec = WorkflowSpec(
+        >>> workflow = Workflow(
         ...     nodes={"count-1": node},
         ...     outputs={"default": Endpoint("count-1", "out")},
         ...     inputs={},
         ...     edges=(),
         ... )
-        >>> plan = build_execution_plan(spec)
+        >>> plan = build_execution_plan(workflow)
         >>> sorted(plan.nodes)
         ['count-1']
 
     """
-    spec.validate()
-    nodes = {id_: _build_node(node, dispatcher) for id_, node in spec.nodes.items()}
-    return ExecutionPlan(spec=spec, nodes=nodes)
+    workflow.validate()
+    nodes = {id_: _build_node(node, dispatcher) for id_, node in workflow.nodes.items()}
+    return ExecutionPlan(workflow=workflow, nodes=nodes)
 
 
 __all__ = ["ExecutionPlan", "build_execution_plan"]

@@ -13,8 +13,15 @@ Examples:
 
 """
 
-from riko.runtime.collections import SyncPipe
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from riko import Pipeline
 from riko.types.modules import ItemBuilderConf, ParsedParam
+
+if TYPE_CHECKING:
+    from riko.types import Item
 
 attrs = [
     ParsedParam({"key": "title", "value": "riko pt. 1"}),
@@ -24,8 +31,8 @@ attrs = [
 ib_conf = ItemBuilderConf({"attrs": attrs})
 
 
-def pipe(test=False):
-    return SyncPipe("itembuilder", conf=ib_conf, test=test).hash()
+def pipe(test: bool = False) -> list[Item]:
+    return list(Pipeline.from_module("itembuilder", conf=ib_conf).hash())
 
 
 if __name__ == "__main__":

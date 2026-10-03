@@ -4,7 +4,7 @@ The immutable canonical Workflow v2 model and public ``Pipeline`` definition.
 
 Six closed node families (``ModuleNode``/``ReadNode``/``WriteNode``/``CacheNode``/
 ``ActionNode``/``SubscribeNode``) and two edge families (``StreamEdge``/``PublishEdge``)
-compose a ``WorkflowSpec`` graph, wrapped by the public immutable ``Pipeline``. This is
+compose a ``Workflow`` graph, wrapped by the public immutable ``Pipeline``. This is
 the structural definition surface only: nodes carry declarative intent, never execution
 state, and no node runs here. ``WriteNode`` and ``ActionNode`` carry a ``backend`` and
 serialization ``fmt`` rather than a live resource or write session.
@@ -13,17 +13,17 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.definitions._workflow import ModuleNode, Pipeline, WorkflowSpec
+        >>> from riko.definitions._workflow import ModuleNode, Pipeline, Workflow
         >>> from riko.types._workflow import Endpoint
         >>>
         >>> node = ModuleNode(id="fetch-1", name="fetch")
-        >>> spec = WorkflowSpec(
+        >>> workflow = Workflow(
         ...     nodes={node.id: node},
         ...     edges=(),
         ...     outputs={"default": Endpoint(node.id, "out")},
         ...     inputs={},
         ... )
-        >>> Pipeline(spec).spec.outputs["default"]
+        >>> Pipeline(workflow).workflow.outputs["default"]
         Endpoint(node='fetch-1', port='out')
 
 """
@@ -62,7 +62,14 @@ from riko.types._collections import (
 )
 from riko.types._enums import Backends, Formats, ModuleNameLike
 from riko.types._guards import is_mapping, is_streamlike, require_mapping
-from riko.types._workflow import WORKFLOW_VERSION, Edge, Endpoint, NodeId, parse_port
+from riko.types._workflow import (
+    WORKFLOW_VERSION,
+    Edge,
+    Endpoint,
+    NodeId,
+    RawWorkflow,
+    parse_port,
+)
 from riko.types.modules import (
     AnyModuleConf,
     Conf,
@@ -73,14 +80,18 @@ from riko.types.modules import (
 )
 
 from ._resources import normalize_resources
-from ._targets import normalize_strs, resolve_enum
+from ._targets import build_write, normalize_enum, normalize_strs
 from ._write import WriteMode
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping
+    from collections.abc import AsyncGenerator, Callable, Generator, Iterator, Mapping
 
-    from riko.types._streams import AsyncItemGenerator, ItemGenerator, SourceLike
+    from riko.execution._events import EventSink
+    from riko.types._enums import FmtLike, StrLike
+    from riko.types._streams import SourceLike
     from riko.types._workflow import EdgeFamily, NodeFamily
+
+    from ._write import Destination
 
 _FROZEN_OPTIONS: FrozenMap[FrozenOptionValues] = MappingProxyType({})
 _FROZEN_PARAMS: FrozenMap[FrozenOptionValues] = MappingProxyType({})
@@ -92,6 +103,7 @@ _EMPTY_INPUTS: JSONSchema = MappingProxyType({})
 _EMPTY_RESOURCES: FrozenMap[str] = MappingProxyType({})
 
 T = TypeVar("T", default=Any)
+type WorkflowLike = Workflow | RawWorkflow | Mapping[str, object]
 
 
 def freeze_mapping_value(value: Mapping[str, object]) -> JSONSchema:
@@ -111,9 +123,9 @@ optional_resources = def_from_require(normalize_resources, default=_EMPTY_RESOUR
 optional_str = narrow_def_from_require(require_str)
 resource_converter = [optional_binding, optional_resources]
 
-_normalize_backend = partial(resolve_enum, Backends)
-_normalize_format = partial(resolve_enum, Formats, strict=False)
-_normalize_mode = partial(resolve_enum, WriteMode, default=WriteMode.REPLACE)
+_normalize_backend = partial(normalize_enum, Backends)
+_normalize_format = partial(normalize_enum, Formats, strict=False)
+_normalize_mode = partial(normalize_enum, WriteMode, default=WriteMode.REPLACE)
 
 
 def _is_source(value: object) -> TypeGuard[SourceLike]:
@@ -323,9 +335,9 @@ def require_module_node(value: Node, what: str | None = None) -> ModuleNode:
     return value
 
 
-def require_spec(value: object) -> WorkflowSpec:
-    if not isinstance(value, WorkflowSpec):
-        msg = "Pipeline() takes a WorkflowSpec or None; use Pipeline.from_module(name) "
+def _require_workflow(value: object) -> Workflow:
+    if not isinstance(value, Workflow):
+        msg = "Pipeline() takes a Workflow or None; use Pipeline.from_module(name) "
         msg += "for a module or Pipeline(source=items) to seed an item stream"
         raise TypeError(msg)
 
@@ -333,7 +345,7 @@ def require_spec(value: object) -> WorkflowSpec:
 
 
 @define(frozen=True, slots=True)
-class WorkflowSpec:
+class Workflow:
     """
     The strict canonical Workflow v2 graph: nodes, edges, outputs, and inputs.
 
@@ -354,14 +366,14 @@ class WorkflowSpec:
     Examples:
 
         >>> node = ModuleNode(id="fetch-1", name="fetch")
-        >>> spec = WorkflowSpec(
+        >>> workflow = Workflow(
         ...     nodes={node.id: node},
         ...     outputs={"default": Endpoint(node.id, "out")},
         ...     resources="db",
         ... )
-        >>> spec.resources
+        >>> workflow.resources
         ('db',)
-        >>> spec.isvalid
+        >>> workflow.isvalid
         True
 
     """
@@ -517,61 +529,90 @@ class WorkflowSpec:
         return result
 
 
-_EMPTY_SPEC = WorkflowSpec(nodes={}, outputs={}, inputs={})
+_EMPTY_SPEC = Workflow(nodes={}, outputs={}, inputs={})
 
 
-def _mint_node_id(spec: WorkflowSpec, name: str) -> NodeId:
-    """Mints a ``<name>-<occurrence>`` node id unused by the spec's existing nodes."""
-    count = len([node for node in spec.nodes.values() if node.name == name]) + 1
+def _mint_node_id(workflow: Workflow, name: str) -> NodeId:
+    """Mints a conflict free ``<name>-<occurrence>`` node id."""
+    count = len([node for node in workflow.nodes.values() if node.name == name]) + 1
     candidate = f"{name}-{count}"
 
-    while candidate in spec.nodes:
+    while candidate in workflow.nodes:
         count += 1
         candidate = f"{name}-{count}"
 
     return candidate
 
 
-def _build_chained_spec(
+def _build_appended_workflow(node: Node, workflow: Workflow | None = None) -> Workflow:
+    """Builds a workflow with ``node``s and re-points the default output to it."""
+    workflow = _EMPTY_SPEC if workflow is None else workflow
+
+    if (tail := workflow.outputs.get("default")) is None:
+        edges = workflow.edges
+    else:
+        edges = (*workflow.edges, StreamEdge(tail, Endpoint(node.id, "in")))
+
+    return Workflow(
+        nodes={**workflow.nodes, node.id: node},
+        outputs={**workflow.outputs, "default": Endpoint(node.id, "out")},
+        inputs=workflow.inputs,
+        edges=edges,
+        resources=workflow.resources,
+        version=workflow.version,
+    )
+
+
+def _build_chained_workflow(
     name: str,
-    spec: WorkflowSpec | None = None,
+    workflow: Workflow | None = None,
     *,
     conf: FrozenConf | Conf | None = None,
     options: FrozenOptions | ModuleOptions | None = None,
     embed: Embed | None = None,
-) -> WorkflowSpec:
-    """Builds a spec that appends a module node and re-points the default output."""
-    spec = _EMPTY_SPEC if spec is None else spec
-    node_id = _mint_node_id(spec, name)
+) -> Workflow:
+    """Builds a workflow that appends a module node and re-points the default output."""
+    workflow = _EMPTY_SPEC if workflow is None else workflow
+    node_id = _mint_node_id(workflow, name)
     node = ModuleNode(id=node_id, name=name, conf=conf, options=options, embed=embed)
+    return _build_appended_workflow(node, workflow)
 
-    if (tail := spec.outputs.get("default")) is None:
-        edges = spec.edges
-    else:
-        edges = (*spec.edges, StreamEdge(tail, Endpoint(node_id, "in")))
 
-    return WorkflowSpec(
-        nodes={**spec.nodes, node_id: node},
-        outputs={**spec.outputs, "default": Endpoint(node_id, "out")},
-        inputs=spec.inputs,
-        edges=edges,
-        resources=spec.resources,
-        version=spec.version,
+def _build_write_workflow(
+    workflow: Workflow,
+    dest: Destination,
+    *,
+    mode: WriteMode | str = WriteMode.REPLACE,
+    fmt: FmtLike | None = None,
+    keys: StrLike | None = None,
+) -> Workflow:
+    """Builds a workflow with a validated write node bound to ``dest``'s backend."""
+    prepared = build_write(dest, mode, fmt=fmt, keys=keys)
+    location: object = getattr(prepared.target, "dest", None)
+    node = WriteNode(
+        id=_mint_node_id(workflow, "write"),
+        name="write",
+        backend=prepared.target.backend,
+        dest=None if location is None else str(location),
+        fmt=prepared.fmt,
+        mode=prepared.operation.mode,
+        keys=prepared.operation.keys,
     )
+    return _build_appended_workflow(node, workflow)
 
 
-optional_spec = narrow_def_from_require(require_spec, default=_EMPTY_SPEC)
+_optional_workflow = narrow_def_from_require(_require_workflow, default=_EMPTY_SPEC)
 
 
 @define(frozen=True, slots=True)
 class Pipeline(Generic[T]):
     """
-    A public immutable pipeline definition over a canonical Workflow v2 spec.
+    A public immutable pipeline definition over a canonical Workflow v2 workflow.
 
     ``Pipeline`` is the stable definition surface. Iterating it yields its default
     output stream which is generic over T.
 
-    ``Pipeline(spec)`` wraps a built graph. ``Pipeline.from_module(name)`` seeds a
+    ``Pipeline(workflow)`` wraps a built graph. ``Pipeline.from_module(name)`` seeds a
     module by name, ``Pipeline(source=items)`` seeds a source, and ``Pipeline()``
     starts an empty template to compose with ``|``. A source is one item, an item
     stream, an async item stream, or an awaitable resolving to one of those; each
@@ -579,22 +620,22 @@ class Pipeline(Generic[T]):
 
     Attributes:
 
-        spec: The canonical workflow this pipeline defines.
+        workflow: The canonical workflow this pipeline defines.
         source: The seeded source, or ``None`` when the graph supplies its own.
 
     Examples:
 
-        >>> flow = Pipeline.from_module("fetch").pipe("sort", conf={"combine": "a"})
-        >>> sorted(flow.spec.nodes)
+        >>> pipeline = Pipeline.from_module("fetch").pipe("sort", conf={"combine": "a"})
+        >>> sorted(pipeline.workflow.nodes)
         ['fetch-1', 'sort-1']
-        >>> flow.spec.outputs["default"]
+        >>> pipeline.workflow.outputs["default"]
         Endpoint(node='sort-1', port='out')
         >>> Pipeline(source=[{"x": 1}]).source
         [{'x': 1}]
 
     """
 
-    spec: WorkflowSpec = field(default=_EMPTY_SPEC, converter=optional_spec)
+    workflow: Workflow = field(default=_EMPTY_SPEC, converter=_optional_workflow)
     source: SourceLike | None = field(default=None, repr=False)
 
     @classmethod
@@ -625,19 +666,22 @@ class Pipeline(Generic[T]):
 
         Examples:
 
-            >>> flow = Pipeline.from_module("fetch").pipe("sort", conf={"combine": "a"})
-            >>> sorted(flow.spec.nodes)
+            >>> fetch = Pipeline.from_module("fetch")
+            >>> pipeline = fetch.pipe("sort", conf={"combine": "a"})
+            >>> sorted(pipeline.workflow.nodes)
             ['fetch-1', 'sort-1']
-            >>> flow.spec.outputs["default"]
+            >>> pipeline.workflow.outputs["default"]
             Endpoint(node='sort-1', port='out')
 
         """
-        spec = _build_chained_spec(str(name), conf=conf, options=options, embed=embed)
-        return cls(spec)
+        workflow = _build_chained_workflow(
+            str(name), conf=conf, options=options, embed=embed
+        )
+        return cls(workflow)
 
-    def _derive(self, spec: WorkflowSpec, source: SourceLike | None) -> Pipeline:
-        """Builds a sibling pipeline over a derived spec."""
-        return type(self)(spec, source)
+    def _derive(self, workflow: Workflow, source: SourceLike | None) -> Pipeline:
+        """Builds a sibling pipeline over a derived workflow."""
+        return type(self)(workflow, source)
 
     def pipe(
         self,
@@ -666,24 +710,210 @@ class Pipeline(Generic[T]):
 
         Examples:
 
-            >>> flow = Pipeline.from_module("fetch").pipe("sort", conf={"combine": "a"})
-            >>> sorted(flow.spec.nodes)
+            >>> fetch = Pipeline.from_module("fetch")
+            >>> pipeline = fetch.pipe("sort", conf={"combine": "a"})
+            >>> sorted(pipeline.workflow.nodes)
             ['fetch-1', 'sort-1']
-            >>> flow.spec.outputs["default"]
+            >>> pipeline.workflow.outputs["default"]
             Endpoint(node='sort-1', port='out')
             >>> delimiter = {"type": "text", "value": " "}
             >>> embed = {"name": "tokenizer", "conf": {"delimiter": delimiter}}
-            >>> flow = Pipeline.from_module("itembuilder")
-            >>> flow = flow.loop(embed=embed, options={"emit": True})
-            >>> flow.spec.nodes["loop-1"].embed["name"]
+            >>> pipeline = Pipeline.from_module("itembuilder")
+            >>> pipeline = pipeline.loop(embed=embed, options={"emit": True})
+            >>> pipeline.workflow.nodes["loop-1"].embed["name"]
             'tokenizer'
-            >>> dict(flow.spec.nodes["loop-1"].options)
+            >>> dict(pipeline.workflow.nodes["loop-1"].options)
             {'emit': True}
 
         """
-        args = str(name), self.spec
-        spec = _build_chained_spec(*args, conf=conf, options=options, embed=embed)
-        return self._derive(spec, self.source)
+        args = str(name), self.workflow
+        workflow = _build_chained_workflow(
+            *args, conf=conf, options=options, embed=embed
+        )
+        return self._derive(workflow, self.source)
+
+    def write(
+        self,
+        dest: Destination | None = None,
+        /,
+        *,
+        mode: WriteMode | str = WriteMode.REPLACE,
+        fmt: FmtLike | None = None,
+        keys: StrLike | None = None,
+        conf: FrozenConf | Conf | None = None,
+        options: FrozenOptions | ModuleOptions | None = None,
+        embed: Embed | None = None,
+    ) -> Pipeline:
+        """
+        Appends a write to ``dest``, or chains the ``write`` module without one.
+
+        Given a destination, the new pipeline declares where its records go, how
+        they are serialized, and how they reconcile with what is already there.
+        Given no destination, the call chains the shipped ``write`` module with
+        the module arguments instead, so attribute chaining keeps working.
+        Supplying both a destination and module arguments is a call-site error.
+
+        Args:
+
+            dest: The destination path or write target, or ``None`` to chain the
+                ``write`` module.
+            mode: How the records reconcile with the destination's contents.
+            fmt: The serialization format, or ``None`` to derive one.
+            keys: The match keys a keyed destination needs.
+            conf: The ``write`` module's configuration, if any.
+            options: The call options forwarded to the ``write`` module, if any.
+            embed: The module a loop runs per item, with its configuration, if any.
+
+        Returns:
+
+            A new pipeline whose default output is the appended node.
+
+        Raises:
+
+            TypeError: If ``dest`` is given together with ``conf``, ``options``,
+                or ``embed``.
+            ValueError: If ``dest``, ``mode``, ``fmt``, and ``keys`` do not form a
+                write the destination supports.
+
+        Examples:
+
+            >>> pipeline = Pipeline(source=[{"x": 1}]).write("out.csv")
+            >>> sorted(pipeline.workflow.nodes)
+            ['write-1']
+            >>> pipeline.workflow.outputs["default"]
+            Endpoint(node='write-1', port='out')
+            >>> try:
+            ...     pipeline.first()
+            ... except Exception as error:
+            ...     print(type(error).__name__)
+            InvalidPipelineError
+
+        """
+        if dest is None:
+            written = self.pipe("write", conf=conf, options=options, embed=embed)
+        elif conf is not None or options is not None or embed is not None:
+            msg = "write() takes either a destination or module arguments, not both"
+            raise TypeError(msg)
+        else:
+            workflow = _build_write_workflow(
+                self.workflow, dest, mode=mode, fmt=fmt, keys=keys
+            )
+            written = self._derive(workflow, self.source)
+
+        return written
+
+    def with_execution(
+        self,
+        *,
+        executor: str | None = None,
+        concurrency: int | None = None,
+        ordered: bool | None = None,
+        event_sink: EventSink | None = None,
+    ) -> Pipeline:
+        """
+        Derives a pipeline carrying settings that apply to the whole run.
+
+        Args:
+
+            executor: Where per-item work runs: ``"inline"``, ``"thread"``, or
+                ``"process"``.
+            concurrency: The ceiling on how much work runs at once.
+            ordered: Whether results are presented in source order.
+            event_sink: The sink that receives the run's events.
+
+        Returns:
+
+            A new pipeline carrying the given execution settings.
+
+        Raises:
+
+            NotImplementedError: Always; execution settings are not available yet.
+
+        """
+        raise NotImplementedError("execution settings are not available yet")
+
+    @classmethod
+    def subscribe(
+        cls, name: str, *, func: Callable[..., object] | None = None, **policy: object
+    ) -> Pipeline:
+        """
+        Declares a local subscription to a named published stream.
+
+        Args:
+
+            name: The channel the subscription listens on.
+            func: Runs on each item as it is received; its return value is discarded.
+            policy: The subscription's delivery policy.
+
+        Returns:
+
+            A new pipeline over the subscribed channel.
+
+        Raises:
+
+            NotImplementedError: Always; local subscriptions are not available yet.
+
+        """
+        raise NotImplementedError("local subscriptions are not available yet")
+
+    def publish(self, subscription: Pipeline, *, isolate: bool = True) -> Pipeline:
+        """
+        Publishes this pipeline's records to a declared subscription.
+
+        Args:
+
+            subscription: The subscription receiving the published records.
+            isolate: Whether the subscriber's failures stay out of this pipeline.
+
+        Returns:
+
+            A new pipeline that passes its records through to the subscription.
+
+        Raises:
+
+            NotImplementedError: Always; publishing is not available yet.
+
+        """
+        raise NotImplementedError("publishing to a subscription is not available yet")
+
+    def split(self, n: int = 2) -> tuple[Pipeline, ...]:
+        """
+        Fans the stream out into ``n`` independently consumable branches.
+
+        Args:
+
+            n: How many branches to produce.
+
+        Returns:
+
+            One pipeline per branch, in branch order.
+
+        Raises:
+
+            NotImplementedError: Always; streaming fan-out is not available yet.
+
+        """
+        raise NotImplementedError("streaming fan-out is not available yet")
+
+    def map(self, func: Callable[..., object], **kwargs: object) -> Pipeline:
+        """
+        Appends a callable that runs over the stream as its own node.
+
+        Args:
+
+            func: The callable to run.
+            kwargs: The keyword arguments forwarded to ``func``.
+
+        Returns:
+
+            A new pipeline whose default output is the appended callable.
+
+        Raises:
+
+            NotImplementedError: Always; callable nodes are not available yet.
+
+        """
+        raise NotImplementedError("chaining a callable as a node is not available yet")
 
     def __getattr__(self, name: str) -> Callable[..., Pipeline]:
         """
@@ -713,11 +943,11 @@ class Pipeline(Generic[T]):
 
         Examples:
 
-            >>> flow = Pipeline.from_module("fetch") | "sort"
-            >>> sorted(flow.spec.nodes)
+            >>> pipeline = Pipeline.from_module("fetch") | "sort"
+            >>> sorted(pipeline.workflow.nodes)
             ['fetch-1', 'sort-1']
-            >>> flow = Pipeline.from_module("fetch") | ("sort", {"combine": "a"})
-            >>> dict(flow.spec.nodes["sort-1"].conf)
+            >>> pipeline = Pipeline.from_module("fetch") | ("sort", {"combine": "a"})
+            >>> dict(pipeline.workflow.nodes["sort-1"].conf)
             {'combine': 'a'}
 
         """
@@ -735,7 +965,7 @@ class Pipeline(Generic[T]):
 
     def _or_template(self, other: Pipeline) -> Pipeline:
         """Chains a single-module, source-less pipeline used as a reusable template."""
-        nodes = other.spec.nodes.values()
+        nodes = other.workflow.nodes.values()
         node = next(iter(nodes)) if len(nodes) == 1 else None
 
         if other.source is None and isinstance(node, ModuleNode):
@@ -764,19 +994,19 @@ class Pipeline(Generic[T]):
         Examples:
 
             >>> items = [{"x": 1}, {"x": 2}]
-            >>> flow = items | Pipeline.from_module("sort")
-            >>> flow.source is items
+            >>> pipeline = items | Pipeline.from_module("sort")
+            >>> pipeline.source is items
             True
 
         """
         if self.source is None and _is_source(other):
-            primed = self._derive(self.spec, other)
+            primed = self._derive(self.workflow, other)
         else:
             primed = NotImplemented
 
         return primed
 
-    def __iter__(self) -> ItemGenerator:
+    def __iter__(self) -> Generator[T, None]:
         """
         Synchronously runs the pipeline.
 
@@ -791,12 +1021,12 @@ class Pipeline(Generic[T]):
         from riko.execution._execution import SyncExecution  # noqa: PLC0415
         from riko.runtime._execution_plan import build_execution_plan  # noqa: PLC0415
 
-        plan = build_execution_plan(self.spec)
+        plan = build_execution_plan(self.workflow)
 
         with SyncExecution() as execution:
             yield from execution.run(plan, source=self.source)
 
-    def __aiter__(self) -> AsyncItemGenerator:
+    def __aiter__(self) -> AsyncGenerator[T, None]:
         """
         Asynchronously runs the pipeline.
 
@@ -811,8 +1041,8 @@ class Pipeline(Generic[T]):
         from riko.execution._execution import AsyncExecution  # noqa: PLC0415
         from riko.runtime._execution_plan import build_execution_plan  # noqa: PLC0415
 
-        async def _run() -> AsyncItemGenerator:
-            plan = build_execution_plan(self.spec)
+        async def _run() -> AsyncGenerator[T, None]:
+            plan = build_execution_plan(self.workflow)
 
             async with AsyncExecution() as execution:
                 stream = await execution.run(plan, source=self.source)
@@ -822,16 +1052,23 @@ class Pipeline(Generic[T]):
 
         return _run()
 
+    def first(self) -> T:
+        return next(iter(self))
+
+    async def afirst(self) -> T:
+        return await anext(aiter(self))
+
 
 __all__ = [
     "ActionNode",
     "CacheNode",
     "ModuleNode",
+    "Node",
     "Pipeline",
     "PublishEdge",
     "ReadNode",
     "StreamEdge",
     "SubscribeNode",
-    "WorkflowSpec",
+    "Workflow",
     "WriteNode",
 ]

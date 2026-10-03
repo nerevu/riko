@@ -24,9 +24,9 @@ from riko.types._rss import RSSEntry
 from riko.types.modules import FetchConf
 
 if TYPE_CHECKING:
-    from riko.definitions._workflow import WorkflowSpec
+    from riko.definitions._workflow import Workflow
     from riko.types._streams import Item, Items
-    from riko.types._workflow import EdgeAuthoring, NodeAuthoring, WorkflowAuthoring
+    from riko.types._workflow import RawEdge, RawNode, RawWorkflow
     from riko.types._wrappers import (
         ParserMaterializedOutput,
         SyncProcessorWrapperOutput,
@@ -63,13 +63,13 @@ type AsyncFunc = Callable[..., Awaitable[Iterator[RSSEntry]]]
 type AsyncTest = Callable[[], Awaitable[object]]
 
 
-def build_fanin_spec() -> WorkflowSpec:
+def build_fanin() -> Workflow:
     """Builds one workflow fanning a fetch of every feed into a single union."""
-    nodes: list[NodeAuthoring] = [
+    nodes: list[RawNode] = [
         {"id": f"fetch-{pos}", "name": "fetch", "conf": conf}
         for pos, conf in enumerate(confs)
     ]
-    edges: list[EdgeAuthoring] = [
+    edges: list[RawEdge] = [
         {
             "source": {"node": f"fetch-{pos}", "port": "out"},
             "target": {"node": UNION_ID, "port": "in" if pos == 0 else f"in:{pos}"},
@@ -77,7 +77,7 @@ def build_fanin_spec() -> WorkflowSpec:
         for pos in range(length)
     ]
     nodes.append({"id": UNION_ID, "name": "union"})
-    workflow: WorkflowAuthoring = {
+    workflow: RawWorkflow = {
         "nodes": nodes,
         "edges": edges,
         "outputs": {"default": {"node": UNION_ID, "port": "out"}},
@@ -85,7 +85,7 @@ def build_fanin_spec() -> WorkflowSpec:
     return normalize_workflow(workflow)
 
 
-fanin_spec: WorkflowSpec = build_fanin_spec()
+fanin: Workflow = build_fanin()
 
 
 def baseline_sync() -> list[None]:
@@ -121,7 +121,7 @@ def sync_pipe() -> Items:
 
 
 def sync_workflow() -> Items:
-    return list(Pipeline(fanin_spec))
+    return list(Pipeline(fanin))
 
 
 async def baseline_async() -> list[None]:
@@ -148,10 +148,10 @@ async def async_pipe() -> Items:
 
 
 async def async_workflow() -> Items:
-    return [item async for item in Pipeline(fanin_spec)]
+    return [item async for item in Pipeline(fanin)]
 
 
-def parse_results(results: Sequence[float]) -> tuple[float, str]:
+def summarize_results(results: Sequence[float]) -> tuple[float, str]:
     switch = {0: "secs", 3: "msecs", 6: "usecs"}
     best = min(results)
 
@@ -183,7 +183,7 @@ async def run_async(tests: Sequence[AsyncTest], max_chars: int) -> None:
 
             results.append(loop)
 
-        run_time, units = parse_results(results)
+        run_time, units = summarize_results(results)
         print_time(test.__name__, max_chars, run_time, units)
 
 
@@ -209,7 +209,7 @@ def main() -> None:
 
     for test in sync_tests:
         results = run(f"{test}()", setup=f"from riko.cli.benchmark import {test}")
-        run_time, units = parse_results(results)
+        run_time, units = summarize_results(results)
         print_time(test, max_chars, run_time, units)
 
     if isasync:

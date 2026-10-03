@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, overload
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -12,8 +12,6 @@ from riko.bado._backend import issync, run
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable
-
-    from riko.runtime.collections import AsyncPipe, SyncPipe
 
 TESTS_DIR = Path(__file__).parent.absolute()
 
@@ -34,10 +32,3 @@ def aresolve[T](aiterable: AsyncIterable[T]) -> list[T]:
         return [item async for item in aiterable]
 
     return run(_collect)
-
-
-class PipeBuilder(Protocol):
-    @overload
-    def __call__(self, pipe: type[SyncPipe]) -> SyncPipe: ...  # noqa: E704
-    @overload
-    def __call__(self, pipe: type[AsyncPipe]) -> AsyncPipe: ...  # noqa: E704

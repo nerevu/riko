@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from riko import AsyncPipe, SyncPipe, issync, run
+from riko import Pipeline, issync, run
 from riko.ext import ModuleDefinition, operator, register_module
 
 if TYPE_CHECKING:
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     if issync:
 
         def main() -> None:
-            print(list(SyncPipe(name, source=source)))
+            print(list(Pipeline(source=source).pipe(name)))
 
         register_module(ModuleDefinition(name=name, sync_pipe=pipe))
         main()
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     else:
 
         async def amain() -> None:
-            print([item async for item in AsyncPipe(name, source=source)])
+            print([item async for item in Pipeline(source=source).pipe(name)])
 
         module = ModuleDefinition(name=name, sync_pipe=pipe, async_pipe=async_pipe)
         register_module(module)

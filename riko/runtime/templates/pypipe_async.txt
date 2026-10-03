@@ -18,9 +18,6 @@ from riko.modules.{{ module.name }} import async_pipe as {{ module.alias }}
 {%- endif %}
 {%- endfor %}
 from riko.runtime._pipelines import mark_subpipe
-{%- if use_collection %}
-from riko.runtime.collections import AsyncCollection
-{%- endif %}
 {%- if raw_confs %}
 from riko.types.modules import (
 {%- for raw_conf in raw_confs %}

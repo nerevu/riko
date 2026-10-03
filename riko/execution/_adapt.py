@@ -10,7 +10,7 @@ private to the runtime and belong to no supported surface.
 
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import AsyncIterable, AsyncIterator, Generator, Iterable, Iterator
 from itertools import chain
 from typing import TYPE_CHECKING, Any, cast
 
@@ -20,28 +20,25 @@ from riko.types._sentinels import MISSING
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from riko.types._streams import AsyncItems, AsyncStream, Item, Items, Stream
+    from riko.types._streams import Item, Items
     from riko.types._wrappers import (
         AsyncModuleWrapper,
-        AsyncSplitterWrapperOutput,
-        AsyncWrapperOutput,
+        AsyncModuleWrapperOutput,
         ModuleWrapper,
         SyncModuleWrapper,
-        SyncSplitterWrapperOutput,
-        SyncWrapperOutput,
     )
 
 type LoopCall = Callable[[Callable[[], Any]], Any]
 type WorkerCall = Callable[..., Awaitable[Any]]
-type Drain = Callable[[AsyncItems], Stream]
+type Drain[T] = Callable[[AsyncIterable[T]], Iterator[T]]
 
 _WRAPPER_META = ("name", "type", "subtype", "subtypes", "pollable", "loopable")
 _FUNC_META = ("__name__", "__qualname__", "__doc__")
 
 
-def require_stream(
-    value: SyncWrapperOutput | SyncSplitterWrapperOutput, pipe: ModuleWrapper
-) -> Stream:
+def require_stream[T](
+    value: Iterator[T] | Iterator[Iterator[T]], pipe: ModuleWrapper
+) -> Iterator[T]:
     """
     Narrows a synchronous pipe's raw output to the item stream it produces.
 
@@ -64,12 +61,12 @@ def require_stream(
 
     """
     require_single_output(pipe)
-    return cast("Stream", iter(value))
+    return cast("Iterator[T]", iter(value))
 
 
-def require_async_stream(
-    value: AsyncWrapperOutput | AsyncSplitterWrapperOutput, pipe: ModuleWrapper
-) -> AsyncStream:
+def require_async_stream[T](
+    value: AsyncModuleWrapperOutput[T], pipe: ModuleWrapper
+) -> AsyncIterator[T]:
     """
     Narrows an asynchronous pipe's raw output to the async item stream it produces.
 
@@ -91,10 +88,11 @@ def require_async_stream(
 
     """
     require_single_output(pipe)
-    return cast("AsyncStream", aiter(value))
+    return cast("AsyncIterator[T]", aiter(value))
 
 
-def resolve_items(value: Item | Items) -> Items:
+# TODO: isnt this just listize?
+def normalize_items[T](value: T | Iterable[T]) -> Iterable[T]:
     """
     Resolves a synchronous seed to the item stream it denotes.
 
@@ -111,13 +109,13 @@ def resolve_items(value: Item | Items) -> Items:
 
     Examples:
 
-        >>> resolve_items({"x": 1})
+        >>> normalize_items({"x": 1})
         [{'x': 1}]
-        >>> resolve_items([{"x": 1}, {"x": 2}])
+        >>> normalize_items([{"x": 1}, {"x": 2}])
         [{'x': 1}, {'x': 2}]
 
     """
-    return cast("Items", value) if is_listlike(value) else [cast("Item", value)]
+    return value if is_listlike(value) else [cast("T", value)]
 
 
 def _close_generator(value: object) -> None:
@@ -126,7 +124,7 @@ def _close_generator(value: object) -> None:
         value.close()
 
 
-def drain_async(source: AsyncItems, call: LoopCall) -> Stream:
+def drain_async[T](source: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
     """
     Re-exposes an async stream as a lazy synchronous item stream.
 
@@ -152,9 +150,9 @@ def drain_async(source: AsyncItems, call: LoopCall) -> Stream:
             yield item
 
 
-async def pull_stream(
-    iterator: Stream, closeable: object, pull: WorkerCall, close: WorkerCall
-) -> AsyncStream:
+async def pull_stream[T](
+    iterator: Iterator[T], closeable: object, pull: WorkerCall, close: WorkerCall
+) -> AsyncIterator[T]:
     """
     Re-exposes a blocking item stream as a lazy async item stream.
 
@@ -209,7 +207,9 @@ def _materialize(
     return list(require_stream(embed(item, **kwargs), embed))
 
 
-def adapt_embed_for_sync(embed: AsyncModuleWrapper, drain: Drain) -> SyncModuleWrapper:
+def adapt_embed_for_sync[T](
+    embed: AsyncModuleWrapper, drain: Drain[T]
+) -> SyncModuleWrapper:
     """
     Wraps an async-only loop embed as a synchronous one.
 
@@ -228,8 +228,10 @@ def adapt_embed_for_sync(embed: AsyncModuleWrapper, drain: Drain) -> SyncModuleW
 
     """
 
-    def wrapper(item: Item | None = None, **kwargs: object) -> Stream:
-        return drain(require_async_stream(embed(item, **kwargs), embed))
+    def wrapper(item: T | None = None, **kwargs: object) -> Iterator[T]:
+        output = cast("AsyncModuleWrapperOutput[T]", embed(item, **kwargs))
+        stream = require_async_stream(output, embed)
+        return drain(stream)
 
     _copy_wrapper_meta(wrapper, embed, isasync=False)
     return cast("SyncModuleWrapper", wrapper)
@@ -239,21 +241,21 @@ def adapt_embed_for_async(
     embed: SyncModuleWrapper, run_sync: WorkerCall
 ) -> AsyncModuleWrapper:
     """
-    Wraps a sync-only loop embed as an asynchronous one.
+        Wraps a sync-only loop embed as an asynchronous one.
 
-    The caller gets a callable with the asynchronous calling convention that
-    carries the embed's discovery metadata, so the loop machinery treats it as a
-    native async embed. Each parent item's results are collected off the event
-    loop, which the per-parent result count keeps bounded.
+        The caller gets a callable with the asynchronous calling convention that
+        carries the embed's discovery metadata, so the loop machinery treats it as a
+        native async embed. Each parent item's results are collected off the event
+        loop, which the per-parent result count keeps bounded.
 
     Args:
 
-        embed: The blocking pipe to run per parent item.
-        run_sync: Runs a blocking callable off the event loop.
+            embed: The blocking pipe to run per parent item.
+            run_sync: Runs a blocking callable off the event loop.
 
     Returns:
 
-        An asynchronous embed whose per-item results are produced on a worker.
+            An asynchronous embed whose per-item results are produced on a worker.
 
     """
 
@@ -269,8 +271,8 @@ __all__ = [
     "adapt_embed_for_async",
     "adapt_embed_for_sync",
     "drain_async",
+    "normalize_items",
     "pull_stream",
     "require_async_stream",
     "require_stream",
-    "resolve_items",
 ]

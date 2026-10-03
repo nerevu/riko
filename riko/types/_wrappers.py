@@ -51,8 +51,8 @@ type PipeTuples = SyncPipeTuples | AsyncPipeTuples
 type Interface = Literal["pipe", "async_pipe"]
 
 # Input/Output
-type Func = Callable[..., object]
-type AysncFunc = Callable[..., Awaitable[object]]
+type Func[T] = Callable[..., T]
+type AysncFunc[T] = Callable[..., Awaitable[T]]
 type CoroutineFunc = Callable[..., Coroutine[object, object, object]]
 type ProcessorParserOutput[O: ItemOrValue] = O | Iterator[O]
 type OperatorParserOutput[T: ItemOrValue] = T | Iterator[T] | Stream
@@ -122,7 +122,7 @@ class ModuleWrapper(Protocol):
     __name__: str
     __qualname__: str
 
-    def __call__(  # noqa: E301
+    def __call__(  # noqa: E301, E704
         self, *args: Any, **kwargs: Any
     ) -> WrapperOutput | SplitterWrapperOutput: ...
 
@@ -138,7 +138,7 @@ class ModuleWrapper(Protocol):
 class SyncModuleWrapper(ModuleWrapper, Protocol):
     isasync = False
 
-    def __call__(  # noqa: E301
+    def __call__(  # noqa: E301, E704
         self, *args: Any, **kwargs: Any
     ) -> SyncWrapperOutput | SyncSplitterWrapperOutput: ...
 
@@ -223,6 +223,11 @@ type AsyncSplitterWrapperOutput = AsyncWrapperStream[Stream, SyncSplitterWrapper
 type AsyncSplitterWrapperInput = SyncSplitterWrapperInput
 
 type AsyncWrapperOutput = AsyncProcessorWrapperOutput | AsyncOperatorWrapperOutput
+type AsyncModuleWrapperOutput[T] = (
+    AsyncWrapperStream[T, Iterator[T]]
+    | AsyncWrapperStream[Iterator[T], Iterator[Iterator[T]]]
+)
+
 type AwaitableProcessorParser[I, E, O: ItemOrValue] = Callable[
     [I, E, DynamicConf], Awaitable[ProcessorParserOutput[O]]
 ]
@@ -246,7 +251,7 @@ type AsyncPipeParser[T: ItemOrValue] = Callable[..., AwaitableParserOutput[T]]
 class AsyncModuleWrapper(ModuleWrapper, Protocol):
     isasync = True
 
-    def __call__(  # noqa: E301
+    def __call__(  # noqa: E301, E704
         self, *args: Any, **kwargs: Any
     ) -> AsyncWrapperOutput | AsyncSplitterWrapperOutput: ...
 
@@ -330,17 +335,17 @@ class Resolver(Protocol):
     """
 
     @overload
-    def resolve(  # noqa: E704
+    def require(  # noqa: E704
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
     @overload  # noqa: E301
-    def resolve(  # noqa: E704
+    def require(  # noqa: E704
         self, name: str, is_async: Literal[True]
     ) -> AsyncModuleWrapper: ...
-    def resolve(  # noqa: E301, E704
+    def require(  # noqa: E301, E704
         self, name: str, is_async: bool = False
     ) -> ModuleWrapper: ...
 
     def is_compatible(self, name: str) -> bool: ...  # noqa: E704
-    def get_interfaces(self, name: str) -> frozenset[Interface]: ...  # noqa: E704
+    def require_interfaces(self, name: str) -> frozenset[Interface]: ...  # noqa: E704
     def load_definition(self, name: str) -> object: ...  # noqa: E704

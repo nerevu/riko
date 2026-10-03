@@ -136,7 +136,7 @@ def build_regex_conf_rule(
     )
 
 
-def resolve_regex_rule(
+def build_regex_rule(
     rule: DynamicConf | RegexConfRule, recompile: bool = False
 ) -> RegexRule:
     """
@@ -154,11 +154,11 @@ def resolve_regex_rule(
 
     Examples:
 
-        >>> rule = resolve_regex_rule(build_regex_conf_rule("title", "foo", "bar"))
+        >>> rule = build_regex_rule(build_regex_conf_rule("title", "foo", "bar"))
         >>> rule["field"], rule["match"], rule["replace"], rule["series"]
         ('title', 'foo', 'bar', True)
         >>> conf_rule = build_regex_conf_rule("title", "foo", "bar")
-        >>> compiled = resolve_regex_rule(conf_rule, True)
+        >>> compiled = build_regex_rule(conf_rule, True)
         >>> compiled["match"].pattern
         'foo'
 

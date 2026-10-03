@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from riko import Pipeline
 from riko.base._dateutils import get_tzname
 from riko.base._strutils import truncate_content
 from riko.base.exceptions import UnsupportedModuleError
@@ -26,11 +27,10 @@ from riko.coercion._sequences import listize
 from riko.definitions._workflow import ModuleNode
 from riko.execution._execution import SyncExecution
 from riko.execution.context import Context
-from riko.runtime._compile import get_pipeline_dependencies, resolve_module
+from riko.runtime._compile import resolve_module
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._pipelines import pipeline_resolver
-from riko.runtime._serialize import parse_workflow
-from riko.runtime.collections import SyncPipe
+from riko.runtime._serialize import parse_document
 from riko.types._guards import is_mapping
 from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput
@@ -39,9 +39,8 @@ from tests import TESTS_DIR, async_test
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from riko.definitions._workflow import Node, WorkflowSpec
+    from riko.definitions._workflow import Node, Workflow
     from riko.types._io import PathLike
-    from riko.types._pipeline import AsyncPipelineDependencies, SyncPipelineDependencies
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
@@ -115,9 +114,9 @@ def _node_names(node: Node) -> set[str]:
     return names
 
 
-def _spec_dependencies(spec: WorkflowSpec) -> list[str]:
+def _workflow_dependencies(workflow: Workflow) -> list[str]:
     """Collects the built-in module names a canonical workflow depends on."""
-    named = (_node_names(node) for node in spec.nodes.values())
+    named = (_node_names(node) for node in workflow.nodes.values())
     names = set(chain.from_iterable(named))
     return sorted(name for name in names if not name.startswith("pipe"))
 
@@ -131,18 +130,18 @@ def _declared_input(name: str, schema: object) -> tuple[str, str, str, str, str]
     return ("", name, prompt, kind, default)
 
 
-def _declared_inputs(spec: WorkflowSpec) -> list[tuple[str, str, str, str, str]]:
+def _declared_inputs(workflow: Workflow) -> list[tuple[str, str, str, str, str]]:
     """Renders a workflow's declared inputs as the prompt tuples a caller is shown."""
-    properties = spec.inputs.get("properties")
+    properties = workflow.inputs.get("properties")
     schemas = properties if is_mapping(properties) else {}
     return [_declared_input(name, schema) for name, schema in sorted(schemas.items())]
 
 
-def _load_spec(pipe_name: str) -> WorkflowSpec:
+def _load_workflow(pipe_name: str) -> Workflow:
     """Parses the canonical workflow document committed for a pipeline."""
     document = _document(pipe_name)
     assert document is not None, f"{pipe_name} has no canonical document"
-    return parse_workflow(document.read_text())
+    return parse_document(document.read_text())
 
 
 def _check_results(
@@ -205,11 +204,11 @@ def test_fetchtable_reads_sqlite_fixture(tmp_path, db_conn):
     dbpath = tmp_path / "cars.sqlite"
     db_conn(dbpath)
 
-    stream = SyncPipe("fetchtable", conf={"url": str(dbpath)})
+    pipeline = Pipeline.from_module("fetchtable", conf={"url": str(dbpath)})
     item = {}
 
     with pytest.raises(RuntimeError):
-        item = next(stream)
+        item = pipeline.first()
 
     Path(dbpath).unlink(missing_ok=True)
     assert is_mapping(item)
@@ -229,10 +228,10 @@ class TestBasics:
             stream = resolve_module(pipe_name)(context=self.context)
             items = cast("ParserMaterializedOutput", list(listize(stream)))
         else:
-            spec = pipeline_resolver.load_definition(pipe_name, directory=file_path)
+            workflow = pipeline_resolver.load_definition(pipe_name, directory=file_path)
 
             with SyncExecution(context=self.context) as execution:
-                items = list(execution.run(build_execution_plan(spec)))
+                items = list(execution.run(build_execution_plan(workflow)))
 
         return items
 
@@ -242,20 +241,18 @@ class TestBasics:
     def _load(self, items: Sequence[Items], pipe_name, value=0, check=1):
         if _document(pipe_name) is None:
             module = import_module(f"tests.pypipelines.{pipe_name}")
-            pipeline: SyncPipelineDependencies = module.pipe
-            pydeps = get_pipeline_dependencies(pipeline=pipeline)
+            pydeps = _workflow_dependencies(module.build().workflow)
         else:
-            pydeps = _spec_dependencies(_load_spec(pipe_name))
+            pydeps = _workflow_dependencies(_load_workflow(pipe_name))
 
         _check_results(pydeps, items, pipe_name, value=value, check=check)
 
     async def _aload(self, items: Sequence[Items], pipe_name, value=0, check=1):
         if _document(pipe_name) is None:
             module = import_module(f"tests.pypipelines.{pipe_name}")
-            pipeline: AsyncPipelineDependencies = module.async_pipe
-            pydeps = await get_pipeline_dependencies(pipeline=pipeline)
+            pydeps = _workflow_dependencies(module.build().workflow)
         else:
-            pydeps = _spec_dependencies(_load_spec(pipe_name))
+            pydeps = _workflow_dependencies(_load_workflow(pipe_name))
 
         _check_results(pydeps, items, pipe_name, value=value, check=check)
 
@@ -669,7 +666,7 @@ class TestBasics:
     )
     def test_describe_input(self):
         """Reads a pipeline's input requirements from what it declares."""
-        spec = _load_spec("pipe_5fabfc509a8e44342941060c7c7d0340")
+        workflow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
         expected = [
             ("", "dateinput1", "dateinput1", "datetime", "10/14/2010"),
             ("", "locationinput1", "locationinput1", "location", "isle of wight, uk"),
@@ -685,12 +682,12 @@ class TestBasics:
             ("", "urlinput1", "urlinput1", "url", "file://riko/data/example.html"),
         ]
 
-        assert _declared_inputs(spec) == expected
+        assert _declared_inputs(workflow) == expected
 
     def test_describe_dependencies(self):
         """Reads a pipeline's module dependencies from its canonical document."""
-        spec = _load_spec("pipe_5fabfc509a8e44342941060c7c7d0340")
-        assert _spec_dependencies(spec) == ["input", "rssitembuilder"]
+        workflow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
+        assert _workflow_dependencies(workflow) == ["input", "rssitembuilder"]
 
     def test_union_just_other(self):
         """

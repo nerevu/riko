@@ -55,7 +55,7 @@ def _strip_required(annotation):
     return annotation.slice if wrapped else annotation
 
 
-def _normalize(annotation) -> str:
+def _render_annotation(annotation) -> str:
     inner = _strip_required(annotation)
     module = ast.parse("")
     module.body = [ast.Expr(value=inner)]
@@ -81,7 +81,7 @@ def _nonraw_confs() -> list[ast.ClassDef]:
 
 def own_fields(node: ast.ClassDef) -> dict[str, str]:
     return {
-        stmt.target.id: _normalize(stmt.annotation)
+        stmt.target.id: _render_annotation(stmt.annotation)
         for stmt in node.body
         if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
     }

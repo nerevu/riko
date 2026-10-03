@@ -16,10 +16,10 @@ from riko.base.exceptions import (
     UnsupportedModuleError,
     UnsupportedPipelineError,
 )
-from riko.definitions._workflow import Pipeline
+from riko.definitions._workflow import Node, Pipeline, Workflow, WorkflowLike
 from riko.execution.context import Context
 from riko.ext.codegen import list_modules
-from riko.io._async import async_url_open, async_write, get_async_temp_file
+from riko.io._async import async_get_temp_file, async_url_open, async_write
 from riko.modules._metadata import describe_module, get_module_metadata
 from riko.modules._names import Modules, Sinks, Sources, Transforms
 from riko.runtime._codegen import compile_pipe
@@ -28,17 +28,10 @@ from riko.runtime._compile import (
     get_pipeline_dependencies,
     parse_pipe_def,
 )
-from riko.runtime._migrate import build_workflow
-from riko.runtime.collections import (
-    AsyncCollection,
-    AsyncPipe,
-    PipeState,
-    SyncCollection,
-    SyncPipe,
-    export,
-    list_formats,
-)
+from riko.runtime._migrate import parse_dag
+from riko.runtime.collections import export, list_formats
 from riko.types._enums import Backends, ExecutionMode, Formats
+from riko.types._workflow import Edge, Endpoint, WorkflowDocument
 
 from ._package import PACKAGE_INFO
 
@@ -54,26 +47,28 @@ def __getattr__(name: str) -> str:
 __copyright__ = "Copyright 2015 Reuben Cummings"
 
 __all__ = [
-    "AsyncCollection",
-    "AsyncPipe",
     "Backends",
     "Context",
+    "Edge",
+    "Endpoint",
     "ExecutionMode",
     "Formats",
     "Modules",
-    "PipeState",
+    "Node",
     "Pipeline",
     "PipelineStateError",
     "RikoError",
     "Sinks",
     "Sources",
-    "SyncCollection",
-    "SyncPipe",
     "Transforms",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
+    "Workflow",
+    "WorkflowDocument",
+    "WorkflowLike",
     "as_async",
     "async_chain",
+    "async_get_temp_file",
     "async_map",
     "async_map_stream",
     "async_read",
@@ -83,11 +78,9 @@ __all__ = [
     "async_write",
     "backend",
     "build_pipeline",
-    "build_workflow",
     "compile_pipe",
     "describe_module",
     "export",
-    "get_async_temp_file",
     "get_module_metadata",
     "get_path",
     "get_pipeline_dependencies",
@@ -96,6 +89,7 @@ __all__ = [
     "issync",
     "list_formats",
     "list_modules",
+    "parse_dag",
     "parse_pipe_def",
     "run",
 ]

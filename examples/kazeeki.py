@@ -16,20 +16,21 @@ Examples:
 from __future__ import annotations
 
 from functools import partial
+from itertools import chain
 from pprint import pprint
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
-from riko import AsyncPipe, SyncPipe, get_path
+from riko import Pipeline, async_chain, get_path
 from riko.types.modules import (
     CurrencyFormatConf,
     CurrencyFormatRawConf,
     ExchangeRateConf,
     FetchDataConf,
     FindConfRule,
+    ModuleOptions,
     RenameConf,
     RenameConfRule,
     SimpleMathRawConf,
-    Skip,
     StrconcatConf,
     StrfindConf,
     StrReplaceConfRule,
@@ -40,12 +41,11 @@ from riko.types.modules import (
 )
 
 if TYPE_CHECKING:
-    from riko.types._streams import Items
-
-# from riko.utils import make_regex_conf_rule
+    from riko.types import AsyncStream, Item
 
 BR = FindConfRule(find="<br>")
 DEF_CUR_CODE = "USD"
+Rules = FindConfRule | list[FindConfRule]
 
 odesk_conf = FetchDataConf({"url": get_path("odesk.json"), "path": "items"})
 guru_conf = FetchDataConf({"url": get_path("guru.json"), "path": "items"})
@@ -62,102 +62,81 @@ def make_simplemath(other: str, op: str) -> SimpleMathRawConf:
     )
 
 
-def add_source[T: SyncPipe | AsyncPipe](source: T) -> T:
+def add_source(source: Pipeline) -> Pipeline:
     subelement_conf = SubelementConf({"path": "k:source.content.1", "token_key": None})
-
-    result = source.urlparse(field="link", emit=False, assign="k:source").subelement(
-        conf=subelement_conf, emit=False, assign="k:source"
+    urlparse_options = ModuleOptions(
+        {"field": "link", "emit": False, "assign": "k:source"}
     )
-    return cast("T", result)
+
+    return source.urlparse(options=urlparse_options).subelement(
+        conf=subelement_conf, options={"emit": False, "assign": "k:source"}
+    )
 
 
-def add_id[T: SyncPipe | AsyncPipe](source: T, rule, field="link") -> T:
+def add_id(source: Pipeline, rule: Rules, field: str = "link") -> Pipeline:
     make_id_part = [
         {"subkey": "k:source", "type": "text"},
         "-",
         {"subkey": "id", "type": "text"},
     ]
 
-    result = source.strfind(conf={"rule": rule}, field=field, assign="id").strconcat(
-        conf={"part": make_id_part}, assign="id"
-    )
-    return cast("T", result)
+    return source.strfind(
+        conf={"rule": rule}, options={"field": field, "assign": "id"}
+    ).strconcat(conf={"part": make_id_part}, options={"assign": "id"})
 
 
-def add_posted[T: SyncPipe | AsyncPipe](
-    source: T, rule: FindConfRule | list[FindConfRule] | None = None, field="summary"
-) -> T:
-    if rule:
-        conf = StrfindConf({"rule": rule})
-        result = source.strfind(conf=conf, field=field, assign="k:posted")
-    else:
+def add_posted(
+    source: Pipeline, rule: Rules | None = None, field: str = "summary"
+) -> Pipeline:
+    if rule is None:
         rename_rule = RenameConfRule(field="updated", newval="k:posted")
         result = source.rename(conf={"rule": rename_rule})
+    else:
+        conf = StrfindConf({"rule": rule})
+        result = source.strfind(
+            conf=conf, options={"field": field, "assign": "k:posted"}
+        )
 
-    return cast("T", result)
+    return result
 
 
-def add_tags[T: SyncPipe | AsyncPipe](
-    source: T, rule, field="summary", assign="k:tags"
-) -> T:
-    no_tags = Skip({"field": assign})
-
+def add_tags(
+    source: Pipeline, rule: Rules, field: str = "summary", assign: str = "k:tags"
+) -> Pipeline:
     tag_strreplace_rule = [
         StrReplaceConfRule(find="  ", replace=","),
         StrReplaceConfRule(find="&gt;", replace=","),
         StrReplaceConfRule(find="&amp;", replace="&"),
         StrReplaceConfRule(find="Other -", replace=""),
-        # StrReplaceConfRule(find='-', replace=''),
     ]
 
-    result = (
-        source.strfind(conf={"rule": rule}, field=field, assign=assign)
-        .strreplace(
-            conf={"rule": tag_strreplace_rule},
-            field=assign,
-            assign=assign,
-            skip_if=no_tags,
-        )
-        .strtransform(
-            conf=StrTransformConf({"rule": StrTransformConfRule(transform="lower")}),
-            field=assign,
-            assign=assign,
-            skip_if=no_tags,
-        )
+    transform_conf = StrTransformConf({"rule": StrTransformConfRule(transform="lower")})
+
+    in_place = ModuleOptions({"field": assign, "assign": assign})
+
+    return (
+        source.strfind(conf={"rule": rule}, options={"field": field, "assign": assign})
+        .strreplace(conf={"rule": tag_strreplace_rule}, options=in_place)
+        .strtransform(conf=transform_conf, options=in_place)
         .tokenizer(
             conf={"dedupe": True, "sort": True},
-            field=assign,
-            emit=False,
-            assign=assign,
-            skip_if=no_tags,
+            options={"field": assign, "emit": False, "assign": assign},
         )
     )
-    return cast("T", result)
 
 
-def add_budget[T: SyncPipe | AsyncPipe](
-    source: T, fixed_text="", hourly_text="", double: bool | str = True
-) -> T:
+def add_budget(
+    source: Pipeline,
+    fixed_text: str = "",
+    hourly_text: str = "",
+    double: bool | str = True,
+) -> Pipeline:
     codes = "$£€₹"
-    no_raw_budget = Skip({"field": "k:budget_raw"})
-    has_code = Skip({"field": "k:cur_code", "include": True})
-    is_def_cur = Skip({"field": "k:cur_code", "text": DEF_CUR_CODE})
-    not_def_cur = Skip({"field": "k:cur_code", "text": DEF_CUR_CODE, "include": True})
-    isnt_fixed = Skip({"field": "summary", "text": fixed_text, "include": True})
-    isnt_hourly = Skip({"field": "summary", "text": hourly_text, "include": True})
-    no_symbol = Skip(
-        {"field": "k:budget_raw", "text": codes, "op": "intersection", "include": True}
-    )
-    code_or_no_raw_budget = [has_code, no_raw_budget]
-    def_cur_or_no_raw_budget = [is_def_cur, no_raw_budget]
-    not_def_cur_or_no_raw_budget = [not_def_cur, no_raw_budget]
-
     first_num_rule = FindConfRule(find=r"\d+", location="at")
     last_num_rule = FindConfRule(find=r"\d+", location="at", param="last")
     cur_rule = FindConfRule(find=r"\b[A-Z]{3}\b", location="at")
     sym_rule = FindConfRule(find=f"[{codes}]", location="at")
 
-    # make_regex_conf_rule('k:budget_raw', r'[(),.\s]', ''),
     invalid_budgets = [
         StrReplaceConfRule(find="Less than", replace="0-"),
         StrReplaceConfRule(find="Under", replace="0-"),
@@ -199,140 +178,104 @@ def add_budget[T: SyncPipe | AsyncPipe](
     def_currencyformat_conf = CurrencyFormatConf({"currency": DEF_CUR_CODE})
     ave_budget_conf = make_simplemath("k:budget_raw2_num", "mean")
     convert_budget_conf = make_simplemath("k:rate", "multiply")
+    raw_budget = ModuleOptions({"field": "k:budget_raw", "assign": "k:budget_raw"})
 
     if fixed_text:
         result = source.strconcat(
-            conf={"part": "fixed"}, assign="k:job_type", skip_if=isnt_fixed
+            conf={"part": "fixed"}, options={"assign": "k:job_type"}
         )
     else:
         result = source
 
     if hourly_text:
         result = result.strconcat(
-            conf={"part": "hourly"}, assign="k:job_type", skip_if=isnt_hourly
+            conf={"part": "hourly"}, options={"assign": "k:job_type"}
         )
 
     result = result.refind(
         conf={"rule": cur_rule},
-        field="k:budget_raw",
-        assign="k:cur_code",
-        skip_if=no_raw_budget,
-    ).strreplace(
-        conf={"rule": invalid_budgets},
-        field="k:budget_raw",
-        assign="k:budget_raw",
-        skip_if=no_raw_budget,
-    )
+        options={"field": "k:budget_raw", "assign": "k:cur_code"},
+    ).strreplace(conf={"rule": invalid_budgets}, options=raw_budget)
 
     if double:
         result = (
             result.refind(
                 conf={"rule": first_num_rule},
-                field="k:budget_raw",
-                assign="k:budget_raw_num",
-                skip_if=no_raw_budget,
+                options={"field": "k:budget_raw", "assign": "k:budget_raw_num"},
             )
             .refind(
                 conf={"rule": last_num_rule},
-                field="k:budget_raw",
-                assign="k:budget_raw2_num",
-                skip_if=no_raw_budget,
+                options={"field": "k:budget_raw", "assign": "k:budget_raw2_num"},
             )
             .simplemath(
                 conf=ave_budget_conf,
-                field="k:budget_raw_num",
-                assign="k:budget",
-                skip_if=no_raw_budget,
+                options={"field": "k:budget_raw_num", "assign": "k:budget"},
             )
         )
     else:
         result = result.refind(
             conf={"rule": first_num_rule},
-            field="k:budget_raw",
-            assign="k:budget",
-            skip_if=no_raw_budget,
+            options={"field": "k:budget_raw", "assign": "k:budget"},
         )
 
     result = (
         result.refind(
             conf={"rule": sym_rule},
-            field="k:budget_raw",
-            assign="k:budget_raw_sym",
-            skip_if=no_symbol,
+            options={"field": "k:budget_raw", "assign": "k:budget_raw_sym"},
         )
         .strreplace(
             conf={"rule": cur_strreplace_rule},
-            field="k:budget_raw_sym",
-            assign="k:cur_code",
-            skip_if=code_or_no_raw_budget,
+            options={"field": "k:budget_raw_sym", "assign": "k:cur_code"},
         )
         .currencyformat(
             conf=native_currencyformat_conf,
-            field="k:budget",
-            assign="k:budget_w_sym",
-            skip_if=no_raw_budget,
+            options={"field": "k:budget", "assign": "k:budget_w_sym"},
         )
         .exchangerate(
-            conf=exchangerate_conf,
-            field="k:cur_code",
-            assign="k:rate",
-            skip_if=def_cur_or_no_raw_budget,
+            conf=exchangerate_conf, options={"field": "k:cur_code", "assign": "k:rate"}
         )
         .simplemath(
             conf=convert_budget_conf,
-            field="k:budget",
-            assign="k:budget_converted",
-            skip_if=def_cur_or_no_raw_budget,
+            options={"field": "k:budget", "assign": "k:budget_converted"},
         )
         .currencyformat(
             conf=def_currencyformat_conf,
-            field="k:budget_converted",
-            assign="k:budget_converted_w_sym",
-            skip_if=def_cur_or_no_raw_budget,
+            options={
+                "field": "k:budget_converted",
+                "assign": "k:budget_converted_w_sym",
+            },
         )
         .strconcat(
             conf=StrconcatConf({"part": converted_budget_part}),
-            assign="k:budget_full",
-            skip_if=def_cur_or_no_raw_budget,
+            options={"assign": "k:budget_full"},
         )
         .strconcat(
             conf=StrconcatConf({"part": def_full_budget_part}),
-            assign="k:budget_full",
-            skip_if=not_def_cur_or_no_raw_budget,
+            options={"assign": "k:budget_full"},
         )
     )
 
     if hourly_text:
         result = result.strconcat(
-            conf={"part": hourly_budget_part},
-            assign="k:budget_full",
-            skip_if=isnt_hourly,
+            conf={"part": hourly_budget_part}, options={"assign": "k:budget_full"}
         )
 
-    return cast("T", result)
+    return result
 
 
-def clean_locations[T: SyncPipe | AsyncPipe](source: T) -> T:
-    no_client_loc = Skip({"field": "k:client_location"})
-    no_work_loc = Skip({"field": "k:work_location"})
+def clean_locations(source: Pipeline) -> Pipeline:
     rule = StrReplaceConfRule(find=", ", replace="")
+    client = ModuleOptions(
+        {"field": "k:client_location", "assign": "k:client_location"}
+    )
+    work = ModuleOptions({"field": "k:work_location", "assign": "k:work_location"})
 
-    result = source.strreplace(
-        conf={"rule": rule},
-        field="k:client_location",
-        assign="k:client_location",
-        skip_if=no_client_loc,
-    ).strreplace(
-        conf={"rule": rule},
-        field="k:work_location",
-        assign="k:work_location",
-        skip_if=no_work_loc,
+    return source.strreplace(conf={"rule": rule}, options=client).strreplace(
+        conf={"rule": rule}, options=work
     )
 
-    return cast("T", result)
 
-
-def remove_cruft[T: SyncPipe | AsyncPipe](source: T) -> T:
+def remove_cruft(source: Pipeline) -> Pipeline:
     remove_rule = [
         RenameConfRule(field="author"),
         RenameConfRule(field="content"),
@@ -351,13 +294,11 @@ def remove_cruft[T: SyncPipe | AsyncPipe](source: T) -> T:
         RenameConfRule(field="k:budget_raw_sym"),
     ]
 
-    result = source.rename(conf=RenameConf({"rule": remove_rule}))
-    return cast("T", result)
+    return source.rename(conf=RenameConf({"rule": remove_rule}))
 
 
-def parse_odesk[T: SyncPipe | AsyncPipe](source: T) -> T:
+def parse_odesk(source: Pipeline) -> Pipeline:
     budget_text = "Budget</b>:"
-    no_budget = Skip({"field": "summary", "text": budget_text, "include": True})
     raw_budget_rule = [FindConfRule(find=budget_text, location="after"), BR]
     title_rule = FindConfRule(find="- oDesk")
     find_id_rule = [FindConfRule(find="ID</b>:", location="after"), BR]
@@ -371,18 +312,23 @@ def parse_odesk[T: SyncPipe | AsyncPipe](source: T) -> T:
     ]
 
     result = (
-        source.strfind(conf={"rule": title_rule}, field="title", assign="title")
-        .strfind(
-            conf={"rule": client_loc_rule}, field="summary", assign="k:client_location"
+        source.strfind(
+            conf={"rule": title_rule}, options={"field": "title", "assign": "title"}
         )
-        .strfind(conf={"rule": desc_rule}, field="summary", assign="description")
+        .strfind(
+            conf={"rule": client_loc_rule},
+            options={"field": "summary", "assign": "k:client_location"},
+        )
+        .strfind(
+            conf={"rule": desc_rule},
+            options={"field": "summary", "assign": "description"},
+        )
         .strfind(
             conf={"rule": raw_budget_rule},
-            field="summary",
-            assign="k:budget_raw",
-            skip_if=no_budget,
+            options={"field": "summary", "assign": "k:budget_raw"},
         )
     )
+
     result = add_source(result)
     result = add_posted(result, posted_rule)
     result = add_id(result, find_id_rule, field="summary")
@@ -390,17 +336,14 @@ def parse_odesk[T: SyncPipe | AsyncPipe](source: T) -> T:
     result = add_tags(result, skills_rule)
     result = add_tags(result, categ_rule, assign="k:categories")
     result = clean_locations(result)
-    result = remove_cruft(result)
-    return cast("T", result)
+    return remove_cruft(result)
 
 
-def parse_guru[T: SyncPipe | AsyncPipe](source: T) -> T:
+def parse_guru(source: Pipeline) -> Pipeline:
     budget_text = "budget:</b>"
     fixed_text = "Fixed Price budget:</b>"
     hourly_text = "Hourly budget:</b>"
 
-    no_budget = Skip({"field": "summary", "text": budget_text, "include": True})
-    isnt_hourly = Skip({"field": "summary", "text": hourly_text, "include": True})
     raw_budget_rule = [FindConfRule(find=budget_text, location="after"), BR]
     after_hourly = StrfindConf({"rule": FindConfRule(find="Rate:", location="after")})
     find_id_rule = FindConfRule(find="/", location="after", param="last")
@@ -416,19 +359,17 @@ def parse_guru[T: SyncPipe | AsyncPipe](source: T) -> T:
     )
 
     result = (
-        source.strfind(conf=job_loc_conf, field="summary", assign="k:work_location")
-        .strfind(conf=desc_conf, field="summary", assign="description")
+        source.strfind(
+            conf=job_loc_conf, options={"field": "summary", "assign": "k:work_location"}
+        )
+        .strfind(conf=desc_conf, options={"field": "summary", "assign": "description"})
         .strfind(
             conf={"rule": raw_budget_rule},
-            field="summary",
-            assign="k:budget_raw",
-            skip_if=no_budget,
+            options={"field": "summary", "assign": "k:budget_raw"},
         )
         .strfind(
             conf=after_hourly,
-            field="k:budget_raw",
-            assign="k:budget_raw",
-            skip_if=isnt_hourly,
+            options={"field": "k:budget_raw", "assign": "k:budget_raw"},
         )
     )
 
@@ -440,24 +381,14 @@ def parse_guru[T: SyncPipe | AsyncPipe](source: T) -> T:
     result = add_tags(result, skills_rule)
     result = add_tags(result, categ_rule, assign="k:categories")
     result = clean_locations(result)
-    result = remove_cruft(result)
-    return cast("T", result)
+    return remove_cruft(result)
 
 
-def parse_elance[T: SyncPipe | AsyncPipe](source: T) -> T:
+def parse_elance(source: Pipeline) -> Pipeline:
     budget_text = "Budget:</b>"
     fixed_text = "Budget:</b> Fixed Price"
     hourly_text = "Budget:</b> Hourly"
 
-    no_job_loc = Skip(
-        {"field": "summary", "text": "Preferred Job Location", "include": True}
-    )
-    no_client_loc = Skip(
-        {"field": "summary", "text": "Client Location", "include": True}
-    )
-    no_budget = Skip({"field": "summary", "text": budget_text, "include": True})
-    isnt_fixed = Skip({"field": "summary", "text": fixed_text, "include": True})
-    isnt_hourly = Skip({"field": "summary", "text": hourly_text, "include": True})
     raw_budget_rule = [FindConfRule(find=budget_text, location="after"), BR]
     after_hourly = StrfindConf({"rule": FindConfRule(find="Hourly", location="after")})
     after_fixed = StrfindConf(
@@ -538,42 +469,44 @@ def parse_elance[T: SyncPipe | AsyncPipe](source: T) -> T:
     )
 
     result = (
-        source.strfind(conf=title_conf, field="title", assign="title")
-        .strfind(conf=proposals_conf, field="summary", assign="k:submissions")
-        .strfind(conf=jobs_posted_conf, field="summary", assign="k:num_jobs")
-        .strfind(conf=jobs_awarded_conf, field="summary", assign="k:per_awarded")
-        .strfind(conf=purchased_conf, field="summary", assign="k:tot_purchased")
-        .strfind(conf=ends_conf, field="summary", assign="k:due")
+        source.strfind(conf=title_conf, options={"field": "title", "assign": "title"})
         .strfind(
-            conf=job_loc_conf,
-            field="summary",
-            assign="k:work_location",
-            skip_if=no_job_loc,
+            conf=proposals_conf, options={"field": "summary", "assign": "k:submissions"}
+        )
+        .strfind(
+            conf=jobs_posted_conf, options={"field": "summary", "assign": "k:num_jobs"}
+        )
+        .strfind(
+            conf=jobs_awarded_conf,
+            options={"field": "summary", "assign": "k:per_awarded"},
+        )
+        .strfind(
+            conf=purchased_conf,
+            options={"field": "summary", "assign": "k:tot_purchased"},
+        )
+        .strfind(conf=ends_conf, options={"field": "summary", "assign": "k:due"})
+        .strfind(
+            conf=job_loc_conf, options={"field": "summary", "assign": "k:work_location"}
         )
         .strfind(
             conf=client_loc_conf,
-            field="summary",
-            assign="k:client_location",
-            skip_if=no_client_loc,
+            options={"field": "summary", "assign": "k:client_location"},
         )
-        .strfind(conf={"rule": desc_rule}, field="summary", assign="description")
+        .strfind(
+            conf={"rule": desc_rule},
+            options={"field": "summary", "assign": "description"},
+        )
         .strfind(
             conf={"rule": raw_budget_rule},
-            field="summary",
-            assign="k:budget_raw",
-            skip_if=no_budget,
+            options={"field": "summary", "assign": "k:budget_raw"},
         )
         .strfind(
             conf=after_hourly,
-            field="k:budget_raw",
-            assign="k:budget_raw",
-            skip_if=isnt_hourly,
+            options={"field": "k:budget_raw", "assign": "k:budget_raw"},
         )
         .strfind(
             conf=after_fixed,
-            field="k:budget_raw",
-            assign="k:budget_raw",
-            skip_if=isnt_fixed,
+            options={"field": "k:budget_raw", "assign": "k:budget_raw"},
         )
     )
 
@@ -584,14 +517,11 @@ def parse_elance[T: SyncPipe | AsyncPipe](source: T) -> T:
     result = add_budget(result, **kwargs)
     result = add_tags(result, skills_rule)
     result = add_tags(result, categ_rule, assign="k:categories")
-    result = clean_locations(result)
-    # result = remove_cruft(result)
-    return cast("T", result)
+    return clean_locations(result)
 
 
-def parse_freelancer[T: SyncPipe | AsyncPipe](source: T) -> T:
+def parse_freelancer(source: Pipeline) -> Pipeline:
     budget_text = "(Budget:"
-    no_budget = Skip({"field": "summary", "text": budget_text, "include": True})
     raw_budget_rule = [
         FindConfRule(find=budget_text, location="after"),
         FindConfRule(find=","),
@@ -608,13 +538,16 @@ def parse_freelancer[T: SyncPipe | AsyncPipe](source: T) -> T:
     ]
 
     result = (
-        source.strfind(conf={"rule": title_rule}, field="title", assign="title")
-        .strfind(conf={"rule": desc_rule}, field="summary", assign="description")
+        source.strfind(
+            conf={"rule": title_rule}, options={"field": "title", "assign": "title"}
+        )
+        .strfind(
+            conf={"rule": desc_rule},
+            options={"field": "summary", "assign": "description"},
+        )
         .strfind(
             conf={"rule": raw_budget_rule},
-            field="summary",
-            assign="k:budget_raw",
-            skip_if=no_budget,
+            options={"field": "summary", "assign": "k:budget_raw"},
         )
     )
 
@@ -623,45 +556,38 @@ def parse_freelancer[T: SyncPipe | AsyncPipe](source: T) -> T:
     result = add_budget(result)
     result = add_tags(result, skills_rule)
     result = clean_locations(result)
-    result = remove_cruft(result)
-    return cast("T", result)
+    return remove_cruft(result)
 
 
-def pipe(test=False, parallel=False, threads=False) -> Items:
-    kwargs = {"parallel": parallel, "threads": threads}
-
-    pipe = partial(SyncPipe, "fetchdata", **kwargs)
-    odesk_source = pipe(conf=odesk_conf)
-    guru_source = pipe(conf=guru_conf)
-    freelancer_source = pipe(conf=freelancer_conf)
-    elance_source = pipe(conf=elance_conf)
-
-    odesk_pipe = parse_odesk(odesk_source)  # 10
-    guru_stream = parse_guru(guru_source)  # 75
-    freelancer_stream = parse_freelancer(freelancer_source)  # 20
-    elance_stream = parse_elance(elance_source)  # 75
-
-    others = [guru_stream, freelancer_stream, elance_stream]
-    return list(odesk_pipe.union(others=others))
+def build_pipelines() -> list[Pipeline]:
+    source = partial(Pipeline.from_module, "fetchdata")
+    return [
+        parse_odesk(source(conf=odesk_conf)),
+        parse_guru(source(conf=guru_conf)),
+        parse_freelancer(source(conf=freelancer_conf)),
+        parse_elance(source(conf=elance_conf)),
+    ]
 
 
-def async_pipe(test=None) -> AsyncPipe:
-    pipe = partial(AsyncPipe, "fetchdata")
-    odesk_source = pipe(conf=odesk_conf)
-    guru_source = pipe(conf=guru_conf)
-    freelancer_source = pipe(conf=freelancer_conf)
-    elance_source = pipe(conf=elance_conf)
+def pipe(
+    test: bool = False, parallel: bool = False, threads: bool = False
+) -> list[Item]:
+    pipelines = build_pipelines()
 
-    odesk_pipe = parse_odesk(odesk_source)
-    guru_stream = parse_guru(guru_source)
-    elance_stream = parse_elance(elance_source)
-    freelancer_stream = parse_freelancer(freelancer_source)
+    if parallel:
+        executor = "thread" if threads else "process"
+        pipelines = [
+            pipeline.with_execution(executor=executor) for pipeline in pipelines
+        ]
 
-    others = [guru_stream, freelancer_stream, elance_stream]
-    return odesk_pipe.union(others=others)
+    return list(chain.from_iterable(pipelines))
 
 
-def print_results(result) -> None:
+def async_pipe(test: bool | None = None) -> AsyncStream:
+    return async_chain(*build_pipelines())
+
+
+def print_results(result: list[Item]) -> None:
     pprint(result[-1])
 
 

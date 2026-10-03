@@ -19,7 +19,7 @@ from ._test import TEST_COMMAND
 sys.excepthook = partial(exception_hook, debug=False)
 
 
-def parse_verbosity(verbose: int = 0, quiet: bool | None = None) -> str:
+def get_verbosity(verbose: int = 0, quiet: bool | None = None) -> str:
     """Convert CLI verbosity flags to the logging verbosity value."""
     if quiet:
         verbosity = "0"
@@ -41,7 +41,7 @@ def parse_verbosity(verbose: int = 0, quiet: bool | None = None) -> str:
 @click.option("-q", "--quiet", help="Only log errors (overrides -v)", is_flag=True)
 def manager(verbose: int = 0, quiet: bool = False) -> None:
     """Run riko development tasks."""
-    environ["VERBOSITY"] = parse_verbosity(verbose, quiet)
+    environ["VERBOSITY"] = get_verbosity(verbose, quiet)
 
 
 @manager.command()

@@ -88,7 +88,7 @@ class Reencoder[T: AnyStr](PatchedReencoder):  # pyright: ignore[reportRedeclara
     def join(self, parts: Iterable[T]) -> T:
         return cast("Callable[[Iterable[T]], T]", self._join_char.join)(parts)
 
-    def _parse_n(self, n: int | None = None) -> int | None:
+    def _normalize_n(self, n: int | None = None) -> int | None:
         """Parse ``n`` into a non-negative int or None."""
         return None if n is None or n < 0 else max(0, int(n))
 
@@ -113,7 +113,7 @@ class Reencoder[T: AnyStr](PatchedReencoder):  # pyright: ignore[reportRedeclara
         return head
 
     def read(self, n: int | None = None) -> T:
-        if (parsed_n := self._parse_n(n)) is None:
+        if (parsed_n := self._normalize_n(n)) is None:
             result = self.join(chain((self._buf,), self._chunks))
             self._buf = self._join_char
         else:
@@ -132,7 +132,7 @@ class Reencoder[T: AnyStr](PatchedReencoder):  # pyright: ignore[reportRedeclara
         if not (self._buf or self._fill()):
             line = self._join_char
         else:
-            line = self._take(self._parse_n(n))
+            line = self._take(self._normalize_n(n))
 
         return (
             line if keepends else cast("Callable[[T], T]", line.rstrip)(self.lineseps)

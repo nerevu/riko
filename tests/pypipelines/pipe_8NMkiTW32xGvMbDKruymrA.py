@@ -6,11 +6,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko.modules.fetch import pipe as fetch
 from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as sort
+from riko.modules.union import pipe as union
 from riko.runtime._pipelines import mark_subpipe
-from riko.runtime.collections import SyncCollection
-from riko.types.modules import FilterRawConf, SortRawConf
+from riko.types.modules import FetchRawConf, FilterRawConf, SortRawConf
 
 if TYPE_CHECKING:
     from riko import Context
@@ -22,14 +23,45 @@ def pipe(item=None, context: Context | None = None, **_):
     elif context and context.describe_dependencies:
         _OUTPUT = ["fetch", "filter", "sort"]
     else:
-        sw_35 = SyncCollection(
-            [
-                {"url": "file://riko/data/www.fourtitude.com_news_publish_rss.xml"},
-                {"url": "file://riko/data/feeds.gawker.com_jalopnik_full.xml"},
-                {"url": "file://riko/data/www.autoblog.com_rss.xml"},
-            ],
+        sw_35_1 = fetch(
+            None,
+            conf=FetchRawConf(
+                {
+                    "url": {
+                        "type": "url",
+                        "value": (
+                            "file://riko/data/www.fourtitude.com_news_publish_rss.xml"
+                        ),
+                    }
+                }
+            ),
             context=context,
         )
+        sw_35_2 = fetch(
+            None,
+            conf=FetchRawConf(
+                {
+                    "url": {
+                        "type": "url",
+                        "value": "file://riko/data/feeds.gawker.com_jalopnik_full.xml",
+                    }
+                }
+            ),
+            context=context,
+        )
+        sw_35_3 = fetch(
+            None,
+            conf=FetchRawConf(
+                {
+                    "url": {
+                        "type": "url",
+                        "value": "file://riko/data/www.autoblog.com_rss.xml",
+                    }
+                }
+            ),
+            context=context,
+        )
+        sw_35 = union(sw_35_1, conf={}, context=context, others=[sw_35_2, sw_35_3])
         sw_54 = _filter(
             sw_35,
             conf=FilterRawConf(

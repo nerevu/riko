@@ -42,20 +42,20 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @overload
-def get_subpipe(  # noqa: E704
+def bind_subpipe(  # noqa: E704
     embed: SyncProcessorWrapper | SyncSubPipe,
     context: Context,
     embedded_kwargs: EmbedKwargs | None = ...,
     field: str | None = ...,
 ) -> partial[SyncProcessorWrapperOutput]: ...
 @overload  # noqa: E302
-def get_subpipe(  # noqa: E704
+def bind_subpipe(  # noqa: E704
     embed: AsyncProcessorWrapper | AsyncSubPipe,
     context: Context,
     embedded_kwargs: EmbedKwargs | None = ...,
     field: str | None = ...,
 ) -> partial[Awaitable[SyncProcessorWrapperOutput]]: ...
-def get_subpipe(  # noqa: E302
+def bind_subpipe(  # noqa: E302
     embed: ProcessorWrapper | SubPipe,
     context: Context,
     embedded_kwargs: EmbedKwargs | None = None,
@@ -86,20 +86,20 @@ def get_subpipe(  # noqa: E302
 
 
 @overload
-def get_assignment(  # noqa: E704
+def build_assignment(  # noqa: E704
     items: Stream | Item, skip: bool = ..., count: CountValues | None = ...
 ) -> tuple[bool, Stream]: ...
 @overload  # noqa: E302
-def get_assignment(  # noqa: E704
+def build_assignment(  # noqa: E704
     items: PrimitiveValue, skip: bool = ..., count: CountValues | None = ...
 ) -> tuple[bool, ValueStream]: ...
 @overload  # noqa: E302
-def get_assignment(  # noqa: E704
+def build_assignment(  # noqa: E704
     items: OperatorParserOutput[ItemOrValue],
     skip: bool = ...,
     count: CountValues | None = ...,
 ) -> tuple[bool, StreamOrValueStream]: ...
-def get_assignment(  # noqa: E302
+def build_assignment(  # noqa: E302
     items: OperatorParserOutput[ItemOrValue],
     skip=False,
     count: CountValues | None = None,
