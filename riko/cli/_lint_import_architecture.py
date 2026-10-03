@@ -146,6 +146,15 @@ def _gen_remaining(
         yield "<no layers>"
 
 
+def _format_group(nodes: Iterable[str]) -> str | None:
+    if len(ordered := sorted(nodes)) > 1:
+        formatted = f"{{{' | '.join(ordered)}}}"
+    else:
+        formatted = next(iter(ordered), None)
+
+    return formatted
+
+
 def _render_from(
     start: frozenset[str], layers: Mapping[frozenset[str], set[str]]
 ) -> Iterator[str]:
@@ -161,13 +170,23 @@ def _render_from(
     return filter(None, parts)
 
 
-def _format_group(nodes: Iterable[str]) -> str | None:
-    if len(ordered := sorted(nodes)) > 1:
-        formatted = f"{{{' | '.join(ordered)}}}"
-    else:
-        formatted = next(iter(ordered), None)
+def _validate_graph(name: str, graph: AnyGraph[str]) -> None:
+    declared = set(graph)
+    referenced = {node for targets in graph.values() for node in targets}
 
-    return formatted
+    if dangling := referenced - declared:
+        names = ", ".join(sorted(dangling))
+        raise InvalidArchitectureError(f"undeclared layers: {names}")
+
+    topological_sort(graph, strict=True, name=name)
+
+    for source, targets in graph.items():
+        for target in targets:
+            others = set(targets) - {target}
+
+            if any(target in descendants(other, graph) for other in others):
+                msg = f"redundant dependency: {source} -> {target}"
+                raise InvalidArchitectureError(msg)
 
 
 def _gen_layers(name: str, graph: AnyGraph[str], verbose=True) -> Iterator[str]:
@@ -190,25 +209,6 @@ def _gen_layers(name: str, graph: AnyGraph[str], verbose=True) -> Iterator[str]:
     else:
         parts = map(_format_group, layers.values())
         yield " < ".join(filter(None, parts))
-
-
-def _validate_graph(name: str, graph: AnyGraph[str]) -> None:
-    declared = set(graph)
-    referenced = {node for targets in graph.values() for node in targets}
-
-    if dangling := referenced - declared:
-        names = ", ".join(sorted(dangling))
-        raise InvalidArchitectureError(f"undeclared layers: {names}")
-
-    topological_sort(graph, strict=True, name=name)
-
-    for source, targets in graph.items():
-        for target in targets:
-            others = set(targets) - {target}
-
-            if any(target in descendants(other, graph) for other in others):
-                msg = f"redundant dependency: {source} -> {target}"
-                raise InvalidArchitectureError(msg)
 
 
 def generate_report(

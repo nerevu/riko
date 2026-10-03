@@ -335,15 +335,6 @@ def require_module_node(value: Node, what: str | None = None) -> ModuleNode:
     return value
 
 
-def _require_workflow(value: object) -> Workflow:
-    if not isinstance(value, Workflow):
-        msg = "Pipeline() takes a Workflow or None; use Pipeline.from_module(name) "
-        msg += "for a module or Pipeline(source=items) to seed an item stream"
-        raise TypeError(msg)
-
-    return value
-
-
 @define(frozen=True, slots=True)
 class Workflow:
     """
@@ -595,6 +586,15 @@ def _build_write_workflow(
         keys=prepared.operation.keys,
     )
     return _build_appended_workflow(node, workflow)
+
+
+def _require_workflow(value: object) -> Workflow:
+    if not isinstance(value, Workflow):
+        msg = "Pipeline() takes a Workflow or None; use Pipeline.from_module(name) "
+        msg += "for a module or Pipeline(source=items) to seed an item stream"
+        raise TypeError(msg)
+
+    return value
 
 
 _optional_workflow = narrow_def_from_require(_require_workflow, default=_EMPTY_SPEC)
@@ -925,6 +925,21 @@ class Pipeline(Generic[T]):
 
         return partial(self.pipe, name)
 
+    def _or_template(self, other: Pipeline) -> Pipeline:
+        """Chains a single-module, source-less pipeline used as a reusable template."""
+        nodes = other.workflow.nodes.values()
+        node = next(iter(nodes)) if len(nodes) == 1 else None
+
+        if other.source is None and isinstance(node, ModuleNode):
+            chained = self.pipe(
+                node.name, conf=node.conf, options=node.options, embed=node.embed
+            )
+        else:
+            msg = "pipeline template must define exactly one module"
+            raise InvalidPipelineError(msg)
+
+        return chained
+
     def __or__(self, other: object) -> Pipeline:
         """
         Chains a module name, config pair, or single-module template using ``|``.
@@ -956,21 +971,6 @@ class Pipeline(Generic[T]):
             chained = self._or_template(other)
         else:
             chained = NotImplemented
-
-        return chained
-
-    def _or_template(self, other: Pipeline) -> Pipeline:
-        """Chains a single-module, source-less pipeline used as a reusable template."""
-        nodes = other.workflow.nodes.values()
-        node = next(iter(nodes)) if len(nodes) == 1 else None
-
-        if other.source is None and isinstance(node, ModuleNode):
-            chained = self.pipe(
-                node.name, conf=node.conf, options=node.options, embed=node.embed
-            )
-        else:
-            msg = "pipeline template must define exactly one module"
-            raise InvalidPipelineError(msg)
 
         return chained
 

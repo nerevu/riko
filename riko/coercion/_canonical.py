@@ -98,6 +98,26 @@ def _canon_struct_time(value: struct_time) -> str:
     return moment.astimezone(UTC).isoformat()
 
 
+def canonical_json(canon: CanonicalValue) -> bytes:
+    """
+    Encode a canonical value into fixed canonical UTF-8 JSON bytes.
+
+    Returns:
+
+        Byte-stable JSON with no insignificant whitespace.
+
+    Examples:
+
+        >>> canonical_json(canonicalize(1))
+        b'["int","1"]'
+
+    """
+    dumped = json.dumps(
+        canon, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+    )
+    return dumped.encode("utf-8")
+
+
 def _sort_key(canon: CanonicalValue) -> bytes:
     return canonical_json(canon)
 
@@ -221,26 +241,6 @@ def canonicalize(value: object) -> CanonicalValue:
 
     """
     return _canon(value, set())
-
-
-def canonical_json(canon: CanonicalValue) -> bytes:
-    """
-    Encode a canonical value into fixed canonical UTF-8 JSON bytes.
-
-    Returns:
-
-        Byte-stable JSON with no insignificant whitespace.
-
-    Examples:
-
-        >>> canonical_json(canonicalize(1))
-        b'["int","1"]'
-
-    """
-    dumped = json.dumps(
-        canon, ensure_ascii=False, separators=(",", ":"), allow_nan=False
-    )
-    return dumped.encode("utf-8")
 
 
 def canonical_bytes(value: object) -> bytes:

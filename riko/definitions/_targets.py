@@ -174,95 +174,6 @@ def validate_target_mode(
         raise ValueError(msg)
 
 
-def build_write(
-    dest: Destination,
-    mode: WriteMode | str = WriteMode.REPLACE,
-    *,
-    fmt: FmtLike | None = None,
-    keys: StrLike | None = None,
-) -> PreparedWrite:
-    """
-    Resolves, validates, and binds a write into a ``PreparedWrite``.
-
-    The target reports its ``(target × fmt)`` capabilities; the keys are
-    normalized; the ``(target, mode, keys)`` triple is validated; and the result is a
-    fully validated, execution-ready specification.
-
-    Args:
-
-        dest: A path, ``Path``, or ``SupportsWrite`` target.
-        mode: The write mode, as a ``WriteMode`` or its string value.
-        fmt: The serialization format override for a serializing target.
-        keys: The unified keys, interpreted per the target's capabilities.
-
-    Returns:
-
-        The target-bound, validated write specification.
-
-    Raises:
-
-        ValueError: For an invalid ``(dest, mode, keys, fmt)`` combination.
-
-    Examples:
-
-        >>> from riko.definitions._targets import FileTarget, build_write
-        >>>
-        >>> prepared = build_write(FileTarget("out.csv"), "append")
-        >>> prepared.operation.mode
-        <WriteMode.APPEND: 'append'>
-        >>> prepared.fmt
-        <Formats.CSV: 'csv'>
-
-    """
-    target = normalize_target(dest)
-    resolved_mode = WriteMode(mode)
-    capabilities = target.capabilities(fmt)
-    normalized_keys = normalize_strs(keys)
-
-    validate_target_mode(target, resolved_mode, capabilities, keys=normalized_keys)
-    operation = WriteOperation(resolved_mode, keys=normalized_keys)
-    return PreparedWrite(target, operation, capabilities)
-
-
-def normalize_target(dest: Destination, **kwargs: str) -> SupportsWrite:
-    """
-    Normalizes a destination argument into a ``SupportsWrite`` target.
-
-    A ``SupportsWrite`` target is returned unchanged; a path string or ``Path`` becomes
-    a ``FileTarget``. Named registry targets are deferred until a second built-in target
-    exists, so every string is currently treated as a file path.
-
-    Args:
-
-        dest: The destination location.
-        kwargs: Extra keyword configuration for a constructed ``FileTarget``.
-
-    Returns:
-
-        The resolved ``SupportsWrite`` target.
-
-    Raises:
-
-        TypeError: When ``dest`` is neither a ``SupportsWrite`` target nor a path.
-
-    Examples:
-
-        >>> from riko.definitions._targets import normalize_target
-        >>>
-        >>> normalize_target("out.csv")
-        FileTarget(dest='out.csv', fmt=None)
-
-    """
-    if isinstance(dest, SupportsWrite):
-        target: SupportsWrite = dest
-    elif isinstance(dest, PathLikeType):
-        target = FileTarget(dest, **kwargs)
-    else:
-        raise TypeError(f"cannot resolve a target from {dest!r}")
-
-    return target
-
-
 def resolve_format(dest: PathLike | None, fmt: FmtLike | None) -> Formats:
     """
     Resolves a serialization format from an explicit ``fmt``.
@@ -372,6 +283,95 @@ class FileTarget:
             fmt=resolved_fmt,
             incremental=resolved_fmt in _FILE_INCREMENTAL_FORMATS,
         )
+
+
+def normalize_target(dest: Destination, **kwargs: str) -> SupportsWrite:
+    """
+    Normalizes a destination argument into a ``SupportsWrite`` target.
+
+    A ``SupportsWrite`` target is returned unchanged; a path string or ``Path`` becomes
+    a ``FileTarget``. Named registry targets are deferred until a second built-in target
+    exists, so every string is currently treated as a file path.
+
+    Args:
+
+        dest: The destination location.
+        kwargs: Extra keyword configuration for a constructed ``FileTarget``.
+
+    Returns:
+
+        The resolved ``SupportsWrite`` target.
+
+    Raises:
+
+        TypeError: When ``dest`` is neither a ``SupportsWrite`` target nor a path.
+
+    Examples:
+
+        >>> from riko.definitions._targets import normalize_target
+        >>>
+        >>> normalize_target("out.csv")
+        FileTarget(dest='out.csv', fmt=None)
+
+    """
+    if isinstance(dest, SupportsWrite):
+        target: SupportsWrite = dest
+    elif isinstance(dest, PathLikeType):
+        target = FileTarget(dest, **kwargs)
+    else:
+        raise TypeError(f"cannot resolve a target from {dest!r}")
+
+    return target
+
+
+def build_write(
+    dest: Destination,
+    mode: WriteMode | str = WriteMode.REPLACE,
+    *,
+    fmt: FmtLike | None = None,
+    keys: StrLike | None = None,
+) -> PreparedWrite:
+    """
+    Resolves, validates, and binds a write into a ``PreparedWrite``.
+
+    The target reports its ``(target × fmt)`` capabilities; the keys are
+    normalized; the ``(target, mode, keys)`` triple is validated; and the result is a
+    fully validated, execution-ready specification.
+
+    Args:
+
+        dest: A path, ``Path``, or ``SupportsWrite`` target.
+        mode: The write mode, as a ``WriteMode`` or its string value.
+        fmt: The serialization format override for a serializing target.
+        keys: The unified keys, interpreted per the target's capabilities.
+
+    Returns:
+
+        The target-bound, validated write specification.
+
+    Raises:
+
+        ValueError: For an invalid ``(dest, mode, keys, fmt)`` combination.
+
+    Examples:
+
+        >>> from riko.definitions._targets import FileTarget, build_write
+        >>>
+        >>> prepared = build_write(FileTarget("out.csv"), "append")
+        >>> prepared.operation.mode
+        <WriteMode.APPEND: 'append'>
+        >>> prepared.fmt
+        <Formats.CSV: 'csv'>
+
+    """
+    target = normalize_target(dest)
+    resolved_mode = WriteMode(mode)
+    capabilities = target.capabilities(fmt)
+    normalized_keys = normalize_strs(keys)
+
+    validate_target_mode(target, resolved_mode, capabilities, keys=normalized_keys)
+    operation = WriteOperation(resolved_mode, keys=normalized_keys)
+    return PreparedWrite(target, operation, capabilities)
 
 
 __all__ = [

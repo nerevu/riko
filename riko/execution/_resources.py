@@ -121,6 +121,14 @@ class Resource[T]:
         target = OneShotResource if cls is Resource else cls
         return cast("OneShotResource[T] | ReusableResource[T]", object.__new__(target))
 
+    @staticmethod
+    def _reject_non_value(value: object) -> None:
+        is_resource = isinstance(value, Resource)
+
+        if is_resource or is_lifecycle_factory(value) or is_context_manager(value):
+            msg = f"Expected a resolved resource value but got a: {type(value)}."
+            raise TypeError(msg)
+
     @overload  # noqa: E301
     def __init__(  # noqa: E704
         self,
@@ -181,14 +189,6 @@ class Resource[T]:
             msg += f"resources. Not a {type(value).__name__}. If this value's "
             msg += "lifecycle is externally managed, use Resource.from_external(...) "
             msg += "instead."
-            raise TypeError(msg)
-
-    @staticmethod
-    def _reject_non_value(value: object) -> None:
-        is_resource = isinstance(value, Resource)
-
-        if is_resource or is_lifecycle_factory(value) or is_context_manager(value):
-            msg = f"Expected a resolved resource value but got a: {type(value)}."
             raise TypeError(msg)
 
     @classmethod
