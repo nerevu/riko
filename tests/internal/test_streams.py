@@ -6,7 +6,10 @@ Test AnyIO streaming primitives.
 ``async_map_ordered_stream`` keeps the same bound while preserving source order.
 """
 
+from __future__ import annotations
+
 from time import monotonic
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -20,6 +23,9 @@ from riko.bado.itertools import (
 )
 from riko.modules.timeout import AsyncTimeoutIterator
 from tests import aresolve, async_test, skipif_issync
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 
 @async_test
@@ -168,6 +174,49 @@ async def test_shared_budget_caps_nested_fanout():
     assert state["peak"] <= 3
 
 
+def _budgeted_probe() -> tuple[dict[str, int], Callable[[int], Awaitable[int]]]:
+    state = {"current": 0, "peak": 0}
+
+    async def leaf(x: int) -> int:
+        state["current"] += 1
+        state["peak"] = max(state["peak"], state["current"])
+        await async_sleep(0.01)
+        state["current"] -= 1
+        return x
+
+    return state, leaf
+
+
+@async_test
+async def test_shared_budget_caps_concurrent_unordered_streams():
+    """Two concurrent unordered maps sharing a budget of 3 never exceed it."""
+    state, leaf = _budgeted_probe()
+    budget = Semaphore(3)
+
+    async def collect() -> list[int]:
+        stream = async_map_stream(leaf, range(10), limit=4, budget=budget)
+        return [r async for r in stream]
+
+    results = await gather_results([collect(), collect()])
+    assert [sorted(result) for result in results] == [list(range(10))] * 2
+    assert 1 < state["peak"] <= 3
+
+
+@async_test
+async def test_shared_budget_caps_concurrent_ordered_streams():
+    """Two concurrent ordered maps sharing a budget of 3 never exceed it."""
+    state, leaf = _budgeted_probe()
+    budget = Semaphore(3)
+
+    async def collect() -> list[int]:
+        stream = async_map_ordered_stream(leaf, range(10), limit=4, budget=budget)
+        return [r async for r in stream]
+
+    results = await gather_results([collect(), collect()])
+    assert results == [list(range(10))] * 2
+    assert 1 < state["peak"] <= 3
+
+
 @skipif_issync
 @pytest.mark.parametrize("stream", [async_map_stream, async_map_ordered_stream])
 def test_stream_rejects_bad_limit(stream):
@@ -228,3 +277,34 @@ def test_async_merge_rejects_bad_limit():
 def test_async_merge_rejects_negative_buffer():
     with pytest.raises(ValueError, match="buffer cannot be negative"):
         aresolve(async_merge([_afeed([1])], buffer=-1))
+
+
+async def _forever(closed: list[bool]):
+    index = 0
+
+    try:
+        while True:
+            yield index
+            index += 1
+    finally:
+        closed.append(True)
+
+
+@async_test
+async def test_async_map_stream_early_close_stops_workers_and_closes_source():
+    closed: list[bool] = []
+    stream = async_map_stream(_double, _forever(closed), limit=2)
+    first = await anext(stream)
+    await stream.aclose()
+    assert first in {0, 2}
+    assert closed == [True]
+
+
+@async_test
+async def test_async_map_ordered_stream_early_close_stops_workers_and_closes_source():
+    closed: list[bool] = []
+    stream = async_map_ordered_stream(_double, _forever(closed), limit=2)
+    first = await anext(stream)
+    await stream.aclose()
+    assert first == 0
+    assert closed == [True]

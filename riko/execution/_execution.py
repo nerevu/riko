@@ -18,17 +18,18 @@ from collections.abc import (
     Iterator,
     Mapping,
 )
-from contextlib import AsyncExitStack, ExitStack, nullcontext
+from contextlib import AsyncExitStack, ExitStack, aclosing, nullcontext
 from functools import cached_property, partial
 from inspect import isawaitable
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Self, cast, overload
 
-from attrs import define, field
+from attrs import Factory, define, field
 
 from riko.bado._backend import (
     CancelScope,
     Event,
+    Semaphore,
     asyncify,
     create_task_group,
     fail_after,
@@ -36,10 +37,12 @@ from riko.bado._backend import (
     start_blocking_portal,
 )
 from riko.bado._util import as_awaitable
-from riko.bado.itertools import as_async
+from riko.bado.itertools import as_async, async_map_ordered_stream, async_map_stream
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
+from riko.definitions._execution import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from riko.definitions._resources import ResourceView
 from riko.types._compiler import ModuleOptionValues
+from riko.types._enums import Executor
 from riko.types._guards import is_async_callable, is_async_closeable, is_sync_closeable
 from riko.types._workflow import parse_port
 from riko.types._wrappers import AsyncModuleWrapperOutput, CoroutineFunc, ModuleWrapper
@@ -53,8 +56,19 @@ from ._adapt import (
     require_async_stream,
     require_stream,
 )
-from ._events import _NULL_EVENT_SINK, EventSink
+from ._events import _NULL_EVENT_SINK
+from ._mapping import (
+    AsyncPolicy,
+    SyncPolicy,
+    _PoolLifetime,
+    is_mappable,
+    require_process_safe,
+    resolve_async_policy,
+    resolve_sync_policy,
+    run_item,
+)
 from ._plan import _ResourcePlan, _ResourceStrategy, build_resource_plan
+from ._pools import open_pool
 from ._prepared import ExecMode, PreparedNode
 
 if TYPE_CHECKING:
@@ -67,6 +81,7 @@ if TYPE_CHECKING:
 
     from riko.runtime._execution_plan import ExecutionPlan
     from riko.types._compiler import GraphEdge
+    from riko.types._events import EventSink
     from riko.types._sentinels import MissingType
     from riko.types._wrappers import AsyncModuleWrapper, AysncFunc, SyncModuleWrapper
 
@@ -148,6 +163,14 @@ async def _asyncify_call[T](func: Callable[..., T], *args: object) -> T:
 
     """
     return await asyncify(func)(*args)
+
+
+def _require_source[S](source: S | None) -> S:
+    """Requires the source a plan-less run streams unchanged."""
+    if source is None:
+        raise InvalidPipelineError("a run without a plan requires a source")
+
+    return source
 
 
 def _seed_target(plan: ExecutionPlan, required: frozenset[str]) -> str:
@@ -253,12 +276,21 @@ class _WorkerContext[T]:
         return bool(await self._run(self._cm.__exit__, exc_type, exc, traceback))
 
 
+def _event_sink(self: _BaseExecution) -> EventSink:
+    sink = self.settings.event_sink
+    return _NULL_EVENT_SINK if sink is None else sink
+
+
+events = Factory(_event_sink, takes_self=True)
+
+
 @define(eq=False)
 class _BaseExecution:
     """Shares the definition reference and closed-state guard across executions."""
 
     context: Context | None = None
-    events: EventSink = field(default=_NULL_EVENT_SINK, kw_only=True)
+    settings: ExecutionSettings = field(default=DEF_EXECUTION_SETTINGS, kw_only=True)
+    events: EventSink = field(default=events, kw_only=True)
     _closing: bool = field(default=False, init=False)
     _cleanup_errors: list[Exception] = field(factory=list, init=False)
 
@@ -326,7 +358,9 @@ class SyncExecution[T](_BaseExecution):
     """
     Runs a pipeline definition synchronously behind one owned exit stack.
 
-    Async-only components run through a lazily started blocking portal.
+    Async-only components run through a lazily started blocking portal. The
+    execution settings decide whether loopable nodes spread their items across
+    one shared thread or process pool for the run.
 
     Examples:
 
@@ -355,6 +389,20 @@ class SyncExecution[T](_BaseExecution):
 
     def __enter__(self) -> Self:
         return self
+
+    @cached_property
+    def _policy(self) -> SyncPolicy:
+        return resolve_sync_policy(self.settings)
+
+    @cached_property
+    def _pool(self) -> _PoolLifetime:
+        """The run's one worker pool, shared by every mapped node."""
+        if (workers := self._policy.workers) is None:
+            raise RuntimeError("a sequential run has no worker pool")
+
+        self._require_open("open a worker pool in")
+        handle = open_pool(self._policy.executor, workers)
+        return self._stack.enter_context(_PoolLifetime(handle, workers))
 
     def close(
         self,
@@ -660,6 +708,13 @@ class SyncExecution[T](_BaseExecution):
         values = {slot: self.acquire(available[name]) for slot, name in binding.items()}
         return ResourceView(values)
 
+    def _map_stream(
+        self, call: Callable[[T], Iterable[T]], source: Iterator[T]
+    ) -> Iterator[T]:
+        """Maps a bound pipe over its items once the consumer first pulls."""
+        func = partial(run_item, call)
+        yield from self._pool.map_items(func, source, ordered=self.settings.ordered)
+
     def _build_stream(
         self,
         plan: ExecutionPlan,
@@ -667,6 +722,26 @@ class SyncExecution[T](_BaseExecution):
         steps: SyncExecSteps,
         seed: Iterable[T] | None = None,
     ) -> Iterator[T]:
+        """
+        Builds one node's lazy output stream from its already-built inputs.
+
+        When the settings allow concurrency, a loopable node with a synchronous
+        implementation runs its items across the run's worker pool. Concurrency
+        applies to synchronous pipes here; iterate asynchronously for concurrent
+        async work.
+
+        Args:
+
+            plan: The prepared workflow being run.
+            node_id: The node to build.
+            steps: The streams already built for upstream nodes.
+            seed: The items fed to the node's open input, if any.
+
+        Returns:
+
+            The node's lazy output stream.
+
+        """
         node = plan.nodes[node_id]
         _pipe, mode = node.select(is_async=False)
         host_async = mode is ExecMode.ADAPTER
@@ -682,12 +757,16 @@ class SyncExecution[T](_BaseExecution):
 
         extra.update(cast("Mapping[str, ModuleOptionValues]", node.options))
         conf = node.embed_or_self_conf
+        mapped = self._policy.workers is not None and is_mappable(node, extra)
 
         if mode is ExecMode.ADAPTER:
             async_pipe = cast("AsyncModuleWrapper", _pipe)
             _stream = async_pipe(source, conf=conf, context=self.context, **extra)
             value = cast("AsyncModuleWrapperOutput[T]", _stream)
             stream = self._drain_async(require_async_stream(value, async_pipe))
+        elif mapped:
+            call = partial(_pipe, conf=conf, context=self.context, **extra)
+            stream = self._map_stream(cast("Callable[[T], Iterable[T]]", call), source)
         else:
             pipe = cast("SyncModuleWrapper", _pipe)
             _stream = pipe(source, conf=conf, context=self.context, **extra)
@@ -715,7 +794,7 @@ class SyncExecution[T](_BaseExecution):
 
     def run(
         self,
-        plan: ExecutionPlan,
+        plan: ExecutionPlan | None,
         output: str = "default",
         *,
         source: T
@@ -732,7 +811,8 @@ class SyncExecution[T](_BaseExecution):
 
         Args:
 
-            plan: The prepared workflow to run.
+            plan: The prepared workflow to run, or ``None`` to stream ``source``
+                unchanged.
             output: The named output to produce.
             source: A seed for the output's open input in place of the default
                 empty seed: one item, an item stream, an async item stream, or an
@@ -745,18 +825,43 @@ class SyncExecution[T](_BaseExecution):
 
         Raises:
 
-            InvalidPipelineError: If the plan exposes no such output, or if
-                ``source`` is supplied but the output has no single open input.
+            InvalidPipelineError: If ``plan`` and ``source`` are both ``None``,
+                if the plan exposes no such output, if
+                ``source`` is supplied but the output has no single open input,
+                or if the process executor is chosen and a node cannot be sent
+                to a worker process.
 
         """
         self._require_open("run")
 
+        if plan is None:
+            stream = self._resolve_source(_require_source(source))
+        else:
+            stream = self._run_plan(plan, output, source)
+
+        return stream
+
+    def _run_plan(
+        self,
+        plan: ExecutionPlan,
+        output: str,
+        source: T
+        | Iterable[T]
+        | AsyncIterable[T]
+        | Awaitable[T | Iterable[T] | AsyncIterable[T]]
+        | None,
+    ) -> Iterator[T]:
+        """Builds the item stream for one of the plan's named outputs."""
         if (endpoint := plan.index.outputs.get(output)) is None:
             raise InvalidPipelineError(f"workflow has no output {output!r}")
 
         steps: SyncExecSteps = {}
         _require_default_output_port(endpoint.port, f"output {output!r}")
         required = plan.required[output]
+
+        if self._policy.executor is Executor.PROCESS:
+            require_process_safe(plan, required, self.context)
+
         seed = None if source is None else self._resolve_source(source)
         seed_target = None if seed is None else _seed_target(plan, required)
 
@@ -768,19 +873,29 @@ class SyncExecution[T](_BaseExecution):
         return steps[endpoint.node]
 
 
+_timeout = Factory(lambda self: self.settings.shutdown_timeout, takes_self=True)
+
+
 @define(eq=False)
 class AsyncExecution[T](_BaseExecution):
     """
     Runs a pipeline definition asynchronously behind one owned exit stack.
 
-    Blocking sync components run on a worker thread through the bridge.
+    Blocking sync components run on a worker thread through the bridge. The
+    execution settings decide whether loopable nodes run several items at once
+    under one in-flight ceiling shared by the whole run.
     """
 
-    shutdown_timeout: float | None = field(default=None, kw_only=True)
+    shutdown_timeout: float | None = field(default=_timeout, kw_only=True)
     _stack: AsyncExitStack = field(factory=AsyncExitStack, init=False)
     _task_group: TaskGroup | None = field(default=None, init=False)
     _resolved: Resolved = field(factory=dict, init=False)
     _inflight: dict[Resource[Any], Event] = field(factory=dict, init=False)
+    _budget: Semaphore | None = field(default=None, init=False)
+
+    @cached_property
+    def _policy(self) -> AsyncPolicy:
+        return resolve_async_policy(self.settings)
 
     async def __aenter__(self) -> Self:
         self._task_group = create_task_group()
@@ -1077,7 +1192,7 @@ class AsyncExecution[T](_BaseExecution):
 
     async def run(
         self,
-        plan: ExecutionPlan,
+        plan: ExecutionPlan | None,
         output: str = "default",
         *,
         source: T
@@ -1094,7 +1209,8 @@ class AsyncExecution[T](_BaseExecution):
 
         Args:
 
-            plan: The prepared workflow to run.
+            plan: The prepared workflow to run, or ``None`` to stream ``source``
+                unchanged.
             output: The named output to produce.
             source: A seed for the output's open input in place of the default
                 empty seed: one item, an item stream, an async item stream, or an
@@ -1107,11 +1223,33 @@ class AsyncExecution[T](_BaseExecution):
 
         Raises:
 
-            InvalidPipelineError: If the plan exposes no such output, or if
-                ``source`` is supplied but the output has no single open input.
+            InvalidPipelineError: If ``plan`` and ``source`` are both ``None``,
+                if the plan exposes no such output, if
+                ``source`` is supplied but the output has no single open input,
+                or if the settings name the process executor.
 
         """
         self._require_open("run")
+
+        if plan is None:
+            stream = aiter(await self._aresolve_source(_require_source(source)))
+        else:
+            stream = await self._arun_plan(plan, output, source)
+
+        return stream
+
+    async def _arun_plan(
+        self,
+        plan: ExecutionPlan,
+        output: str,
+        source: T
+        | Iterable[T]
+        | AsyncIterable[T]
+        | Awaitable[T | Iterable[T] | AsyncIterable[T]]
+        | None,
+    ) -> AsyncIterator[T]:
+        """Builds the async item stream for one of the plan's named outputs."""
+        policy = self._policy
 
         if (endpoint := plan.index.outputs.get(output)) is None:
             raise InvalidPipelineError(f"workflow has no output {output!r}")
@@ -1125,7 +1263,7 @@ class AsyncExecution[T](_BaseExecution):
         for node_id in plan.index.order:
             if node_id in required:
                 _seed = seed if node_id == seed_target else None
-                args = (plan, node_id, steps, _seed)
+                args = (plan, node_id, steps, _seed, policy)
                 steps[node_id] = await self._abuild_stream(*args)
 
         return steps[endpoint.node]
@@ -1226,6 +1364,76 @@ class AsyncExecution[T](_BaseExecution):
 
         return result
 
+    def _build_item_call(
+        self,
+        pipe: ModuleWrapper,
+        node: PreparedNode,
+        extra: ExtraInput,
+        mode: ExecMode,
+        policy: AsyncPolicy,
+    ) -> Callable[[T], Awaitable[Iterable[T]]]:
+        """
+        Binds a mapped node's pipe into a call that collects one item's results.
+
+        A synchronous pipe runs on a worker thread, or on the event-loop thread
+        when the settings choose the inline executor.
+        """
+        conf = node.embed_or_self_conf
+
+        if mode is ExecMode.NATIVE:
+
+            async def call_native(item: T) -> Iterable[T]:
+                raw = pipe(item, conf=conf, context=self.context, **extra)
+                value = await as_awaitable(raw)
+
+                if isinstance(value, AsyncIterable):
+                    stream = cast("AsyncIterable[T]", value)
+                    results: Iterable[T] = [x async for x in stream]
+                else:
+                    results = cast("Iterator[T]", value)
+
+                return results
+
+            call = call_native
+        else:
+            kwargs = _bridge_inputs(extra)
+            bound = partial(pipe, conf=conf, context=self.context, **kwargs)
+            sync_call = cast("Callable[[T], Iterable[T]]", bound)
+
+            async def call_sync(item: T) -> Iterable[T]:
+                if policy.inline:
+                    results = run_item(sync_call, item)
+                else:
+                    results = await self.run_sync(run_item, sync_call, item)
+
+                return results
+
+            call = call_sync
+
+        return call
+
+    async def _amap_stream(
+        self,
+        call: Callable[[T], Awaitable[Iterable[T]]],
+        source: AsyncIterable[T],
+        limit: int,
+    ) -> AsyncIterator[T]:
+        """
+        Maps a bound call over a node's items under the run's shared ceiling.
+
+        Closing the stream early stops its in-flight calls in the consuming task.
+        """
+        if self._budget is None:
+            self._budget = Semaphore(limit)
+
+        mapper = async_map_ordered_stream if self.settings.ordered else async_map_stream
+        mapped = mapper(call, source, limit=limit, buffer=0, budget=self._budget)
+
+        async with aclosing(mapped) as results:
+            async for result in results:
+                for item in result:
+                    yield item
+
     async def _run_sync_node(
         self,
         pipe: SyncModuleWrapper,
@@ -1269,8 +1477,28 @@ class AsyncExecution[T](_BaseExecution):
         plan: ExecutionPlan,
         node_id: str,
         steps: AsyncExecSteps,
-        seed: Iterable[T] | AsyncIterable[T] | None = None,
+        seed: Iterable[T] | AsyncIterable[T] | None,
+        policy: AsyncPolicy,
     ) -> AsyncIterator[T]:
+        """
+        Builds one node's lazy async output stream from its already-built inputs.
+
+        When the settings allow concurrency, a loopable node runs several items
+        at once under the run's shared in-flight ceiling.
+
+        Args:
+
+            plan: The prepared workflow being run.
+            node_id: The node to build.
+            steps: The streams already built for upstream nodes.
+            seed: The items fed to the node's open input, if any.
+            policy: The run's resolved concurrency policy.
+
+        Returns:
+
+            The node's lazy async output stream.
+
+        """
         node = plan.nodes[node_id]
         _pipe, mode = node.select(is_async=True)
         host_async = mode is ExecMode.NATIVE
@@ -1285,8 +1513,12 @@ class AsyncExecution[T](_BaseExecution):
             extra["embed"] = self._select_embed(node.embed, host_async=host_async)
 
         extra.update(cast("Mapping[str, ModuleOptionValues]", node.options))
+        limit = policy.limit
 
-        if mode is ExecMode.ADAPTER:
+        if limit is not None and is_mappable(node, extra):
+            call = self._build_item_call(_pipe, node, extra, mode, policy)
+            stream = self._amap_stream(call, source, limit)
+        elif mode is ExecMode.ADAPTER:
             pipe = cast("SyncModuleWrapper", _pipe)
             stream = await self._run_sync_node(pipe, node, source, extra)
         else:

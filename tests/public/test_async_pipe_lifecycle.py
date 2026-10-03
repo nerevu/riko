@@ -157,6 +157,23 @@ class TestAsyncClose:
         await stream.aclose()
         assert len(consumed) < 20
 
+    @async_test
+    async def test_afirst_closes_its_run_before_returning(self):
+        consumed: list[int] = []
+
+        async def source():
+            for index in range(20):
+                consumed.append(index)
+                yield {"content": str(index)}
+
+        with fail_after(5):
+            first = await (source() | Pipeline.from_module("hash")).afirst()
+            gc.collect()
+            await checkpoint()
+
+        assert first["content"] == "0"
+        assert len(consumed) < 20
+
     @pytest.mark.xfail(
         strict=True,
         reason=(

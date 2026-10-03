@@ -5,31 +5,41 @@ Bounded-parallelism tripwires for asynchronous pipeline iteration.
 A pipeline carrying concurrency settings maps a loopable node over its source with
 bounded concurrency and backpressure: results arrive as they complete unless
 ``ordered=True`` preserves source order, and the source advances only as workers
-free up, so it is never pre-materialized. A fan-in graph gets the same treatment
-over its source feeds.
+free up, so it is never pre-materialized. A fan-in graph should pull its upstream
+branches concurrently under the same ceiling; that is not available yet.
 
 The primitives' precise ``limit + buffer`` bound is covered in
 ``tests/internal/test_streams.py``. Here we assert the *pipeline-level* contract:
-same results as sequential, order control, and non-materialization. Every case is
-written against the settings surface it will have once concurrency lands.
+same results as sequential, order control, and non-materialization.
 """
+
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from riko import Pipeline, parse_dag
-from riko.base._paths import get_path
-from riko.types._compiler import DagModule, PipeDag
+from riko import Pipeline
+from riko.bado._backend import async_sleep
+from riko.definitions._workflow import ModuleNode, StreamEdge, Workflow
+from riko.ext.registry import ModuleDefinition, register_module, reset_module_registry
 from riko.types._guards import is_mapping
-from riko.types.modules import ConfArg, FetchRawConf, ItemBuilderConf
+from riko.types._workflow import Endpoint
+from riko.types.modules import ItemBuilderConf
 from tests import skipif_issync
+
+if TYPE_CHECKING:
+    from riko.types._wrappers import AsyncModuleWrapper
 
 pytestmark = pytest.mark.slow
 
 BUILDER_CONF = ItemBuilderConf({"attrs": {"key": "content", "value": "a,bb,ccc,dddd"}})
-SOURCES = [get_path("feed.xml"), get_path("ouseful.xml")]
+BRANCHES = ("fanin_branch_a", "fanin_branch_b", "fanin_branch_c")
 
-EXECUTION_PENDING = pytest.mark.xfail(
-    strict=True, reason="Pipeline.with_execution() does not configure concurrency yet"
+FANIN_PENDING = pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "concurrent pulling of fan-in branches is not available yet; a fan-in "
+        "pulls its sources one at a time"
+    ),
 )
 
 
@@ -42,24 +52,53 @@ def _tokenized() -> Pipeline:
     return source.tokenizer(options={"emit": True}).hash(options={"assign": "h"})
 
 
-def _fetch_node(index: int, url: str) -> DagModule:
-    """Builds one fetch module entry for the fan-in dag."""
-    conf = FetchRawConf({"url": ConfArg(type="url", value=url)})
-    return DagModule(id=f"f{index}", type="fetch", conf=conf)
+def _fanned_in(names: tuple[str, ...]) -> Pipeline:
+    """Builds a pipeline whose single union node merges one branch per name."""
+    branches = [
+        ModuleNode(id=f"b{index}", name=name) for index, name in enumerate(names)
+    ]
+    union = ModuleNode(id="u", name="union")
+    ports = ["in" if index == 0 else f"in:{index}" for index in range(len(names))]
+    edges = tuple(
+        StreamEdge(Endpoint(branch.id, "out"), Endpoint(union.id, port))
+        for branch, port in zip(branches, ports, strict=True)
+    )
+    workflow = Workflow(
+        nodes={node.id: node for node in [*branches, union]},
+        edges=edges,
+        outputs={"default": Endpoint(union.id, "out")},
+        inputs={},
+    )
+    return Pipeline(workflow)
 
 
-def _fanned_in(urls: list[str]) -> Pipeline:
-    """Builds a pipeline whose single union node merges one fetch per url."""
-    fetches = [_fetch_node(index, url) for index, url in enumerate(urls)]
-    ports = ["in" if index == 0 else f"in:{index}" for index in range(len(urls))]
-    wires = [[f"f{index}", "u", port] for index, port in enumerate(ports)]
-    union = DagModule(id="u", type="union")
-    dag = PipeDag(modules=[*fetches, union], wires=wires)
-    return Pipeline(parse_dag(dag))
+@pytest.fixture
+def branch_log():
+    """Registers slow async branch sources that log when each starts and ends."""
+    log: list[tuple[str, str]] = []
+
+    def build_branch(name: str):
+        async def branch(_items=None, **_):
+            log.append(("start", name))
+            await async_sleep(0.05)
+            yield {"content": name}
+            log.append(("end", name))
+
+        return branch
+
+    reset_module_registry()
+
+    for name in BRANCHES:
+        async_pipe = cast("AsyncModuleWrapper", build_branch(name))
+        register_module(ModuleDefinition(name=name, async_pipe=async_pipe))
+
+    try:
+        yield log
+    finally:
+        reset_module_registry()
 
 
 @skipif_issync
-@EXECUTION_PENDING
 class TestAsyncBoundedParallel:
     @pytest.mark.anyio
     async def test_parallel_matches_sequential_as_multiset(self):
@@ -119,24 +158,35 @@ class TestAsyncBoundedParallel:
 
 
 @skipif_issync
-@EXECUTION_PENDING
 class TestAsyncFanInParallel:
-    @pytest.mark.anyio
-    async def test_ordered_matches_unordered_as_multiset(self):
-        flow = _fanned_in(SOURCES)
-        unordered = [item async for item in flow.with_execution(concurrency=2)]
-        settings = flow.with_execution(concurrency=2, ordered=True)
-        ordered = [item async for item in settings]
-        assert unordered
-        assert ordered
-        assert sorted(map(str, ordered)) == sorted(map(str, unordered))
-
     @pytest.mark.parametrize("ordered", [False, True])
     @pytest.mark.anyio
-    async def test_streams_more_sources_than_limit(self, ordered):
-        urls = [get_path("feed.xml")] * 5
-        single = [item async for item in _fanned_in(urls[:1])]
-        flow = _fanned_in(urls).with_execution(concurrency=2, ordered=ordered)
-        everything = [item async for item in flow]
-        assert single
-        assert len(everything) == 5 * len(single)
+    async def test_fan_in_yields_every_branch(self, branch_log, ordered):
+        pipeline = _fanned_in(BRANCHES[:2]).with_execution(
+            concurrency=2, ordered=ordered
+        )
+        items = [item async for item in pipeline]
+        assert sorted(item["content"] for item in items) == sorted(BRANCHES[:2])
+
+    @FANIN_PENDING
+    @pytest.mark.parametrize("ordered", [False, True])
+    @pytest.mark.anyio
+    async def test_branches_are_pulled_concurrently(self, branch_log, ordered):
+        pipeline = _fanned_in(BRANCHES[:2]).with_execution(
+            concurrency=2, ordered=ordered
+        )
+        assert len([item async for item in pipeline]) == 2
+        assert [event for event, _ in branch_log[:2]] == ["start", "start"]
+
+    @FANIN_PENDING
+    @pytest.mark.anyio
+    async def test_more_branches_than_limit_stay_bounded(self, branch_log):
+        pipeline = _fanned_in(BRANCHES).with_execution(concurrency=2)
+        assert len([item async for item in pipeline]) == 3
+        active, peak = 0, 0
+
+        for event, _ in branch_log:
+            active += 1 if event == "start" else -1
+            peak = max(peak, active)
+
+        assert peak == 2

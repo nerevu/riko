@@ -31,16 +31,26 @@ Examples:
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from contextlib import aclosing, closing
 from functools import partial
 from inspect import isawaitable
 from itertools import chain
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeGuard, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Generic,
+    Literal,
+    TypeGuard,
+    cast,
+    overload,
+)
 
-from attrs import define, field
+from attrs import define, evolve, field, fields
 from typing_extensions import TypeVar
 
-from riko.base.exceptions import InvalidPipelineError
+from riko.base.exceptions import EmptyPipelineError, InvalidPipelineError
 from riko.types._collections import (
     FreezeMapping,
     FrozenConf,
@@ -62,6 +72,7 @@ from riko.types._collections import (
 )
 from riko.types._enums import Backends, Formats, ModuleNameLike
 from riko.types._guards import is_mapping, is_streamlike, require_mapping
+from riko.types._sentinels import MISSING, MissingType
 from riko.types._workflow import (
     WORKFLOW_VERSION,
     Edge,
@@ -79,6 +90,7 @@ from riko.types.modules import (
     OptionValues,
 )
 
+from ._execution import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from ._resources import normalize_resources
 from ._targets import build_write, normalize_enum, normalize_strs
 from ._write import WriteMode
@@ -86,11 +98,15 @@ from ._write import WriteMode
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Generator, Iterator, Mapping
 
-    from riko.execution._events import EventSink
-    from riko.types._enums import FmtLike, StrLike
+    from riko.execution._resources import ReusableResource
+    from riko.execution.context import Context
+    from riko.types._enums import ExecutorLike, FmtLike, StrLike
+    from riko.types._events import EventSink
+    from riko.types._resource import LifecycleFactory
     from riko.types._streams import SourceLike
     from riko.types._workflow import EdgeFamily, NodeFamily
 
+    from ._resource_types import ResourceDefinition
     from ._write import Destination
 
 _FROZEN_OPTIONS: FrozenMap[FrozenOptionValues] = MappingProxyType({})
@@ -617,7 +633,13 @@ class Pipeline(Generic[T]):
     Attributes:
 
         workflow: The canonical workflow this pipeline defines.
+
         source: The seeded source, or ``None`` when the graph supplies its own.
+
+        context: The environment each run uses, including its bound resources, or
+            ``None`` for a default one.
+
+        settings: How each run executes its per-item work.
 
     Examples:
 
@@ -633,6 +655,10 @@ class Pipeline(Generic[T]):
 
     workflow: Workflow = field(default=_EMPTY_SPEC, converter=_optional_workflow)
     source: SourceLike | None = field(default=None, repr=False)
+    context: Context | None = field(default=None, kw_only=True, repr=False)
+    settings: ExecutionSettings = field(
+        default=DEF_EXECUTION_SETTINGS, kw_only=True, repr=False
+    )
 
     @classmethod
     def from_module(
@@ -676,8 +702,8 @@ class Pipeline(Generic[T]):
         return cls(workflow)
 
     def _derive(self, workflow: Workflow, source: SourceLike | None) -> Pipeline:
-        """Builds a sibling pipeline over a derived workflow."""
-        return type(self)(workflow, source)
+        """Builds a sibling pipeline over a derived workflow and source."""
+        return evolve(self, workflow=workflow, source=source)
 
     def pipe(
         self,
@@ -753,11 +779,17 @@ class Pipeline(Generic[T]):
 
             dest: The destination path or write target, or ``None`` to chain the
                 ``write`` module.
+
             mode: How the records reconcile with the destination's contents.
+
             fmt: The serialization format, or ``None`` to derive one.
+
             keys: The match keys a keyed destination needs.
+
             conf: The ``write`` module's configuration, if any.
+
             options: The call options forwarded to the ``write`` module, if any.
+
             embed: The module a loop runs per item, with its configuration, if any.
 
         Returns:
@@ -801,32 +833,172 @@ class Pipeline(Generic[T]):
     def with_execution(
         self,
         *,
-        executor: str | None = None,
-        concurrency: int | None = None,
-        ordered: bool | None = None,
-        event_sink: EventSink | None = None,
+        executor: ExecutorLike | MissingType | None = MISSING,
+        concurrency: int | MissingType | None = MISSING,
+        ordered: bool | MissingType | None = MISSING,
+        event_sink: EventSink | MissingType | None = MISSING,
+        shutdown_timeout: float | MissingType | None = MISSING,
     ) -> Pipeline:
         """
-        Derives a pipeline carrying settings that apply to the whole run.
+        Derives a pipeline whose runs execute with the given settings.
+
+        Without settings, a run processes one item at a time in source order. An omitted
+        argument keeps the current setting. An explicit ``None`` restores that setting's
+        default. Settings are validated here, not when the pipeline runs.
 
         Args:
 
-            executor: Where per-item work runs: ``"inline"``, ``"thread"``, or
-                ``"process"``.
-            concurrency: The ceiling on how much work runs at once.
-            ordered: Whether results are presented in source order.
-            event_sink: The sink that receives the run's events.
+            executor: Picks where per-item work runs: ``"auto"``, ``"inline"``,
+                ``"thread"``, or ``"process"``. ``None`` selects ``"auto"``.
+
+            concurrency: Max number of items that item-wise modules can work on at once
+                across the whole run. ``None`` selects sequential processing.
+
+            ordered: Restores result source order. ``None`` selects completion order.
+
+            event_sink: The sink that receives the run's events; ``None`` discards them.
+
+            shutdown_timeout: The bound, in seconds, on teardown under
+                asynchronous iteration; ``None`` removes the bound.
 
         Returns:
 
-            A new pipeline carrying the given execution settings.
+            A new pipeline carrying the updated settings.
 
         Raises:
 
-            NotImplementedError: Always; execution settings are not available yet.
+            ValueError: If ``executor`` names no known executor, ``concurrency``
+                is below one, or ``shutdown_timeout`` is negative or NaN.
+
+            TypeError: If ``concurrency``, ``ordered``, or ``shutdown_timeout``
+                has the wrong type.
+
+        Examples:
+
+            >>> base = Pipeline.from_module("fetch")
+            >>> pipeline = base.with_execution(executor="thread", concurrency=4)
+            >>> pipeline.settings.executor.value, pipeline.settings.concurrency
+            ('thread', 4)
+            >>> pipeline.with_execution(ordered=True).settings.concurrency
+            4
+            >>> print(pipeline.with_execution(concurrency=None).settings.concurrency)
+            None
+            >>> print(base.settings.concurrency)
+            None
 
         """
-        raise NotImplementedError("execution settings are not available yet")
+        requested = {
+            "executor": executor,
+            "concurrency": concurrency,
+            "ordered": ordered,
+            "event_sink": event_sink,
+            "shutdown_timeout": shutdown_timeout,
+        }
+        defaults = fields(ExecutionSettings)
+        changes = {
+            name: getattr(defaults, name).default if value is None else value
+            for name, value in requested.items()
+            if value is not MISSING
+        }
+        return evolve(self, settings=evolve(self.settings, **changes))
+
+    def with_context(self, context: Context) -> Pipeline:
+        """
+        Derives a pipeline whose runs use ``context``.
+
+        The context supplies the run's inputs, mode, and bound resources, and
+        replaces any context this pipeline already carries.
+
+        Args:
+
+            context: The environment each run uses.
+
+        Returns:
+
+            A new pipeline bound to ``context``; this one is unchanged.
+
+        Examples:
+
+            >>> from riko import Context
+            >>>
+            >>> context = Context(inputs={"limit": 5})
+            >>> pipeline = Pipeline.from_module("fetch").with_context(context)
+            >>> pipeline.context is context
+            True
+
+        """
+        return evolve(self, context=context)
+
+    @overload
+    def with_resource[R](  # noqa: E704
+        self,
+        name: str,
+        definition: LifecycleFactory[R],
+        *,
+        credential: str | None = ...,
+        lazy: bool = ...,
+    ) -> Pipeline: ...
+    @overload  # noqa: E301
+    def with_resource[R](  # noqa: E704
+        self,
+        name: str,
+        definition: ReusableResource[R],
+        *,
+        credential: None = ...,
+        lazy: Literal[False] = ...,
+    ) -> Pipeline: ...
+    def with_resource[R](  # noqa: E301
+        self,
+        name: str,
+        definition: ResourceDefinition[R],
+        *,
+        credential: str | None = None,
+        lazy: bool = False,
+    ) -> Pipeline:
+        """
+        Derives a pipeline whose runs bind a resource ``definition`` to ``name``.
+
+        The binding is added to this pipeline's context, or to a default context
+        when it has none, exactly as ``Context.with_resource`` binds it. A
+        factory is entered only when a run needs it, so ``credential``/``lazy``
+        apply only to a factory.
+
+        Args:
+
+            name: The name the resource is bound to.
+            definition: A ``Resource``/``LifecycleFactory`` that wraps a resource value.
+            credential: A credential reference for a factory.
+            lazy: Whether a factory defers entry until first use.
+
+        Returns:
+
+            A new pipeline whose context carries the resource. This one is unchanged.
+
+        Raises:
+
+            TypeError: When ``credential``/``lazy`` accompany a ``Resource`` (they
+                belong on a ``LifecycleFactory``).
+
+        Examples:
+
+            >>> def open_db():
+            ...     yield {"rows": []}
+            >>>
+            >>> pipeline = Pipeline.from_module("fetch").with_resource("db", open_db)
+            >>> sorted(pipeline.context.resources)
+            ['db']
+
+        """
+        from riko.execution.context import Context  # noqa: PLC0415
+
+        base = Context() if self.context is None else self.context
+        bound = base.with_resource(  # pyright: ignore[reportCallIssue]
+            name,
+            definition,  # pyright: ignore[reportArgumentType]
+            credential=credential,
+            lazy=lazy,
+        )
+        return evolve(self, context=bound)
 
     @classmethod
     def subscribe(
@@ -1002,9 +1174,14 @@ class Pipeline(Generic[T]):
 
         return primed
 
+    @property
+    def _is_source_only(self) -> bool:
+        """Whether the pipeline seeds a source but chains no module."""
+        return self.source is not None and not self.workflow.nodes
+
     def __iter__(self) -> Generator[T, None]:
         """
-        Synchronously runs the pipeline.
+        Synchronously runs the pipeline with its context and execution settings.
 
         Each iteration creates a fresh one-shot execution that owns the run's
         resources for the lifetime of the returned iterator.
@@ -1017,14 +1194,14 @@ class Pipeline(Generic[T]):
         from riko.execution._execution import SyncExecution  # noqa: PLC0415
         from riko.runtime._execution_plan import build_execution_plan  # noqa: PLC0415
 
-        plan = build_execution_plan(self.workflow)
+        plan = None if self._is_source_only else build_execution_plan(self.workflow)
 
-        with SyncExecution() as execution:
+        with SyncExecution(self.context, settings=self.settings) as execution:
             yield from execution.run(plan, source=self.source)
 
     def __aiter__(self) -> AsyncGenerator[T, None]:
         """
-        Asynchronously runs the pipeline.
+        Asynchronously runs the pipeline with its context and execution settings.
 
         Each iteration creates a fresh one-shot execution that owns the run's
         resources for the lifetime of the returned async iterator.
@@ -1034,25 +1211,100 @@ class Pipeline(Generic[T]):
             The items produced at the pipeline's default output.
 
         """
+        from riko.bado._util import maybe_aclosing  # noqa: PLC0415
         from riko.execution._execution import AsyncExecution  # noqa: PLC0415
         from riko.runtime._execution_plan import build_execution_plan  # noqa: PLC0415
 
         async def _run() -> AsyncGenerator[T, None]:
-            plan = build_execution_plan(self.workflow)
+            workflow = self.workflow
+            plan = None if self._is_source_only else build_execution_plan(workflow)
+            execution = AsyncExecution(self.context, settings=self.settings)
 
-            async with AsyncExecution() as execution:
+            async with execution:
                 stream = await execution.run(plan, source=self.source)
 
-                async for item in stream:
-                    yield item
+                # An abandoned stream must close before the execution exits.
+                async with maybe_aclosing(stream) as items:
+                    async for item in items:
+                        yield item
 
         return _run()
 
-    def first(self) -> T:
-        return next(iter(self))
+    def first(self, default: T | MissingType = MISSING) -> T:
+        """
+        Runs the pipeline just long enough to read its first item.
 
-    async def afirst(self) -> T:
-        return await anext(aiter(self))
+        The run is closed as soon as the item is read.
+
+        Args:
+
+            default: The value returned when the pipeline produces no items.
+
+        Returns:
+
+            The first item at the pipeline's default output, or ``default``.
+
+        Raises:
+
+            EmptyPipelineError: If the pipeline produces no items and no
+                ``default`` is given.
+
+        Examples:
+
+            >>> Pipeline(source=[{"x": 1}, {"x": 2}]).first()
+            {'x': 1}
+            >>> print(Pipeline(source=[]).first(default=None))
+            None
+            >>> Pipeline(source=[]).first()
+            Traceback (most recent call last):
+            riko.base.exceptions.EmptyPipelineError: pipeline produced no items
+
+        """
+        with closing(iter(self)) as stream:
+            item = next(stream, default)
+
+        if isinstance(item, MissingType):
+            raise EmptyPipelineError
+
+        return item
+
+    async def afirst(self, default: T | MissingType = MISSING) -> T:
+        """
+        Asynchronously runs the pipeline just long enough to read its first item.
+
+        The run is closed as soon as the item is read.
+
+        Args:
+
+            default: The value returned when the pipeline produces no items.
+
+        Returns:
+
+            The first item at the pipeline's default output, or ``default``.
+
+        Raises:
+
+            EmptyPipelineError: If the pipeline produces no items and no
+                ``default`` is given.
+
+        Examples:
+
+            >>> from riko import issync, run
+            >>>
+            >>> async def main():
+            ...     print(await Pipeline(source=[]).afirst(default=None))
+            >>>
+            >>> print(None) if issync else run(main)
+            None
+
+        """
+        async with aclosing(aiter(self)) as stream:
+            item = await anext(stream, default)
+
+        if isinstance(item, MissingType):
+            raise EmptyPipelineError
+
+        return item
 
 
 __all__ = [

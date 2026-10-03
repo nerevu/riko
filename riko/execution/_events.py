@@ -9,22 +9,7 @@ results they emit. The default sink discards every event.
 
 from __future__ import annotations
 
-from typing import Protocol
-
-
-class EventSink(Protocol):
-    """Receives events emitted by a running execution."""
-
-    def emit(self, event: object) -> None:
-        """
-        Delivers an emitted execution event.
-
-        Args:
-
-            event: The event value produced during a run.
-
-        """
-        ...
+from riko.types._events import EventSink
 
 
 class _NullEventSink:

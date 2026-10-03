@@ -18,6 +18,7 @@ Examples:
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from functools import partial
 from inspect import isawaitable
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
@@ -27,7 +28,7 @@ from riko.types._sentinels import MISSING
 from ._backend import AsyncClient, Path, create_task_group
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterable
+    from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 
     from ._backend import HTTPXResponse
 
@@ -102,6 +103,48 @@ async def maybe_deferred[T](
 ) -> T:
     """Calls ``func`` and awaits its result only when it is awaitable."""
     return await as_awaitable(func(*args, **kwargs))
+
+
+@asynccontextmanager
+async def maybe_aclosing[T](iterator: T) -> AsyncGenerator[T, None]:
+    """
+    Closes *iterator* on exit when it has an ``aclose`` method.
+
+    Unlike :func:`contextlib.aclosing`, an iterator without ``aclose`` (such as a
+    plain async iterator) passes through untouched, so callers needn't check first.
+
+    Args:
+
+        iterator: The async iterator to close on exit.
+
+    Yields:
+
+        *iterator* itself.
+
+    Examples:
+
+        >>> from riko import run
+        >>>
+        >>> async def gen():
+        ...     yield 1
+        ...     yield 2
+        >>>
+        >>> async def main():
+        ...     async with maybe_aclosing(gen()) as items:
+        ...         async for item in items:
+        ...             break
+        ...
+        ...     print(item, items.ag_running, items.ag_frame)
+        >>>
+        >>> run(main)
+        1 False None
+
+    """
+    try:
+        yield iterator
+    finally:
+        if (aclose := getattr(iterator, "aclose", None)) is not None:
+            await aclose()
 
 
 def async_partial(f, **kwargs):

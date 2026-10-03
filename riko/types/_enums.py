@@ -164,7 +164,34 @@ class ExecutionMode(StrEnum):
     DESCRIBE = "describe"
 
 
+class Executor(StrEnum):
+    """
+    Where a run executes per-item work.
+
+    ``AUTO`` lets the run pick: items run sequentially inline unless a
+    concurrency limit above one is set, in which case synchronous iteration
+    uses a thread pool. Under asynchronous iteration, native async work runs
+    inline and synchronous work runs on worker threads. ``INLINE`` never uses
+    workers, while ``THREAD`` and ``PROCESS`` use a pool of threads or worker
+    processes.
+
+    Examples:
+
+        >>> from riko import Executor
+        >>>
+        >>> Executor("thread") is Executor.THREAD, Executor.AUTO.value
+        (True, 'auto')
+
+    """
+
+    AUTO = "auto"
+    INLINE = "inline"
+    THREAD = "thread"
+    PROCESS = "process"
+
+
 type ModuleNameLike = str | ModuleName
 type StrLike = str | Iterable[str]
 type FmtLike = Formats | str
 type BackendLike = Backends | str
+type ExecutorLike = Executor | str

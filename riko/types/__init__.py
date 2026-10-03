@@ -6,6 +6,7 @@ Implementation typing machinery lives in underscore-prefixed modules and is
 not part of the SemVer-guaranteed API.
 """
 
+from ._events import EventSink
 from ._streams import AsyncItems, AsyncStream, Feed, Item, Items, Stream
 from ._workflow import RawEdge, RawEndpoint, RawNode, RawWorkflow
 from ._wrappers import AsyncPipeTuples, PipeTuples, SyncPipeTuples
@@ -16,6 +17,7 @@ __all__ = [
     "AsyncPipeTuples",
     "AsyncStream",
     "Conf",
+    "EventSink",
     "Feed",
     "Item",
     "Items",

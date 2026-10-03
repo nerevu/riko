@@ -8,13 +8,13 @@ results are emitted or assigned back to that same parent item.
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, AsyncIterable, Generator
+from collections.abc import AsyncIterable, Generator
 from functools import partial
 from typing import TYPE_CHECKING, cast
 
 import pygogo as gogo
 
-from riko.bado._util import maybe_deferred
+from riko.bado._util import maybe_aclosing, maybe_deferred
 from riko.bado.itertools import as_async
 from riko.types._guards import is_subpipe
 
@@ -56,15 +56,10 @@ def _take_first(results: Items) -> Stream:
 
 
 async def _atake_first(results: AsyncItems) -> AsyncStream:
-    iterator = aiter(results)
-
-    try:
+    async with maybe_aclosing(aiter(results)) as iterator:
         async for item in iterator:
             yield item
             break
-    finally:
-        if isinstance(iterator, AsyncGenerator):
-            await iterator.aclose()
 
 
 def _take[T: Feed](results: T, count: CountValues | None = "all") -> T:

@@ -162,6 +162,10 @@ class PreparedNode:
         return self.conf if self.embed is None else self.embed.conf
 
     @property
+    def pipe(self) -> ModuleWrapper | None:
+        return self.sync_pipe if self.async_pipe is None else self.async_pipe
+
+    @property
     def module_type(self) -> ModuleType | None:
         """
         Reports the declared module type of this node's resolved implementation.
@@ -172,5 +176,14 @@ class PreparedNode:
             with, or ``None`` when no resolved pipe carries one.
 
         """
-        pipe = self.sync_pipe if self.async_pipe is None else self.async_pipe
-        return None if pipe is None else getattr(pipe, "type", None)
+        return None if self.pipe is None else getattr(self.pipe, "type", None)
+
+    @property
+    def loopable(self) -> bool:
+        """
+        Whether this node's resolved implementation runs one item at a time.
+
+        A loopable node gives the same results whether it is called once with the
+        whole stream or once per item, so its items may be spread across workers.
+        """
+        return self.pipe is not None and getattr(self.pipe, "loopable", False) is True

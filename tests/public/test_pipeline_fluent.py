@@ -13,7 +13,7 @@ from typing import get_args, get_origin
 import pytest
 
 from riko import Pipeline
-from riko.base.exceptions import InvalidPipelineError
+from riko.base.exceptions import EmptyPipelineError, InvalidPipelineError, PipelineError
 from riko.definitions._workflow import ModuleNode, StreamEdge, Workflow
 from riko.definitions.modules import normalize_module_name
 from riko.types._enums import ModuleName
@@ -235,9 +235,52 @@ def test_duplicate_names_mint_unique_ids():
     assert sorted(pipeline.workflow.nodes) == ["sort-1", "sort-2"]
 
 
-def test_iterating_source_only_pipeline_raises():
-    with pytest.raises(InvalidPipelineError):
-        list(Pipeline(source=[{"x": 1}]))
+def test_iterating_a_source_only_pipeline_streams_the_source():
+    assert list(Pipeline(source=[{"x": 1}, {"x": 2}])) == [{"x": 1}, {"x": 2}]
+    assert list(Pipeline(source={"x": 1})) == [{"x": 1}]
+
+
+@async_test
+async def test_async_iterating_a_source_only_pipeline_streams_the_source():
+    async def source():
+        yield {"x": 1}
+
+    assert [item async for item in Pipeline(source=source())] == [{"x": 1}]
+
+
+def test_first_on_an_empty_pipeline_raises_a_lookup_error():
+    with pytest.raises(EmptyPipelineError, match="no items") as info:
+        Pipeline(source=[]).first()
+
+    assert isinstance(info.value, PipelineError)
+    assert isinstance(info.value, LookupError)
+
+
+def test_first_does_not_leak_stop_iteration_into_an_outer_iterator():
+    pipelines = [Pipeline(source=[{"x": 1}]), Pipeline(source=[])]
+
+    with pytest.raises(EmptyPipelineError):
+        list(map(Pipeline.first, pipelines))
+
+
+def test_first_returns_the_default_on_an_empty_pipeline():
+    assert Pipeline(source=[]).first(default=None) is None
+    assert Pipeline(source=[]).first(default={"x": 0}) == {"x": 0}
+    assert Pipeline(source=[{"x": 1}]).first(default=None) == {"x": 1}
+
+
+@async_test
+async def test_afirst_on_an_empty_pipeline_raises_a_lookup_error():
+    with pytest.raises(EmptyPipelineError):
+        await Pipeline(source=[]).afirst()
+
+    assert await Pipeline(source=[]).afirst(default=None) is None
+    assert await Pipeline(source=[{"x": 1}]).afirst() == {"x": 1}
+
+
+def test_iterating_an_empty_pipeline_raises():
+    with pytest.raises(InvalidPipelineError, match="no nodes"):
+        list(Pipeline())
 
 
 def test_iterating_a_split_pipeline_raises_before_running():

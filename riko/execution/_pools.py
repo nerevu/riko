@@ -1,19 +1,18 @@
 # vim: sw=4:ts=4:expandtab
 """
-Worker pools and executor selection for the synchronous execution paths.
+Worker pools for per-item work in synchronous executions.
 
-A synchronous run maps each item either inline, across a pool of threads, or
-across a pool of worker processes. The ``parallel``/``threads`` flags a caller
-supplies pick between those three, pool sizing follows the source length, and
-every pool is held by a handle that records whether riko opened it. A handle
-releases only a pool it opened; one borrowed from a caller stays open for that
-caller to close.
+An execution opens a thread or process pool to map items across workers and sized
+from the source length. Each pool is held by a handle that records whether riko
+opened it. A handle releases only a pool it opened, and one borrowed from a
+caller stays open for that caller to close.
 
 Examples:
 
     Basic usage::
 
-        >>> from riko.execution._pools import Executor, open_pool
+        >>> from riko.execution._pools import open_pool
+        >>> from riko.types._enums import Executor
         >>>
         >>> handle = open_pool(Executor.THREAD, 2)
         >>> handle.pool
@@ -26,13 +25,14 @@ Examples:
 
 from __future__ import annotations
 
-from enum import StrEnum
 from multiprocessing import Pool as CPUPool
 from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing.pool import Pool as CPUPoolType
 from multiprocessing.pool import ThreadPool as ThreadPoolType
 from typing import TYPE_CHECKING, Any
+
+from riko.types._enums import Executor
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -43,7 +43,6 @@ type PoolMap = Callable[..., Iterable[Any]]
 
 __all__ = [
     "AnyPool",
-    "Executor",
     "PoolFactory",
     "PoolHandle",
     "PoolMap",
@@ -51,52 +50,13 @@ __all__ = [
     "get_chunksize",
     "get_worker_cnt",
     "open_pool",
-    "resolve_executor",
 ]
-
-
-class Executor(StrEnum):
-    """
-    Where per-item work runs.
-
-    Derived from ``parallel``/``threads`` rather than set directly: ``INLINE``
-    when ``parallel`` is off, otherwise ``THREAD`` or ``PROCESS``.
-    """
-
-    INLINE = "inline"
-    THREAD = "thread"
-    PROCESS = "process"
 
 
 _POOLS: dict[Executor, PoolFactory] = {
     Executor.THREAD: ThreadPool,
     Executor.PROCESS: CPUPool,
 }
-
-
-def resolve_executor(*, parallel: bool, threads: bool) -> Executor:
-    """
-    Maps the parallelism flags to the executor they denote.
-
-    Args:
-
-        parallel: Whether per-item work is spread across a worker pool.
-        threads: Whether a parallel pool uses threads rather than processes.
-
-    Returns:
-
-        ``INLINE`` when ``parallel`` is False, ``THREAD`` when ``threads`` is
-        True, and ``PROCESS`` otherwise.
-
-    """
-    if not parallel:
-        executor = Executor.INLINE
-    elif threads:
-        executor = Executor.THREAD
-    else:
-        executor = Executor.PROCESS
-
-    return executor
 
 
 def get_worker_cnt(length: int, threads: bool | None = True) -> int:
@@ -148,7 +108,8 @@ class PoolHandle:
 
         Basic usage::
 
-            >>> from riko.execution._pools import Executor, open_pool
+            >>> from riko.execution._pools import open_pool
+            >>> from riko.types._enums import Executor
             >>>
             >>> handle = open_pool(Executor.THREAD, 2)
             >>> list(handle.map(True)(str, [1, 2]))
@@ -219,13 +180,15 @@ def open_pool(executor: Executor, workers: int) -> PoolHandle:
 
     Raises:
 
-        ValueError: If ``executor`` is ``INLINE``, which has no worker pool.
+        ValueError: If ``executor`` is ``INLINE`` or ``AUTO``, which have no worker
+            pool.
 
     Examples:
 
         Basic usage::
 
-            >>> from riko.execution._pools import Executor, open_pool
+            >>> from riko.execution._pools import open_pool
+            >>> from riko.types._enums import Executor
             >>>
             >>> handle = open_pool(Executor.THREAD, 2)
             >>> handle.owned

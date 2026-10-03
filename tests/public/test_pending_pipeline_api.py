@@ -41,9 +41,6 @@ EXPECTED = [
     {"content": "thrice is 3x"},
 ]
 
-EXECUTION_PENDING = pytest.mark.xfail(
-    strict=True, reason="Pipeline.with_execution() does not configure concurrency yet"
-)
 PUBSUB_PENDING = pytest.mark.xfail(
     strict=True, reason="Pipeline.subscribe()/publish() are not available yet"
 )
@@ -62,33 +59,6 @@ def _tokenized() -> Pipeline:
     """Builds the three-item token stream both halves of this module publish."""
     source = Pipeline.from_module("itembuilder", conf=BUILDER_CONF)
     return source.tokenizer(options={"emit": True})
-
-
-def _by_content(items):
-    return sorted(items, key=itemgetter("content"))
-
-
-@EXECUTION_PENDING
-class TestExecutionSettings:
-    """Run-wide settings: concurrency, ordering, and where per-item work runs."""
-
-    def test_parallel_matches_sequential_as_multiset(self):
-        pipeline = _tokenized().hash(options={"assign": "h"})
-        sequential = list(pipeline)
-        parallel = list(pipeline.with_execution(concurrency=4))
-        assert len(parallel) == len(sequential) == 3
-        assert _by_content(parallel) == _by_content(sequential)
-
-    def test_ordered_preserves_source_order(self):
-        pipeline = _tokenized().hash(options={"assign": "h"})
-        sequential = list(pipeline)
-        ordered = list(pipeline.with_execution(concurrency=4, ordered=True))
-        assert ordered == sequential
-
-    @pytest.mark.parametrize("executor", ["inline", "thread", "process"])
-    def test_every_executor_produces_the_same_items(self, executor):
-        pipeline = Pipeline(source=SRC).hash(options={"assign": "h"})
-        assert list(pipeline.with_execution(executor=executor)) == list(pipeline)
 
 
 @PUBSUB_PENDING

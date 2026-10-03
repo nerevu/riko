@@ -49,6 +49,13 @@ class InvalidPipelineError(PipelineError):
         self.msg = msg
 
 
+class EmptyPipelineError(PipelineError, LookupError):
+    """Raised when a pipeline asked for its first item produces none."""
+
+    def __init__(self) -> None:
+        super().__init__("pipeline produced no items")
+
+
 class PubSubError(RikoError):
     """Base class for pub/sub errors."""
 
@@ -94,6 +101,7 @@ class InvalidArchitectureError(ImportLintError): ...  # noqa: E701
 __all__ = [
     "CyclicIdentityError",
     "DuplicateReceiverError",
+    "EmptyPipelineError",
     "IdentityEncodingError",
     "IdentityError",
     "ImportAnalysisError",

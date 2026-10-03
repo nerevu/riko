@@ -11,6 +11,7 @@ from riko.bado._util import async_read, async_return
 from riko.bado.itertools import as_async, async_map, async_map_stream
 from riko.base._paths import get_path, get_temp_file
 from riko.base.exceptions import (
+    EmptyPipelineError,
     PipelineStateError,
     RikoError,
     UnsupportedModuleError,
@@ -25,7 +26,7 @@ from riko.modules._names import Modules, Sinks, Sources, Transforms
 from riko.runtime._codegen import compile_pipe
 from riko.runtime._migrate import parse_dag
 from riko.runtime.collections import export, list_formats
-from riko.types._enums import Backends, ExecutionMode, Formats
+from riko.types._enums import Backends, ExecutionMode, Executor, Formats
 from riko.types._workflow import Edge, Endpoint, WorkflowDocument
 
 from ._package import PACKAGE_INFO
@@ -45,8 +46,10 @@ __all__ = [
     "Backends",
     "Context",
     "Edge",
+    "EmptyPipelineError",
     "Endpoint",
     "ExecutionMode",
+    "Executor",
     "Formats",
     "Modules",
     "Node",

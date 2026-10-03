@@ -6,26 +6,8 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import pytest
 
-from riko.execution._pools import (
-    Executor,
-    borrow_pool,
-    get_chunksize,
-    get_worker_cnt,
-    open_pool,
-    resolve_executor,
-)
-
-
-class TestResolveExecutor:
-    @pytest.mark.parametrize("threads", [True, False])
-    def test_inline_when_not_parallel(self, threads: bool) -> None:
-        assert resolve_executor(parallel=False, threads=threads) is Executor.INLINE
-
-    def test_thread_when_parallel_and_threads(self) -> None:
-        assert resolve_executor(parallel=True, threads=True) is Executor.THREAD
-
-    def test_process_when_parallel_without_threads(self) -> None:
-        assert resolve_executor(parallel=True, threads=False) is Executor.PROCESS
+from riko.execution._pools import borrow_pool, get_chunksize, get_worker_cnt, open_pool
+from riko.types._enums import Executor
 
 
 class TestWorkerCnt:
@@ -154,6 +136,7 @@ class TestOpenPool:
         finally:
             handle.close()
 
-    def test_inline_has_no_pool(self) -> None:
-        with pytest.raises(ValueError, match="inline"):
-            open_pool(Executor.INLINE, 2)
+    @pytest.mark.parametrize("executor", [Executor.INLINE, Executor.AUTO])
+    def test_poolless_executors_have_no_pool(self, executor: Executor) -> None:
+        with pytest.raises(ValueError, match=executor.value):
+            open_pool(executor, 2)

@@ -41,6 +41,7 @@ OTHER = frozenset(
         "Edge",
         "Endpoint",
         "ExecutionMode",
+        "Executor",
         "Node",
         "Pipeline",
         "Workflow",
@@ -54,6 +55,7 @@ OTHER = frozenset(
 
 ROOT_EXCEPTIONS = frozenset(
     {
+        "EmptyPipelineError",
         "PipelineStateError",
         "RikoError",
         "UnsupportedModuleError",
@@ -131,6 +133,7 @@ TYPES = frozenset(
         "AsyncItems",
         "AsyncPipeTuples",
         "Conf",
+        "EventSink",
         "Feed",
         "Item",
         "Items",
