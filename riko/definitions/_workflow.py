@@ -395,15 +395,6 @@ class Workflow:
     def family_ports(self, family: EdgeFamily = "stream") -> Counter[tuple[str, str]]:
         return Counter(edge.port for edge in self.family_edges(family))
 
-    def family_indices(self, family: EdgeFamily = "stream") -> dict[str, list[int]]:
-        indexed: dict[str, list[int]] = defaultdict(list)
-
-        for edge in self.family_edges(family):
-            if (index := parse_port(edge.target.port).index) is not None:
-                indexed[edge.target.node].append(index)
-
-        return indexed
-
     def _gen_edge_target_mismatches(self) -> Iterator[str]:
         """Detects a publish/subscribe mismatch between an edge and its target node."""
         for edge in self.edges:
@@ -468,24 +459,17 @@ class Workflow:
 
         Raises:
 
-            InvalidPipelineError: If a source port feeds more than one stream edge,
-                or a node's positional inputs are not exactly ``in:1`` to ``in:N``.
+            InvalidPipelineError: If the graph is structurally invalid: an unsupported
+                version, an empty node set, a node keyed under another id, a dangling
+                edge or output reference, more than one stream edge into a port, a
+                publish/subscribe edge mismatch, a misdirected or malformed port, a
+                cycle, an unresolved resource, or no exposed output.
 
         """
         endpoints = {endpoint.node for endpoint in self.endpoints}
         family_ports = self.family_ports().items()
-        family_sources = self.family_sources().items()
 
-        gapped = {
-            node: sorted(f"in:{index}" for index in indices)
-            for node, indices in self.family_indices().items()
-            if sorted(indices) != list(range(1, len(indices) + 1))
-        }
-
-        if gapped:
-            msg = f"positional inputs must run from in:1 without gaps, got {gapped}"
-            raise InvalidPipelineError(msg)
-        elif self.version != WORKFLOW_VERSION:
+        if self.version != WORKFLOW_VERSION:
             msg = f"unsupported workflow version: {self.version!r}"
             raise InvalidPipelineError(msg)
         elif not self.nodes:
@@ -497,9 +481,6 @@ class Workflow:
             raise InvalidPipelineError(msg)
         elif fan_in := [port for port, count in family_ports if count > 1]:
             msg = f"multiple stream edges into port(s): {sorted(fan_in)}"
-            raise InvalidPipelineError(msg)
-        elif fan_out := sorted(source for source, count in family_sources if count > 1):
-            msg = f"un-supported fan-out from source(s): {fan_out}"
             raise InvalidPipelineError(msg)
         elif mismatches := sorted(self._gen_edge_target_mismatches()):
             msg = f"edge family disagrees with target node: {mismatches}"
@@ -515,6 +496,21 @@ class Workflow:
             raise InvalidPipelineError(msg)
         elif not self.outputs:
             raise InvalidPipelineError("workflow exposes no output; declare 'outputs'")
+
+    def require_executable(self) -> None:
+        """
+        Requires a topology the current executor can run.
+
+        Raises:
+
+            InvalidPipelineError: If a source port feeds more than one stream edge.
+
+        """
+        family_sources = self.family_sources().items()
+
+        if fan_out := sorted(source for source, count in family_sources if count > 1):
+            msg = f"un-supported fan-out from source(s): {fan_out}"
+            raise InvalidPipelineError(msg)
 
     @property
     def isvalid(self) -> bool:

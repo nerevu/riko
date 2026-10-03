@@ -188,6 +188,18 @@ def test_malformed_port_rejected():
         workflow.validate()
 
 
+@pytest.mark.parametrize(
+    ("source", "target"), [("out", "in:0"), ("out:0", "in")], ids=["in:0", "out:0"]
+)
+def test_zero_positional_port_rejected(source, target):
+    a = ModuleNode(id="a", name="fetch")
+    b = ModuleNode(id="b", name="sort")
+    edges = [StreamEdge(Endpoint("a", source), Endpoint("b", target))]
+    workflow = _workflow([a, b], edges=edges, outputs={"default": Endpoint("b", "out")})
+    with pytest.raises(InvalidPipelineError, match="invalid port"):
+        workflow.validate()
+
+
 def test_cycle_rejected():
     a = ModuleNode(id="a", name="sort")
     b = ModuleNode(id="b", name="sort")

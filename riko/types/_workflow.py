@@ -151,8 +151,8 @@ def parse_port(port: Port) -> ParsedPort:
 
     Args:
 
-        port: A port following the ``in``/``out``, ``in:N``/``out:N``, or
-            ``in:<name>``/``out:<name>`` grammar.
+        port: A port following the ``in``/``out``, ``in:N``/``out:N`` (``N`` is
+            1-based), or ``in:<name>``/``out:<name>`` grammar.
 
     Returns:
 
@@ -166,6 +166,9 @@ def parse_port(port: Port) -> ParsedPort:
         ParsedPort(direction='out', index=1, name=None)
         >>> parse_port("in:count")
         ParsedPort(direction='in', index=None, name='count')
+        >>> parse_port("in:0")
+        Traceback (most recent call last):
+        ValueError: invalid port: 'in:0'
 
     """
     direction, sep, rest = port.partition(":")
@@ -175,7 +178,7 @@ def parse_port(port: Port) -> ParsedPort:
 
     if not sep:
         index, name = None, None
-    elif rest.isdigit():
+    elif rest.isdigit() and int(rest) > 0:
         index, name = int(rest), None
     elif rest.isidentifier():
         index, name = None, rest

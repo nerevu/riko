@@ -103,7 +103,8 @@ def _normalize_port(port: str, direction: str) -> str:
     elif _is_legacy_port(port, OTHER_PORT):
         result = f"in:{_get_legacy_index(port, OTHER_PORT, 1)}"
     elif _is_legacy_port(port, OUTPUT_PORT):
-        result = f"out:{_get_legacy_index(port, OUTPUT_PORT, 1) - 1}"
+        index = _get_legacy_index(port, OUTPUT_PORT, 1) - 1
+        result = "out" if index < 1 else f"out:{index}"
     elif port.isidentifier():
         result = f"{direction}:{port}"
     else:

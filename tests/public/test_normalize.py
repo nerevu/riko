@@ -37,6 +37,7 @@ from riko.types._workflow import Endpoint
         ("_OTHER2", "in", "in:2"),
         ("_OTHER5", "in", "in:5"),
         ("_OUTPUT", "out", "out"),
+        ("_OUTPUT1", "out", "out"),
         ("_OUTPUT2", "out", "out:1"),
         ("_OUTPUT4", "out", "out:3"),
         ("out:matched", "out", "out:matched"),
