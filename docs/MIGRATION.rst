@@ -91,4 +91,39 @@ This guide intentionally contains only the durable compatibility model and suppo
 boundaries. It should change only when those policies or surfaces change, not for each
 release.
 
+Workflow call options and stored pipelines
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A workflow node now separates the configuration a module parses (``conf``) from the
+options handed to the module itself (``options``). The typing name ``LoopOptions`` in
+``riko.types.modules`` is now ``ModuleOptions``, since those options apply to every
+module rather than to ``loop`` alone, and ``LoopConf`` holds only ``embed``.
+
+Move a loop's ``emit``, ``assign``, ``field``, and ``count`` out of its ``conf``:
+
+.. code-block:: python
+
+    # before
+    ModuleNode(id="loop", name="loop", conf={"embed": embed, "emit": True})
+
+    # after
+    ModuleNode(id="loop", name="loop", conf={"embed": embed}, options={"emit": True})
+
+The same ``options`` mapping is accepted in an authoring mapping and is serialized only
+when it is non-empty.
+
+A directory registered with ``riko.ext.register_pipeline_store(directory=…)``, and the
+files ``PipelineResolver.load_definition`` reads from it, must now hold canonical
+workflow JSON. Convert stored definitions in the released pipe-definition format once:
+
+.. code-block:: python
+
+    from riko.ext import migrate_v1_to_v2, serialize_workflow
+
+    canonical = serialize_workflow(migrate_v1_to_v2(old_definition))
+
+The ``gen-pipelines`` console script and the ``manage codegen --pipes`` selector were
+removed along with the generated fixture trees they produced. ``compile-pipe`` and
+``convert-dag`` are unchanged and still take the older pipe-definition format.
+
 .. _CHANGES: CHANGES.rst

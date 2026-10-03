@@ -1,10 +1,10 @@
 Bare-bones DAG format
 =====================
 
-riko pipelines are stored as verbose JSON pipe definitions (``tests/pipelines/*.json``):
-every wire is a full ``src``/``tgt`` endpoint record, and a terminal ``output`` module is
-always present. The **bare-bones DAG** is a minimal authoring format that captures only
-the essentials and expands to a full pipe definition via ``build_pipe_def``.
+A full riko **pipe definition** is verbose JSON: every wire is a full ``src``/``tgt``
+endpoint record, and a terminal ``output`` module is always present. The **bare-bones
+DAG** is a minimal authoring format that captures only the essentials and expands to a
+full pipe definition via ``build_pipe_def``.
 
 Schema
 ------
@@ -103,10 +103,10 @@ Chaining them turns a DAG straight into runnable Python:
 See `pipe_forever`_ for a runnable example and `test_compile`_
 (``test_convert_dag_*``) for the round-trip guarantees.
 
-For fuller worked pipe definitions, see the `example pipelines`_
-(``examples/pipelines/*.json``) and the compiled modules they produce
-(``examples/pypipelines/*.py``), regenerated with
-``compile-pipe examples/pipelines/pipe_<name>.json -o examples/pypipelines/pipe_<name>.py``.
+For fuller worked pipelines, see the `example pipelines`_
+(``examples/pipelines/*.json``). Those are canonical workflow documents run directly by
+riko rather than pipe definitions, and the ``examples/pypipelines/*.py`` modules beside
+them are hand-written Python equivalents, not ``compile-pipe`` output.
 
 .. _pipe_forever: ../tests/dags/pipe_forever.json
 .. _pipe_reordered: ../tests/dags/pipe_reordered.json

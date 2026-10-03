@@ -588,9 +588,10 @@ then see the following output in your terminal:
 
 The ``examples`` directory bundles more runnable ``pipelines``. E.g., try ``run-pipe
 usage``, ``run-pipe simple1``, or ``run-pipe wired``. The `Cookbook`_ covers the
-``register_alias``/``register_module`` runtime-registration examples, and
-``examples/pipelines/*.json`` holds JSON pipe definitions that compile to
-``examples/pypipelines/*.py`` (see the `DAG format`_ doc).
+``register_alias``/``register_module`` runtime-registration examples.
+``examples/pipelines/*.json`` holds the same pipelines as canonical workflow
+documents, run directly by riko; ``examples/pypipelines/*.py`` are hand-written
+Python equivalents kept beside them (see the `DAG format`_ doc).
 
 Contributing
 ------------
@@ -666,9 +667,9 @@ Project Structure
     │   ├── dags/*           (bare-bones DAG fixtures)
     │   ├── functional/*
     │   ├── internal/*
-    │   ├── pipelines/*      (JSON pipe definitions)
+    │   ├── pipelines/*      (canonical JSON workflow documents)
     │   ├── public/*
-    │   └── pypipelines/*    (expected generated Python modules)
+    │   └── pypipelines/*    (hand-written Python equivalents)
     ├── CLAUDE.md
     ├── conftest.py
     ├── CONTRIBUTING.rst

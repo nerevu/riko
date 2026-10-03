@@ -310,7 +310,13 @@ A built-in module change commonly requires work in several places:
 
        uv run manage codegen --config --names
 
-5. Add or update sync and async tests where both execution paths exist.
+5. Add or update sync and async tests where both execution paths exist. An
+   asynchronous test is a native ``async def`` decorated with ``async_test``
+   from ``tests/__init__.py``; never wrap a coroutine in a synchronous test
+   body. A test stays a plain ``def`` under ``skipif_issync`` only when the
+   synchronous path is deliberately what it exercises (for example, the
+   synchronous execution driving an async-only module); if the synchronous
+   runner is incidental, drop it and write the test as a native ``async def``.
 6. Add deterministic examples to the module docstring or cookbook.
 7. Update the FAQ catalog when adding, removing, or materially changing a
    built-in module.
