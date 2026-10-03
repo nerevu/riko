@@ -141,7 +141,7 @@ def parse_arg[VT](arg: VT, op: str, memoize: bool = False) -> str | date | VT | 
     return func(arg, op)
 
 
-def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
+def evaluate_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
     """
     Evaluates a single rule against an item.
 
@@ -150,12 +150,12 @@ def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
         >>> from meza.fntools import Objectify
         >>>
         >>> numeric = Objectify({"field": "x", "op": "atleast", "value": 3})
-        >>> parse_rule(numeric, {"x": 5})
+        >>> evaluate_rule(numeric, {"x": 5})
         True
-        >>> parse_rule(numeric, {})
+        >>> evaluate_rule(numeric, {})
         False
         >>> unknown = Objectify({"field": "x", "op": "bogus", "value": 3})
-        >>> parse_rule(unknown, {"x": 5})
+        >>> evaluate_rule(unknown, {"x": 5})
         False
 
     """
@@ -268,7 +268,7 @@ def parser(
             msg = f"Invalid combine: '{objconf.combine}'. (Expected 'and' or 'or')"
             logger.error(msg)
         else:
-            result = func(parse_rule(rule, item, **kwargs) for rule in extract)
+            result = func(evaluate_rule(rule, item, **kwargs) for rule in extract)
 
             if (result and objconf.permit) or not (result or objconf.permit):
                 yield item

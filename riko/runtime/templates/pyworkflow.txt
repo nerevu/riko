@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 INPUTS: dict[str, object] = {{ inputs }}
 DEPENDENCIES: list[str] = {{ dependencies }}
 
-spec = WorkflowSpec(
+workflow = Workflow(
     nodes={
 {%- for node in nodes %}
         {{ node }},
@@ -52,7 +52,7 @@ spec = WorkflowSpec(
 {% if is_async %}
 async def _run(item, context):
     async with AsyncExecution(context=context) as execution:
-        stream = await execution.run(build_execution_plan(spec), source=item)
+        stream = await execution.run(build_execution_plan(workflow), source=item)
 
         async for value in stream:
             yield value
@@ -83,7 +83,7 @@ if __name__ == "__main__":
 {%- else %}
 def _run(item, context):
     with SyncExecution(context=context) as execution:
-        yield from execution.run(build_execution_plan(spec), source=item)
+        yield from execution.run(build_execution_plan(workflow), source=item)
 
 
 def pipe(item=None, context: Context | None = None, **_):

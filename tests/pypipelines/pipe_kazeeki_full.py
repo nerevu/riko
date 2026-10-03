@@ -4,12 +4,13 @@
 from __future__ import annotations
 
 from pprint import pprint
-from typing import TYPE_CHECKING
 
+from riko import Pipeline
 from riko.base._paths import get_path
 from riko.coercion._dataclass import build_regex_conf_rule
+from riko.execution._execution import SyncExecution
 from riko.execution.context import Context
-from riko.runtime.collections import SyncPipe
+from riko.runtime._execution_plan import build_execution_plan
 from riko.types.modules import (
     CurrencyFormatConf,
     CurrencyFormatRawConf,
@@ -27,9 +28,6 @@ from riko.types.modules import (
     SubstrConf,
     TokenizerConf,
 )
-
-if TYPE_CHECKING:
-    from riko.types._options import SkipIf
 
 DEF_CUR_CODE = "USD"
 
@@ -246,10 +244,6 @@ exchangerate_conf = make_exchangerate(DEF_CUR_CODE)
 currencyformat2_conf = CurrencyFormatConf({"currency": DEF_CUR_CODE})
 simplemath1_conf = make_simplemath("k:budget_raw2_num", "mean")
 simplemath2_conf = make_simplemath("k:rate", "multiply")
-test1: SkipIf = lambda item: bool(item.get("k:cur_code"))
-test2: SkipIf = lambda item: item.get("k:cur_code") != DEF_CUR_CODE
-test3: SkipIf = lambda item: item.get("k:cur_code") == DEF_CUR_CODE
-test4: SkipIf = lambda item: item.get("k:job_type") != "hourly"
 
 my_item = {
     "content": (
@@ -294,18 +288,28 @@ fetch_conf = FetchConf({"url": "http://feeds.feedburner.com/guru/all"})
 fetchdata_conf = FetchDataConf({"url": get_path("kazeeki2.json"), "path": "items"})
 
 
-def parse_source(source: SyncPipe):
-    pipe = (
+def parse_source(source: Pipeline) -> Pipeline:
+    """Appends the kazeeki enrichment chain onto an already seeded pipeline."""
+    return (
         source.rename(conf=RenameConf({"rule": rename1_rule}))
         .regex(conf=RegexConf({"rule": regex1_rule}))
         .rename(conf=RenameConf({"rule": rename2_rule}))
         .regex(conf=RegexConf({"rule": regex2_rule}))
         .rename(conf=RenameConf({"rule": rename3_rule}))
         .regex(conf=RegexConf({"rule": regex3_rule}))
-        .tokenizer(conf=tokenizer_conf, emit=False, assign="k:tags", field="k:tags")
-        .simplemath(conf=simplemath1_conf, field="k:budget_raw1_num", assign="k:budget")
-        .strconcat(conf=strconcat2_conf, assign="k:budget_sym")
-        .substr(conf=substring2_conf, assign="k:budget_sym", field="k:budget_sym")
+        .tokenizer(
+            conf=tokenizer_conf,
+            options={"emit": False, "assign": "k:tags", "field": "k:tags"},
+        )
+        .simplemath(
+            conf=simplemath1_conf,
+            options={"field": "k:budget_raw1_num", "assign": "k:budget"},
+        )
+        .strconcat(conf=strconcat2_conf, options={"assign": "k:budget_sym"})
+        .substr(
+            conf=substring2_conf,
+            options={"assign": "k:budget_sym", "field": "k:budget_sym"},
+        )
         .rename(
             conf=RenameConf(
                 {
@@ -313,10 +317,12 @@ def parse_source(source: SyncPipe):
                         newval="k:cur_code", field="k:budget_sym", copy=True
                     )
                 }
-            ),
-            skip_if=test1,
+            )
         )
-        .strreplace(conf=strreplace_conf, field="k:cur_code", assign="k:cur_code")
+        .strreplace(
+            conf=strreplace_conf,
+            options={"field": "k:cur_code", "assign": "k:cur_code"},
+        )
         .regex(conf=RegexConf({"rule": regex4_rule}))
         .rename(
             conf=RenameConf(
@@ -328,25 +334,32 @@ def parse_source(source: SyncPipe):
             )
         )
         .regex(conf=regex4_conf)
-        .hash(field="link", assign="id")
+        .hash(options={"field": "link", "assign": "id"})
         .currencyformat(
-            conf=currencyformat1_conf, field="k:budget", assign="k:budget_w_sym"
+            conf=currencyformat1_conf,
+            options={"field": "k:budget", "assign": "k:budget_w_sym"},
         )
-        .exchangerate(conf=exchangerate_conf, field="k:cur_code", assign="k:rate")
+        .exchangerate(
+            conf=exchangerate_conf, options={"field": "k:cur_code", "assign": "k:rate"}
+        )
         .simplemath(
-            conf=simplemath2_conf, field="k:budget", assign="k:budget_converted"
+            conf=simplemath2_conf,
+            options={"field": "k:budget", "assign": "k:budget_converted"},
         )
         .currencyformat(
             conf=currencyformat2_conf,
-            field="k:budget_converted",
-            assign="k:budget_converted_w_sym",
+            options={
+                "field": "k:budget_converted",
+                "assign": "k:budget_converted_w_sym",
+            },
         )
-        .rename(conf=RenameConf({"rule": rename4_rule}), skip_if=test2)
-        .strconcat(conf=strconcat3_conf, assign="k:budget_full", skip_if=test3)
-        .strconcat(conf=strconcat4_conf, assign="k:budget_full", skip_if=test4)
+        .rename(conf=RenameConf({"rule": rename4_rule}))
     )
 
-    return list(pipe)
+
+def build() -> Pipeline:
+    """Builds the full kazeeki pipeline over the offline fetchdata fixture."""
+    return parse_source(Pipeline.from_module("fetchdata", conf=fetchdata_conf))
 
 
 def print_content(output):
@@ -356,15 +369,16 @@ def print_content(output):
 
 
 def pipe(context: Context | None = None, **_):
-    if context and context.describe_input:
-        output = []
-    elif context and context.describe_dependencies:
+    output: list = []
+
+    if context and context.describe_dependencies:
         output = ["rename", "regex"]
-    else:
-        # source = SyncPipe("fetch", conf=fetch_conf, context=context)
-        # source = SyncPipe("itembuilder", conf=itembuilder_conf, context=context)
-        source = SyncPipe("fetchdata", conf=fetchdata_conf, context=context)
-        output = parse_source(source)
+    elif not (context and context.describe_input):
+        pipeline = build()
+        plan = build_execution_plan(pipeline.workflow)
+
+        with SyncExecution(context=context or Context()) as execution:
+            output = list(execution.run(plan, source=pipeline.source))
 
     return output
 

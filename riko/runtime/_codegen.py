@@ -15,9 +15,9 @@ Examples:
         >>> from riko.runtime._codegen import compile_workflow
         >>>
         >>> attrs = {"key": "title", "value": "riko"}
-        >>> flow = Pipeline.from_module("itembuilder", conf={"attrs": attrs})
-        >>> flow = flow.pipe("rename", conf={"rule": [{"field": "title"}]})
-        >>> source = compile_workflow(flow.spec, "pipe_demo")
+        >>> pipeline = Pipeline.from_module("itembuilder", conf={"attrs": attrs})
+        >>> pipeline = pipeline.pipe("rename", conf={"rule": [{"field": "title"}]})
+        >>> source = compile_workflow(pipeline.workflow, "pipe_demo")
         >>> print(next(l for l in source.splitlines() if l.startswith("def pipe")))
         def pipe(item=None, context: Context | None = None, **_):
         >>> print(next(l for l in source.splitlines() if l.startswith("DEPEND")))
@@ -34,7 +34,7 @@ from jinja2 import Environment, PackageLoader
 from riko.base._source_format import ruff_format
 from riko.base._strutils import pythonise
 from riko.base.exceptions import InvalidPipelineError
-from riko.definitions._workflow import ModuleNode, WorkflowSpec
+from riko.definitions._workflow import ModuleNode, Workflow
 from riko.types._guards import is_mapping
 
 from ._normalize import normalize_workflow
@@ -42,8 +42,9 @@ from ._normalize import normalize_workflow
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
+    from riko.definitions._workflow import WorkflowLike
     from riko.types._collections import FrozenConf
-    from riko.types._workflow import Edge, Endpoint, WorkflowSpecLike
+    from riko.types._workflow import Edge, Endpoint
     from riko.types.modules import Conf, Embed
 
 RAW_CONFS = {
@@ -164,9 +165,9 @@ def _render_outputs(outputs: Mapping[str, Endpoint]) -> str:
     return "{" + ", ".join(pairs) + "}"
 
 
-def _gen_module_nodes(spec: WorkflowSpec) -> Iterator[ModuleNode]:
+def _gen_module_nodes(workflow: Workflow) -> Iterator[ModuleNode]:
     """Emits every node, rejecting a family that has no generated form yet."""
-    for node in spec.nodes.values():
+    for node in workflow.nodes.values():
         if isinstance(node, ModuleNode):
             yield node
         else:
@@ -175,7 +176,7 @@ def _gen_module_nodes(spec: WorkflowSpec) -> Iterator[ModuleNode]:
             raise InvalidPipelineError(msg)
 
 
-def _resolve_raw_confs(nodes: list[ModuleNode]) -> list[str]:
+def _collect_raw_confs(nodes: list[ModuleNode]) -> list[str]:
     """Collects the raw config classes the generated module has to import."""
     used: set[str] = set()
 
@@ -194,10 +195,10 @@ def _resolve_raw_confs(nodes: list[ModuleNode]) -> list[str]:
 
 
 def compile_workflow(
-    spec: WorkflowSpec, name: str = "anonymous", *, is_async: bool = False
+    workflow: Workflow, name: str = "anonymous", *, is_async: bool = False
 ) -> str:
     """
-    Generates the Python module source that rebuilds and runs ``spec``.
+    Generates the Python module source that rebuilds and runs ``workflow``.
 
     The module declares the workflow with typed configuration classes and exposes a
     single ``pipe`` (or ``async_pipe``) callable over it. That callable takes one
@@ -207,7 +208,7 @@ def compile_workflow(
 
     Args:
 
-        spec: The canonical workflow to generate a module for.
+        workflow: The canonical workflow to generate a module for.
         name: The name the generated module documents itself by.
         is_async: Whether to generate the asynchronous interface.
 
@@ -224,15 +225,15 @@ def compile_workflow(
 
         >>> from riko.definitions._workflow import Pipeline
         >>>
-        >>> flow = Pipeline.from_module("forever")
-        >>> source = compile_workflow(flow.spec, "pipe_demo", is_async=True)
+        >>> pipeline = Pipeline.from_module("forever")
+        >>> source = compile_workflow(pipeline.workflow, "pipe_demo", is_async=True)
         >>> print(next(l for l in source.splitlines() if l.startswith("async def a")))
         async def async_pipe(item=None, context: Context | None = None, **_):
 
     """
-    spec.validate()
-    nodes = list(_gen_module_nodes(spec))
-    edge_names = sorted({type(edge).__name__ for edge in spec.edges})
+    workflow.validate()
+    nodes = list(_gen_module_nodes(workflow))
+    edge_names = sorted({type(edge).__name__ for edge in workflow.edges})
     loader = PackageLoader("riko.runtime")
     env = Environment(loader=loader, autoescape=False)  # noqa: S701
     template = env.get_template("pyworkflow.txt")
@@ -240,37 +241,34 @@ def compile_workflow(
     rendered = template.render(
         pipe_name=pythonise(name),
         is_async=is_async,
-        definition_names=sorted({"ModuleNode", "WorkflowSpec", *edge_names}),
-        raw_confs=_resolve_raw_confs(nodes),
+        definition_names=sorted({"ModuleNode", "Workflow", *edge_names}),
+        raw_confs=_collect_raw_confs(nodes),
         nodes=[_render_node(node) for node in nodes],
-        edges=_render_edges(spec.edges),
-        outputs=_render_outputs(spec.outputs),
-        inputs=render_value(spec.inputs),
-        resources=render_value(list(spec.resources)),
-        has_resources=len(spec.resources) > 0,
+        edges=_render_edges(workflow.edges),
+        outputs=_render_outputs(workflow.outputs),
+        inputs=render_value(workflow.inputs),
+        resources=render_value(list(workflow.resources)),
+        has_resources=len(workflow.resources) > 0,
         dependencies=render_value(sorted({node.name for node in nodes})),
-        subtype="transformer" if len(spec.inputs) else "source",
+        subtype="transformer" if len(workflow.inputs) else "source",
     )
 
     return ruff_format(rendered)
 
 
 def compile_pipe(
-    workflow: WorkflowSpec | WorkflowSpecLike,
-    name: str = "anonymous",
-    *,
-    is_async: bool = False,
+    workflow: WorkflowLike, name: str = "anonymous", *, is_async: bool = False
 ) -> str:
     """
-    Generates the Python module source for a workflow or an authoring mapping.
+    Generates the Python module source for a workflow or a RawWorkflow.
 
-    An authoring mapping is normalized into a canonical workflow first, so the
+    An RawWorkflow is normalized into a canonical workflow first, so the
     generated module always reflects the canonical graph rather than the shorthand
     it was written in.
 
     Args:
 
-        workflow: The canonical workflow, or an authoring mapping describing one.
+        workflow: The canonical workflow, or a RawWorkflow describing one.
         name: The name the generated module documents itself by.
         is_async: Whether to generate the asynchronous interface.
 
@@ -291,8 +289,8 @@ def compile_pipe(
         DEPENDENCIES: list[str] = ["forever"]
 
     """
-    spec = normalize_workflow(workflow)
-    return compile_workflow(spec, name, is_async=is_async)
+    workflow = normalize_workflow(workflow)
+    return compile_workflow(workflow, name, is_async=is_async)
 
 
 __all__ = ["RAW_CONFS", "compile_pipe", "compile_workflow", "render_value"]

@@ -1,9 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Deterministic canonical serialization and parsing of Workflow v2 specs.
+Deterministic canonical serialization and parsing of Workflows.
 
 ``serialize_workflow`` emits a byte-stable canonical JSON document, and
-``parse_workflow`` reconstructs a ``WorkflowSpec`` from it by reusing the shared
+``parse_document`` reconstructs a ``Workflow`` from it by reusing the shared
 normalization boundary. Serialization emits v2 only. v1 documents are converted to v2
 through ``migrate_v1_to_v2`` before it is ever serialized.
 
@@ -11,11 +11,11 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.ext import normalize_workflow, parse_workflow, serialize_workflow
+        >>> from riko.ext import normalize_workflow, parse_document, serialize_workflow
         >>>
-        >>> spec = normalize_workflow({"nodes": [{"name": "fetch"}]})
-        >>> json = serialize_workflow(spec)
-        >>> parse_workflow(json) == spec
+        >>> workflow = normalize_workflow({"nodes": [{"name": "fetch"}]})
+        >>> json = serialize_workflow(workflow)
+        >>> parse_document(json) == workflow
         True
 
 """
@@ -31,8 +31,8 @@ from typing import TYPE_CHECKING, Any
 import attrs
 from attrs import AttrsInstance
 
-from riko.definitions._workflow import Node, WorkflowSpec
-from riko.types._workflow import Edge
+from riko.definitions._workflow import Node, Workflow
+from riko.types._workflow import Edge, WorkflowDocument
 
 from ._normalize import normalize_workflow
 
@@ -63,10 +63,10 @@ def _serialize_attrs(instance: AttrsInstance, *keep_fields: str) -> dict[str, ob
 
 
 class WorkflowEncoder(json.JSONEncoder):
-    """Renders the structural and JSON-native value types a canonical spec carries."""
+    """Renders the structural and JSON-native value types a workflow carries."""
 
     def default(self, o: object) -> Any:
-        if isinstance(o, WorkflowSpec):
+        if isinstance(o, Workflow):
             result = _serialize_attrs(o, "edges")
         elif isinstance(o, (Node, Edge)):
             result = {"type": o.family, **_serialize_attrs(o)}
@@ -86,13 +86,13 @@ class WorkflowEncoder(json.JSONEncoder):
         return result
 
 
-def parse_workflow(data: bytes | str) -> WorkflowSpec:
+def parse_document(document: WorkflowDocument | str) -> Workflow:
     """
-    Parses a canonical Workflow v2 JSON document into a spec.
+    Parses a WorkflowDocument into a Workflow.
 
     Reuses the shared normalization boundary, so a serialized document round-trips back
-    to an equal spec. Structural validity beyond reconstruction stays with the separate
-    validation step.
+    to an equal workflow. Structural validity beyond reconstruction stays with the
+    separate validation step.
 
     Args:
 
@@ -100,32 +100,34 @@ def parse_workflow(data: bytes | str) -> WorkflowSpec:
 
     Returns:
 
-        The reconstructed :class:`~riko.definitions._workflow.WorkflowSpec`.
+        The reconstructed :class:`~riko.definitions._workflow.Workflow`.
 
     Examples:
 
         >>> from json import dumps
         >>>
         >>> json = json.dumps({"nodes": [{"name": "fetch"}]})
-        >>> parse_workflow(json).nodes["fetch-1"].name
+        >>> parse_document(json).nodes["fetch-1"].name
         'fetch'
 
     """
-    return normalize_workflow(json.loads(data))
+    return normalize_workflow(json.loads(document))
 
 
-def serialize_workflow(spec: WorkflowSpec, *, indent: int | None = 4) -> bytes:
+def serialize_workflow(
+    workflow: Workflow, *, indent: int | None = 4
+) -> WorkflowDocument:
     """
-    Serializes a canonical workflow spec into byte-stable canonical JSON.
+    Serializes a ``Workflow`` into byte-stable canonical JSON.
 
     Map keys are sorted at every level and node/edge fields use a fixed shape, so the
-    same spec always yields identical bytes for golden-fixture comparison. Edge order
-    follows the spec; semantic wiring lives in the endpoints, not the array order.
-    The default is the readable indented form committed documents are stored in.
+    same workflow always yields identical bytes for golden-fixture comparison. Edge
+    order follows the workflow; semantic wiring lives in the endpoints, not the array
+    order. The default is the readable indented form committed documents are stored in.
 
     Args:
 
-        spec: The canonical :class:`~riko.definitions._workflow.WorkflowSpec`.
+        workflow: The canonical :class:`~riko.definitions._workflow.Workflow`.
         indent: Number of spaces to indent each nesting level by. The readable form
             ends with a trailing newline; pass ``None`` for the compact single-line
             form.
@@ -138,8 +140,8 @@ def serialize_workflow(spec: WorkflowSpec, *, indent: int | None = 4) -> bytes:
 
         >>> from riko.ext import normalize_workflow
         >>>
-        >>> spec = normalize_workflow({"nodes": [{"name": "fetch"}]})
-        >>> document = serialize_workflow(spec).decode("utf-8")
+        >>> workflow = normalize_workflow({"nodes": [{"name": "fetch"}]})
+        >>> document = serialize_workflow(workflow).decode("utf-8")
         >>> document.splitlines()[1]
         '    "edges": [],'
         >>> document.endswith("\\n")
@@ -147,7 +149,7 @@ def serialize_workflow(spec: WorkflowSpec, *, indent: int | None = 4) -> bytes:
 
         Compact form::
 
-            >>> serialize_workflow(spec, indent=None)
+            >>> serialize_workflow(workflow, indent=None)
             b'{"edges":[],"nodes":{"fetch-1":{"id":"fetch-1","name":"fetch","type":"module"}},"outputs":{"default":{"node":"fetch-1","port":"out"}},"version":"2"}'
 
     """
@@ -159,7 +161,7 @@ def serialize_workflow(spec: WorkflowSpec, *, indent: int | None = 4) -> bytes:
         suffix = "\n"
 
     dumped = json.dumps(
-        spec,
+        workflow,
         cls=WorkflowEncoder,
         sort_keys=True,
         indent=indent,
@@ -170,4 +172,4 @@ def serialize_workflow(spec: WorkflowSpec, *, indent: int | None = 4) -> bytes:
     return (dumped + suffix).encode("utf-8")
 
 
-__all__ = ["parse_workflow", "serialize_workflow"]
+__all__ = ["parse_document", "serialize_workflow"]

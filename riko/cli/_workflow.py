@@ -4,19 +4,19 @@ Shared JSON document front door for the riko console scripts.
 
 Every command that takes a workflow document reads it here, so one place decides
 which shape a document is written in, which loader turns it into a canonical
-workflow, and which commands accept the older shapes at all. ``convert-dag`` is the
+workflow, and which commands accept the older shapes at all. ``build-workflow`` is the
 lenient one; the commands that run or generate code take canonical documents only.
 
 Examples:
 
     Basic usage::
 
-        >>> from riko.cli._workflow import detect_format, load_workflow
+        >>> from riko.cli._workflow import get_document_format, normalize_document
         >>>
         >>> dag = {"modules": [{"type": "forever"}, {"type": "truncate"}]}
-        >>> detect_format(dag).value
+        >>> get_document_format(dag).value
         'dag'
-        >>> list(load_workflow(dag).nodes)
+        >>> list(normalize_document(dag).nodes)
         ['sw-1', 'sw-2']
 
 """
@@ -27,24 +27,23 @@ import sys
 from enum import StrEnum
 from json import loads
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, TypeGuard
 
 from riko.base._config import OUTPUT_MODULE
 from riko.base._logging import logger
 from riko.base.exceptions import InvalidPipelineError
-from riko.runtime._migrate import build_workflow, migrate_v1_to_v2
+from riko.runtime._migrate import migrate_v1_to_v2, parse_dag
 from riko.runtime._normalize import normalize_workflow
 from riko.types._guards import is_mapping
 
 if TYPE_CHECKING:
-    from riko.definitions._workflow import WorkflowSpec
+    from riko.definitions._workflow import Workflow, WorkflowLike
     from riko.types._compiler import PipeDag, PipeDefLike
-    from riko.types._workflow import WorkflowSpecLike
-
-type WorkflowDocument = WorkflowSpecLike | PipeDefLike | PipeDag
 
 _SHAPE_ERROR = "a workflow document needs 'nodes' or 'modules'"
 _WIRE_KEYS = frozenset({"src", "tgt"})
+
+type DocumentMapping = WorkflowLike | PipeDefLike | PipeDag
 
 
 class DocumentFormat(StrEnum):
@@ -55,25 +54,7 @@ class DocumentFormat(StrEnum):
     V2 = "v2"
 
 
-def _entries(value: object) -> tuple[object, ...]:
-    """Supplies a document's listed entries, or nothing when it lists none."""
-    return tuple(value) if isinstance(value, (list, tuple)) else ()
-
-
-def _is_legacy(**document: object) -> bool:
-    """Reports whether a ``modules`` document uses the older wire and output shape."""
-    wired = any(
-        is_mapping(wire) and not _WIRE_KEYS.isdisjoint(wire)
-        for wire in _entries(document.get("wires"))
-    )
-    terminal = any(
-        is_mapping(module) and module.get("type") == OUTPUT_MODULE
-        for module in _entries(document.get("modules"))
-    )
-    return wired or terminal
-
-
-def read_document(path: str) -> tuple[WorkflowDocument | None, str]:
+def read_document(path: Path | str) -> tuple[DocumentMapping | None, str]:
     """
     Reads a JSON workflow document from ``path``, or from stdin when it is ``-``.
 
@@ -95,23 +76,57 @@ def read_document(path: str) -> tuple[WorkflowDocument | None, str]:
         (None, 'no-such-flow')
 
     """
-    stdin = path == "-"
-    name = "anonymous" if stdin else Path(path).stem
+    if path == "-":
+        name = "anonymous"
+        text = sys.stdin.read()
+    else:
+        path = Path(path)
+        name = path.stem
+        text = None
 
-    try:
-        text = sys.stdin.read() if stdin else Path(path).read_text(encoding="utf-8")
-        document = loads(text)
-    except OSError as e:
-        logger.warning("Unable to read workflow document: %s", e)
-        document = None
-    except ValueError as e:
-        logger.warning("Invalid JSON in workflow document: %s", e)
-        document = None
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as e:
+            logger.warning("Unable to read workflow document: %s", e)
+        except ValueError as e:
+            logger.warning("Invalid JSON in workflow document: %s", e)
 
+    document = None if text is None else loads(text)
     return document, name
 
 
-def detect_format(document: WorkflowDocument) -> DocumentFormat:
+def is_workflowlike(value: object) -> TypeGuard[WorkflowLike]:
+    """Reports whether ``value`` is a workflow document."""
+    return is_mapping(value) and bool({"nodes", "version"}.intersection(value))
+
+
+def is_pipedeflike(value: object) -> TypeGuard[PipeDefLike]:
+    """Reports whether ``value`` is a released pipe definition."""
+    if is_mapping(value) and not is_workflowlike(value) and "modules" in value:
+        wires = value.get("wires", ())
+        modules = value.get("modules", ())
+
+        wired = any(
+            is_mapping(wire) and not _WIRE_KEYS.isdisjoint(wire) for wire in wires
+        )
+        terminal = any(
+            is_mapping(module) and module.get("type") == OUTPUT_MODULE
+            for module in modules
+        )
+        result = wired or terminal
+    else:
+        result = False
+
+    return result
+
+
+def is_pipedag(value: object) -> TypeGuard[PipeDag]:
+    """Reports whether ``value`` is a bare-bones DAG."""
+    possible = is_mapping(value) and not is_workflowlike(value) and "modules" in value
+    return possible and not is_pipedeflike(value)
+
+
+def get_document_format(document: DocumentMapping) -> DocumentFormat:
     """
     Detects which of the readable shapes ``document`` is written in.
 
@@ -135,29 +150,30 @@ def detect_format(document: WorkflowDocument) -> DocumentFormat:
 
     Examples:
 
-        >>> detect_format({"nodes": [{"name": "forever"}]}).value
+        >>> get_document_format({"nodes": [{"name": "forever"}]}).value
         'v2'
-        >>> detect_format({"modules": [{"id": "_OUTPUT", "type": "output"}]}).value
+        >>> modules = [{"id": "_OUTPUT", "type": "output"}]
+        >>> get_document_format({"modules": modules}).value
         'v1'
 
     """
-    keys = document if is_mapping(document) else {}
-
-    if "nodes" in keys or "version" in keys:
+    if is_workflowlike(document):
         fmt = DocumentFormat.V2
-    elif "modules" in keys:
-        fmt = DocumentFormat.V1 if _is_legacy(**keys) else DocumentFormat.DAG
+    elif is_pipedeflike(document):
+        fmt = DocumentFormat.V1
+    elif is_pipedag(document):
+        fmt = DocumentFormat.DAG
     else:
         raise InvalidPipelineError(_SHAPE_ERROR)
 
     return fmt
 
 
-def load_workflow(
-    document: WorkflowDocument, fmt: DocumentFormat | None = None
-) -> WorkflowSpec:
+def normalize_document(
+    document: DocumentMapping, fmt: DocumentFormat | None = None
+) -> Workflow:
     """
-    Loads a document of any readable shape as a validated canonical workflow.
+    Converts a document of any readable shape into a validated canonical workflow.
 
     Args:
 
@@ -166,7 +182,7 @@ def load_workflow(
 
     Returns:
 
-        The canonical :class:`~riko.definitions._workflow.WorkflowSpec`.
+        The canonical :class:`~riko.definitions._workflow.Workflow`.
 
     Raises:
 
@@ -188,24 +204,24 @@ def load_workflow(
         ...         }
         ...     ],
         ... }
-        >>> load_workflow(pipe_def).outputs["default"]
+        >>> normalize_document(pipe_def).outputs["default"]
         Endpoint(node='sw-1', port='out')
 
     """
-    resolved = detect_format(document) if fmt is None else fmt
-
-    if resolved is DocumentFormat.V2:
-        spec = normalize_workflow(document)
-    elif resolved is DocumentFormat.V1:
-        spec = migrate_v1_to_v2(document)
+    if fmt is DocumentFormat.V2 or is_workflowlike(document):
+        workflow = normalize_workflow(document)
+    elif fmt is DocumentFormat.V1 or is_pipedeflike(document):
+        workflow = migrate_v1_to_v2(document)  # pyright: ignore[reportArgumentType]
+    elif fmt is DocumentFormat.DAG or is_pipedag(document):
+        workflow = parse_dag(document)  # pyright: ignore[reportArgumentType]
     else:
-        spec = build_workflow(cast("PipeDag", document))
+        raise InvalidPipelineError(_SHAPE_ERROR)
 
-    spec.validate()
-    return spec
+    workflow.validate()
+    return workflow
 
 
-def require_workflow(document: WorkflowDocument) -> WorkflowSpec:
+def require_workflow(document: DocumentMapping) -> Workflow:
     """
     Loads a document that has to already be a canonical workflow.
 
@@ -215,7 +231,7 @@ def require_workflow(document: WorkflowDocument) -> WorkflowSpec:
 
     Returns:
 
-        The canonical :class:`~riko.definitions._workflow.WorkflowSpec`.
+        The canonical :class:`~riko.definitions._workflow.Workflow`.
 
     Raises:
 
@@ -224,24 +240,24 @@ def require_workflow(document: WorkflowDocument) -> WorkflowSpec:
 
     Examples:
 
-        >>> spec = require_workflow({"nodes": [{"name": "forever"}]})
-        >>> list(spec.nodes)
+        >>> workflow = require_workflow({"nodes": [{"name": "forever"}]})
+        >>> list(workflow.nodes)
         ['forever-1']
 
     """
-    if (fmt := detect_format(document)) is not DocumentFormat.V2:
+    if (fmt := get_document_format(document)) is not DocumentFormat.V2:
         msg = f"this document is written in the older {fmt.value} form; run it through "
-        msg += "convert-dag first to get a canonical workflow document"
+        msg += "build-workflow first to get a canonical workflow document"
         raise InvalidPipelineError(msg)
 
-    return load_workflow(document, DocumentFormat.V2)
+    return normalize_document(document, DocumentFormat.V2)
 
 
 __all__ = [
     "DocumentFormat",
-    "WorkflowDocument",
-    "detect_format",
-    "load_workflow",
+    "DocumentMapping",
+    "get_document_format",
+    "normalize_document",
     "read_document",
     "require_workflow",
 ]

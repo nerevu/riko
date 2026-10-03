@@ -2,7 +2,7 @@
 """
 Canonical Workflow v2 graph indexing.
 
-Builds the shared immutable graph index from a validated ``WorkflowSpec``. The
+Builds the shared immutable graph index from a validated ``Workflow``. The
 assembly is factored into ``build_graph_index`` so the v1 compiler and the v2
 workflow feed one implementation rather than deriving separate topologies.
 """
@@ -19,7 +19,7 @@ from riko.types._compiler import GraphEdge, GraphIndex, OutputRef
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from riko.definitions._workflow import WorkflowSpec
+    from riko.definitions._workflow import Workflow
 
 
 def build_graph_index(
@@ -75,16 +75,16 @@ def build_graph_index(
     )
 
 
-def index_workflow(spec: WorkflowSpec) -> GraphIndex:
+def index_workflow(workflow: Workflow) -> GraphIndex:
     """
     Interprets a canonical workflow's nodes and edges into one graph index.
 
     Every declared node is included and disconnected nodes retained, and the
-    explicit named outputs are preserved. Assumes a validated ``WorkflowSpec``.
+    explicit named outputs are preserved. Assumes a validated ``Workflow``.
 
     Args:
 
-        spec: The canonical workflow to index.
+        workflow: The canonical workflow to index.
 
     Returns:
 
@@ -92,21 +92,21 @@ def index_workflow(spec: WorkflowSpec) -> GraphIndex:
 
     Examples:
 
-        >>> from riko.definitions._workflow import ModuleNode, WorkflowSpec
+        >>> from riko.definitions._workflow import ModuleNode, Workflow
         >>> from riko.types._workflow import Endpoint
         >>> node = ModuleNode(id="fetch-1", name="fetch")
-        >>> spec = WorkflowSpec(
+        >>> workflow = Workflow(
         ...     nodes={node.id: node},
         ...     outputs={"default": Endpoint(node.id, "out")},
         ...     inputs={},
         ... )
-        >>> index_workflow(spec).order
+        >>> index_workflow(workflow).order
         ('fetch-1',)
 
     """
-    adjacency: dict[str, set[str]] = {node_id: set() for node_id in spec.nodes}
+    adjacency: dict[str, set[str]] = {node_id: set() for node_id in workflow.nodes}
 
-    for edge in spec.edges:
+    for edge in workflow.edges:
         adjacency[edge.source.node].add(edge.target.node)
 
     edges = tuple(
@@ -116,9 +116,9 @@ def index_workflow(spec: WorkflowSpec) -> GraphIndex:
             source_port=edge.source.port,
             target_port=edge.target.port,
         )
-        for edge in spec.edges
+        for edge in workflow.edges
     )
-    items = spec.outputs.items()
+    items = workflow.outputs.items()
     outputs = {name: OutputRef(node=ep.node, port=ep.port) for name, ep in items}
     return build_graph_index(adjacency, edges, outputs)
 

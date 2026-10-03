@@ -12,7 +12,7 @@ from os.path import isfile
 
 import pytest
 
-from riko.runtime._migrate import build_workflow
+from riko.runtime._migrate import parse_dag
 from riko.runtime._serialize import serialize_workflow
 from tests import TESTS_DIR, skipif_issync
 
@@ -133,8 +133,8 @@ def run_module(module: str, *args: str, **kwargs) -> subprocess.CompletedProcess
     )
 
 
-def test_convert_dag_pipes_to_compile_stdin():
-    convert = run_module("convert_dag", str(DAG_PATH))
+def test_build_workflow_pipes_to_compile_stdin():
+    convert = run_module("build_workflow", str(DAG_PATH))
     compiled = run_module("compile", "-", input=convert.stdout)
 
     assert '"version": "2"' in convert.stdout
@@ -143,9 +143,9 @@ def test_convert_dag_pipes_to_compile_stdin():
     assert "TruncateRawConf" in compiled.stdout
 
 
-def test_convert_dag_and_compile(tmp_path):
+def test_build_workflow_and_compile(tmp_path):
     workflow_file = tmp_path / "pipe_forever.json"
-    convert = run_module("convert_dag", str(DAG_PATH), "-o", str(workflow_file))
+    convert = run_module("build_workflow", str(DAG_PATH), "-o", str(workflow_file))
     compiled = run_module("compile", str(workflow_file))
     converted = workflow_file.read_text(encoding="utf-8")
 
@@ -156,24 +156,24 @@ def test_convert_dag_and_compile(tmp_path):
     assert "TruncateRawConf" in compiled.stdout
 
 
-def test_convert_dag_compact_is_canonical():
+def test_build_workflow_compact_is_canonical():
     """The compact form is the same byte-stable document the serializer emits."""
     dag = json.loads(DAG_PATH.read_text(encoding="utf-8"))
-    expected = serialize_workflow(build_workflow(dag), indent=None).decode("utf-8")
-    convert = run_module("convert_dag", str(DAG_PATH), "-c")
+    expected = serialize_workflow(parse_dag(dag), indent=None).decode("utf-8")
+    convert = run_module("build_workflow", str(DAG_PATH), "-c")
     assert convert.stdout == expected
 
 
-def test_convert_dag_format_override_rejects_wrong_shape():
-    convert = run_module("convert_dag", str(DAG_PATH), "--format", "v2")
+def test_build_workflow_format_override_rejects_wrong_shape():
+    convert = run_module("build_workflow", str(DAG_PATH), "--format", "v2")
     assert convert.returncode
     assert convert.stderr
 
 
-def test_convert_dag_empty_dag_exits_nonzero(tmp_path):
+def test_build_workflow_empty_dag_exits_nonzero(tmp_path):
     empty = tmp_path / "empty.json"
     empty.write_text('{"modules": []}', encoding="utf-8")
-    convert = run_module("convert_dag", str(empty))
+    convert = run_module("build_workflow", str(empty))
     assert convert.returncode == 1
     assert "no nodes" in convert.stderr
 
@@ -181,12 +181,12 @@ def test_convert_dag_empty_dag_exits_nonzero(tmp_path):
 def test_compile_rejects_legacy_document():
     compiled = run_module("compile", str(DAG_PATH))
     assert compiled.returncode == 1
-    assert "convert-dag" in compiled.stderr
+    assert "build-workflow" in compiled.stderr
 
 
 def test_run_pipe_workflow_document(tmp_path):
     workflow_file = tmp_path / "flow.json"
-    run_module("convert_dag", str(DAG_PATH), "-o", str(workflow_file))
+    run_module("build_workflow", str(DAG_PATH), "-o", str(workflow_file))
     ran = run_module("runpipe", "-p", str(workflow_file))
     assert ran.returncode == 0
     assert ran.stdout == "{'forever': True}\n" * 3
@@ -215,7 +215,7 @@ def test_run_pipe_workflow_document_async(tmp_path):
         ]
     }
     dag_file.write_text(json.dumps(dag), encoding="utf-8")
-    run_module("convert_dag", str(dag_file), "-o", str(workflow_file))
+    run_module("build_workflow", str(dag_file), "-o", str(workflow_file))
     ran = run_module("runpipe", "-a", "-p", str(workflow_file))
 
     assert ran.returncode == 0

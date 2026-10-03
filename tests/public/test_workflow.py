@@ -2,7 +2,7 @@
 """
 Structural tests for the canonical Workflow v2 model.
 
-These exercise the closed node/edge families, the immutable ``WorkflowSpec`` envelope,
+These exercise the closed node/edge families, the immutable ``Workflow`` envelope,
 the ``Pipeline`` definition, and the port grammar. They cover structure only; runtime
 execution of the graph lands in a later phase.
 """
@@ -10,21 +10,20 @@ execution of the graph lands in a later phase.
 import pytest
 
 from riko import Pipeline
+from riko.definitions._workflow import Workflow
 from riko.definitions._write import WriteMode
 from riko.ext import (
     ActionNode,
     CacheNode,
-    Endpoint,
     ModuleNode,
     PublishEdge,
     ReadNode,
     StreamEdge,
     SubscribeNode,
-    WorkflowSpec,
     WriteNode,
 )
 from riko.types._enums import Backends
-from riko.types._workflow import ParsedPort, parse_port
+from riko.types._workflow import Endpoint, ParsedPort, parse_port
 
 NODE_FAMILIES = (
     (ModuleNode(id="fetch-1", name="fetch"), "module"),
@@ -36,9 +35,9 @@ NODE_FAMILIES = (
 )
 
 
-def _spec():
+def _workflow():
     node = ModuleNode(id="fetch-1", name="fetch")
-    return WorkflowSpec(
+    return Workflow(
         nodes={node.id: node},
         edges=(),
         outputs={"default": Endpoint(node.id, "out")},
@@ -71,21 +70,21 @@ def test_node_is_frozen():
 
 
 def test_spec_mappings_are_read_only():
-    spec = _spec()
-    assert type(spec.nodes).__name__ == "mappingproxy"
+    workflow = _workflow()
+    assert type(workflow.nodes).__name__ == "mappingproxy"
     with pytest.raises(TypeError):
-        spec.outputs["extra"] = Endpoint("fetch-1", "out")  # type: ignore[index]
+        workflow.outputs["extra"] = Endpoint("fetch-1", "out")  # type: ignore[index]
 
 
 def test_spec_version_defaults_to_v2():
-    assert _spec().version == "2"
+    assert _workflow().version == "2"
 
 
 def test_pipeline_wraps_spec():
-    spec = _spec()
-    pipeline = Pipeline(spec)
-    assert pipeline.spec is spec
-    assert pipeline.spec.outputs["default"] == Endpoint("fetch-1", "out")
+    workflow = _workflow()
+    pipeline = Pipeline(workflow)
+    assert pipeline.workflow is workflow
+    assert pipeline.workflow.outputs["default"] == Endpoint("fetch-1", "out")
 
 
 @pytest.mark.parametrize(

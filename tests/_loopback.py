@@ -13,7 +13,7 @@ Basic usage::
     from tests._loopback import loopback_url
 
     with loopback_url("<rss>...</rss>", content_type="application/xml") as url:
-        stream = SyncPipe("fetch", conf={"url": url})
+        pipeline = Pipeline.from_module("fetch", conf={"url": url})
 
 Tests that use this should carry ``@pytest.mark.simulated_network``.
 """

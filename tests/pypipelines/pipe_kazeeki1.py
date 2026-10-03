@@ -1,21 +1,32 @@
 # vim: sw=4:ts=4:expandtab
 """Hand-written sync Kazeeki pipeline fixture (variant 1)."""
 
+from riko import Pipeline
+from riko.execution._execution import SyncExecution
 from riko.execution.context import Context
-from riko.runtime.collections import SyncPipe
+from riko.runtime._execution_plan import build_execution_plan
 from tests.pypipelines._pipe_kazeeki import fetchdata_conf, regex_conf, rename_conf
 
 
-def pipe(context: Context | None = None, **_):
-    if context and context.describe_input:
-        output = []
-    elif context and context.describe_dependencies:
-        output = ["fetchdata", "rename", "regex"]
-    else:
-        source = SyncPipe("fetchdata", context=context, conf=fetchdata_conf)
-        output = source.rename(conf=rename_conf).regex(conf=regex_conf)
+def build() -> Pipeline:
+    """Builds the fetchdata variant of the simple kazeeki chain."""
+    source = Pipeline.from_module("fetchdata", conf=fetchdata_conf)
+    return source.rename(conf=rename_conf).regex(conf=regex_conf)
 
-    return list(output)
+
+def pipe(context: Context | None = None, **_):
+    output: list = []
+
+    if context and context.describe_dependencies:
+        output = ["fetchdata", "rename", "regex"]
+    elif not (context and context.describe_input):
+        pipeline = build()
+        plan = build_execution_plan(pipeline.workflow)
+
+        with SyncExecution(context=context or Context()) as execution:
+            output = list(execution.run(plan, source=pipeline.source))
+
+    return output
 
 
 if __name__ == "__main__":

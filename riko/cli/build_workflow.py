@@ -5,7 +5,7 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import build_workflow
+        >>> from riko import parse_dag
         >>>
         >>> count = {"count": {"type": "int", "value": "3"}}
         >>> dag = {
@@ -14,15 +14,15 @@ Examples:
         ...         {"type": "truncate", "conf": count},
         ...     ]
         ... }
-        >>> spec = build_workflow(dag)
-        >>> list(spec.nodes)
+        >>> workflow = parse_dag(dag)
+        >>> list(workflow.nodes)
         ['sw-1', 'sw-2']
-        >>> spec.outputs["default"]
+        >>> workflow.outputs["default"]
         Endpoint(node='sw-2', port='out')
 
     CLI composition::
 
-        $ convert-dag dag.json | compile-pipe - -o flow.py
+        $ build-workflow dag.json | compile-pipe - -o flow.py
 
 """
 
@@ -35,17 +35,19 @@ from pathlib import Path
 from riko.base.exceptions import InvalidPipelineError
 from riko.runtime._serialize import serialize_workflow
 
-from ._workflow import DocumentFormat, load_workflow, read_document
+from ._workflow import DocumentFormat, normalize_document, read_document
+
+# Workflow | RawWorkflow | Mapping[str, object] | PipeDef | PipeDag
 
 
 def run() -> None:
     """CLI workflow converter."""
     parser = ArgumentParser(
         description=(
-            "description: Converts a bare-bones DAG or an older pipe definition "
+            "description: Converts a ``PipeDag`` or an older pipe definition "
             "into a canonical workflow document"
         ),
-        prog="convert-dag",
+        prog="build-workflow",
         usage="%(prog)s [path]",
         formatter_class=RawTextHelpFormatter,
     )
@@ -84,7 +86,7 @@ def run() -> None:
     )
 
     args = parser.parse_args()
-    document, _ = read_document(args.path)
+    document = read_document(args.path)[0]
     fmt = None if args.fmt is None else DocumentFormat(args.fmt)
 
     if document is None:
@@ -92,13 +94,13 @@ def run() -> None:
         return_code = 1
     else:
         try:
-            spec = load_workflow(document, fmt)
+            workflow = normalize_document(document, fmt)
         except InvalidPipelineError as e:
             print(e, file=sys.stderr)
             return_code = 1
         else:
             options = {"indent": None} if args.compact else {}
-            text = serialize_workflow(spec, **options).decode("utf-8")
+            text = serialize_workflow(workflow, **options).decode("utf-8")
 
             if args.output is None:
                 sys.stdout.write(text)

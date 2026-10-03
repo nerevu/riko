@@ -15,7 +15,7 @@ from riko.base._paths import get_path
 from riko.coercion._canonical import repr_cache
 from riko.coercion._dates import date_to_tt, parse_date_string, tt_to_datedict
 from riko.io._sync import Fetch
-from riko.modules._prepare import get_pieces_or_conf
+from riko.modules._prepare import build_conf
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
@@ -266,5 +266,5 @@ class TestPrepare:
     def test_listize_wraps_falsy_extracted_value(self, value, expected):
         """A falsy (but non-None) extracted value is still list-wrapped."""
         conf = cast("Conf", {"n": value})
-        pieces, _ = get_pieces_or_conf(conf, {}, {"extract": "n", "listize": True})
+        pieces, _ = build_conf(conf, {}, {"extract": "n", "listize": True})
         assert pieces == expected

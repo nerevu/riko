@@ -23,15 +23,15 @@ from riko.base._strutils import pythonise
 from riko.base.exceptions import UnsupportedPipelineError
 from riko.types._guards import is_subpipe
 
-from ._importutils import load_interfaces, resolve_interface
-from ._serialize import parse_workflow
+from ._importutils import load_interfaces, require_interface
+from ._serialize import parse_document
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
     from types import ModuleType
 
-    from riko.definitions._workflow import WorkflowSpec
+    from riko.definitions._workflow import Workflow
     from riko.types._wrappers import (
         AsyncModuleWrapper,
         AsyncSubPipe,
@@ -134,22 +134,22 @@ class DirectoryStore:
     Loads canonical Workflow v2 JSON documents from a directory.
 
     Despite the shared ``load`` name, this is not a ``ModuleStore``. It yields a
-    ``WorkflowSpec`` rather than a module. This is why ``PipelineResolver`` keeps
+    ``Workflow`` rather than a module. This is why ``PipelineResolver`` keeps
     it in its own slot instead of chaining it into a ``CompositeStore``. A loaded
-    spec is interface-agnostic; the caller runs it with the execution layer.
+    workflow is interface-agnostic; the caller runs it with the execution layer.
 
     """
 
     def __init__(self, directory: Path) -> None:
         self._directory = directory
 
-    def load(self, name: str) -> WorkflowSpec | None:
+    def load(self, name: str) -> Workflow | None:
         try:
             text = (self._directory / f"{name}.json").read_text()
         except OSError:
             parsed = None
         else:
-            parsed = parse_workflow(text)
+            parsed = parse_document(text)
 
         return parsed
 
@@ -167,7 +167,7 @@ class PipelineResolver:
         >>> module = ModuleType("pipe_demo")
         >>> module.pipe = lambda stream=None, **kwargs: iter([{"x": 1}])
         >>> resolver = PipelineResolver(store=MappingStore({"pipe_demo": module}))
-        >>> list(resolver.resolve("pipe_demo")())
+        >>> list(resolver.require("pipe_demo")())
         [{'x': 1}]
 
     """
@@ -232,14 +232,14 @@ class PipelineResolver:
         return None if self._store is None else self._store.load(name)
 
     @overload
-    def resolve(  # noqa: E704
+    def require(  # noqa: E704
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
     @overload  # noqa: E301
-    def resolve(  # noqa: E704
+    def require(  # noqa: E704
         self, name: str, is_async: Literal[True]
     ) -> AsyncModuleWrapper: ...
-    def resolve(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
+    def require(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
         """
         Resolves a ``pipe_<id>`` / ``pipe:<id>`` name to its marked callable.
 
@@ -250,10 +250,10 @@ class PipelineResolver:
 
         """
         kwargs = {"is_async": is_async, "builtin": False}
-        pipe = resolve_interface(pythonise(name), loader=self.load, **kwargs)
+        pipe = require_interface(pythonise(name), loader=self.load, **kwargs)
         return _as_subpipe(pipe)
 
-    def get_interfaces(self, name: str) -> frozenset[Interface]:
+    def require_interfaces(self, name: str) -> frozenset[Interface]:
         """
         Resolves which of a pipeline's sync and async interfaces are defined.
 
@@ -272,9 +272,7 @@ class PipelineResolver:
         """
         return load_interfaces(pythonise(name), builtin=False, loader=self.load)
 
-    def load_definition(
-        self, name: str, *, directory: Path | None = None
-    ) -> WorkflowSpec:
+    def load_definition(self, name: str, *, directory: Path | None = None) -> Workflow:
         """
         Loads a named canonical Workflow v2 document, optionally from ``directory``.
 
@@ -285,7 +283,7 @@ class PipelineResolver:
 
         Returns:
 
-            The canonical workflow spec the document describes.
+            The ``Workflow`` the document describes.
 
         Raises:
 

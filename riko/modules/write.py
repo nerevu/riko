@@ -56,7 +56,7 @@ DEFAULTS: Defaults = Defaults({"fmt": None, "mode": "wb+"})
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def _validate(items: Items, objconf: WriteObjconf) -> AnyStr | IOFileLike | None:
+def _prepare_content(items: Items, objconf: WriteObjconf) -> AnyStr | IOFileLike | None:
     items = list(items)
     content = None
 
@@ -100,10 +100,10 @@ async def async_parser(
 
         >>> from itertools import repeat
         >>> from meza.fntools import Objectify
-        >>> from riko import get_async_temp_file, run
+        >>> from riko import async_get_temp_file, run
         >>>
         >>> async def main():
-        ...     async with get_async_temp_file() as fp:
+        ...     async with async_get_temp_file() as fp:
         ...         conf = {"dest": fp.name, "fmt": "json", "mode": "wb+"}
         ...         objconf = Objectify(conf)
         ...         stream = [{"x": 0}, {"x": 1}]
@@ -119,7 +119,7 @@ async def async_parser(
     """
     items = list(stream)
 
-    if content := _validate(items, objconf):
+    if content := _prepare_content(items, objconf):
         await async_write(objconf.dest, content, mode=objconf.mode)
 
     return iter(items)
@@ -164,7 +164,7 @@ def parser(
     """
     items = list(stream)
 
-    if content := _validate(items, objconf):
+    if content := _prepare_content(items, objconf):
         io.write(objconf.dest, content, mode=objconf.mode)
 
     return iter(items)
@@ -213,10 +213,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Examples:
 
-        >>> from riko import get_async_temp_file, run
+        >>> from riko import async_get_temp_file, run
         >>>
         >>> async def main():
-        ...     async with get_async_temp_file() as fp:
+        ...     async with async_get_temp_file() as fp:
         ...         conf = {"dest": fp.name, "fmt": "csv"}
         ...         stream = async_pipe([{"x": 0}, {"x": 1}], conf=conf)
         ...         print(await anext(stream))

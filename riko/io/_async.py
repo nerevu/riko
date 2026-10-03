@@ -30,7 +30,7 @@ from riko.bado import _backend
 from riko.bado._backend import async_open
 from riko.bado._util import async_get, async_read
 from riko.base._constants import ENCODING
-from riko.base._paths import get_abspath
+from riko.base._paths import normalize_url
 
 from ._sync import ext_from_content_type
 
@@ -167,7 +167,7 @@ def _chunk_content(  # noqa: E302
         yield from chunk(content, chunksize)
 
 
-def _resolve_chunk(raw: AnyStr, binary: bool, encoding: str) -> AnyStr:
+def _normalize_chunk(raw: AnyStr, binary: bool, encoding: str) -> AnyStr:
     if isinstance(raw, str):
         result: AnyStr = raw.encode(encoding) if binary else raw
     else:
@@ -365,7 +365,7 @@ async def async_url_read(
         Member
 
     """
-    url = get_abspath(url, offline=True)
+    url = normalize_url(url, offline=True)
 
     if url.startswith("http"):
         response = await async_get(url, timeout=timeout)
@@ -405,10 +405,10 @@ async def async_write(
     Examples:
 
         >>> from io import StringIO
-        >>> from riko import get_async_temp_file, run
+        >>> from riko import async_get_temp_file, run
         >>>
         >>> async def main():
-        ...     async with get_async_temp_file() as fp:
+        ...     async with async_get_temp_file() as fp:
         ...         await async_write(fp.name, StringIO("Hello World"))
         ...
         ...         with open(fp.name, mode="rb") as f:
@@ -428,7 +428,7 @@ async def async_write(
 
     async with await opener as f:
         for normalized in _chunk_content(content, chunksize):
-            data = _resolve_chunk(normalized, binary, encoding)
+            data = _normalize_chunk(normalized, binary, encoding)
             await f.write(data)  # pyright: ignore[reportArgumentType]
             progress += len(data)
 
@@ -436,7 +436,7 @@ async def async_write(
     return written
 
 
-def get_async_temp_file() -> NamedTemporaryFile[bytes]:
+def async_get_temp_file() -> NamedTemporaryFile[bytes]:
     """
     Creates an auto-deleting named temporary file for async use.
 
@@ -453,7 +453,7 @@ def get_async_temp_file() -> NamedTemporaryFile[bytes]:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     async with get_async_temp_file() as f:
+        ...     async with async_get_temp_file() as f:
         ...         await f.write(b"hi")
         ...         print(f.name is not None)
         >>>

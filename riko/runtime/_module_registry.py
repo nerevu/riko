@@ -10,13 +10,13 @@ Examples:
         >>> from riko.ext import ModuleDefinition, ModuleRegistry
         >>>
         >>> registry = ModuleRegistry()
-        >>> registry.resolve(Sources.FETCH) is fetch
+        >>> registry.require(Sources.FETCH) is fetch
         True
         >>> def example(conf, **kwargs):
         ...     return []
         >>>
         >>> registry.register(ModuleDefinition(sync_pipe=example))
-        >>> registry.resolve("example") is example
+        >>> registry.require("example") is example
         True
 
 Attributes:
@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Literal, overload
 from riko.base.exceptions import UnsupportedModuleError
 from riko.definitions.modules import ModuleDefinition
 
-from ._importutils import load_interfaces, resolve_interface
+from ._importutils import load_interfaces, require_interface
 from ._registry import Registry
 
 if TYPE_CHECKING:
@@ -86,7 +86,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
         >>> registry.register(ModuleDefinition(name="example", sync_pipe=pipe))
         >>> registry.registered_names()
         ('example',)
-        >>> registry.resolve("example") is pipe
+        >>> registry.require("example") is pipe
         True
 
     """
@@ -118,20 +118,20 @@ class ModuleRegistry(Registry[ModuleDefinition]):
         return definition
 
     def _resolve_builtin(self, name: str, is_async: bool = False) -> ModuleWrapper:
-        return resolve_interface(name, is_async=is_async)
+        return require_interface(name, is_async=is_async)
 
     def is_compatible(self, name: str) -> bool:
         return not name.startswith(("pipe_", "pipe:"))
 
     @overload
-    def resolve(  # noqa: E704
+    def require(  # noqa: E704
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
     @overload  # noqa: E301
-    def resolve(  # noqa: E704
+    def require(  # noqa: E704
         self, name: str, is_async: Literal[True]
     ) -> AsyncModuleWrapper: ...
-    def resolve(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
+    def require(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
         """
         Resolves a module's sync or async callable, honoring tier precedence.
 
@@ -157,7 +157,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             >>>
             >>> registry = ModuleRegistry()
             >>> registry.register(ModuleDefinition(name="example", sync_pipe=pipe))
-            >>> registry.resolve("example") is pipe
+            >>> registry.require("example") is pipe
             True
 
         """
@@ -169,7 +169,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
         return pipe
 
-    def get_interfaces(self, name: str) -> frozenset[Interface]:
+    def require_interfaces(self, name: str) -> frozenset[Interface]:
         """
         Resolves which of a module's sync and async interfaces are defined.
 
@@ -190,7 +190,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             >>> registry = ModuleRegistry()
             >>> sync_pipe = lambda s, **_: s
             >>> registry.register(ModuleDefinition(name="example", sync_pipe=sync_pipe))
-            >>> sorted(registry.get_interfaces("example"))
+            >>> sorted(registry.require_interfaces("example"))
             ['pipe']
 
         """

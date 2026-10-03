@@ -69,7 +69,7 @@ TT_KEYS = (
 )
 
 
-def get_local_tz(
+def load_local_tz(
     try_local_tz: bool | None = True, fallback_tzinfo: tzinfo = UTC
 ) -> tzinfo:
     """
@@ -88,7 +88,7 @@ def get_local_tz(
 
         >>> from datetime import UTC
         >>>
-        >>> get_local_tz(False) is UTC
+        >>> load_local_tz(False) is UTC
         True
 
     """

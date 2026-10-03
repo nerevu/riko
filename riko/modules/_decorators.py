@@ -35,7 +35,7 @@ from riko.bado.itertools import (
     async_map_ordered_stream,
 )
 from riko.base._iterutils import dispatch
-from riko.definitions._resources import bind_resources, resolve_binding
+from riko.definitions._resources import bind_resources, normalize_binding
 from riko.execution.context import Context
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
@@ -52,14 +52,14 @@ from riko.types._streams import (
     StreamOrValueStream,
 )
 
-from ._assignment import gen_assignments, get_assignment
+from ._assignment import build_assignment, gen_assignments
 from ._derive import get_module_subtypes, is_loopable
 from ._loop import loop_embed_async, loop_embed_sync
 from ._prepare import (
     PreparedModule,
     build_casters,
+    build_conf,
     build_parsers,
-    get_pieces_or_conf,
     parse_and_cast,
 )
 
@@ -378,7 +378,7 @@ class Module[B: (Literal[True], Literal[False])]:
         if casters and not is_dynamic:
             parsed_conf = parsers.conf_parser({})
             args = (parsed_conf, self.defaults, opts, module_name)
-            parsed = get_pieces_or_conf(*args)
+            parsed = build_conf(*args)
             casted = dispatch(parsed, casters[1], casters[2])
             static_casted = (casters[0], casted[0], casted[1])
 
@@ -392,7 +392,7 @@ class Module[B: (Literal[True], Literal[False])]:
             emit=_emit,
             is_source=is_source,
             static_casted=static_casted,
-            resources=resolve_binding(opts.get("resources")),
+            resources=normalize_binding(opts.get("resources")),
         )
 
 
@@ -442,9 +442,9 @@ async def _materialize_terminal[T](value: object) -> object:  # noqa: E302
     """
     Drains an async terminal sub-source into a concrete sync iterator.
 
-    A terminal sub-source (an ``AsyncPipe`` passed as ``format``/``formatted`` or one
-    of ``union``'s ``others``) reaches the synchronous conf-parsing machinery, which
-    pulls it with ``next`` or ``chain``. An async iterable cannot satisfy this.
+    A terminal sub-source (an async pipeline passed as ``format``/``formatted`` or
+    one of ``union``'s ``others``) reaches the synchronous conf-parsing machinery,
+    which pulls it with ``next`` or ``chain``. An async iterable cannot satisfy this.
 
     Args:
 
@@ -496,7 +496,7 @@ async def _materialize_terminals(**kwargs: object) -> dict[str, object]:
 
     The async operator and processor wrappers forward terminal sub-sources through
     ``**kwargs`` into the synchronous conf-parsing machinery. Each async stream is
-    materialized once here so parsing consumes it like its ``SyncPipe`` counterpart.
+    materialized once here so parsing consumes it like its synchronous counterpart.
 
     Args:
 
@@ -754,9 +754,9 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         """
         if skip or emit:
-            _, result = get_assignment(stream, skip=skip, count=count)
+            _, result = build_assignment(stream, skip=skip, count=count)
         else:
-            one, assignment = get_assignment(stream, skip=False, count=count)
+            one, assignment = build_assignment(stream, skip=False, count=count)
             result = gen_assignments(input_, assignment, assign=assign, one=one)
 
         return result
@@ -1273,7 +1273,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         """
         items = stream
-        one, assignment = get_assignment(items, skip=False)
+        one, assignment = build_assignment(items, skip=False)
 
         if emit:
             result = assignment
@@ -1387,7 +1387,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 # consume the async stream lazily to bound an infinite Feed. Legacy
                 # aggregators reuse the sync parser, which can't iterate async
                 # tuples, so materialize the async input here — the same legacy
-                # materialization seam the AsyncPipe collection path applies.
+                # materialization seam the async collection path applies.
                 if async_native:
                     input_ = self.aparse(items)
                 else:

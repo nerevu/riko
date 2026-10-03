@@ -17,26 +17,15 @@ BADO = frozenset(
     }
 )
 
-IO_ = frozenset({"async_url_open", "async_write", "get_async_temp_file"})
+IO_ = frozenset({"async_url_open", "async_write", "async_get_temp_file"})
 
-COLLECTIONS = frozenset(
-    {
-        "AsyncCollection",
-        "AsyncPipe",
-        "Formats",
-        "PipeState",
-        "SyncCollection",
-        "SyncPipe",
-        "export",
-        "list_formats",
-    }
-)
+COLLECTIONS = frozenset({"Formats", "export", "list_formats"})
 
 COMPILE = frozenset(
     {
         "build_pipeline",
         "compile_pipe",
-        "build_workflow",
+        "parse_dag",
         "get_pipeline_dependencies",
         "parse_pipe_def",
     }
@@ -57,8 +46,14 @@ OTHER = frozenset(
     {
         "Backends",
         "Context",
+        "Edge",
+        "Endpoint",
         "ExecutionMode",
+        "Node",
         "Pipeline",
+        "Workflow",
+        "WorkflowLike",
+        "WorkflowDocument",
         "get_path",
         "get_temp_file",
         "list_modules",
@@ -98,7 +93,6 @@ EXTENSION = frozenset(
         "AsyncSplitterWrapper",
         "CacheNode",
         "DynamicConf",
-        "Endpoint",
         "FileTarget",
         "ModuleDefinition",
         "ModuleMetadata",
@@ -121,7 +115,6 @@ EXTENSION = frozenset(
         "SyncSplitterWrapper",
         "Target",
         "TargetRegistry",
-        "WorkflowSpec",
         "WriteCapabilities",
         "WriteNode",
         "get_module_category",
@@ -130,7 +123,7 @@ EXTENSION = frozenset(
         "normalize_module_name",
         "normalize_workflow",
         "operator",
-        "parse_workflow",
+        "parse_document",
         "processor",
         "register_module",
         "register_pipeline_store",
@@ -146,16 +139,15 @@ TYPES = frozenset(
         "AsyncItems",
         "AsyncPipeTuples",
         "Conf",
-        "EdgeAuthoring",
-        "EndpointAuthoring",
         "Feed",
         "Item",
         "Items",
-        "NodeAuthoring",
+        "RawEdge",
+        "RawEndpoint",
+        "RawNode",
+        "RawWorkflow",
         "PipeTuples",
         "Stream",
         "SyncPipeTuples",
-        "WorkflowAuthoring",
-        "WorkflowSpecLike",
     }
 )

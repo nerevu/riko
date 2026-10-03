@@ -117,12 +117,12 @@ def classify_factory[T](
 
 
 @overload
-def resolve_binding(  # noqa: E704
+def normalize_binding(  # noqa: E704
     raw: BindingLike,
 ) -> ResourcesLike: ...
 @overload
-def resolve_binding(raw: None) -> None: ...  # noqa: E704
-def resolve_binding(  # noqa: E302
+def normalize_binding(raw: None) -> None: ...  # noqa: E704
+def normalize_binding(  # noqa: E302
     raw: BindingLike | None,
 ) -> ResourcesLike | None:
     """
@@ -142,13 +142,13 @@ def resolve_binding(  # noqa: E302
 
     Examples:
 
-        >>> from riko.definitions._resources import resolve_binding
+        >>> from riko.definitions._resources import normalize_binding
         >>>
-        >>> resolve_binding("client")
+        >>> normalize_binding("client")
         'client'
-        >>> resolve_binding(["db", "cache"])
+        >>> normalize_binding(["db", "cache"])
         ['db', 'cache']
-        >>> resolve_binding(None)
+        >>> normalize_binding(None)
 
     """
     if raw is None:
@@ -323,6 +323,6 @@ __all__ = [
     "ResourcesLike",
     "bind_resources",
     "classify_factory",
+    "normalize_binding",
     "normalize_resources",
-    "resolve_binding",
 ]

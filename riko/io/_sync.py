@@ -32,7 +32,7 @@ from mezmorize.utils import get_cache_type
 
 from riko._package import __version__
 from riko.base._constants import ENCODING, STREAMING_THRESHOLD
-from riko.base._paths import get_abspath
+from riko.base._paths import normalize_url
 from riko.base._strutils import truncate_content
 
 from ._reencode import reencode
@@ -439,7 +439,7 @@ def opener(  # noqa: E302
         raise TypeError("a url is required")
 
     params = params or {}
-    url = get_abspath(url, offline=offline)
+    url = normalize_url(url, offline=offline)
     r = None
 
     if url.startswith("http"):

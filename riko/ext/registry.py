@@ -15,7 +15,7 @@ Examples:
         >>>
         >>> registry = ModuleRegistry()
         >>> registry.register(ModuleDefinition(name="double", sync_pipe=double))
-        >>> list(registry.resolve("double")([{"x": 2}]))
+        >>> list(registry.require("double")([{"x": 2}]))
         [{'x': 4}]
 
 Attributes:

@@ -1,13 +1,23 @@
 # vim: sw=4:ts=4:expandtab
-"""Async-only pipe lifecycle and source-adapter behavior."""
+"""
+Run lifetime and source adaptation for asynchronous pipeline iteration.
+
+A ``Pipeline`` is a definition, not a run: the lifetime belongs to the execution
+that each async iterator creates, so there is no pipeline-level state to inspect.
+Iterating again starts a fresh execution, and closing an iterator tears that one
+execution down without touching the definition.
+"""
+
+from __future__ import annotations
 
 import pytest
 
+from riko import Pipeline, parse_dag
 from riko.bado.itertools import async_iter
 from riko.base._paths import get_path
-from riko.runtime.collections import AsyncCollection, AsyncPipe
-from riko.types.modules import ItemBuilderConf
-from tests import skipif_issync
+from riko.types._compiler import DagModule, PipeDag
+from riko.types.modules import ConfArg, FetchRawConf, ItemBuilderConf
+from tests import async_test
 
 BUILDER_CONF = ItemBuilderConf({"attrs": [{"key": "content", "value": "a,b,c"}]})
 SRC = [{"content": "x"}, {"content": "y"}]
@@ -39,102 +49,132 @@ RAISING_SOURCES = [
 ]
 
 
-@skipif_issync
-class TestAsyncAwaitLifecycle:
-    @pytest.mark.anyio
-    async def test_await_after_partial_iteration_consumes_remainder(self):
-        runs = []
-
-        def count[T](item: T) -> T:
-            runs.append(1)
-            return item
-
-        pipe = (
-            AsyncPipe("itembuilder", conf=BUILDER_CONF)
-            .tokenizer(emit=True)
-            .udf(func=count)
-        )
-        assert await anext(pipe) == {"content": "a"}
-        assert [item async for item in pipe] == [{"content": "b"}, {"content": "c"}]
-        assert len(runs) == 3
-
-    @pytest.mark.anyio
-    async def test_await_twice_after_exhaustion_is_empty(self):
-        pipe = AsyncPipe(source=list(SRC))
-        assert list(await pipe) == SRC
-        assert list(await pipe) == []
-
-    @pytest.mark.anyio
-    async def test_iteration_after_exhaustion_is_empty(self):
-        pipe = AsyncPipe(source=list(SRC))
-        assert [item async for item in pipe] == SRC
-        assert [item async for item in pipe] == []
-
-    @pytest.mark.anyio
-    async def test_collection_await_after_partial_iteration_consumes_remainder(self):
-        full = AsyncCollection([{"url": get_path("feed.xml")}])
-        total = len([item async for item in full])
-        stream = AsyncCollection([{"url": get_path("feed.xml")}])
-        await anext(stream)
-        rest = len(list(await stream))
-
-        assert total > 1
-        assert rest == total - 1
-
-    @pytest.mark.anyio
-    async def test_collection_iteration_after_partial_iteration_consumes_remainder(
-        self,
-    ):
-        full = AsyncCollection([{"url": get_path("feed.xml")}])
-        total = len([item async for item in full])
-        stream = AsyncCollection([{"url": get_path("feed.xml")}])
-        await anext(stream)
-        rest = len([item async for item in stream])
-
-        assert total > 1
-        assert rest == total - 1
-
-    @pytest.mark.anyio
-    async def test_collection_async_pipe_after_partial_iteration_consumes_remainder(
-        self,
-    ):
-        full = AsyncCollection([{"url": get_path("feed.xml")}])
-        total = len([item async for item in full])
-        stream = AsyncCollection([{"url": get_path("feed.xml")}])
-        await anext(stream)
-        child = stream.async_pipe()
-        rest = len([item async for item in child])
-
-        assert total > 1
-        assert rest == total - 1
+def _tokenized() -> Pipeline:
+    source = Pipeline.from_module("itembuilder", conf=BUILDER_CONF)
+    return source.tokenizer(options={"emit": True})
 
 
-@skipif_issync
+def _fetch_node(index: int, url: str) -> DagModule:
+    """Builds one fetch module entry for the fan-in dag."""
+    conf = FetchRawConf({"url": ConfArg(type="url", value=url)})
+    return DagModule(id=f"f{index}", type="fetch", conf=conf)
+
+
+def _fanned_in(*urls: str) -> Pipeline:
+    """Builds a pipeline whose single union node merges one fetch per url."""
+    fetches = [_fetch_node(index, url) for index, url in enumerate(urls)]
+    ports = ["in" if index == 0 else f"in:{index}" for index in range(len(urls))]
+    wires = [[f"f{index}", "u", port] for index, port in enumerate(ports)]
+    union = DagModule(id="u", type="union")
+    dag = PipeDag(modules=[*fetches, union], wires=wires)
+    return Pipeline(parse_dag(dag))
+
+
 class TestAsyncSourceAdapter:
-    """Exercise each source kind accepted by ``AsyncPipe._resolve_source``."""
+    """Every source kind an asynchronous execution accepts."""
 
     @pytest.mark.parametrize("make_source", GOOD_SOURCES)
-    @pytest.mark.anyio
+    @async_test
     async def test_source_iterates(self, make_source):
-        pipe = AsyncPipe("hash", source=make_source())
-        result = [item async for item in pipe]
-        assert len(result) == len(SRC)
+        flow = make_source() | Pipeline.from_module("hash")
+        assert len([item async for item in flow]) == len(SRC)
 
     @pytest.mark.parametrize("make_source", RAISING_SOURCES)
-    @pytest.mark.anyio
+    @async_test
     async def test_source_failure_propagates(self, make_source):
-        pipe = AsyncPipe("hash", source=make_source())
+        flow = make_source() | Pipeline.from_module("hash")
 
-        with pytest.raises(RuntimeError):
-            [item async for item in pipe]
-
-        assert pipe.failed
+        with pytest.raises(RuntimeError, match="boom"):
+            _ = [item async for item in flow]
 
     @pytest.mark.parametrize("make_source", GOOD_SOURCES)
-    @pytest.mark.anyio
+    @async_test
     async def test_source_closes(self, make_source):
-        pipe = AsyncPipe("hash", source=make_source())
-        items = [item async for item in pipe]
-        await pipe.aclose()
+        flow = make_source() | Pipeline.from_module("hash")
+        stream = aiter(flow)
+        items = [item async for item in stream]
+        await stream.aclose()
         assert len(items) == len(SRC)
-        assert pipe.closed is True
+
+
+class TestAsyncReiteration:
+    @async_test
+    async def test_module_source_replays(self):
+        flow = _tokenized()
+        assert len([item async for item in flow]) == 3
+        assert len([item async for item in flow]) == 3
+
+    @async_test
+    async def test_one_shot_source_is_seen_consumed(self):
+        flow = iter(SRC) | Pipeline.from_module("hash")
+        assert len([item async for item in flow]) == len(SRC)
+        assert [item async for item in flow] == []
+
+    @async_test
+    async def test_iteration_after_partial_iteration_restarts(self):
+        flow = _tokenized()
+        stream = aiter(flow)
+        assert await anext(stream) == {"content": "a"}
+        await stream.aclose()
+        assert len([item async for item in flow]) == 3
+
+
+class TestAsyncClose:
+    @async_test
+    async def test_close_before_the_first_item_never_runs_the_source(self):
+        ran: list[int] = []
+
+        async def source():
+            ran.append(1)
+            yield {"content": "x"}
+
+        stream = aiter(source() | Pipeline.from_module("hash"))
+        await stream.aclose()
+        assert [item async for item in stream] == []
+        assert ran == []
+
+    @async_test
+    async def test_close_is_idempotent(self):
+        stream = aiter(_tokenized())
+        await stream.aclose()
+        await stream.aclose()
+        assert [item async for item in stream] == []
+
+    @async_test
+    async def test_early_close_stops_a_partially_consumed_run(self):
+        consumed: list[int] = []
+
+        async def source():
+            for index in range(20):
+                consumed.append(index)
+                yield {"content": str(index)}
+
+        stream = aiter(source() | Pipeline.from_module("hash"))
+        assert await anext(stream)
+        await stream.aclose()
+        assert len(consumed) < 20
+
+
+class TestAsyncFanIn:
+    @async_test
+    async def test_fan_in_merges_every_source(self):
+        single = _fanned_in(get_path("feed.xml"))
+        doubled = _fanned_in(get_path("feed.xml"), get_path("feed.xml"))
+        one = len([item async for item in single])
+        both = len([item async for item in doubled])
+        assert one
+        assert both == 2 * one
+
+    @async_test
+    async def test_fan_in_replays(self):
+        flow = _fanned_in(get_path("feed.xml"))
+        first = [item async for item in flow]
+        second = [item async for item in flow]
+        assert first
+        assert len(first) == len(second)
+
+    @async_test
+    async def test_fan_in_close_before_iteration_produces_nothing(self):
+        stream = aiter(_fanned_in(get_path("feed.xml")))
+        await stream.aclose()
+        assert [item async for item in stream] == []

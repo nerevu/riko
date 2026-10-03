@@ -19,13 +19,13 @@ from riko.base.exceptions import InvalidPipelineError
 from riko.execution._execution import SyncExecution
 from riko.execution.context import Context
 from riko.runtime._execution_plan import build_execution_plan
-from riko.runtime._serialize import parse_workflow, serialize_workflow
+from riko.runtime._serialize import parse_document, serialize_workflow
 from tests import TESTS_DIR
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from riko.definitions._workflow import WorkflowSpec
+    from riko.definitions._workflow import Workflow
     from riko.types._streams import Item
 
 EXAMPLES_DIR = TESTS_DIR.parent / "examples"
@@ -46,9 +46,9 @@ SPLIT_PENDING = pytest.mark.xfail(
 PROBE_MARKS = {"pipe_zKJifuNS3BGLRQK_GsevXg": (SPLIT_PENDING,)}
 
 
-def _render(spec: WorkflowSpec) -> str:
-    """Renders a spec as the indented canonical JSON the fixtures are stored in."""
-    return serialize_workflow(spec).decode("utf-8")
+def _render(workflow: Workflow) -> str:
+    """Renders a workflow as the indented canonical JSON the fixtures are stored in."""
+    return serialize_workflow(workflow).decode("utf-8")
 
 
 def _fixtures() -> list[Any]:
@@ -77,11 +77,11 @@ def _probes() -> list[Any]:
 
 
 def _run_document(path: Path) -> list[Item]:
-    spec = parse_workflow(path.read_text())
+    workflow = parse_document(path.read_text())
     items: list[Item] = []
 
     with SyncExecution(context=Context(test=True)) as execution:
-        items = list(execution.run(build_execution_plan(spec)))
+        items = list(execution.run(build_execution_plan(workflow)))
 
     return items
 
@@ -100,15 +100,15 @@ def _run_probe(package: str, name: str) -> list[object]:
 @pytest.mark.parametrize("path", _fixtures())
 def test_fixture_is_canonical(path: Path):
     """Every committed fixture parses, validates, and is stored canonically."""
-    spec = parse_workflow(path.read_text())
+    workflow = parse_document(path.read_text())
 
-    if spec.family_sources().get(("sw-243", "out")):
+    if workflow.family_sources().get(("sw-243", "out")):
         with pytest.raises(InvalidPipelineError, match=r"fan-out.*\('sw-243', 'out'\)"):
-            spec.validate()
+            workflow.validate()
     else:
-        spec.validate()
+        workflow.validate()
 
-    assert path.read_text() == _render(spec)
+    assert path.read_text() == _render(workflow)
 
 
 @pytest.mark.parametrize(("package", "path"), _probes())

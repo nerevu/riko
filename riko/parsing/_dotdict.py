@@ -46,7 +46,7 @@ type Data[VT] = Iterable[tuple[str, VT]]
 type DotDictInput[VT] = Data[VT] | Item
 
 
-def normalize_key(key: Key | None = None) -> list[str]:
+def parse_key(key: Key | None = None) -> list[str]:
     if isinstance(key, str):
         if "." in key:
             keys = key.rstrip(".").split(".")
@@ -218,7 +218,7 @@ def gen_dict(  # noqa: C901, E302
 
     """
     if key:
-        keys = normalize_key(key)
+        keys = parse_key(key)
     else:
         if is_mapping(data):
             if DotDict.is_self(data) and not kwargs:
@@ -451,7 +451,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             'bar'
 
         """
-        keys = normalize_key(key)
+        keys = parse_key(key)
         value = raw_get(self, keys[0])
 
         if len(keys) > 1:
@@ -509,7 +509,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
             return cast("Self", existing)
 
-        keys = normalize_key(key)
+        keys = parse_key(key)
 
         if len(keys) == 1:
             CaseInsensitiveDict.__setitem__(self, key, value)
@@ -607,7 +607,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             'verse2'
 
         """
-        keys = normalize_key(key)
+        keys = parse_key(key)
         item = self
 
         if keys:
@@ -663,7 +663,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
             return cast("Self", value) if is_mapping(value) else None
 
-        keys = normalize_key(key)
+        keys = parse_key(key)
         rest, last = keys[:-1], keys[-1]
 
         if len(keys) == 1 and match_key(self, key):
@@ -736,7 +736,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         if dot_keys := [k for k in _dict if "." in k]:
             # skip key if a subkey redefines it
             # i.e., 'author.name' has precedence over 'author'
-            skip_keys = {".".join(normalize_key(key)[:-1]) for key in dot_keys}
+            skip_keys = {".".join(parse_key(key)[:-1]) for key in dot_keys}
             items = [(k, _dict[k]) for k in _dict if k not in skip_keys]
         else:
             items = _dict.items()

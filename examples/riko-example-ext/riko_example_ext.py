@@ -19,10 +19,10 @@ Examples:
 
         cd examples/riko-example-ext && uv pip install -e .
         python << 'EOF'
-        from riko import SyncPipe
+        from riko import Pipeline
 
-        source=[{'content': 'hi'}]
-        print(list(SyncPipe('example.shout', source=source)))
+        source = [{'content': 'hi'}]
+        print(next(iter(Pipeline(source=source).pipe('example.shout'))))
         EOF
 
 """

@@ -1,150 +1,142 @@
 # vim: sw=4:ts=4:expandtab
-"""Shared one-shot lifecycle contract for sync and async pipes."""
+"""
+Run lifetime for synchronous pipeline iteration.
+
+A ``Pipeline`` is a definition, not a run: the lifetime belongs to the execution
+that each iterator creates, so there is no pipeline-level state to inspect.
+Iterating again starts a fresh execution, and closing an iterator tears that one
+execution down without touching the definition.
+"""
+
+from __future__ import annotations
 
 import pytest
 
+from riko import Pipeline, parse_dag
 from riko.base._paths import get_path
-from riko.base.exceptions import PipelineStateError
-from riko.runtime.collections import PipeState, SyncCollection
-from tests import skipif_issync
-from tests._lifecycle import AsyncLifecycleBackend, SyncLifecycleBackend
+from riko.types._compiler import DagModule, PipeDag
+from riko.types.modules import ConfArg, FetchRawConf, ItemBuilderConf
 
-BACKENDS = [
-    pytest.param(SyncLifecycleBackend(), id="sync"),
-    pytest.param(AsyncLifecycleBackend(), marks=skipif_issync, id="async"),
-]
+BUILDER_CONF = ItemBuilderConf({"attrs": [{"key": "content", "value": "a,b,c"}]})
+SRC = [{"content": "x"}, {"content": "y"}]
 
 
-@pytest.mark.parametrize("backend", BACKENDS)
-class TestLifecycleContract:
-    def test_new_state(self, backend):
-        assert backend.new_pipe().state is PipeState.NEW
+def _tokenized() -> Pipeline:
+    source = Pipeline.from_module("itembuilder", conf=BUILDER_CONF)
+    return source.tokenizer(options={"emit": True})
 
-    def test_exhausted_after_full_iteration(self, backend):
-        flow = backend.stream_pipe()
-        assert len(backend.consume(flow)) == backend.stream_count
-        assert flow.exhausted
-        assert flow.state is PipeState.EXHAUSTED
 
-    def test_exhausted_reiterates_empty_without_reexecution(self, backend):
-        flow = backend.stream_pipe()
-        first = backend.consume(flow)
-        second = backend.consume(flow)
-        assert len(first) == backend.stream_count
-        assert second == []
+def _fetch_node(index: int, url: str) -> DagModule:
+    """Builds one fetch module entry for the fan-in dag."""
+    conf = FetchRawConf({"url": ConfArg(type="url", value=url)})
+    return DagModule(id=f"f{index}", type="fetch", conf=conf)
 
-    def test_chain_while_new_is_allowed(self, backend):
-        chained = backend.chainable_pipe().hash()
-        assert chained.state is PipeState.NEW
 
-    def test_chain_after_partial_iteration_wraps_remainder(self, backend):
-        flow = backend.stream_pipe()
-        state, result = backend.partial_then_count(flow)
-        assert state is PipeState.RUNNING
-        assert result == [{"count": backend.remaining_count}]
+def _fanned_in(*urls: str) -> Pipeline:
+    """Builds a pipeline whose single union node merges one fetch per url."""
+    fetches = [_fetch_node(index, url) for index, url in enumerate(urls)]
+    ports = ["in" if index == 0 else f"in:{index}" for index in range(len(urls))]
+    wires = [[f"f{index}", "u", port] for index, port in enumerate(ports)]
+    union = DagModule(id="u", type="union")
+    dag = PipeDag(modules=[*fetches, union], wires=wires)
+    return Pipeline(parse_dag(dag))
 
-    def test_chain_after_exhaustion_is_allowed(self, backend):
-        flow = backend.stream_pipe()
-        backend.consume(flow)
-        assert backend.consume(flow.count()) == [{"count": 0}]
 
-    def test_close_is_idempotent(self, backend):
-        flow = backend.new_pipe()
-        backend.close(flow)
-        backend.close(flow)
-        assert flow.closed
-        assert flow.state is PipeState.CLOSED
+def _boom():
+    raise RuntimeError("boom")
+    yield  # pragma: no cover
 
-    def test_chain_after_close_raises(self, backend):
-        flow = backend.new_pipe()
-        backend.close(flow)
 
-        with pytest.raises(PipelineStateError):
-            flow.count()
+class TestReiteration:
+    def test_module_source_replays(self):
+        pipeline = _tokenized()
+        assert len(list(pipeline)) == 3
+        assert len(list(pipeline)) == 3
 
-    def test_chain_after_failure_raises(self, backend):
-        flow = backend.failing_pipe()
+    def test_replayable_source_replays(self):
+        pipeline = Pipeline(source=SRC).hash()
+        assert len(list(pipeline)) == 2
+        assert len(list(pipeline)) == 2
 
-        with pytest.raises(RuntimeError):
-            backend.consume(flow)
+    def test_one_shot_source_is_seen_consumed(self):
+        pipeline = iter(SRC) | Pipeline.from_module("hash")
+        assert len(list(pipeline)) == 2
+        assert list(pipeline) == []
 
-        with pytest.raises(PipelineStateError):
-            flow.count()
+    def test_chaining_after_a_run_builds_a_fresh_run(self):
+        pipeline = _tokenized()
+        assert len(list(pipeline)) == 3
+        assert list(pipeline.count()) == [{"count": 3}]
 
-    def test_iterate_after_run_then_close_is_empty(self, backend):
-        flow = backend.stream_pipe()
-        assert len(backend.consume(flow)) == backend.stream_count
-        backend.close(flow)
-        assert backend.consume(flow) == []
 
-    def test_close_before_iteration_does_not_execute(self, backend):
-        ran: list[int] = []
-        flow = backend.lazy_pipe(ran)
-        backend.close(flow)
-        assert backend.consume(flow) == []
-        assert ran == []
-
-    def test_collection_close_before_iteration_does_not_execute(self, backend):
+class TestClose:
+    def test_close_before_the_first_item_never_runs_the_source(self):
         ran: list[int] = []
 
-        def sources():
+        def source():
             ran.append(1)
-            yield {"url": get_path("feed.xml")}
+            yield {"content": "x"}
 
-        stream = backend.collection(sources())
-        backend.close(stream)
-        assert backend.consume(stream) == []
+        stream = iter(source() | Pipeline.from_module("hash"))
+        stream.close()
+        assert list(stream) == []
         assert ran == []
 
-    def test_failed_state_reiterates_empty(self, backend):
-        flow = backend.failing_pipe()
+    def test_close_is_idempotent(self):
+        stream = iter(_tokenized())
+        stream.close()
+        stream.close()
+        assert list(stream) == []
 
-        with pytest.raises(RuntimeError):
-            backend.consume(flow)
+    def test_early_close_stops_a_partially_consumed_run(self):
+        consumed: list[int] = []
 
-        assert flow.state is PipeState.FAILED
-        assert flow.failed
-        assert backend.consume(flow) == []
+        def source():
+            for index in range(20):
+                consumed.append(index)
+                yield {"content": str(index)}
 
-    def test_context_manager_closes(self, backend):
-        flow = backend.context_pipe()
-        items = backend.context_consume(flow)
-        assert items
+        stream = iter(source() | Pipeline.from_module("hash"))
+        assert next(stream)
+        stream.close()
+        assert len(consumed) < 20
 
-        if backend.context_count is not None:
-            assert len(items) == backend.context_count
-
-        assert flow.closed
-        assert flow.state is PipeState.CLOSED
-
-    def test_collection_lifecycle(self, backend):
-        stream = backend.collection([{"url": get_path("feed.xml")}])
-        assert stream.state is PipeState.NEW
-        assert backend.consume(stream)
-        assert stream.exhausted
-        assert backend.consume(stream) == []
-
-    def test_collection_close_is_idempotent(self, backend):
-        stream = backend.collection([{"url": get_path("feed.xml")}])
-        backend.close(stream)
-        backend.close(stream)
-        assert stream.closed
-        assert stream.state is PipeState.CLOSED
+    def test_closing_one_iterator_leaves_the_definition_runnable(self):
+        pipeline = _tokenized()
+        stream = iter(pipeline)
+        assert next(stream)
+        stream.close()
+        assert len(list(pipeline)) == 3
 
 
-class TestSyncLifecycle:
-    def test_collection_failed_state(self):
-        def boom_sources():
-            raise RuntimeError("boom")
-            yield  # pragma: no cover
+class TestFailure:
+    def test_failing_source_propagates(self):
+        pipeline = _boom() | Pipeline.from_module("hash")
 
-        stream = SyncCollection(boom_sources())
+        with pytest.raises(RuntimeError, match="boom"):
+            list(pipeline)
 
-        try:
-            list(stream)
-        except RuntimeError:
-            pass
+    def test_a_fresh_iteration_starts_cleanly_after_a_failure(self):
+        pipeline = _tokenized()
 
-        assert stream.state is PipeState.FAILED
-        assert stream.failed
+        with pytest.raises(RuntimeError, match="boom"):
+            list(_boom() | Pipeline.from_module("hash"))
+
+        assert len(list(pipeline)) == 3
+
+
+class TestFanIn:
+    def test_fan_in_merges_every_source(self):
+        one = len(list(_fanned_in(get_path("feed.xml"))))
+        both = len(list(_fanned_in(get_path("feed.xml"), get_path("feed.xml"))))
+        assert one
+        assert both == 2 * one
+
+    def test_fan_in_replays(self):
+        pipeline = _fanned_in(get_path("feed.xml"))
+        assert len(list(pipeline)) == len(list(pipeline))
+
+    def test_fan_in_close_before_iteration_produces_nothing(self):
+        stream = iter(_fanned_in(get_path("feed.xml")))
+        stream.close()
         assert list(stream) == []

@@ -25,7 +25,7 @@ from inspect import (
     signature,
     unwrap,
 )
-from typing import TYPE_CHECKING, Any, TypeGuard
+from typing import TYPE_CHECKING, Any, TypeGuard, overload
 
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs
@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     from ._sentinels import MissingType, Sentinel
     from ._streams import Item, StatefulItem
     from ._wrappers import ModuleWrapper, SplitterWrapper, SubPipe
-    from .modules import ConfArg
+    from .modules import Conf, ConfArg
 
 
 def _protocol_signature(method: Callable) -> Signature:
@@ -151,7 +151,17 @@ def is_dataclass_inst(value: object) -> TypeIs[DataclassInstance]:
     return is_dataclass(value) and not isinstance(value, type)
 
 
-def require_mapping(value: object, what: str | None = "value") -> Mapping[str, object]:
+@overload
+def require_mapping(  # noqa: E704
+    value: Conf | None, what: str | None = "value"
+) -> Conf: ...
+@overload  # noqa: E302
+def require_mapping[K, V](  # noqa: E704
+    value: Mapping[K, V] | object, what: str | None = "value"
+) -> Mapping[K, V]: ...
+def require_mapping[K, V](  # noqa: E302
+    value: Mapping[K, V] | object, what: str | None = "value"
+) -> Mapping[K, V]:
     """Narrows a value to a mapping or rejects it as malformed structure."""
     if not is_mapping(value):
         raise InvalidPipelineError(f"{what} must be a mapping")
@@ -320,7 +330,9 @@ def is_async_context_manager(
     return candidate is val and isinstance(val, AbstractAsyncContextManager)
 
 
-def is_async_callable(val: object) -> TypeGuard[Callable[..., Awaitable]]:
+def is_async_callable[T](
+    val: Callable[..., Awaitable[T]] | object,
+) -> TypeGuard[Callable[..., Awaitable[T]]]:
     if callable(val):
         result = iscoroutinefunction(val) or iscoroutinefunction(type(val).__call__)
     else:
@@ -329,7 +341,7 @@ def is_async_callable(val: object) -> TypeGuard[Callable[..., Awaitable]]:
     return result
 
 
-def is_sync_callable(val: object) -> TypeGuard[Callable[..., object]]:
+def is_sync_callable[T](val: Callable[..., T] | object) -> TypeGuard[Callable[..., T]]:
     return callable(val) and not is_async_callable(val)
 
 

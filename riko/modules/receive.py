@@ -318,8 +318,8 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[Item | None]:
 
         The marker exists so a poll on an empty queue neither blocks nor ends
         the stream. Setting ``max_wait`` to 0 makes the drain non-blocking
-        instead, which renders the marker unreachable — that is what
-        ``riko.SyncPipe.subscribe`` does.
+        instead, which renders the marker unreachable: the subscriber yields
+        whatever the channel already holds and then stops.
 
     Examples:
 

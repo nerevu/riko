@@ -525,11 +525,11 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
         Examples:
 
-            >>> from riko import get_async_temp_file, issync, run
+            >>> from riko import async_get_temp_file, issync, run
             >>> from riko.definitions._targets import build_write
             >>>
             >>> async def main():
-            ...     async with get_async_temp_file() as fp:
+            ...     async with async_get_temp_file() as fp:
             ...         prepare = build_write(fp.name, fmt="jsonl")
             ...         session = _AsyncFileWriteSession(prepare)
             ...         await session.aacquire()
@@ -584,11 +584,11 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
         Examples:
 
-            >>> from riko import get_async_temp_file, issync, run
+            >>> from riko import async_get_temp_file, issync, run
             >>> from riko.definitions._targets import build_write
             >>>
             >>> async def main():
-            ...     async with get_async_temp_file() as fp:
+            ...     async with async_get_temp_file() as fp:
             ...         session = _AsyncFileWriteSession(build_write(fp.name))
             ...         await session.aacquire()
             ...         await session.write([{"x": 1}])

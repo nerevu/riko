@@ -7,13 +7,7 @@ not part of the SemVer-guaranteed API.
 """
 
 from ._streams import AsyncItems, AsyncStream, Feed, Item, Items, Stream
-from ._workflow import (
-    EdgeAuthoring,
-    EndpointAuthoring,
-    NodeAuthoring,
-    WorkflowAuthoring,
-    WorkflowSpecLike,
-)
+from ._workflow import RawEdge, RawEndpoint, RawNode, RawWorkflow
 from ._wrappers import AsyncPipeTuples, PipeTuples, SyncPipeTuples
 from .modules import Conf
 
@@ -22,15 +16,14 @@ __all__ = [
     "AsyncPipeTuples",
     "AsyncStream",
     "Conf",
-    "EdgeAuthoring",
-    "EndpointAuthoring",
     "Feed",
     "Item",
     "Items",
-    "NodeAuthoring",
     "PipeTuples",
+    "RawEdge",
+    "RawEndpoint",
+    "RawNode",
+    "RawWorkflow",
     "Stream",
     "SyncPipeTuples",
-    "WorkflowAuthoring",
-    "WorkflowSpecLike",
 ]

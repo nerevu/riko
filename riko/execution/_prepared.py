@@ -128,15 +128,15 @@ class PreparedNode:
 
             >>> from riko.definitions._workflow import ModuleNode
             >>> from riko.runtime._execution_plan import build_execution_plan
-            >>> from riko.definitions._workflow import WorkflowSpec
+            >>> from riko.definitions._workflow import Workflow
             >>> from riko.types._workflow import Endpoint
             >>>
             >>> node = ModuleNode(id="count-1", name="count")
-            >>> spec = WorkflowSpec(
+            >>> workflow = Workflow(
             ...     nodes={"count-1": node},
             ...     outputs={"default": Endpoint("count-1", "out")},
             ... )
-            >>> plan = build_execution_plan(spec)
+            >>> plan = build_execution_plan(workflow)
             >>> plan.nodes["count-1"].select(is_async=False).mode.name
             'NATIVE'
 

@@ -72,7 +72,7 @@ class RatesJson(TypedDict):
     rates: Mapping[str, str]
 
 
-def parse_response(rates: Mapping[str, str | float]) -> dict[str, Decimal]:
+def normalize_rates(rates: Mapping[str, str | float]) -> dict[str, Decimal]:
     if rates:
         resp = {k: Decimal(v) for k, v in rates.items() if v}
     else:
@@ -158,7 +158,7 @@ async def async_parser(
 
     if rates and not same_currency:
         places = Decimal(10) ** -objconf.precision
-        rates = parse_response(rates)
+        rates = normalize_rates(rates)
         rate = calc_rate(base, objconf.currency, places=places, **rates)
 
     return rate
@@ -207,7 +207,7 @@ def parser(
 
             if rates := json.get("rates", {}):
                 places = Decimal(10) ** -objconf.precision
-                rates = parse_response(rates)
+                rates = normalize_rates(rates)
                 rate = calc_rate(base, objconf.currency, places=places, **rates)
 
     return rate

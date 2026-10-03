@@ -2,8 +2,8 @@
 """
 The single authoring-sugar normalization boundary for canonical Workflow v2.
 
-``normalize_workflow`` turns a flexible ``WorkflowSpecLike`` authoring mapping into one
-strict canonical ``WorkflowSpec`` so no other subsystem has to reinterpret shorthand. It
+``normalize_workflow`` turns a flexible ``WorkflowLike`` RawWorkflow into one
+strict canonical ``Workflow`` so no other subsystem has to reinterpret shorthand. It
 is the structural, contract-free pass. Malformed structure raises
 ``InvalidPipelineError``.
 
@@ -13,18 +13,18 @@ Examples:
 
         >>> from riko.runtime._normalize import normalize_workflow
         >>>
-        >>> spec = normalize_workflow({"nodes": [{"name": "fetch"}]})
-        >>> spec.validate()
-        >>> list(spec.nodes)
+        >>> workflow = normalize_workflow({"nodes": [{"name": "fetch"}]})
+        >>> workflow.validate()
+        >>> list(workflow.nodes)
         ['fetch-1']
-        >>> spec.outputs["default"]
+        >>> workflow.outputs["default"]
         Endpoint(node='fetch-1', port='out')
 
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from itertools import count, starmap
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, get_args
@@ -43,7 +43,7 @@ from riko.definitions._workflow import (
     ReadNode,
     StreamEdge,
     SubscribeNode,
-    WorkflowSpec,
+    Workflow,
     WriteNode,
 )
 from riko.types._collections import (
@@ -57,17 +57,18 @@ from riko.types._guards import is_mapping, require_mapping
 from riko.types._workflow import (
     WORKFLOW_VERSION,
     Edge,
-    EdgeAuthoring,
     EdgeFamily,
     Endpoint,
-    EndpointAuthoring,
-    NodeAuthoring,
-    WorkflowAuthoring,
+    RawEdge,
+    RawEndpoint,
+    RawNode,
+    RawWorkflow,
     parse_port,
 )
 
 if TYPE_CHECKING:
-    from riko.types._workflow import JSONSchema, WorkflowSpecLike
+    from riko.definitions._workflow import WorkflowLike
+    from riko.types._workflow import JSONSchema
 
 
 _EDGE_ALIASES = frozenset({"src", "tgt", "from", "to"})
@@ -145,7 +146,7 @@ def _build_node(family: object | None = "module", **fields: Any) -> Node:
     return builder(**fields)
 
 
-def _normalize_node(*raw_nodes: object) -> Iterator[NodeAuthoring]:
+def _normalize_node(*raw_nodes: object) -> Iterator[RawNode]:
     """Pairs list-authored nodes with explicit or generated ``<name>-<occurrence>``."""
     counts: dict[str, int] = {}
 
@@ -158,7 +159,7 @@ def _normalize_node(*raw_nodes: object) -> Iterator[NodeAuthoring]:
             counts[name] = counts.get(name, 0) + 1
             node_id = f"{name}-{counts[name]}"
 
-        yield NodeAuthoring(id=str(node_id), **node)
+        yield RawNode(id=str(node_id), **node)
 
 
 def _keyed_node(key: object, raw_node: object) -> dict[str, Any]:
@@ -242,7 +243,7 @@ def _normalize_outputs(raw: object, *edges: Edge, **nodes: Node) -> dict[str, En
     return result
 
 
-def _resolve_input(raw: object) -> FrozenJSON:
+def _normalize_input(raw: object) -> FrozenJSON:
     """Normalizes an input declaration shorthand into a full JSON Schema mapping."""
     if isinstance(raw, str):
         result = {"type": raw}
@@ -254,42 +255,42 @@ def _resolve_input(raw: object) -> FrozenJSON:
     return freeze_mapping(result)
 
 
-def _resolve_inputs(raw: object) -> JSONSchema:
+def _normalize_inputs(raw: object) -> JSONSchema:
     """Normalizes declared inputs into name-keyed full JSON Schema mappings."""
     inputs = {} if raw is None else require_mapping(raw, "inputs")
-    resolved = {name: _resolve_input(schema) for name, schema in inputs.items()}
+    resolved = {name: _normalize_input(schema) for name, schema in inputs.items()}
     return MappingProxyType(resolved)
 
 
-def _authoring_map[K, V, R](
-    values: Mapping[K, V], authoring: Callable[..., R]
-) -> Iterator[tuple[K, R]]:
+def _gen_raw[K, V, R](values: Mapping[K, V], raw: type[R]) -> Iterator[tuple[K, R]]:
     extra = lambda value: {"type": value.family} if isinstance(value, Node) else {}
 
     for key, _value in values.items():
-        yield key, authoring(**asdict(_value), **extra(_value))
+        yield key, raw(**asdict(_value), **extra(_value))
 
 
-def _spec_authoring(spec: WorkflowSpec) -> WorkflowAuthoring:
-    """Renders a canonical spec back into an authoring mapping for re-normalization."""
-    edges = dict(zip(count(), spec.edges, strict=False))
+def _raw_workflow(workflow: Workflow) -> RawWorkflow:
+    """Converts a workflow back into a RawWorkflow for re-normalization."""
+    edges = dict(zip(count(), workflow.edges, strict=False))
 
-    return {
-        "nodes": dict(_authoring_map(spec.nodes, NodeAuthoring)),
-        "edges": [v for _, v in _authoring_map(edges, EdgeAuthoring)],
-        "outputs": dict(_authoring_map(spec.outputs, EndpointAuthoring)),
-        "inputs": spec.inputs,
-        "resources": spec.resources,
-        "version": spec.version,
-    }
+    return RawWorkflow(
+        {
+            "nodes": dict(_gen_raw(workflow.nodes, RawNode)),
+            "edges": [v for _, v in _gen_raw(edges, RawEdge)],
+            "outputs": dict(_gen_raw(workflow.outputs, RawEndpoint)),
+            "inputs": workflow.inputs,
+            "resources": workflow.resources,
+            "version": workflow.version,
+        }
+    )
 
 
-def normalize_workflow(raw: WorkflowSpecLike | WorkflowSpec) -> WorkflowSpec:
+def normalize_workflow(raw: WorkflowLike) -> Workflow:
     """
-    Normalizes a flexible Workflow v2 authoring mapping into a strict canonical spec.
+    Normalizes a flexible Workflow v2 RawWorkflow into a strict workflow.
 
-    A :class:`~riko.definitions._workflow.WorkflowSpec` is re-normalized through the
-    same pipeline rather than trusted, so a hand-built spec is re-canonicalized and
+    A :class:`~riko.definitions._workflow.Workflow` is re-normalized through the
+    same pipeline rather than trusted, so a hand-built workflow is re-canonicalized and
     normalization is idempotent on its own output.
 
     This is the one structural normalization boundary: no compiler, runtime, or CLI
@@ -299,16 +300,16 @@ def normalize_workflow(raw: WorkflowSpecLike | WorkflowSpec) -> WorkflowSpec:
 
     Args:
 
-        raw: A ``WorkflowSpecLike`` authoring mapping with ``nodes`` and optional
+        raw: A ``WorkflowLike`` RawWorkflow with ``nodes`` and optional
             ``edges``, ``outputs``, ``inputs``, ``resources``, and ``version``.
 
     Returns:
 
-        The canonical :class:`~riko.definitions._workflow.WorkflowSpec`.
+        The canonical :class:`~riko.definitions._workflow.Workflow`.
 
     Examples:
 
-        >>> spec = normalize_workflow(
+        >>> workflow = normalize_workflow(
         ...     {
         ...         "nodes": [
         ...             {"id": "fetch-1", "name": "fetch"},
@@ -319,25 +320,25 @@ def normalize_workflow(raw: WorkflowSpecLike | WorkflowSpec) -> WorkflowSpec:
         ...         ],
         ...     }
         ... )
-        >>> spec.nodes["write-1"].backend.value
+        >>> workflow.nodes["write-1"].backend.value
         'file'
-        >>> spec.outputs["default"]
+        >>> workflow.outputs["default"]
         Endpoint(node='write-1', port='out')
 
     """
-    source = _spec_authoring(raw) if isinstance(raw, WorkflowSpec) else raw
+    source = _raw_workflow(raw) if isinstance(raw, Workflow) else raw
     workflow = require_mapping(source, "workflow")
-    _reject_unknown(workflow, WorkflowSpec)
+    _reject_unknown(workflow, Workflow)
     _resources = workflow.get("resources")
     version = workflow.get("version", WORKFLOW_VERSION)
     nodes = _normalize_nodes(workflow.get("nodes", ()))
     _edges = require_sequence(workflow.get("edges", ()), "edges")
     edges = [_normalize_edge(edge, **nodes) for edge in _edges]
 
-    return WorkflowSpec(
+    return Workflow(
         nodes=nodes,
         outputs=_normalize_outputs(workflow.get("outputs"), *edges, **nodes),
-        inputs=_resolve_inputs(workflow.get("inputs")),
+        inputs=_normalize_inputs(workflow.get("inputs")),
         edges=edges,
         resources=None if _resources is None else require_strlike(_resources),
         version=require_str(version, "workflow 'version'"),

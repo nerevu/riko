@@ -1,8 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests for ``spec.validate`` structural graph validation.
+Tests for ``workflow.validate`` structural graph validation.
 
-These build canonical ``WorkflowSpec`` graphs directly and assert the closed-schema
+These build canonical ``Workflow`` graphs directly and assert the closed-schema
 rules: version, non-empty nodes, id/key agreement, endpoint references, stream fan-in,
 publish/subscribe edge coherence, port direction, acyclicity, resource references, and
 exposed outputs.
@@ -11,19 +11,14 @@ exposed outputs.
 import pytest
 
 from riko.base.exceptions import InvalidPipelineError
-from riko.ext import (
-    Endpoint,
-    ModuleNode,
-    PublishEdge,
-    StreamEdge,
-    SubscribeNode,
-    WorkflowSpec,
-)
+from riko.definitions._workflow import Workflow
+from riko.ext import ModuleNode, PublishEdge, StreamEdge, SubscribeNode
+from riko.types._workflow import Endpoint
 
 
-def _spec(nodes, edges=(), outputs=None, inputs=None, resources=(), version="2"):
+def _workflow(nodes, edges=(), outputs=None, inputs=None, resources=(), version="2"):
     node_map = {node.id: node for node in nodes}
-    return WorkflowSpec(
+    return Workflow(
         nodes=node_map,
         edges=tuple(edges),
         outputs={} if outputs is None else outputs,
@@ -35,46 +30,48 @@ def _spec(nodes, edges=(), outputs=None, inputs=None, resources=(), version="2")
 
 def test_valid_spec_passes():
     node = ModuleNode(id="a", name="fetch")
-    spec = _spec([node], outputs={"default": Endpoint("a", "out")})
-    assert spec.validate() is None
+    workflow = _workflow([node], outputs={"default": Endpoint("a", "out")})
+    assert workflow.validate() is None
 
 
 def test_unsupported_version_rejected():
     node = ModuleNode(id="a", name="fetch")
-    spec = _spec([node], outputs={"default": Endpoint("a", "out")}, version="1")
+    workflow = _workflow([node], outputs={"default": Endpoint("a", "out")}, version="1")
     with pytest.raises(InvalidPipelineError, match="unsupported workflow version"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_empty_node_set_rejected():
     with pytest.raises(InvalidPipelineError, match="no nodes"):
-        _spec([]).validate()
+        _workflow([]).validate()
 
 
 def test_node_id_key_mismatch_rejected():
-    spec = WorkflowSpec(
+    workflow = Workflow(
         nodes={"a": ModuleNode(id="b", name="fetch")},
         edges=(),
         outputs={"default": Endpoint("b", "out")},
         inputs={},
     )
     with pytest.raises(InvalidPipelineError, match="does not match its key"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_missing_edge_reference_rejected():
     node = ModuleNode(id="a", name="fetch")
     edge = StreamEdge(Endpoint("a", "out"), Endpoint("ghost", "in"))
-    spec = _spec([node], edges=[edge], outputs={"default": Endpoint("a", "out")})
+    workflow = _workflow(
+        [node], edges=[edge], outputs={"default": Endpoint("a", "out")}
+    )
     with pytest.raises(InvalidPipelineError, match="missing node"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_missing_output_reference_rejected():
     node = ModuleNode(id="a", name="fetch")
-    spec = _spec([node], outputs={"default": Endpoint("ghost", "out")})
+    workflow = _workflow([node], outputs={"default": Endpoint("ghost", "out")})
     with pytest.raises(InvalidPipelineError, match="missing node"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_multiple_stream_edges_into_one_port_rejected():
@@ -85,9 +82,11 @@ def test_multiple_stream_edges_into_one_port_rejected():
         StreamEdge(Endpoint("a", "out"), Endpoint("c", "in")),
         StreamEdge(Endpoint("b", "out"), Endpoint("c", "in")),
     ]
-    spec = _spec([a, b, c], edges=edges, outputs={"default": Endpoint("c", "out")})
+    workflow = _workflow(
+        [a, b, c], edges=edges, outputs={"default": Endpoint("c", "out")}
+    )
     with pytest.raises(InvalidPipelineError, match="multiple stream edges"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_distinct_fanin_ports_pass():
@@ -98,85 +97,95 @@ def test_distinct_fanin_ports_pass():
         StreamEdge(Endpoint("a", "out"), Endpoint("c", "in")),
         StreamEdge(Endpoint("b", "out"), Endpoint("c", "in:1")),
     ]
-    spec = _spec([a, b, c], edges=edges, outputs={"default": Endpoint("c", "out")})
-    assert spec.validate() is None
+    workflow = _workflow(
+        [a, b, c], edges=edges, outputs={"default": Endpoint("c", "out")}
+    )
+    assert workflow.validate() is None
 
 
 def test_publish_edge_to_non_subscribe_rejected():
     a = ModuleNode(id="a", name="fetch")
     b = ModuleNode(id="b", name="filter")
     edge = PublishEdge(Endpoint("a", "out"), Endpoint("b", "in"))
-    spec = _spec([a, b], edges=[edge], outputs={"default": Endpoint("b", "out")})
+    workflow = _workflow(
+        [a, b], edges=[edge], outputs={"default": Endpoint("b", "out")}
+    )
     with pytest.raises(InvalidPipelineError, match="edge family disagrees"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_stream_edge_to_subscribe_rejected():
     a = ModuleNode(id="a", name="fetch")
     sub = SubscribeNode(id="s", name="sub")
     edge = StreamEdge(Endpoint("a", "out"), Endpoint("s", "in"))
-    spec = _spec([a, sub], edges=[edge], outputs={"default": Endpoint("a", "out")})
+    workflow = _workflow(
+        [a, sub], edges=[edge], outputs={"default": Endpoint("a", "out")}
+    )
     with pytest.raises(InvalidPipelineError, match="edge family disagrees"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_publish_edge_to_subscribe_passes():
     a = ModuleNode(id="a", name="fetch")
     sub = SubscribeNode(id="s", name="sub")
     edge = PublishEdge(Endpoint("a", "out"), Endpoint("s", "in"))
-    spec = _spec([a, sub], edges=[edge], outputs={"default": Endpoint("a", "out")})
-    assert spec.validate() is None
+    workflow = _workflow(
+        [a, sub], edges=[edge], outputs={"default": Endpoint("a", "out")}
+    )
+    assert workflow.validate() is None
 
 
 def test_unresolved_resource_reference_rejected():
     node = ModuleNode(id="a", name="fetch", resources={"db": "prod"})
-    spec = _spec([node], outputs={"default": Endpoint("a", "out")})
+    workflow = _workflow([node], outputs={"default": Endpoint("a", "out")})
     with pytest.raises(InvalidPipelineError, match="unresolved resource"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_declared_resource_reference_passes():
     node = ModuleNode(id="a", name="fetch", resources={"db": "prod"})
-    spec = _spec([node], outputs={"default": Endpoint("a", "out")}, resources=("prod",))
-    assert spec.validate() is None
+    workflow = _workflow(
+        [node], outputs={"default": Endpoint("a", "out")}, resources=("prod",)
+    )
+    assert workflow.validate() is None
 
 
 def test_non_empty_graph_without_output_rejected():
     node = ModuleNode(id="a", name="fetch")
     with pytest.raises(InvalidPipelineError, match="exposes no output"):
-        _spec([node]).validate()
+        _workflow([node]).validate()
 
 
 def test_edge_source_on_input_port_rejected():
     a = ModuleNode(id="a", name="fetch")
     b = ModuleNode(id="b", name="sort")
     edges = [StreamEdge(Endpoint("a", "in"), Endpoint("b", "in"))]
-    spec = _spec([a, b], edges=edges, outputs={"default": Endpoint("b", "out")})
+    workflow = _workflow([a, b], edges=edges, outputs={"default": Endpoint("b", "out")})
     with pytest.raises(InvalidPipelineError, match=r"'a', 'in'.*not an 'out' port"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_edge_target_on_output_port_rejected():
     a = ModuleNode(id="a", name="fetch")
     b = ModuleNode(id="b", name="sort")
     edges = [StreamEdge(Endpoint("a", "out"), Endpoint("b", "out"))]
-    spec = _spec([a, b], edges=edges, outputs={"default": Endpoint("b", "out")})
+    workflow = _workflow([a, b], edges=edges, outputs={"default": Endpoint("b", "out")})
     with pytest.raises(InvalidPipelineError, match=r"'b', 'out'.*not an 'in' port"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_output_on_input_port_rejected():
     node = ModuleNode(id="a", name="fetch")
-    spec = _spec([node], outputs={"default": Endpoint("a", "in")})
+    workflow = _workflow([node], outputs={"default": Endpoint("a", "in")})
     with pytest.raises(InvalidPipelineError, match="not an 'out' port"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_malformed_port_rejected():
     node = ModuleNode(id="a", name="fetch")
-    spec = _spec([node], outputs={"default": Endpoint("a", "sideways")})
+    workflow = _workflow([node], outputs={"default": Endpoint("a", "sideways")})
     with pytest.raises(InvalidPipelineError, match="invalid port direction"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_cycle_rejected():
@@ -186,17 +195,17 @@ def test_cycle_rejected():
         StreamEdge(Endpoint("a", "out"), Endpoint("b", "in")),
         StreamEdge(Endpoint("b", "out"), Endpoint("a", "in")),
     ]
-    spec = _spec([a, b], edges=edges, outputs={"default": Endpoint("b", "out")})
+    workflow = _workflow([a, b], edges=edges, outputs={"default": Endpoint("b", "out")})
     with pytest.raises(InvalidPipelineError, match=r"cycle.*\['a', 'b'\]"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_self_loop_rejected():
     node = ModuleNode(id="a", name="sort")
     edges = [StreamEdge(Endpoint("a", "out"), Endpoint("a", "in"))]
-    spec = _spec([node], edges=edges, outputs={"default": Endpoint("a", "out")})
+    workflow = _workflow([node], edges=edges, outputs={"default": Endpoint("a", "out")})
     with pytest.raises(InvalidPipelineError, match=r"cycle.*\['a'\]"):
-        spec.validate()
+        workflow.validate()
 
 
 def test_cycle_names_only_the_unrunnable_nodes():
@@ -208,5 +217,7 @@ def test_cycle_names_only_the_unrunnable_nodes():
         StreamEdge(Endpoint("a", "out"), Endpoint("b", "in")),
         StreamEdge(Endpoint("b", "out"), Endpoint("a", "in:1")),
     ]
-    spec = _spec([src, a, b], edges=edges, outputs={"default": Endpoint("b", "out")})
-    assert spec.cyclic_nodes == ["a", "b"]
+    workflow = _workflow(
+        [src, a, b], edges=edges, outputs={"default": Endpoint("b", "out")}
+    )
+    assert workflow.cyclic_nodes == ["a", "b"]

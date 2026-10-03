@@ -32,10 +32,12 @@ if TYPE_CHECKING:
 
     from ._collections import JSONSchema
     from ._enums import BackendLike, FmtLike, StrLike
+    from .modules import Conf
 
 type NodeId = str
 type Port = str
 type ResourceName = str
+type WorkflowDocument = bytes
 
 type NodeFamily = Literal["module", "read", "write", "cache", "action", "subscribe"]
 type EdgeFamily = Literal["stream", "publish"]
@@ -50,23 +52,23 @@ class InputRef(TypedDict):
     input: str
 
 
-class EndpointAuthoring(TypedDict, total=False):
+class RawEndpoint(TypedDict, total=False):
     """Authoring shorthand for an edge or output endpoint; ``node`` is required."""
 
     node: Required[str]
     port: str
 
 
-class EdgeAuthoring(TypedDict, total=False):
+class RawEdge(TypedDict, total=False):
     """Authoring shorthand for a stream or publish edge between two endpoints."""
 
-    source: Required[EndpointAuthoring]
-    target: Required[EndpointAuthoring]
+    source: Required[RawEndpoint]
+    target: Required[RawEndpoint]
     family: EdgeFamily
     type: EdgeFamily
 
 
-class NodeAuthoring(TypedDict, total=False):
+class RawNode(TypedDict, total=False):
     """Authoring shorthand for a node of any family, with aliases and optional keys."""
 
     id: str
@@ -74,7 +76,7 @@ class NodeAuthoring(TypedDict, total=False):
     type: NodeFamily
     family: NodeFamily
     label: str
-    conf: Mapping[str, object]
+    conf: Conf | Mapping[str, object]
     options: Mapping[str, object]
     embed: Mapping[str, object]
     policy: Mapping[str, object]
@@ -88,18 +90,15 @@ class NodeAuthoring(TypedDict, total=False):
     resources: str | Sequence[str] | Mapping[str, str]
 
 
-class WorkflowAuthoring(TypedDict, total=False):
-    """Flexible Workflow v2 authoring envelope normalized into a ``WorkflowSpec``."""
+class RawWorkflow(TypedDict, total=False):
+    """Flexible Workflow v2 authoring envelope normalized into a ``Workflow``."""
 
-    nodes: Sequence[NodeAuthoring] | Mapping[str, NodeAuthoring]
-    outputs: Mapping[str, EndpointAuthoring]
+    nodes: Sequence[RawNode] | Mapping[str, RawNode]
+    outputs: Mapping[str, RawEndpoint]
     inputs: JSONSchema
-    edges: Sequence[EdgeAuthoring]
+    edges: Sequence[RawEdge]
     resources: str | Sequence[str]
     version: str
-
-
-type WorkflowSpecLike = WorkflowAuthoring | Mapping[str, object]
 
 
 @define(frozen=True, slots=True)

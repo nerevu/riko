@@ -5,38 +5,80 @@ Tests target registration, write targets, sessions, and the ``write``/``sink`` v
 Covers ``File`` capability resolution, key normalization, ``build_write``
 validation, the native whole-stream vs. temporary singleton converter paths, the
 csv/jsonl/framed serialization contracts, the session lifecycle state machine, and
-the passthrough execution host (``riko.definitions._targets`` and
+passthrough execution (``riko.definitions._targets`` and
 ``riko.runtime._write_session``).
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import pytest
 
-from riko.base._paths import get_path
+from riko import Pipeline
+from riko.bado import as_async
 from riko.definitions._targets import (
     FileTarget,
     build_write,
     normalize_strs,
+    normalize_target,
     resolve_format,
-    resolve_target,
     validate_target_mode,
 )
+from riko.definitions._workflow import WriteNode
 from riko.definitions._write import WriteCapabilities, WriteMode, WriteResult
 from riko.execution._resources import FactoryKind, OneShotResource
+from riko.modules.tail import async_pipe as async_tail
+from riko.modules.tail import pipe as tail
 from riko.runtime import _write_session
 from riko.runtime._write_session import (
     _SessionState,
     _SyncFileWriteSession,
+    async_file_write_session,
+    async_write_through,
     file_write_session,
     mint_write_resource,
+    write_through,
 )
-from riko.runtime.collections import AsyncPipe, SyncCollection, SyncPipe
 from riko.types._enums import Backends, Formats
-from tests import skipif_issync
+from tests import async_test, skipif_issync
+
+if TYPE_CHECKING:
+    from riko.types._io import PathLike
+    from riko.types._streams import Feed, Items
 
 ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
+
+
+def _never() -> bool:
+    """Reports a graceful close rather than a termination."""
+    return False
+
+
+def _always() -> bool:
+    """Reports a termination rather than a graceful close."""
+    return True
+
+
+def _sink(items: Items, dest: PathLike, mode: str = "replace", **kwargs) -> WriteResult:
+    """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
+    with file_write_session(build_write(dest, mode, **kwargs)) as session:
+        session.write(items)
+        result = session.finalize()
+
+    return result
+
+
+async def _asink(
+    items: Feed, dest: PathLike, mode: str = "replace", **kwargs
+) -> WriteResult:
+    """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
+    async with async_file_write_session(build_write(dest, mode, **kwargs)) as session:
+        await session.write(items)
+        result = await session.afinalize()
+
+    return result
 
 
 @dataclass(frozen=True)
@@ -56,11 +98,11 @@ class _RecordStore:
 class TestResolveTarget:
     def test_write_target_passes_through(self):
         target = FileTarget("out.json")
-        assert resolve_target(target) is target
+        assert normalize_target(target) is target
 
     def test_non_target_raises(self):
         with pytest.raises(TypeError, match="cannot resolve"):
-            resolve_target(42)  # pyright: ignore[reportArgumentType]
+            normalize_target(42)  # pyright: ignore[reportArgumentType]
 
 
 class TestResolveFormat:
@@ -160,7 +202,7 @@ class TestPrepareWrite:
 
 
 class TestConverterPath:
-    """The native whole-stream path and the temporary singleton path (§34)."""
+    """The native whole-stream path and the temporary singleton path."""
 
     def _spy(self, monkeypatch):
         calls = []
@@ -176,15 +218,15 @@ class TestConverterPath:
 
     def test_sink_converts_whole_stream_once(self, monkeypatch, tmp_path):
         calls = self._spy(monkeypatch)
-        SyncPipe(source=ITEMS).sink(tmp_path / "out.jsonl", mode="replace")
+        _sink(ITEMS, tmp_path / "out.jsonl")
 
         assert len(calls) == 1
         assert calls[0] == ITEMS
 
     def test_passthrough_converts_per_item(self, monkeypatch, tmp_path):
         calls = self._spy(monkeypatch)
-        flow = SyncPipe(source=ITEMS).write(tmp_path / "out.jsonl")
-        yielded = list(flow)
+        prepared = build_write(tmp_path / "out.jsonl")
+        yielded = list(write_through(ITEMS, prepared, terminating=_never))
 
         assert yielded == ITEMS
         assert len(calls) == len(ITEMS)
@@ -193,36 +235,36 @@ class TestConverterPath:
 class TestCsv:
     def test_replace_writes_header_once(self, tmp_path):
         path = tmp_path / "out.csv"
-        SyncPipe(source=ITEMS).sink(path, mode="replace")
+        _sink(ITEMS, path)
         assert path.read_bytes() == b"x\r\n0\r\n1\r\n2\r\n"
 
     def test_append_existing_skips_header(self, tmp_path):
         path = tmp_path / "out.csv"
-        SyncPipe(source=[{"x": 0}]).sink(path, mode="replace")
-        SyncPipe(source=[{"x": 1}]).sink(path, mode="append")
+        _sink([{"x": 0}], path)
+        _sink([{"x": 1}], path, "append")
         assert path.read_bytes() == b"x\r\n0\r\n1\r\n"
 
     def test_append_empty_emits_header(self, tmp_path):
         path = tmp_path / "out.csv"
-        SyncPipe(source=[{"x": 0}]).sink(path, mode="append")
+        _sink([{"x": 0}], path, "append")
         assert path.read_bytes() == b"x\r\n0\r\n"
 
     def test_append_existing_without_newline_inserts_boundary(self, tmp_path):
         path = tmp_path / "out.csv"
         path.write_bytes(b"x\r\n0")
-        SyncPipe(source=[{"x": 1}]).sink(path, mode="append")
+        _sink([{"x": 1}], path, "append")
         assert path.read_bytes() == b"x\r\n0\n1\r\n"
 
     def test_empty_append_does_not_mutate(self, tmp_path):
         path = tmp_path / "out.csv"
         path.write_bytes(b"x\r\n0\r\n")
-        SyncPipe(source=[]).sink(path, mode="append")
+        _sink([], path, "append")
         assert path.read_bytes() == b"x\r\n0\r\n"
 
     def test_passthrough_singleton_preserves_schema(self, tmp_path):
         path = tmp_path / "out.csv"
         rows = [{"a": 1, "b": 2}, {"b": 4, "a": 3}]
-        list(SyncPipe(source=rows).write(path))
+        list(write_through(rows, build_write(path), terminating=_never))
         assert path.read_bytes() == b"a,b\r\n1,2\r\n3,4\r\n"
 
     def test_passthrough_unexpected_field_raises(self, tmp_path):
@@ -230,52 +272,52 @@ class TestCsv:
         rows = [{"a": 1}, {"a": 2, "b": 3}]
 
         with pytest.raises(ValueError, match="unexpected fields"):
-            list(SyncPipe(source=rows).write(path))
+            list(write_through(rows, build_write(path), terminating=_never))
 
 
 class TestJsonl:
     def test_native_stream_has_no_array(self, tmp_path):
         path = tmp_path / "out.jsonl"
-        SyncPipe(source=ITEMS).sink(path, mode="replace")
+        _sink(ITEMS, path)
         assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
 
     def test_singleton_has_no_array(self, tmp_path):
         path = tmp_path / "out.jsonl"
-        list(SyncPipe(source=ITEMS).write(path))
+        list(write_through(ITEMS, build_write(path), terminating=_never))
         assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
 
     def test_append_newline_terminated_concatenates(self, tmp_path):
         path = tmp_path / "out.jsonl"
         path.write_bytes(b'{"x": 0}\n')
-        SyncPipe(source=[{"x": 1}]).sink(path, mode="append")
+        _sink([{"x": 1}], path, "append")
         assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n'
 
     def test_append_unterminated_inserts_one_boundary(self, tmp_path):
         path = tmp_path / "out.jsonl"
         path.write_bytes(b'{"x": 0}')
-        SyncPipe(source=[{"x": 1}]).sink(path, mode="append")
+        _sink([{"x": 1}], path, "append")
         assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n'
 
     def test_empty_append_does_not_mutate(self, tmp_path):
         path = tmp_path / "out.jsonl"
         path.write_bytes(b'{"x": 0}\n')
-        SyncPipe(source=[]).sink(path, mode="append")
+        _sink([], path, "append")
         assert path.read_bytes() == b'{"x": 0}\n'
 
 
 class TestFramed:
     def test_passthrough_buffers_until_finalize(self, tmp_path):
         path = tmp_path / "out.json"
-        flow = SyncPipe(source=ITEMS).write(path)
-        next(flow)
+        stream = write_through(ITEMS, build_write(path), terminating=_never)
+        next(stream)
         assert not path.exists()
-        list(flow)
+        list(stream)
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
     def test_sink_writes_one_document(self, tmp_path):
         path = tmp_path / "out.json"
-        flow = SyncPipe(source=ITEMS).sink(path, mode="replace")
-        assert flow.written > 0
+        result = _sink(ITEMS, path)
+        assert result.written > 0
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
     def test_abort_discards_staged_document(self, tmp_path):
@@ -395,149 +437,222 @@ class TestSessionLifecycle:
 
 class TestSyncWriteExecution:
     def test_passthrough_preserves_stream(self, tmp_path):
-        flow = SyncPipe(source=ITEMS).write(tmp_path / "out.json")
-        assert list(flow) == ITEMS
+        prepared = build_write(tmp_path / "out.json")
+        assert list(write_through(ITEMS, prepared, terminating=_never)) == ITEMS
 
     def test_writes_mid_chain(self, tmp_path):
         path = tmp_path / "out.json"
-        flow = SyncPipe(source=ITEMS).write(path).tail(conf={"count": 1})
-        assert list(flow) == [{"x": 2}]
+        stream = write_through(ITEMS, build_write(path), terminating=_never)
+        assert list(tail(stream, conf={"count": 1})) == [{"x": 2}]
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
     def test_replace_defers_truncation_until_consumed(self, tmp_path):
         path = tmp_path / "out.jsonl"
         path.write_bytes(b'{"old": 1}\n')
-        flow = SyncPipe(source=ITEMS).write(path, mode="replace")
+        prepared = build_write(path, "replace")
+        stream = write_through(ITEMS, prepared, terminating=_never)
         assert path.read_bytes() == b'{"old": 1}\n'
-        list(flow)
+        list(stream)
         assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
 
     def test_graceful_close_finalizes_prefix(self, tmp_path):
         path = tmp_path / "out.json"
-        flow = SyncPipe(source=ITEMS).write(path)
-        next(flow)
-        flow.close()
+        stream = write_through(ITEMS, build_write(path), terminating=_never)
+        next(stream)
+        stream.close()
         assert path.read_bytes() == b'[{"x": 0}]'
 
     def test_terminate_aborts(self, tmp_path):
         path = tmp_path / "out.json"
-        flow = SyncPipe(source=ITEMS).write(path)
-        next(flow)
-        flow.terminate()
-        assert flow._terminating
+        stream = write_through(ITEMS, build_write(path), terminating=_always)
+        next(stream)
+        stream.close()
         assert not path.exists()
 
-    def test_exceptional_context_exit_aborts(self, tmp_path):
+    def test_exception_aborts(self, tmp_path):
         path = tmp_path / "out.json"
+        stream = write_through(ITEMS, build_write(path), terminating=_never)
+        next(stream)
 
-        def boom():
-            with SyncPipe(source=ITEMS).write(path) as flow:
-                next(flow)
-                raise RuntimeError("boom")
-
-        with pytest.raises(RuntimeError):
-            boom()
+        with pytest.raises(RuntimeError, match="boom"):
+            stream.throw(RuntimeError("boom"))
 
         assert not path.exists()
 
 
 @skipif_issync
 class TestAsyncWriteExecution:
-    @pytest.mark.anyio
+    @async_test
     async def test_passthrough_preserves_stream(self, tmp_path):
-        flow = AsyncPipe(source=ITEMS).write(tmp_path / "out.json")
-        assert [item async for item in flow] == ITEMS
+        prepared = build_write(tmp_path / "out.json")
+        stream = async_write_through(as_async(ITEMS), prepared, terminating=_never)
+        assert [item async for item in stream] == ITEMS
 
-    @pytest.mark.anyio
+    @async_test
     async def test_writes_mid_chain(self, tmp_path):
         path = tmp_path / "out.json"
-        flow = AsyncPipe(source=ITEMS).write(path).tail(conf={"count": 1})
-        assert [item async for item in flow] == [{"x": 2}]
+        stream = async_write_through(
+            as_async(ITEMS), build_write(path), terminating=_never
+        )
+        tailed = async_tail(stream, conf={"count": 1})
+        assert [item async for item in tailed] == [{"x": 2}]
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
-    @pytest.mark.anyio
+    @async_test
     async def test_csv_singleton_preserves_schema(self, tmp_path):
         path = tmp_path / "out.csv"
         rows = [{"a": 1, "b": 2}, {"b": 4, "a": 3}]
-        _ = [item async for item in AsyncPipe(source=rows).write(path)]
+        stream = async_write_through(
+            as_async(rows), build_write(path), terminating=_never
+        )
+        _ = [item async for item in stream]
         assert path.read_bytes() == b"a,b\r\n1,2\r\n3,4\r\n"
 
-    @pytest.mark.xfail(
-        reason="async early-close lifecycle semantics is not yet implemented",
-        strict=True,
-    )
-    @pytest.mark.anyio
+    @async_test
     async def test_graceful_close_finalizes_prefix(self, tmp_path):
         path = tmp_path / "out.json"
-        flow = AsyncPipe(source=ITEMS).write(path)
-        await anext(flow)
-        await flow.aclose()
+        stream = async_write_through(
+            as_async(ITEMS), build_write(path), terminating=_never
+        )
+        await anext(stream)
+        await stream.aclose()
         assert path.read_bytes() == b'[{"x": 0}]'
 
-    @pytest.mark.xfail(
-        reason="async terminate/abort semantics is not yet implemented", strict=True
-    )
-    @pytest.mark.anyio
+    @async_test
     async def test_terminate_aborts(self, tmp_path):
         path = tmp_path / "out.json"
-        flow = AsyncPipe(source=ITEMS).write(path)
-        await anext(flow)
-        await flow.terminate()
-        assert flow._terminating
+        stream = async_write_through(
+            as_async(ITEMS), build_write(path), terminating=_always
+        )
+        await anext(stream)
+        await stream.aclose()
         assert not path.exists()
 
-    @pytest.mark.xfail(
-        reason="exception-sensitive async context exit is not yet implemented",
-        strict=True,
-    )
-    @pytest.mark.anyio
-    async def test_exceptional_context_exit_aborts(self, tmp_path):
+    @async_test
+    async def test_exception_aborts(self, tmp_path):
         path = tmp_path / "out.json"
+        stream = async_write_through(
+            as_async(ITEMS), build_write(path), terminating=_never
+        )
+        await anext(stream)
 
-        async def boom():
-            async with AsyncPipe(source=ITEMS).write(path) as flow:
-                await anext(flow)
-                raise RuntimeError("boom")
-
-        with pytest.raises(RuntimeError):
-            await boom()
+        with pytest.raises(RuntimeError, match="boom"):
+            await stream.athrow(RuntimeError("boom"))
 
         assert not path.exists()
 
-
-class TestPassthroughHost:
-    def test_write_does_not_rerun_preceding_module(self, tmp_path):
-        once = list(SyncPipe(source=ITEMS).hash())
-        through = list(SyncPipe(source=ITEMS).hash().write(tmp_path / "out.json"))
-        assert through == once
-
-    def test_write_returns_identity_pipe(self, tmp_path):
-        flow = SyncPipe(source=ITEMS).write(tmp_path / "out.json")
-        assert isinstance(flow, SyncPipe)
-        assert flow.name == ""
-
-    def test_collection_write_has_no_name_attribute_error(self, tmp_path):
-        path = tmp_path / "out.csv"
-        sources = [{"url": get_path("feed.xml")}]
-        flow = SyncCollection(sources).write(path)
-        assert isinstance(flow, SyncPipe)
-        assert flow.name == ""
-        assert list(flow)
-        assert path.exists()
+    @async_test
+    async def test_whole_stream_writes_one_document(self, tmp_path):
+        path = tmp_path / "out.json"
+        result = await _asink(ITEMS, path)
+        assert result.written > 0
+        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
 
 class TestSink:
     def test_terminal_returns_result(self, tmp_path):
-        path = tmp_path / "out.json"
-        flow = SyncPipe(source=ITEMS).sink(path, mode="replace")
+        result = _sink(ITEMS, tmp_path / "out.json")
 
-        assert isinstance(flow, WriteResult)
-        assert flow.written > 0
+        assert isinstance(result, WriteResult)
+        assert result.written > 0
 
     def test_file_rejects_keys(self, tmp_path):
         with pytest.raises(ValueError, match="forbids 'keys'"):
-            SyncPipe(source=ITEMS).sink(tmp_path / "out.csv", keys="x")
+            build_write(tmp_path / "out.csv", keys="x")
 
     def test_non_file_target_execution_unsupported(self):
+        prepared = build_write(_RecordStore(), "replace")
+
+        with (
+            pytest.raises(NotImplementedError, match="only file targets"),
+            file_write_session(prepared),
+        ):
+            pass  # pragma: no cover
+
+
+WRITE_NODE_PENDING = pytest.mark.xfail(
+    strict=True, reason="write nodes do not execute yet"
+)
+
+
+class TestPipelineWriteDefinition:
+    """The ``write`` verb validates its destination when the node is declared."""
+
+    def test_file_rejects_keys(self, tmp_path):
+        with pytest.raises(ValueError, match="forbids 'keys'"):
+            Pipeline(source=ITEMS).write(tmp_path / "out.csv", keys="x")
+
+    def test_declares_the_resolved_format_and_mode(self, tmp_path):
+        pipeline = Pipeline(source=ITEMS).write(tmp_path / "out.csv", mode="append")
+        node = pipeline.workflow.nodes["write-1"]
+        assert isinstance(node, WriteNode)
+        assert (node.fmt, node.mode, node.keys) == (Formats.CSV, WriteMode.APPEND, ())
+
+
+@WRITE_NODE_PENDING
+class TestPipelineWrite:
+    """The ``write`` verb at the pipeline level, once a write node can run."""
+
+    def test_passthrough_preserves_stream(self, tmp_path):
+        pipeline = Pipeline(source=ITEMS).write(tmp_path / "out.json")
+        assert list(pipeline) == ITEMS
+
+    def test_writes_mid_chain(self, tmp_path):
+        path = tmp_path / "out.json"
+        pipeline = Pipeline(source=ITEMS).write(path).tail(conf={"count": 1})
+        assert list(pipeline) == [{"x": 2}]
+        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
+
+    def test_replace_defers_truncation_until_consumed(self, tmp_path):
+        path = tmp_path / "out.jsonl"
+        path.write_bytes(b'{"old": 1}\n')
+        pipeline = Pipeline(source=ITEMS).write(path, mode="replace")
+        assert path.read_bytes() == b'{"old": 1}\n'
+        list(pipeline)
+        assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
+
+    def test_graceful_close_finalizes_prefix(self, tmp_path):
+        path = tmp_path / "out.json"
+        stream = iter(Pipeline(source=ITEMS).write(path))
+        next(stream)
+        stream.close()
+        assert path.read_bytes() == b'[{"x": 0}]'
+
+    def test_exception_aborts(self, tmp_path):
+        path = tmp_path / "out.json"
+        stream = iter(Pipeline(source=ITEMS).write(path))
+        next(stream)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            stream.throw(RuntimeError("boom"))
+
+        assert not path.exists()
+
+    def test_csv_writes_the_header_once(self, tmp_path):
+        path = tmp_path / "out.csv"
+        list(Pipeline(source=ITEMS).write(path))
+        assert path.read_bytes() == b"x\r\n0\r\n1\r\n2\r\n"
+
+    def test_jsonl_has_no_array(self, tmp_path):
+        path = tmp_path / "out.jsonl"
+        list(Pipeline(source=ITEMS).write(path))
+        assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
+
+    def test_leaf_write_produces_one_framed_document(self, tmp_path):
+        path = tmp_path / "out.json"
+        pipeline = Pipeline(source=ITEMS).hash(options={"assign": "h"}).write(path)
+        assert len(list(pipeline)) == len(ITEMS)
+        assert path.read_bytes().startswith(b"[")
+        assert path.read_bytes().endswith(b"]")
+
+    def test_non_file_target_execution_unsupported(self):
+        pipeline = Pipeline(source=ITEMS).write(_RecordStore())
+
         with pytest.raises(NotImplementedError, match="only file targets"):
-            SyncPipe(source=ITEMS).sink(_RecordStore(), mode="replace")
+            list(pipeline)
+
+    def test_write_does_not_rerun_preceding_module(self, tmp_path):
+        once = list(Pipeline(source=ITEMS).hash(options={"assign": "h"}))
+        source = Pipeline(source=ITEMS).hash(options={"assign": "h"})
+        through = list(source.write(tmp_path / "out.json"))
+        assert through == once

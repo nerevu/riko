@@ -5,7 +5,7 @@ Tests for the ``normalize_workflow`` authoring-sugar normalization boundary.
 These cover the structural, contract-free pass: node id generation and family
 dispatch, enum coercion, legacy port aliases, edge-alias rejection, publish-edge
 detection, omitted-outputs materialization, input shorthand, resource sugar, and
-idempotency over an already-canonical authoring mapping.
+idempotency over an already-canonical RawWorkflow.
 """
 
 from types import MappingProxyType
@@ -19,7 +19,7 @@ from riko.definitions._workflow import (
     ReadNode,
     StreamEdge,
     SubscribeNode,
-    WorkflowSpec,
+    Workflow,
     WriteNode,
 )
 from riko.definitions._write import WriteMode
@@ -50,25 +50,25 @@ def test_normalize_port_maps_open_ended_legacy_series(legacy, direction, canonic
 
 
 def test_list_nodes_generate_occurrence_ids():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {"nodes": [{"name": "fetch"}, {"name": "filter"}, {"name": "filter"}]}
     )
-    assert list(spec.nodes) == ["fetch-1", "filter-1", "filter-2"]
+    assert list(workflow.nodes) == ["fetch-1", "filter-1", "filter-2"]
 
 
 def test_mapping_nodes_keep_explicit_ids():
-    spec = normalize_workflow({"nodes": {"a": {"name": "fetch"}}})
-    assert isinstance(spec.nodes["a"], ModuleNode)
-    assert spec.nodes["a"].name == "fetch"
+    workflow = normalize_workflow({"nodes": {"a": {"name": "fetch"}}})
+    assert isinstance(workflow.nodes["a"], ModuleNode)
+    assert workflow.nodes["a"].name == "fetch"
 
 
 def test_explicit_id_in_list_is_preserved():
-    spec = normalize_workflow({"nodes": [{"id": "keep", "name": "fetch"}]})
-    assert list(spec.nodes) == ["keep"]
+    workflow = normalize_workflow({"nodes": [{"id": "keep", "name": "fetch"}]})
+    assert list(workflow.nodes) == ["keep"]
 
 
 def test_family_dispatch_and_enum_coercion():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [
                 {"name": "read", "type": "read", "backend": "file", "fmt": "csv"},
@@ -83,8 +83,8 @@ def test_family_dispatch_and_enum_coercion():
             ]
         }
     )
-    read = spec.nodes["read-1"]
-    write = spec.nodes["write-1"]
+    read = workflow.nodes["read-1"]
+    write = workflow.nodes["write-1"]
     assert isinstance(read, ReadNode)
     assert read.backend is Backends.FILE
     assert read.fmt is Formats.CSV
@@ -111,7 +111,7 @@ def test_missing_node_name_raises():
 
 
 def test_legacy_ports_map_to_canonical_grammar():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [{"id": "a", "name": "fetch"}, {"id": "b", "name": "join"}],
             "edges": [
@@ -122,19 +122,19 @@ def test_legacy_ports_map_to_canonical_grammar():
             ],
         }
     )
-    edge = spec.edges[0]
+    edge = workflow.edges[0]
     assert edge.source == Endpoint("a", "out")
     assert edge.target == Endpoint("b", "in:1")
 
 
 def test_default_ports_when_omitted():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [{"id": "a", "name": "fetch"}, {"id": "b", "name": "filter"}],
             "edges": [{"source": {"node": "a"}, "target": {"node": "b"}}],
         }
     )
-    assert spec.edges[0] == StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))
+    assert workflow.edges[0] == StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))
 
 
 @pytest.mark.parametrize("alias", ["src", "tgt", "from", "to"])
@@ -149,7 +149,7 @@ def test_edge_shorthand_aliases_rejected(alias):
 
 
 def test_publish_edge_detected_from_subscribe_target():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [
                 {"id": "a", "name": "fetch"},
@@ -158,76 +158,76 @@ def test_publish_edge_detected_from_subscribe_target():
             "edges": [{"source": {"node": "a"}, "target": {"node": "s"}}],
         }
     )
-    assert isinstance(spec.nodes["s"], SubscribeNode)
-    assert isinstance(spec.edges[0], PublishEdge)
+    assert isinstance(workflow.nodes["s"], SubscribeNode)
+    assert isinstance(workflow.edges[0], PublishEdge)
 
 
 def test_omitted_outputs_materialize_single_leaf():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [{"id": "a", "name": "fetch"}, {"id": "b", "name": "filter"}],
             "edges": [{"source": {"node": "a"}, "target": {"node": "b"}}],
         }
     )
-    assert spec.outputs == {"default": Endpoint("b", "out")}
+    assert workflow.outputs == {"default": Endpoint("b", "out")}
 
 
 def test_omitted_outputs_empty_when_ambiguous():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {"nodes": [{"id": "a", "name": "fetch"}, {"id": "b", "name": "other"}]}
     )
-    assert spec.outputs == {}
+    assert workflow.outputs == {}
 
 
 def test_explicit_outputs_alias_ports():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [{"id": "a", "name": "route"}],
             "outputs": {"errors": {"node": "a", "port": "_OUTPUT2"}},
         }
     )
-    assert spec.outputs == {"errors": Endpoint("a", "out:1")}
+    assert workflow.outputs == {"errors": Endpoint("a", "out:1")}
 
 
 def test_input_string_shorthand_becomes_schema():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {"nodes": [{"id": "a", "name": "fetch"}], "inputs": {"customer_id": "string"}}
     )
-    assert spec.inputs["customer_id"] == {"type": "string"}
+    assert workflow.inputs["customer_id"] == {"type": "string"}
 
 
 def test_input_mapping_passes_through():
     schema = {"type": "integer", "default": 0}
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {"nodes": [{"id": "a", "name": "fetch"}], "inputs": {"n": schema}}
     )
-    assert spec.inputs["n"] == schema
+    assert workflow.inputs["n"] == schema
 
 
 def test_bare_string_resource_binds_to_itself():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {"nodes": [{"id": "a", "name": "fetch", "resources": "db"}]}
     )
-    assert spec.nodes["a"].resources == {"db": "db"}
+    assert workflow.nodes["a"].resources == {"db": "db"}
 
 
 def test_top_level_resources_normalize_to_tuple():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {"nodes": [{"id": "a", "name": "fetch"}], "resources": ["db", "cache"]}
     )
-    assert spec.resources == ("db", "cache")
+    assert workflow.resources == ("db", "cache")
 
 
 def test_top_level_resources_accept_bare_string():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {"nodes": [{"id": "a", "name": "fetch"}], "resources": "db"}
     )
-    assert spec.resources == ("db",)
+    assert workflow.resources == ("db",)
 
 
 def test_version_defaults_to_v2():
-    spec = normalize_workflow({"nodes": [{"id": "a", "name": "fetch"}]})
-    assert spec.version == "2"
+    workflow = normalize_workflow({"nodes": [{"id": "a", "name": "fetch"}]})
+    assert workflow.version == "2"
 
 
 def test_duplicate_ids_rejected():
@@ -261,7 +261,7 @@ def test_unknown_node_field_rejected():
 
 
 def test_unknown_top_level_field_rejected():
-    with pytest.raises(InvalidPipelineError, match="unknown WorkflowSpec field"):
+    with pytest.raises(InvalidPipelineError, match="unknown Workflow field"):
         normalize_workflow({"nodes": [{"name": "fetch"}], "bogus": 1})
 
 
@@ -294,7 +294,7 @@ def test_unknown_edge_family_rejected():
 
 
 def test_explicit_stream_family_to_subscribe_is_preserved():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [
                 {"id": "a", "name": "fetch"},
@@ -305,7 +305,7 @@ def test_explicit_stream_family_to_subscribe_is_preserved():
             ],
         }
     )
-    assert isinstance(spec.edges[0], StreamEdge)
+    assert isinstance(workflow.edges[0], StreamEdge)
 
 
 @pytest.mark.parametrize("port", ["out:", "bogus:x", ""])
@@ -322,8 +322,10 @@ def test_invalid_port_rejected(port):
 
 
 def test_explicit_empty_outputs_not_materialized():
-    spec = normalize_workflow({"nodes": [{"id": "a", "name": "fetch"}], "outputs": {}})
-    assert spec.outputs == {}
+    workflow = normalize_workflow(
+        {"nodes": [{"id": "a", "name": "fetch"}], "outputs": {}}
+    )
+    assert workflow.outputs == {}
 
 
 def test_falsey_conf_rejected_not_coerced():
@@ -332,22 +334,24 @@ def test_falsey_conf_rejected_not_coerced():
 
 
 def test_write_dest_is_preserved():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [
                 {"name": "w", "type": "write", "backend": "file", "dest": "out.json"}
             ]
         }
     )
-    write = spec.nodes["w-1"]
+    write = workflow.nodes["w-1"]
     assert isinstance(write, WriteNode)
     assert write.dest == "out.json"
 
 
 def test_node_conf_is_isolated_from_caller_mutation():
     conf = {"limit": 5}
-    spec = normalize_workflow({"nodes": [{"id": "a", "name": "fetch", "conf": conf}]})
-    node = spec.nodes["a"]
+    workflow = normalize_workflow(
+        {"nodes": [{"id": "a", "name": "fetch", "conf": conf}]}
+    )
+    node = workflow.nodes["a"]
     conf["limit"] = 99
     assert isinstance(node, ModuleNode)
     assert node.conf == {"limit": 5}
@@ -370,7 +374,7 @@ def test_normalizing_a_spec_is_a_fixed_point():
 def test_normalize_recanonicalizes_a_hand_built_spec():
     a = ModuleNode(id="a", name="fetch")
     b = ModuleNode(id="b", name="filter")
-    hand = WorkflowSpec(
+    hand = Workflow(
         nodes={"a": a, "b": b},
         edges=(StreamEdge(Endpoint("a", "_OUTPUT"), Endpoint("b", "_OTHER2")),),
         outputs={"default": Endpoint("b", "_OUTPUT")},
@@ -388,8 +392,8 @@ def test_mapping_key_conflicting_inner_id_rejected():
 
 
 def test_mapping_key_matching_inner_id_allowed():
-    spec = normalize_workflow({"nodes": {"a": {"id": "a", "name": "fetch"}}})
-    assert list(spec.nodes) == ["a"]
+    workflow = normalize_workflow({"nodes": {"a": {"id": "a", "name": "fetch"}}})
+    assert list(workflow.nodes) == ["a"]
 
 
 def test_unknown_endpoint_field_rejected():
@@ -405,7 +409,7 @@ def test_unknown_endpoint_field_rejected():
 
 
 def test_format_alias_maps_to_fmt():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [
                 {
@@ -418,7 +422,7 @@ def test_format_alias_maps_to_fmt():
             ]
         }
     )
-    read = spec.nodes["r"]
+    read = workflow.nodes["r"]
     assert isinstance(read, ReadNode)
     assert read.fmt is Formats.CSV
 
@@ -455,7 +459,7 @@ def test_bad_index_ports_rejected(port):
 
 
 def test_named_input_port_canonicalized():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [{"id": "a", "name": "f"}, {"id": "b", "name": "g"}],
             "edges": [
@@ -463,11 +467,11 @@ def test_named_input_port_canonicalized():
             ],
         }
     )
-    assert spec.edges[0].target.port == "in:count"
+    assert workflow.edges[0].target.port == "in:count"
 
 
 def test_legacy_prefix_with_non_numeric_suffix_is_not_misconverted():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [{"id": "a", "name": "f"}, {"id": "b", "name": "g"}],
             "edges": [
@@ -475,18 +479,18 @@ def test_legacy_prefix_with_non_numeric_suffix_is_not_misconverted():
             ],
         }
     )
-    assert spec.edges[0].target.port == "in:count"
+    assert workflow.edges[0].target.port == "in:count"
 
 
 def test_authoring_call_options_are_accepted():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [
                 {"name": "tokenizer", "options": {"field": "title", "count": "first"}}
             ]
         }
     )
-    node = spec.nodes["tokenizer-1"]
+    node = workflow.nodes["tokenizer-1"]
     assert isinstance(node, ModuleNode)
     assert node.options == {"field": "title", "count": "first"}
     assert node.conf == {}
@@ -499,11 +503,11 @@ def test_unknown_call_option_is_rejected():
 
 def test_nested_conf_is_deeply_frozen_and_isolated():
     inner = {"k": 1}
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {"nodes": [{"id": "a", "name": "f", "conf": {"nested": inner, "list": [1, 2]}}]}
     )
     inner["k"] = 99
-    node = spec.nodes["a"]
+    node = workflow.nodes["a"]
     assert isinstance(node, ModuleNode)
     assert node.conf is not None
     assert node.conf.get("nested") == {"k": 1}
@@ -512,14 +516,14 @@ def test_nested_conf_is_deeply_frozen_and_isolated():
 
 
 def test_authoring_embed_becomes_a_read_only_node_field():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [
                 {"name": "loop", "embed": {"name": "tokenizer", "conf": {"d": " "}}}
             ]
         }
     )
-    node = spec.nodes["loop-1"]
+    node = workflow.nodes["loop-1"]
     assert isinstance(node, ModuleNode)
     assert node.embed == {"name": "tokenizer", "conf": {"d": " "}}
     assert isinstance(node.embed, MappingProxyType)
@@ -527,10 +531,10 @@ def test_authoring_embed_becomes_a_read_only_node_field():
 
 
 def test_embed_conf_defaults_to_empty_when_omitted():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {"nodes": [{"name": "loop", "embed": {"name": "tokenizer"}}]}
     )
-    node = spec.nodes["loop-1"]
+    node = workflow.nodes["loop-1"]
     assert isinstance(node, ModuleNode)
     assert node.embed == {"name": "tokenizer", "conf": {}}
 
@@ -548,11 +552,11 @@ def test_embed_without_a_name_is_rejected():
 
 
 def test_normalizing_a_spec_with_an_embed_is_a_fixed_point():
-    spec = normalize_workflow(
+    workflow = normalize_workflow(
         {
             "nodes": [
                 {"name": "loop", "embed": {"name": "tokenizer", "conf": {"d": " "}}}
             ]
         }
     )
-    assert normalize_workflow(spec) == spec
+    assert normalize_workflow(workflow) == workflow
