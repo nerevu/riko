@@ -94,6 +94,12 @@ jobs:
             echo "Unconditional pytest skips are not permitted."
             exit 1
           fi
+      - name: Reject direct async-extra imports in tests
+        run: |
+          if grep -rnE --include='*.py' "^\s*(import|from) (anyio|asyncer|httpx)\b" tests; then
+            echo "Import async primitives from riko.bado._backend; the async extra is optional."
+            exit 1
+          fi
       - name: Install (optional=${{ matrix.optional }})
         run: |
           if [ "${{ matrix.optional }}" = "true" ]; then

@@ -66,7 +66,8 @@ Streaming json parsing    ``ijson``           ``python -m pip install "riko[perf
 OFX/QIF export            csv2ofx             ``python -m pip install "riko[finance]"``
 ========================  ==================  =========================================
 
-- ``async`` enables the ``AsyncPipe`` and ``AsyncCollection`` APIs.
+- ``async`` enables asynchronous iteration of a ``Pipeline`` (``async for``) and the
+  async I/O helpers.
 - ``perf`` enables accelerated / streaming parser paths; without ``lxml``, ``riko``
   falls back to the built-in Python XML parser; without ``fastfeedparser`` it falls back
   to `feedparser`_.
@@ -110,14 +111,14 @@ chaining work:
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import Pipeline
     >>>
     >>> conf = {'attrs': {'key': 'content', 'value': 'a'}}
-    >>> next(SyncPipe('itembuilder', conf=conf).count())
+    >>> next(iter(Pipeline.from_module('itembuilder', conf=conf).count()))
     {'count': 1}
 
-For the asynchronous API, first install the ``async`` extra, then use
-``AsyncPipe`` with ``async for`` or ``await`` as shown in the `cookbook`_.
+For the asynchronous API, first install the ``async`` extra, then iterate the same
+``Pipeline`` with ``async for`` as shown in the `cookbook`_.
 
 Troubleshooting
 ---------------

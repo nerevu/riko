@@ -40,7 +40,7 @@ number of times each word appears.
 
 .. code-block:: python
 
-    >>> from riko import get_path, Sources, SyncPipe
+    >>> from riko import get_path, Pipeline, Sources
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -57,16 +57,17 @@ number of times each word appears.
     ...     'rule': [{'find': '\r\n', 'replace': ' '}, {'find': '\n', 'replace': ' '}]
     ... }
     >>>
-    >>> flow = (
-    ...     SyncPipe(Sources.FETCHPAGE, conf=fetch_conf)      # 2
-    ...     .strreplace(conf=replace_conf, assign='content')  # 3
-    ...     .tokenizer(conf={'delimiter': ' '}, emit=True)    # 4
-    ...     .count(conf={'count_key': 'content'})             # 5
+    >>> pipeline = (
+    ...     Pipeline.from_module(Sources.FETCHPAGE, conf=fetch_conf)          # 2
+    ...     .strreplace(conf=replace_conf, options={'assign': 'content'})     # 3
+    ...     .tokenizer(conf={'delimiter': ' '}, options={'emit': True})       # 4
+    ...     .count(conf={'count_key': 'content'})                             # 5
     ... )
     >>>
-    >>> next(flow)
+    >>> stream = iter(pipeline)
+    >>> next(stream)
     {'Tidy': 1}
-    >>> next(flow)
+    >>> next(stream)
     {'your': 1}
 
 Motivation
@@ -80,8 +81,8 @@ particular, I wanted to fetch RSS feeds and web pages and process records withou
 needing to deploy a scheduler, cluster, or message queue.
 
 The basic idea is deliberately simple: dictionary-like records flow through configurable
-pipes. Pipelines can run synchronously, asynchronous via async/await, or
-parallelized across threads or processes.
+pipes. A pipeline is an immutable definition that can run synchronously (or
+asynchronously via async/await), and spread work across threads or processes.
 
 Why you should use riko
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -97,7 +98,7 @@ In particular, riko provides:
 - synchronous and asynchronous APIs
 - local thread and process-pool execution
 - lazy iterator-oriented processing
-- simple Python or JSON pipeline configuration and definition
+- workflows written in Python or stored as JSON
 - tools to inspect, execute, and compile pipelines
 
 Why you shouldn't use riko
@@ -170,8 +171,8 @@ places more emphasis on continuous push-based streams, windowing, and reactive d
 ``riko`` provides more "batteries included" data-processing vocabulary. It exposes common
 operations (filtering, truncating, searching, etc.) as configurable, reusable ``pipes``
 rather than requiring a Python callable. ``riko`` also provides first-class support for
-web-content (RSS/Atom feeds, HTML/XML, and JSON) and a simple JSON-based pipeline
-definition format.
+web-content (RSS/Atom feeds, HTML/XML, and JSON) and a simple JSON format for storing
+workflows.
 
 Design Principles
 -----------------
@@ -181,25 +182,25 @@ Overview
 
 Here's the ``riko`` vocabulary at a glance:
 
-+---------------------+---------------------------------------+--------------------------------------------------+
-| Term                | Meaning                               | Example                                          |
-+=====================+=======================================+==================================================+
-| ``item``            | one dictionary-like record            | ``{'title': 'Example'}``                         |
-+---------------------+---------------------------------------+--------------------------------------------------+
-| ``stream``          | an iterator of ``item``               | ``iter([{'title': 'Example'}])`` or ``SyncPipe`` |
-+---------------------+---------------------------------------+--------------------------------------------------+
-| ``pipe``            | a configured stream operation         | ``join``, ``slugify``, ``uniq``                  |
-+---------------------+---------------------------------------+--------------------------------------------------+
-| ``operator``        | a pipe that consumes a ``stream``     | ``count``, ``filter``, ``reverse``               |
-+---------------------+---------------------------------------+--------------------------------------------------+
-| ``processor``       | a pipe that consumes an ``item``      | ``urlparse``, ``fetch``, ``hash``                |
-+---------------------+---------------------------------------+--------------------------------------------------+
-| ``splitter``        | a pipe returning multiple ``streams`` | ``split``                                        |
-+---------------------+---------------------------------------+--------------------------------------------------+
-| ``flow`` / pipeline | a chain of configured ``pipes``       | ``SyncPipe(...).count()``                        |
-+---------------------+---------------------------------------+--------------------------------------------------+
-| ``Context``         | runtime inputs + ``ExecutionMode``    | ``Context(inputs=...)``                          |
-+---------------------+---------------------------------------+--------------------------------------------------+
++---------------------+---------------------------------------+----------------------------------------------------+
+| Term                | Meaning                               | Example                                            |
++=====================+=======================================+====================================================+
+| ``item``            | one dictionary-like record            | ``{'title': 'Example'}``                           |
++---------------------+---------------------------------------+----------------------------------------------------+
+| ``stream``          | an iterator of ``item``               | ``iter([{'title': 'Example'}])``                   |
++---------------------+---------------------------------------+----------------------------------------------------+
+| ``pipe``            | a configured stream operation         | ``join``, ``slugify``, ``uniq``                    |
++---------------------+---------------------------------------+----------------------------------------------------+
+| ``operator``        | a pipe that consumes a ``stream``     | ``count``, ``filter``, ``reverse``                 |
++---------------------+---------------------------------------+----------------------------------------------------+
+| ``processor``       | a pipe that consumes an ``item``      | ``urlparse``, ``fetch``, ``hash``                  |
++---------------------+---------------------------------------+----------------------------------------------------+
+| ``splitter``        | a pipe returning multiple ``streams`` | ``split``                                          |
++---------------------+---------------------------------------+----------------------------------------------------+
+| ``pipeline``        | a chain of configured ``pipes``       | ``Pipeline.from_module(...).count()``              |
++---------------------+---------------------------------------+----------------------------------------------------+
+| ``Context``         | runtime inputs + ``ExecutionMode``    | ``Context(inputs=...)``                            |
++---------------------+---------------------------------------+----------------------------------------------------+
 
 Core concepts
 ^^^^^^^^^^^^^
@@ -212,8 +213,10 @@ create a ``stream`` manually with something as simple as
 ``stream`` or ``item``, and returns a ``stream``.
 
 
-Through ``SyncPipe`` and ``AsyncPipe`` classes, ``pipes`` are composable: the output of
-each ``pipe`` is the input to the next ``pipe``.
+Through the ``Pipeline`` class, ``pipes`` are composable: the output of each ``pipe``
+is the input to the next ``pipe``. ``Pipeline(source=items)`` seeds a ``pipeline``
+with an existing ``stream``, ``.pipe(name, conf=..., options=...)`` appends a ``pipe``,
+and iterating the ``pipeline`` runs it.
 
 
 ``riko`` ``pipes`` come in three types: ``processor``, ``operator``, and ``splitter``.
@@ -222,34 +225,37 @@ E.g., ``count``, ``filter``, and ``reverse``.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, Transforms
+    >>> from riko import Pipeline, Transforms
     >>>
     >>> items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> stream = SyncPipe(Transforms.REVERSE, items)
-    >>> next(stream)
+    >>> pipeline = Pipeline(source=items).pipe(Transforms.REVERSE)
+    >>> pipeline.first()
     {'title': 'riko pt. 2'}
 
-A ``processor`` processes an individual ``item`` and can be parallelized across
-threads or processes. E.g., ``fetchsitefeed``, ``hash``, ``itembuilder``, and ``regex``.
+A ``processor`` processes an individual ``item``. E.g., ``fetchsitefeed``, ``hash``,
+``itembuilder``, and ``regex``. Call options such as ``field``, ``assign``, and ``emit``
+are passed as the ``options`` mapping.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, Transforms
+    >>> from riko import Pipeline, Transforms
     >>>
     >>> items = [{'title': 'riko pt. 1'}]
-    >>> stream = SyncPipe(Transforms.HASH, items, field='title')
-    >>> next(stream)['hash']
+    >>> pipeline = Pipeline(source=items).pipe(Transforms.HASH, options={'field': 'title'})
+    >>> pipeline.first()['hash']
     1104819838
 
 Some ``processors``, e.g., ``tokenizer``, return multiple results.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, Transforms
+    >>> from riko import Pipeline, Transforms
     >>>
     >>> items = [{'title': 'riko pt. 1'}]
-    >>> stream = SyncPipe(Transforms.TOKENIZER, items, conf={'delimiter': ' '}, field='title')
-    >>> list(stream)
+    >>> pipeline = Pipeline(source=items).pipe(
+    ...     Transforms.TOKENIZER, conf={'delimiter': ' '}, options={'field': 'title'}
+    ... )
+    >>> list(pipeline)
     [{'content': 'riko'}, {'content': 'pt.'}, {'content': '1'}]
 
 ``operators`` are split into sub-types: ``aggregator``
@@ -260,10 +266,10 @@ some or all ``items`` of an input ``stream``.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, Transforms
+    >>> from riko import Pipeline, Transforms
     >>>
     >>> items = [{'title': 'riko pt 1'}, {'title': 'riko pt 2'}]
-    >>> list(SyncPipe(Transforms.COUNT, items))
+    >>> list(Pipeline(source=items).pipe(Transforms.COUNT))
     [{'count': 2}]
 
 Astute observers may have noticed from the "Word Count" example up top, that ``count``
@@ -271,22 +277,23 @@ can return multiple items if you pass in the ``count_key`` config option.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, Transforms
+    >>> from riko import Pipeline, Transforms
     >>>
-    >>> stream = SyncPipe(Transforms.COUNT, items, conf={'count_key': 'title'})
-    >>> list(stream)
+    >>> pipeline = Pipeline(source=items).pipe(Transforms.COUNT, conf={'count_key': 'title'})
+    >>> list(pipeline)
     [{'riko pt 1': 1}, {'riko pt 2': 1}]
 
-``processors`` are parallelizable and split into sub-types of ``source`` and
-``transformer``. A ``source``, e.g., ``itembuilder``, can create a ``stream``, while
-a ``transformer``, e.g. ``hash`` can only transform a source ``item``.
+``processors`` are split into sub-types of ``source`` and ``transformer``. A
+``source``, e.g., ``itembuilder``, can create a ``stream``, while a ``transformer``,
+e.g. ``hash`` can only transform a source ``item``. ``Pipeline.from_module`` seeds a
+``pipeline`` with a ``source`` ``pipe`` instead of an existing ``stream``.
 
 .. code-block:: python
 
-    >>> from riko import Sources, SyncPipe
+    >>> from riko import Pipeline, Sources
     >>>
     >>> attrs = {'key': 'title', 'value': 'riko pt. 1'}
-    >>> next(SyncPipe(Sources.ITEMBUILDER, conf={'attrs': attrs}))
+    >>> next(iter(Pipeline.from_module(Sources.ITEMBUILDER, conf={'attrs': attrs})))
     {'title': 'riko pt. 1'}
 
 The following table summarizes these observations:
@@ -323,39 +330,44 @@ If you are unsure of the type of ``pipe`` you have, check its metadata.
 
 Note: ``type`` and ``subtype`` are mutually exclusive: a subtype implies its type.
 
-``SyncPipe``/``AsyncPipe`` perform this check for you to allow for convenient method
-chaining and transparent parallelization.
+``Pipeline`` performs this check for you to allow for convenient method chaining: any
+module name is available as a method that appends that ``pipe``.
 
 .. code-block:: python
 
-    >>> from riko import Sources, SyncPipe
+    >>> from riko import Pipeline, Sources
     >>>
     >>> attrs = [
     ...     {'key': 'title', 'value': 'riko pt. 1'},
     ...     {'key': 'content', 'value': "Let's talk about riko!"}
     ... ]
-    >>> flow = SyncPipe(Sources.ITEMBUILDER, conf={'attrs': attrs}).hash()
-    >>> item = next(flow)
+    >>> pipeline = Pipeline.from_module(Sources.ITEMBUILDER, conf={'attrs': attrs}).hash()
+    >>> item = pipeline.first()
     >>> item['title'], item['content'], item['hash']
     ('riko pt. 1', "Let's talk about riko!", 197222720)
 
-The ``|`` operator chains the same way. It takes a module name or a ``(name, conf)``
-tuple. The later is handy when the next ``pipe``'s name is computed. A name may be a
-plain string or a member of the typed discovery tree (``Sources``/``Transforms``/
-``Sinks``).
+The ``|`` operator chains the same way. It takes a module name, a ``(name, conf)``
+tuple, or a single-module ``Pipeline`` used as a reusable template. The tuple is handy
+when the next ``pipe``'s name is computed. A name may be a plain string or a member of
+the typed discovery tree (``Sources``/``Transforms``/``Sinks``). An existing ``stream``
+on the left of ``|`` seeds the ``pipeline``'s source.
 
 .. code-block:: python
 
-    >>> from riko import Sources, SyncPipe, Transforms
+    >>> from riko import Pipeline, Sources, Transforms
     >>>
     >>> attrs = [
     ...     {'key': 'title', 'value': 'riko pt. 1'},
     ...     {'key': 'content', 'value': "Let's talk about riko!"}
     ... ]
     >>> conf = {'attrs': attrs}
-    >>> item = next(SyncPipe(Sources.ITEMBUILDER, conf=conf) | Transforms.HASH)
+    >>> pipeline = Pipeline.from_module(Sources.ITEMBUILDER, conf=conf) | Transforms.HASH
+    >>> item = pipeline.first()
     >>> item['title'], item['hash']
     ('riko pt. 1', 197222720)
+    >>> items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
+    >>> next(iter(items | Pipeline.from_module(Transforms.REVERSE)))
+    {'title': 'riko pt. 2'}
 
 View the `Cookbook`_ for advanced examples including how to wire in
 values from other pipes or accept user input.
@@ -383,10 +395,10 @@ filepaths via ``source`` ``pipes``:
 
 .. code-block:: python
 
-    >>> from riko import get_path, Sources, SyncPipe
+    >>> from riko import get_path, Pipeline, Sources
     >>>
-    >>> stream = SyncPipe(Sources.FETCH, conf={'url': get_path('feed.xml')})
-    >>> item = next(stream)
+    >>> pipeline = Pipeline.from_module(Sources.FETCH, conf={'url': get_path('feed.xml')})
+    >>> item = pipeline.first()
     >>> {'author', 'content', 'id', 'link', 'published', 'summary', 'title'} <= set(item)
     True
     >>> item['title'], item['author'], item['id']
@@ -403,25 +415,25 @@ Synchronous processing
 
 .. code-block:: python
 
-    >>> from riko import get_path, Sources, SyncPipe
+    >>> from riko import get_path, Pipeline, Sources
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
     >>>
-    >>> # The following flow will:
+    >>> # The following pipeline will:
     >>> #   1. fetch a (cached) RSS feed
     >>> #   2. filter for items with an 'a' in the title
     >>> #   3. sort the items ascending by title
     >>> #
     >>> # Note: sorting is not lazy so take caution when using this pipe
     >>>
-    >>> flow = (
-    ...     SyncPipe(Sources.FETCH, conf=fetch_conf)   # 1
-    ...     .filter(conf={'rule': filter_rule})        # 2
-    ...     .sort(conf={'rule': {'field': 'title'}})   # 3
+    >>> pipeline = (
+    ...     Pipeline.from_module(Sources.FETCH, conf=fetch_conf)   # 1
+    ...     .filter(conf={'rule': filter_rule})                    # 2
+    ...     .sort(conf={'rule': {'field': 'title'}})               # 3
     ... )
     >>>
-    >>> next(flow)['title']
+    >>> pipeline.first()['title']
     'Donations'
 
 View `pipes`_ for a complete list of available ``pipes``.
@@ -429,32 +441,38 @@ View `pipes`_ for a complete list of available ``pipes``.
 Parallel processing
 ^^^^^^^^^^^^^^^^^^^
 
-An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
+By default, ``processors`` process one ``item`` at a time. You can declare
+execution-wide concurrency on a ``Pipeline`` via ``with_execution``. This allows you
+to select where per-item work runs (``executor``), cap how much work runs at once
+(``concurrency``), and choose whether results keep their source order (``ordered``).
+``operators`` such as ``sort`` and ``count`` are not impacted.
+
+Like every other ``Pipeline`` method, it derives a new ``pipeline`` rather than mutating
+the definition.
 
 .. code-block:: python
 
-    >>> from riko import get_path, Sources, SyncPipe
-    >>>
-    >>> fetch_conf = {'url': get_path('feed.xml')}
-    >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
-    >>>
-    >>> # The following flow will:
-    >>> #   1. fetch a (cached) RSS feed
-    >>> #   2. filter for items with an 'a' in the title, in parallel (4 workers)
-    >>> #
-    >>> # Note: no point in sorting after the filter since parallel fetching doesn't
-    >>> # guarantee order
-    >>> flow = (
-    ...     SyncPipe(Sources.FETCH, conf=fetch_conf, parallel=True, workers=4)  # 1
-    ...     .filter(conf={'rule': filter_rule})                           # 2
-    ... )
-    >>>
-    >>> sorted(item['title'] for item in flow)[:3]
-    ['Donations', 'FAQ', 'General Comments']
+    from riko import get_path, Pipeline, Sources
 
-Notes
+    fetch_conf = {'url': get_path('feed.xml')}
+    filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
 
-.. [#] You can instead enable a ``ProcessPool`` by additionally passing ``threads=False`` to ``SyncPipe``, i.e., ``SyncPipe(Sources.FETCH, conf={'url': url}, parallel=True, threads=False)``.
+    # The following pipeline will:
+    #   1. fetch a (cached) RSS feed
+    #   2. filter for items with an 'a' in the title
+    #   3. hash each title
+    #   4. perform the hashing in parallel four items at a time
+    #
+    # Note: no point in sorting before the hash since unordered execution (the
+    # default) doesn't guarantee order
+    pipeline = (
+        Pipeline.from_module(Sources.FETCH, conf=fetch_conf)    # 1
+        .filter(conf={'rule': filter_rule})                     # 2
+        .hash(options={'field': 'title'})                       # 3
+        .with_execution(concurrency=4)                          # 4
+    )
+
+    sorted(item['title'] for item in pipeline)[:3]
 
 Asynchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -465,23 +483,32 @@ To enable asynchronous processing, you must install the ``async`` extra.
 
     python -m pip install "riko[async]"
 
+The same ``pipeline`` then runs asynchronously under ``async for``. When you
+stop early, close the async iterator (``contextlib.aclosing`` does so for you) rather
+than ``break`` out of a bare ``async for``: the run is released only when the iterator
+is exhausted or closed.
+
 .. code-block:: python
 
-    >>> from riko import AsyncPipe, get_path, issync, run, Sources
+    >>> from contextlib import aclosing
+    >>> from riko import get_path, issync, Pipeline, run, Sources
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
     >>>
-    >>> # The following flow will:
+    >>> # The following pipeline will:
     >>> #   1. fetch a (cached) RSS feed
     >>> #   2. filter for items with an 'a' in the title
     >>>
     >>> async def main():
-    ...     stream = (
-    ...         AsyncPipe(Sources.FETCH, conf=fetch_conf)           # 1
-    ...             .filter(conf={'rule': filter_rule}))            # 2
+    ...     pipeline = (
+    ...         Pipeline.from_module(Sources.FETCH, conf=fetch_conf)   # 1
+    ...         .filter(conf={'rule': filter_rule})                    # 2
+    ...     )
     ...
-    ...     print((await anext(stream))['title'])
+    ...     async with aclosing(aiter(pipeline)) as stream:
+    ...         first = await anext(stream)
+    ...         print(first['title'])
     >>>
     >>> print("Donations") if issync else run(main)
     Donations
@@ -514,71 +541,73 @@ Built-in pipes
 Pipeline lifecycle
 ^^^^^^^^^^^^^^^^^^
 
-``SyncPipe``/``AsyncPipe`` represent a *single* execution: iterating one
-consumes the ``stream``, and iterating it again yields an empty ``stream``. Read the
-``state``/``exhausted``/``closed``/``failed`` properties to inspect a pipe. Use it as a
-context manager (or call ``close()``/``terminate()``) to release a parallel pipe's
-worker pool deterministically.
+A ``Pipeline`` is an immutable *definition*, not a running ``stream``. Every
+iteration starts a fresh one-shot execution, so iterating a ``pipeline`` twice runs
+it twice. The iterator owns that run's resources: exhausting it or closing it early
+tears the run down.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, Transforms
+    >>> from riko import export, Pipeline, Transforms
     >>>
-    >>> flow = SyncPipe(Transforms.HASH, source=[{'content': 'a'}, {'content': 'b'}])
-    >>> flow.state
-    <PipeState.NEW: 'new'>
-    >>> len(list(flow))
+    >>> pipeline = Pipeline(source=[{'content': 'a'}, {'content': 'b'}]).pipe(Transforms.HASH)
+    >>> len(list(pipeline))
     2
-    >>> flow.state
-    <PipeState.EXHAUSTED: 'exhausted'>
-    >>> flow.exhausted
-    True
+    >>> len(list(pipeline))
+    2
+    >>> stream = iter(pipeline)
+    >>> next(stream)
+    {'content': 'a', 'hash': 1267964084}
+    >>> stream.close()
+    >>> export(pipeline, 'csv').getvalue()
+    'content,hash\r\na,1267964084\r\nb,2297772648\r\n'
 
-See the `Cookbook`_ for pool cleanup and the full state model.
+``export`` serializes a ``pipeline`` (or any ``stream``) to one of the ``Formats``;
+see `exporting results`_ in the `Cookbook`_.
 
 Command-line Interface
 ----------------------
 
-``riko`` provides a command, ``run-pipe``, to execute ``pipelines``. A
-``pipeline`` is simply a file containing a function named ``pipe`` that creates
-a ``flow`` and processes the resulting ``stream``. E.g., ``flow.py``
+``riko`` provides a command, ``run-pipe``, to execute pipe scripts and workflow
+documents (``WorkflowDocument``\s, i.e., serialized ``Workflow``\s). A pipe script is a
+Python file containing a function named ``pipe`` that returns a ``pipeline``;
+``run-pipe`` prints each item of the resulting ``stream``. E.g., ``pipe.py``
 
 .. code-block:: python
 
-    from riko import Sources, SyncPipe
+    from riko import Pipeline, Sources
 
     conf1 = {'attrs': [{'value': 'https://google.com', 'key': 'content'}]}
     conf2 = {'rule': [{'find': 'com', 'replace': 'co.uk'}]}
 
     def pipe(test=False):
-        kwargs = {'conf': conf1, 'test': test}
-        flow = SyncPipe(Sources.ITEMBUILDER, **kwargs).strreplace(conf=conf2)
-        for i in flow:
-            print(i)
+        itembuilder = Pipeline.from_module(Sources.ITEMBUILDER, conf=conf1)
+        return itembuilder.strreplace(conf=conf2)
 
 CLI Usage
 
   usage: run-pipe [pipeid] [-p PATH]
 
-  description: Runs a riko pipe
+  description: Runs a pipe script, workflow module, or workflow document
 
   positional arguments:
-    pipeid            The pipeline to run from the examples directory.
+    pipeid            The id of an example pipe script or workflow document.
 
   optional arguments:
     -h, --help        show this help message and exit
-    -p, --path PATH   Path to a pipe file to run, e.g. flow.py.
+    -p, --path PATH   Path to a pipe script, workflow module, or workflow document to
+                      run, e.g., pipe.py or flow.json.
     -a, --async       Load async pipe.
     -t, --test        Run in test mode (uses default inputs).
 
-Now to execute ``flow.py``, type the command ``run-pipe --path flow.py``. You should
+Now to execute ``pipe.py``, type the command ``run-pipe --path pipe.py``. You should
 then see the following output in your terminal:
 
 .. code-block:: bash
 
     {'content': 'https://google.com', 'strreplace': 'https://google.co.uk'}
 
-``run-pipe`` will also search the ``examples`` directory for ``pipelines``. Type
+``run-pipe`` will also search the ``examples`` directory for pipe scripts. Type
 ``run-pipe demo`` and you should see the following output:
 
 .. code-block:: bash
@@ -586,11 +615,13 @@ then see the following output in your terminal:
     Deadline to clear up health law eligibility near
     682
 
-The ``examples`` directory bundles more runnable ``pipelines``. E.g., try ``run-pipe
+The ``examples`` directory bundles more runnable pipe scripts. E.g., try ``run-pipe
 usage``, ``run-pipe simple1``, or ``run-pipe wired``. The `Cookbook`_ covers the
-``register_alias``/``register_module`` runtime-registration examples, and
-``examples/pipelines/*.json`` holds JSON pipe definitions that compile to
-``examples/pypipelines/*.py`` (see the `DAG format`_ doc).
+``register_alias``/``register_module`` runtime-registration examples.
+
+``examples/workflows/*.json`` are ``WorkflowDocument``\s. ``run-pipe`` can run one
+using either its path (``run-pipe -p flow.json``) or id (``run-pipe pipe_timezone``).
+See the `DAG format`_ for details on the JSON structure.
 
 Contributing
 ------------
@@ -617,7 +648,8 @@ More Info
 
 - `FAQ`_ — the complete built-in ``pipe`` and file-format catalog
 - `Cookbook`_ — progressively organized, runnable recipes
-- `DAG format`_ — compact and full JSON ``pipeline`` formats
+- `DAG format`_ — the bare-bones DAG and workflow document formats,
+  and the commands that convert, compile, and run them
 - `Migration guide`_ — upgrading from the older versions or the ``legacy`` branch
 - `Changelog`_ — release notes
 - `Contributing doc`_ — contribution and issue-reporting guidance
@@ -636,39 +668,36 @@ Project Structure
     │   ├── DAG_FORMAT.rst
     │   ├── FAQ.rst
     │   ├── INSTALLATION.rst
-    │   ├── MIGRATION.rst
-    │   └── ROADMAP.md
-    ├── examples/*
+    │   └── MIGRATION.rst
+    ├── examples
+    │   ├── *.py              (runnable example pipes)
+    │   ├── workflows/*       (example WorkflowDocuments)
+    │   ├── pyworkflows/*     (hand-written Python equivalents)
+    │   └── riko-example-ext/ (example extension package)
     ├── riko
     │   ├── __init__.py       (stable public API)
-    │   ├── api.py            (stable API re-export hub)
-    │   ├── autorss.py, cast.py, currencies.py, dates.py, locations.py, pprint2.py, topsort.py
-    │   ├── collections.py    (SyncPipe, AsyncPipe, SyncCollection, AsyncCollection)
-    │   ├── compile.py        (JSON pipe → executable pipeline / Python module)
-    │   ├── context.py        (Context, ExecutionMode)
-    │   ├── dotdict.py
-    │   ├── paths.py          (get_path / get_abspath)
-    │   ├── parsers.py        (sync XML/HTML parsing)
-    │   │
-    │   ├── _*.py             (private helpers: _feed, _io, _iterutils, _objectify,
-    │   │                      _serialize, _strutils, _logging)
-    │   ├── _pubsub/          (sync + async pub/sub hubs backing send/receive)
-    │   ├── bado/             (async backend: __init__, io, itertools, mock, _util)
-    │   ├── cli/              (manage, run-pipe, benchmark, compile, convert-dag, gen-config)
-    │   ├── data/*
+    │   ├── base/             (constants, paths, logging, helpers, exceptions)
+    │   ├── types/            (supported typing surface)
+    │   ├── coercion/         (casts, generated config objects)
+    │   ├── bado/             (async backend and iterator helpers)
+    │   ├── definitions/      (immutable module, resource, write, and workflow contracts)
+    │   ├── io/               (sync/async URL and file I/O, serialization)
+    │   ├── parsing/          (config, XML/HTML, and document parsing)
+    │   ├── rss/              (feed discovery and parsing)
+    │   ├── execution/        (sync/async executions, Context, resources)
+    │   ├── runtime/          (collections, compiler, registries, pipelines, pub/sub)
+    │   ├── modules/          (the built-in pipes)
     │   ├── ext/              (extension API: decorators, protocols)
-    │   ├── modules/*         (the built-in pipes)
-    │   ├── templates/*       (codegen Jinja templates)
-    │   └── types/            (compile, general, modules, values, configs, guards)
+    │   ├── cli/              (manage, run-pipe, benchmark, compile-workflow, build-workflow)
+    │   └── data/*
     ├── tests
     │   ├── __init__.py
-    │   ├── conftest.py
-    │   ├── dags/*           (bare-bones DAG fixtures)
+    │   ├── dags/*           (serialized PipeDag fixtures)
     │   ├── functional/*
     │   ├── internal/*
-    │   ├── pipelines/*      (JSON pipe definitions)
     │   ├── public/*
-    │   └── pypipelines/*    (expected generated Python modules)
+    │   ├── pyworkflows/*    (hand-written Python equivalents)
+    │   └── workflows/*      (WorkflowDocument fixtures)
     ├── CLAUDE.md
     ├── conftest.py
     ├── CONTRIBUTING.rst
@@ -702,6 +731,7 @@ License
 .. _DAG format: docs/DAG_FORMAT.rst
 .. _issue tracker: https://github.com/nerevu/riko/issues
 .. _Fetching data and feeds: docs/COOKBOOK.rst#fetching-data-and-feeds
+.. _exporting results: docs/COOKBOOK.rst#exporting-results
 
 .. _pipe2py: https://github.com/ggaughan/pipe2py/
 .. _Bonobo: https://www.bonobo-project.org
