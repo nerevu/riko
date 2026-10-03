@@ -1,11 +1,11 @@
 Bare-bones DAG format
 =====================
 
-A canonical ``riko`` **workflow document** is explicit JSON: every node is named and
+A ``riko`` **workflow document** is explicit JSON: every node is named and
 identified, every edge names the port it leaves and the port it enters, and the
 workflow's outputs are listed. The **bare-bones DAG** is a minimal authoring format
-that captures only the essentials and expands into a validated canonical workflow via
-``build_workflow``.
+that captures only the essentials and expands into a validated workflow document via
+``parse_dag``.
 
 Schema
 ------
@@ -81,10 +81,10 @@ than one stream — ``union``, ``join`` — is expressible directly. The first i
         ]
     }
 
-Expansion rules (``build_workflow``)
+Expansion rules (``parse_dag``)
 ------------------------------------
 
-``riko.build_workflow(dag)`` returns a validated canonical workflow:
+``riko.parse_dag(dag)`` returns a validated workflow document:
 
 1. Modules missing an ``id`` are assigned ``sw-{n}`` in 1-based listing order.
 2. When ``wires`` is omitted or empty, consecutive modules are wired in listing order.
@@ -98,7 +98,7 @@ Expansion rules (``build_workflow``)
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, build_workflow
+    >>> from riko import Pipeline, parse_dag
     >>>
     >>> dag = {
     ...     'modules': [
@@ -106,7 +106,7 @@ Expansion rules (``build_workflow``)
     ...         {'type': 'truncate', 'conf': {'count': {'type': 'int', 'value': '3'}}},
     ...     ]
     ... }
-    >>> spec = build_workflow(dag)
+    >>> spec = parse_dag(dag)
     >>> list(spec.nodes)
     ['sw-1', 'sw-2']
     >>> spec.outputs['default']
@@ -114,7 +114,7 @@ Expansion rules (``build_workflow``)
     >>> len(list(Pipeline(spec)))
     3
 
-The expanded workflow is an ordinary canonical document: run it with ``Pipeline``,
+The expanded workflow is an ordinary workflow document: run it with ``Pipeline``,
 serialize it with ``riko.ext.serialize_workflow``, or hand it to ``compile_pipe``.
 
 Commands
@@ -124,25 +124,25 @@ Three console scripts work on these documents:
 
 .. code-block:: bash
 
-    # any supported form -> canonical workflow document (stdout, or -o path)
-    convert-dag tests/dags/pipe_forever.json -o flow.json
+    # any supported form -> workflow document (stdout, or -o path)
+    build-workflow tests/dags/pipe_forever.json -o flow.json
 
-    # canonical workflow document -> generated Python module (stdout, or -o path)
+    # workflow document -> generated Python module (stdout, or -o path)
     compile-pipe flow.json -o flow.py
 
-    # run a canonical workflow document directly
+    # run a workflow document directly
     run-pipe -p flow.json
 
-``convert-dag`` is the lenient one. It reads a bare-bones DAG, a released pipe
-definition in the older ``{"src": ..., "tgt": ...}`` wire format, or a canonical
-workflow document, and always emits a validated canonical workflow. It detects which
+``build-workflow`` is the lenient one. It reads a bare-bones DAG, a pipe definition
+(the older ``{"src": ..., "tgt": ...}`` wire format), or a workflow document, and
+always emits a validated workflow document. It detects which
 form it was given; pass ``--format {dag,v1,v2}`` to pin the reading instead. The output
 is indented for reading by default; ``-c``/``--compact`` writes the byte-stable
 single-line form. A document it cannot read or cannot validate is reported on stderr
 and exits non-zero.
 
-``compile-pipe`` takes canonical documents only — hand it an older form and it exits
-with a message telling you to run ``convert-dag`` first. It emits a Python module that
+``compile-pipe`` takes workflow documents only — hand it an older form and it exits
+with a message telling you to run ``build-workflow`` first. It emits a Python module that
 rebuilds the workflow from typed configuration classes and exposes a ``pipe`` (or,
 with ``-a``/``--async``, an ``async_pipe``) callable over it. ``-v``/``--verbose``
 reports the modules used and the bytes written to stderr.
@@ -151,13 +151,13 @@ Both read stdin when given ``-`` or no path at all, so they compose:
 
 .. code-block:: bash
 
-    convert-dag dag.json | compile-pipe - -o flow.py
+    build-workflow dag.json | compile-pipe - -o flow.py
 
 See `pipe_forever`_ for a runnable example, and `test_build_workflow`_ and
 `test_script`_ for the expansion and command guarantees.
 
 For fuller worked pipelines, see the `example pipelines`_
-(``examples/pipelines/*.json``). Those are canonical workflow documents run directly by
+(``examples/pipelines/*.json``). Those are workflow documents run directly by
 riko, and the ``examples/pypipelines/*.py`` modules beside them are hand-written Python
 equivalents, not ``compile-pipe`` output.
 

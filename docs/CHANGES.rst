@@ -53,7 +53,7 @@ Changes
   re-exported from ``riko.bado``. Import them from ``riko`` (or ``riko.io``).
   ``riko.bado`` now covers only the async iteration and runtime helpers.
 
-- Renamed ``get_abspath`` to ``get_url``, and ``riko.bado.get_async_temp_file`` to
+- Renamed ``get_abspath`` to ``normalize_url``, and ``riko.bado.get_async_temp_file`` to
   ``riko.async_get_temp_file``.
 
 - Renamed ``convert_dag`` to ``parse_dag`` which now emits a ``Workflow`` instead of a
@@ -80,12 +80,6 @@ Changes
   serialized ``PipeDef``s. Convert a stored ``PipeDef`` with ``build-workflow`` (or
   ``migrate_v1_to_v2`` in Python) before handing it to ``compile-pipe``, ``run-pipe``,
   or a registered pipeline store.
-
-- Added chainable ``write`` and terminal ``sink`` methods to ``SyncPipe`` and
-  ``SyncCollection``. They take the destination directly (e.g. ``write("out.csv")``) plus
-  ``fmt`` and ``mode``. ``csv``/``jsonl`` write incrementally, other formats buffer, and a
-  chainable ``write`` opens its destination lazily. They shadow the ``write`` module, so
-  use ``pipe("write", conf={"url": ...})`` for the old call shape.
 
 - A single ``write``/``sink`` destination now accepts one input shape only. Feeding it a
   whole stream after individual items, or a second stream, raises ``RuntimeError`` instead

@@ -38,13 +38,15 @@ or consumes a ``stream``.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, Transforms
+    >>> from riko import Pipeline, Transforms
     >>>
     >>> items = [{'title': 'alpha'}, {'title': 'beta'}]
-    >>> flow = SyncPipe(
-    ...     Transforms.HASH, source=items, field='title', assign='title_hash'
+    >>> pipeline = Pipeline(source=items).pipe(
+    ...     Transforms.HASH, options={'field': 'title', 'assign': 'title_hash'}
     ... )
-    >>> len(list(flow))
+    >>> pipeline.first()
+    {'title': 'alpha', 'title_hash': 863334096}
+    >>> len(list(pipeline))
     2
 
 ``riko`` is designed around ordinary Python iteration. It is not a dataframe
@@ -72,9 +74,8 @@ Which imports are public?
 ``riko`` organizes its public interface into three import tiers:
 
 - **Stable**: the top-level ``riko`` package holds the SemVer-guaranteed API: the
-  ``SyncPipe``/``AsyncPipe``/``SyncCollection``/
-  ``AsyncCollection`` classes, ``Context``, ``ExecutionMode``, ``PipeState``,
-  ``backend``, ``build_pipeline``, ``compile_pipe``, ``build_workflow``, ``export``,
+  ``Pipeline`` class, ``Context``, ``ExecutionMode``,
+  ``backend``, ``build_pipeline``, ``compile_pipe``, ``parse_dag``, ``export``,
   ``get_pipeline_dependencies``, ``get_module_metadata``, ``get_path``, ``isasync``,
   ``issync``, ``list_modules``, ``describe_module``, ``list_formats``,
   ``parse_pipe_def``, ``run``, the typed discovery surface (``Modules``/``Sources``/
@@ -90,17 +91,15 @@ Application code should import from ``riko``.
 .. code-block:: python
 
     >>> from riko import (
-    ...     AsyncCollection,
-    ...     AsyncPipe,
     ...     Context,
     ...     ExecutionMode,
     ...     Formats,
     ...     Modules,
+    ...     Pipeline,
     ...     Sinks,
     ...     Sources,
-    ...     SyncCollection,
-    ...     SyncPipe,
     ...     Transforms,
+    ...     parse_dag,
     ...     describe_module,
     ...     export,
     ...     get_path,
@@ -245,21 +244,23 @@ Args
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, Transforms
+    >>> from riko import Pipeline, Transforms
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(SyncPipe(Transforms.REVERSE, stream))
+    >>> next(iter(Pipeline(source=stream).pipe(Transforms.REVERSE)))
     {'title': 'riko pt. 2'}
 
 A ``processor`` processes individual ``items``. Examples include ``fetchsitefeed``,
-``hash``, ``itembuilder``, and ``regex``.
+``hash``, ``itembuilder``, and ``regex``. Call options such as ``field`` are passed
+as the ``options`` mapping.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, Transforms
+    >>> from riko import Pipeline, Transforms
     >>>
     >>> items = [{'title': 'riko pt. 1'}]
-    >>> result = next(SyncPipe(Transforms.HASH, items, field='title'))
+    >>> pipeline = Pipeline(source=items).pipe(Transforms.HASH, options={'field': 'title'})
+    >>> result = pipeline.first()
     >>> sorted(result)
     ['hash', 'title']
     >>> result['hash']
@@ -455,15 +456,35 @@ Only the outermost argument is interpreted as one-or-many, so a list-valued
     >>> next(pipe(item, func=lambda i: {"tags": i["tags"]}))
     {'tags': ['a', 'b']}
 
-The supported ``SyncPipe``/``AsyncPipe`` objects behave identically.
+A ``Pipeline`` source behaves identically: one ``item``, a list, or an iterator all
+seed the same ``stream``.
 
-    >>> from riko import SyncPipe, Modules
+    >>> from riko import Modules, Pipeline
     >>>
     >>> source = [{"x": 0}, {"x": 1}]
-    >>> next(SyncPipe(Modules.UDF, iter(source), func=func))
-    {'y': 3}
-    >>> next(SyncPipe(Modules.UDF, source, func=func))
-    {'y': 3}
+    >>> options = {"field": "x"}
+    >>> next(iter(Pipeline(source=iter(source)).pipe(Modules.HASH, options=options)))
+    {'x': 0, 'hash': 2328942002}
+    >>> next(iter(Pipeline(source=source).pipe(Modules.HASH, options=options)))
+    {'x': 0, 'hash': 2328942002}
+    >>> next(iter(Pipeline(source=source[0]).pipe(Modules.HASH, options=options)))
+    {'x': 0, 'hash': 2328942002}
+
+``udf`` itself is not reachable this way, because a ``Pipeline``'s ``options`` must be
+JSON-native and a callable is not. Chaining a callable as its own node is what
+``map`` is for.
+
+.. note::
+
+    Pending. The ``map`` call exists but raises ``NotImplementedError`` until
+    callable nodes land. Call ``riko.modules.udf.pipe`` directly, as above, in the
+    meantime.
+
+.. code-block:: python
+
+    from riko import Pipeline
+
+    pipeline = Pipeline(source=source).map(func)
 
 What file types are supported?
 ------------------------------
@@ -523,9 +544,10 @@ targets available in the active environment.
 How do synchronous and asynchronous pipelines differ?
 -----------------------------------------------------
 
-``SyncPipe`` implements ordinary iteration. ``AsyncPipe`` implements async
-iteration and can also be awaited. Awaiting materializes all remaining
-``items``; ``async for`` preserves item-by-item consumption.
+They are the same definition run two ways. A ``Pipeline`` implements ordinary
+iteration (``for item in pipeline``, ``list(pipeline)``) and, with the ``async`` extra, async
+iteration (``async for item in pipeline``). Each iteration starts a fresh execution in
+the style you asked for; nothing about the definition is sync- or async-specific.
 
 Fully consumed sync and async pipelines are tested for equivalent data output.
 Execution mechanics can differ under partial consumption: a loopable ``pipe``
@@ -533,21 +555,51 @@ mapped over its ``source`` may begin work for ``items`` that a downstream consum
 never yields. Keep side effects out of such ``pipes`` when consuming partially, or
 bound the work per ``item``.
 
-``SyncCollection`` fetches multiple configured sources sequentially or with a
-local pool. ``AsyncCollection`` fetches sources concurrently with bounded
-in-flight work.
+Fetching several configured sources at once is a fan-in graph rather than a separate
+class. ``parse_dag`` turns a bare-bones DAG that wires each source into a
+``union`` into a ``Workflow``, and ``Pipeline(workflow)`` runs it under either style:
+
+.. code-block:: python
+
+    >>> from riko import parse_dag, Pipeline
+    >>>
+    >>> workflow = parse_dag({
+    ...     'modules': [
+    ...         {'id': 'f1', 'type': 'itembuilder', 'conf': {'attrs': {'key': 'x', 'value': '1'}}},
+    ...         {'id': 'f2', 'type': 'itembuilder', 'conf': {'attrs': {'key': 'x', 'value': '2'}}},
+    ...         {'id': 'u', 'type': 'union', 'conf': {}},
+    ...     ],
+    ...     'wires': [['f1', 'u'], ['f2', 'u', 'in:1']],
+    ... })
+    >>> list(Pipeline(workflow))
+    [{'x': '1'}, {'x': '2'}]
+
+Swap ``itembuilder`` for ``fetch`` (with a ``url``) to merge feeds. See `Can I define
+a pipeline as JSON`_ for the wire grammar.
 
 What does ``parallel=True`` do?
 -------------------------------
 
-For ``SyncPipe``, eligible item-processing ``pipes`` use a local thread pool by
-default. Pass ``threads=False`` to use a process pool. The current sync mapping
-path materializes the ``pipe`` ``source`` before dispatch, so it is suitable only
-for finite inputs. Results are unordered unless ``ordered=True`` is requested.
+There is no ``parallel`` flag on ``Pipeline``. Concurrency is an execution-wide
+setting declared on the ``pipeline`` with ``with_execution``: ``executor`` picks where
+per-item work runs (``inline``, ``thread``, or ``process``), ``concurrency`` caps how
+much work runs at once, and ``ordered`` says whether results keep their source
+order. It derives a new ``pipeline`` like every other method.
 
-For ``AsyncPipe``, ``parallel=True`` enables bounded async concurrency with
-backpressure. ``connections`` limits in-flight work, ``prefetch`` controls extra
-buffering, and ``ordered=True`` preserves source order.
+.. note::
+
+    Pending. The ``with_execution`` call exists but raises ``NotImplementedError``
+    until execution-wide concurrency lands. Today every ``pipeline`` runs inline;
+    ``async for`` is the way to overlap I/O.
+
+.. code-block:: python
+
+    from riko import Pipeline, Sources
+
+    pipeline = (
+        Pipeline.from_module(Sources.FETCH, conf={'url': url})
+        .with_execution(executor='thread', concurrency=4, ordered=False)
+    )
 
 Parallel execution is not automatically faster. Pool startup, serialization,
 network behavior, ordering, and workload size can outweigh concurrency gains.
@@ -566,23 +618,31 @@ use a distributed data engine when one machine is insufficient.
 Why does a pipeline return no items the second time?
 ----------------------------------------------------
 
-A ``pipe`` or collection instance represents one execution. Consuming it
-advances its underlying iterator. Re-iterating an exhausted or failed instance
-returns an empty ``stream`` rather than silently rerunning work.
+It doesn't. A ``Pipeline`` is an immutable definition, and each call to ``iter()``
+(or ``aiter()``) starts a fresh one-shot execution, so iterating twice runs the
+``pipeline`` twice and yields the same ``items`` again. It is the *iterator* that
+represents one execution: it owns the run's resources, and exhausting it or closing
+it early tears the run down.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe, Transforms
+    >>> from riko import Pipeline, Transforms
     >>>
-    >>> flow = SyncPipe(Transforms.HASH, source=[{'content': 'a'}])
-    >>> len(list(flow))
+    >>> pipeline = Pipeline(source=[{'content': 'a'}]).pipe(Transforms.HASH)
+    >>> len(list(pipeline))
     1
-    >>> list(flow)
-    []
+    >>> len(list(pipeline))
+    1
+    >>> stream = iter(pipeline)
+    >>> next(stream)
+    {'content': 'a', 'hash': 1267964084}
+    >>> stream.close()
 
-Build a new pipeline instance to rerun the pipeline. Chaining after partial
-consumption wraps the remaining ``source``. Chaining after ``close()`` or
-failure raises ``PipelineStateError``.
+If a ``pipeline`` seeded from an in-memory iterator (``Pipeline(source=iter(...))``)
+returns no ``items`` the second time, it is because the *source iterator* was
+exhausted by the first run; seed from a list, or build the ``source`` with a
+``source`` ``pipe`` such as ``fetch`` or ``itembuilder``, to make the ``pipeline``
+re-runnable.
 
 Which operations materialize or retain input?
 ---------------------------------------------
@@ -613,44 +673,48 @@ pipe         retains           why
 ===========  ================  =======================================================
 
 ``export()`` and serialized exports materialize by the same reasoning as ``write``.
-Awaiting an ``AsyncPipe`` materializes all remaining ``items``, and
-``SyncPipe(parallel=True)``/``SyncCollection(parallel=True)`` materialize the source
-before submission.
+Iterating a ``Pipeline`` otherwise yields ``items`` from its default output as they
+are produced, under both ``for`` and ``async for``, subject only to what the ``pipes``
+above retain.
 
-``AsyncPipe(parallel=True)`` uses bounded concurrency instead of materializing the
-source, though it still keeps in-flight and optionally prefetched work. Without
-``parallel`` it buffers the source instead. ``AsyncCollection`` ignores ``parallel``.
-It bounds by ``connections``, and streams incrementally (unless ``ordered=True``,
-in which case it fetches each source whole). See the `Cookbook`_'s performance and
-memory section for practical guidance.
+.. note::
+
+    Pending. Execution-wide settings (``with_execution``) raise
+    ``NotImplementedError`` until execution-wide concurrency lands. When it does, the
+    ``thread`` and ``process`` executors will keep in-flight work bounded by
+    ``concurrency`` rather than materializing the whole ``source``.
+
+See the `Cookbook`_'s performance and memory section for practical guidance.
 
 How do I send one stream to multiple consumers?
 -----------------------------------------------
 
-Use ``split`` for the simplest finite-stream copy. It eagerly materializes the
-entire ``source`` and returns identical iterators. Use ``publish`` and ``subscribe``
-for lazy in-process fan-out:
+Two forms are planned. ``split(n)`` fans a ``pipeline`` out into ``n`` independently
+consumable branches, and ``subscribe``/``publish`` route a copy of each ``item`` to a
+locally declared subscription while the main ``stream`` continues.
+
+.. note::
+
+    Pending. ``Pipeline.split``, ``Pipeline.subscribe``, and ``Pipeline.publish``
+    exist but raise ``NotImplementedError`` until streaming fan-out and local
+    subscriptions and publishing land. A ``pipeline`` that chains the ``split``
+    module is likewise refused before it runs. In the meantime, run the
+    ``pipeline`` once into a list and feed that list to each consumer.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
-    >>>
-    >>> items = [{"title": "quiet"}, {"title": "loud"}]
-    >>> subscriber = SyncPipe.subscribe("alerts")
-    >>>
-    >>> _ = list(SyncPipe.publish(items, "alerts"))
-    >>> [item["title"] for item in subscriber]
-    ['quiet', 'loud']
+    from riko import Pipeline
 
-``SyncPipe.subscribe`` registers the channel. Draining is non-blocking: a subscriber
-whose publisher has not run yields nothing rather than waiting. ``publish`` only pushes
-when *you* advance the publisher. Nothing published before you subscribe is replayed.
+    items = [{"title": "quiet"}, {"title": "loud"}]
 
-``publish`` also chains. The main stream continues while a copy flows to each
-subscriber: ``SyncPipe(source=items).publish("archive").filter(conf=...)``.
+    # streaming fan-out into two branches
+    left, right = Pipeline(source=items).split(2)
+
+    # local subscription: the main stream continues while a copy flows to it
+    alerts = Pipeline.subscribe("alerts")
+    pipeline = Pipeline(source=items).publish(alerts, isolate=True).filter(conf=...)
 
 This is an in-process coordination mechanism, not an external message broker.
-The `Cookbook`_ fan-out section includes complete recipes for both approaches.
 
 Can I define a pipeline as JSON?
 --------------------------------
@@ -658,7 +722,7 @@ Can I define a pipeline as JSON?
 Yes. A ``pipeline`` stored as a JSON *workflow document* is a first-class input, and
 ``riko`` ships three commands for working with them:
 
-- ``convert-dag`` converts any supported authoring form into a canonical workflow
+- ``build-workflow`` converts any supported authoring form into a canonical workflow
   document.
 - ``compile-pipe`` translates a canonical workflow document into a runnable Python
   module.
@@ -699,7 +763,7 @@ is ``in``, the rest are ``in:1``, ``in:2``, and so on:
         "wires": [["a", "u"], ["b", "u", "in:1"]]
     }
 
-``convert-dag`` detects which form it was handed — a bare-bones DAG, a released pipe
+``build-workflow`` detects which form it was handed — a bare-bones DAG, a released pipe
 definition in the older ``{"src": ..., "tgt": ...}`` wire format, or a canonical
 document — and always emits a canonical one, so it is also how stored definitions are
 brought forward. Pass ``--format {dag,v1,v2}`` to pin the reading, and
@@ -711,7 +775,7 @@ to a file via ``-o``):
 
 .. code-block:: bash
 
-    convert-dag dag.json -o flow.json
+    build-workflow dag.json -o flow.json
     compile-pipe flow.json -o flow.py
 
 Since ``compile-pipe`` reads stdin when given ``-`` (or no path at all), the two
@@ -719,7 +783,7 @@ compose directly. Add ``-v`` to report the modules used and bytes written to std
 
 .. code-block:: bash
 
-    convert-dag dag.json | compile-pipe - -o flow.py -v
+    build-workflow dag.json | compile-pipe - -o flow.py -v
 
 
 See the `DAG format`_ doc and the `Cookbook`_ for the full format/expansion rules and
@@ -742,23 +806,29 @@ DESCRIBE                 Return both input and dependency information
 ``get_pipeline_dependencies()`` can also inspect a pipe definition without executing
 it. See `Inspecting a pipeline`_ in the cookbook for additional details.
 
-The chainable classes share one pipeline model across four execution styles.
+One ``Pipeline`` definition runs under every execution style.
 
-+------------------------------+----------------------------------------+------------------------------------------------+
-| API / mode                   | How it runs                            | Important behavior                             |
-+==============================+========================================+================================================+
-| ``SyncPipe``                 | inline iterator pipeline               | single-use; lazy except sort/aggregate         |
-+------------------------------+----------------------------------------+------------------------------------------------+
-| ``SyncPipe(parallel=True)``  | local thread (or process) pool         | eligible pipes; source materialized first      |
-+------------------------------+----------------------------------------+------------------------------------------------+
-| ``AsyncPipe``                | async iteration or ``await``           | await materializes; mapped source runs eager   |
-+------------------------------+----------------------------------------+------------------------------------------------+
-| ``AsyncPipe(parallel=True)`` | bounded async concurrency              | tune ``connections``/``prefetch``/``ordered``  |
-+------------------------------+----------------------------------------+------------------------------------------------+
-| ``SyncCollection``           | fetch sources sequentially or pooled   | sources may pick a pipe via ``type``           |
-+------------------------------+----------------------------------------+------------------------------------------------+
-| ``AsyncCollection``          | fetch sources concurrently             | bounded, optionally ordered                    |
-+------------------------------+----------------------------------------+------------------------------------------------+
++-------------------------------------+----------------------------------------+------------------------------------------------+
+| API / mode                          | How it runs                            | Important behavior                             |
++=====================================+========================================+================================================+
+| ``for item in pipeline``            | inline iterator pipeline               | fresh run per ``iter()``; lazy except          |
+|                                     |                                        | sort/aggregate                                 |
++-------------------------------------+----------------------------------------+------------------------------------------------+
+| ``async for item in pipeline``      | async iteration                        | fresh run per ``aiter()``; close early with    |
+|                                     |                                        | ``aclosing``                                   |
++-------------------------------------+----------------------------------------+------------------------------------------------+
+| ``Pipeline(parse_dag(...))``        | fan-in graph (``union``/``join``)      | several sources merge into one output          |
++-------------------------------------+----------------------------------------+------------------------------------------------+
+| ``pipeline.with_execution(...)``    | thread/process executor (pending)      | ``concurrency`` ceiling; optionally ordered    |
++-------------------------------------+----------------------------------------+------------------------------------------------+
+| ``pipeline.split(n)`` / ``publish`` | streaming fan-out (pending)            | branches and local subscriptions               |
++-------------------------------------+----------------------------------------+------------------------------------------------+
+
+.. note::
+
+    Pending. The rows marked pending describe calls that exist but raise
+    ``NotImplementedError`` until execution-wide concurrency, streaming fan-out, and
+    local subscriptions and publishing land.
 
 Can I create custom modules?
 ----------------------------
@@ -767,8 +837,9 @@ Yes. ``riko.ext`` exposes ``processor``, ``operator``, and ``splitter``
 decorators plus supported protocols and metadata types. Decorated functions can
 be called directly and composed with ordinary Python.
 
-To make a module resolvable by name (so ``SyncPipe('your.module', ...)`` and the
-``|`` operator can find it), register it with the module registry. Package your
+To make a module resolvable by name (so ``Pipeline.from_module('your.module', ...)``,
+``.pipe('your.module')``, and the ``|`` operator can find it), register it with the
+module registry. Package your
 module so it exposes ``pipe`` and/or ``async_pipe`` functions, then either register
 it at runtime or declare an entry point.
 
@@ -817,13 +888,15 @@ additional work required for a built-in module.
 How should errors and resource cleanup be handled?
 --------------------------------------------------
 
-Normal module exceptions propagate. A failing ``pipe`` records the ``FAILED``
-state, and a closed ``pipe`` records ``CLOSED``. Use ``state``, ``failed``,
-``closed``, and ``exhausted`` for inspection.
+Normal module exceptions propagate out of the iteration that triggered them, and an
+unknown module name raises ``UnsupportedModuleError`` before anything runs. A
+``Pipeline`` carries no state of its own, so there is nothing to inspect or reset
+afterwards: iterate it again to rerun it.
 
-Use sync parallel ``pipes`` and collections as context managers when you need
-deterministic worker-pool cleanup. Use ``async with`` or ``aclose()`` for early
-async termination. External I/O can still raise the normal network, parser, and
+Each iterator owns its run's resources and releases them when it is exhausted,
+closed, or garbage collected. Call ``close()`` on a sync iterator, or wrap an async
+one in ``contextlib.aclosing``, when you stop early and want that cleanup to happen
+deterministically. External I/O can still raise the normal network, parser, and
 filesystem exceptions for the underlying operation.
 
 Where should I report problems or contribute?

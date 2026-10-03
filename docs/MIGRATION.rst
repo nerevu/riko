@@ -91,66 +91,52 @@ This guide intentionally contains only the durable compatibility model and suppo
 boundaries. It should change only when those policies or surfaces change, not for each
 release.
 
-Workflow call options and stored pipelines
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Workflow documents replace pipe definitions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-A workflow node now separates the configuration a module parses (``conf``) from the
-options handed to the module itself (``options``). The typing name ``LoopOptions`` in
-``riko.types.modules`` is now ``ModuleOptions``, since those options apply to every
-module rather than to ``loop`` alone. ``LoopConf`` is removed: a loop's embedded module
-is the node's ``embed``.
-
-Move a loop's ``emit``, ``assign``, ``field``, and ``count`` out of its ``conf`` into
-``options``, and its embedded module out of ``conf`` into ``embed``:
-
-.. code-block:: python
-
-    # before
-    ModuleNode(id="loop", name="loop", conf={"embed": embed, "emit": True})
-
-    # after
-    ModuleNode(id="loop", name="loop", embed=embed, options={"emit": True})
-
-Both ``options`` and ``embed`` are accepted in an authoring mapping and are serialized
-only when present.
+A stored pipeline is now a **workflow document**: explicit JSON with named nodes, edges
+that name the ports they leave and enter, and listed outputs. A node separates the
+configuration its module parses (``conf``) from the call options handed to the module
+(``options``), and a ``loop`` carries its embedded module as ``embed``. The typing names
+``ModuleOptions`` and ``Embed`` in ``riko.types.modules`` describe those two fields.
 
 A directory registered with ``riko.ext.register_pipeline_store(directory=…)``, and the
-files ``PipelineResolver.load_definition`` reads from it, must now hold canonical
-workflow JSON. Convert stored definitions in the released pipe-definition format once:
+files ``PipelineResolver.load_definition`` reads from it, must hold workflow documents.
+Convert a stored pipe definition once:
 
 .. code-block:: python
 
     from riko.ext import migrate_v1_to_v2, serialize_workflow
 
-    canonical = serialize_workflow(migrate_v1_to_v2(old_definition))
+    document = serialize_workflow(migrate_v1_to_v2(old_definition))
 
-``convert-dag`` does the same conversion from the command line, so stored definitions can
+``build-workflow`` does the same conversion from the command line, so stored definitions can
 be brought forward without writing a script:
 
 .. code-block:: bash
 
-    convert-dag old_definition.json -o flow.json
+    build-workflow old_definition.json -o flow.json
 
-It now emits a canonical workflow document rather than a pipe definition, and reads a
-bare-bones DAG, a released pipe definition, or a canonical document, detecting which
-unless ``--format {dag,v1,v2}`` pins it. ``compile-pipe`` takes canonical documents only
-and exits with a message naming ``convert-dag`` when handed an older one; the module it
-generates rebuilds the workflow from typed configuration classes and runs it through
-riko's execution. ``run-pipe -p flow.json`` runs a canonical document directly.
+It now emits a workflow document rather than a pipe definition, and reads a bare-bones
+DAG, a pipe definition, or a workflow document, detecting which unless
+``--format {dag,v1,v2}`` pins it. ``compile-pipe`` takes workflow documents only and
+exits with a message naming ``build-workflow`` when handed a pipe definition.
+``run-pipe -p flow.json`` runs a workflow document directly.
 
-In Python, ``build_pipe_def`` is replaced by ``build_workflow``, which expands the same
-bare-bones DAG into a canonical ``WorkflowSpec`` instead of a pipe definition, and
-``compile_pipe`` takes a workflow (or an authoring mapping for one) rather than a pipe
-definition.
+In Python, ``riko.convert_dag`` is replaced by ``parse_dag``, which expands the same
+bare-bones DAG into a ``Workflow`` instead of a pipe definition, and ``compile_pipe``
+takes a workflow document (a ``Workflow`` or the mapping it parses from) rather than
+a pipe definition.
 
 .. code-block:: python
 
     # before
-    definition = build_pipe_def(dag)
+    definition = convert_dag(dag)
+    source = compile_pipe(definition, "flow")
 
     # after
-    spec = build_workflow(dag)
-    source = compile_pipe(spec, "flow")
+    workflow = parse_dag(dag)
+    source = compile_pipe(workflow, "flow")
 
 The ``gen-pipelines`` console script and the ``manage codegen --pipes`` selector were
 removed along with the generated fixture trees they produced.
