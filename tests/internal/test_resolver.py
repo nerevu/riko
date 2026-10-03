@@ -1,7 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """Tests for the P8 module registry + pipe-resolution façade (slice 1)."""
 
-import sys
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
@@ -23,9 +22,8 @@ from riko.runtime._pipelines import (
     MappingStore,
     PackageStore,
     PipelineResolver,
-    pipeline_resolver,
 )
-from riko.runtime._resolver import ResolverDispatcher, dispatcher
+from riko.runtime._resolver import dispatcher
 from riko.types._guards import is_mapping
 
 if TYPE_CHECKING:
@@ -194,11 +192,9 @@ class TestPipeResolver:
         with pytest.raises(UnsupportedModuleError):
             dispatcher.require(_MISSING_NAME)
 
-    def test_runtime_pipe_resolution_imports_no_compiler(self, fixed_registry):
-        """Resolving an ordinary module must not pull in riko.runtime._compile."""
-        sys.modules.pop("riko.runtime._compile", None)
-        ResolverDispatcher(fixed_registry, pipeline_resolver).require("tokenizer")
-        assert "riko.runtime._compile" not in sys.modules
+    def test_unresolved_pipeline_name_raises(self):
+        with pytest.raises(UnsupportedModuleError):
+            dispatcher.require("pipe_missing")
 
     @pytest.mark.xfail(
         strict=True,

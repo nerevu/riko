@@ -27,11 +27,11 @@ from riko.coercion._sequences import listize
 from riko.definitions._workflow import ModuleNode
 from riko.execution._execution import SyncExecution
 from riko.execution.context import Context
-from riko.runtime._compile import resolve_module
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._pipelines import pipeline_resolver
+from riko.runtime._resolver import dispatcher
 from riko.runtime._serialize import parse_document
-from riko.types._guards import is_mapping
+from riko.types._guards import is_mapping, is_subpipe
 from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput
 from tests import TESTS_DIR, async_test
@@ -225,7 +225,7 @@ class TestBasics:
         items: ParserMaterializedOutput = []
 
         if _document(pipe_name) is None:
-            stream = resolve_module(pipe_name)(context=self.context)
+            stream = dispatcher.require(pipe_name)(context=self.context)
             items = cast("ParserMaterializedOutput", list(listize(stream)))
         else:
             workflow = pipeline_resolver.load_definition(pipe_name, directory=file_path)
@@ -236,7 +236,9 @@ class TestBasics:
         return items
 
     def _aget_pipeline(self, pipe_name: str) -> AsyncStream:
-        return resolve_module(pipe_name, True)(context=self.context)
+        pipe = dispatcher.require(pipe_name, True)
+        assert is_subpipe(pipe)
+        return pipe(context=self.context)
 
     def _load(self, items: Sequence[Items], pipe_name, value=0, check=1):
         if _document(pipe_name) is None:
@@ -791,6 +793,20 @@ class TestBasics:
         assert is_mapping(item)
         assert item.get("title") == expected
         assert item.get("pubDate")
+
+    def test_loop_subpipe_embed(self):
+        """Runs a sub-pipeline embedded in a loop once per parent item."""
+        items = self._get_pipeline("pipe_loop_subpipe")
+        assert items == [{"title": "hello", "strconcat": "hello!"}]
+
+    def test_loop_count_all_assign(self):
+        """Keeps one copy of the parent per embed result when assigning all."""
+        items = self._get_pipeline("pipe_loop_assign")
+        assert items == [
+            {"title": "a b c", "tokens": {"content": "a"}},
+            {"title": "a b c", "tokens": {"content": "b"}},
+            {"title": "a b c", "tokens": {"content": "c"}},
+        ]
 
     def test_namespaceless_xml_input(self):
         """Loads a pipeline containing deep xml source with no namespace."""

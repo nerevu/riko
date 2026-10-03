@@ -55,8 +55,7 @@ class ResolverDispatcher:
 
         Raises:
 
-            UnsupportedModuleError: If a module name is unresolved.
-            UnsupportedPipelineError: If a ``pipe_*`` name is unresolved.
+            UnsupportedModuleError: If a module or ``pipe_*`` name is unresolved.
 
         """
         resolver = next((r for r in self.resolvers if r.is_compatible(name)), None)

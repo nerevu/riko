@@ -21,15 +21,7 @@ IO_ = frozenset({"async_url_open", "async_write", "async_get_temp_file"})
 
 COLLECTIONS = frozenset({"Formats", "export", "list_formats"})
 
-COMPILE = frozenset(
-    {
-        "build_pipeline",
-        "compile_pipe",
-        "parse_dag",
-        "get_pipeline_dependencies",
-        "parse_pipe_def",
-    }
-)
+COMPILE = frozenset({"compile_pipe", "parse_dag"})
 
 MODULES = frozenset(
     {

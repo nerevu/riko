@@ -2,9 +2,9 @@
 """
 Canonical Workflow v2 graph indexing.
 
-Builds the shared immutable graph index from a validated ``Workflow``. The
-assembly is factored into ``build_graph_index`` so the v1 compiler and the v2
-workflow feed one implementation rather than deriving separate topologies.
+Builds the immutable graph index that execution planning reads from a validated
+``Workflow``. ``build_graph_index`` assembles the index from adjacency, edges, and
+named outputs; ``index_workflow`` derives those from a workflow's stream edges.
 """
 
 from __future__ import annotations

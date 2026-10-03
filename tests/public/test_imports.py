@@ -22,7 +22,6 @@ import riko.ext
 import riko.modules
 import riko.modules._names
 import riko.runtime._codegen
-import riko.runtime._compile
 import riko.runtime._migrate
 import riko.runtime.collections
 import riko.types
@@ -42,7 +41,6 @@ SURFACE_MODULES = (
     riko.bado,
     riko.runtime.collections,
     riko.runtime._codegen,
-    riko.runtime._compile,
     riko.runtime._migrate,
     riko.ext,
     riko.modules,
@@ -62,13 +60,11 @@ CODEGEN = (COMPILE & {"compile_pipe"}) | {
     "compile_workflow",
     "render_value",
 }
-V1_COMPILE = (COMPILE - {"parse_dag", "compile_pipe"}) | {"compile_pipe_def"}
 
 EQUAL_SURFACES = (
     (riko.bado, BADO),
     (riko.runtime.collections, COLLECTIONS),
     (riko.runtime._codegen, CODEGEN),
-    (riko.runtime._compile, V1_COMPILE),
     (riko.runtime._migrate, {"parse_dag", "migrate_v1_to_v2"}),
     (riko.ext, EXTENSION),
     (riko, STABLE),

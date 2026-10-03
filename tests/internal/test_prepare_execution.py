@@ -92,6 +92,7 @@ def test_index_workflow_orders_and_indexes() -> None:
     assert set(index.roots) == {"a", "c"}
     assert set(index.leaves) == {"b", "c"}
     assert index.dependencies["b"] == frozenset({"a"})
+    assert index.dependents["a"] == frozenset({"b"})
     assert index.incoming["b"][0].source == "a"
     assert index.outgoing["a"][0].target == "b"
     assert set(index.outputs) == {"default", "extra"}

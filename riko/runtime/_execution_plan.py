@@ -66,7 +66,7 @@ class ExecutionPlan:
 
         workflow: The canonical workflow that was prepared.
         nodes: The resolved nodes, keyed by canonical node id.
-        index: The structural graph index shared with the compiler.
+        index: The workflow's structural graph index.
         required: For each named output, the node ids its subgraph must run.
 
     """

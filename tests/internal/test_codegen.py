@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+from keyword import iskeyword
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from riko.base._strutils import pythonise
 from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._workflow import ModuleNode, Pipeline, Workflow, WriteNode
 from riko.execution._execution import AsyncExecution, SyncExecution
@@ -293,3 +295,19 @@ def test_loop_embed_is_rendered_as_a_node_field():
     source = compile_workflow(_loop_spec(), "pipe_x")
     assert "embed=Embed(" in source
     assert "LoopConf" not in source
+
+
+@pytest.mark.xfail(
+    reason="pythonise does not sanitize ids into valid identifiers yet", strict=True
+)
+def test_pythonise_yields_valid_identifiers():
+    """
+    Every generated id must be a legal, non-keyword Python identifier.
+
+    ``pythonise`` only replaces four characters and ASCII-``replace``-encodes, so
+    ``"class"``/``"foo bar"``/``"foo.bar"``/``"café"`` survive into generated source
+    as invalid identifiers (``"1st"`` already becomes ``"_1st"``).
+    ``ext/codegen.py::enum_member_name`` already sanitizes properly.
+    """
+    results = [pythonise(raw) for raw in ("class", "foo bar", "foo.bar", "1st", "café")]
+    assert all(r.isidentifier() and not iskeyword(r) for r in results)

@@ -1,8 +1,8 @@
-"""Pipeline-definition and compiler typing contracts."""
+"""Pipe-definition, bare DAG, and workflow graph-index typing contracts."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from itertools import chain
 from typing import TYPE_CHECKING, Literal, NewType, NotRequired, Required, TypedDict
@@ -11,7 +11,6 @@ from ._workflow import parse_port
 
 if TYPE_CHECKING:
     from ._module_ids import LoopableModuleId, ModuleId
-    from ._pipeline import PyInput
     from .modules import AnyModuleRawConf, Conf, ModuleOptions
 
 
@@ -27,11 +26,6 @@ class EmbedRef(TypedDict):
 class LoopableEmbedRef(TypedDict):
     id: str
     type: LoopableModuleId | PipeId
-
-
-class XY(TypedDict):
-    x: int
-    y: int
 
 
 class LayoutItem(TypedDict):
@@ -57,34 +51,6 @@ class EmbedKwargs(TypedDict, total=False):
     conf: Conf
     field: str
     emit: bool
-
-
-class AbbrevStringModule(TypedDict):
-    alias: str
-    name: str
-    pipe_name: str
-    is_sub_pipe: bool
-
-
-class StringModule(AbbrevStringModule):
-    id: str
-    expr: str
-    splits: int
-    is_collection: bool
-
-
-class TemplateData(TypedDict):
-    uniq_modules: list[AbbrevStringModule]
-    modules: list[StringModule]
-    pipe_name: str
-    inputs: PyInput
-    dependencies: list[str]
-    embedded_pipes: dict[str, PipeModule]
-    last_module: str
-    raw_confs: list[str]
-    use_collection: bool
-    needs_await: bool
-    subtype: str
 
 
 class TypeCount(TypedDict):
@@ -179,19 +145,19 @@ type ModuleOptionValues = bool | str | CountValues
 @dataclass(frozen=True, slots=True)
 class GraphEdge:
     """
-    One directed connection between two module ports.
+    One directed stream connection between two workflow node ports.
 
-    Ports keep their legacy identifiers verbatim (``_INPUT``/``_OTHER``/``_OUTPUT``
-    for structural wiring, or a named keyword such as ``count``/``url`` for a named
-    secondary input) so the connection's meaning is interpreted in one place rather
-    than re-derived from raw wires at every call site.
+    Ports keep their workflow spelling: ``out`` on the source, and on the target
+    either the default ``in``, a positional ``in:1``/``in:2`` input, or a named
+    value input such as ``count``. ``is_valid`` reports whether the target port
+    is a positional stream input rather than a named value input.
 
     Attributes:
 
-        source: Python-safe id of the module the connection leaves.
-        target: Python-safe id of the module the connection enters.
-        source_port: Raw output-port id on ``source`` (e.g. ``_OUTPUT``).
-        target_port: Raw input-port id on ``target`` (e.g. ``_INPUT``/``count``).
+        source: Id of the node the connection leaves.
+        target: Id of the node the connection enters.
+        source_port: Output port on ``source`` (e.g. ``out``).
+        target_port: Input port on ``target`` (e.g. ``in``/``in:1``/``count``).
 
     """
 
@@ -208,12 +174,12 @@ class GraphEdge:
 @dataclass(frozen=True, slots=True)
 class OutputRef:
     """
-    A canonical pipeline output to replace the legacy ``_OUTPUT`` node.
+    One named output of a workflow.
 
     Attributes:
 
-        node: Python-safe id of the module that produces the output stream.
-        port: Canonical output-port name.
+        node: Id of the node that produces the output stream.
+        port: Output port on ``node`` (e.g. ``out``).
 
     """
 
@@ -224,16 +190,16 @@ class OutputRef:
 @dataclass(frozen=True, slots=True)
 class GraphIndex:
     """
-    Immutable, runtime-neutral interpretation of a pipe's wiring.
+    Immutable, runtime-neutral interpretation of a workflow's topology.
 
-    Built once per parse so both the current compiler and future execution planning
-    consume the same structural facts instead of rescanning raw wires. Edge lookups
-    (``incoming``/``outgoing``) carry full port identity. The
+    Execution planning and both sync and async executions read the same
+    structural facts from one index rather than rescanning the workflow's edges.
+    Edge lookups (``incoming``/``outgoing``) carry full port identity. The
     ``dependencies``/``dependents`` projection carries only node-level ordering.
 
     Attributes:
 
-        edges: Every wire connection, in listing order.
+        edges: Every stream edge, in listing order.
         incoming: Connections entering each node, keyed by target id.
         outgoing: Connections leaving each node, keyed by source id.
         dependencies: Node ids each node must run after.
@@ -241,7 +207,7 @@ class GraphIndex:
         order: Node ids in topological (execution) order.
         roots: Node ids with no dependencies, in ``order``.
         leaves: Node ids with no dependents, in ``order``.
-        outputs: Canonical pipeline outputs, keyed by output name.
+        outputs: The workflow's named outputs, keyed by output name.
 
     """
 
@@ -276,18 +242,6 @@ class GraphIndex:
         return valid
 
 
-class ParsedPipeDef(TypedDict):
-    name: str
-    modules: dict[str, PipeModule]
-    embed: dict[str, PipeModule]
-    graph: GraphIndex
-
-
-class PipelineDescription(TypedDict):
-    inputs: list[str | tuple[str, ...]]
-    dependencies: list[str]
-
-
 class DagModule(TypedDict):
     id: NotRequired[str]
     type: ModuleId | PipeId
@@ -312,18 +266,12 @@ class PipeDag(TypedDict):
     wires: NotRequired[Sequence[Sequence[str]]]
 
 
-type PipelineDescriptionLike = PipelineDescription | str | tuple[str, ...]
-type PipelineDescriptions = Sequence[PipelineDescriptionLike]
-type PipelineDescriptionStream = Iterator[PipelineDescriptionLike]
-
 __all__ = [
     "DagModule",
     "LoopModule",
-    "ParsedPipeDef",
     "PipeDag",
     "PipeDef",
     "PipeDefLike",
     "PipeModule",
-    "PipelineDescription",
     "Wire",
 ]
