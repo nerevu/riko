@@ -114,3 +114,9 @@ def test_parse_port_rejects_bad_direction(port):
 def test_parse_port_rejects_bad_qualifier(port):
     with pytest.raises(ValueError, match="invalid port"):
         parse_port(port)
+
+
+@pytest.mark.parametrize("port", ["in:0", "out:0"])
+def test_parse_port_rejects_zero_position(port):
+    with pytest.raises(ValueError, match="invalid port"):
+        parse_port(port)

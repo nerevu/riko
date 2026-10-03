@@ -73,7 +73,7 @@
             },
             "target": {
                 "node": "sw-154",
-                "port": "in:2"
+                "port": "in:3"
             },
             "type": "stream"
         }

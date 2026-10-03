@@ -18,7 +18,7 @@
             },
             "target": {
                 "node": "sw-637",
-                "port": "in:1"
+                "port": "in:2"
             },
             "type": "stream"
         },
@@ -51,7 +51,7 @@
             },
             "target": {
                 "node": "sw-730",
-                "port": "in:1"
+                "port": "in:2"
             },
             "type": "stream"
         },

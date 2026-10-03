@@ -33,6 +33,8 @@ from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop_pipe
 from riko.modules.split import async_pipe as async_split
 from riko.modules.split import pipe as split_pipe
+from riko.modules.union import async_pipe as async_union
+from riko.modules.union import pipe as union_pipe
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._graph_index import index_workflow
 from riko.runtime._module_registry import (
@@ -413,31 +415,50 @@ def test_build_plan_rejects_fan_out_from_one_source_port() -> None:
         build_execution_plan(workflow, dispatcher=dispatcher)
 
 
-@pytest.mark.parametrize(
-    "ports",
-    [
-        pytest.param(("in", "in:2"), id="gap-after-default"),
-        pytest.param(("in:1", "in:3"), id="gap-between-positions"),
-        pytest.param(("in:0",), id="zero-index"),
-    ],
+def test_run_accepts_sparse_positional_inputs() -> None:
+    # A variadic fan-in reads its positional inputs as one ordered list, so a gap
+    # in the numbering (a legacy _OTHER3 with no _OTHER2) executes, and the port
+    # number rather than edge order still decides where each operand lands.
+    dispatcher = _dispatcher(
+        ModuleDefinition(name="a", sync_pipe=_tagged_source("a")),
+        ModuleDefinition(name="b", sync_pipe=_tagged_source("b")),
+        ModuleDefinition(name="c", sync_pipe=_tagged_source("c")),
+        ModuleDefinition(name="union", sync_pipe=union_pipe, async_pipe=async_union),
+    )
+    a = ModuleNode(id="a", name="a")
+    b = ModuleNode(id="b", name="b")
+    c = ModuleNode(id="c", name="c")
+    u = ModuleNode(id="u", name="union")
+    edges = (
+        StreamEdge(Endpoint("a", "out"), Endpoint("u", "in")),
+        StreamEdge(Endpoint("c", "out"), Endpoint("u", "in:3")),
+        StreamEdge(Endpoint("b", "out"), Endpoint("u", "in:1")),
+    )
+    workflow = _workflow([a, b, c, u], {"default": Endpoint("u", "out")}, edges=edges)
+
+    assert _run(workflow, dispatcher) == [{"t": "a"}, {"t": "b"}, {"t": "c"}]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="owned by the module port contracts: a positional input into a module "
+    "that declares no positional ports is accepted and silently ignored",
 )
-def test_build_plan_rejects_sparse_positional_inputs(ports) -> None:
-    # Positional inputs reach a node as one contiguous list, so a gap or a zero
-    # index would silently renumber the operands. The plan refuses the shape
-    # until module port contracts say what each position means.
+def test_build_plan_rejects_undeclared_positional_input() -> None:
     dispatcher = _dispatcher(
         ModuleDefinition(name="src", sync_pipe=_tagged_source("a")),
-        ModuleDefinition(name="merge", sync_pipe=_sync_pipe),
+        ModuleDefinition(name="sink", sync_pipe=_sync_pipe),
     )
-    sources = [ModuleNode(id=f"s{n}", name="src") for n in range(len(ports))]
-    m = ModuleNode(id="m", name="merge")
-    edges = tuple(
-        StreamEdge(Endpoint(source.id, "out"), Endpoint("m", port))
-        for source, port in zip(sources, ports, strict=True)
+    a = ModuleNode(id="a", name="src")
+    b = ModuleNode(id="b", name="src")
+    s = ModuleNode(id="s", name="sink")
+    edges = (
+        StreamEdge(Endpoint("a", "out"), Endpoint("s", "in")),
+        StreamEdge(Endpoint("b", "out"), Endpoint("s", "in:1")),
     )
-    workflow = _workflow([*sources, m], {"default": Endpoint("m", "out")}, edges=edges)
+    workflow = _workflow([a, b, s], {"default": Endpoint("s", "out")}, edges=edges)
 
-    with pytest.raises(InvalidPipelineError, match="without gaps"):
+    with pytest.raises(InvalidPipelineError, match="positional"):
         build_execution_plan(workflow, dispatcher=dispatcher)
 
 

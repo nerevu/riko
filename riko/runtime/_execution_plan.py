@@ -135,6 +135,7 @@ def build_execution_plan(
             more than one edge, a node's positional inputs have gaps, a node
             family has no execution runtime yet, or a node runs a multi-output
             splitter.
+
         UnsupportedModuleError: If a node's implementation is unresolved.
 
     Examples:
@@ -154,6 +155,7 @@ def build_execution_plan(
 
     """
     workflow.validate()
+    workflow.require_executable()
     nodes = {id_: _build_node(node, dispatcher) for id_, node in workflow.nodes.items()}
     return ExecutionPlan(workflow=workflow, nodes=nodes)
 
