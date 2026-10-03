@@ -6,8 +6,11 @@ riko.modules._derive
 Provides functions for deriving module subtypes and loop behavior.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from riko.types._enums import BasicCastType
-from riko.types._wrappers import ModuleParser
 from riko.types.modules import (
     ModuleSubtype,
     ModuleSubtypes,
@@ -16,6 +19,9 @@ from riko.types.modules import (
 )
 
 from ._inference import gen_operator_return_kinds
+
+if TYPE_CHECKING:
+    from riko.types._wrappers import ModuleParser
 
 
 # Keep this module independent of riko.ext. It is imported while riko.modules is still

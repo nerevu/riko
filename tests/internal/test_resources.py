@@ -1,6 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """Tests the execution-resource foundation (``riko.runtime._resources`` + Context wiring)."""
 
+from __future__ import annotations
+
 from contextlib import (
     AbstractAsyncContextManager,
     AbstractContextManager,
@@ -9,7 +11,7 @@ from contextlib import (
 )
 from dataclasses import dataclass
 from functools import partial
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import pytest
 
@@ -24,9 +26,11 @@ from riko.runtime._resources import (
     classify_factory,
 )
 from riko.runtime.context import Context
-from riko.types._resource import LifecycleFactory, ValueFactory
-from riko.types._streams import Stream
 from tests import async_test
+
+if TYPE_CHECKING:
+    from riko.types._resource import LifecycleFactory, ValueFactory
+    from riko.types._streams import Stream
 
 _CREDENTIAL = "microsoft/cif"
 _SCALAR = 42
@@ -411,7 +415,7 @@ class TestValues:
             with pytest.raises(TypeError, match=r"ValueFactory.*cleanup function"):
                 Resource.from_factory(value)
 
-            casted = cast(ValueFactory[AbstractContextManager[_Connection]], value)
+            casted = cast("ValueFactory[AbstractContextManager[_Connection]]", value)
 
             with pytest.warns(ResourceInterpretationWarning, match="context manager"):
                 factory = Resource.from_factory(casted, cleanup=cleanup_contextmanager)

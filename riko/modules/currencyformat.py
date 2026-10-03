@@ -21,20 +21,25 @@ Attributes:
 
 """
 
-from decimal import Decimal
-from logging import Logger
-from typing import Any, cast
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 from babel.numbers import format_currency
 
 from riko.base.currencies import CURRENCY_CODES
-from riko.coercion._configs import CurrencyFormatObjconf
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from decimal import Decimal
+    from logging import Logger
+
+    from riko.coercion._configs import CurrencyFormatObjconf
+    from riko.types._options import Defaults, Opts
 
 OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}
 DEFAULTS: Defaults = {"currency": "USD", "clean": False}
@@ -74,7 +79,7 @@ def parser(
         parsed = ""
     else:
         currency: str = require_conf(objconf, "currency", "currencyformat")
-        currency_code = CURRENCY_CODES.get(currency, cast(dict[str, str], {}))
+        currency_code = CURRENCY_CODES.get(currency, cast("dict[str, str]", {}))
         locale = objconf.locale or currency_code.get("locale", "")
 
         try:

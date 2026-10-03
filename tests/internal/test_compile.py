@@ -8,9 +8,12 @@ stream as the in-process executor ``build_pipeline`` (path b). Any divergence â€
 or a codegen regression â€” fails here.
 """
 
+from __future__ import annotations
+
 from difflib import unified_diff
 from json import loads
 from keyword import iskeyword
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -34,9 +37,11 @@ from riko.types._compiler import (
     PipeModule,
     _GraphIndex,
 )
-from riko.types._streams import Item, ItemOrValue
 from riko.types.modules import ItemBuilderRawConf, Param, TruncateRawConf
 from tests import TESTS_DIR, async_test
+
+if TYPE_CHECKING:
+    from riko.types._streams import Item, ItemOrValue
 
 PIPELINE_DIR = TESTS_DIR / "pipelines"
 PYPIPELINE_DIR = TESTS_DIR / "pypipelines"

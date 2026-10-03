@@ -7,16 +7,22 @@ sync half of ``send`` and ``receive``. The async half uses ``riko.runtime._pubsu
 instead.
 """
 
+from __future__ import annotations
+
 from collections import deque
-from collections.abc import Mapping
 from itertools import count
+from typing import TYPE_CHECKING
 
 import pygogo as gogo
 
 from riko.types._sentinels import MissingType, StreamState
-from riko.types._streams import Item, StatefulItem
 
-from ._types import Receiver
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from riko.types._streams import Item, StatefulItem
+
+    from ._types import Receiver
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 

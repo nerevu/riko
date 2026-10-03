@@ -26,24 +26,29 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.base._constants import ENCODING
 from riko.base._iterutils import betwix
-from riko.coercion._configs import FetchPageObjconf
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch
 from riko.parsing.documents import get_text
 from riko.types._options import Defaults, Opts
-from riko.types._streams import Item
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from logging import Logger
+
+    from riko.coercion._configs import FetchPageObjconf
+    from riko.types._streams import Item
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING, "detag": False})

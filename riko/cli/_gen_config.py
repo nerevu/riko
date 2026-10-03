@@ -137,13 +137,13 @@ def _import_block(structure) -> str:
         - {"DynamicConf"}
     )
     lines = ["from __future__ import annotations", ""]
-    lines += [f"from collections.abc import {', '.join(abc)}"] if abc else []
     lines += [
         f"from typing import {', '.join(typing)}",
         "",
         "from ._dynamic_conf import DynamicConf",
     ]
     guarded = ["", "if TYPE_CHECKING:"]
+    guarded += [f"    from collections.abc import {', '.join(abc)}", ""] if abc else []
 
     if names:
         guarded += [f"    from riko.types._enums import {', '.join(names)}"]

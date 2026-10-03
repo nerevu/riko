@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import partial
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from riko.base.exceptions import InvalidArchitectureError
 from riko.coercion._graph import (
@@ -25,6 +24,10 @@ from ._import_graph import (
     collect_imports,
     resolve_import_targets,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Mapping
+    from pathlib import Path
 
 _LAYER_DEPENDENCIES: FrozenGraph[str] = freeze_graph(
     {

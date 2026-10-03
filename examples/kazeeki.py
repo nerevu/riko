@@ -14,12 +14,13 @@ Examples:
 
 """
 
+from __future__ import annotations
+
 from functools import partial
 from pprint import pprint
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from riko import AsyncPipe, SyncPipe, get_path
-from riko.types._streams import RikoItems
 from riko.types.modules import (
     CurrencyFormatConf,
     CurrencyFormatRawConf,
@@ -38,6 +39,9 @@ from riko.types.modules import (
     SubelementConf,
     Subkey,
 )
+
+if TYPE_CHECKING:
+    from riko.types._streams import RikoItems
 
 # from riko.utils import make_regex_rule
 
@@ -65,7 +69,7 @@ def add_source[T: SyncPipe | AsyncPipe](source: T) -> T:
     result = source.urlparse(field="link", emit=False, assign="k:source").subelement(
         conf=subelement_conf, emit=False, assign="k:source"
     )
-    return cast(T, result)
+    return cast("T", result)
 
 
 def add_id[T: SyncPipe | AsyncPipe](source: T, rule, field="link") -> T:
@@ -78,7 +82,7 @@ def add_id[T: SyncPipe | AsyncPipe](source: T, rule, field="link") -> T:
     result = source.strfind(conf={"rule": rule}, field=field, assign="id").strconcat(
         conf={"part": make_id_part}, assign="id"
     )
-    return cast(T, result)
+    return cast("T", result)
 
 
 def add_posted[T: SyncPipe | AsyncPipe](
@@ -91,7 +95,7 @@ def add_posted[T: SyncPipe | AsyncPipe](
         rename_rule = RenameConfRule(field="updated", newval="k:posted")
         result = source.rename(conf={"rule": rename_rule})
 
-    return cast(T, result)
+    return cast("T", result)
 
 
 def add_tags[T: SyncPipe | AsyncPipe](
@@ -129,7 +133,7 @@ def add_tags[T: SyncPipe | AsyncPipe](
             skip_if=no_tags,
         )
     )
-    return cast(T, result)
+    return cast("T", result)
 
 
 def add_budget[T: SyncPipe | AsyncPipe](
@@ -306,7 +310,7 @@ def add_budget[T: SyncPipe | AsyncPipe](
             skip_if=isnt_hourly,
         )
 
-    return cast(T, result)
+    return cast("T", result)
 
 
 def clean_locations[T: SyncPipe | AsyncPipe](source: T) -> T:
@@ -326,7 +330,7 @@ def clean_locations[T: SyncPipe | AsyncPipe](source: T) -> T:
         skip_if=no_work_loc,
     )
 
-    return cast(T, result)
+    return cast("T", result)
 
 
 def remove_cruft[T: SyncPipe | AsyncPipe](source: T) -> T:
@@ -349,7 +353,7 @@ def remove_cruft[T: SyncPipe | AsyncPipe](source: T) -> T:
     ]
 
     result = source.rename(conf=RenameConf({"rule": remove_rule}))
-    return cast(T, result)
+    return cast("T", result)
 
 
 def parse_odesk[T: SyncPipe | AsyncPipe](source: T) -> T:
@@ -388,7 +392,7 @@ def parse_odesk[T: SyncPipe | AsyncPipe](source: T) -> T:
     result = add_tags(result, categ_rule, assign="k:categories")
     result = clean_locations(result)
     result = remove_cruft(result)
-    return cast(T, result)
+    return cast("T", result)
 
 
 def parse_guru[T: SyncPipe | AsyncPipe](source: T) -> T:
@@ -438,7 +442,7 @@ def parse_guru[T: SyncPipe | AsyncPipe](source: T) -> T:
     result = add_tags(result, categ_rule, assign="k:categories")
     result = clean_locations(result)
     result = remove_cruft(result)
-    return cast(T, result)
+    return cast("T", result)
 
 
 def parse_elance[T: SyncPipe | AsyncPipe](source: T) -> T:
@@ -583,7 +587,7 @@ def parse_elance[T: SyncPipe | AsyncPipe](source: T) -> T:
     result = add_tags(result, categ_rule, assign="k:categories")
     result = clean_locations(result)
     # result = remove_cruft(result)
-    return cast(T, result)
+    return cast("T", result)
 
 
 def parse_freelancer[T: SyncPipe | AsyncPipe](source: T) -> T:
@@ -621,7 +625,7 @@ def parse_freelancer[T: SyncPipe | AsyncPipe](source: T) -> T:
     result = add_tags(result, skills_rule)
     result = clean_locations(result)
     result = remove_cruft(result)
-    return cast(T, result)
+    return cast("T", result)
 
 
 def pipe(test=False, parallel=False, threads=False) -> RikoItems:
@@ -655,7 +659,7 @@ def async_pipe(test=None) -> AsyncPipe:
     freelancer_stream = parse_freelancer(freelancer_source)
 
     others = [guru_stream, freelancer_stream, elance_stream]
-    return cast(AsyncPipe, odesk_pipe).union(others=others)
+    return cast("AsyncPipe", odesk_pipe).union(others=others)
 
 
 def print_results(result) -> None:

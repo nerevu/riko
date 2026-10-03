@@ -21,17 +21,22 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 import ctypes
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._dynamic_conf import DynamicConf
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.types._options import Defaults, Opts
 
 OPTS: Opts = {
     "ftype": BasicCastType.TEXT,

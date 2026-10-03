@@ -3,11 +3,12 @@
 Provides pipeline collection tests.
 """
 
-from collections.abc import Awaitable, Callable, Iterable, Iterator
+from __future__ import annotations
+
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import itemgetter
 from time import perf_counter
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
@@ -31,7 +32,6 @@ from riko.runtime.collections import (
 from riko.types._enums import ModuleName
 from riko.types._guards import is_mapping, is_stateful_item
 from riko.types._sentinels import StreamState
-from riko.types._streams import Item
 from riko.types.modules import (
     ItemBuilderConf,
     ParsedParam,
@@ -40,6 +40,11 @@ from riko.types.modules import (
     StrReplaceConfRule,
 )
 from tests import PipeBuilder, skipif_issync
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable, Iterable, Iterator
+
+    from riko.types._streams import Item
 
 value = "once is 1x,twice is 2x,thrice is 3x"
 attrs = ParsedParam({"key": "content", "value": value})
@@ -65,9 +70,7 @@ def _aresolve[T](awaitable: Awaitable[Any], extract: Callable[..., T]) -> T:
 
 
 def _run_on[T](
-    pipe: type[SyncPipe] | type[AsyncPipe],
-    build: PipeBuilder,
-    extract: Callable[..., T],
+    pipe: type[SyncPipe | AsyncPipe], build: PipeBuilder, extract: Callable[..., T]
 ) -> T:
     """
     Build a pipeline on *pipe*, resolve it, and return ``extract`` applied to
@@ -78,7 +81,7 @@ def _run_on[T](
     if pipe is SyncPipe:
         result = extract(build(pipe))
     else:
-        result = _aresolve(build(cast(type[AsyncPipe], pipe)), extract)
+        result = _aresolve(build(cast("type[AsyncPipe]", pipe)), extract)
 
     return result
 
@@ -365,8 +368,8 @@ class TestSyncCollections(_CollectionTest):
             .hash(assign="content")
         )
         result = list(stream)
-        actual_content = sorted(cast(dict, item)["content"] for item in result)
-        expected_content = sorted(cast(dict, item)["content"] for item in expected)
+        actual_content = sorted(cast("dict", item)["content"] for item in result)
+        expected_content = sorted(cast("dict", item)["content"] for item in expected)
         assert actual_content == expected_content
         assert self.runs == 3
 

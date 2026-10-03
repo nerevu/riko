@@ -122,6 +122,8 @@ extend-exclude = [
 skip-magic-trailing-comma = true
 
 [tool.ruff.lint]
+future-annotations = true
+
 # E704 is default-ignored by ruff (formatter conflict) but suppressed for an
 # external flake8 run on overload one-liners; declare it so RUF102 doesn't flag
 # the `# noqa: E704` comments as invalid rule codes.
@@ -138,6 +140,7 @@ extend-select = [
     "N",    # pep8-naming
     "D",    # pydocstyle
     "S",    # flake8-bandit
+    "TC",   # flake8-typing-imports
     "T20",  # flake8-print
     "PT",   # flake8-pytest-style
     "PLC0415", # Import not at top of file
@@ -145,31 +148,31 @@ extend-select = [
 
 ignore = [
     # temp
+    "D200",  # unnecessary-multiline-docstring
+    "D205",  # missing-blank-line-after-summary
     "D400",  # missing-trailing-period
     "D415",  # missing-terminal-punctuation
-    "D205",  # missing-blank-line-after-summary
-    "D200",  # unnecessary-multiline-docstring
 
     # docs
     "D100",  # Missing docstring in public module
     "D101",  # undocumented-public-class
     "D102",  # undocumented-public-method
     "D103",  # undocumented-public-function
+    "D104",  # undocumented-public-package
     "D105",  # undocumented-magic-method
     "D107",  # undocumented-public-init
     "D401",  # non-imperative-mood
     "D417",  # undocumented-param
-    "D104",  # undocumented-public-package
 
     # misc
     "T201",  # print
     "T203",  # p-print
 
     # stylistic
-    "E731",  # do not assign a lambda expression, use a def
-    "E501",  # line too long
     "D301",  # escape-sequence-in-docstring
     "D412",  # blank-lines-between-header-and-content
+    "E501",  # line too long
+    "E731",  # do not assign a lambda expression, use a def
 
     # security
     "S404",

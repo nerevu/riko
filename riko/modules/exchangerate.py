@@ -27,24 +27,29 @@ Attributes:
 
 """
 
-from collections.abc import Mapping
+from __future__ import annotations
+
 from decimal import Decimal
 from json import load, loads
-from logging import Logger
 from os import getenv
-from typing import Any, TypedDict, cast
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 import pygogo as gogo
 
 from riko.bado._util import async_get, async_json
 from riko.base._constants import ENCODING
-from riko.coercion._configs import ExchangeRateObjconf
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from logging import Logger
+
+    from riko.coercion._configs import ExchangeRateObjconf
+    from riko.types._options import Defaults, Opts
 
 EXCHANGE_API = "https://openexchangerates.org/api/latest.json"
 PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_ID")}
@@ -148,7 +153,7 @@ async def async_parser(
         rates = await async_json(r)
     else:
         content = await async_url_read(objconf.url)
-        rates = cast(dict[str, Any], loads(content).get("rates", {}))
+        rates = cast("dict[str, Any]", loads(content).get("rates", {}))
 
     if rates and not same_currency:
         places = Decimal(10) ** -objconf.precision

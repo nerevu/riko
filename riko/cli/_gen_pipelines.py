@@ -12,11 +12,16 @@ Edit the JSON, not the generated module, then regenerate with ``gen-pipelines``.
 if the two layers drift.
 """
 
+from __future__ import annotations
+
 from json import loads
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from riko.base._paths import ROOT_DIR
 from riko.runtime._compile import compile_pipe
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 PIPELINE_DIRS = (
     (ROOT_DIR / "tests" / "pipelines", ROOT_DIR / "tests" / "pypipelines"),

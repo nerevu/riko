@@ -2,10 +2,16 @@
 # vim: sw=4:ts=4:expandtab
 # A small hand-written sub-pipeline used to demonstrate a pipe:-loop.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from riko.modules.strconcat import pipe as strconcat
 from riko.runtime._subpipe import mark_subpipe
-from riko.runtime.context import Context
 from riko.types.modules import StrconcatRawConf
+
+if TYPE_CHECKING:
+    from riko.runtime.context import Context
 
 
 def pipe(item=None, context: Context | None = None, **_):

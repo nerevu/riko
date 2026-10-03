@@ -23,23 +23,28 @@ Attributes:
 
 """
 
-from logging import Logger
+from __future__ import annotations
+
 from os.path import splitext
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 from meza.io import read
 
 from riko.base._constants import ENCODING
-from riko.coercion._configs import FetchTableObjconf
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close, seekable
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Item, Stream
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import FetchTableObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item, Stream
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {

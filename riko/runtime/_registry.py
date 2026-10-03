@@ -19,15 +19,24 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 from dataclasses import replace as _replace
 from importlib.metadata import EntryPoint, entry_points
-from typing import Literal, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 from riko.base.exceptions import UnsupportedModuleError
 from riko.definitions.modules import ModuleDefinition
-from riko.types._wrappers import AsyncPipeWrapper, Pipe, PipeCallable, SyncPipeWrapper
 
 from ._importutils import resolve_interface
+
+if TYPE_CHECKING:
+    from riko.types._wrappers import (
+        AsyncPipeWrapper,
+        Pipe,
+        PipeCallable,
+        SyncPipeWrapper,
+    )
 
 ENTRY_POINT_GROUP = "riko.modules"
 

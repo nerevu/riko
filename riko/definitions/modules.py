@@ -13,9 +13,18 @@ Examples:
 
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
 
-from riko.types._wrappers import AsyncPipeCallable, Pipe, PipeCallable, SyncPipeCallable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from riko.types._wrappers import (
+        AsyncPipeCallable,
+        Pipe,
+        PipeCallable,
+        SyncPipeCallable,
+    )
 
 
 @dataclass(frozen=True, slots=True)

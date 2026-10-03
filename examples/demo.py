@@ -55,8 +55,8 @@ async def async_pipe(test=False):
 
 def print_results(result) -> None:
     feed, count = result
-    print(cast(dict, feed)["title"])
-    print(cast(dict, count)["count"])
+    print(cast("dict", feed)["title"])
+    print(cast("dict", count)["count"])
 
 
 def main(*, test: bool = False) -> None:

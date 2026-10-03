@@ -9,7 +9,6 @@ from collections.abc import Iterable, Iterator, Mapping
 from datetime import date
 from decimal import Decimal
 from functools import reduce
-from logging import Logger
 from typing import TYPE_CHECKING, Any, Self, TypeGuard, TypeVar, cast, overload
 
 import pygogo as gogo
@@ -18,7 +17,6 @@ from requests.structures import CaseInsensitiveDict
 from riko.base._strutils import replacer
 from riko.coercion._objectify import Objectify
 from riko.coercion.cast import CAST_SWITCH, cast_value
-from riko.types._collections import Key, RikoList, RikoValue
 from riko.types._enums import CastType
 from riko.types._guards import (
     is_known_sequence,
@@ -29,13 +27,17 @@ from riko.types._guards import (
     is_value_seq,
 )
 from riko.types._rss import RSSEntry
-from riko.types._scalars import BasicValue, PrimitiveValue
 from riko.types._sentinels import Sentinel, SentinelValue
-from riko.types._streams import Item, Stream
-from riko.types.modules import ConfArg
 
 if TYPE_CHECKING:
+    from logging import Logger
+
     from _typeshed import SupportsKeysAndGetItem
+
+    from riko.types._collections import Key, RikoList, RikoValue
+    from riko.types._scalars import BasicValue, PrimitiveValue
+    from riko.types._streams import Item, Stream
+    from riko.types.modules import ConfArg
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -106,7 +108,7 @@ def parse_sentinel[D, VT](  # noqa: E302
         key = replacer(value[SentinelValue], "")
 
         if stream := kwargs.get(key):
-            stream = cast(Stream, stream)
+            stream = cast("Stream", stream)
             parsed = next(stream, default)
         else:
             parsed = default
@@ -131,7 +133,7 @@ def parse_sentinel[D, VT](  # noqa: E302
         for k, v in value.items():
             _parsed[k] = parse_sentinel(v, v, **kwargs) if is_mapping(v) else v
 
-        parsed = cast(dict[str, VT], _parsed)
+        parsed = cast("dict[str, VT]", _parsed)
 
     return parsed
 
@@ -153,7 +155,7 @@ def parse_dotdict[VT](*keys: str, data: DotDict[VT]) -> Iterator[tuple[str, VT |
         else:
             v = None
 
-        yield (key.lower(), cast(VT, v))
+        yield (key.lower(), cast("VT", v))
 
 
 @overload
@@ -226,9 +228,9 @@ def gen_dict[VT](  # noqa: E302
     else:
         if is_mapping(data):
             if DotDict.is_self(data) and not kwargs:
-                data = parse_sentinel(cast(DotDict[VT], data), default=data)
+                data = parse_sentinel(cast("DotDict[VT]", data), default=data)
             else:
-                data = DotDict(cast(Mapping[str, VT], data)).get(**kwargs)
+                data = DotDict(cast("Mapping[str, VT]", data)).get(**kwargs)
 
         keys = []
 
@@ -240,7 +242,7 @@ def gen_dict[VT](  # noqa: E302
         else:
             items = parse_map(*keys, data=data, **kwargs)
 
-        items = cast(Iterator[tuple[str, VT]], items)
+        items = cast("Iterator[tuple[str, VT]]", items)
 
         if default_key:
             yield from items
@@ -361,7 +363,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             if cls.is_self(value):
                 result = value
             else:
-                result = cast(DotDict[V], cls(cast(Mapping[str, Any], value)))
+                result = cast("DotDict[V]", cls(cast("Mapping[str, Any]", value)))
 
             if key or kwargs:
                 result = result.get(key=key, default=default, **kwargs)
@@ -430,7 +432,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             if is_mapping_seq(value):
                 if isinstance(key, str):
                     try:
-                        parsed = cast(RikoList, [v[key] for v in value])
+                        parsed = cast("RikoList", [v[key] for v in value])
                     except (KeyError, IndexError):
                         parsed = default
                 else:
@@ -466,7 +468,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             msg = f"Ignoring unsupported key {key} to access non-mapping value {value}."
 
             if is_mapping(value):
-                value = cast(VT, value[key])
+                value = cast("VT", value[key])
             else:
                 logger.warning(msg)
 
@@ -474,7 +476,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
         if is_mapping(value):
             parsed = parse_sentinel(value, default=value)
-            result = cast(VT, self.dictize(parsed))
+            result = cast("VT", self.dictize(parsed))
 
         return result
 
@@ -506,10 +508,10 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
                 existing = None
 
             if existing is None:
-                existing = item[key] = cast(VT, {})
+                existing = item[key] = cast("VT", {})
                 # CaseInsensitiveDict.__setitem__(item, key, existing)
 
-            return cast(Self, existing)
+            return cast("Self", existing)
 
         keys = parse_key(key)
 
@@ -644,7 +646,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             else:
                 value = None
 
-            return cast(Self, value) if is_mapping(value) else None
+            return cast("Self", value) if is_mapping(value) else None
 
         keys = parse_key(key)
         rest, last = keys[:-1], keys[-1]
@@ -693,14 +695,14 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         {'author': {'name': 'bar', 'url': 'example.com'}}
         """
         if is_mapping(data):
-            data = cast(Mapping[str, VT], data)
+            data = cast("Mapping[str, VT]", data)
             if self.is_self(data):
                 if kwargs:
                     _dict = data | kwargs
                 else:
                     return self._store.update(data._store)
             elif kwargs or any("." in k for k in data):
-                _dict = cast(dict[str, VT], {**data, **kwargs})
+                _dict = cast("dict[str, VT]", {**data, **kwargs})
             else:
                 for key, value in data.items():
                     CaseInsensitiveDict.__setitem__(self, key, value)  # noqa: PLC2801

@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from re import Pattern, RegexFlag
 from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict
 
 from ._compiler import EmbedRef
-from ._io import PathLike
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+    from re import Pattern, RegexFlag
+
     from _typeshed import DataclassInstance
 
     from ._compiler import PipeModule
     from ._enums import CastType, FmtLike, LocationType, SortableCastType
+    from ._io import PathLike
     from ._scalars import BasicValue
 
 

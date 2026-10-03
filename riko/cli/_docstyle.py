@@ -20,10 +20,14 @@ Examples:
 
 """
 
+from __future__ import annotations
+
 from ast import AsyncFunctionDef, FunctionDef, get_docstring, parse, walk
-from collections.abc import Iterator
-from pathlib import Path
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
 
 BANNED_LEADS: tuple[str, ...] = ("Return", "Yield")
 

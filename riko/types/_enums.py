@@ -49,6 +49,17 @@ class Formats(StrEnum):
     QIF = "qif"
 
 
+class Targets(StrEnum):
+    """The kind of endpoint a write reaches."""
+
+    FILE = "file"
+    HTTP = "http"
+    S3 = "s3"
+    POSTGRES = "postgres"
+    AIRTABLE = "airtable"
+    INTUNE = "intune"
+
+
 class LocationType(StrEnum):
     """
     The kind of lookup ``cast_location`` performs.
@@ -156,3 +167,4 @@ class ExecutionMode(StrEnum):
 type ModuleNameLike = str | ModuleName
 type KeyLike = str | Iterable[str]
 type FmtLike = Formats | str
+type TargetLike = Targets | str

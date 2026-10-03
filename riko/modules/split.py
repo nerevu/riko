@@ -28,19 +28,24 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
+from __future__ import annotations
+
 from copy import deepcopy
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Stream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import splitter
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from logging import Logger
+
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"extract": "splits", "ptype": BasicCastType.INT, "objectify": False}
 DEFAULTS: Defaults = {"splits": 2}

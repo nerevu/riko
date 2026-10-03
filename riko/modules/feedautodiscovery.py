@@ -39,19 +39,24 @@ Attributes:
 
 """
 
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._configs import FeedAutoDiscoveryObjconf
 from riko.coercion.cast import SourceOpts
 from riko.rss.discovery import async_get_rss, get_rss
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Item, Stream
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import FeedAutoDiscoveryObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item, Stream
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {"strict": True, "sort": False}

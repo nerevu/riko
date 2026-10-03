@@ -20,35 +20,40 @@ letting ``count="first"`` stop after the first result without materializing the
 rest.
 """
 
+from __future__ import annotations
+
 from collections.abc import AsyncGenerator, Generator
 from functools import partial
-from logging import Logger
-from typing import Literal, cast, overload
+from typing import TYPE_CHECKING, Literal, cast, overload
 
 import pygogo as gogo
 
 from riko.bado._util import maybe_deferred
 from riko.bado.itertools import async_iter
 from riko.runtime._subpipe import is_subpipe
-from riko.runtime.context import Context
-from riko.types._compiler import CountValues, EmbedKwargs
-from riko.types._streams import (
-    AsyncItemsOrValues,
-    AsyncStreamOrValueStream,
-    Item,
-    Items,
-    ItemsOrValues,
-    Stream,
-    StreamOrValueStream,
-)
-from riko.types._wrappers import (
-    AsyncProcessorWrapper,
-    AsyncSubPipe,
-    SyncProcessorWrapper,
-    SyncSubPipe,
-)
 
 from ._assignment import get_subpipe
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.runtime.context import Context
+    from riko.types._compiler import CountValues, EmbedKwargs
+    from riko.types._streams import (
+        AsyncItemsOrValues,
+        AsyncStreamOrValueStream,
+        Item,
+        Items,
+        ItemsOrValues,
+        Stream,
+        StreamOrValueStream,
+    )
+    from riko.types._wrappers import (
+        AsyncProcessorWrapper,
+        AsyncSubPipe,
+        SyncProcessorWrapper,
+        SyncSubPipe,
+    )
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -125,7 +130,7 @@ def _fold_parent(  # noqa: E302
 
     for value in results:
         yielded = True
-        yield value if emit else cast(Item, {**parent, assign: value})
+        yield value if emit else cast("Item", {**parent, assign: value})
 
     if not (yielded or emit):
         yield parent
@@ -138,7 +143,7 @@ async def _afold_parent(
 
     async for value in results:
         yielded = True
-        yield value if emit else cast(Item, {**parent, assign: value})
+        yield value if emit else cast("Item", {**parent, assign: value})
 
     if not (yielded or emit):
         yield parent
@@ -215,7 +220,7 @@ def loop_embed_sync(
     elif is_subpipe(embed):
         # A sub-pipeline embed is self-contained, so it runs per parent with no
         # embedded kwargs (its own modules carry their conf).
-        stream = loop(cast(SyncSubPipe, embed), None, context, source)
+        stream = loop(cast("SyncSubPipe", embed), None, context, source)
         looped = True
     elif embed_type and embed.loopable:
         stream = loop(embed, embedded_kwargs, context, source)
@@ -262,7 +267,7 @@ def loop_embed_async(
     elif is_subpipe(embed):
         # A sub-pipeline embed is self-contained, so it runs per parent with no
         # embedded kwargs (its own modules carry their conf).
-        stream = loop(cast(AsyncSubPipe, embed), None, context, source)
+        stream = loop(cast("AsyncSubPipe", embed), None, context, source)
         looped = True
     elif embed_type and embed.loopable:
         stream = loop(embed, embedded_kwargs, context, source)

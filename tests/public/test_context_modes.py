@@ -93,7 +93,7 @@ class TestContextImmutability:
 
     def test_roundtrips_through_pickle(self):
         context = Context(mode=ExecutionMode.DESCRIBE, inputs={"count": 2}, test=True)
-        restored = cast(Context, loads(dumps(context)))  # noqa: S301
+        restored = cast("Context", loads(dumps(context)))  # noqa: S301
 
         assert restored.mode is ExecutionMode.DESCRIBE
         assert restored.test is True

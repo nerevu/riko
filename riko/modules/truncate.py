@@ -25,19 +25,24 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 from itertools import islice
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._configs import TruncateObjconf
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Stream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import operator
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import TruncateObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
 DEFAULTS: Defaults = {"start": 0, "count": 0}

@@ -15,6 +15,8 @@ Examples:
 
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, overload
 
 if TYPE_CHECKING:
@@ -25,15 +27,15 @@ SINK_NAMES: frozenset[str] = frozenset({"output", "write"})
 
 @overload
 def derive_category(  # noqa: E704
-    metadata: "ModuleMetadata", *, provider: str = "riko", override: str
+    metadata: ModuleMetadata, *, provider: str = "riko", override: str
 ) -> str: ...
 @overload  # noqa: E302
 def derive_category(  # noqa: E704
-    metadata: "ModuleMetadata", *, provider: str = "riko", override: None = ...
-) -> "ModuleCategory": ...
+    metadata: ModuleMetadata, *, provider: str = "riko", override: None = ...
+) -> ModuleCategory: ...
 def derive_category(  # noqa: E302
-    metadata: "ModuleMetadata", *, provider: str = "riko", override: str | None = None
-) -> "ModuleCategory | str":
+    metadata: ModuleMetadata, *, provider: str = "riko", override: str | None = None
+) -> ModuleCategory | str:
     """
     Derives the user-facing discovery category for a module.
 

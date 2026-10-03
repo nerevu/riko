@@ -1,8 +1,12 @@
 """General iterable composition, fan-out, selection, and deduplication helpers."""
 
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from __future__ import annotations
+
 from itertools import chain, dropwhile, takewhile
-from typing import overload
+from typing import TYPE_CHECKING, overload
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
 
 def noop[T](item: T) -> T:

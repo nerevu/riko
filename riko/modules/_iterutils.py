@@ -12,15 +12,16 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 from collections import defaultdict
 from collections.abc import Callable, ItemsView, Iterable, Mapping, Sequence
 from datetime import UTC, date, tzinfo
 from datetime import datetime as dt
 from decimal import Decimal
-from logging import Logger
 from math import isnan
 from time import struct_time
-from typing import Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
@@ -29,6 +30,9 @@ from riko.coercion._dates import date_to_datetime, ensure_tzinfo
 from riko.coercion.cast import CAST_SWITCH, cast_value
 from riko.types._enums import CastType
 from riko.types._scalars import PrimitiveValue, SortableValue
+
+if TYPE_CHECKING:
+    from logging import Logger
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -119,7 +123,7 @@ def _resolve_default(
         if unorderable or type_ in DATELIKE_TYPES:
             resolved = SORT_FILLER
         elif _default is not None:
-            resolved = cast(SortableValue, _default)
+            resolved = cast("SortableValue", _default)
     elif isinstance(default, Mapping):
         logger.warning(f"Invalid {default=}. Setting to empty string.")
     elif default is not None:
@@ -179,7 +183,7 @@ def def_itemgetter(
             casted = _resolve_uncastable(value, msg, default)
         elif type_:
             _casted = cast_value(value, CastType(type_))
-            casted = cast(PrimitiveValue, _casted)
+            casted = cast("PrimitiveValue", _casted)
         elif isinstance(value, (str, int, struct_time)):
             casted = value
         elif isinstance(value, NON_SORTABLE):

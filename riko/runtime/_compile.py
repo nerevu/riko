@@ -23,27 +23,21 @@ Examples:
 
 """
 
+from __future__ import annotations
+
 import builtins
 import keyword
 from collections import defaultdict
-from collections.abc import (
-    AsyncIterator,
-    Awaitable,
-    Iterable,
-    Iterator,
-    Mapping,
-    Sequence,
-)
+from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
 from functools import partial, reduce, update_wrapper
 from itertools import pairwise
 from json import JSONEncoder, dumps
-from pathlib import Path
 from pprint import PrettyPrinter
 from time import struct_time
 from types import MappingProxyType
-from typing import Any, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 from jinja2 import Environment, PackageLoader
 
@@ -55,7 +49,6 @@ from riko.base.exceptions import InvalidPipelineError
 from riko.coercion._graph import Graph, Nodes, NodeSet, SetGraph, topological_sort
 from riko.coercion._sequences import listize
 from riko.parsing._dotdict import DotDict
-from riko.types._collections import Inputs
 from riko.types._compiler import (
     AbbrevStringModule,
     CountValues,
@@ -76,36 +69,6 @@ from riko.types._compiler import (
 )
 from riko.types._enums import ExecutionMode
 from riko.types._guards import is_loop_module, is_mapping
-from riko.types._pipeline import (
-    AsyncPipelineDependencies,
-    AsyncPyInput,
-    AsyncStep,
-    AsyncSteps,
-    PipelineDependencies,
-    PyInput,
-    Step,
-    Steps,
-    StepValue,
-    SyncPipelineDependencies,
-    SyncPyInput,
-    SyncStep,
-    SyncSteps,
-    SyncStepValue,
-)
-from riko.types._streams import (
-    AsyncStreamOrValueStream,
-    ItemOrValue,
-    Stream,
-    StreamOrValueStream,
-)
-from riko.types._wrappers import (
-    AsyncPipeWrapper,
-    AsyncWrapperOutput,
-    Pipe,
-    SyncPipeWrapper,
-    SyncWrapperOutput,
-    WrapperOutput,
-)
 from riko.types.modules import (
     AnyModuleRawConf,
     ConfArg,
@@ -118,6 +81,41 @@ from ._compile_repr import Id, PyKwargValue, repr_arg, repr_args
 from ._resolver import pipe_resolver
 from .context import Context
 
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Iterable
+    from pathlib import Path
+
+    from riko.types._collections import Inputs
+    from riko.types._pipeline import (
+        AsyncPipelineDependencies,
+        AsyncPyInput,
+        AsyncStep,
+        AsyncSteps,
+        PipelineDependencies,
+        PyInput,
+        Step,
+        Steps,
+        StepValue,
+        SyncPipelineDependencies,
+        SyncPyInput,
+        SyncStep,
+        SyncSteps,
+        SyncStepValue,
+    )
+    from riko.types._streams import (
+        AsyncStreamOrValueStream,
+        ItemOrValue,
+        Stream,
+        StreamOrValueStream,
+    )
+    from riko.types._wrappers import (
+        AsyncPipeWrapper,
+        AsyncWrapperOutput,
+        Pipe,
+        SyncPipeWrapper,
+        SyncWrapperOutput,
+        WrapperOutput,
+    )
 _RAW_CONFS = {
     "count": "CountRawConf",
     "csv": "CsvRawConf",
@@ -209,7 +207,7 @@ def _as_named_pipe(  # noqa: E302
     """Builds a renamed wrapper without modifying the imported pipe."""
     pipe = resolve_module(module_name, is_async)
     name = str(f"pipe_{module_id}")
-    wrapper = cast(Pipe, partial(pipe))
+    wrapper = cast("Pipe", partial(pipe))
     update_wrapper(wrapper, pipe)
 
     wrapper.__name__ = name
@@ -319,7 +317,7 @@ def get_input(conf: InputRawConf, **kwargs: object) -> str | int | bool:
     default = _default.get("value")
 
     if inputs := kwargs.get("inputs"):
-        value = cast(Inputs, inputs).get(name, default)
+        value = cast("Inputs", inputs).get(name, default)
     elif not kwargs.get("test"):
         # we skip user interaction during tests
         raw = input(f"{prompt} (default={default}) ")
@@ -486,7 +484,7 @@ def _lower_keys[T](obj: T) -> T:
     else:
         result = obj
 
-    return cast(T, result)
+    return cast("T", result)
 
 
 def _conf_source(module_name: str, conf: Id | PyKwargValue) -> str:
@@ -519,8 +517,8 @@ def _gen_embed_subpipe_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
 
 def _get_sources(conf: AnyModuleRawConf | None) -> list[dict[str, str]] | None:
     if conf and (url := conf.get("url")) and isinstance(url, list):
-        urls = cast(list[Value], url)
-        return [{"url": cast(str, url.get("value"))} for url in urls]
+        urls = cast("list[Value]", url)
+        return [{"url": cast("str", url.get("value"))} for url in urls]
 
 
 def _used_raw_confs(parsed_pipe_def: ParsedPipeDef) -> set[str]:
@@ -697,7 +695,7 @@ def _gen_pykwargs(  # noqa: E302
 
     for key in ("emit", "assign", "field", "count"):
         if (setting := module.get(key)) is not None:
-            yield (key, cast(bool | str | CountValues, setting))
+            yield (key, cast("bool | str | CountValues", setting))
 
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
     yield ("context", context)
@@ -824,7 +822,7 @@ def _gen_steps(  # noqa: E302  # pyright: ignore[reportInconsistentOverload]
             pykwargs = dict(_pykwargs)
             step = (module_id, pipe(pyarg, **pykwargs))
 
-        _step = cast(Step, step)
+        _step = cast("Step", step)
         steps.update([_step])
         yield _step
 
@@ -1045,7 +1043,7 @@ def _build_pipeline(  # noqa: E302
         msg = f"pipeline output {module_id!r} resolves to an embedded module"
         raise InvalidPipelineError(msg)
 
-    return cast(WrapperOutput, steps[module_id])
+    return cast("WrapperOutput", steps[module_id])
 
 
 def _get_descriptions(
@@ -1156,7 +1154,7 @@ async def abuild_pipeline(  # noqa: E302
         args = (parsed_pipe_def, module_names, module_ids)
         bkwargs = {**kwargs, "is_async": True}
         built = await maybe_deferred(_build_pipeline, *args, context=context, **bkwargs)
-        stream = cast(AsyncStreamOrValueStream, built)
+        stream = cast("AsyncStreamOrValueStream", built)
 
         async for item in as_async(stream):
             yield item
@@ -1208,7 +1206,7 @@ def stringify_pipe(
     pyinput = extract_input(parsed_pipe_def)
     data = TemplateData(
         {
-            "uniq_modules": [cast(AbbrevStringModule, m) for m in uniq_modules],
+            "uniq_modules": [cast("AbbrevStringModule", m) for m in uniq_modules],
             "modules": string_modules,
             "pipe_name": parsed_pipe_def["name"],
             "inputs": pyinput,

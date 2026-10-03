@@ -37,27 +37,32 @@ Attributes:
 
 """
 
-from collections.abc import Callable, Iterator, Mapping
+from __future__ import annotations
+
 from inspect import signature
-from logging import Logger
 from time import sleep
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 from meza.fntools import dfilter
 
 from riko.base._strutils import gen_name
-from riko.coercion._configs import ReceiveObjconf
 from riko.runtime._pubsub import async_hub, coroutine, sync_hub
-from riko.runtime._pubsub._types import ReceiveFunc, Receiver
 from riko.types._enums import BasicCastType
 from riko.types._guards import is_missing_type, is_stateful_item
-from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING, StreamState
 from riko.types._streams import Item, StatefulItem, Stream, StreamOrValueStream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import operator
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator, Mapping
+    from logging import Logger
+
+    from riko.coercion._configs import ReceiveObjconf
+    from riko.runtime._pubsub._types import ReceiveFunc, Receiver
+    from riko.types._options import Defaults, Opts
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "pollable": True}
 DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5, "max_len": 256}
@@ -109,7 +114,7 @@ def register_receiver(
                         if state is StreamState.DONE and on_complete is not None:
                             on_complete()
                     else:
-                        item = cast(Item, item)
+                        item = cast("Item", item)
 
                         if on_receive is not None:
                             on_receive(item)
@@ -162,7 +167,9 @@ async def async_parser(
 
     async with async_hub.subscribe(name) as receive_stream:
         async for item in receive_stream:
-            results.append(cast(Item, _apply(func, item, **fkwargs) if func else item))
+            results.append(
+                cast("Item", _apply(func, item, **fkwargs) if func else item)
+            )
 
     return iter(results)
 

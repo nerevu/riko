@@ -8,6 +8,8 @@ resolved return member. A successful classification names its source
 that explains how to fix the function contract.
 """
 
+from __future__ import annotations
+
 import asyncio
 import itertools
 from collections.abc import Iterator
@@ -80,7 +82,7 @@ async def _passthrough(items):
     return result
 
 
-def _unresolvable(items) -> "Nonexistent":  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
+def _unresolvable(items) -> Nonexistent:  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
     return sum(items)
 
 

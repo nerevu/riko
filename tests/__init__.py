@@ -6,14 +6,19 @@ tests
 Provides application unit tests
 """
 
-from collections.abc import AsyncIterable
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Protocol, overload
+from typing import TYPE_CHECKING, Protocol, overload
 
 import pytest
 
 from riko.bado._backend import issync, run
-from riko.runtime.collections import AsyncPipe, SyncPipe
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterable
+
+    from riko.runtime.collections import AsyncPipe, SyncPipe
 
 TESTS_DIR = Path(__file__).parent.absolute()
 

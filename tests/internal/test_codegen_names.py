@@ -7,8 +7,10 @@ generated module-name and module-id output. Generated files must match the
 current module catalog.
 """
 
+from __future__ import annotations
+
 import dataclasses
-from typing import get_args
+from typing import TYPE_CHECKING, get_args
 
 import pytest
 
@@ -24,7 +26,9 @@ from riko.ext.codegen import (
 )
 from riko.modules._metadata import gen_module_catalog
 from riko.types._module_ids import LoopableModuleId, ModuleId
-from riko.types.modules import ModuleCategory
+
+if TYPE_CHECKING:
+    from riko.types.modules import ModuleCategory
 
 _NAMES = PACKAGE_DIR / "modules" / "_names.py"
 _MODULE_IDS = PACKAGE_DIR / "types" / "_module_ids.py"

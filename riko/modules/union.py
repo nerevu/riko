@@ -23,20 +23,25 @@ Attributes:
 
 """
 
-from collections.abc import Iterable
+from __future__ import annotations
+
 from itertools import chain
-from logging import Logger
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 
-from riko.coercion._dynamic_conf import DynamicConf
 from riko.parsing._dotdict import DotDict
 from riko.types._options import Defaults, Opts
-from riko.types._streams import Stream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import operator
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from logging import Logger
+
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.types._streams import Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = Opts()
 DEFAULTS: Defaults = {}
@@ -80,7 +85,7 @@ def parser(
 
     """
     _others = DotDict(kwargs).get("others", [])
-    others = cast(Iterable[Stream], _others)
+    others = cast("Iterable[Stream]", _others)
     return chain(stream, chain.from_iterable(others))
 
 

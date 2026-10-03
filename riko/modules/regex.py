@@ -26,26 +26,31 @@ Attributes:
 
 """
 
-from collections.abc import Sequence
+from __future__ import annotations
+
 from functools import reduce
-from logging import Logger
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 
 from riko.bado.itertools import async_reduce, coop_reduce
 from riko.base._strutils import multi_substitute, substitute
-from riko.coercion._configs import RegexObjconf
 from riko.coercion._dataclass import get_regex_rule
 from riko.parsing._dotdict import DotDict
-from riko.types._collections import RikoValue
-from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING
-from riko.types._streams import Item
-from riko.types.modules import RegexConfRule, RegexRule
 
 from ._decorators import processor
 from ._iterutils import group_by
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from logging import Logger
+
+    from riko.coercion._configs import RegexObjconf
+    from riko.types._collections import RikoValue
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item
+    from riko.types.modules import RegexConfRule, RegexRule
 
 OPTS: Opts = {"listize": True, "extract": "rule", "emit": True}
 DEFAULTS: Defaults = {"multi": False}
@@ -110,7 +115,7 @@ async def async_parser(
 
         rewritten = {} if replacement is MISSING else {field: replacement}
         result = DotDict({**item, **rewritten})
-        return cast(DotDict[RikoValue], result)
+        return cast("DotDict[RikoValue]", result)
 
     regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
     grouped = group_by(regex_rules, "field")
@@ -172,7 +177,7 @@ def parser(
 
         rewritten = {} if replacement is MISSING else {field: replacement}
         result = DotDict({**item, **rewritten})
-        return cast(DotDict[RikoValue], result)
+        return cast("DotDict[RikoValue]", result)
 
     regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
     grouped = group_by(regex_rules, "field")

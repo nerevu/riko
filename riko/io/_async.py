@@ -19,9 +19,7 @@ Examples:
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Generator, Iterator
 from io import BytesIO, StringIO, TextIOWrapper
-from logging import Logger
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import pygogo as gogo
@@ -33,15 +31,18 @@ from riko.bado._backend import async_open
 from riko.bado._util import async_get, async_read
 from riko.base._constants import ENCODING
 from riko.base._paths import get_abspath
-from riko.types._io import IOFileLike, PathLike
-from riko.types._scalars import AnyStr
 
 from ._sync import ext_from_content_type
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable, Generator, Iterator
+    from logging import Logger
+
     from _typeshed import OpenBinaryMode, OpenTextMode
 
     from riko.bado._backend import NamedTemporaryFile
+    from riko.types._io import IOFileLike, PathLike
+    from riko.types._scalars import AnyStr
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -115,7 +116,7 @@ def chunk(  # noqa: E302
 
     """
     result = _chunk(content, chunksize, *args, **kwargs)
-    return cast(Iterator[Chunk], result)
+    return cast("Iterator[Chunk]", result)
 
 
 @overload

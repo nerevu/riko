@@ -8,15 +8,19 @@ from the response ``Content-Type``. The sync path already did this via
 is threaded through ``async_url_open`` onto ``NamedTextIOWrapper.ext``.
 """
 
+from __future__ import annotations
+
 from types import SimpleNamespace
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from riko.io._async import async_url_open
 from riko.modules.fetchdata import async_pipe
-from riko.types._streams import Item
 from tests import skipif_issync
+
+if TYPE_CHECKING:
+    from riko.types._streams import Item
 
 URL = "https://example.test/data"
 JSON = b'{"items": [{"title": "A"}, {"title": "B"}]}'
@@ -32,7 +36,7 @@ def _async_get(content, content_type):
 
 async def _titles(conf):
     stream = async_pipe(conf=conf)
-    return [cast(Item, item).get("title") async for item in stream]
+    return [cast("Item", item).get("title") async for item in stream]
 
 
 @skipif_issync

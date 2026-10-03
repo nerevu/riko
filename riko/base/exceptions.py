@@ -18,6 +18,16 @@ class UnsupportedModuleError(ModuleError):
         self.module_name = module_name
 
 
+class TargetError(RikoError):
+    """Base class for target-related errors."""
+
+
+class UnsupportedTargetError(TargetError):
+    def __init__(self, target: str):
+        super().__init__(f"Unsupported riko target: {target}")
+        self.target = target
+
+
 class PipelineError(RikoError):
     """Base class for pipeline-related errors."""
 
@@ -77,6 +87,8 @@ __all__ = [
     "PubSubError",
     "ReceiverUnavailableError",
     "RikoError",
+    "TargetError",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
+    "UnsupportedTargetError",
 ]

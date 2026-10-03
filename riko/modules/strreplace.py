@@ -25,20 +25,25 @@ Attributes:
 
 """
 
-from collections.abc import Callable, Sequence
+from __future__ import annotations
+
 from functools import reduce
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.bado.itertools import coop_reduce
-from riko.coercion._configs import StrReplaceObjconf
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types.modules import StrReplaceConfRule
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+    from logging import Logger
+
+    from riko.coercion._configs import StrReplaceObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types.modules import StrReplaceConfRule
 
 OPTS: Opts = {
     "ftype": BasicCastType.TEXT,

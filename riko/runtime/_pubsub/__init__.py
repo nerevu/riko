@@ -11,13 +11,18 @@ cannot reach an async receiver.
 depend on it.
 """
 
-from collections.abc import Callable
+from __future__ import annotations
+
 from functools import wraps
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ._async import AsyncPubSubHub
 from ._sync import SyncPubSubHub
-from ._types import Receiver
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from ._types import Receiver
 
 sync_hub = SyncPubSubHub()
 async_hub = AsyncPubSubHub()

@@ -23,22 +23,27 @@ Attributes:
 
 """
 
-from logging import Logger
-from typing import Any, cast
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 from meza.io import read_csv
 
 from riko.base._constants import ENCODING
-from riko.coercion._configs import CsvObjconf
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close, seekable
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Item, Stream
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import CsvObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item, Stream
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {
@@ -100,7 +105,7 @@ async def async_parser(
     renamed = {"first_row": first_row, "custom_header": custom_header}
     source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
-    content = cast(Stream, read_csv(source, **rkwargs))
+    content = cast("Stream", read_csv(source, **rkwargs))
     return auto_close(content, source, r)
 
 
@@ -146,7 +151,7 @@ def parser(
     f = Fetch(url, encoding=objconf.encoding)
     source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
-    content = cast(Stream, read_csv(source, **rkwargs))
+    content = cast("Stream", read_csv(source, **rkwargs))
     return auto_close(content, source, f)
 
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import asynccontextmanager, contextmanager
 from enum import Enum, auto
 from io import StringIO
@@ -24,14 +23,17 @@ from riko.io._reencode import IterStringIO, Reencoder, reencode
 from riko.io._serialization import convert_records
 from riko.types._enums import FmtLike, Formats, KeyLike
 from riko.types._guards import is_mapping
-from riko.types._streams import AsyncItems, Item, Items, Stream
-from riko.types._wrappers import ConversionOutput
 
 from ._resources import OneShotResource, Resource
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Callable, Generator
+
     from _typeshed import OpenBinaryMode
     from anyio import AsyncFile
+
+    from riko.types._streams import AsyncItems, Item, Items, Stream
+    from riko.types._wrappers import ConversionOutput
 
 
 class _SessionState(Enum):

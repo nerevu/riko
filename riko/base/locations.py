@@ -26,9 +26,13 @@ Attributes:
 
 """
 
-from types import MappingProxyType
+from __future__ import annotations
 
-from ._locations import Region
+from types import MappingProxyType
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ._locations import Region
 
 LOCATIONS: MappingProxyType[str, Region] = MappingProxyType(
     {

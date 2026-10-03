@@ -9,6 +9,8 @@ Examples:
 
 """
 
+from __future__ import annotations
+
 from collections.abc import Mapping
 from pprint import pprint
 

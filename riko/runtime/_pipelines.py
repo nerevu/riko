@@ -11,21 +11,26 @@ Attributes:
 
 """
 
-from collections.abc import Mapping
+from __future__ import annotations
+
 from functools import partial, update_wrapper
 from json import loads
-from pathlib import Path
-from types import ModuleType
-from typing import Literal, Protocol, cast, overload
+from typing import TYPE_CHECKING, Literal, Protocol, cast, overload
 
 from riko.base._imports import import_or_else
 from riko.base.exceptions import UnsupportedPipelineError
-from riko.types._compiler import ParsedPipeDef
-from riko.types._wrappers import AsyncPipeWrapper, Pipe, SyncPipeWrapper
-from riko.types.modules import ModuleSubtype
 
 from ._importutils import resolve_interface
 from ._subpipe import is_subpipe, mark_subpipe
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pathlib import Path
+    from types import ModuleType
+
+    from riko.types._compiler import ParsedPipeDef
+    from riko.types._wrappers import AsyncPipeWrapper, Pipe, SyncPipeWrapper
+    from riko.types.modules import ModuleSubtype
 
 
 def _as_subpipe(pipe: Pipe) -> Pipe:
@@ -40,10 +45,10 @@ def _as_subpipe(pipe: Pipe) -> Pipe:
     if is_subpipe(pipe):
         subpipe = pipe
     else:
-        subpipe = cast(Pipe, partial(pipe))
+        subpipe = cast("Pipe", partial(pipe))
         update_wrapper(subpipe, pipe)
-        subtype = cast(ModuleSubtype, getattr(pipe, "subtype", "source"))
-        loopable = cast(bool, getattr(pipe, "loopable", True))
+        subtype = cast("ModuleSubtype", getattr(pipe, "subtype", "source"))
+        loopable = cast("bool", getattr(pipe, "loopable", True))
         mark_subpipe(subpipe, subtype=subtype, loopable=loopable)
 
     return subpipe
@@ -131,6 +136,8 @@ class PipelineResolver:
 
     Examples:
 
+        >>> from types import ModuleType
+        >>>
         >>> module = ModuleType("pipe_demo")
         >>> module.pipe = lambda stream=None, **kwargs: iter([{"x": 1}])
         >>> resolver = PipelineResolver(store=MappingStore({"pipe_demo": module}))

@@ -26,9 +26,9 @@ checkpoints.
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, AsyncIterable, Awaitable, Callable, Iterable
+from collections.abc import AsyncIterable
 from functools import partial
-from typing import cast, overload
+from typing import TYPE_CHECKING, cast, overload
 
 from riko.base._constants import DEF_CONNECTION_COUNT
 from riko.types._sentinels import MISSING
@@ -43,6 +43,9 @@ from ._backend import (
     create_task_group,
 )
 from ._util import maybe_deferred
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 
 
 def _cap[T, S](
@@ -304,7 +307,7 @@ async def async_map[T, S](
         for index, item in enumerate(items):
             tg.start_soon(work, index, item)
 
-    return [cast(S, r) for r in results if r is not MISSING]
+    return [cast("S", r) for r in results if r is not MISSING]
 
 
 async def _pool_stream[T, S](

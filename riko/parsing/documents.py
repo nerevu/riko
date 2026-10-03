@@ -11,27 +11,32 @@ Attributes:
 
 """
 
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from __future__ import annotations
+
 from html.entities import name2codepoint
 from html.parser import HTMLParser
 from io import BytesIO, RawIOBase, StringIO
 from itertools import chain
 from json import JSONDecodeError, load, loads
-from logging import Logger
-from types import ModuleType
-from typing import TYPE_CHECKING, Any, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import feedparser
 import pygogo as gogo
 
 from riko.base._constants import STREAMING_THRESHOLD
 from riko.coercion._sequences import listize
-from riko.types._collections import RikoDict, Stringy, StringyDict
 from riko.types._guards import is_mapping
-from riko.types._io import FileLike
-from riko.types._streams import Item, Stream
 
 from ._dotdict import DotDict
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Mapping, Sequence
+    from logging import Logger
+    from types import ModuleType
+
+    from riko.types._collections import RikoDict, Stringy, StringyDict
+    from riko.types._io import FileLike
+    from riko.types._streams import Item, Stream
 
 try:
     from lxml import etree, html
@@ -85,9 +90,9 @@ if TYPE_CHECKING:
     from lxml.etree import _ElementTree as lxmlElementTree
 
 type AnyElementTree = (
-    "nativeElementTree | lxmlElementTree | nativeElementTree[nativeElement[str]]"
+    nativeElementTree | lxmlElementTree | nativeElementTree[nativeElement[str]]
 )
-type AnyElement = "nativeElement | lxmlElement"
+type AnyElement = nativeElement | lxmlElement
 
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 logger.debug(f"{IS_LXML=}")
@@ -341,7 +346,7 @@ def xpath(
     ns_path = "/".join(f"{ns_prefix}:{tag}" for tag in tags[pos:]) if namespace else ""
 
     if hasattr(tree, "xpath"):
-        _xpath = cast(Union["lxmlElementTree", "lxmlElement"], tree).xpath
+        _xpath = cast("lxmlElementTree | lxmlElement", tree).xpath
         elements = _xpath(ns_path, namespaces=namespaces) if namespace else _xpath(path)
     elif namespace:
         elements = tree.findall(f".//{ns_path}", namespaces=namespaces)
@@ -433,7 +438,7 @@ def element2dict(element: AnyElement) -> StringyDict:
 
     if text and not set(i).difference(["content"]):
         # element is leaf node and doesn't have attributes
-        result = cast(StringyDict, i["content"])
+        result = cast("StringyDict", i["content"])
     else:
         result = i
 
@@ -493,7 +498,7 @@ def any2dict(
                 prefix = path
 
             items = ijson.items(content, prefix, use_float=True)
-            yield from cast(Stream, items)
+            yield from cast("Stream", items)
         elif isinstance(content, str):
             try:
                 json = loads(content)
@@ -501,7 +506,7 @@ def any2dict(
                 logger.error(e)
             else:
                 value = DotDict(json).get(path, "")
-                yield from any2dict(cast(list[RikoDict], value), ext=None)
+                yield from any2dict(cast("list[RikoDict]", value), ext=None)
         else:
             try:
                 json_obj = load(content)
@@ -509,7 +514,7 @@ def any2dict(
                 logger.error(e)
             else:
                 value = DotDict(json_obj).get(path, "") if path else json_obj
-                yield from any2dict(cast(RikoDict, value), ext=None)
+                yield from any2dict(cast("RikoDict", value), ext=None)
     elif ext:
         raise TypeError(f"Invalid file type: '{ext}'")
     elif isinstance(content, str):

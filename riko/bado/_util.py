@@ -9,7 +9,8 @@ This module is private. Optional dependency handling and the sync-only fallback
 are provided by :mod:`riko.bado._backend`.
 """
 
-from collections.abc import Awaitable, Callable, Iterable
+from __future__ import annotations
+
 from functools import partial
 from inspect import isawaitable
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
@@ -19,10 +20,12 @@ from riko.types._sentinels import MISSING
 from ._backend import AsyncClient, Path, create_task_group
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable, Iterable
+
     from ._backend import HTTPXResponse
 
 
-async def async_get(url: str, **kwargs: Any) -> "HTTPXResponse":
+async def async_get(url: str, **kwargs: Any) -> HTTPXResponse:
     """
     Fetches ``url`` via httpx and follows redirects.
 
@@ -52,7 +55,7 @@ async def async_read(  # noqa: E302
     return await (path.read_bytes() if binary else path.read_text(encoding))
 
 
-async def async_json(response: "HTTPXResponse") -> dict[str, Any]:
+async def async_json(response: HTTPXResponse) -> dict[str, Any]:
     """Parses the JSON body of ``response``."""
     return response.json()
 
@@ -84,7 +87,7 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
 
 
 async def as_awaitable[T](value: T | Awaitable[T]) -> T:
-    return cast(T, (await value)) if isawaitable(value) else value
+    return cast("T", (await value)) if isawaitable(value) else value
 
 
 async def maybe_deferred[T](

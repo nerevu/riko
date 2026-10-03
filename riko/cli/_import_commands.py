@@ -1,8 +1,10 @@
 """Compose static import-contract checks for the manage CLI."""
 
-from collections.abc import Callable
+from __future__ import annotations
+
 from pathlib import Path
 from sys import exit
+from typing import TYPE_CHECKING
 
 import click
 
@@ -16,6 +18,9 @@ from ._lint_import_architecture import (
     validate_architecture,
 )
 from ._lint_relative_imports import check_relative_imports
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def _check_architecture(root: Path) -> int:

@@ -23,17 +23,22 @@ Attributes:
 
 """
 
-import datetime
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._configs import DateFormatObjconf
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    import datetime
+    from logging import Logger
+
+    from riko.coercion._configs import DateFormatObjconf
+    from riko.types._options import Defaults, Opts
 
 OPTS: Opts = {"field": "date", "ftype": BasicCastType.DATETIME}
 DEFAULTS: Defaults = {"format": "%m/%d/%Y %H:%M:%S"}

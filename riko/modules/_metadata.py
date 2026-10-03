@@ -9,7 +9,6 @@ than declared, and the catalog is discovered from the package at runtime.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from importlib import import_module
 from pkgutil import iter_modules as iter_package_modules
 from typing import TYPE_CHECKING, Literal, cast, overload
@@ -18,11 +17,13 @@ from riko.base._imports import import_or_else
 from riko.coercion._dataclass import normalize_module_name
 from riko.definitions.modules import ModuleDefinition
 from riko.runtime._registry import registry
-from riko.types._wrappers import ModuleWrapper
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from riko.types._enums import ModuleNameLike
+    from riko.types._wrappers import ModuleWrapper
 
 _PACKAGE = "riko.modules"
 
@@ -94,7 +95,7 @@ def get_module_metadata(  # noqa: E302
     canonical = normalize_module_name(name)
     module = import_module(f"{_PACKAGE}.{canonical}")
     pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
-    targets = tuple(cast(ModuleWrapper, pipe) for pipe in pipes if callable(pipe))
+    targets = tuple(cast("ModuleWrapper", pipe) for pipe in pipes if callable(pipe))
     label = module.__name__
     metadata = _metadata_from_targets(
         canonical, targets, label=label, strict_naming=True
@@ -128,7 +129,7 @@ def gen_registry_catalog() -> Iterator[ModuleMetadata]:
     for name in registry.catalog_names():
         definition = registry.definition(name)
         pipes = map(definition.get_pipe, is_async) if definition else ()
-        targets = tuple(cast(ModuleWrapper, pipe) for pipe in pipes if callable(pipe))
+        targets = tuple(cast("ModuleWrapper", pipe) for pipe in pipes if callable(pipe))
         args = (name, targets)
 
         try:

@@ -6,17 +6,23 @@ Colorized logging formatter, verbosity parsing, a ``log`` helper, and the
 ``exception_hook`` used by the dev CLI (pdb on error when ``debug``).
 """
 
+from __future__ import annotations
+
 import pdb  # noqa: T100
 import sys
-from collections.abc import Callable
 from json.decoder import JSONDecodeError
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING, Formatter, Logger, LogRecord
 from traceback import format_exception
-from types import TracebackType
+from typing import TYPE_CHECKING
 
 import pygogo as gogo
-import requests
 from pygogo.formatters import DATEFMT
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from types import TracebackType
+
+    import requests
 
 # https://stackoverflow.com/a/56944256/408556
 GREY = "\x1b[38;21m"

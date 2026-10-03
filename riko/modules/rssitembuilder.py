@@ -25,28 +25,33 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 from datetime import UTC
 from datetime import datetime as dt
-from logging import Logger
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 
-from riko.coercion._configs import RssItemBuilderObjconf
 from riko.parsing._dotdict import DotDict
-from riko.types._collections import RikoValue
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Item
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import RssItemBuilderObjconf
+    from riko.types._collections import RikoValue
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item
 
 OPTS: Opts = {"ftype": BasicCastType.NONE}
 DEFAULTS: Defaults = {}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 RSS = cast(
-    dict[str, str],
+    "dict[str, str]",
     DotDict(
         {
             "author": "author",

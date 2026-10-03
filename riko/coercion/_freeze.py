@@ -3,25 +3,29 @@
 Dataclass construction and hashable round-tripping for repr-based memoization.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, is_dataclass
 from functools import cache, wraps
-from logging import Logger
 from time import struct_time
-from typing import TYPE_CHECKING, Any, Protocol, TypeGuard, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, Protocol, TypeGuard, TypeVar, cast
 
 import pygogo as gogo
 
-from riko.types._collections import RikoDict, RikoList, RikoValue
 from riko.types._scalars import Hashable, HashableType
 
 from ._dataclass import fromdict
 from ._objectify import Objectify
 
 if TYPE_CHECKING:
+    from logging import Logger
+
     from _typeshed import DataclassInstance
 
-_UNSUPPORTED: Hashable = cast(Hashable, object())
+    from riko.types._collections import RikoDict, RikoList, RikoValue
+
+_UNSUPPORTED: Hashable = cast("Hashable", object())
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -68,7 +72,7 @@ def _to_hashable(obj: object) -> HashableOrTuple:
     if obj is None:
         pass
     elif isinstance(obj, HashableType):
-        hashed = cast(Hashable, obj)
+        hashed = cast("Hashable", obj)
     elif isinstance(obj, Mapping):
         inner = sorted((k, _to_hashable(v)) for k, v in obj.items())
         typ = Objectify if isinstance(obj, Objectify) else dict
@@ -101,28 +105,32 @@ def _to_hashable(obj: object) -> HashableOrTuple:
 @cache
 def _from_hashable(
     obj: HashableOrTuple,
-) -> Union[RikoValue, Objectify, "DataclassInstance", CollectionTuple, DataclassTuple]:
+) -> RikoValue | Objectify | DataclassInstance | CollectionTuple | DataclassTuple:
     if not isinstance(obj, struct_time) and isinstance(obj, tuple) and len(obj) == 2:
         if is_dataclass_tuple(obj):
             typ, (cls, inner) = obj
         else:
-            typ, inner = cast(CollectionTuple, obj)
+            typ, inner = cast("CollectionTuple", obj)
             cls = None
 
         if typ in (Objectify, dict, "dataclass"):
-            _arg = {k: _from_hashable(v) for k, v in cast(InnerPairs, inner)}
-            arg = cast(RikoDict, _arg)
+            _arg = {k: _from_hashable(v) for k, v in cast("InnerPairs", inner)}
+            arg = cast("RikoDict", _arg)
 
             if typ is Objectify:
                 arg = typ(arg)
             elif cls and typ == "dataclass":
                 arg = fromdict(cls, **arg)
         elif typ is list:
-            _arg = [_from_hashable(v) for v in cast(tuple[HashableOrTuple, ...], inner)]
-            arg = cast(RikoList, _arg)
+            _arg = [
+                _from_hashable(v) for v in cast("tuple[HashableOrTuple, ...]", inner)
+            ]
+            arg = cast("RikoList", _arg)
         elif typ is tuple:
-            _seq = [_from_hashable(v) for v in cast(tuple[HashableOrTuple, ...], inner)]
-            arg = cast(RikoValue, tuple(_seq))
+            _seq = [
+                _from_hashable(v) for v in cast("tuple[HashableOrTuple, ...]", inner)
+            ]
+            arg = cast("RikoValue", tuple(_seq))
         else:
             arg = obj
     else:
@@ -175,7 +183,7 @@ def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
 
     setattr(wrapper, "cache_clear", _cached.cache_clear)  # noqa: B010
     setattr(wrapper, "cache_info", _cached.cache_info)  # noqa: B010
-    return cast(ReprCacheWrapper[R], wrapper)
+    return cast("ReprCacheWrapper[R]", wrapper)
 
 
 # https://trac.edgewall.org/ticket/2066#comment:1

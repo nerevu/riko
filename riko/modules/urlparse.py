@@ -22,18 +22,23 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import pygogo as gogo
 
-from riko.coercion._configs import UrlParseObjconf
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from logging import Logger
+
+    from riko.coercion._configs import UrlParseObjconf
+    from riko.types._options import Defaults, Opts
 
 OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {"parse_key": "content"}
