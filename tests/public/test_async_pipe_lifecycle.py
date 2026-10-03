@@ -79,22 +79,22 @@ class TestAsyncSourceAdapter:
     @pytest.mark.parametrize("make_source", GOOD_SOURCES)
     @async_test
     async def test_source_iterates(self, make_source):
-        flow = make_source() | Pipeline.from_module("hash")
-        assert len([item async for item in flow]) == len(SRC)
+        pipeline = make_source() | Pipeline.from_module("hash")
+        assert len([item async for item in pipeline]) == len(SRC)
 
     @pytest.mark.parametrize("make_source", RAISING_SOURCES)
     @async_test
     async def test_source_failure_propagates(self, make_source):
-        flow = make_source() | Pipeline.from_module("hash")
+        pipeline = make_source() | Pipeline.from_module("hash")
 
         with pytest.raises(RuntimeError, match="boom"):
-            _ = [item async for item in flow]
+            _ = [item async for item in pipeline]
 
     @pytest.mark.parametrize("make_source", GOOD_SOURCES)
     @async_test
     async def test_source_closes(self, make_source):
-        flow = make_source() | Pipeline.from_module("hash")
-        stream = aiter(flow)
+        pipeline = make_source() | Pipeline.from_module("hash")
+        stream = aiter(pipeline)
         items = [item async for item in stream]
         await stream.aclose()
         assert len(items) == len(SRC)
@@ -103,23 +103,23 @@ class TestAsyncSourceAdapter:
 class TestAsyncReiteration:
     @async_test
     async def test_module_source_replays(self):
-        flow = _tokenized()
-        assert len([item async for item in flow]) == 3
-        assert len([item async for item in flow]) == 3
+        pipeline = _tokenized()
+        assert len([item async for item in pipeline]) == 3
+        assert len([item async for item in pipeline]) == 3
 
     @async_test
     async def test_one_shot_source_is_seen_consumed(self):
-        flow = iter(SRC) | Pipeline.from_module("hash")
-        assert len([item async for item in flow]) == len(SRC)
-        assert [item async for item in flow] == []
+        pipeline = iter(SRC) | Pipeline.from_module("hash")
+        assert len([item async for item in pipeline]) == len(SRC)
+        assert [item async for item in pipeline] == []
 
     @async_test
     async def test_iteration_after_partial_iteration_restarts(self):
-        flow = _tokenized()
-        stream = aiter(flow)
+        pipeline = _tokenized()
+        stream = aiter(pipeline)
         assert await anext(stream) == {"content": "a"}
         await stream.aclose()
-        assert len([item async for item in flow]) == 3
+        assert len([item async for item in pipeline]) == 3
 
 
 class TestAsyncClose:
@@ -191,9 +191,9 @@ class TestAsyncFanIn:
 
     @async_test
     async def test_fan_in_replays(self):
-        flow = _fanned_in(get_path("feed.xml"))
-        first = [item async for item in flow]
-        second = [item async for item in flow]
+        pipeline = _fanned_in(get_path("feed.xml"))
+        first = [item async for item in pipeline]
+        second = [item async for item in pipeline]
         assert first
         assert len(first) == len(second)
 

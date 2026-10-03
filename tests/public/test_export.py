@@ -35,11 +35,11 @@ class TestExportPipeline:
 
     def test_pipeline_exports_its_items(self):
         source = Pipeline.from_module("itembuilder", conf=BUILDER_CONF)
-        flow = source.tokenizer(options={"emit": True})
-        assert export(flow) == EXPECTED
+        pipeline = source.tokenizer(options={"emit": True})
+        assert export(pipeline) == EXPECTED
 
     def test_pipeline_serializes(self):
         source = Pipeline.from_module("itembuilder", conf=BUILDER_CONF)
-        flow = source.tokenizer(options={"emit": True})
-        lines = export(flow, Formats.CSV).getvalue().splitlines()
+        pipeline = source.tokenizer(options={"emit": True})
+        lines = export(pipeline, Formats.CSV).getvalue().splitlines()
         assert lines == ["content", "once is 1x", "twice is 2x", "thrice is 3x"]

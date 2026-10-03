@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from riko import Pipeline
 from riko.types._guards import is_mapping
 from riko.types.modules import ItemBuilderConf, StrReplaceConf, StrReplaceConfRule
@@ -35,18 +37,19 @@ def _tokenize() -> Pipeline:
 
 def _both(build: Callable[[Pipeline], Pipeline]) -> tuple[Items, Items]:
     """Iterate *build*'s pipeline both ways; return ``(sync_result, async_result)``."""
-    flow = build(_tokenize())
-    return list(flow), aresolve(flow)
+    pipeline = build(_tokenize())
+    return list(pipeline), aresolve(pipeline)
 
 
 @skipif_issync
 class TestOutputParity:
+    @pytest.mark.smoke
     def test_pipe_chaining(self):
-        sync_result, async_result = _both(lambda flow: flow.count())
+        sync_result, async_result = _both(lambda pipeline: pipeline.count())
         assert sync_result == async_result == [{"count": 3}]
 
     def test_assignment_preserves_parent(self):
-        build = lambda flow: flow.hash(options={"assign": "h"})
+        build = lambda pipeline: pipeline.hash(options={"assign": "h"})
         sync_result, async_result = _both(build)
         expected = ["a", "bb", "ccc"]
         assert sync_result == async_result
@@ -55,8 +58,9 @@ class TestOutputParity:
         ] == expected
         assert all("h" in item for item in sync_result if is_mapping(item))
 
+    @pytest.mark.smoke
     def test_emit_false_assigns_onto_content(self):
-        build = lambda flow: flow.strreplace(
+        build = lambda pipeline: pipeline.strreplace(
             conf=STRR_CONF, options={"assign": "content"}
         )
         sync_result, async_result = _both(build)
@@ -64,17 +68,17 @@ class TestOutputParity:
         assert sync_result == [{"content": "a"}, {"content": "bb"}, {"content": "CCC"}]
 
     def test_aggregator_reverse(self):
-        sync_result, async_result = _both(lambda flow: flow.reverse())
+        sync_result, async_result = _both(lambda pipeline: pipeline.reverse())
         assert sync_result == async_result
         assert sync_result == [{"content": "ccc"}, {"content": "bb"}, {"content": "a"}]
 
     def test_aggregator_tail(self):
         conf = {"count": 1}
-        sync_result, async_result = _both(lambda flow: flow.tail(conf=conf))
+        sync_result, async_result = _both(lambda pipeline: pipeline.tail(conf=conf))
         assert sync_result == async_result == [{"content": "ccc"}]
 
     def test_composer_truncate(self):
-        build = lambda flow: flow.truncate(conf={"count": 2})
+        build = lambda pipeline: pipeline.truncate(conf={"count": 2})
         sync_result, async_result = _both(build)
         assert sync_result == async_result
         assert sync_result == [{"content": "a"}, {"content": "bb"}]

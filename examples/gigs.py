@@ -41,14 +41,14 @@ p4_conf = SortConf({"rule": SortConfRule(field="", dir="desc")})
 
 
 def pipe(test: bool = False) -> list[Item]:
-    flow = (
+    pipeline = (
         Pipeline.from_module("fetchdata", conf=p1_conf)
         .uniq(conf=p2_conf)
         .filter(conf=p3_conf)
         .sort(conf=p4_conf)
     )
 
-    return list(flow)
+    return list(pipeline)
 
 
 def async_pipe(test: bool = False) -> Pipeline:

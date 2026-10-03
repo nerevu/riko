@@ -63,18 +63,18 @@ def _fanned_in(urls: list[str]) -> Pipeline:
 class TestAsyncBoundedParallel:
     @pytest.mark.anyio
     async def test_parallel_matches_sequential_as_multiset(self):
-        flow = _tokenized()
-        sequential = [item async for item in flow]
-        parallel = [item async for item in flow.with_execution(concurrency=4)]
+        pipeline = _tokenized()
+        sequential = [item async for item in pipeline]
+        parallel = [item async for item in pipeline.with_execution(concurrency=4)]
         assert len(parallel) == len(sequential) == 4
         assert _by_content(parallel) == _by_content(sequential)
 
     @pytest.mark.anyio
     async def test_ordered_parallel_preserves_order(self):
-        flow = _tokenized()
-        sequential = [item async for item in flow]
-        settings = flow.with_execution(concurrency=4, ordered=True)
-        assert [item async for item in settings] == sequential
+        pipeline = _tokenized()
+        sequential = [item async for item in pipeline]
+        ordered = pipeline.with_execution(concurrency=4, ordered=True)
+        assert [item async for item in ordered] == sequential
 
     @pytest.mark.parametrize("ordered", [False, True])
     @pytest.mark.anyio
@@ -86,10 +86,10 @@ class TestAsyncBoundedParallel:
                 consumed.append(index)
                 yield {"content": str(index)}
 
-        flow = (tracking() | Pipeline.from_module("hash")).with_execution(
+        pipeline = (tracking() | Pipeline.from_module("hash")).with_execution(
             concurrency=2, ordered=ordered
         )
-        stream = aiter(flow)
+        stream = aiter(pipeline)
         first = await anext(stream)
         await stream.aclose()
         assert is_mapping(first)
@@ -108,10 +108,10 @@ class TestAsyncBoundedParallel:
                 yield {"content": str(index)}
                 index += 1
 
-        flow = (unbounded() | Pipeline.from_module("hash")).with_execution(
+        pipeline = (unbounded() | Pipeline.from_module("hash")).with_execution(
             concurrency=2, ordered=ordered
         )
-        stream = aiter(flow)
+        stream = aiter(pipeline)
         first = await anext(stream)
         await stream.aclose()
         assert is_mapping(first)
