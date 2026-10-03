@@ -90,8 +90,6 @@ def _ordered[T](
 
 
 SWITCH: dict[str, Callable[..., bool]] = {
-    # TODO: add support for all containment semantics
-    # 2 in [1, 2, 3]  or "a" in {"a": 1}
     "after": op.gt,
     "atleast": _ordered(op.ge),
     "atmost": _ordered(op.le),

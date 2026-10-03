@@ -11,19 +11,6 @@ from riko.cli._lint_relative_imports import _iter_issues as relative_issues
 if TYPE_CHECKING:
     from pathlib import Path
 
-# TODO: add tests for:
-# descendants, keyed topsort, frozen graph.
-# exact bare TYPE_CHECKING; typing.TYPE_CHECKING not exempt; else runtime.
-# from . import _private; mixed multi-target import.
-# transitive permission and forbidden direction.
-# local imports enforced.
-# same-layer private allowed / public forbidden.
-# type-only graph recorded but not violated.
-# dangling/cyclic/redundant architecture declaration.
-# deterministic diagnostics.
-# analysis error → exit 2; violation → 1; clean → 0.
-# complete ArchitectureReport rendering.
-
 
 def write(root: Path, path: str, text: str) -> None:
     target = root / path

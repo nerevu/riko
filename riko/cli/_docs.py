@@ -92,12 +92,7 @@ _TARGET = re.compile(
 
 
 def _slugify(text: str) -> str:
-    r"""
-    Convert a heading to its GitHub anchor slug.
-
-    TODO: Update meza and replace with
-    slugify(text, allow_unicode=True, regex_pattern=r"[^\w-]+")
-    """
+    """Convert a heading to its GitHub anchor slug."""
     lowered = text.strip().lower()
     kept = "".join(c for c in lowered if c.isalnum() or c in {" ", "-", "_"})
     return kept.replace(" ", "-")

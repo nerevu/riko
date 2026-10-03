@@ -122,7 +122,6 @@ def gen_tzinfos() -> Iterator[tuple[str, tzinfo]]:
     # Cover the broad common set first, then re-add the US-preferred zones so a shared
     # abbreviation (``CST``/``EST``/...) resolves to its US zone rather than a foreign
     # one (e.g. Asia/Taipei).
-    # TODO: replace with tzdata
     common = available_timezones().intersection(pytz.common_timezones)
     yield from _add_zones(*common.difference(_PREFERRED_ZONES))
     yield from _add_zones(*_PREFERRED_ZONES)

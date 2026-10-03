@@ -52,11 +52,6 @@ DEFAULTS = Defaults({"encoding": ENCODING, "html5": False})
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-# TODO: convert relative links to absolute
-# TODO: remove the closing tag if using an HTML tag stripped of HTML tags
-# TODO: clean html with Tidy
-
-
 async def async_parser(
     _: Item, extraction: object, objconf: XpathFetchPageObjconf, **kwargs: object
 ) -> Stream:

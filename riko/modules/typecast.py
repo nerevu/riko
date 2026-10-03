@@ -186,5 +186,4 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
         False
 
     """
-    # TODO: add option to specify timezone
     return parser(*args, **kwargs)

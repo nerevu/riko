@@ -23,7 +23,7 @@ class Defaults(TypedDict, total=False):
     count: int
     count_key: str | None
     clean: bool
-    currency: str  # TODO this should be an enum/literal
+    currency: str
     dedupe: bool
     default: BasicArg
     delimiter: str

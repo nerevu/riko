@@ -319,7 +319,6 @@ def cast_location(
     return result
 
 
-# TODO: inherit from meza
 @overload
 def cast_datetime(  # noqa: E704
     value: DateLike, *, try_local_tz: bool = ...

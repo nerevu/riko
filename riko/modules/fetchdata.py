@@ -94,7 +94,6 @@ async def async_parser(
     url: str = require_conf(objconf, "url", "fetchdata")
     ext = splitext(url)[1].lstrip(".")
     path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
-    # TODO: Figure out if html/xml files should be parsed as binary too.
     binary = ext == "json"
     f = await async_url_open(url, encoding=objconf.encoding, binary=binary)
     ext = ext or getattr(f, "ext", None) or ""

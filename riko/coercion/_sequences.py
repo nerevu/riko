@@ -45,7 +45,6 @@ def require_sequence(value: object, what: str) -> Iterable[object]:
     return value
 
 
-# TODO: move back to meza
 @overload
 def listize(  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
     value: Item | Iterable[Item],

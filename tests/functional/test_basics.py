@@ -450,11 +450,7 @@ class TestBasics:
 
     @pytest.mark.perf
     def test_feed(self):
-        """
-        Loads a simple test pipeline.
-
-        TODO: have these tests iterate over a number of test pipelines
-        """
+        """Loads a simple test pipeline."""
         pipe_name = "pipe_testpipe1"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 4, 0)

@@ -56,9 +56,6 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def get_string(content: str, start: str, end: str) -> str:
-    # TODO: convert relative links to absolute
-    # TODO: remove the closing tag if using an HTML tag stripped of HTML tags
-    # TODO: clean html with Tidy
     start_pos = content.find(start) if start else 0
     right = content[start_pos + (len(start) if start else 0) :]
     end_pos = right[1:].find(end) + 1 if end else len(right)

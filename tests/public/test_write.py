@@ -117,8 +117,8 @@ class TestWriteTargetFromExtension:
         list(pipe(ITEMS, conf=WriteConf({"dest": path, "fmt": "json"})))
         assert self._read(path) == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
-    def test_unknown_extension_fails(self, tmp_path):
+    def test_unknown_extension_fails(self, tmp_path, caplog):
         path = tmp_path / "out.dat"
         list(pipe(ITEMS, conf=WriteConf({"dest": path})))
         assert not path.exists()
-        # TODO: catch 'dat' is not a valid Formats error log
+        assert any("Invalid Formats: 'dat'" in r.message for r in caplog.records)

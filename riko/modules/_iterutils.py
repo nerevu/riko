@@ -262,7 +262,6 @@ def build_sort_key(
     return key
 
 
-# TODO: move this to meza.process.group
 def group_by[T: Mapping | PrimitiveValue](
     content: Iterable[T], attr: str, default: PrimitiveValue | None = None
 ) -> ItemsView[str, list[T]]:
