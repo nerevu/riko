@@ -113,7 +113,7 @@ class _FileWriteSession:
         self.path = Path(self.target.dest)
 
         self._fields: tuple[str, ...] | None = None
-        self._initial_fize_size: int | None = None
+        self._initial_file_size: int | None = None
         self._input_shape: _InputShape | None = None
         self._needs_newline: bool | None = None
         self._skip_header: bool | None = None
@@ -210,20 +210,20 @@ class _SyncFileWriteSession(_FileWriteSession):
         return result
 
     @property
-    def initial_fize_size(self) -> int:
+    def initial_file_size(self) -> int:
         """Whether ``path`` exists and is non-empty."""
-        if self._initial_fize_size is None:
+        if self._initial_file_size is None:
             try:
-                self._initial_fize_size = self.path.stat().st_size
+                self._initial_file_size = self.path.stat().st_size
             except FileNotFoundError:
-                self._initial_fize_size = 0
+                self._initial_file_size = 0
 
-        return self._initial_fize_size
+        return self._initial_file_size
 
     @property
     def needs_newline(self) -> bool:
         if self._needs_newline is None:
-            if self.append_mode and self.initial_fize_size:
+            if self.append_mode and self.initial_file_size:
                 self._needs_newline = not self.ends_with_newline()
             else:
                 self._needs_newline = False
@@ -235,7 +235,7 @@ class _SyncFileWriteSession(_FileWriteSession):
     @property
     def skip_header(self) -> bool:
         if self._skip_header is None:
-            self._skip_header = (self.initial_fize_size or self._written) > 0
+            self._skip_header = (self.initial_file_size or self._written) > 0
         elif self._written and not self._skip_header:
             self._skip_header = True
 
@@ -432,24 +432,24 @@ class _AsyncFileWriteSession(_FileWriteSession):
         return result
 
     @property
-    async def ainitial_fize_size(self) -> int:
+    async def ainitial_file_size(self) -> int:
         """Whether ``path`` exists and is non-empty."""
-        if self._initial_fize_size is None:
+        if self._initial_file_size is None:
             path = _backend.Path(self.path)
 
             try:
                 file_stat = await path.stat()
             except FileNotFoundError:
-                self._initial_fize_size = 0
+                self._initial_file_size = 0
             else:
-                self._initial_fize_size = int(file_stat.st_size)
+                self._initial_file_size = int(file_stat.st_size)
 
-        return self._initial_fize_size
+        return self._initial_file_size
 
     @property
     async def aneeds_newline(self) -> bool:
         if self._needs_newline is None:
-            if self.append_mode and await self.ainitial_fize_size:
+            if self.append_mode and await self.ainitial_file_size:
                 self._needs_newline = not await self.aends_with_newline()
             else:
                 self._needs_newline = False
@@ -461,7 +461,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
     @property
     async def askip_header(self) -> bool:
         if self._skip_header is None:
-            self._skip_header = ((await self.ainitial_fize_size) or self._written) > 0
+            self._skip_header = ((await self.ainitial_file_size) or self._written) > 0
         elif self._written and not self._skip_header:
             self._skip_header = True
 
