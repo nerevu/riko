@@ -139,6 +139,19 @@ Fixes
 - Concurrent async fetches no longer drop a legitimate ``None`` result, so results stay
   aligned with the requests that produced them.
 
+- Sync fetching (e.g., ``fetchpage``) a text source with no newline or only carriage-
+  return line endings no longer inserts a newline between every character or drops blank
+  lines. ``fetchdata`` now parses such XML instead of raising ``XMLSyntaxError``;
+  ``fetchdata``, ``fetchpage``, ``xpathfetchpage``, and ``csv`` yield its content
+  instead of an empty result; and ``fetchtext`` keeps its blank lines.
+
+- A decode failure while sync fetching such a source over HTTP no longer leaves the
+  response open.
+
+- Sync fetching a multi-line UTF-16 text source no longer drops everything after its
+  first line, and sync fetching an empty text source returns empty content instead of
+  raising ``RuntimeError``.
+
 - A decoded response now treats ``read(n)`` as a count of characters rather than of
   lines, and ``readlines`` accepts ``keepends`` instead of raising ``TypeError``.
 
@@ -148,7 +161,6 @@ Fixes
 
 - ``listize`` now wraps falsy extracted values, e.g., ``0`` or ``""``, instead of
   passing them through unwrapped.
-
 - ``sort`` now orders numeric strings numerically instead of lexicographically.
 
 - A ``sort`` rule without a ``type`` no longer raises ``TypeError`` when some items lack

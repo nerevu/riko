@@ -1,11 +1,12 @@
 # vim: sw=4:ts=4:expandtab
 """
-Extensionless-URL parity tests for async ``fetchdata``.
+Format-detection and decoding tests for ``fetchdata``.
 
 An HTTP source whose URL carries no file extension must have its format inferred
 from the response ``Content-Type``. The sync path already did this via
 ``Fetch.ext``; these tests lock in the async equivalent, where the content type
-is threaded through ``async_url_open`` onto ``NamedTextIOWrapper.ext``.
+is threaded through ``async_url_open`` onto ``NamedTextIOWrapper.ext``. Local
+documents must parse the same whether or not they end in a newline.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 from riko.io._async import async_url_open
-from riko.modules.fetchdata import async_pipe
+from riko.modules.fetchdata import async_pipe, pipe
 from tests import skipif_issync
 
 URL = "https://example.test/data"
@@ -84,3 +85,27 @@ class TestExtensionlessFetchdata:
         url = "https://example.test/export.json?token=abc"
         result = await _titles({"url": url, "path": "items"})
         assert result == ["A", "B"]
+
+
+class TestLocalDocuments:
+    """``fetchdata`` parses local XML documents."""
+
+    def test_minified_xml_parses(self, tmp_path):
+        path = tmp_path / "data.xml"
+        path.write_bytes(XML)
+        items = pipe(conf={"url": path.as_uri(), "path": "items"})
+        assert [item.get("title") for item in items] == ["A", "B"]
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=UnicodeDecodeError,
+        reason="owned by the pending encoding-precedence work: XML is decoded with "
+        "the configured encoding instead of the encoding its declaration names",
+    )
+    def test_declared_encoding_is_honored(self, tmp_path):
+        path = tmp_path / "latin1.xml"
+        declaration = '<?xml version="1.0" encoding="ISO-8859-1"?>'
+        text = f"{declaration}<r><items><t>café</t></items></r>"
+        path.write_bytes(text.encode("latin-1"))
+        items = pipe(conf={"url": path.as_uri(), "path": "items"})
+        assert [item.get("t") for item in items] == ["café"]

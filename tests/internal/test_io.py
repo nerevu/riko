@@ -8,7 +8,9 @@ socket, so a fixture file cannot exercise them: the streamed text branch reads
 """
 
 from io import BytesIO
+from os import linesep
 from unittest.mock import Mock, patch
+from urllib.response import addinfourl
 
 import pytest
 from requests import Response
@@ -77,7 +79,153 @@ async def test_async_url_open_honors_content_type_charset():
             assert "é" in result
 
 
+@pytest.mark.simulated_network
+@pytest.mark.xfail(
+    strict=True,
+    reason="owned by the pending encoding-precedence work: sync decoding keeps "
+    "carriage returns that async decoding converts to newlines",
+)
+@async_test
+async def test_sync_and_async_decode_line_endings_alike():
+    """Decode carriage returns the same way in sync and async reads."""
+    body = b"abc\rdef\n"
+    sync_result = reencode(BytesIO(body), decode=True).read()
+
+    with loopback_url(body, content_type="text/plain", path="p.txt") as url:
+        async with async_url_open(url) as f:
+            assert sync_result == f.read()
+
+
 class TestReencode:
+    @pytest.mark.parametrize("method", ["read", "chunks", "readlines"])
+    def test_line_without_trailing_newline_round_trips(self, method):
+        """A single unterminated line decodes to the same text however it is read."""
+        text = "<r><t>café</t></r>"
+        reader = reencode(BytesIO(text.encode()), decode=True)
+
+        if method == "read":
+            result = reader.read()
+        elif method == "chunks":
+            result = "".join(iter(lambda: reader.read(4), ""))
+        else:
+            result = "".join(iter(reader.readline, ""))
+
+        assert result == text
+
+    @pytest.mark.parametrize("size", [1, 3, 5])
+    def test_foreign_newlines_read_in_chunks_match_full_read(self, size):
+        """Sized reads of carriage-return lines keep every separator within ``n``."""
+        data = b"abc\rdef\rghi"
+        full = reencode(BytesIO(data), decode=True).read()
+        reader = reencode(BytesIO(data), decode=True)
+        chunks = list(iter(lambda: reader.read(size), ""))
+
+        assert full == linesep.join(["abc", "def", "ghi"])
+        assert all(len(chunk) <= size for chunk in chunks)
+        assert "".join(chunks) == full
+
+    def test_foreign_newlines_readline_keeps_ends(self):
+        """Carriage-return lines come back with a line ending unless asked not to."""
+        data = b"abc\rdef\rghi"
+        reader = reencode(BytesIO(data), decode=True)
+        bare = reencode(BytesIO(data), decode=True).readlines(keepends=False)
+
+        assert reader.readlines() == [f"abc{linesep}", f"def{linesep}", "ghi"]
+        assert bare == ["abc", "def", "ghi"]
+
+    @pytest.mark.parametrize(
+        ("data", "expected"),
+        [
+            (b"abc\r\rdef", ["abc", "", "def"]),
+            (b"\rabc", ["", "abc"]),
+            (b"abc\rdef\r", ["abc", "def", ""]),
+        ],
+    )
+    def test_foreign_newlines_keep_blank_lines(self, data, expected):
+        """Each carriage return ends exactly one line, so blank lines survive."""
+        full = reencode(BytesIO(data), decode=True).read()
+        lines = reencode(BytesIO(data), decode=True).readlines()
+
+        assert full == linesep.join(expected)
+        assert "".join(lines) == full
+        assert list(reencode(BytesIO(data), decode=True)) == lines
+
+    @pytest.mark.parametrize("encoding", ["utf-16", "utf-16-le"])
+    def test_wide_encoding_keeps_every_line(self, encoding):
+        """A source whose newline spans several bytes decodes in full, line by line."""
+        data = "a\nb\r\nc\n".encode(encoding)
+        assert reencode(BytesIO(data), encoding, decode=True).read() == "a\nb\nc\n"
+        reader = reencode(BytesIO(data), encoding, decode=True)
+        assert list(iter(reader.readline, "")) == ["a\n", "b\n", "c\n"]
+
+    def test_wide_encoding_reencodes_in_full(self):
+        """Re-encoding a multi-line wide-encoded source keeps every byte."""
+        data = "a\nb\nc\n".encode("utf-16")
+        assert reencode(BytesIO(data), "utf-16").read() == b"a\nb\nc\n"
+
+    @pytest.mark.parametrize(
+        ("data", "kwargs", "expected"),
+        [
+            (b"", {"decode": True}, ""),
+            (b"", {}, b""),
+            (b"\xff\xfe", {"fromenc": "utf-16", "decode": True}, ""),
+        ],
+    )
+    def test_empty_source_reads_empty(self, data, kwargs, expected):
+        """A source with no content reads as empty instead of raising."""
+        reader = reencode(BytesIO(data), **kwargs)
+        assert reader.read() == expected
+        assert reader.readline() == expected
+
+    def test_empty_file_fetches_as_empty_text(self, tmp_path):
+        """Fetching an empty text file reads nothing instead of raising."""
+        path = tmp_path / "empty.txt"
+        path.write_bytes(b"")
+
+        with Fetch(path.as_uri()) as f:
+            assert f.read() == ""
+
+    def test_failed_open_closes_the_source(self):
+        """A source that fails while the reader is being opened is closed."""
+
+        class BrokenSource(BytesIO):
+            def __next__(self):
+                raise OSError("unreadable")
+
+        source = BrokenSource(b"<r/>")
+
+        with pytest.raises(OSError, match="unreadable"):
+            reencode(source, decode=True)
+
+        assert source.closed
+
+    def test_failed_decode_closes_the_fetched_file(self, tmp_path):
+        """A fetched file that fails to decode is closed rather than leaked."""
+        path = tmp_path / "latin1.txt"
+        path.write_bytes("<r>café</r>".encode("latin-1"))
+        fetched = Fetch(path.as_uri())
+        assert isinstance(fetched.file, Reencoder)
+        handle = fetched.file._f
+        assert isinstance(handle, addinfourl)
+
+        with pytest.raises(UnicodeDecodeError), fetched:
+            fetched.read()
+
+        assert handle.closed
+
+    @pytest.mark.parametrize(
+        ("kwargs", "expected"),
+        [
+            ({"decode": True}, "\ufeff<r/>\n"),
+            ({"decode": True, "remove_BOM": True}, "<r/>\n"),
+            ({"remove_BOM": True}, b"<r/>\n"),
+        ],
+    )
+    def test_remove_bom_strips_the_byte_order_mark(self, kwargs, expected):
+        """``remove_BOM`` drops a leading byte order mark; it is kept by default."""
+        data = b"\xef\xbb\xbf<r/>\n"
+        assert reencode(BytesIO(data), **kwargs).read() == expected
+
     @pytest.mark.parametrize("method", ["read", "readline"])
     def test_char_count_preserves_remainder(self, method):
         """A one-character read consumes only that character."""
@@ -90,6 +238,15 @@ class TestReencode:
         assert head == "l"
         assert rest == "ine one\nline two\nline three\n"
         assert head + rest == full
+
+    @pytest.mark.parametrize("method", ["read", "readline"])
+    def test_zero_size_reads_nothing(self, method):
+        """A zero-size read returns empty and leaves the whole stream unread."""
+        data = b"line one\nline two\n"
+        reader = reencode(BytesIO(data), decode=True)
+
+        assert getattr(reader, method)(0) == ""
+        assert reader.read() == data.decode()
 
     def test_reencode_readline(self):
         data = b"line one\nline two\nline three\n"
