@@ -314,7 +314,7 @@ class TestPipelineResolver:
 
     def test_directory_store_parses_definition(self):
         directory = ROOT_DIR / "tests" / "pipelines"
-        resolver = PipelineResolver(definitions=DirectoryStore(directory))
+        resolver = PipelineResolver(documents=DirectoryStore(directory))
         assert isinstance(resolver.load_definition("pipe_gigs"), Workflow)
 
         with pytest.raises(UnsupportedPipelineError):

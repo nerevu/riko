@@ -176,10 +176,10 @@ class PipelineResolver:
         self,
         *,
         store: ModuleStore | None = None,
-        definitions: DirectoryStore | None = None,
+        documents: DirectoryStore | None = None,
     ) -> None:
         self._store = store
-        self._definitions = definitions
+        self._documents = documents
 
     @staticmethod
     def _register_slot[T](
@@ -194,7 +194,7 @@ class PipelineResolver:
         self,
         *,
         store: ModuleStore | None = None,
-        definitions: DirectoryStore | None = None,
+        documents: DirectoryStore | None = None,
         replace: bool = False,
     ) -> None:
         """
@@ -205,7 +205,7 @@ class PipelineResolver:
         Args:
 
             store: Generated-pipe module store to register.
-            definitions: Canonical Workflow v2 document directory to register.
+            documents: ``WorkflowDocument`` directory to register.
             replace: Whether an already-registered half of the same kind may be
                 replaced.
 
@@ -217,12 +217,12 @@ class PipelineResolver:
         """
         register_slot = partial(self._register_slot, replace=replace)
         self._store = register_slot(self._store, store, "store")
-        self._definitions = register_slot(self._definitions, definitions, "definitions")
+        self._documents = register_slot(self._documents, documents, "documents")
 
     def reset(self) -> None:
-        """Clears the registered store and definitions, chiefly for test isolation."""
+        """Clears the registered store and documents, chiefly for test isolation."""
         self._store = None
-        self._definitions = None
+        self._documents = None
 
     def is_compatible(self, name: str) -> bool:
         return name.startswith(("pipe_", "pipe:"))
@@ -290,7 +290,7 @@ class PipelineResolver:
             UnsupportedPipelineError: If the ``WorkflowDocument`` cannot be found.
 
         """
-        store = self._definitions if directory is None else DirectoryStore(directory)
+        store = self._documents if directory is None else DirectoryStore(directory)
 
         if (parsed := None if store is None else store.load(name)) is None:
             raise UnsupportedPipelineError(name)
@@ -327,8 +327,8 @@ def register_pipeline_store(
 
     """
     store = None if package is None else PackageStore(package)
-    definitions = None if directory is None else DirectoryStore(directory)
-    pipeline_resolver.register(store=store, definitions=definitions, replace=replace)
+    documents = None if directory is None else DirectoryStore(directory)
+    pipeline_resolver.register(store=store, documents=documents, replace=replace)
 
 
 def reset_pipeline_resolver() -> None:
