@@ -1,4 +1,9 @@
-"""Pipe-definition, bare DAG, and workflow graph-index typing contracts."""
+"""
+Pipe definition, bare-bones DAG, and workflow graph-index typing contracts.
+
+A pipe definition (``PipeDef``) is the older ``src``/``tgt``-wired module listing; a
+``PipeDag`` is the bare-bones DAG mapping. Both expand into a ``Workflow``.
+"""
 
 from __future__ import annotations
 
@@ -132,6 +137,12 @@ class Wire(TypedDict):
 
 
 class PipeDef(TypedDict):
+    """
+    A pipe definition: the older ``src``/``tgt``-wired module listing.
+
+    ``migrate_v1_to_v2`` converts one into a ``Workflow``.
+    """
+
     modules: list[PipeModule]
     wires: list[Wire]
     layout: NotRequired[list[LayoutItem]]
@@ -251,7 +262,7 @@ class DagModule(TypedDict):
 
 class PipeDag(TypedDict):
     """
-    Bare-bones DAG expanded by ``riko.runtime._migrate.parse_dag``.
+    A bare-bones DAG mapping that ``parse_dag`` expands into a ``Workflow``.
 
     ``wires`` is optional (omit for a linear chain in module listing order) and
     holds ``(source_id, target_id)`` entries, optionally followed by the port the

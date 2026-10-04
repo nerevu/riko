@@ -1,10 +1,10 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests the immutable fluent authoring surface on ``Pipeline``.
+Tests the immutable fluent builder surface on ``Pipeline``.
 
 Most cases cover workflow derivation only: each fluent operation returns a new
 ``Pipeline`` whose workflow shares the prior structure. A handful run the derived
-pipeline where the point is that two authoring forms produce the same items.
+pipeline where the point is that two call forms produce the same items.
 """
 
 from dataclasses import asdict
@@ -46,14 +46,14 @@ tokenizer_conf = TokenizerRawConf(delimiter=ConfArg(type="text", value=" "))
 _EMBED = Embed(name="tokenizer", conf=tokenizer_conf)
 
 
-def _spec():
+def _workflow():
     node = Pipeline.from_module("fetch").workflow.nodes["fetch-1"]
     return Workflow(
         nodes={node.id: node}, outputs={"default": Endpoint(node.id, "out")}, inputs={}
     )
 
 
-def test_module_seed_builds_single_node_spec():
+def test_module_seed_builds_single_node_workflow():
     pipeline = Pipeline.from_module("fetch")
     assert sorted(pipeline.workflow.nodes) == ["fetch-1"]
     assert pipeline.workflow.outputs["default"] == Endpoint("fetch-1", "out")
@@ -62,8 +62,8 @@ def test_module_seed_builds_single_node_spec():
     assert pipeline.source is None
 
 
-def test_spec_constructor_is_canonical():
-    workflow = _spec()
+def test_workflow_constructor_keeps_the_workflow():
+    workflow = _workflow()
     assert Pipeline(workflow).workflow is workflow
 
 
@@ -91,7 +91,7 @@ def test_items_seed_builds_template():
     ],
     ids=["items", "module-name", "pipeline"],
 )
-def test_non_spec_positional_rejected(make):
+def test_non_workflow_positional_rejected(make):
     with pytest.raises(TypeError):
         make()
 

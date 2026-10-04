@@ -1,9 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests the Python modules generated from canonical workflow documents.
+Tests the Python modules generated from workflow documents.
 
 A generated module rebuilds its workflow from typed configuration classes and runs
-it through the canonical execution, so it has to produce exactly what running the
+it through the standard execution, so it has to produce exactly what running the
 document produces. These tests hold that equivalence over every committed fixture,
 in both the synchronous and asynchronous interface, and keep the generated source
 importable. Type coverage of generated modules is held by the committed typed
@@ -145,7 +145,7 @@ def _failure(call) -> tuple[str, str]:
 
 @pytest.mark.parametrize("path", _fixtures())
 def test_generated_matches_document(path: Path, tmp_path: Path):
-    """Each generated module yields the items its canonical document yields."""
+    """Each generated module yields the items its workflow document yields."""
     workflow = parse_document(path.read_text())
     module = _build(workflow, path.stem, tmp_path)
     assert list(module.pipe(context=Context(test=True))) == _run_workflow(workflow)
@@ -263,13 +263,13 @@ def test_generation_is_deterministic():
     )
 
 
-def test_compile_pipe_accepts_an_authoring_mapping():
-    """An RawWorkflow is normalized before it is generated."""
-    authoring = {
+def test_compile_pipe_accepts_a_raw_workflow():
+    """A ``RawWorkflow`` is normalized before it is generated."""
+    raw = {
         "nodes": [{"name": "itembuilder"}, {"name": "sort"}],
         "edges": [{"source": {"node": "itembuilder-1"}, "target": {"node": "sort-1"}}],
     }
-    source = compile_pipe(authoring, "pipe_authored")
+    source = compile_pipe(raw, "pipe_raw")
     assert 'DEPENDENCIES: list[str] = ["itembuilder", "sort"]' in source
 
 
@@ -284,7 +284,7 @@ def test_generated_source_parses(tmp_path: Path):
     assert module.workflow.outputs["default"] == Endpoint("rename-1", "out")
 
 
-def _loop_spec() -> Workflow:
+def _loop_workflow() -> Workflow:
     """Parses the committed loop fixture whose embed carries a typed config."""
     data = (TESTS_DIR / "pipelines" / "pipe_loop_assign.json").read_text()
     return parse_document(data)
@@ -292,7 +292,7 @@ def _loop_spec() -> Workflow:
 
 def test_loop_embed_is_rendered_as_a_node_field():
     """A loop node's embedded module is rebuilt from the typed ``Embed``."""
-    source = compile_workflow(_loop_spec(), "pipe_x")
+    source = compile_workflow(_loop_workflow(), "pipe_x")
     assert "embed=Embed(" in source
     assert "LoopConf" not in source
 

@@ -1,11 +1,11 @@
 # vim: sw=4:ts=4:expandtab
 """
-Private sync/async executions that run a pipeline definition.
+Private sync/async executions that run a prepared workflow.
 
-A pipeline definition is a reusable structural snapshot; running it creates one
-of these one-shot executions. Each owns the task group, exit stack, and sync/async
-bridge that bound a run's spawned tasks and acquired resources. These types are
-private to the runtime and belong to no supported surface.
+A prepared workflow (an execution plan) is a reusable structural snapshot; running
+it creates one of these one-shot executions. Each owns the task group, exit stack,
+and sync/async bridge that bound a run's spawned tasks and acquired resources. These
+types are private to the runtime and belong to no supported surface.
 """
 
 from __future__ import annotations
@@ -286,7 +286,7 @@ events = Factory(_event_sink, takes_self=True)
 
 @define(eq=False)
 class _BaseExecution:
-    """Shares the definition reference and closed-state guard across executions."""
+    """Shares the context reference and closed-state guard across executions."""
 
     context: Context | None = None
     settings: ExecutionSettings = field(default=DEF_EXECUTION_SETTINGS, kw_only=True)
@@ -356,7 +356,7 @@ class _BaseExecution:
 @define(eq=False)
 class SyncExecution[T](_BaseExecution):
     """
-    Runs a pipeline definition synchronously behind one owned exit stack.
+    Runs a prepared workflow synchronously behind one owned exit stack.
 
     Async-only components run through a lazily started blocking portal. The
     execution settings decide whether loopable nodes spread their items across
@@ -879,7 +879,7 @@ _timeout = Factory(lambda self: self.settings.shutdown_timeout, takes_self=True)
 @define(eq=False)
 class AsyncExecution[T](_BaseExecution):
     """
-    Runs a pipeline definition asynchronously behind one owned exit stack.
+    Runs a prepared workflow asynchronously behind one owned exit stack.
 
     Blocking sync components run on a worker thread through the bridge. The
     execution settings decide whether loopable nodes run several items at once

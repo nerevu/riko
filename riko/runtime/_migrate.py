@@ -1,11 +1,11 @@
 # vim: sw=4:ts=4:expandtab
 """
-Construction of Workflows from terser authoring documents.
+Construction of Workflows from terser module listings.
 
-``parse_dag`` expands a ``PipeDag`` (``modules`` plus optional ``wires``)
-into a validated canonical ``Workflow``. ``migrate_v1_to_v2`` converts a legacy
-``PipeDef`` into the same canonical form; it is a rescue/conversion tool, not a live
-loader, so migration warns and emits v2 only.
+``parse_dag`` expands a ``PipeDag`` (``modules`` plus optional ``wires``) into a
+validated ``Workflow``. ``migrate_v1_to_v2`` converts a pipe definition (``PipeDef``)
+into a ``Workflow`` too; it is a rescue/conversion tool, not a live loader, so
+migration warns and only ever returns a ``Workflow``.
 
 Examples:
 
@@ -74,16 +74,17 @@ _WRITE_CONF_KEYS = frozenset({"dest", "fmt", "mode", "keys"})
 _WRITE_MODES = {"w": "replace", "a": "append"}
 _STRUCTURAL_KEYS = frozenset({"id", "type", "conf"})
 _OPTION_KEYS = frozenset(ModuleOptions.__annotations__)
-_WARNING = "migrating a PipeDef to Workflow"
+_WARNING = "migrating a pipe definition to a workflow"
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def _migrate_write_mode(mode: object) -> str:
-    """Translates a v1 file-open write mode into its canonical v2 reconcile mode."""
+    """Translates a ``PipeDef`` file-open write mode into a reconcile mode."""
     head = mode[:1].lower() if isinstance(mode, str) else ""
 
     if (canonical := _WRITE_MODES.get(head)) is None:
-        raise InvalidPipelineError(f"cannot migrate v1 write mode: {mode!r}")
+        msg = f"cannot migrate pipe definition write mode: {mode!r}"
+        raise InvalidPipelineError(msg)
 
     return canonical
 
@@ -91,9 +92,10 @@ def _migrate_write_mode(mode: object) -> str:
 def _migrate_write(
     module_id: str, name: str, conf: AnyModuleConf, **extra: object
 ) -> RawNode:
-    """Translates a v1 ``write`` module into a v2 ``WriteNode`` RawWorkflow."""
+    """Translates a ``PipeDef`` ``write`` module into a shorthand ``WriteNode``."""
     if unsupported := sorted(set(extra) | (set(conf) - _WRITE_CONF_KEYS)):
-        raise InvalidPipelineError(f"cannot migrate v1 write option(s): {unsupported}")
+        msg = f"cannot migrate pipe definition write option(s): {unsupported}"
+        raise InvalidPipelineError(msg)
 
     node = RawNode(
         {"id": module_id, "name": name, "type": _WRITE_TYPE, "backend": "file"}
@@ -110,7 +112,7 @@ def _migrate_write(
 
 
 def _migrate_embed(embed: object, conf: Conf | None = None) -> Embed:
-    """Translates a v1 loop's embedded module reference into the v2 node embed."""
+    """Translates a ``PipeDef`` loop's embedded module reference into a node embed."""
     mapping = require_mapping(embed, "loop 'embed'")
     name = require_str(mapping.get("type"), "loop embed 'type'")
     return Embed({"name": name, "conf": conf or {}})
@@ -119,7 +121,7 @@ def _migrate_embed(embed: object, conf: Conf | None = None) -> Embed:
 def _migrate_pipe(
     module_id: str, name: str, conf: Conf | None = None, **extra: object
 ) -> RawNode:
-    """Translates a v1 pipe module into a v2 module-node RawWorkflow."""
+    """Translates a ``PipeDef`` pipe module into a shorthand module ``RawNode``."""
     options = {k: extra.pop(k) for k in _OPTION_KEYS.intersection(extra)}
     embed = extra.pop("embed", None) if name == _LOOP_TYPE else None
     node = RawNode({"id": module_id, "name": name})
@@ -137,7 +139,7 @@ def _migrate_pipe(
 
 
 def _migrate_module(module: DagModule) -> RawNode:
-    """Translates one v1 module mapping into a v2 authoring node mapping."""
+    """Translates one ``PipeDef`` module mapping into a ``RawNode``."""
     module_id = require_str(module.get("id"), "module 'id'")
     name = require_str(module.get("type"), "module 'type'")
     extra = {k: v for k, v in module.items() if k not in _STRUCTURAL_KEYS}
@@ -155,7 +157,7 @@ def _migrate_module(module: DagModule) -> RawNode:
 
 
 def _migrate_target_port(port: str) -> str:
-    """Sanitizes a v1 target port into the id the receiving module looks up."""
+    """Sanitizes a ``PipeDef`` target port into the id the receiving module looks up."""
     return port if port.startswith("_") else pythonise(port)
 
 
@@ -167,7 +169,7 @@ def _resolve_port(port: object, default: str) -> str:
 def _migrate_wires(
     wires: object, output_ids: frozenset[str]
 ) -> tuple[list[RawEdge], dict[str, RawEndpoint]]:
-    """Splits v1 wires into v2 stream edges and terminal-output references."""
+    """Splits ``PipeDef`` wires into stream edges and terminal-output references."""
     edges: list[RawEdge] = []
     endpoints: dict[str, RawEndpoint] = {}
 
@@ -198,23 +200,25 @@ def migrate_v1_to_v2(pipe_def: PipeDefLike) -> Workflow:
     """
     Migrates a ``PipeDef`` into a ``Workflow``.
 
-    Warns that a v1 document was migrated, then returns the workflow. Legacy
+    Warns that a ``PipeDef`` was migrated, then returns the ``Workflow``. Legacy
     ports, the ``write`` module, and the terminal ``_OUTPUT`` node are translated to
-    their v2 equivalents; orphan and empty-graph rejection is left to validation. A
-    module's call options become the node's ``options``, a loop's embedded module and
+    their ``Workflow`` equivalents. Orphan and empty-graph rejection is left to
+    validation.
+
+    A module's call options become the node's ``options``, a loop's embedded module and
     its configuration become the node's ``embed``, and any other module-level key folds
-    into the node's configuration. A v1 ``write`` file-open mode maps to a
-    canonical reconcile mode, and a ``write`` carrying an option with no v2 equivalent
+    into the node's configuration. A ``write`` module's file-open mode maps to a
+    reconcile mode, and a ``write`` carrying an option with no ``Workflow`` equivalent
     is rejected rather than silently dropped.
 
     Args:
 
-        pipe_def: A released v1 ``PipeDef`` with ``modules`` and ``src``/``tgt``
-            ``wires``; editor ``layout``/``terminaldata`` are ignored.
+        pipe_def: A ``PipeDef`` with ``modules`` and ``src``/``tgt`` ``wires``;
+            editor ``layout``/``terminaldata`` are ignored.
 
     Returns:
 
-        The canonical :class:`~riko.definitions._workflow.Workflow`.
+        The :class:`~riko.definitions._workflow.Workflow`.
 
     Examples:
 
@@ -314,7 +318,7 @@ def parse_dag(dag: PipeDag) -> Workflow:
 
     Returns:
 
-        The canonical :class:`~riko.definitions._workflow.Workflow`.
+        The :class:`~riko.definitions._workflow.Workflow`.
 
     Raises:
 

@@ -1,9 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-The single authoring-sugar normalization boundary for canonical Workflow v2.
+The single shorthand normalization boundary for ``Workflow`` graphs.
 
-``normalize_workflow`` turns a flexible ``WorkflowLike`` RawWorkflow into one
-strict canonical ``Workflow`` so no other subsystem has to reinterpret shorthand. It
+``normalize_workflow`` turns a flexible ``WorkflowLike`` into one strict ``Workflow``
+so no other subsystem has to reinterpret shorthand. It
 is the structural, contract-free pass. Malformed structure raises
 ``InvalidPipelineError``.
 
@@ -75,7 +75,7 @@ _EDGE_ALIASES = frozenset({"src", "tgt", "from", "to"})
 
 
 def _reject_unknown(present: Mapping[str, object], cls: type, *extra: str) -> None:
-    """Rejects any authoring key outside the closed set for ``what``."""
+    """Rejects any shorthand key outside the closed set for ``what``."""
     if unknown := sorted(set(present).difference([*field_names(cls), *extra])):
         raise InvalidPipelineError(f"unknown {cls.__name__} field(s): {unknown}")
 
@@ -132,7 +132,7 @@ _NODE_BUILDERS: Mapping[str, type[Node]] = {
 
 
 def _build_node(family: object | None = "module", **fields: Any) -> Node:
-    """Dispatches an authoring node mapping to its closed node family builder."""
+    """Dispatches a ``RawNode`` to its closed node family builder."""
     resolved = str(fields.pop("type", family))
 
     if "format" in fields and "fmt" in fields:
@@ -192,7 +192,7 @@ def _normalize_nodes(raw_nodes: object) -> dict[str, Node]:
 
 
 def _normalize_endpoint(raw: object, default_port: str) -> Endpoint:
-    """Normalizes an authoring endpoint into a canonical ``node``/``port`` reference."""
+    """Normalizes a ``RawEndpoint`` into a canonical ``node``/``port`` reference."""
     endpoint = require_mapping(raw, "endpoint")
     _reject_unknown(endpoint, Endpoint)
     node = require_str(endpoint.get("node"), "edge endpoint 'node'")
@@ -214,7 +214,7 @@ def _resolve_edge_family(family: object, target: Endpoint, **nodes: Node) -> boo
 
 
 def _normalize_edge(raw: object, **nodes: Node) -> Edge:
-    """Normalizes one authoring edge."""
+    """Normalizes one ``RawEdge``."""
     edge = require_mapping(raw, "edge")
 
     if present := _EDGE_ALIASES.intersection(edge):
@@ -288,25 +288,25 @@ def _raw_workflow(workflow: Workflow) -> RawWorkflow:
 
 def normalize_workflow(raw: WorkflowLike) -> Workflow:
     """
-    Normalizes a flexible Workflow v2 RawWorkflow into a strict workflow.
+    Normalizes a flexible ``WorkflowLike`` into a strict ``Workflow``.
 
     A :class:`~riko.definitions._workflow.Workflow` is re-normalized through the
     same pipeline rather than trusted, so a hand-built workflow is re-canonicalized and
     normalization is idempotent on its own output.
 
     This is the one structural normalization boundary: no compiler, runtime, or CLI
-    subsystem independently reinterprets authoring shorthand, legacy port names, or
+    subsystem independently reinterprets shorthand, legacy port names, or
     omitted outputs. It stays contract-free; closed-schema rejection and contract-aware
     sugar belong to the later validation phase.
 
     Args:
 
-        raw: A ``WorkflowLike`` RawWorkflow with ``nodes`` and optional
+        raw: A ``WorkflowLike`` with ``nodes`` and optional
             ``edges``, ``outputs``, ``inputs``, ``resources``, and ``version``.
 
     Returns:
 
-        The canonical :class:`~riko.definitions._workflow.Workflow`.
+        The normalized :class:`~riko.definitions._workflow.Workflow`.
 
     Examples:
 

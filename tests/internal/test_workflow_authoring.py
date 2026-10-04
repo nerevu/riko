@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Guards the authoring TypedDicts against drift from the canonical attrs classes."""
+"""Guards the ``Raw*`` TypedDicts against drift from the workflow attrs classes."""
 
 from dataclasses import dataclass
 from typing import ClassVar
@@ -27,28 +27,28 @@ def _attrs_fields(*classes) -> set[str]:
     return {name for cls in classes for name in fields_dict(cls)}
 
 
-def test_node_authoring_covers_every_node_field():
-    canonical = _attrs_fields(*_NODES)
-    authoring = set(RawNode.__annotations__)
-    assert not (canonical - authoring), f"missing: {sorted(canonical - authoring)}"
-    assert not (authoring - canonical - _NODE_ALIASES), (
-        f"unknown: {sorted(authoring - canonical - _NODE_ALIASES)}"
+def test_raw_node_covers_every_node_field():
+    attrs_keys = _attrs_fields(*_NODES)
+    raw_keys = set(RawNode.__annotations__)
+    assert not (attrs_keys - raw_keys), f"missing: {sorted(attrs_keys - raw_keys)}"
+    assert not (raw_keys - attrs_keys - _NODE_ALIASES), (
+        f"unknown: {sorted(raw_keys - attrs_keys - _NODE_ALIASES)}"
     )
 
 
-def test_edge_authoring_covers_every_edge_field():
-    canonical = _attrs_fields(EdgeBase)
-    authoring = set(RawEdge.__annotations__)
-    assert not (canonical - authoring), f"missing: {sorted(canonical - authoring)}"
-    assert not (authoring - canonical - _EDGE_ALIASES), (
-        f"unknown: {sorted(authoring - canonical - _EDGE_ALIASES)}"
+def test_raw_edge_covers_every_edge_field():
+    attrs_keys = _attrs_fields(EdgeBase)
+    raw_keys = set(RawEdge.__annotations__)
+    assert not (attrs_keys - raw_keys), f"missing: {sorted(attrs_keys - raw_keys)}"
+    assert not (raw_keys - attrs_keys - _EDGE_ALIASES), (
+        f"unknown: {sorted(raw_keys - attrs_keys - _EDGE_ALIASES)}"
     )
 
 
-def test_endpoint_authoring_covers_every_endpoint_field():
-    canonical = _attrs_fields(Endpoint)
-    authoring = set(RawEndpoint.__annotations__)
-    assert canonical == authoring
+def test_raw_endpoint_covers_every_endpoint_field():
+    attrs_keys = _attrs_fields(Endpoint)
+    raw_keys = set(RawEndpoint.__annotations__)
+    assert attrs_keys == raw_keys
 
 
 def test_field_names_includes_classvar_for_attrs_and_dataclass():
@@ -68,7 +68,7 @@ def _required_keys(raw) -> set[str]:
     return {key for key, hint in items if "Required[" in str(hint)}
 
 
-def test_authoring_requiredness_matches_contract():
+def test_raw_requiredness_matches_contract():
     assert _required_keys(RawNode) == {"name"}
     assert "id" in RawNode.__annotations__
     assert "id" not in _required_keys(RawNode)

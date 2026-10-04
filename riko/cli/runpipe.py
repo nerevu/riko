@@ -1,4 +1,8 @@
-"""Command for running a pipe script or a canonical workflow document from the CLI."""
+"""
+Command for running a pipe script or a workflow document from the CLI.
+
+A workflow document (``WorkflowDocument``) is a serialized ``Workflow``.
+"""
 
 from __future__ import annotations
 
@@ -89,12 +93,12 @@ async def plan_runner(plan: ExecutionPlan, test: bool = False) -> None:
 
 def run_document(path: str, isasync: bool = False, test: bool = False) -> None:
     """
-    Runs the canonical workflow document at ``path`` and prints what it produces.
+    Runs the ``WorkflowDocument`` at ``path`` and prints what it produces.
 
     Args:
 
-        path: The path to the workflow document.
-        isasync: Whether to run the workflow through the asynchronous execution.
+        path: The path to the ``WorkflowDocument``.
+        isasync: Whether to run the ``Workflow`` through the asynchronous execution.
         test: Whether to run with the modules' default inputs.
 
     """
@@ -117,7 +121,7 @@ def run_document(path: str, isasync: bool = False, test: bool = False) -> None:
 
 def resolve_example(pipeid: str) -> str | ModuleType | None:
     """
-    Resolves an example id to the pipe module or workflow document it names.
+    Resolves an example id to the pipe module or ``WorkflowDocument`` it names.
 
     Args:
 
@@ -125,7 +129,7 @@ def resolve_example(pipeid: str) -> str | ModuleType | None:
 
     Returns:
 
-        The loaded pipe module, or the path to the workflow document of that name.
+        The loaded pipe module, or the path to the ``WorkflowDocument`` of that name.
 
     """
     try:
@@ -149,16 +153,16 @@ def resolve_target(
     path: str | None = None, pipeid: str | None = None
 ) -> str | ModuleType | None:
     """
-    Resolves what a run refers to: a workflow document, or a pipe module.
+    Resolves what a run refers to: a ``WorkflowDocument``, or a pipe module.
 
     Args:
 
-        path: The path to a pipe script or a workflow document.
+        path: The path to a pipe script or a ``WorkflowDocument``.
         pipeid: The name of a pipeline in the examples directory.
 
     Returns:
 
-        The loaded pipe module, or the path to a workflow document.
+        The loaded pipe module, or the path to a ``WorkflowDocument``.
 
     """
     if path is not None and path.endswith(".json"):
@@ -179,7 +183,7 @@ def resolve_target(
 def run() -> None:
     """CLI runner."""
     parser = ArgumentParser(
-        description="description: Runs a riko pipe or a canonical workflow document",
+        description="description: Runs a riko pipe or a workflow document",
         prog="run-pipe",
         usage="%(prog)s [pipeid] [-p PATH]",
         formatter_class=RawTextHelpFormatter,

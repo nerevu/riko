@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Structural contracts for the canonical Workflow v2 graph language.
+Structural contracts for the ``Workflow`` graph language.
 
 These are pure, behavior-free contracts shared by the immutable workflow model in
 ``riko.definitions``: the node/port endpoint reference, the port-grammar parser, the
@@ -53,14 +53,14 @@ class InputRef(TypedDict):
 
 
 class RawEndpoint(TypedDict, total=False):
-    """Authoring shorthand for an edge or output endpoint; ``node`` is required."""
+    """Shorthand for an edge or output endpoint; ``node`` is required."""
 
     node: Required[str]
     port: str
 
 
 class RawEdge(TypedDict, total=False):
-    """Authoring shorthand for a stream or publish edge between two endpoints."""
+    """Shorthand for a stream or publish edge between two endpoints."""
 
     source: Required[RawEndpoint]
     target: Required[RawEndpoint]
@@ -69,7 +69,7 @@ class RawEdge(TypedDict, total=False):
 
 
 class RawNode(TypedDict, total=False):
-    """Authoring shorthand for a node of any family, with aliases and optional keys."""
+    """Shorthand for a node of any family, with aliases and optional keys."""
 
     id: str
     name: Required[str]
@@ -91,7 +91,7 @@ class RawNode(TypedDict, total=False):
 
 
 class RawWorkflow(TypedDict, total=False):
-    """Flexible Workflow v2 authoring envelope normalized into a ``Workflow``."""
+    """Shorthand workflow mapping a person writes, normalized into a ``Workflow``."""
 
     nodes: Sequence[RawNode] | Mapping[str, RawNode]
     outputs: Mapping[str, RawEndpoint]

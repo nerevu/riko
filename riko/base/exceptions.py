@@ -44,6 +44,8 @@ class PipelineStateError(PipelineError):
 
 
 class InvalidPipelineError(PipelineError):
+    """Raised when a workflow is malformed or cannot be executed as declared."""
+
     def __init__(self, msg: str):
         super().__init__(f"Invalid pipeline: {msg}")
         self.msg = msg
@@ -107,6 +109,7 @@ __all__ = [
     "ImportAnalysisError",
     "ImportLintError",
     "InvalidArchitectureError",
+    "InvalidPipelineError",
     "ModuleError",
     "PipelineError",
     "PipelineStateError",

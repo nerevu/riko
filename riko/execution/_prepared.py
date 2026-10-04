@@ -1,9 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Immutable execution-plan data for a canonical workflow.
+Immutable execution-plan data for a ``Workflow``.
 
 The runtime build boundary resolves a workflow into these nodes; the sync/async
-executions then run them without re-inspecting the definition, resolver, or
+executions then run them without re-inspecting the ``Workflow``, resolver, or
 registry. This module carries data only and imports no resolution or graph
 machinery.
 """
@@ -67,7 +67,7 @@ class PreparedNode:
 
     Attributes:
 
-        node: The canonical definition node this was resolved from.
+        node: The ``Workflow`` node this was resolved from.
         id: The canonical node id.
         name: The registered implementation name.
         resources: The node's resource-slot bindings, slot to resource name.

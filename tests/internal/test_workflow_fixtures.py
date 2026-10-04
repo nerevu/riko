@@ -1,10 +1,10 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests the committed pipeline fixtures against the canonical workflow runtime.
+Tests the committed pipeline fixtures against the workflow runtime.
 
 Every ``pipe_*.json`` under ``tests/pipelines`` and ``examples/pipelines`` is a
-canonical Workflow v2 document. One test keeps those documents parseable, valid,
-and byte-identical to their canonical rendering; the other keeps the hand-written
+``WorkflowDocument``. One test keeps those documents parseable, valid,
+and byte-identical to their serialized form; the other keeps the hand-written
 Python probes beside them producing the same items as the documents they mirror.
 """
 
@@ -46,7 +46,7 @@ PROBE_MARKS = {"pipe_zKJifuNS3BGLRQK_GsevXg": (SPLIT_PENDING,)}
 
 
 def _render(workflow: Workflow) -> str:
-    """Renders a workflow as the indented canonical JSON the fixtures are stored in."""
+    """Renders a workflow as the indented document the fixtures are stored in."""
     return serialize_workflow(workflow).decode("utf-8")
 
 
@@ -97,8 +97,8 @@ def _run_probe(package: str, name: str) -> list[object]:
 
 
 @pytest.mark.parametrize("path", _fixtures())
-def test_fixture_is_canonical(path: Path):
-    """Every committed fixture parses, validates, and is stored canonically."""
+def test_fixture_round_trips(path: Path):
+    """Every committed fixture parses, validates, and is stored in serialized form."""
     workflow = parse_document(path.read_text())
     workflow.validate()
     assert path.read_text() == _render(workflow)
@@ -106,6 +106,6 @@ def test_fixture_is_canonical(path: Path):
 
 @pytest.mark.parametrize(("package", "path"), _probes())
 def test_probe_matches_document(package: str, path: Path):
-    """Each Python probe yields the items its canonical document yields."""
+    """Each Python probe yields the items its workflow document yields."""
     expected = _run_probe(package, path.stem)
     assert _run_document(path) == expected

@@ -1,11 +1,12 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests for the ``migrate_v1_to_v2`` one-shot legacy migration boundary.
+Tests for the ``migrate_v1_to_v2`` one-shot pipe definition migration boundary.
 
-These cover the v1-specific translation before the shared normalization pass: legacy
-port mapping, ``src``/``tgt`` wire translation, the ``write`` module becoming a
-``WriteNode``, terminal ``_OUTPUT`` pseudo-node consumption into ``outputs``, orphan
-retention, the migration warning, and that migrated output carries no v1-only structure.
+These cover the ``PipeDef``-specific translation before the shared normalization
+pass: older port mapping, ``src``/``tgt`` wire translation, the ``write`` module
+becoming a ``WriteNode``, terminal ``_OUTPUT`` pseudo-node consumption into
+``outputs``, orphan retention, the migration warning, and that migrated output
+carries no ``PipeDef``-only structure.
 """
 
 import pytest
@@ -136,7 +137,7 @@ def test_write_module_preserves_destination_mode_and_keys():
 
 
 @pytest.mark.parametrize(
-    ("v1_mode", "canonical"),
+    ("pipe_def_mode", "mode"),
     [
         ("wb+", WriteMode.REPLACE),
         ("w", WriteMode.REPLACE),
@@ -144,24 +145,24 @@ def test_write_module_preserves_destination_mode_and_keys():
         ("a+", WriteMode.APPEND),
     ],
 )
-def test_v1_file_open_mode_translates(v1_mode, canonical):
+def test_pipe_def_file_open_mode_translates(pipe_def_mode, mode):
     workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {
                     "id": "w",
                     "type": "write",
-                    "conf": {"dest": "o.json", "mode": v1_mode},
+                    "conf": {"dest": "o.json", "mode": pipe_def_mode},
                 }
             ]
         }
     )
     node = workflow.nodes["w"]
     assert isinstance(node, WriteNode)
-    assert node.mode is canonical
+    assert node.mode is mode
 
 
-def test_unmappable_v1_write_mode_rejected():
+def test_unmappable_pipe_def_write_mode_rejected():
     with pytest.raises(InvalidPipelineError, match="write mode"):
         migrate_v1_to_v2(
             {
@@ -172,7 +173,7 @@ def test_unmappable_v1_write_mode_rejected():
         )
 
 
-def test_v1_write_wrapper_option_rejected():
+def test_pipe_def_write_wrapper_option_rejected():
     with pytest.raises(InvalidPipelineError, match="write option"):
         migrate_v1_to_v2(
             {
@@ -183,7 +184,7 @@ def test_v1_write_wrapper_option_rejected():
         )
 
 
-def test_v1_write_unknown_conf_key_rejected():
+def test_pipe_def_write_unknown_conf_key_rejected():
     with pytest.raises(InvalidPipelineError, match="write option"):
         migrate_v1_to_v2(
             {
@@ -308,17 +309,17 @@ def test_loop_embedded_subpipe_keeps_its_prefixed_name():
 
 
 @pytest.mark.parametrize(
-    ("v1_port", "canonical"),
+    ("pipe_def_port", "canonical"),
     [("1_URL", "in:_1_URL"), ("PARAM_5_value", "in:PARAM_5_value")],
 )
-def test_wire_target_port_is_sanitized_like_a_module_terminal(v1_port, canonical):
+def test_wire_target_port_is_sanitized_like_a_module_terminal(pipe_def_port, canonical):
     workflow = migrate_v1_to_v2(
         {
             "modules": [
                 {"id": "a", "type": "fetch", "conf": {}},
                 {"id": "b", "type": "urlbuilder", "conf": {}},
             ],
-            "wires": [_wire("_w1", "a", "b", tgt_port=v1_port)],
+            "wires": [_wire("_w1", "a", "b", tgt_port=pipe_def_port)],
         }
     )
     assert workflow.edges[0].target == Endpoint("b", canonical)
@@ -362,10 +363,10 @@ def test_omitted_output_node_defaults_to_lone_leaf():
 
 def test_migration_warns(caplog):
     migrate_v1_to_v2({"modules": [{"id": "a", "type": "fetch", "conf": {}}]})
-    assert any("PipeDef to Workflow" in record.message for record in caplog.records)
+    assert any("pipe definition" in record.message for record in caplog.records)
 
 
-def test_migrated_spec_carries_no_v1_structure():
+def test_migrated_workflow_carries_no_pipe_def_structure():
     workflow = migrate_v1_to_v2(
         {
             "modules": [

@@ -2,8 +2,8 @@
 """
 Provides resolution for named pipelines.
 
-Pipelines can be loaded from generated or hand-written modules, or from canonical
-Workflow v2 JSON documents.
+Pipelines can be loaded from generated or hand-written modules, or from workflow
+documents (each a ``WorkflowDocument``: a serialized ``Workflow``).
 
 Attributes:
 
@@ -131,7 +131,7 @@ class CompositeStore:
 
 class DirectoryStore:
     """
-    Loads canonical Workflow v2 JSON documents from a directory.
+    Loads ``WorkflowDocument`` files from a directory.
 
     Despite the shared ``load`` name, this is not a ``ModuleStore``. It yields a
     ``Workflow`` rather than a module. This is why ``PipelineResolver`` keeps
@@ -198,7 +198,7 @@ class PipelineResolver:
         replace: bool = False,
     ) -> None:
         """
-        Registers a module store and/or a workflow-document directory.
+        Registers a module store and/or a ``WorkflowDocument`` directory.
 
         Only the halves supplied are touched; an omitted half is left as it is.
 
@@ -274,7 +274,7 @@ class PipelineResolver:
 
     def load_definition(self, name: str, *, directory: Path | None = None) -> Workflow:
         """
-        Loads a named canonical Workflow v2 document, optionally from ``directory``.
+        Loads a named ``WorkflowDocument``, optionally from ``directory``.
 
         Args:
 
@@ -283,11 +283,11 @@ class PipelineResolver:
 
         Returns:
 
-            The ``Workflow`` the document describes.
+            The ``Workflow`` the ``WorkflowDocument`` describes.
 
         Raises:
 
-            UnsupportedPipelineError: If the definition cannot be found.
+            UnsupportedPipelineError: If the ``WorkflowDocument`` cannot be found.
 
         """
         store = self._definitions if directory is None else DirectoryStore(directory)
@@ -310,8 +310,7 @@ def register_pipeline_store(
     Args:
 
         package: Import path of a package holding generated ``pipe_*`` modules.
-        directory: Filesystem directory holding canonical Workflow v2 JSON
-            documents.
+        directory: Filesystem directory holding ``WorkflowDocument`` files.
         replace: Whether an already-registered source of the same kind may be
             replaced.
 

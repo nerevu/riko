@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Tests for canonical workflow indexing and execution preparation."""
+"""Tests for workflow indexing and execution preparation."""
 
 from threading import get_ident
 from typing import TYPE_CHECKING, cast
@@ -1511,7 +1511,7 @@ def _titled_source(_items=None, **_):
     yield {"title": "b"}
 
 
-def _real_loop_spec(embed_name="child"):
+def _real_loop_workflow(embed_name="child"):
     return _loop(loop_name="loop", embed_name=embed_name)
 
 
@@ -1557,7 +1557,8 @@ def test_run_count_first_stays_lazy_for_an_async_only_embed() -> None:
         ModuleDefinition(name="child", async_pipe=_async_child(produced, closed)),
     )
 
-    assert _run(_real_loop_spec(), dispatcher) == [{"content": "a0"}, {"content": "b0"}]
+    expected = [{"content": "a0"}, {"content": "b0"}]
+    assert _run(_real_loop_workflow(), dispatcher) == expected
     assert produced == [0, 0]
     assert closed == ["a", "b"]
 
@@ -1580,7 +1581,7 @@ async def test_arun_count_first_stays_lazy_for_a_sync_only_embed() -> None:
         ModuleDefinition(name="child", sync_pipe=_sync_child(produced, closed)),
     )
 
-    assert await _arun(_real_loop_spec(), dispatcher) == [
+    assert await _arun(_real_loop_workflow(), dispatcher) == [
         {"content": "a0"},
         {"content": "b0"},
     ]

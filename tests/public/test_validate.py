@@ -2,7 +2,7 @@
 """
 Tests for ``workflow.validate`` structural graph validation.
 
-These build canonical ``Workflow`` graphs directly and assert the closed-schema
+These build ``Workflow`` graphs directly and assert the closed-schema
 rules: version, non-empty nodes, id/key agreement, endpoint references, stream fan-in,
 publish/subscribe edge coherence, port direction, acyclicity, resource references, and
 exposed outputs.
@@ -28,7 +28,7 @@ def _workflow(nodes, edges=(), outputs=None, inputs=None, resources=(), version=
     )
 
 
-def test_valid_spec_passes():
+def test_valid_workflow_passes():
     node = ModuleNode(id="a", name="fetch")
     workflow = _workflow([node], outputs={"default": Endpoint("a", "out")})
     assert workflow.validate() is None

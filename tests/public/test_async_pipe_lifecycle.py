@@ -58,7 +58,7 @@ def _tokenized() -> Pipeline:
 
 
 def _fetch_node(index: int, url: str) -> DagModule:
-    """Builds one fetch module entry for the fan-in dag."""
+    """Builds one fetch module entry for the fan-in ``PipeDag``."""
     conf = FetchRawConf({"url": ConfArg(type="url", value=url)})
     return DagModule(id=f"f{index}", type="fetch", conf=conf)
 

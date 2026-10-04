@@ -2,7 +2,7 @@
 """
 Tripwires for the parts of the ``Pipeline`` surface that are declared but inert.
 
-Each case is written against the authoring form it will have once the capability
+Each case is written against the call form it will have once the capability
 lands and asserts the behavior its retired predecessor asserted, so the strict
 xfail flips to a pass the moment the capability ships.
 """

@@ -1,9 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Generates a Python module from a canonical Workflow v2 graph.
+Generates a Python module from a ``Workflow`` graph.
 
 The generated module rebuilds the workflow from typed configuration classes and
-exposes a ``pipe``/``async_pipe`` callable that runs it through the canonical
+exposes a ``pipe``/``async_pipe`` callable that runs it through the standard
 execution. It is a readable, type-checkable rendering of the same graph, so it may
 be edited by hand, imported like any module, and embedded in a loop as a sub-pipe.
 
@@ -208,7 +208,7 @@ def compile_workflow(
 
     Args:
 
-        workflow: The canonical workflow to generate a module for.
+        workflow: The ``Workflow`` to generate a module for.
         name: The name the generated module documents itself by.
         is_async: Whether to generate the asynchronous interface.
 
@@ -260,15 +260,14 @@ def compile_pipe(
     workflow: WorkflowLike, name: str = "anonymous", *, is_async: bool = False
 ) -> str:
     """
-    Generates the Python module source for a workflow or a RawWorkflow.
+    Generates the Python module source for a ``Workflow`` or a ``RawWorkflow``.
 
-    An RawWorkflow is normalized into a canonical workflow first, so the
-    generated module always reflects the canonical graph rather than the shorthand
-    it was written in.
+    A ``RawWorkflow`` is normalized into a ``Workflow`` first, so the generated module
+    always reflects the normalized graph rather than the shorthand it was written in.
 
     Args:
 
-        workflow: The canonical workflow, or a RawWorkflow describing one.
+        workflow: The ``Workflow``, or a ``RawWorkflow`` describing one.
         name: The name the generated module documents itself by.
         is_async: Whether to generate the asynchronous interface.
 
@@ -283,8 +282,8 @@ def compile_pipe(
 
     Examples:
 
-        >>> authoring = {"nodes": [{"name": "forever"}]}
-        >>> source = compile_pipe(authoring, "pipe_demo")
+        >>> raw = {"nodes": [{"name": "forever"}]}
+        >>> source = compile_pipe(raw, "pipe_demo")
         >>> print(next(l for l in source.splitlines() if l.startswith("DEPEND")))
         DEPENDENCIES: list[str] = ["forever"]
 

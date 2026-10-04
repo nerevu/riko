@@ -1,5 +1,8 @@
 """
-Compiles a canonical workflow document into a Python module.
+Compiles a workflow document into a Python module.
+
+A workflow document (``WorkflowDocument``) is a serialized ``Workflow``. Convert a
+serialized ``PipeDef`` or ``PipeDag`` with ``build-workflow`` first.
 
 Examples:
 
@@ -39,8 +42,8 @@ from ._workflow import read_document, require_workflow
 def run() -> None:
     """CLI compiler."""
     parser = ArgumentParser(
-        description="description: Compiles a canonical workflow into a Python module",
-        prog="compile",
+        description="description: Compiles a workflow document into a Python module",
+        prog="compile-pipe",
         usage="%(prog)s [path]",
         formatter_class=RawTextHelpFormatter,
     )
@@ -49,7 +52,7 @@ def run() -> None:
         dest="path",
         nargs="?",
         default="-",
-        help="Path to the canonical workflow ('-' or omitted reads stdin).",
+        help="Path to the workflow document ('-' or omitted reads stdin).",
     )
 
     parser.add_argument(

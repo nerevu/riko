@@ -1,9 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Private execution runtime for running pipeline definitions.
+Private execution runtime for running prepared workflows.
 
 This package owns the one-shot sync/async executions that turn an immutable
-pipeline definition into a run. Each execution owns the exit stack, task group,
+execution plan into a run. Each execution owns the exit stack, task group,
 and sync/async bridge for that run; these are internal implementation details and
 are not part of any supported import surface.
 """

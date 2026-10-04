@@ -1,11 +1,11 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests for the ``normalize_workflow`` authoring-sugar normalization boundary.
+Tests for the ``normalize_workflow`` ``RawWorkflow`` normalization boundary.
 
 These cover the structural, contract-free pass: node id generation and family
 dispatch, enum coercion, legacy port aliases, edge-alias rejection, publish-edge
 detection, omitted-outputs materialization, input shorthand, resource sugar, and
-idempotency over an already-canonical RawWorkflow.
+idempotency over an already-normalized ``Workflow``.
 """
 
 from types import MappingProxyType
@@ -226,7 +226,7 @@ def test_top_level_resources_accept_bare_string():
     assert workflow.resources == ("db",)
 
 
-def test_version_defaults_to_v2():
+def test_version_defaults_to_2():
     workflow = normalize_workflow({"nodes": [{"id": "a", "name": "fetch"}]})
     assert workflow.version == "2"
 
@@ -358,7 +358,7 @@ def test_node_conf_is_isolated_from_caller_mutation():
     assert node.conf == {"limit": 5}
 
 
-def test_normalizing_a_spec_is_a_fixed_point():
+def test_normalizing_a_workflow_is_a_fixed_point():
     first = normalize_workflow(
         {
             "nodes": [
@@ -372,7 +372,7 @@ def test_normalizing_a_spec_is_a_fixed_point():
     assert normalize_workflow(normalize_workflow(first)) == first
 
 
-def test_normalize_recanonicalizes_a_hand_built_spec():
+def test_normalize_renormalizes_a_hand_built_workflow():
     a = ModuleNode(id="a", name="fetch")
     b = ModuleNode(id="b", name="filter")
     hand = Workflow(
@@ -381,10 +381,10 @@ def test_normalize_recanonicalizes_a_hand_built_spec():
         outputs={"default": Endpoint("b", "_OUTPUT")},
         inputs={},
     )
-    canon = normalize_workflow(hand)
-    assert canon.edges[0].source.port == "out"
-    assert canon.edges[0].target.port == "in:2"
-    assert canon.outputs["default"].port == "out"
+    normalized = normalize_workflow(hand)
+    assert normalized.edges[0].source.port == "out"
+    assert normalized.edges[0].target.port == "in:2"
+    assert normalized.outputs["default"].port == "out"
 
 
 def test_mapping_key_conflicting_inner_id_rejected():
@@ -483,7 +483,7 @@ def test_legacy_prefix_with_non_numeric_suffix_is_not_misconverted():
     assert workflow.edges[0].target.port == "in:count"
 
 
-def test_authoring_call_options_are_accepted():
+def test_raw_call_options_are_accepted():
     workflow = normalize_workflow(
         {
             "nodes": [
@@ -516,7 +516,7 @@ def test_nested_conf_is_deeply_frozen_and_isolated():
     assert isinstance(node.conf.get("nested"), MappingProxyType)
 
 
-def test_authoring_embed_becomes_a_read_only_node_field():
+def test_raw_embed_becomes_a_read_only_node_field():
     workflow = normalize_workflow(
         {
             "nodes": [
@@ -552,7 +552,7 @@ def test_embed_without_a_name_is_rejected():
         normalize_workflow({"nodes": [{"name": "loop", "embed": {"conf": {}}}]})
 
 
-def test_normalizing_a_spec_with_an_embed_is_a_fixed_point():
+def test_normalizing_a_workflow_with_an_embed_is_a_fixed_point():
     workflow = normalize_workflow(
         {
             "nodes": [

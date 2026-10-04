@@ -172,7 +172,7 @@ def validator_from_require[T](  # noqa: E302
 
 
 def require_str(value: object, what: str | None = "value") -> str:
-    """Reads the required registered-name field off a node's RawWorkflow."""
+    """Narrows ``value`` to a ``str`` or raises ``InvalidPipelineError`` otherwise."""
     if not isinstance(value, str):
         raise InvalidPipelineError(f"{what} must be a str")
 
@@ -180,7 +180,11 @@ def require_str(value: object, what: str | None = "value") -> str:
 
 
 def require_strlike(value: object, what: str | None = "value") -> str | tuple[str, ...]:
-    """Reads the required registered-name field off a node's RawWorkflow."""
+    """
+    Narrows ``value`` to a ``str`` or a tuple of strs.
+
+    Raises ``InvalidPipelineError`` when ``value`` is neither.
+    """
     if isinstance(value, str):
         valid = True
     elif isinstance(value, Iterable):

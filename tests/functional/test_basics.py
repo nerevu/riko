@@ -96,7 +96,7 @@ def _assert_kazeeki(item: Mapping, example: Mapping, content: tuple[str, str]) -
 
 
 def _document(pipe_name: str) -> Path | None:
-    """Supplies the canonical workflow document for a pipeline, when it has one."""
+    """Supplies the committed workflow document for a pipeline, when it has one."""
     path = TESTS_DIR / "pipelines" / f"{pipe_name}.json"
     return path if path.exists() else None
 
@@ -115,7 +115,7 @@ def _node_names(node: Node) -> set[str]:
 
 
 def _workflow_dependencies(workflow: Workflow) -> list[str]:
-    """Collects the built-in module names a canonical workflow depends on."""
+    """Collects the built-in module names a workflow depends on."""
     named = (_node_names(node) for node in workflow.nodes.values())
     names = set(chain.from_iterable(named))
     return sorted(name for name in names if not name.startswith("pipe"))
@@ -138,9 +138,9 @@ def _declared_inputs(workflow: Workflow) -> list[tuple[str, str, str, str, str]]
 
 
 def _load_workflow(pipe_name: str) -> Workflow:
-    """Parses the canonical workflow document committed for a pipeline."""
+    """Parses the workflow document committed for a pipeline."""
     document = _document(pipe_name)
-    assert document is not None, f"{pipe_name} has no canonical document"
+    assert document is not None, f"{pipe_name} has no workflow document"
     return parse_document(document.read_text())
 
 
@@ -221,7 +221,7 @@ class TestBasics:
     def _get_pipeline(
         self, pipe_name: str, file_path: Path | None = None
     ) -> ParserMaterializedOutput:
-        # prefer the canonical document; fall back to the hand-written module
+        # prefer the workflow document; fall back to the hand-written module
         items: ParserMaterializedOutput = []
 
         if _document(pipe_name) is None:
@@ -683,7 +683,7 @@ class TestBasics:
         assert _declared_inputs(workflow) == expected
 
     def test_describe_dependencies(self):
-        """Reads a pipeline's module dependencies from its canonical document."""
+        """Reads a pipeline's module dependencies from its workflow document."""
         workflow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
         assert _workflow_dependencies(workflow) == ["input", "rssitembuilder"]
 

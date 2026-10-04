@@ -12,6 +12,8 @@ from riko.bado.itertools import as_async, async_map, async_map_stream
 from riko.base._paths import get_path, get_temp_file
 from riko.base.exceptions import (
     EmptyPipelineError,
+    InvalidPipelineError,
+    PipelineError,
     PipelineStateError,
     RikoError,
     UnsupportedModuleError,
@@ -51,9 +53,11 @@ __all__ = [
     "ExecutionMode",
     "Executor",
     "Formats",
+    "InvalidPipelineError",
     "Modules",
     "Node",
     "Pipeline",
+    "PipelineError",
     "PipelineStateError",
     "RikoError",
     "Sinks",

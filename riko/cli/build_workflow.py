@@ -1,5 +1,9 @@
 """
-Converts a terser workflow document into a canonical workflow document.
+Converts a serialized ``PipeDag`` or pipe definition into a workflow document.
+
+A pipe definition (``PipeDef``) is the older ``src``/``tgt``-wired module listing; a
+workflow document (``WorkflowDocument``) is a serialized ``Workflow``. A
+``WorkflowDocument`` given as input is re-normalized and written back out.
 
 Examples:
 
@@ -42,8 +46,8 @@ def run() -> None:
     """CLI workflow converter."""
     parser = ArgumentParser(
         description=(
-            "description: Converts a ``PipeDag`` or an older pipe definition "
-            "into a canonical workflow document"
+            "description: Converts a serialized bare-bones DAG or serialized pipe "
+            "definition into a workflow document"
         ),
         prog="build-workflow",
         usage="%(prog)s [path]",
@@ -54,7 +58,7 @@ def run() -> None:
         dest="path",
         nargs="?",
         default="-",
-        help="Path to the document to convert ('-' or omitted reads stdin).",
+        help="Path to the JSON file to convert ('-' or omitted reads stdin).",
     )
 
     parser.add_argument(
@@ -63,7 +67,7 @@ def run() -> None:
         dest="fmt",
         choices=[member.value for member in DocumentFormat],
         default=None,
-        help="Read the document in this form (default: detect it).\n\n",
+        help="Read the input in this form (default: detect it).\n\n",
     )
 
     parser.add_argument(
@@ -80,7 +84,7 @@ def run() -> None:
         "--output",
         dest="output",
         default=None,
-        help="Write the canonical workflow to this path (default: stdout).\n\n",
+        help="Write the workflow document to this path (default: stdout).\n\n",
     )
 
     args = parser.parse_args()

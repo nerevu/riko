@@ -1,10 +1,10 @@
 # vim: sw=4:ts=4:expandtab
 """
-Structural tests for the canonical Workflow v2 model.
+Structural tests for the ``Workflow`` graph.
 
 These exercise the closed node/edge families, the immutable ``Workflow`` envelope,
-the ``Pipeline`` definition, and the port grammar. They cover structure only; runtime
-execution of the graph lands in a later phase.
+the ``Pipeline`` wrapper, and the port grammar. They cover structure only; running
+the graph is tested elsewhere.
 """
 
 import pytest
@@ -69,18 +69,18 @@ def test_node_is_frozen():
         node.name = "other"  # type: ignore[misc]
 
 
-def test_spec_mappings_are_read_only():
+def test_workflow_mappings_are_read_only():
     workflow = _workflow()
     assert type(workflow.nodes).__name__ == "mappingproxy"
     with pytest.raises(TypeError):
         workflow.outputs["extra"] = Endpoint("fetch-1", "out")  # type: ignore[index]
 
 
-def test_spec_version_defaults_to_v2():
+def test_workflow_version_defaults_to_2():
     assert _workflow().version == "2"
 
 
-def test_pipeline_wraps_spec():
+def test_pipeline_wraps_workflow():
     workflow = _workflow()
     pipeline = Pipeline(workflow)
     assert pipeline.workflow is workflow

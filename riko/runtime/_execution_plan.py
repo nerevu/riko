@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Building of a canonical workflow into an immutable execution plan.
+Building of a ``Workflow`` into an immutable execution plan.
 
 The build boundary validates the graph, indexes it, and resolves each node's
 implementation once, so the returned plan carries the resolution. It performs no
@@ -64,7 +64,7 @@ class ExecutionPlan:
 
     Attributes:
 
-        workflow: The canonical workflow that was prepared.
+        workflow: The ``Workflow`` that was prepared.
         nodes: The resolved nodes, keyed by canonical node id.
         index: The workflow's structural graph index.
         required: For each named output, the node ids its subgraph must run.
@@ -121,7 +121,7 @@ def build_execution_plan(
 
     Args:
 
-        workflow: The canonical workflow to prepare.
+        workflow: The ``Workflow`` to prepare.
         dispatcher: The pipe resolver supplying node implementations.
 
     Returns:

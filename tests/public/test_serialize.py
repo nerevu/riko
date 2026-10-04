@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Tests deterministic Workflow v2 serialization, round-trips, and v1-free output."""
+"""Tests deterministic ``Workflow`` serialization, round-trips, and migrated output."""
 
 import json
 from datetime import date
@@ -17,7 +17,7 @@ from riko.ext import (
     serialize_workflow,
 )
 
-RICH_AUTHORING = {
+RICH_RAW = {
     "version": "2",
     "inputs": {"since": "string"},
     "resources": ["db"],
@@ -139,7 +139,7 @@ TOPOLOGIES = {
     },
 }
 
-V1_PIPE_DEF = {
+PIPE_DEF = {
     "modules": [
         {"id": "sw-1", "type": "fetch", "conf": {}},
         {"id": "sw-2", "type": "write", "conf": {"fmt": "json"}},
@@ -161,37 +161,37 @@ V1_PIPE_DEF = {
 
 
 def test_golden_bytes():
-    workflow = normalize_workflow(RICH_AUTHORING)
+    workflow = normalize_workflow(RICH_RAW)
     assert serialize_workflow(workflow, indent=None) == RICH_GOLDEN
 
 
 def test_default_form_is_indented():
-    workflow = normalize_workflow(RICH_AUTHORING)
+    workflow = normalize_workflow(RICH_RAW)
     assert serialize_workflow(workflow) == serialize_workflow(workflow, indent=4)
     assert serialize_workflow(workflow) != serialize_workflow(workflow, indent=None)
 
 
-@pytest.mark.parametrize("authoring", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
-def test_topologies_round_trip(authoring):
-    workflow = normalize_workflow(authoring)
+@pytest.mark.parametrize("raw", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
+def test_topologies_round_trip(raw):
+    workflow = normalize_workflow(raw)
     assert parse_document(serialize_workflow(workflow)) == workflow
 
 
-@pytest.mark.parametrize("authoring", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
-def test_serialization_is_idempotent(authoring):
-    workflow = normalize_workflow(authoring)
+@pytest.mark.parametrize("raw", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
+def test_serialization_is_idempotent(raw):
+    workflow = normalize_workflow(raw)
     once = serialize_workflow(workflow)
     assert serialize_workflow(parse_document(once)) == once
 
 
-@pytest.mark.parametrize("authoring", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
-def test_indented_output_round_trips(authoring):
-    workflow = normalize_workflow(authoring)
+@pytest.mark.parametrize("raw", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
+def test_indented_output_round_trips(raw):
+    workflow = normalize_workflow(raw)
     assert parse_document(serialize_workflow(workflow, indent=4)) == workflow
 
 
 def test_indented_output_is_readable_and_sorted():
-    workflow = normalize_workflow(RICH_AUTHORING)
+    workflow = normalize_workflow(RICH_RAW)
     document = serialize_workflow(workflow, indent=2).decode("utf-8")
     top_level = [line[2:] for line in document.splitlines() if line.startswith('  "')]
     keys = [line.split('"')[1] for line in top_level]
@@ -245,8 +245,8 @@ def test_write_node_destination_survives():
     assert restored.dest == "out.jsonl"
 
 
-def test_migration_then_serialization_emits_no_v1_structure():
-    data = serialize_workflow(migrate_v1_to_v2(V1_PIPE_DEF), indent=None)
+def test_migration_then_serialization_emits_no_pipe_def_structure():
+    data = serialize_workflow(migrate_v1_to_v2(PIPE_DEF), indent=None)
     text = data.decode("utf-8")
     assert b'"version":"2"' in data
     for token in ("_OUTPUT", "_INPUT", "wires", '"src"', '"tgt"', '"type":"output"'):
@@ -261,7 +261,7 @@ def test_call_options_are_serialized_apart_from_conf():
 
 
 def test_json_native_conf_round_trips_by_equality():
-    authoring = {
+    raw = {
         "nodes": [
             {
                 "id": "n",
@@ -277,7 +277,7 @@ def test_json_native_conf_round_trips_by_equality():
             }
         ]
     }
-    workflow = normalize_workflow(authoring)
+    workflow = normalize_workflow(raw)
     assert parse_document(serialize_workflow(workflow)) == workflow
 
 
@@ -293,20 +293,20 @@ def test_json_native_conf_round_trips_by_equality():
     ],
 )
 def test_non_json_native_conf_value_rejected(value):
-    authoring = {"nodes": [{"id": "n", "name": "tag", "conf": {"x": value}}]}
+    raw = {"nodes": [{"id": "n", "name": "tag", "conf": {"x": value}}]}
 
     with pytest.raises(InvalidPipelineError):
-        normalize_workflow(authoring)
+        normalize_workflow(raw)
 
 
 def test_migrated_output_pseudo_node_is_not_a_node():
-    workflow = migrate_v1_to_v2(V1_PIPE_DEF)
+    workflow = migrate_v1_to_v2(PIPE_DEF)
     assert "_OUTPUT" not in workflow.nodes
     assert workflow.outputs["default"].node == "sw-2"
 
 
 def test_loop_embed_serializes_as_a_node_field():
-    authoring = {
+    raw = {
         "nodes": [
             {
                 "id": "loop-1",
@@ -315,7 +315,7 @@ def test_loop_embed_serializes_as_a_node_field():
             }
         ]
     }
-    workflow = normalize_workflow(authoring)
+    workflow = normalize_workflow(raw)
     document = json.loads(serialize_workflow(workflow))
     node = document["nodes"]["loop-1"]
 

@@ -199,7 +199,7 @@ class TestExamples:
         ],
     )
     def test_compiled_pipe(self, pipe_name, expected):
-        """Tests the example workflow documents produce the expected stream."""
+        """Runs each example workflow document and checks the stream it produces."""
         document = ROOT_DIR / "examples" / "pipelines" / f"{pipe_name}.json"
         workflow = parse_document(document.read_text())
         items = []

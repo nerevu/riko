@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Shared JSON document front door for the riko console scripts.
+Shared JSON input front door for the riko console scripts.
 
 The console scripts read three JSON shapes: a workflow document (``WorkflowDocument``
 aka a serialized ``Workflow``), a serialized pipe definition (``PipeDef``), and a
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from riko.definitions._workflow import Workflow, WorkflowLike
     from riko.types._compiler import PipeDag, PipeDefLike
 
-_SHAPE_ERROR = "a workflow document needs 'nodes' or 'modules'"
+_SHAPE_ERROR = "the input needs 'nodes' or 'modules'"
 _WIRE_KEYS = frozenset({"src", "tgt"})
 _OTHER_FORMS = {
     "dag": "a serialized bare-bones DAG",
@@ -55,7 +55,7 @@ type DocumentMapping = WorkflowLike | PipeDefLike | PipeDag
 
 
 class DocumentFormat(StrEnum):
-    """The document shapes the console scripts read."""
+    """The JSON input shapes the console scripts read."""
 
     DAG = "dag"
     V1 = "v1"
@@ -64,10 +64,10 @@ class DocumentFormat(StrEnum):
 
 def read_document(path: Path | str) -> tuple[DocumentMapping | None, str]:
     """
-    Reads a JSON workflow document from ``path``, or from stdin when it is ``-``.
+    Reads a JSON input from ``path``, or from stdin when it is ``-``.
 
-    An unreadable path and malformed JSON are both reported as a warning, leaving the
-    caller to decide what an absent document means for it.
+    An unreadable, undecodable, or malformed input is reported as a warning and leaves
+    the caller to decide what absent input means for it.
 
     Args:
 
@@ -75,8 +75,9 @@ def read_document(path: Path | str) -> tuple[DocumentMapping | None, str]:
 
     Returns:
 
-        The parsed document, or ``None`` when it could not be read, together with the
-        name it is known by: the file stem, or ``anonymous`` for standard input.
+        The parsed ``WorkflowLike``, ``PipeDef``, or ``PipeDag`` mapping, or ``None``
+        when it could not be read; and the name it is known by: the file stem, or
+        ``anonymous`` for standard input.
 
     Examples:
 
@@ -95,9 +96,9 @@ def read_document(path: Path | str) -> tuple[DocumentMapping | None, str]:
         try:
             text = path.read_text(encoding="utf-8")
         except OSError as e:
-            logger.warning("Unable to read workflow document: %s", e)
+            logger.warning("Unable to read input file: %s", e)
         except ValueError as e:
-            logger.warning("Invalid JSON in workflow document: %s", e)
+            logger.warning("Unable to decode input file: %s", e)
 
     document = None
 
@@ -111,12 +112,12 @@ def read_document(path: Path | str) -> tuple[DocumentMapping | None, str]:
 
 
 def is_workflowlike(value: object) -> TypeGuard[WorkflowLike]:
-    """Reports whether ``value`` is a workflow document."""
+    """Reports whether ``value`` is a ``WorkflowLike`` mapping."""
     return is_mapping(value) and bool({"nodes", "version"}.intersection(value))
 
 
 def is_pipedeflike(value: object) -> TypeGuard[PipeDefLike]:
-    """Reports whether ``value`` is a released pipe definition."""
+    """Reports whether ``value`` is a ``PipeDef``."""
     if is_mapping(value) and not is_workflowlike(value) and "modules" in value:
         wires = value.get("wires")
         modules = value.get("modules")
@@ -136,7 +137,7 @@ def is_pipedeflike(value: object) -> TypeGuard[PipeDefLike]:
 
 
 def is_pipedag(value: object) -> TypeGuard[PipeDag]:
-    """Reports whether ``value`` is a bare-bones DAG."""
+    """Reports whether ``value`` is a ``PipeDag``."""
     possible = is_mapping(value) and not is_workflowlike(value) and "modules" in value
     return possible and not is_pipedeflike(value)
 
@@ -145,14 +146,13 @@ def get_document_format(document: DocumentMapping) -> DocumentFormat:
     """
     Detects which of the readable shapes ``document`` is written in.
 
-    A document listing ``nodes``, or declaring the workflow version it targets, is a
-    canonical workflow. One listing ``modules`` is either a released pipe definition,
-    recognised by its wire mappings and its terminal output module, or a bare-bones
-    DAG.
+    A mapping listing ``nodes``, or declaring the workflow format version it targets,
+    is a ``WorkflowLike``. One listing ``modules`` is either a ``PipeDef``, recognised
+    by its wire mappings and its terminal output module, or a ``PipeDag``.
 
     Args:
 
-        document: The parsed JSON document.
+        document: The parsed JSON input.
 
     Returns:
 
@@ -160,7 +160,7 @@ def get_document_format(document: DocumentMapping) -> DocumentFormat:
 
     Raises:
 
-        InvalidPipelineError: If the document is not a mapping, or lists neither
+        InvalidPipelineError: If the input is not a mapping, or lists neither
             ``nodes`` nor ``modules``.
 
     Examples:
@@ -188,20 +188,20 @@ def normalize_document(
     document: DocumentMapping, fmt: DocumentFormat | None = None
 ) -> Workflow:
     """
-    Converts a document of any readable shape into a validated canonical workflow.
+    Converts parsed input of any readable shape into a validated ``Workflow``.
 
     Args:
 
-        document: The parsed JSON document.
-        fmt: The shape to read it as. Omit it to detect the shape from the document.
+        document: The parsed JSON input.
+        fmt: The shape to read it as. Omit it to detect the shape from the input.
 
     Returns:
 
-        The canonical :class:`~riko.definitions._workflow.Workflow`.
+        The validated :class:`~riko.definitions._workflow.Workflow`.
 
     Raises:
 
-        InvalidPipelineError: If the shape cannot be detected, the document does not
+        InvalidPipelineError: If the shape cannot be detected, the input does not
             hold the shape it is read as, or the resulting workflow is invalid.
 
     Examples:
@@ -238,20 +238,20 @@ def normalize_document(
 
 def require_workflow(document: DocumentMapping) -> Workflow:
     """
-    Loads a document that has to already be a canonical workflow.
+    Loads parsed input that must already be a ``WorkflowLike``.
 
     Args:
 
-        document: The parsed JSON document.
+        document: The parsed JSON input.
 
     Returns:
 
-        The canonical :class:`~riko.definitions._workflow.Workflow`.
+        The validated :class:`~riko.definitions._workflow.Workflow`.
 
     Raises:
 
-        InvalidPipelineError: If the document is written in an older shape, or is not
-            a valid canonical workflow.
+        InvalidPipelineError: If the input is a ``PipeDef`` or ``PipeDag``, or is not
+            a valid ``WorkflowLike``.
 
     Examples:
 

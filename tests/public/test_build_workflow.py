@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Tests ``PipeDag`` expansion into Workflows."""
+"""Tests ``PipeDag`` expansion into a ``Workflow``."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ FAN_IN_WIRES: Sequence[Sequence[str]] = [["a", "u"], ["b", "u", "in:1"]]
 
 
 def _dag(name: str) -> PipeDag:
-    """Loads a committed ``PipeDag`` fixture."""
+    """Loads a committed fixture holding a serialized ``PipeDag``."""
     return loads((DAG_DIR / f"{name}.json").read_text())
 
 
@@ -110,7 +110,7 @@ def test_bad_wire_length_raises_invalid_pipeline(wire: list[str]):
         parse_dag({"modules": FAN_IN_MODULES, "wires": [wire]})
 
 
-def test_expanded_dag_runs_like_its_document():
+def test_expanded_dag_runs():
     workflow = parse_dag(_dag("pipe_forever"))
     assert list(Pipeline(workflow)) == [{"forever": True}] * 3
 

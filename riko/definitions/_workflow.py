@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-The immutable canonical Workflow v2 model and public ``Pipeline`` definition.
+The immutable ``Workflow`` graph model and the public ``Pipeline`` wrapper.
 
 Six closed node families (``ModuleNode``/``ReadNode``/``WriteNode``/``CacheNode``/
 ``ActionNode``/``SubscribeNode``) and two edge families (``StreamEdge``/``PublishEdge``)
@@ -354,10 +354,10 @@ def require_module_node(value: Node, what: str | None = None) -> ModuleNode:
 @define(frozen=True, slots=True)
 class Workflow:
     """
-    The strict canonical Workflow v2 graph: nodes, edges, outputs, and inputs.
+    The strict in-memory workflow graph: nodes, edges, outputs, and inputs.
 
     Construction canonicalizes field-local representation details such as immutable
-    mappings and resource-name shorthand. Does not perform authoring-shape normalization
+    mappings and resource-name shorthand. Does not perform shorthand normalization
     or closed-schema rejection. Cross-field graph validity is checked explicitly by
     ``validate()``.
 
@@ -368,7 +368,7 @@ class Workflow:
         outputs: The named exposed outputs, each an endpoint reference.
         inputs: The declared inputs, each a JSON Schema.
         resources: The declared resource slot names.
-        version: The canonical workflow version.
+        version: The workflow format version.
 
     Examples:
 
@@ -619,9 +619,9 @@ _optional_workflow = narrow_def_from_require(_require_workflow, default=_EMPTY_S
 @define(frozen=True, slots=True)
 class Pipeline(Generic[T]):
     """
-    A public immutable pipeline definition over a canonical Workflow v2 workflow.
+    A public immutable, runnable wrapper around a ``Workflow``.
 
-    ``Pipeline`` is the stable definition surface. Iterating it yields its default
+    ``Pipeline`` is the stable application surface. Iterating it yields its default
     output stream which is generic over T.
 
     ``Pipeline(workflow)`` wraps a built graph. ``Pipeline.from_module(name)`` seeds a
@@ -632,7 +632,7 @@ class Pipeline(Generic[T]):
 
     Attributes:
 
-        workflow: The canonical workflow this pipeline defines.
+        workflow: The ``Workflow`` this pipeline runs.
 
         source: The seeded source, or ``None`` when the graph supplies its own.
 

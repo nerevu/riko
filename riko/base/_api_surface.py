@@ -56,6 +56,8 @@ OTHER = frozenset(
 ROOT_EXCEPTIONS = frozenset(
     {
         "EmptyPipelineError",
+        "InvalidPipelineError",
+        "PipelineError",
         "PipelineStateError",
         "RikoError",
         "UnsupportedModuleError",
@@ -141,6 +143,9 @@ TYPES = frozenset(
         "RawEndpoint",
         "RawNode",
         "RawWorkflow",
+        "PipeDag",
+        "PipeDef",
+        "PipeDefLike",
         "PipeTuples",
         "Stream",
         "SyncPipeTuples",

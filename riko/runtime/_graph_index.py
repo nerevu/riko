@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Canonical Workflow v2 graph indexing.
+Graph indexing for ``Workflow`` graphs.
 
 Builds the immutable graph index that execution planning reads from a validated
 ``Workflow``. ``build_graph_index`` assembles the index from adjacency, edges, and
@@ -77,14 +77,14 @@ def build_graph_index(
 
 def index_workflow(workflow: Workflow) -> GraphIndex:
     """
-    Interprets a canonical workflow's nodes and edges into one graph index.
+    Interprets a ``Workflow``'s nodes and edges into one graph index.
 
     Every declared node is included and disconnected nodes retained, and the
     explicit named outputs are preserved. Assumes a validated ``Workflow``.
 
     Args:
 
-        workflow: The canonical workflow to index.
+        workflow: The validated ``Workflow`` to index.
 
     Returns:
 
