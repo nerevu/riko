@@ -71,7 +71,7 @@ def normalize_enum[E: StrEnum](  # noqa: E302
     strict: bool = True,
 ) -> E | None:
     """Resolves a name or member into the given string enum, or rejects it."""
-    what = what or enum.__name__
+    what = enum.__name__ if what is None else what
 
     if value is None and default is None and strict:
         raise InvalidPipelineError(f"missing required {what}")
@@ -204,10 +204,10 @@ def resolve_format(dest: PathLike | None, fmt: FmtLike | None) -> Formats:
         <Formats.JSON: 'json'>
 
     """
-    if fmt:
-        resolved = fmt
-    else:
+    if fmt is None:
         resolved = Path(str(dest)).suffix.lstrip(".").lower() or None
+    else:
+        resolved = fmt
 
     return normalize_enum(Formats, resolved, default=Formats.JSON)
 
@@ -272,7 +272,7 @@ class FileTarget:
             False
 
         """
-        resolved_fmt = resolve_format(self.dest, fmt or self.fmt)
+        resolved_fmt = resolve_format(self.dest, self.fmt if fmt is None else fmt)
         modes = {WriteMode.REPLACE}
 
         if resolved_fmt in _FILE_APPEND_FORMATS:

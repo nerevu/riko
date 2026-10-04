@@ -42,7 +42,7 @@ DEPENDENCY_MODES = {ExecutionMode.DESCRIBE_DEPENDENCIES, ExecutionMode.DESCRIBE}
 
 class ContextTuple(NamedTuple):
     mode: ExecutionMode
-    inputs: Inputs
+    inputs: Inputs | None
     verbose: bool
     test: bool
     submodule: bool
@@ -56,7 +56,8 @@ class Context:
     Attributes:
 
         mode: Whether to run or describe the pipeline.
-        inputs: Read-only values that override input defaults.
+        inputs: Read-only values that override input defaults, or ``None`` when
+            none were given (an ``input`` module then prompts unless ``test``).
         verbose: Whether to print debug output.
         test: Whether to use defaults instead of prompting.
         submodule: Whether inputs come from a parent pipeline.
@@ -75,7 +76,7 @@ class Context:
         submodule: bool | None = False,
     ) -> None:
         self._mode = mode or ExecutionMode.RUN
-        self._inputs = freeze_mapping(inputs or {})
+        self._inputs = None if inputs is None else freeze_mapping(inputs)
         self._verbose = bool(verbose)
         self._test = bool(test)
         self._submodule = bool(submodule)
@@ -84,7 +85,7 @@ class Context:
     def __reduce__(self) -> tuple[Callable[[ContextTuple], Context], ContextTuple]:
         context_tuple = ContextTuple(
             mode=self.mode,
-            inputs=dict(self.inputs),
+            inputs=None if self.inputs is None else dict(self.inputs),
             verbose=self.verbose,
             test=self.test,
             submodule=self.submodule,
@@ -94,7 +95,8 @@ class Context:
 
     def __repr__(self) -> str:
         content = f"mode={self.mode}, verbose={self.verbose}, test={self.test}, "
-        content += f"inputs={dict(self.inputs)}, submodule={self.submodule}"
+        inputs = None if self.inputs is None else dict(self.inputs)
+        content += f"inputs={inputs}, submodule={self.submodule}"
         return f"Context({content})"
 
     @property
@@ -102,7 +104,7 @@ class Context:
         return self._mode
 
     @property
-    def inputs(self) -> Inputs:
+    def inputs(self) -> Inputs | None:
         return self._inputs
 
     @property
@@ -124,7 +126,8 @@ class Context:
     @classmethod
     def _from_parts(cls, context_tuple: ContextTuple) -> Self:
         resources = freeze_mapping(context_tuple.resources)
-        inputs = freeze_mapping(context_tuple.inputs)
+        _inputs = context_tuple.inputs
+        inputs = None if _inputs is None else freeze_mapping(_inputs)
 
         context = cls.__new__(cls)
         context._mode = context_tuple.mode

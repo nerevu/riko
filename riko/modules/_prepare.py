@@ -317,7 +317,7 @@ def parse_and_cast[T, E](  # noqa: E302
 
     """
     defaults = defaults or Defaults({})
-    field = field or opts.get("field")
+    field = opts.get("field") if field is None else field
 
     if parsers:
         parsed_field, parsed_conf = broadcast(item, *parsers, field=field, **kwargs)

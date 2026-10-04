@@ -345,7 +345,7 @@ class PublishEdge(Edge):
 
 def require_module_node(value: Node, what: str | None = None) -> ModuleNode:
     if not isinstance(value, ModuleNode):
-        what = what or value.family
+        what = value.family if what is None else what
         raise InvalidPipelineError(f"{what} node execution is not yet supported")
 
     return value

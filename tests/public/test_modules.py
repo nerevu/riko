@@ -29,6 +29,17 @@ def test_input_test_flag_scoped_to_test_context(monkeypatch):
     assert next(input_pipe(conf=conf)) == "typed"
 
 
+def test_input_empty_inputs_uses_default(monkeypatch):
+    monkeypatch.setattr(
+        "builtins.input", lambda *args: pytest.fail("input() should not be called")
+    )
+    conf = InputConf({"prompt": "?", "default": "def", "type": CastType.TEXT})
+
+    assert next(input_pipe(conf=conf, inputs={})) == "def"
+    assert next(input_pipe(conf=conf, context=Context(inputs={}))) == "def"
+    assert Context().inputs is None
+
+
 def test_input_conf_test_flag_uses_default(monkeypatch):
     monkeypatch.setattr(
         "builtins.input", lambda *args: pytest.fail("input() should not be called")

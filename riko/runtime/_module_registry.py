@@ -195,7 +195,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
         """
         definition = self._registered(name)
-        return definition.interfaces if definition else load_interfaces(name)
+        return load_interfaces(name) if definition is None else definition.interfaces
 
     def load_definition(self, name: str) -> ModuleDefinition | None:
         """

@@ -90,6 +90,10 @@ Changes
   structurally immutable. Derive a changed context with ``augment``/``with_resource``
   instead of assigning to its fields, inputs, or resources.
 
+- ``Context().inputs`` is now ``None`` when no inputs are given, rather than an empty
+  mapping. An ``input`` module still prompts when no inputs are given, but an explicit
+  ``inputs={}`` now uses each input's default instead of prompting.
+
 - An async operator's ``async_pipe`` now returns an async iterator directly. Consume it
   with ``async for``/``anext`` without awaiting the call first. Async processors and
   splitters are unchanged.

@@ -89,7 +89,7 @@ def parser(
         30
 
     """
-    if inputs := cast("Inputs | None", kwargs.get("inputs")):
+    if (inputs := cast("Inputs | None", kwargs.get("inputs"))) is not None:
         value = inputs.get(objconf.input_key, objconf.default)
     elif objconf.test or skip or kwargs.get("test"):
         value = objconf.default

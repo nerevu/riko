@@ -101,7 +101,7 @@ class _FileWriteSession:
         self._result: WriteResult = WriteResult()
         self._state: _SessionState = _SessionState.OPEN
         self._written: int = 0
-        self.fmt: Formats = prepared.fmt or Formats.JSON
+        self.fmt: Formats = Formats.JSON if prepared.fmt is None else prepared.fmt
         self.mode: WriteMode = prepared.operation.mode
         self.operation = prepared.operation
         self.target: FileTarget = prepared.target

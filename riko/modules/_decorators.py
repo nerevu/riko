@@ -305,7 +305,7 @@ class Module[B: (Literal[True], Literal[False])]:
         module_name: str,
         conf: Conf | DynamicConf | None = None,
         *,
-        assign: str | None = "",
+        assign: str | None = None,
         **kwargs: object,
     ) -> PreparedModule[ItemOrValue, object]:
         """
@@ -337,7 +337,7 @@ class Module[B: (Literal[True], Literal[False])]:
         """
         emit = cast("bool | None", kwargs.pop("emit", None))
         def_emit = self._opts.get("emit") if emit is None else emit
-        def_assign = assign or self._opts.get("assign", "")
+        def_assign = self._opts.get("assign", "") if assign is None else assign
         opts: Opts = Opts(self._opts)
         opts.setdefault("objectify", self._opts.get("ptype") != BasicCastType.NONE)
 
@@ -705,7 +705,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         if prepared.static_casted:
             field_func, pre_casted_extract, pre_casted_conf = prepared.static_casted
-            field = field or prepared.opts.get("field", "")
+            field = prepared.opts.get("field", "") if field is None else field
             parsed_field = get_field(input_, field=field, **kwargs)
             casted_field = field_func(parsed_field)
             orig_item = input_
