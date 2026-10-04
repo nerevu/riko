@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import tomllib
+from importlib import import_module
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -13,7 +16,9 @@ from riko.cli.manage import manager
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
+
+PYPROJECT = Path(__file__).parents[2] / "pyproject.toml"
+SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
 
 
 def test_docstring_summary_output_lead_detection() -> None:
@@ -42,7 +47,7 @@ def _record_path(calls: list[str], name: str, code: int = 0) -> Callable[[Path],
     [
         ([], ["config"]),
         (["--names", "--api"], ["names", "api"]),
-        (["--all"], ["config", "names", "pipes", "api"]),
+        (["--all"], ["config", "names", "api"]),
     ],
 )
 def test_codegen_selectors(
@@ -54,7 +59,7 @@ def test_codegen_selectors(
         "_CODEGEN",
         {
             name: (_record(calls, name), lambda name=name: name, f"{name} failed")
-            for name in ("config", "names", "pipes", "api")
+            for name in _codegen._CODEGEN
         },
     )
 
@@ -165,3 +170,17 @@ def test_imports_is_nested_under_lint() -> None:
     assert nested.exit_code == 0
     assert "--architecture" in nested.output
     assert top_level.exit_code == 2
+
+
+@pytest.mark.parametrize(("script", "target"), sorted(SCRIPTS.items()))
+def test_console_script_target_resolves(script: str, target: str) -> None:
+    """
+    Checks every console script names an importable callable.
+
+    A script pointing at a renamed module installs fine but fails with
+    ``ModuleNotFoundError`` when run.
+
+    """
+    module_name, attr = target.split(":")
+
+    assert callable(getattr(import_module(module_name), attr)), script

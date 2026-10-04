@@ -2,7 +2,7 @@
 """
 Generated parse-time module configuration classes.
 
-Edit ``riko.types.modules`` and regenerate with ``manage codegen -m config``;
+Edit ``riko.types.modules`` and regenerate with ``manage codegen --config``;
 **DO NOT edit this module directly!**.
 """
 

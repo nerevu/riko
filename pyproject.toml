@@ -95,9 +95,9 @@ run-pipe = "riko.cli.runpipe:run"
 benchmark = "riko.cli.benchmark:main"
 compile-pipe = "riko.cli.compile:run"
 build-workflow = "riko.cli.build_workflow:run"
-gen-config = "riko.cli.gen_config:main"
-gen-names = "riko.cli.gen_names:main"
-gen-api-surface = "riko.cli.gen_api_surface:main"
+gen-config = "riko.cli._gen_config:main"
+gen-names = "riko.cli._gen_names:main"
+gen-api-surface = "riko.cli._gen_api_surface:main"
 
 [tool.uv]
 # Rebuild the local `riko` install when any source file changes, not just when
