@@ -18,7 +18,7 @@ from riko.bado._backend import (
 from riko.base.exceptions import DuplicateReceiverError, ReceiverUnavailableError
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Iterable
+    from collections.abc import AsyncGenerator, Iterable
 
     from riko.types._streams import Item
 
@@ -82,7 +82,9 @@ class AsyncPubSubHub:
                 slot.state = SubscriptionState.CLOSED
 
     @asynccontextmanager
-    async def subscribe(self, name: str) -> AsyncIterator[MemoryObjectReceiveStream]:
+    async def subscribe(
+        self, name: str
+    ) -> AsyncGenerator[MemoryObjectReceiveStream, None]:
         slot = self._get_or_create(name)
 
         if slot.state is SubscriptionState.SUBSCRIBED:
