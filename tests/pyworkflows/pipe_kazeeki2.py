@@ -1,11 +1,11 @@
 # vim: sw=4:ts=4:expandtab
-"""Hand-written sync Kazeeki pipeline fixture (variant 2)."""
+"""Hand-written sync Kazeeki workflow module (variant 2)."""
 
 from riko import Pipeline
 from riko.execution._execution import SyncExecution
 from riko.execution.context import Context
 from riko.runtime._execution_plan import build_execution_plan
-from tests.pypipelines._pipe_kazeeki import itembuilder_conf, regex_conf, rename_conf
+from tests.pyworkflows._pipe_kazeeki import itembuilder_conf, regex_conf, rename_conf
 
 
 def build() -> Pipeline:

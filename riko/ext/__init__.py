@@ -24,9 +24,9 @@ from riko.modules._decorators import operator, processor, splitter
 from riko.runtime._migrate import migrate_v1_to_v2
 from riko.runtime._module_registry import ModuleRegistry, register_module
 from riko.runtime._normalize import normalize_workflow
-from riko.runtime._pipelines import register_pipeline_store
 from riko.runtime._serialize import parse_document, serialize_workflow
 from riko.runtime._target_registry import TargetRegistry, register_target
+from riko.runtime._workflows import register_workflow_store
 from riko.types._enums import ModuleName, ModuleNameLike
 from riko.types._targets import SupportsActions, SupportsRead, SupportsWrite, Target
 from riko.types._wrappers import (
@@ -83,8 +83,8 @@ __all__ = [
     "parse_document",
     "processor",
     "register_module",
-    "register_pipeline_store",
     "register_target",
+    "register_workflow_store",
     "serialize_workflow",
     "splitter",
 ]

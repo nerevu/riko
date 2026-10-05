@@ -7,20 +7,20 @@ import pytest
 from riko.bado._backend import issync
 from riko.base._paths import ROOT_DIR
 from riko.parsing.documents import IS_LXML
-from riko.runtime._pipelines import register_pipeline_store, reset_pipeline_resolver
 from riko.runtime._pubsub import reset_pubsub
+from riko.runtime._workflows import register_workflow_store, reset_workflow_resolver
 
-PIPELINE_DIR = ROOT_DIR / "tests" / "pipelines"
+WORKFLOW_DIR = ROOT_DIR / "tests" / "workflows"
 
 
 @pytest.fixture(autouse=True)
-def pipeline_store():
-    # Core ships no named-pipeline locations; the suite supplies its own probe
-    # package plus the directory of Workflows.
-    reset_pipeline_resolver()
-    register_pipeline_store(package="tests.pypipelines", directory=PIPELINE_DIR)
+def workflow_store():
+    # Core ships no named-workflow locations; the suite supplies its own package of
+    # workflow modules plus the directory of workflow documents.
+    reset_workflow_resolver()
+    register_workflow_store(package="tests.pyworkflows", directory=WORKFLOW_DIR)
     yield
-    reset_pipeline_resolver()
+    reset_workflow_resolver()
 
 
 def _extra_missing(*modules: str) -> list[str]:

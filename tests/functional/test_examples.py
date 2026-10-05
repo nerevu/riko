@@ -200,7 +200,7 @@ class TestExamples:
     )
     def test_compiled_pipe(self, pipe_name, expected):
         """Runs each example workflow document and checks the stream it produces."""
-        document = ROOT_DIR / "examples" / "pipelines" / f"{pipe_name}.json"
+        document = ROOT_DIR / "examples" / "workflows" / f"{pipe_name}.json"
         workflow = parse_document(document.read_text())
         items = []
 
@@ -230,6 +230,6 @@ class TestExamples:
     )
     def test_unsupported_timezone(self):
         """The timezone example asks for EST but dateformat ignores it (UTC)."""
-        module = import_module("examples.pypipelines.pipe_timezone")
+        module = import_module("examples.pyworkflows.pipe_timezone")
         item = next(iter(module.pipe(test=True)))
         assert "EST" in item["dateformat"]

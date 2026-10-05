@@ -1,14 +1,15 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides resolution for named pipelines.
+Provides resolution for named workflows.
 
-Pipelines can be loaded from generated or hand-written modules, or from workflow
-documents (each a ``WorkflowDocument``: a serialized ``Workflow``).
+A named workflow is a ``Workflow`` filed under a ``pipe_<id>`` name: a workflow module
+(``WorkflowModule``), generated or hand-written, or a workflow document
+(``WorkflowDocument``: a serialized ``Workflow``).
 
 Attributes:
 
-    pipeline_resolver: Process-global resolver. Core ships it unconfigured, since
-        a bare install has no named pipelines.
+    workflow_resolver: Process-global resolver. Core ships it unconfigured, since
+        a bare install has no named workflows.
 
 """
 
@@ -71,7 +72,7 @@ def _as_subpipe(pipe: ModuleWrapper) -> SubPipe:
     Builds a sub-pipe-marked wrapper around ``pipe``.
 
     The marker goes on a fresh ``partial`` because the module callable is shared
-    with anyone importing the generated pipe directly; marking it in place
+    with anyone importing the workflow module directly; marking it in place
     would leak sub-pipe semantics into those calls.
 
     """
@@ -88,13 +89,13 @@ def _as_subpipe(pipe: ModuleWrapper) -> SubPipe:
 
 
 class ModuleStore(Protocol):
-    """Loads generated pipe modules by name and returns ``None`` if absent."""
+    """Loads workflow modules by name and returns ``None`` if absent."""
 
     def load(self, name: str) -> ModuleType | None: ...  # noqa: E704
 
 
 class PackageStore:
-    """Loads pipe modules from a Python package."""
+    """Loads workflow modules from a Python package."""
 
     def __init__(self, package: str) -> None:
         self._package = package
@@ -104,7 +105,7 @@ class PackageStore:
 
 
 class MappingStore:
-    """Loads pipe modules from an in-memory mapping."""
+    """Loads workflow modules from an in-memory mapping."""
 
     def __init__(self, modules: Mapping[str, ModuleType]) -> None:
         self._modules = dict(modules)
@@ -114,7 +115,7 @@ class MappingStore:
 
 
 class CompositeStore:
-    """Loads a pipe module from the first store that has it."""
+    """Loads a workflow module from the first store that has it."""
 
     def __init__(self, *stores: ModuleStore) -> None:
         self._stores = stores
@@ -134,7 +135,7 @@ class DirectoryStore:
     Loads ``WorkflowDocument`` files from a directory.
 
     Despite the shared ``load`` name, this is not a ``ModuleStore``. It yields a
-    ``Workflow`` rather than a module. This is why ``PipelineResolver`` keeps
+    ``Workflow`` rather than a module. This is why ``WorkflowResolver`` keeps
     it in its own slot instead of chaining it into a ``CompositeStore``. A loaded
     workflow is interface-agnostic; the caller runs it with the execution layer.
 
@@ -154,11 +155,11 @@ class DirectoryStore:
         return parsed
 
 
-class PipelineResolver:
+class WorkflowResolver:
     """
-    Resolves whole pipelines.
+    Resolves named workflows.
 
-    Use the module registry to resolves leaf modules.
+    Use the module registry to resolve leaf modules.
 
     Examples:
 
@@ -166,7 +167,7 @@ class PipelineResolver:
         >>>
         >>> module = ModuleType("pipe_demo")
         >>> module.pipe = lambda stream=None, **kwargs: iter([{"x": 1}])
-        >>> resolver = PipelineResolver(store=MappingStore({"pipe_demo": module}))
+        >>> resolver = WorkflowResolver(store=MappingStore({"pipe_demo": module}))
         >>> list(resolver.require("pipe_demo")())
         [{'x': 1}]
 
@@ -186,7 +187,7 @@ class PipelineResolver:
         current: T | None, value: T | None, kind: str, replace: bool
     ) -> T | None:
         if value is not None and current is not None and not replace:
-            raise ValueError(f"pipeline {kind} already registered")
+            raise ValueError(f"workflow {kind} already registered")
 
         return current if value is None else value
 
@@ -204,7 +205,7 @@ class PipelineResolver:
 
         Args:
 
-            store: Generated-pipe module store to register.
+            store: Workflow-module store to register.
             documents: ``WorkflowDocument`` directory to register.
             replace: Whether an already-registered half of the same kind may be
                 replaced.
@@ -228,7 +229,7 @@ class PipelineResolver:
         return name.startswith(("pipe_", "pipe:"))
 
     def load(self, name: str) -> ModuleType | None:
-        """Loads the generated pipe module for ``name``, or ``None``."""
+        """Loads the workflow module for ``name``, or ``None``."""
         return None if self._store is None else self._store.load(name)
 
     @overload
@@ -255,7 +256,7 @@ class PipelineResolver:
 
     def require_interfaces(self, name: str) -> frozenset[Interface]:
         """
-        Resolves which of a pipeline's sync and async interfaces are defined.
+        Resolves which of a named workflow's sync and async interfaces are defined.
 
         Args:
 
@@ -263,7 +264,7 @@ class PipelineResolver:
 
         Returns:
 
-            The subset of ``pipe``/``async_pipe`` the pipeline exposes.
+            The subset of ``pipe``/``async_pipe`` the workflow module exposes.
 
         Raises:
 
@@ -298,14 +299,14 @@ class PipelineResolver:
         return parsed
 
 
-pipeline_resolver: PipelineResolver = PipelineResolver()
+workflow_resolver: WorkflowResolver = WorkflowResolver()
 
 
-def register_pipeline_store(
+def register_workflow_store(
     *, package: str | None = None, directory: Path | None = None, replace: bool = False
 ) -> None:
     """
-    Registers pipeline sources on the process-global resolver.
+    Registers named-workflow sources on the process-global resolver.
 
     Args:
 
@@ -321,38 +322,38 @@ def register_pipeline_store(
 
     Examples:
 
-        >>> reset_pipeline_resolver()
-        >>> register_pipeline_store(package="riko.modules")
-        >>> reset_pipeline_resolver()
+        >>> reset_workflow_resolver()
+        >>> register_workflow_store(package="riko.modules")
+        >>> reset_workflow_resolver()
 
     """
     store = None if package is None else PackageStore(package)
     documents = None if directory is None else DirectoryStore(directory)
-    pipeline_resolver.register(store=store, documents=documents, replace=replace)
+    workflow_resolver.register(store=store, documents=documents, replace=replace)
 
 
-def reset_pipeline_resolver() -> None:
+def reset_workflow_resolver() -> None:
     """
     Resets the process-global resolver, chiefly for test isolation.
 
     Examples:
 
-        >>> reset_pipeline_resolver()
-        >>> register_pipeline_store(package="riko.modules")
-        >>> reset_pipeline_resolver()
-        >>> pipeline_resolver.load("pipe_demo") is None
+        >>> reset_workflow_resolver()
+        >>> register_workflow_store(package="riko.modules")
+        >>> reset_workflow_resolver()
+        >>> workflow_resolver.load("pipe_demo") is None
         True
 
     """
-    pipeline_resolver.reset()
+    workflow_resolver.reset()
 
 
 __all__ = [
     "DirectoryStore",
     "MappingStore",
     "PackageStore",
-    "PipelineResolver",
-    "pipeline_resolver",
-    "register_pipeline_store",
-    "reset_pipeline_resolver",
+    "WorkflowResolver",
+    "register_workflow_store",
+    "reset_workflow_resolver",
+    "workflow_resolver",
 ]

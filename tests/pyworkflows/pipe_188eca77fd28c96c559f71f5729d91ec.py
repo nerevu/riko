@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from riko.modules.fetchpage import pipe as fetchpage
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.truncate import pipe as truncate
-from riko.runtime._pipelines import mark_subpipe
+from riko.runtime._workflows import mark_subpipe
 from riko.types.modules import FetchPageRawConf, ItemBuilderRawConf, TruncateRawConf
 
 if TYPE_CHECKING:

@@ -330,8 +330,8 @@ class Resolver(Protocol):
     """
     Resolve a pipe name to its callable and report its available interfaces.
 
-    Leaf modules use ``ModuleRegistry``; ``pipe`` sub-pipelines use
-    ``PipelineResolver``.
+    Leaf modules use ``ModuleRegistry``; ``pipe_*`` named workflows use
+    ``WorkflowResolver``.
     """
 
     @overload

@@ -25,11 +25,11 @@ from riko.ext.codegen import list_modules
 from riko.io._async import async_get_temp_file, async_url_open, async_write
 from riko.modules._metadata import describe_module, get_module_metadata
 from riko.modules._names import Modules, Sinks, Sources, Transforms
-from riko.runtime._codegen import compile_pipe
+from riko.runtime._codegen import compile_workflow
 from riko.runtime._migrate import parse_dag
 from riko.runtime.collections import export, list_formats
 from riko.types._enums import Backends, ExecutionMode, Executor, Formats
-from riko.types._workflow import Edge, Endpoint, WorkflowDocument
+from riko.types._workflow import Edge, Endpoint, WorkflowDocument, WorkflowModule
 
 from ._package import PACKAGE_INFO
 
@@ -68,6 +68,7 @@ __all__ = [
     "Workflow",
     "WorkflowDocument",
     "WorkflowLike",
+    "WorkflowModule",
     "as_async",
     "async_chain",
     "async_get_temp_file",
@@ -79,7 +80,7 @@ __all__ = [
     "async_url_open",
     "async_write",
     "backend",
-    "compile_pipe",
+    "compile_workflow",
     "describe_module",
     "export",
     "get_module_metadata",

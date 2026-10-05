@@ -21,7 +21,7 @@ IO_ = frozenset({"async_url_open", "async_write", "async_get_temp_file"})
 
 COLLECTIONS = frozenset({"Formats", "export", "list_formats"})
 
-COMPILE = frozenset({"compile_pipe", "parse_dag"})
+COMPILE = frozenset({"compile_workflow", "parse_dag"})
 
 MODULES = frozenset(
     {
@@ -47,6 +47,7 @@ OTHER = frozenset(
         "Workflow",
         "WorkflowLike",
         "WorkflowDocument",
+        "WorkflowModule",
         "get_path",
         "get_temp_file",
         "list_modules",
@@ -75,9 +76,9 @@ PRIVATE_RESOLUTION = frozenset(
         "ModuleStore",
         "PackageStore",
         "PipeResolver",
-        "PipelineResolver",
+        "WorkflowResolver",
         "pipe_resolver",
-        "pipeline_resolver",
+        "workflow_resolver",
     }
 )
 
@@ -122,7 +123,7 @@ EXTENSION = frozenset(
         "parse_document",
         "processor",
         "register_module",
-        "register_pipeline_store",
+        "register_workflow_store",
         "register_target",
         "serialize_workflow",
         "splitter",

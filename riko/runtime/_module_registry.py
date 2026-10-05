@@ -71,7 +71,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
     Precedence is runtime registration, then entry point
     (``[project.entry-points."riko.modules"]``), then built-in. Only module
-    implementations are resolved here. Composed ``pipe_*`` pipelines are the resolver
+    implementations are resolved here. Named ``pipe_*`` workflows are the resolver
     façade's concern and no JSON is loaded or compiled. Built-ins are imported lazily
     on first use so heavy optional dependencies stay off the startup path.
 

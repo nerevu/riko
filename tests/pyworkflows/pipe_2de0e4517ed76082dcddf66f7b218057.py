@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from riko.modules.fetch import pipe as fetch
-from riko.runtime._pipelines import mark_subpipe
+from riko.runtime._workflows import mark_subpipe
 from riko.types.modules import FetchRawConf
 
 if TYPE_CHECKING:

@@ -1,8 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests the committed pipeline fixtures against the workflow runtime.
+Tests the committed workflow fixtures against the workflow runtime.
 
-Every ``pipe_*.json`` under ``tests/pipelines`` and ``examples/pipelines`` is a
+Every ``pipe_*.json`` under ``tests/workflows`` and ``examples/workflows`` is a
 ``WorkflowDocument``. One test keeps those documents parseable, valid,
 and byte-identical to their serialized form; the other keeps the hand-written
 Python probes beside them producing the same items as the documents they mirror.
@@ -28,13 +28,13 @@ if TYPE_CHECKING:
     from riko.types._streams import Item
 
 EXAMPLES_DIR = TESTS_DIR.parent / "examples"
-FIXTURE_DIRS = (TESTS_DIR / "pipelines", EXAMPLES_DIR / "pipelines")
+FIXTURE_DIRS = (TESTS_DIR / "workflows", EXAMPLES_DIR / "workflows")
 PROBE_PACKAGES = {
-    TESTS_DIR / "pypipelines": "tests.pypipelines",
-    EXAMPLES_DIR / "pypipelines": "examples.pypipelines",
+    TESTS_DIR / "pyworkflows": "tests.pyworkflows",
+    EXAMPLES_DIR / "pyworkflows": "examples.pyworkflows",
 }
 
-# A sub-pipeline fixture: it is only meaningful when another pipeline embeds it.
+# A named-workflow fixture: it is only meaningful when another workflow embeds it.
 SUBPIPE_ONLY = frozenset({"pipe_bd0834cfe6cdacb0bea5569505d330b8"})
 
 SPLIT_PENDING = pytest.mark.xfail(
@@ -63,7 +63,7 @@ def _probes() -> list[Any]:
 
     for directory, package in PROBE_PACKAGES.items():
         for path in sorted(directory.glob("pipe_*.py")):
-            document = directory.parent / "pipelines" / f"{path.stem}.json"
+            document = directory.parent / "workflows" / f"{path.stem}.json"
 
             if not document.exists() or path.stem in SUBPIPE_ONLY:
                 continue

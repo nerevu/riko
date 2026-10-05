@@ -180,7 +180,7 @@ def loop_embed_sync(
     if embed is None:
         handled = False
     elif is_subpipe(embed):
-        # A sub-pipeline embed is self-contained, so it runs per parent with no
+        # A named-workflow embed is self-contained, so it runs per parent with no
         # embedded kwargs (its own modules carry their conf).
         stream = loop(embed, None, context, source)
         looped = True
@@ -228,7 +228,7 @@ def loop_embed_async(
     if embed is None:
         handled = False
     elif is_subpipe(embed):
-        # A sub-pipeline embed is self-contained, so it runs per parent with no
+        # A named-workflow embed is self-contained, so it runs per parent with no
         # embedded kwargs (its own modules carry their conf).
         stream = loop(embed, None, context, source)
         looped = True

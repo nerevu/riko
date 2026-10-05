@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Sort-key construction and grouping helpers used by built-in pipeline modules.
+Sort-key construction and grouping helpers used by built-in pipes.
 
 Attributes:
 

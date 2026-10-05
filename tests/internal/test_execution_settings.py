@@ -28,8 +28,8 @@ from riko.execution._resources import Resource
 from riko.execution.context import Context
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._module_registry import ModuleRegistry
-from riko.runtime._pipelines import pipeline_resolver
 from riko.runtime._resolver import ResolverDispatcher
+from riko.runtime._workflows import workflow_resolver
 from riko.types._enums import Executor
 from riko.types._workflow import Endpoint
 from tests import async_test
@@ -62,7 +62,7 @@ def _dispatcher(*definitions):
     for definition in definitions:
         registry.register(definition)
 
-    return ResolverDispatcher(registry, pipeline_resolver)
+    return ResolverDispatcher(registry, workflow_resolver)
 
 
 def _loopable(func) -> Any:

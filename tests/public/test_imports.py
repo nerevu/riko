@@ -55,11 +55,7 @@ PARTIAL_SURFACES = (
 CONF_TYPES = riko.types.modules.__all__
 
 
-CODEGEN = (COMPILE & {"compile_pipe"}) | {
-    "RAW_CONFS",
-    "compile_workflow",
-    "render_value",
-}
+CODEGEN = (COMPILE & {"compile_workflow"}) | {"RAW_CONFS", "render_value"}
 
 EQUAL_SURFACES = (
     (riko.bado, BADO),

@@ -1,8 +1,8 @@
 """
-Tests basic pipeline module usage.
+Tests basic workflow module usage.
 
-These are integration tests for compiled/generated pipelines. Keep cases that exercise
-composition, wiring, runtime context, or historical pipeline behavior not owned more
+These are integration tests for workflow modules. Keep cases that exercise
+composition, wiring, runtime context, or historical workflow behavior not owned more
 strongly by module doctests or focused test suites.
 """
 
@@ -28,9 +28,9 @@ from riko.definitions._workflow import ModuleNode
 from riko.execution._execution import SyncExecution
 from riko.execution.context import Context
 from riko.runtime._execution_plan import build_execution_plan
-from riko.runtime._pipelines import pipeline_resolver
 from riko.runtime._resolver import dispatcher
 from riko.runtime._serialize import parse_document
+from riko.runtime._workflows import workflow_resolver
 from riko.types._guards import is_mapping, is_subpipe
 from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput
@@ -97,7 +97,7 @@ def _assert_kazeeki(item: Mapping, example: Mapping, content: tuple[str, str]) -
 
 def _document(pipe_name: str) -> Path | None:
     """Supplies the committed workflow document for a pipeline, when it has one."""
-    path = TESTS_DIR / "pipelines" / f"{pipe_name}.json"
+    path = TESTS_DIR / "workflows" / f"{pipe_name}.json"
     return path if path.exists() else None
 
 
@@ -228,7 +228,7 @@ class TestBasics:
             stream = dispatcher.require(pipe_name)(context=self.context)
             items = cast("ParserMaterializedOutput", list(listize(stream)))
         else:
-            workflow = pipeline_resolver.load_definition(pipe_name, directory=file_path)
+            workflow = workflow_resolver.load_definition(pipe_name, directory=file_path)
 
             with SyncExecution(context=self.context) as execution:
                 items = list(execution.run(build_execution_plan(workflow)))
@@ -242,7 +242,7 @@ class TestBasics:
 
     def _load(self, items: Sequence[Items], pipe_name, value=0, check=1):
         if _document(pipe_name) is None:
-            module = import_module(f"tests.pypipelines.{pipe_name}")
+            module = import_module(f"tests.pyworkflows.{pipe_name}")
             pydeps = _workflow_dependencies(module.build().workflow)
         else:
             pydeps = _workflow_dependencies(_load_workflow(pipe_name))
@@ -251,7 +251,7 @@ class TestBasics:
 
     async def _aload(self, items: Sequence[Items], pipe_name, value=0, check=1):
         if _document(pipe_name) is None:
-            module = import_module(f"tests.pypipelines.{pipe_name}")
+            module = import_module(f"tests.pyworkflows.{pipe_name}")
             pydeps = _workflow_dependencies(module.build().workflow)
         else:
             pydeps = _workflow_dependencies(_load_workflow(pipe_name))
@@ -791,7 +791,7 @@ class TestBasics:
         assert item.get("pubDate")
 
     def test_loop_subpipe_embed(self):
-        """Runs a sub-pipeline embedded in a loop once per parent item."""
+        """Runs a named workflow embedded in a loop once per parent item."""
         items = self._get_pipeline("pipe_loop_subpipe")
         assert items == [{"title": "hello", "strconcat": "hello!"}]
 

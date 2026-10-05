@@ -10,7 +10,7 @@ from riko.modules.feedautodiscovery import pipe as feedautodiscovery
 from riko.modules.fetch import pipe as fetch
 from riko.modules.sort import pipe as sort
 from riko.modules.truncate import pipe as truncate
-from riko.runtime._pipelines import mark_subpipe
+from riko.runtime._workflows import mark_subpipe
 from riko.types.modules import (
     FeedAutoDiscoveryRawConf,
     FetchRawConf,

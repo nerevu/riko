@@ -16,14 +16,14 @@ from riko.ext.codegen import list_modules
 from riko.ext.registry import reset_module_registry
 from riko.modules import regex, tokenizer
 from riko.runtime._module_registry import module_registry
-from riko.runtime._pipelines import (
+from riko.runtime._resolver import dispatcher
+from riko.runtime._workflows import (
     CompositeStore,
     DirectoryStore,
     MappingStore,
     PackageStore,
-    PipelineResolver,
+    WorkflowResolver,
 )
-from riko.runtime._resolver import dispatcher
 from riko.types._guards import is_mapping
 
 if TYPE_CHECKING:
@@ -295,26 +295,26 @@ class TestEntryPointModules:
         assert calls["n"] == 1
 
 
-class TestPipelineResolver:
-    def test_core_default_has_no_named_pipelines(self):
+class TestWorkflowResolver:
+    def test_core_default_has_no_named_workflows(self):
         """A bare (unconfigured) resolver finds no pipe_* module and no definition."""
-        resolver = PipelineResolver()
+        resolver = WorkflowResolver()
         assert resolver.load("pipe_x") is None
 
         with pytest.raises(UnsupportedPipelineError):
             resolver.load_definition("pipe_x")
 
     def test_configured_resolver_imports_generated_module(self):
-        resolver = PipelineResolver(store=PackageStore("tests.pypipelines"))
+        resolver = WorkflowResolver(store=PackageStore("tests.pyworkflows"))
         assert resolver.load("pipe_kazeeki1") is not None
 
     def test_missing_module_returns_none(self):
-        resolver = PipelineResolver(store=PackageStore("tests.pypipelines"))
+        resolver = WorkflowResolver(store=PackageStore("tests.pyworkflows"))
         assert resolver.load("pipe_missing") is None
 
     def test_directory_store_parses_definition(self):
-        directory = ROOT_DIR / "tests" / "pipelines"
-        resolver = PipelineResolver(documents=DirectoryStore(directory))
+        directory = ROOT_DIR / "tests" / "workflows"
+        resolver = WorkflowResolver(documents=DirectoryStore(directory))
         assert isinstance(resolver.load_definition("pipe_gigs"), Workflow)
 
         with pytest.raises(UnsupportedPipelineError):
@@ -324,14 +324,14 @@ class TestPipelineResolver:
         store = CompositeStore(
             MappingStore({"pipe_x": tokenizer}),
             MappingStore({"pipe_x": regex}),
-            PackageStore("tests.pypipelines"),
+            PackageStore("tests.pyworkflows"),
         )
         assert store.load("pipe_x") is tokenizer
         assert store.load("pipe_x") is not regex
         assert store.load("absent") is None
 
     def test_mapping_store_serves_in_memory_module(self):
-        resolver = PipelineResolver(store=MappingStore({"pipe_mem": tokenizer}))
+        resolver = WorkflowResolver(store=MappingStore({"pipe_mem": tokenizer}))
         assert resolver.load("pipe_mem") is tokenizer
 
 

@@ -1,13 +1,13 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests the Python modules generated from workflow documents.
+Tests the workflow modules generated from workflow documents.
 
-A generated module rebuilds its workflow from typed configuration classes and runs
-it through the standard execution, so it has to produce exactly what running the
-document produces. These tests hold that equivalence over every committed fixture,
-in both the synchronous and asynchronous interface, and keep the generated source
-importable. Type coverage of generated modules is held by the committed typed
-probes under the ``pypipelines`` trees, which the standard type check includes.
+A workflow module (``WorkflowModule``) rebuilds its workflow from typed configuration
+classes and runs it through the standard execution, so it has to produce exactly what
+running the document produces. These tests hold that equivalence over every committed
+fixture, in both the synchronous and asynchronous interface, and keep the generated
+source importable. Type coverage of workflow modules is held by the committed typed
+probes under the ``pyworkflows`` trees, which the standard type check includes.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._workflow import ModuleNode, Pipeline, Workflow, WriteNode
 from riko.execution._execution import AsyncExecution, SyncExecution
 from riko.execution.context import Context
-from riko.runtime._codegen import compile_pipe, compile_workflow
+from riko.runtime._codegen import compile_workflow
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._normalize import normalize_workflow
 from riko.runtime._serialize import parse_document
@@ -46,11 +46,11 @@ if TYPE_CHECKING:
     from riko.types._streams import Item
 
 EXAMPLES_DIR = TESTS_DIR.parent / "examples"
-FIXTURE_DIRS = (TESTS_DIR / "pipelines", EXAMPLES_DIR / "pipelines")
+FIXTURE_DIRS = (TESTS_DIR / "workflows", EXAMPLES_DIR / "workflows")
 
 # These documents cannot run on their own: two name modules riko does not
-# implement, and the third is a sub-pipeline that is only meaningful when another
-# pipeline embeds it. Their generated modules are held to the same failure.
+# implement, and the third is a named workflow that is only meaningful when another
+# workflow embeds it. Their workflow modules are held to the same failure.
 UNRUNNABLE = frozenset(
     {
         "pipe_93abb8500bd41d56a37e8885094c8d10",
@@ -145,7 +145,7 @@ def _failure(call) -> tuple[str, str]:
 
 @pytest.mark.parametrize("path", _fixtures())
 def test_generated_matches_document(path: Path, tmp_path: Path):
-    """Each generated module yields the items its workflow document yields."""
+    """Each workflow module yields the items its workflow document yields."""
     workflow = parse_document(path.read_text())
     module = _build(workflow, path.stem, tmp_path)
     assert list(module.pipe(context=Context(test=True))) == _run_workflow(workflow)
@@ -164,7 +164,7 @@ def test_generated_matches_document_failure(path: Path, tmp_path: Path):
 @async_test
 async def test_async_generated_matches_document(stem: str, tmp_path: Path):
     """Each generated async module yields the items its document yields."""
-    path = TESTS_DIR / "pipelines" / f"{stem}.json"
+    path = TESTS_DIR / "workflows" / f"{stem}.json"
     workflow = parse_document(path.read_text())
     module = _build(workflow, stem, tmp_path, is_async=True)
     stream = module.async_pipe(context=Context(test=True))
@@ -241,7 +241,7 @@ def test_conf_is_typed_by_its_module():
 
 
 def test_generated_conf_keeps_its_keys_verbatim(tmp_path: Path):
-    """A generated module spells a configuration key exactly as the document does."""
+    """A workflow module spells a configuration key exactly as the document does."""
     attrs = {
         "key": ConfArg(type="text", value="title"),
         "value": ConfArg(type="text", value="riko"),
@@ -263,13 +263,13 @@ def test_generation_is_deterministic():
     )
 
 
-def test_compile_pipe_accepts_a_raw_workflow():
+def test_compile_workflow_accepts_a_raw_workflow():
     """A ``RawWorkflow`` is normalized before it is generated."""
     raw = {
         "nodes": [{"name": "itembuilder"}, {"name": "sort"}],
         "edges": [{"source": {"node": "itembuilder-1"}, "target": {"node": "sort-1"}}],
     }
-    source = compile_pipe(raw, "pipe_raw")
+    source = compile_workflow(raw, "pipe_raw")
     assert 'DEPENDENCIES: list[str] = ["itembuilder", "sort"]' in source
 
 
@@ -286,7 +286,7 @@ def test_generated_source_parses(tmp_path: Path):
 
 def _loop_workflow() -> Workflow:
     """Parses the committed loop fixture whose embed carries a typed config."""
-    data = (TESTS_DIR / "pipelines" / "pipe_loop_assign.json").read_text()
+    data = (TESTS_DIR / "workflows" / "pipe_loop_assign.json").read_text()
     return parse_document(data)
 
 

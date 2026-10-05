@@ -23,7 +23,7 @@ from riko.modules.regex import pipe as regex
 from riko.modules.strconcat import pipe as strconcat
 from riko.modules.tokenizer import async_pipe as async_tok
 from riko.modules.tokenizer import pipe as tokenizer
-from riko.runtime._pipelines import mark_subpipe
+from riko.runtime._workflows import mark_subpipe
 from riko.types.modules import (
     RegexRawConf,
     RegexRawRule,
@@ -240,7 +240,7 @@ class TestImplicitLooping:
 
 
 class TestSubpipeLoop:
-    """Sub-pipelines use the same per-parent fold without sharing execution."""
+    """Named workflows use the same per-parent fold without sharing execution."""
 
     @pytest.mark.parametrize(("kwargs", "expected"), SUBPIPE_FOLD_CASES)
     def test_fold_per_parent(self, kwargs, expected):
@@ -332,7 +332,7 @@ class TestAsyncLoop:
 
 @skipif_issync
 class TestAsyncSubpipeLoop:
-    """Async sub-pipelines preserve the local per-parent fold contract."""
+    """Async named workflows preserve the local per-parent fold contract."""
 
     @pytest.mark.parametrize(("kwargs", "expected"), ASYNC_SUBPIPE_FOLD_CASES)
     @pytest.mark.anyio

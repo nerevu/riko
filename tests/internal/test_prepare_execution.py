@@ -42,8 +42,8 @@ from riko.runtime._module_registry import (
     register_module,
     reset_module_registry,
 )
-from riko.runtime._pipelines import mark_subpipe, pipeline_resolver
 from riko.runtime._resolver import ResolverDispatcher
+from riko.runtime._workflows import mark_subpipe, workflow_resolver
 from riko.types._enums import BasicCastType
 from riko.types._workflow import Endpoint
 from tests import async_test, skipif_issync
@@ -70,7 +70,7 @@ def _dispatcher(*definitions):
     for definition in definitions:
         registry.register(definition)
 
-    return ResolverDispatcher(registry, pipeline_resolver)
+    return ResolverDispatcher(registry, workflow_resolver)
 
 
 def _module_workflow(name="m"):
@@ -152,7 +152,7 @@ def test_execution_plan_snapshots_resolution() -> None:
     # module afterward does not change what a built plan runs.
     registry = ModuleRegistry()
     registry.register(ModuleDefinition(name="src", sync_pipe=_tagged_source("a")))
-    dispatcher = ResolverDispatcher(registry, pipeline_resolver)
+    dispatcher = ResolverDispatcher(registry, workflow_resolver)
     plan = build_execution_plan(_module_workflow("src"), dispatcher=dispatcher)
     registry.register(
         ModuleDefinition(name="src", sync_pipe=_tagged_source("b")), replace=True

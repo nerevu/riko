@@ -12,7 +12,7 @@ from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
 from riko.modules.tokenizer import pipe as tokenizer
-from riko.runtime._pipelines import mark_subpipe
+from riko.runtime._workflows import mark_subpipe
 from riko.types.modules import (
     FilterRawConf,
     InputRawConf,

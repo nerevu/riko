@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from riko.modules.fetchsitefeed import pipe as fetchsitefeed
 from riko.modules.input import pipe as _input
 from riko.modules.truncate import pipe as truncate
-from riko.runtime._pipelines import mark_subpipe
+from riko.runtime._workflows import mark_subpipe
 from riko.types.modules import FetchSiteFeedRawConf, InputRawConf, TruncateRawConf
 
 if TYPE_CHECKING:

@@ -11,7 +11,7 @@ from riko.modules.fetch import pipe as fetch
 from riko.modules.simplemath import pipe as simplemath
 from riko.modules.split import pipe as split
 from riko.modules.truncate import pipe as truncate
-from riko.runtime._pipelines import mark_subpipe
+from riko.runtime._workflows import mark_subpipe
 from riko.types.modules import (
     CountRawConf,
     FetchRawConf,

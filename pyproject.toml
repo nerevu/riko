@@ -93,7 +93,7 @@ dev = [
 manage = "riko.cli.manage:manager"
 run-pipe = "riko.cli.runpipe:run"
 benchmark = "riko.cli.benchmark:main"
-compile-pipe = "riko.cli.compile:run"
+compile-workflow = "riko.cli.compile:run"
 build-workflow = "riko.cli.build_workflow:run"
 gen-config = "riko.cli._gen_config:main"
 gen-names = "riko.cli._gen_names:main"
@@ -195,7 +195,7 @@ split-on-trailing-comma = false
     "S102",   # Use of `exec` detected
 ]
 
-"tests/pypipelines/*" = [
+"tests/pyworkflows/*" = [
     "E501",  # Line too long (generated fixture data)
     "N999",  # Invalid module name
     "N802",  # Function name
@@ -203,7 +203,7 @@ split-on-trailing-comma = false
     "UP009",  # UTF-8 encoding declaration (generated header)
 ]
 
-"examples/pypipelines/*" = [
+"examples/pyworkflows/*" = [
     "N999",  # Invalid module name
     "N802",  # Function name
     "N806",  # Variable in function should be lowercase (generated _OUTPUT)

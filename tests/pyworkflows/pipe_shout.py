@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
-"""Hand-written sub-pipeline fixture demonstrating a pipe loop."""
+"""Hand-written named-workflow fixture demonstrating a pipe loop."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from riko.modules.strconcat import pipe as strconcat
-from riko.runtime._pipelines import mark_subpipe
+from riko.runtime._workflows import mark_subpipe
 from riko.types.modules import StrconcatRawConf
 
 if TYPE_CHECKING:

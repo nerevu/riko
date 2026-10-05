@@ -10,7 +10,7 @@ from riko.modules.fetch import pipe as fetch
 from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as sort
 from riko.modules.union import pipe as union
-from riko.runtime._pipelines import mark_subpipe
+from riko.runtime._workflows import mark_subpipe
 from riko.types.modules import FetchRawConf, FilterRawConf, SortRawConf
 
 if TYPE_CHECKING:

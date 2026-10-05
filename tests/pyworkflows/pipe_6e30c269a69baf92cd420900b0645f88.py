@@ -13,7 +13,7 @@ from riko.modules.rename import pipe as rename
 from riko.modules.sort import pipe as sort
 from riko.modules.union import pipe as union
 from riko.modules.uniq import pipe as uniq
-from riko.runtime._pipelines import mark_subpipe
+from riko.runtime._workflows import mark_subpipe
 from riko.types.modules import (
     FetchRawConf,
     FilterRawConf,

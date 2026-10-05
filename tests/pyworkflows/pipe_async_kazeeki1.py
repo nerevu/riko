@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Hand-written async Kazeeki pipeline fixture (variant 1)."""
+"""Hand-written async Kazeeki workflow module (variant 1)."""
 
 from riko import Pipeline
 from riko.bado import as_async
@@ -7,7 +7,7 @@ from riko.bado._backend import run
 from riko.execution._execution import AsyncExecution
 from riko.execution.context import Context
 from riko.runtime._execution_plan import build_execution_plan
-from tests.pypipelines._pipe_kazeeki import fetchdata_conf, regex_conf, rename_conf
+from tests.pyworkflows._pipe_kazeeki import fetchdata_conf, regex_conf, rename_conf
 
 
 def build() -> Pipeline:

@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides registration and resolution for named modules and pipelines.
+Provides registration and resolution for named modules and workflows.
 
 Resolution order is runtime registration, entry point, then built-in module.
 
@@ -31,21 +31,21 @@ from riko.runtime._module_registry import (
     register_module,
     reset_module_registry,
 )
-from riko.runtime._pipelines import register_pipeline_store, reset_pipeline_resolver
 from riko.runtime._target_registry import (
     TargetRegistry,
     register_target,
     reset_target_registry,
 )
+from riko.runtime._workflows import register_workflow_store, reset_workflow_resolver
 
 __all__ = [
     "ModuleDefinition",
     "ModuleRegistry",
     "TargetRegistry",
     "register_module",
-    "register_pipeline_store",
     "register_target",
+    "register_workflow_store",
     "reset_module_registry",
-    "reset_pipeline_resolver",
     "reset_target_registry",
+    "reset_workflow_resolver",
 ]

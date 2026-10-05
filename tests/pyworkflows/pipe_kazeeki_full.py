@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Hand-written full Kazeeki pipeline fixture."""
+"""Hand-written full Kazeeki workflow module."""
 
 from __future__ import annotations
 

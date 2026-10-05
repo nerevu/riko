@@ -1,9 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides pipe resolution for modules and named pipelines.
+Provides pipe resolution for modules and named workflows.
 
-Names prefixed with ``pipe_`` or ``pipe:`` resolve as pipelines, everything else as a
-module.
+Names prefixed with ``pipe_`` or ``pipe:`` resolve as named workflows, everything else
+as a module.
 
 Attributes:
 
@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Literal, overload
 from riko.base.exceptions import UnsupportedModuleError
 
 from ._module_registry import module_registry
-from ._pipelines import pipeline_resolver
+from ._workflows import workflow_resolver
 
 if TYPE_CHECKING:
     from riko.types._wrappers import (
@@ -91,7 +91,7 @@ class ResolverDispatcher:
 
         Args:
 
-            name: Module or ``pipe_*`` pipeline name to inspect.
+            name: Module or ``pipe_*`` named-workflow name to inspect.
 
         Returns:
 
@@ -115,7 +115,7 @@ class ResolverDispatcher:
 
         Args:
 
-            name: Module or ``pipe_*`` pipeline name to inspect.
+            name: Module or ``pipe_*`` named-workflow name to inspect.
             is_async: Whether to check the async interface.
 
         Returns:
@@ -149,7 +149,7 @@ class ResolverDispatcher:
 
         Args:
 
-            name: Module or ``pipe_*`` pipeline name to inspect.
+            name: Module or ``pipe_*`` named-workflow name to inspect.
             is_async: Whether to check the async interface.
 
         """
@@ -157,4 +157,4 @@ class ResolverDispatcher:
             return self.require(name, is_async=is_async)
 
 
-dispatcher: ResolverDispatcher = ResolverDispatcher(module_registry, pipeline_resolver)
+dispatcher: ResolverDispatcher = ResolverDispatcher(module_registry, workflow_resolver)

@@ -1,7 +1,9 @@
 """
-Command for running a pipe script or a workflow document from the CLI.
+Runs a pipe script, a workflow module, or a workflow document from the CLI.
 
-A workflow document (``WorkflowDocument``) is a serialized ``Workflow``.
+A pipe script is a Python file that defines ``pipe(test=False)``. A workflow module
+(``WorkflowModule``) is the Python source ``compile-workflow`` generates. A workflow
+document (``WorkflowDocument``) is a serialized ``Workflow``.
 """
 
 from __future__ import annotations
@@ -9,12 +11,14 @@ from __future__ import annotations
 import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
 from collections.abc import Callable, Iterable, Mapping
-from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
-from os.path import basename, isfile, splitext
+from itertools import chain
+from os.path import basename, splitext
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from riko.bado._backend import run as async_run
+from riko.base._paths import ROOT_DIR
 from riko.base.exceptions import InvalidPipelineError
 from riko.execution._execution import AsyncExecution, SyncExecution
 from riko.execution.context import Context
@@ -119,32 +123,51 @@ def run_document(path: str, isasync: bool = False, test: bool = False) -> None:
             emit_result(execution.run(plan))
 
 
+def get_example_dirs() -> list[Path]:
+    """
+    Lists the directories searched for an example id, nearest first.
+
+    The ``examples`` directory under the current one comes first, then the one in the
+    riko checkout. When both are the same directory, it is listed once.
+
+    Examples:
+
+        >>> str(get_example_dirs()[0])
+        'examples'
+
+    """
+    local, checkout = Path("examples"), ROOT_DIR / "examples"
+    return [local] if local.resolve() == checkout.resolve() else [local, checkout]
+
+
 def resolve_example(pipeid: str) -> str | ModuleType | None:
     """
-    Resolves an example id to the pipe module or ``WorkflowDocument`` it names.
+    Resolves an example id to the pipe script or ``WorkflowDocument`` it names.
+
+    Each example directory is searched for ``<pipeid>.py``, then
+    ``workflows/<pipeid>.json``, before moving to the next directory.
 
     Args:
 
-        pipeid: The name of a pipeline in the examples directory.
+        pipeid: The id of an example pipe script or workflow document.
 
     Returns:
 
-        The loaded pipe module, or the path to the ``WorkflowDocument`` of that name.
+        The loaded pipe script, or the path to the ``WorkflowDocument`` of that name.
 
     """
-    try:
-        name = file2name(f"{pipeid}.py")
-        target: str | ModuleType | None = load_file(name, f"examples/{pipeid}.py")
-    except io_error:
-        document = f"examples/pipelines/{pipeid}.json"
+    dirs = get_example_dirs()
+    candidates = chain.from_iterable(
+        (dir / f"{pipeid}.py", dir / "workflows" / f"{pipeid}.json") for dir in dirs
+    )
 
-        if isfile(document):
-            target = document
-        else:
-            try:
-                target = import_module(f"examples.{pipeid}")
-            except ImportError:
-                sys.exit(f"Pipe examples.{pipeid} not found!")
+    if (found := next((path for path in candidates if path.is_file()), None)) is None:
+        searched = ", ".join(str(directory) for directory in dirs)
+        sys.exit(f"Example {pipeid} not found in {searched}!")
+    elif found.suffix == ".json":
+        target: str | ModuleType | None = str(found)
+    else:
+        target = load_file(file2name(found.name), str(found))
 
     return target
 
@@ -153,16 +176,18 @@ def resolve_target(
     path: str | None = None, pipeid: str | None = None
 ) -> str | ModuleType | None:
     """
-    Resolves what a run refers to: a ``WorkflowDocument``, or a pipe module.
+    Resolves a run target: a pipe script, workflow module, or ``WorkflowDocument``.
 
     Args:
 
-        path: The path to a pipe script or a ``WorkflowDocument``.
-        pipeid: The name of a pipeline in the examples directory.
+        path: The path to a pipe script, a ``WorkflowModule``, or a
+            ``WorkflowDocument``.
+
+        pipeid: The id of an example pipe script or workflow document.
 
     Returns:
 
-        The loaded pipe module, or the path to a ``WorkflowDocument``.
+        The loaded pipe script or ``WorkflowModule``, or path to a ``WorkflowDocument``.
 
     """
     if path is not None and path.endswith(".json"):
@@ -171,11 +196,11 @@ def resolve_target(
         try:
             target = load_file(file2name(path), path)
         except io_error:
-            sys.exit(f"Pipe file {path} not found!")
+            sys.exit(f"File {path} not found!")
     elif pipeid is not None:
         target = resolve_example(pipeid)
     else:
-        sys.exit("Please provide a pipeid or path to a pipe file.")
+        sys.exit("Please provide a pipeid or a path to run.")
 
     return target
 
@@ -183,7 +208,9 @@ def resolve_target(
 def run() -> None:
     """CLI runner."""
     parser = ArgumentParser(
-        description="description: Runs a riko pipe or a workflow document",
+        description=(
+            "description: Runs a pipe script, workflow module, or workflow document"
+        ),
         prog="run-pipe",
         usage="%(prog)s [pipeid] [-p PATH]",
         formatter_class=RawTextHelpFormatter,
@@ -193,7 +220,7 @@ def run() -> None:
         dest="pipeid",
         nargs="?",
         default=None,
-        help="The pipeline to run from the examples directory.",
+        help="The id of an example pipe script or workflow document.",
     )
 
     parser.add_argument(
@@ -201,7 +228,10 @@ def run() -> None:
         "--path",
         dest="path",
         default=None,
-        help="Path to a pipe file to run, e.g. flow.py or flow.json.\n\n",
+        help=(
+            "Path to a pipe script, workflow module, or workflow document to run,\n"
+            "e.g. pipe.py or flow.json.\n\n"
+        ),
     )
 
     parser.add_argument(

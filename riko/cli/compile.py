@@ -1,14 +1,15 @@
 """
-Compiles a workflow document into a Python module.
+Compiles a workflow document into a workflow module.
 
-A workflow document (``WorkflowDocument``) is a serialized ``Workflow``. Convert a
+A workflow document (``WorkflowDocument``) is a serialized ``Workflow``; a workflow
+module (``WorkflowModule``) is the Python source that rebuilds and runs it. Convert a
 serialized ``PipeDef`` or ``PipeDag`` with ``build-workflow`` first.
 
 Examples:
 
     Basic usage::
 
-        >>> from riko import compile_pipe
+        >>> from riko import compile_workflow
         >>>
         >>> workflow = {
         ...     "nodes": [
@@ -17,13 +18,13 @@ Examples:
         ...     ],
         ...     "edges": [{"source": {"node": "gen"}, "target": {"node": "trunc"}}],
         ... }
-        >>> source = compile_pipe(workflow, "pipe_demo")
+        >>> source = compile_workflow(workflow, "pipe_demo")
         >>> print(next(l for l in source.splitlines() if l.startswith("def pipe")))
         def pipe(item=None, context: Context | None = None, **_):
 
     CLI composition::
 
-        $ build-workflow dag.json | compile-pipe - -o flow.py
+        $ build-workflow dag.json | compile-workflow - -o flow.py
 
 """
 
@@ -34,7 +35,7 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from pathlib import Path
 
 from riko.base.exceptions import InvalidPipelineError
-from riko.runtime._codegen import compile_pipe
+from riko.runtime._codegen import compile_workflow
 
 from ._workflow import read_document, require_workflow
 
@@ -42,8 +43,8 @@ from ._workflow import read_document, require_workflow
 def run() -> None:
     """CLI compiler."""
     parser = ArgumentParser(
-        description="description: Compiles a workflow document into a Python module",
-        prog="compile-pipe",
+        description="description: Compiles a workflow document into a workflow module",
+        prog="compile-workflow",
         usage="%(prog)s [path]",
         formatter_class=RawTextHelpFormatter,
     )
@@ -60,7 +61,7 @@ def run() -> None:
         "--output",
         dest="output",
         default=None,
-        help="Write the generated module to this path (default: stdout).\n\n",
+        help="Write the workflow module to this path (default: stdout).\n\n",
     )
 
     parser.add_argument(
@@ -69,7 +70,7 @@ def run() -> None:
         dest="is_async",
         action="store_true",
         default=False,
-        help="Generate an async (anyio) pipeline module.\n\n",
+        help="Generate an async (anyio) workflow module.\n\n",
     )
 
     parser.add_argument(
@@ -89,7 +90,7 @@ def run() -> None:
     else:
         try:
             workflow = require_workflow(document)
-            source = compile_pipe(workflow, name, is_async=args.is_async)
+            source = compile_workflow(workflow, name, is_async=args.is_async)
         except InvalidPipelineError as e:
             print(e, file=sys.stderr)
             return_code = 1

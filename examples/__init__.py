@@ -1,1 +1,1 @@
-"""Runnable riko pipeline examples (executed via ``run-pipe`` and the tests)."""
+"""Runnable riko pipe scripts (executed via ``run-pipe`` and the tests)."""

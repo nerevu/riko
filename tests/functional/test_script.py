@@ -117,13 +117,9 @@ def test_benchmark():
 
 def run_module(module: str, *args: str, **kwargs) -> subprocess.CompletedProcess:
     """Run a riko command module in a subprocess and return the finished process."""
+    options = {"cwd": _BASEDIR, "capture_output": True, "text": True} | kwargs
     return subprocess.run(
-        [sys.executable, "-m", f"riko.cli.{module}", *args],
-        cwd=_BASEDIR,
-        capture_output=True,
-        text=True,
-        check=False,
-        **kwargs,
+        [sys.executable, "-m", f"riko.cli.{module}", *args], check=False, **options
     )
 
 
@@ -215,6 +211,26 @@ def test_run_pipe_workflow_document(tmp_path):
     ran = run_module("runpipe", "-p", str(workflow_file))
     assert ran.returncode == 0
     assert ran.stdout == "{'forever': True}\n" * 3
+
+
+@pytest.mark.parametrize(("argument", "expected"), DEMO_PARAMS)
+def test_run_pipe_example_id_outside_the_checkout(tmp_path, argument, expected):
+    """An example id resolves through the checkout's ``examples`` directory anywhere."""
+    ran = run_module("runpipe", argument, cwd=tmp_path)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout == expected
+
+
+def test_run_pipe_unknown_example_id_names_the_searched_directories(tmp_path):
+    ran = run_module("runpipe", "pipe_missing", cwd=tmp_path)
+    assert ran.returncode == 1
+    assert "Example pipe_missing not found in examples" in ran.stderr
+
+
+def test_run_pipe_unknown_example_id_lists_the_checkout_once():
+    ran = run_module("runpipe", "pipe_missing")
+    assert ran.returncode == 1
+    assert "Example pipe_missing not found in examples!" in ran.stderr
 
 
 def test_run_pipe_missing_workflow_document(tmp_path):

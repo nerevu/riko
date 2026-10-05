@@ -106,7 +106,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Kwargs:
 
         embed (callable): The submodule to run once per item. Any loopable
-            processor (everything except ``*input``) or a compiled sub-pipeline.
+            processor (everything except ``*input``) or a named workflow.
             Required.
 
         conf (dict): The **submodule's** configuration, not this pipe's.
@@ -159,7 +159,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Kwargs:
 
         embed (callable): The submodule to run once per item. Any loopable
-            processor (everything except ``*input``) or a compiled sub-pipeline.
+            processor (everything except ``*input``) or a named workflow.
             Required.
 
         conf (dict): The **submodule's** configuration, not this pipe's.

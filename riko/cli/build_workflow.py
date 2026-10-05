@@ -26,7 +26,7 @@ Examples:
 
     CLI composition::
 
-        $ build-workflow dag.json | compile-pipe - -o flow.py
+        $ build-workflow dag.json | compile-workflow - -o flow.py
 
 """
 
