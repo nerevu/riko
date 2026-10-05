@@ -588,6 +588,15 @@ class TestPipelineWriteDefinition:
         assert isinstance(node, WriteNode)
         assert (node.fmt, node.mode, node.keys) == (Formats.CSV, WriteMode.APPEND, ())
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="the write module stays reachable until write nodes execute: write() "
+        "without a destination chains that module instead of requiring a destination",
+    )
+    def test_requires_a_destination(self):
+        with pytest.raises(TypeError):
+            Pipeline(source=ITEMS).write()
+
 
 @WRITE_NODE_PENDING
 class TestPipelineWrite:

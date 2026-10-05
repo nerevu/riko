@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
     from ._compiler import CountValues
     from ._scalars import BasicValue, PrimitiveValue
+    from ._workflow import GraphEdge
 
 type FrozenJSON = (
     bool
@@ -55,6 +56,8 @@ type FrozenConf = FrozenMap[FrozenConfValues]
 type FrozenOptions = FrozenMap[FrozenOptionValues]
 type FrozenParams = FrozenMap[FrozenOptionValues]
 type FrozenPolicy = FrozenMap[FrozenOptionValues]
+type FrozenTupleMapping = FrozenMap[tuple[GraphEdge, ...]]
+type FrozenSetMapping = FrozenMap[frozenset[str]]
 type JSONSchema = FrozenMap[FrozenJSON]
 type Inputs = Mapping[str, str | int | bool]
 type InputSource = Mapping[str, str]
@@ -364,3 +367,21 @@ def field_names(cls: type) -> frozenset[str]:
 class FreezeMapping[K, V]:
     def __call__(self, value: Mapping[K, V]) -> MappingProxyType[K, V]:
         return freeze_mapping(value)
+
+
+class FreezeTupleMapping[K, V]:
+    """Copies a mapping into a read-only one whose values are tuples."""
+
+    def __call__(
+        self, value: Mapping[K, Iterable[V]]
+    ) -> MappingProxyType[K, tuple[V, ...]]:
+        return freeze_mapping({key: tuple(items) for key, items in value.items()})
+
+
+class FreezeSetMapping[K, V]:
+    """Copies a mapping into a read-only one whose values are frozensets."""
+
+    def __call__(
+        self, value: Mapping[K, Iterable[V]]
+    ) -> MappingProxyType[K, frozenset[V]]:
+        return freeze_mapping({key: frozenset(items) for key, items in value.items()})

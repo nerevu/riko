@@ -24,7 +24,7 @@ from riko.types._enums import Executor
 from riko.types._guards import is_streamlike
 
 from ._pools import get_worker_cnt
-from ._prepared import ExecMode
+from ._prepared import Adapted, Native
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -242,15 +242,15 @@ def _process_unsafe_reason(
     node: PreparedNode, context: Context | None
 ) -> tuple[str | None, BaseException | None]:
     embed = node.embed
-    pipe = node.select(is_async=False).pipe
-    embed_pipe = None if embed is None else embed.select(is_async=False)
+    pipe = node.module.select_sync().pipe
+    embed_pipe = None if embed is None else embed.select_sync()
     conf, options = node.embed_or_self_conf, dict(node.options)
     reason: str | None = None
     cause: BaseException | None = None
 
     if node.resources:
         reason = "live resource values cannot cross a process boundary"
-    elif embed_pipe is not None and embed_pipe.mode is ExecMode.ADAPTER:
+    elif isinstance(embed_pipe, Adapted):
         reason = "its embedded module has no synchronous implementation"
     else:
         shipped = None if embed_pipe is None else embed_pipe.pipe
@@ -303,7 +303,7 @@ def require_process_safe(
     """
     for node_id in required:
         node = plan.nodes[node_id]
-        mapped = node.loopable and node.select(is_async=False).mode is ExecMode.NATIVE
+        mapped = node.loopable and isinstance(node.module.select_sync(), Native)
 
         reason, cause = (
             _process_unsafe_reason(node, context) if mapped else (None, None)

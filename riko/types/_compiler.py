@@ -1,5 +1,5 @@
 """
-Pipe definition, bare-bones DAG, and workflow graph-index typing contracts.
+Pipe definition and bare-bones DAG typing contracts.
 
 A pipe definition (``PipeDef``) is the older ``src``/``tgt``-wired module listing; a
 ``PipeDag`` is the bare-bones DAG mapping. Both expand into a ``Workflow``.
@@ -8,11 +8,7 @@ A pipe definition (``PipeDef``) is the older ``src``/``tgt``-wired module listin
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from itertools import chain
 from typing import TYPE_CHECKING, Literal, NewType, NotRequired, Required, TypedDict
-
-from ._workflow import parse_port
 
 if TYPE_CHECKING:
     from ._module_ids import LoopableModuleId, ModuleId
@@ -151,106 +147,6 @@ class PipeDef(TypedDict):
 
 type PipeDefLike = PipeDef | Mapping[str, object]
 type ModuleOptionValues = bool | str | CountValues
-
-
-@dataclass(frozen=True, slots=True)
-class GraphEdge:
-    """
-    One directed stream connection between two workflow node ports.
-
-    Ports keep their workflow spelling: ``out`` on the source, and on the target
-    either the default ``in``, a positional ``in:1``/``in:2`` input, or a named
-    value input such as ``count``. ``is_valid`` reports whether the target port
-    is a positional stream input rather than a named value input.
-
-    Attributes:
-
-        source: Id of the node the connection leaves.
-        target: Id of the node the connection enters.
-        source_port: Output port on ``source`` (e.g. ``out``).
-        target_port: Input port on ``target`` (e.g. ``in``/``in:1``/``count``).
-
-    """
-
-    source: str
-    target: str
-    source_port: str
-    target_port: str
-
-    @property
-    def is_valid(self) -> bool:
-        return parse_port(self.target_port).is_positional
-
-
-@dataclass(frozen=True, slots=True)
-class OutputRef:
-    """
-    One named output of a workflow.
-
-    Attributes:
-
-        node: Id of the node that produces the output stream.
-        port: Output port on ``node`` (e.g. ``out``).
-
-    """
-
-    node: str
-    port: str
-
-
-@dataclass(frozen=True, slots=True)
-class GraphIndex:
-    """
-    Immutable, runtime-neutral interpretation of a workflow's topology.
-
-    Execution planning and both sync and async executions read the same
-    structural facts from one index rather than rescanning the workflow's edges.
-    Edge lookups (``incoming``/``outgoing``) carry full port identity. The
-    ``dependencies``/``dependents`` projection carries only node-level ordering.
-
-    Attributes:
-
-        edges: Every stream edge, in listing order.
-        incoming: Connections entering each node, keyed by target id.
-        outgoing: Connections leaving each node, keyed by source id.
-        dependencies: Node ids each node must run after.
-        dependents: Node ids that must run after each node.
-        order: Node ids in topological (execution) order.
-        roots: Node ids with no dependencies, in ``order``.
-        leaves: Node ids with no dependents, in ``order``.
-        outputs: The workflow's named outputs, keyed by output name.
-
-    """
-
-    edges: tuple[GraphEdge, ...]
-    incoming: Mapping[str, tuple[GraphEdge, ...]]
-    outgoing: Mapping[str, tuple[GraphEdge, ...]]
-    dependencies: Mapping[str, frozenset[str]]
-    dependents: Mapping[str, frozenset[str]]
-    order: tuple[str, ...]
-    roots: tuple[str, ...]
-    leaves: tuple[str, ...]
-    outputs: Mapping[str, OutputRef]
-
-    def is_open(
-        self,
-        root: str | None = None,
-        attr: Literal["incoming", "outgoing", "edges"] = "incoming",
-    ) -> bool:
-        if attr == "edges" and root:
-            msg = "cannot validate edges by root; use 'incoming' or 'outgoing'"
-            raise ValueError(msg)
-        elif attr == "edges":
-            valid = all(edge.is_valid for edge in self.edges)
-        elif attr in {"incoming", "outgoing"}:
-            attr_: Mapping[str, tuple[GraphEdge, ...]] = getattr(self, attr)
-            edges = attr_.get(root, ()) if root else chain.from_iterable(attr_.values())
-            valid = all(edge.is_valid for edge in edges)
-        else:
-            msg = f"invalid {attr=}; must be 'incoming', 'outgoing', or 'edges'"
-            raise ValueError(msg)
-
-        return valid
 
 
 class DagModule(TypedDict):

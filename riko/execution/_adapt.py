@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any, cast
 from riko.types._guards import is_listlike, require_single_output
 from riko.types._sentinels import MISSING
 
+from ._prepared import Native
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -27,6 +29,8 @@ if TYPE_CHECKING:
         ModuleWrapper,
         SyncModuleWrapper,
     )
+
+    from ._prepared import ResolvedModule
 
 type LoopCall = Callable[[Callable[[], Any]], Any]
 type WorkerCall = Callable[..., Awaitable[Any]]
@@ -124,7 +128,7 @@ def _close_generator(value: object) -> None:
         value.close()
 
 
-def drain_async[T](source: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
+def async_drain[T](source: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
     """
     Re-exposes an async stream as a lazy synchronous item stream.
 
@@ -207,9 +211,7 @@ def _materialize(
     return list(require_stream(embed(item, **kwargs), embed))
 
 
-def adapt_embed_for_sync[T](
-    embed: AsyncModuleWrapper, drain: Drain[T]
-) -> SyncModuleWrapper:
+def adapt_embed[T](embed: AsyncModuleWrapper, drain: Drain[T]) -> SyncModuleWrapper:
     """
     Wraps an async-only loop embed as a synchronous one.
 
@@ -237,7 +239,7 @@ def adapt_embed_for_sync[T](
     return cast("SyncModuleWrapper", wrapper)
 
 
-def adapt_embed_for_async(
+def async_adapt_embed(
     embed: SyncModuleWrapper, run_sync: WorkerCall
 ) -> AsyncModuleWrapper:
     """
@@ -267,12 +269,50 @@ def adapt_embed_for_async(
     return cast("AsyncModuleWrapper", wrapper)
 
 
+def select_embed[T](
+    embed: ResolvedModule, *, host_isasync: bool, run_sync: WorkerCall, drain: Drain[T]
+) -> ModuleWrapper:
+    """
+    Chooses a loop embed's callable in the mode its host pipe actually runs in.
+
+    Args:
+
+        embed: The embed module resolved alongside the loop node.
+        host_isasync: Whether the loop pipe runs asynchronously.
+        run_sync: Runs a sync-only embed off the event loop under an async host.
+        drain: Pulls an async-only embed's output under a sync host.
+
+    Returns:
+
+        The embed's native callable for that mode, or a host-mode wrapper
+        around its other-mode callable.
+
+    """
+    if host_isasync:
+        selection = embed.select_async()
+
+        if isinstance(selection, Native):
+            result: ModuleWrapper = selection.pipe
+        else:
+            result = async_adapt_embed(selection.pipe, run_sync)
+    else:
+        sync_selection = embed.select_sync()
+
+        if isinstance(sync_selection, Native):
+            result = sync_selection.pipe
+        else:
+            result = adapt_embed(sync_selection.pipe, drain)
+
+    return result
+
+
 __all__ = [
-    "adapt_embed_for_async",
-    "adapt_embed_for_sync",
-    "drain_async",
+    "adapt_embed",
+    "async_adapt_embed",
+    "async_drain",
     "normalize_items",
     "pull_stream",
     "require_async_stream",
     "require_stream",
+    "select_embed",
 ]

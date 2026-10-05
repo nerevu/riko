@@ -52,7 +52,7 @@ workflow = Workflow(
 {% if is_async %}
 async def _run(item, context):
     async with AsyncExecution(context=context) as execution:
-        stream = await execution.run(build_execution_plan(workflow), source=item)
+        stream = await execution.arun(build_execution_plan(workflow), source=item)
 
         async for value in stream:
             yield value

@@ -13,8 +13,6 @@ from typing import TYPE_CHECKING, Literal, overload
 
 import networkx as nx
 
-from riko.base.exceptions import InvalidArchitectureError
-
 if TYPE_CHECKING:
     from _typeshed import SupportsRichComparison
 
@@ -71,7 +69,7 @@ def scc_sort[T: Hashable](graph: Graph[T], reverse: bool | None = False) -> SCC[
         [(6,), (5,), (0,), (1,), (4,), (2,), (3,)]
 
     """
-    digraph = nx.DiGraph(graph)
+    digraph = nx.DiGraph({node: list(targets) for node, targets in graph.items()})
     component_group: Iterable[set[T]] = nx.strongly_connected_components(digraph)
     scc = [tuple(components) for components in component_group]
     return scc if reverse else scc[::-1]
@@ -145,19 +143,19 @@ def native_topological_sort[T: Hashable](
 
 @overload
 def topological_sort[T: Hashable](  # noqa: E704
-    graph: Graph[T], *, ssc: Literal[True], name: str | None = ...
+    graph: Graph[T], *, ssc: Literal[True]
 ) -> SCC[T]: ...
 @overload  # noqa: E302
 def topological_sort[T: Hashable](  # noqa: E704
-    graph: Graph[T], *, strict: Literal[True], name: str | None = ...
+    graph: Graph[T], *, strict: Literal[True]
 ) -> NodeList[T]: ...
 @overload  # noqa: E302
 def topological_sort[T: Hashable](  # noqa: E704
-    graph: Graph[T], *, ssc: bool = ..., name: str | None = ...
+    graph: Graph[T], *, ssc: bool = ...
 ) -> NodeList[T] | SCC[T]: ...
 @overload  # noqa: E302
 def topological_sort[T: Hashable](  # noqa: E704
-    graph: Graph[T], *, ssc: bool = ..., strict: bool = ..., name: str | None = ...
+    graph: Graph[T], *, ssc: bool = ..., strict: bool = ...
 ) -> NodeList[T] | SCC[T]: ...
 def topological_sort[T: Hashable](  # noqa: E302
     graph: Graph[T],
@@ -166,10 +164,16 @@ def topological_sort[T: Hashable](  # noqa: E302
     ssc: bool | None = False,
     strict: bool | None = False,
     key: Callable[[T], SupportsRichComparison] | None = None,
-    name: str | None = None,
 ) -> NodeList[T] | SCC[T]:
     """
     Topological sort.
+
+    Unless ``strict`` is set, a cyclic graph falls back to its strongly connected
+    components in order.
+
+    Raises:
+
+        CycleError: If ``strict`` is set and the graph has a cycle.
 
     Examples:
 
@@ -214,25 +218,154 @@ def topological_sort[T: Hashable](  # noqa: E302
     else:
         try:
             result = native_topological_sort(graph, reverse=reverse, key=key)
-        except CycleError as e:
+        except CycleError:
             if strict:
-                graph_name = f" '{name}'" if name else ""
-                msg = f"cyclic layer graph{graph_name}: {e}"
-                raise InvalidArchitectureError(msg) from e
+                raise
 
             result = scc_sort(graph, reverse=reverse)
 
     return result
 
 
-def edges_to_graph[T](edges: Iterable[tuple[T, T]]) -> Graph[T]:
-    nodes: set[T] = {node for edge in edges for node in edge}
+def topological_groups[T: Hashable](
+    graph: Graph[T], reverse: bool | None = False
+) -> SCC[T]:
+    """
+    Orders a graph's nodes as groups, whether or not it has a cycle.
+
+    An acyclic graph sorts into one-node groups, and a cyclic one falls back to its
+    strongly connected components.
+
+    Args:
+
+        graph: Each node mapped to the nodes that come after it.
+        reverse: Whether to return the groups last first.
+
+    Returns:
+
+        The nodes in dependency order, grouped by strongly connected component.
+
+    Examples:
+
+        >>> topological_groups({"a": {"b"}, "b": set()})
+        [('a',), ('b',)]
+        >>> topological_groups({"a": {"b"}, "b": {"a"}, "c": set()})
+        [('c',), ('b', 'a')]
+
+    """
+    try:
+        nodes = native_topological_sort(graph, reverse=reverse)
+    except CycleError:
+        result = scc_sort(graph, reverse=reverse)
+    else:
+        result = [(node,) for node in nodes]
+
+    return result
+
+
+def cyclic_nodes[T: Hashable](graph: Graph[T], groups: SCC[T] | None = None) -> list[T]:
+    """
+    Collects the nodes that lie on a cycle.
+
+    A node lies on a cycle when its strongly connected component has more than one
+    node, or when it is its own successor.
+
+    Args:
+
+        graph: Each node mapped to the nodes that come after it.
+        groups: The graph's ``topological_groups``, when already computed.
+
+    Returns:
+
+        The cyclic nodes, in group order.
+
+    Examples:
+
+        >>> cyclic_nodes({"a": {"b"}, "b": {"a"}, "c": {"c"}, "d": set()})
+        ['c', 'b', 'a']
+
+    """
+    _groups = topological_groups(graph) if groups is None else groups
+    is_cyclic = lambda group: len(group) > 1 or group[0] in graph.get(group[0], ())
+    return [node for group in _groups if is_cyclic(group) for node in group]
+
+
+def edges_to_graph[T: Hashable](
+    edges: Iterable[tuple[T, T]], *nodes: T
+) -> dict[T, set[T]]:
+    """
+    Builds a successor graph from ``(source, target)`` edges.
+
+    Args:
+
+        edges: The directed edges.
+        nodes: Nodes to include first, even when no edge touches them.
+
+    Returns:
+
+        Each node mapped to the nodes its edges point to.
+
+    Examples:
+
+        >>> edges_to_graph([("a", "b")], "c")
+        {'c': set(), 'a': {'b'}, 'b': set()}
+
+    """
     graph: dict[T, set[T]] = {node: set() for node in nodes}
 
     for source, target in edges:
-        graph[source].add(target)
+        graph.setdefault(source, set()).add(target)
+        graph.setdefault(target, set())
 
     return graph
+
+
+def reverse_graph[T: Hashable](graph: AnyGraph[T]) -> dict[T, set[T]]:
+    """
+    Flips a graphs edges by mapping each node to the nodes that point to it.
+
+    Args:
+
+        graph: Each node mapped to the nodes that come after it.
+
+    Returns:
+
+        Each node, in ``graph`` order, mapped to the nodes that come before it.
+
+    Examples:
+
+        >>> reverse_graph({"a": {"b"}, "b": set()})
+        {'a': set(), 'b': {'a'}}
+
+    """
+    reversed_: dict[T, set[T]] = {node: set() for node in graph}
+
+    for source, targets in graph.items():
+        for target in targets:
+            reversed_.setdefault(target, set()).add(source)
+
+    return reversed_
+
+
+def leaves[T: Hashable](graph: AnyGraph[T]) -> list[T]:
+    """
+    Collects the nodes nothing comes after.
+
+    Args:
+
+        graph: Each node mapped to the nodes that come after it.
+
+    Returns:
+
+        The nodes with no successors, in ``graph`` order.
+
+    Examples:
+
+        >>> leaves({"a": {"b"}, "b": set(), "c": set()})
+        ['b', 'c']
+
+    """
+    return [node for node, successors in graph.items() if not successors]
 
 
 def freeze_graph[T: Hashable](

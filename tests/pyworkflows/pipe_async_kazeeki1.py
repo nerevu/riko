@@ -28,7 +28,7 @@ async def async_pipe(context: Context | None = None, **_):
         plan = build_execution_plan(pipeline.workflow)
 
         async with AsyncExecution(context=context or Context()) as execution:
-            stream = await execution.run(plan, source=pipeline.source)
+            stream = await execution.arun(plan, source=pipeline.source)
 
             async for item in stream:
                 yield item

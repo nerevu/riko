@@ -10,30 +10,19 @@ machinery.
 
 from __future__ import annotations
 
-from enum import Enum, auto
 from typing import TYPE_CHECKING, NamedTuple
 
-from attrs import Factory, define, field
+from attrs import define, field
 
 from riko.base.exceptions import UnsupportedModuleError
-from riko.definitions._workflow import (
-    Node,
-    conf_converter,
-    options_converter,
-    require_module_node,
-    resource_converter,
-)
-from riko.types._collections import (
-    FrozenConf,
-    FrozenOptions,
-    require_str,
-    validator_from_require,
-)
+from riko.definitions._workflow import ModuleNode, conf_converter, require_module_node
+from riko.types._collections import FrozenConf, require_str, validator_from_require
 from riko.types._guards import require_single_output
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from riko.types._collections import FrozenOptions
     from riko.types._workflow import NodeFamily, NodeId
     from riko.types._wrappers import (
         AsyncModuleWrapper,
@@ -46,120 +35,97 @@ if TYPE_CHECKING:
 single_output = validator_from_require(require_single_output, optional=True)
 
 
-class ExecMode(Enum):
-    """How a prepared node's callable runs under the chosen execution mode."""
+class Native[P](NamedTuple):
+    """A resolved callable that runs natively under the chosen execution mode."""
 
-    NATIVE = auto()
-    ADAPTER = auto()
+    pipe: P
 
 
-class Selection(NamedTuple):
-    """A resolved callable paired with how it runs under an execution mode."""
+class Adapted[P](NamedTuple):
+    """A resolved other-mode callable the execution adapts to its own mode."""
 
-    pipe: ModuleWrapper
-    mode: ExecMode
+    pipe: P
+
+
+type SyncSelection = Native[SyncModuleWrapper] | Adapted[AsyncModuleWrapper]
+type AsyncSelection = Native[AsyncModuleWrapper] | Adapted[SyncModuleWrapper]
 
 
 @define(frozen=True, slots=True)
-class PreparedNode:
+class ResolvedModule:
     """
-    One resolved graph node ready to run, with its callables already resolved.
+    One registered module implementation, resolved for both execution modes.
 
     Attributes:
 
-        node: The ``Workflow`` node this was resolved from.
-        id: The canonical node id.
         name: The registered implementation name.
-        resources: The node's resource-slot bindings, slot to resource name.
-        conf: The node's declarative configuration.
-        options: The call options forwarded to the node's module callable.
+        conf: The configuration the implementation runs with.
         sync_pipe: The resolved synchronous callable, or ``None`` if unavailable.
         async_pipe: The resolved asynchronous callable, or ``None`` if unavailable.
-        embed: The resolved embed submodule for a loop node, else ``None``.
 
     Raises:
 
         InvalidPipelineError: If either resolved callable is a multi-output
             splitter, which no execution can run yet.
 
+    Examples:
+
+        >>> from riko.modules.hash import pipe
+        >>>
+        >>> module = ResolvedModule("hash", {}, sync_pipe=pipe)
+        >>> type(module.select_sync()).__name__, type(module.select_async()).__name__
+        ('Native', 'Adapted')
+
     """
 
-    node: Node = field(converter=require_module_node)
-    id: NodeId = field(
-        default=Factory(lambda self: self.node.id, takes_self=True),
-        converter=require_str,
-    )
-    name: str = field(
-        default=Factory(lambda self: self.node.name, takes_self=True),
-        converter=require_str,
-    )
-    resources: Mapping[str, str] = field(
-        default=Factory(lambda self: self.node.resources, takes_self=True),
-        converter=resource_converter,
-    )
-    conf: FrozenConf = field(
-        default=Factory(lambda self: self.node.conf, takes_self=True),
-        converter=conf_converter("PreparedNode"),
-    )
-    options: FrozenOptions = field(
-        default=Factory(lambda self: self.node.options, takes_self=True),
-        converter=options_converter("PreparedNode"),
-    )
+    name: str = field(converter=require_str)
+    conf: FrozenConf = field(converter=conf_converter("ResolvedModule"))
     sync_pipe: SyncModuleWrapper | None = field(default=None, validator=single_output)
     async_pipe: AsyncModuleWrapper | None = field(default=None, validator=single_output)
-    embed: PreparedNode | None = field(default=None)
 
-    def select(self, *, is_async: bool) -> Selection:
+    def select_sync(self) -> SyncSelection:
         """
-        Chooses this node's native-or-adapted callable for an execution mode.
-
-        The callable was resolved when the plan was built, so no resolver or
-        registry is touched here.
-
-        Args:
-
-            is_async: Whether the node runs under asynchronous execution.
+        Chooses the callable a synchronous execution runs, preferring the native one.
 
         Returns:
 
-            The resolved pipe and whether it runs natively or adapted.
+            The native synchronous pipe, or the asynchronous pipe to adapt.
 
-        Examples:
+        Raises:
 
-            >>> from riko.definitions._workflow import ModuleNode
-            >>> from riko.runtime._execution_plan import build_execution_plan
-            >>> from riko.definitions._workflow import Workflow
-            >>> from riko.types._workflow import Endpoint
-            >>>
-            >>> node = ModuleNode(id="count-1", name="count")
-            >>> workflow = Workflow(
-            ...     nodes={"count-1": node},
-            ...     outputs={"default": Endpoint("count-1", "out")},
-            ... )
-            >>> plan = build_execution_plan(workflow)
-            >>> plan.nodes["count-1"].select(is_async=False).mode.name
-            'NATIVE'
+            UnsupportedModuleError: If neither callable was resolved.
 
         """
-        native = self.async_pipe if is_async else self.sync_pipe
-        adapted = self.sync_pipe if is_async else self.async_pipe
-
-        if native is None and adapted is not None:
-            result = Selection(adapted, ExecMode.ADAPTER)
-        elif native is None:
-            raise UnsupportedModuleError(f"{self.name!r} has no interfaces")
+        if self.sync_pipe is not None:
+            result: SyncSelection = Native(self.sync_pipe)
+        elif self.async_pipe is not None:
+            result = Adapted(self.async_pipe)
         else:
-            result = Selection(native, ExecMode.NATIVE)
+            raise UnsupportedModuleError(f"{self.name!r} has no interfaces")
 
         return result
 
-    @property
-    def family(self) -> NodeFamily:
-        return self.node.family
+    def select_async(self) -> AsyncSelection:
+        """
+        Chooses the callable an asynchronous execution runs, preferring the native one.
 
-    @property
-    def embed_or_self_conf(self) -> FrozenConf:
-        return self.conf if self.embed is None else self.embed.conf
+        Returns:
+
+            The native asynchronous pipe, or the synchronous pipe to adapt.
+
+        Raises:
+
+            UnsupportedModuleError: If neither callable was resolved.
+
+        """
+        if self.async_pipe is not None:
+            result: AsyncSelection = Native(self.async_pipe)
+        elif self.sync_pipe is not None:
+            result = Adapted(self.sync_pipe)
+        else:
+            raise UnsupportedModuleError(f"{self.name!r} has no interfaces")
+
+        return result
 
     @property
     def pipe(self) -> ModuleWrapper | None:
@@ -168,7 +134,7 @@ class PreparedNode:
     @property
     def module_type(self) -> ModuleType | None:
         """
-        Reports the declared module type of this node's resolved implementation.
+        Reports the declared module type of the resolved implementation.
 
         Returns:
 
@@ -181,9 +147,77 @@ class PreparedNode:
     @property
     def loopable(self) -> bool:
         """
-        Whether this node's resolved implementation runs one item at a time.
+        Whether the implementation runs one item at a time.
 
-        A loopable node gives the same results whether it is called once with the
-        whole stream or once per item, so its items may be spread across workers.
+        A loopable module gives the same results whether it is called once with
+        the whole stream or once per item, so its items may be spread across
+        workers.
         """
         return self.pipe is not None and getattr(self.pipe, "loopable", False) is True
+
+
+@define(frozen=True, slots=True)
+class PreparedNode:
+    """
+    One graph node ready to run: the node, its implementation, and its embed.
+
+    Attributes:
+
+        node: The ``Workflow`` module node this was resolved from.
+        module: The node's resolved implementation.
+        embed: The resolved module a loop node runs per item, else ``None``.
+
+    Examples:
+
+        >>> from riko.definitions._workflow import ModuleNode, Workflow
+        >>> from riko.runtime._execution_plan import build_execution_plan
+        >>> from riko.types._workflow import Endpoint
+        >>>
+        >>> node = ModuleNode(id="count-1", name="count")
+        >>> workflow = Workflow(
+        ...     nodes={"count-1": node},
+        ...     outputs={"default": Endpoint("count-1", "out")},
+        ... )
+        >>> prepared = build_execution_plan(workflow).nodes["count-1"]
+        >>> type(prepared.module.select_sync()).__name__
+        'Native'
+
+    """
+
+    node: ModuleNode = field(converter=require_module_node)
+    module: ResolvedModule
+    embed: ResolvedModule | None = None
+
+    @property
+    def id(self) -> NodeId:
+        return self.node.id
+
+    @property
+    def family(self) -> NodeFamily:
+        return self.node.family
+
+    @property
+    def resources(self) -> Mapping[str, str]:
+        return self.node.resources
+
+    @property
+    def options(self) -> FrozenOptions:
+        return self.node.options
+
+    @property
+    def embed_or_self_conf(self) -> FrozenConf:
+        return self.module.conf if self.embed is None else self.embed.conf
+
+    @property
+    def loopable(self) -> bool:
+        return self.module.loopable
+
+
+__all__ = [
+    "Adapted",
+    "AsyncSelection",
+    "Native",
+    "PreparedNode",
+    "ResolvedModule",
+    "SyncSelection",
+]

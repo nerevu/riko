@@ -15,102 +15,83 @@ from typing import TYPE_CHECKING
 
 from attrs import Factory, define, field
 
-from riko.coercion._graph import descendants
 from riko.definitions._workflow import require_module_node
-from riko.execution._prepared import PreparedNode
-from riko.types._collections import freeze_mapping
+from riko.execution._prepared import PreparedNode, ResolvedModule
+from riko.types._collections import freeze_mapping, validator_from_require
 
-from ._graph_index import index_workflow
 from ._resolver import dispatcher
 
 if TYPE_CHECKING:
     from types import MappingProxyType
 
     from riko.definitions._workflow import Node, Workflow
-    from riko.types._compiler import GraphIndex
-    from riko.types._workflow import NodeId
-    from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
+    from riko.types._collections import FrozenConf
+    from riko.types._workflow import GraphIndex, NodeId
+    from riko.types.modules import Conf
 
     from ._resolver import ResolverDispatcher
 
 
 type PreparedNodes = MappingProxyType[NodeId, PreparedNode]
-type RequiredNodes = MappingProxyType[str, frozenset[NodeId]]
-type ResolvedPipes = tuple[SyncModuleWrapper | None, AsyncModuleWrapper | None]
 
 
 def _index(self: ExecutionPlan) -> GraphIndex:
-    return index_workflow(self.workflow)
+    return self.workflow.index
 
 
-def _required(self: ExecutionPlan) -> RequiredNodes:
-    _descendants = partial(descendants, graph=self.index.dependencies)
-    items = self.index.outputs.items()
-    required = {name: _descendants(ref.node) | {ref.node} for name, ref in items}
-    return freeze_mapping(required)
+def _require_valid_or_empty(value: Workflow, what: str | None = "value") -> Workflow:
+    if not value.is_empty:
+        value.validate()
+
+    return value
 
 
-required = Factory(_required, takes_self=True)
+_valid_workflow = validator_from_require(_require_valid_or_empty)
 
 
 @define(frozen=True, slots=True)
 class ExecutionPlan:
     """
-    A prepared workflow: its graph index, resolved nodes, and per-output subgraphs.
+    A prepared workflow: its graph index and resolved nodes.
 
     Only ``nodes`` is supplied — it carries the once-resolved callables. The graph
-    index and per-output subgraphs derive from ``workflow``, so a plan is consistent
-    however it is constructed.
+    index, including each output's required subgraph, derives from ``workflow``,
+    so a plan is consistent however it is constructed. An empty workflow (no nodes,
+    edges, or outputs) is the identity plan: running it streams the seeded source
+    unchanged.
 
     Attributes:
 
         workflow: The ``Workflow`` that was prepared.
         nodes: The resolved nodes, keyed by canonical node id.
         index: The workflow's structural graph index.
-        required: For each named output, the node ids its subgraph must run.
 
     """
 
-    workflow: Workflow = field(validator=lambda inst, field, value: value.validate())
+    workflow: Workflow = field(validator=_valid_workflow)
     nodes: PreparedNodes = field(converter=freeze_mapping)
     index: GraphIndex = field(init=False, default=Factory(_index, takes_self=True))
-    required: RequiredNodes = field(init=False, default=required)
 
 
-def _resolve_pipes(name: str, dispatcher: ResolverDispatcher) -> ResolvedPipes:
+def _resolve_module(
+    name: str, conf: FrozenConf | Conf, dispatcher: ResolverDispatcher
+) -> ResolvedModule:
     dispatcher.validate(name)
     resolve = partial(dispatcher.resolve, name)
-    return resolve(), resolve(is_async=True)
-
-
-def _build_embed(
-    base: PreparedNode, dispatcher: ResolverDispatcher
-) -> PreparedNode | None:
-    embed = require_module_node(base.node).embed
-
-    if embed is None:
-        result = None
-    else:
-        sync_pipe, async_pipe = _resolve_pipes(embed["name"], dispatcher)
-        result = PreparedNode(
-            node=base.node,
-            id=f"{base.id}::embed",
-            name=embed["name"],
-            conf=embed["conf"],
-            options={},
-            resources={},
-            sync_pipe=sync_pipe,
-            async_pipe=async_pipe,
-        )
-
-    return result
+    sync_pipe, async_pipe = resolve(), resolve(is_async=True)
+    return ResolvedModule(name, conf, sync_pipe=sync_pipe, async_pipe=async_pipe)
 
 
 def _build_node(node: Node, dispatcher: ResolverDispatcher) -> PreparedNode:
-    base = PreparedNode(node)
-    sync_pipe, async_pipe = _resolve_pipes(base.name, dispatcher)
-    embed = _build_embed(base, dispatcher)
-    return PreparedNode(node, sync_pipe=sync_pipe, async_pipe=async_pipe, embed=embed)
+    module_node = require_module_node(node)
+    module = _resolve_module(module_node.name, module_node.conf, dispatcher)
+
+    if (embed := module_node.embed) is None:
+        resolved_embed = None
+    else:
+        resolved_embed = _resolve_module(embed["name"], embed["conf"], dispatcher)
+
+    return PreparedNode(module_node, module=module, embed=resolved_embed)
 
 
 def build_execution_plan(
@@ -126,8 +107,8 @@ def build_execution_plan(
 
     Returns:
 
-        The prepared plan: its graph index, resolved nodes, and per-output
-        subgraphs. No node runs and no resource is acquired here.
+        The prepared plan: its graph index and resolved nodes. No node runs and
+        no resource is acquired here.
 
     Raises:
 
@@ -154,7 +135,7 @@ def build_execution_plan(
         ['count-1']
 
     """
-    workflow.validate()
+    _require_valid_or_empty(workflow)
     workflow.require_executable()
     nodes = {id_: _build_node(node, dispatcher) for id_, node in workflow.nodes.items()}
     return ExecutionPlan(workflow=workflow, nodes=nodes)

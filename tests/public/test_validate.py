@@ -221,19 +221,21 @@ def test_self_loop_rejected():
         workflow.validate()
 
 
-def test_cycle_names_only_the_unrunnable_nodes():
+def test_cycle_names_only_the_nodes_on_the_cycle():
     src = ModuleNode(id="src", name="fetch")
     a = ModuleNode(id="a", name="sort")
     b = ModuleNode(id="b", name="sort")
+    after = ModuleNode(id="after", name="sort")
     edges = [
         StreamEdge(Endpoint("src", "out"), Endpoint("a", "in")),
         StreamEdge(Endpoint("a", "out"), Endpoint("b", "in")),
         StreamEdge(Endpoint("b", "out"), Endpoint("a", "in:1")),
+        StreamEdge(Endpoint("b", "out"), Endpoint("after", "in")),
     ]
     workflow = _workflow(
-        [src, a, b], edges=edges, outputs={"default": Endpoint("b", "out")}
+        [src, a, b, after], edges=edges, outputs={"default": Endpoint("after", "out")}
     )
-    assert workflow.cyclic_nodes == ["a", "b"]
+    assert workflow.index.cyclic == ("a", "b")
 
 
 def _counted_source(consumed):

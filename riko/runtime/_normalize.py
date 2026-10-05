@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, get_args
 from attrs import asdict
 
 from riko.base._config import INPUT_PORT, OTHER_PORT, OUTPUT_PORT
+from riko.base._graph import edges_to_graph, leaves
 from riko.base.exceptions import InvalidPipelineError
 from riko.coercion._sequences import require_sequence
 from riko.definitions._workflow import (
@@ -45,6 +46,7 @@ from riko.definitions._workflow import (
     SubscribeNode,
     Workflow,
     WriteNode,
+    get_family_edges,
 )
 from riko.types._collections import (
     FrozenJSON,
@@ -237,9 +239,9 @@ def _normalize_outputs(raw: object, *edges: Edge, **nodes: Node) -> dict[str, En
             for name, endpoint in outputs.items()
         }
     else:
-        sources = {edge.source.node for edge in edges if edge.family == "stream"}
-        leaves = [node_id for node_id in nodes if node_id not in sources]
-        result = {"default": Endpoint(leaves[0], "out")} if len(leaves) == 1 else {}
+        pairs = ((e.source.node, e.target.node) for e in get_family_edges(edges))
+        ends = leaves(edges_to_graph(pairs, *nodes))
+        result = {"default": Endpoint(ends[0], "out")} if len(ends) == 1 else {}
 
     return result
 

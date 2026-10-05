@@ -4,8 +4,8 @@ The immutable ``Workflow`` graph model and the ``PipelineDefinition`` around it.
 
 Six closed node families (``ModuleNode``/``ReadNode``/``WriteNode``/``CacheNode``/
 ``ActionNode``/``SubscribeNode``) and two edge families (``StreamEdge``/``PublishEdge``)
-compose a ``Workflow`` graph.  by the  This is the structural immutable definition that
-wraps the nodes and edges.
+compose a ``Workflow`` graph. This is the structural immutable definition that wraps the
+nodes and edges.
 
 Nodes carry declarative intent, never execution state, and no node runs here.
 ``WriteNode`` and ``ActionNode`` carry a ``backend`` and serialization ``fmt`` rather
@@ -36,8 +36,8 @@ Examples:
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
-from functools import partial
+from collections import Counter
+from functools import cached_property, partial
 from inspect import isawaitable
 from itertools import chain
 from types import MappingProxyType
@@ -83,6 +83,8 @@ from riko.types._workflow import (
     WORKFLOW_VERSION,
     Edge,
     Endpoint,
+    GraphEdge,
+    GraphIndex,
     NodeId,
     RawWorkflow,
     parse_port,
@@ -103,7 +105,7 @@ from ._targets import build_write, normalize_enum, normalize_strs
 from ._write import WriteMode
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping
+    from collections.abc import Callable, Iterable, Iterator, Mapping
 
     from riko.types._enums import ExecutorLike, FmtLike, StrLike
     from riko.types._events import EventSink
@@ -349,6 +351,34 @@ class PublishEdge(Edge):
     family: ClassVar[EdgeFamily] = "publish"
 
 
+def get_family_edges(
+    edges: Iterable[Edge], family: EdgeFamily = "stream"
+) -> list[Edge]:
+    """
+    Selects the edges of one family, in listing order.
+
+    Args:
+
+        edges: The edges to select from.
+        family: The edge family to keep.
+
+    Returns:
+
+        The ``family`` edges among ``edges``.
+
+    Examples:
+
+        >>> from riko.types._workflow import Endpoint
+        >>>
+        >>> end = Endpoint("a", "out")
+        >>> edges = [StreamEdge(end, end), PublishEdge(end, end)]
+        >>> [edge.family for edge in get_family_edges(edges, "publish")]
+        ['publish']
+
+    """
+    return [edge for edge in edges if edge.family == family]
+
+
 def require_module_node(value: Node, what: str | None = None) -> ModuleNode:
     if not isinstance(value, ModuleNode):
         what = value.family if what is None else what
@@ -398,15 +428,12 @@ class Workflow:
     resources: tuple[str, ...] = field(factory=tuple, converter=normalize_strs)
     version: str = WORKFLOW_VERSION
 
-    def family_edges(self, family: EdgeFamily = "stream") -> list[Edge]:
-        return [edge for edge in self.edges if edge.family == family]
-
     def family_sources(self, family: EdgeFamily = "stream") -> Counter[tuple[str, str]]:
-        edges = self.family_edges(family)
+        edges = get_family_edges(self.edges, family)
         return Counter((edge.source.node, edge.source.port) for edge in edges)
 
     def family_ports(self, family: EdgeFamily = "stream") -> Counter[tuple[str, str]]:
-        return Counter(edge.port for edge in self.family_edges(family))
+        return Counter(edge.port for edge in get_family_edges(self.edges, family))
 
     def _gen_edge_target_mismatches(self) -> Iterator[str]:
         """Detects a publish/subscribe mismatch between an edge and its target node."""
@@ -431,28 +458,23 @@ class Workflow:
             if parsed.direction != direction:
                 yield f"{endpoint} is not an {direction!r} port"
 
+    @cached_property
+    def graph_edges(self) -> tuple[GraphEdge, ...]:
+        """Flattens each edge into the node-and-port record the graph index reads."""
+        return tuple(
+            GraphEdge(e.source.node, e.target.node, e.source.port, e.target.port)
+            for e in self.edges
+        )
+
+    @cached_property
+    def index(self) -> GraphIndex:
+        """Interprets the topology once; edges and outputs name declared nodes."""
+        return GraphIndex(self.nodes, self.graph_edges, self.outputs)
+
     @property
-    def cyclic_nodes(self) -> list[NodeId]:
-        """Collect the nodes no edge order can run because edges form a cycle."""
-        dependencies: dict[NodeId, set[NodeId]] = {node: set() for node in self.nodes}
-        dependents: dict[NodeId, set[NodeId]] = defaultdict(set)
-
-        for edge in self.edges:
-            dependencies[edge.target.node].add(edge.source.node)
-            dependents[edge.source.node].add(edge.target.node)
-
-        ready = [node for node, deps in dependencies.items() if not deps]
-
-        while ready:
-            node = ready.pop()
-
-            for dependent in dependents[node]:
-                dependencies[dependent].discard(node)
-
-                if not dependencies[dependent]:
-                    ready.append(dependent)
-
-        return sorted(node for node, deps in dependencies.items() if deps)
+    def is_empty(self) -> bool:
+        """Whether the workflow declares no nodes, edges, or outputs."""
+        return not (self.nodes or self.edges or self.outputs)
 
     @property
     def endpoints(self) -> list[Endpoint]:
@@ -501,7 +523,7 @@ class Workflow:
         elif misdirected := list(self._gen_misdirected_ports()):
             msg = f"port direction does not match its role: {misdirected}"
             raise InvalidPipelineError(msg)
-        elif cyclic := self.cyclic_nodes:
+        elif cyclic := list(self.index.cyclic):
             msg = f"edges form a cycle through node(s): {cyclic}"
             raise InvalidPipelineError(msg)
         elif undeclared := sorted(self.declared_resources.difference(self.resources)):
@@ -625,19 +647,11 @@ _optional_workflow = narrow_def_from_require(_require_workflow, default=_EMPTY_S
 @define(frozen=True, slots=True)
 class PipelineDefinition(Generic[T]):
     """
-    An immutable, composable definition of a pipeline around a ``Workflow``.
+    An immutable, composable pipeline definition around a ``Workflow``.
 
-    It carries everything a run needs (the graph, a seeded source, the context, and
-    the execution settings) and composes new definitions, but never runs. The stable
-    ``Pipeline`` adds running; every composition method returns the caller's own
-    class, so composing a ``Pipeline`` yields a ``Pipeline``.
-
-    ``PipelineDefinition(workflow)`` wraps a built graph,
-    ``PipelineDefinition.from_module(name)`` seeds a module by name,
-    ``PipelineDefinition(source=items)`` seeds a source, and ``PipelineDefinition()``
-    starts an empty template to compose with ``|``. A source is one item, an item
-    stream, an async item stream, or an awaitable resolving to one of those; each
-    execution resolves it at the same boundary.
+    Composition returns the caller's own class; ``Pipeline`` adds running. Build one
+    from a ``Workflow``, ``from_module(name)``, ``source=items``, or empty for ``|``.
+    A seeded source is not copied, so a generator is consumed by the first run.
 
     Attributes:
 
@@ -1006,21 +1020,14 @@ class PipelineDefinition(Generic[T]):
         return evolve(self, context=bound)
 
     @classmethod
-    def subscribe(
-        cls, name: str, *, func: Callable[..., object] | None = None, **policy: object
-    ) -> Self:
+    def subscribe(cls, *args: object, **kwargs: object) -> Self:
         """
-        Declares a local subscription to a named published stream.
+        Reserves the local-subscription constructor; its arguments are not settled.
 
         Args:
 
-            name: The channel the subscription listens on.
-            func: Runs on each item as it is received; its return value is discarded.
-            policy: The subscription's delivery policy.
-
-        Returns:
-
-            A new pipeline over the subscribed channel.
+            args: The not-yet-settled positional arguments.
+            kwargs: The not-yet-settled keyword arguments.
 
         Raises:
 
@@ -1029,20 +1036,14 @@ class PipelineDefinition(Generic[T]):
         """
         raise NotImplementedError("local subscriptions are not available yet")
 
-    def publish(
-        self, subscription: PipelineDefinition, *, isolate: bool = True
-    ) -> Self:
+    def publish(self, *args: object, **kwargs: object) -> Self:
         """
-        Publishes this pipeline's records to a declared subscription.
+        Reserves publishing to a subscription; its arguments are not settled.
 
         Args:
 
-            subscription: The subscription receiving the published records.
-            isolate: Whether the subscriber's failures stay out of this pipeline.
-
-        Returns:
-
-            A new pipeline that passes its records through to the subscription.
+            args: The not-yet-settled positional arguments.
+            kwargs: The not-yet-settled keyword arguments.
 
         Raises:
 
@@ -1051,17 +1052,14 @@ class PipelineDefinition(Generic[T]):
         """
         raise NotImplementedError("publishing to a subscription is not available yet")
 
-    def split(self, n: int = 2) -> tuple[Self, ...]:
+    def split(self, *args: object, **kwargs: object) -> tuple[Self, ...]:
         """
-        Fans the stream out into ``n`` independently consumable branches.
+        Reserves streaming fan-out into branches; its arguments are not settled.
 
         Args:
 
-            n: How many branches to produce.
-
-        Returns:
-
-            One pipeline per branch, in branch order.
+            args: The not-yet-settled positional arguments.
+            kwargs: The not-yet-settled keyword arguments.
 
         Raises:
 
@@ -1070,18 +1068,14 @@ class PipelineDefinition(Generic[T]):
         """
         raise NotImplementedError("streaming fan-out is not available yet")
 
-    def map(self, func: Callable[..., object], **kwargs: object) -> Self:
+    def map(self, *args: object, **kwargs: object) -> Self:
         """
-        Appends a callable that runs over the stream as its own node.
+        Reserves chaining a callable as its own node; its arguments are not settled.
 
         Args:
 
-            func: The callable to run.
-            kwargs: The keyword arguments forwarded to ``func``.
-
-        Returns:
-
-            A new pipeline whose default output is the appended callable.
+            args: The not-yet-settled positional arguments.
+            kwargs: The not-yet-settled keyword arguments.
 
         Raises:
 
@@ -1181,11 +1175,6 @@ class PipelineDefinition(Generic[T]):
             primed = cast("Self", NotImplemented)
 
         return primed
-
-    @property
-    def _is_source_only(self) -> bool:
-        """Whether the pipeline seeds a source but chains no module."""
-        return self.source is not None and not self.workflow.nodes
 
 
 __all__ = [

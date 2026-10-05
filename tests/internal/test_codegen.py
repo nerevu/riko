@@ -130,7 +130,7 @@ async def _arun_document(workflow: Workflow) -> list[Item]:
     items: list[Item] = []
 
     async with AsyncExecution(context=Context(test=True)) as execution:
-        stream = await execution.run(build_execution_plan(workflow))
+        stream = await execution.arun(build_execution_plan(workflow))
         items = [item async for item in stream]
 
     return items

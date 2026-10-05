@@ -10,18 +10,19 @@ from riko.bado._backend import fail_after
 from riko.bado._util import maybe_deferred
 from riko.bado.itertools import as_async
 from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
+from riko.definitions import _workflow as workflow_module
 from riko.definitions._context import Context
 from riko.definitions._resource_definition import Resource
 from riko.definitions._workflow import CacheNode, ModuleNode, StreamEdge, Workflow
 from riko.definitions.modules import ModuleDefinition
 from riko.execution._adapt import (
-    adapt_embed_for_async,
-    adapt_embed_for_sync,
+    adapt_embed,
+    async_adapt_embed,
     require_async_stream,
     require_stream,
 )
 from riko.execution._execution import AsyncExecution, SyncExecution
-from riko.execution._prepared import ExecMode, PreparedNode
+from riko.execution._prepared import Adapted, Native, ResolvedModule
 from riko.modules._decorators import processor, splitter
 from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop_pipe
@@ -30,7 +31,6 @@ from riko.modules.split import pipe as split_pipe
 from riko.modules.union import async_pipe as async_union
 from riko.modules.union import pipe as union_pipe
 from riko.runtime._execution_plan import build_execution_plan
-from riko.runtime._graph_index import index_workflow
 from riko.runtime._module_registry import (
     ModuleRegistry,
     register_module,
@@ -40,7 +40,7 @@ from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import ResolverDispatcher
 from riko.runtime._workflows import mark_subpipe, workflow_resolver
 from riko.types._enums import BasicCastType
-from riko.types._workflow import Endpoint
+from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
@@ -73,14 +73,28 @@ def _module_workflow(name="m"):
     return _workflow([node], {"default": Endpoint("n", "out")})
 
 
-def test_index_workflow_orders_and_indexes() -> None:
+def test_graph_index_derives_and_freezes_from_its_inputs() -> None:
+    edge = GraphEdge("a", "b", "out", "in")
+    index = GraphIndex(["a", "b", "c"], [edge], {"default": Endpoint("b", "out")})
+
+    assert index.edges == (edge,)
+    assert index.incoming["b"] == (edge,)
+    assert index.dependencies["b"] == frozenset({"a"})
+    assert index.required["default"] == frozenset({"a", "b"})
+    assert index.roots == ("a", "c")
+
+    with pytest.raises(TypeError):
+        index.outputs["extra"] = Endpoint("a", "out")  # type: ignore[index]
+
+
+def test_workflow_index_orders_and_indexes() -> None:
     a = ModuleNode(id="a", name="m")
     b = ModuleNode(id="b", name="m")
     c = ModuleNode(id="c", name="m")
     edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))
     outputs = {"default": Endpoint("b", "out"), "extra": Endpoint("c", "out")}
     workflow = _workflow([a, b, c], outputs, edges=(edge,))
-    index = index_workflow(workflow)
+    index = workflow.index
 
     assert set(index.order) == {"a", "b", "c"}
     assert index.order.index("a") < index.order.index("b")
@@ -91,6 +105,7 @@ def test_index_workflow_orders_and_indexes() -> None:
     assert index.incoming["b"][0].source == "a"
     assert index.outgoing["a"][0].target == "b"
     assert set(index.outputs) == {"default", "extra"}
+    assert index.required == {"default": {"a", "b"}, "extra": {"c"}}
 
 
 def test_prepare_selects_native_sync() -> None:
@@ -99,9 +114,9 @@ def test_prepare_selects_native_sync() -> None:
     )
     plan = build_execution_plan(_module_workflow(), dispatcher=_dispatcher(definition))
     node = plan.nodes["n"]
-    result = node.select(is_async=False)
-    assert result.pipe is _sync_pipe
-    assert result.mode is ExecMode.NATIVE
+    selection = node.module.select_sync()
+    assert isinstance(selection, Native)
+    assert selection.pipe is _sync_pipe
 
 
 def test_prepare_selects_native_async() -> None:
@@ -110,23 +125,27 @@ def test_prepare_selects_native_async() -> None:
     )
     plan = build_execution_plan(_module_workflow(), dispatcher=_dispatcher(definition))
     node = plan.nodes["n"]
-    result = node.select(is_async=True)
-    assert result.pipe is _async_pipe
-    assert result.mode is ExecMode.NATIVE
+    selection = node.module.select_async()
+    assert isinstance(selection, Native)
+    assert selection.pipe is _async_pipe
 
 
 def test_prepare_adapts_sync_only_under_async() -> None:
     definition = ModuleDefinition(name="m", sync_pipe=_sync_pipe)
     plan = build_execution_plan(_module_workflow(), dispatcher=_dispatcher(definition))
     node = plan.nodes["n"]
-    assert node.select(is_async=True).mode is ExecMode.ADAPTER
+    selection = node.module.select_async()
+    assert isinstance(selection, Adapted)
+    assert selection.pipe is _sync_pipe
 
 
 def test_prepare_adapts_async_only_under_sync() -> None:
     definition = ModuleDefinition(name="m", async_pipe=_async_pipe)
     plan = build_execution_plan(_module_workflow(), dispatcher=_dispatcher(definition))
     node = plan.nodes["n"]
-    assert node.select(is_async=False).mode is ExecMode.ADAPTER
+    selection = node.module.select_sync()
+    assert isinstance(selection, Adapted)
+    assert selection.pipe is _async_pipe
 
 
 def test_prepare_does_not_invoke_the_pipe() -> None:
@@ -140,6 +159,64 @@ def test_prepare_does_not_invoke_the_pipe() -> None:
     definition = ModuleDefinition(name="m", sync_pipe=sync_pipe)
     build_execution_plan(_module_workflow(), dispatcher=_dispatcher(definition))
     assert calls == []
+
+
+def test_execution_plan_indexes_the_workflow_once(monkeypatch) -> None:
+    # Validation and the plan share the workflow's cached index rather than each
+    # re-interpreting its topology.
+    calls: list[tuple[object, ...]] = []
+
+    def counting(*args: object) -> GraphIndex:
+        calls.append(args)
+        return GraphIndex(*args)  # pyright: ignore[reportArgumentType]
+
+    monkeypatch.setattr(workflow_module, "GraphIndex", counting)
+    plan = build_execution_plan(_module_workflow("count"))
+    assert plan.index is plan.workflow.index
+    assert len(calls) == 1
+
+
+def test_empty_plan_streams_its_seeded_source() -> None:
+    plan = build_execution_plan(Workflow(nodes={}, outputs={}))
+
+    with SyncExecution() as execution:
+        assert list(execution.run(plan, source=[{"x": 1}])) == [{"x": 1}]
+
+
+@async_test
+async def test_empty_plan_streams_its_seeded_source_async() -> None:
+    plan = build_execution_plan(Workflow(nodes={}, outputs={}))
+
+    async with AsyncExecution() as execution:
+        stream = await execution.arun(plan, source={"x": 1})
+        assert [item async for item in stream] == [{"x": 1}]
+
+
+def test_empty_plan_without_a_source_raises() -> None:
+    plan = build_execution_plan(Workflow(nodes={}, outputs={}))
+
+    with (
+        SyncExecution() as execution,
+        pytest.raises(InvalidPipelineError, match="no nodes"),
+    ):
+        execution.run(plan)
+
+
+def test_empty_plan_exposes_only_the_default_output() -> None:
+    plan = build_execution_plan(Workflow(nodes={}, outputs={}))
+
+    with (
+        SyncExecution() as execution,
+        pytest.raises(InvalidPipelineError, match="'extra'"),
+    ):
+        execution.run(plan, "extra", source=[{"x": 1}])
+
+
+def test_build_plan_rejects_a_nodeless_workflow_with_outputs() -> None:
+    workflow = Workflow(nodes={}, outputs={"default": Endpoint("x", "out")})
+
+    with pytest.raises(InvalidPipelineError, match="no nodes"):
+        build_execution_plan(workflow)
 
 
 def test_execution_plan_snapshots_resolution() -> None:
@@ -164,7 +241,7 @@ def test_prepare_carries_conf_index_and_resources() -> None:
     plan = build_execution_plan(workflow, dispatcher=_dispatcher(definition))
     prepared = plan.nodes["n"]
 
-    assert prepared.conf == {"url": "x"}
+    assert prepared.module.conf == {"url": "x"}
     assert set(prepared.resources.values()) == {"db"}
     assert plan.index.outputs["default"].node == "n"
 
@@ -498,16 +575,14 @@ def test_build_plan_rejects_splitter_by_declared_type_not_output_shape() -> None
         build_execution_plan(_module_workflow("listy"), dispatcher=dispatcher)
 
 
-def test_prepared_node_refuses_a_splitter_pipe_on_construction() -> None:
-    # The invariant lives on the node itself, so every construction path (plan
-    # build, embeds, direct construction) is covered, not only the plan builder.
-    node = ModuleNode(id="s", name="split")
-
+def test_resolved_module_refuses_a_splitter_pipe_on_construction() -> None:
+    # The invariant lives on the resolved module itself, so every construction
+    # path (plan build, embeds, direct construction) is covered.
     with pytest.raises(InvalidPipelineError, match=r"'sync_pipe'.*splitter"):
-        PreparedNode(node, sync_pipe=split_pipe)
+        ResolvedModule("split", {}, sync_pipe=split_pipe)
 
     with pytest.raises(InvalidPipelineError, match=r"'async_pipe'.*splitter"):
-        PreparedNode(node, async_pipe=async_split)
+        ResolvedModule("split", {}, async_pipe=async_split)
 
 
 def test_require_stream_refuses_a_splitter_pipe_without_consuming() -> None:
@@ -727,7 +802,7 @@ async def test_arun_seeds_root_with_supplied_source() -> None:
     plan = build_execution_plan(_module_workflow("adouble"), dispatcher=dispatcher)
 
     async with AsyncExecution() as execution:
-        stream = await execution.run(plan, source=[{"x": 1}, {"x": 2}])
+        stream = await execution.arun(plan, source=[{"x": 1}, {"x": 2}])
         assert [item async for item in stream] == [{"x": 2}, {"x": 4}]
 
 
@@ -785,7 +860,7 @@ async def test_arun_seeds_one_item_as_a_single_item_stream() -> None:
     plan = build_execution_plan(_module_workflow("adouble"), _doubler_dispatcher())
 
     async with AsyncExecution() as execution:
-        stream = await execution.run(plan, source={"x": 5})
+        stream = await execution.arun(plan, source={"x": 5})
         assert [item async for item in stream] == [{"x": 10}]
 
 
@@ -796,7 +871,7 @@ async def test_arun_seeds_an_async_stream_without_wrapping_it() -> None:
     plan = build_execution_plan(_module_workflow("adouble"), _doubler_dispatcher())
 
     async with AsyncExecution() as execution:
-        stream = await execution.run(plan, source=_agen_source())
+        stream = await execution.arun(plan, source=_agen_source())
         assert [item async for item in stream] == [{"x": 2}, {"x": 4}]
 
 
@@ -805,7 +880,7 @@ async def test_arun_awaits_an_awaitable_seed_once() -> None:
     plan = build_execution_plan(_module_workflow("adouble"), _doubler_dispatcher())
 
     async with AsyncExecution() as execution:
-        stream = await execution.run(plan, source=_awaitable_source())
+        stream = await execution.arun(plan, source=_awaitable_source())
         assert [item async for item in stream] == [{"x": 2}, {"x": 4}]
 
 
@@ -824,7 +899,7 @@ async def test_arun_without_seed_keeps_forever_source() -> None:
     plan = build_execution_plan(_module_workflow("aprobe"), dispatcher=dispatcher)
 
     async with AsyncExecution() as execution:
-        stream = await execution.run(plan)
+        stream = await execution.arun(plan)
         assert [item async for item in stream] == []
 
     assert seen == [{"forever": True}]
@@ -849,12 +924,9 @@ def test_prepare_resolves_nested_embed() -> None:
     plan = build_execution_plan(_prepare_loop({"case": "upper"}), dispatcher=dispatcher)
     node = plan.nodes["loop"]
 
-    assert node.embed is not None
-    assert node.embed.name == "up"
-    assert node.embed.select(is_async=False).pipe is up
-    assert node.embed.conf == {"case": "upper"}
+    assert node.embed == ResolvedModule("up", {"case": "upper"}, sync_pipe=up)
+    assert node.module.name == "fakeloop"
     assert dict(node.options) == {"emit": True, "count": "first"}
-    assert dict(node.embed.options) == {}
 
 
 def test_prepare_adapts_async_only_embed_under_sync() -> None:
@@ -865,7 +937,7 @@ def test_prepare_adapts_async_only_embed_under_sync() -> None:
     plan = build_execution_plan(_prepare_loop(), dispatcher=dispatcher)
     embed = plan.nodes["loop"].embed
     assert embed is not None
-    assert embed.select(is_async=False).mode is ExecMode.ADAPTER
+    assert isinstance(embed.select_sync(), Adapted)
 
 
 def test_prepare_adapts_sync_only_embed_under_async() -> None:
@@ -877,7 +949,7 @@ def test_prepare_adapts_sync_only_embed_under_async() -> None:
     embed = plan.nodes["loop"].embed
 
     assert embed is not None
-    assert embed.select(is_async=True).mode is ExecMode.ADAPTER
+    assert isinstance(embed.select_async(), Adapted)
 
 
 @skipif_issync
@@ -1008,7 +1080,7 @@ def test_run_loops_async_only_embed_through_the_real_loop() -> None:
 
 def test_adapt_embed_for_sync_copies_metadata() -> None:
     stub = _EmbedStub()
-    adapted = adapt_embed_for_sync(cast("AsyncModuleWrapper", stub), _unused_drain)
+    adapted = adapt_embed(cast("AsyncModuleWrapper", stub), _unused_drain)
 
     assert adapted.name == "up"
     assert adapted.type == "processor"
@@ -1023,7 +1095,7 @@ def test_adapt_embed_for_sync_copies_metadata() -> None:
 def test_adapt_embed_for_async_copies_metadata() -> None:
     stub = _EmbedStub()
     stub.isasync = False
-    adapted = adapt_embed_for_async(cast("SyncModuleWrapper", stub), _unused_worker)
+    adapted = async_adapt_embed(cast("SyncModuleWrapper", stub), _unused_worker)
 
     assert adapted.name == "up"
     assert adapted.type == "processor"
@@ -1116,7 +1188,7 @@ async def _arun(workflow, dispatcher, output="default"):
     plan = build_execution_plan(workflow, dispatcher=dispatcher)
 
     async with AsyncExecution() as execution:
-        stream = await execution.run(plan, output)
+        stream = await execution.arun(plan, output)
         return [item async for item in stream]
 
 
@@ -1275,7 +1347,7 @@ async def test_arun_sync_only_source_streams_lazily() -> None:
     first = None
 
     async with AsyncExecution() as execution:
-        stream = await execution.run(plan)
+        stream = await execution.arun(plan)
         first = await anext(aiter(stream))
 
     assert first == {"x": 1}
@@ -1294,7 +1366,7 @@ async def test_arun_sync_only_source_raises_after_yielding_earlier_items() -> No
     seen = []
 
     async with AsyncExecution() as execution:
-        stream = await execution.run(plan)
+        stream = await execution.arun(plan)
 
         with pytest.raises(RuntimeError, match="later"):
             await _acollect(stream, seen)
@@ -1323,7 +1395,7 @@ async def test_arun_sync_only_source_closes_on_early_exit() -> None:
 
     with fail_after(5):
         async with AsyncExecution() as execution:
-            stream = cast("AsyncItemGenerator", await execution.run(plan))
+            stream = cast("AsyncItemGenerator", await execution.arun(plan))
 
             async for item in stream:
                 seen.append(item)
@@ -1352,7 +1424,7 @@ async def test_arun_unconsumed_sync_only_source_does_not_block_exit() -> None:
 
     with fail_after(5):
         async with AsyncExecution() as execution:
-            stream = await execution.run(plan)
+            stream = await execution.arun(plan)
             assert stream is not None
 
 
@@ -1388,7 +1460,7 @@ async def test_arun_sync_worker_node_reads_secondary_inputs_lazily() -> None:
     seen = []
 
     async with AsyncExecution() as execution:
-        stream = await execution.run(plan)
+        stream = await execution.arun(plan)
 
         with pytest.raises(RuntimeError, match="secondary later"):
             await _acollect(stream, seen)
@@ -1471,10 +1543,10 @@ async def test_arun_runs_sync_only_embed_off_the_event_loop() -> None:
     loop_thread = get_ident()
 
     assert embed is not None
-    assert embed.select(is_async=True).mode is ExecMode.ADAPTER
+    assert isinstance(embed.select_async(), Adapted)
 
     async with AsyncExecution() as execution:
-        stream = await execution.run(plan)
+        stream = await execution.arun(plan)
         assert [item async for item in stream] == [{"up": "X"}]
 
     assert threads

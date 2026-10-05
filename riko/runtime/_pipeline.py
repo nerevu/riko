@@ -69,7 +69,7 @@ class Pipeline(PipelineDefinition[T]):
             The items produced at the pipeline's default output.
 
         """
-        plan = None if self._is_source_only else build_execution_plan(self.workflow)
+        plan = build_execution_plan(self.workflow)
 
         with SyncExecution(self.context, settings=self.settings) as execution:
             yield from execution.run(plan, source=self.source)
@@ -88,12 +88,11 @@ class Pipeline(PipelineDefinition[T]):
         """
 
         async def _run() -> AsyncGenerator[T, None]:
-            workflow = self.workflow
-            plan = None if self._is_source_only else build_execution_plan(workflow)
+            plan = build_execution_plan(self.workflow)
             execution = AsyncExecution(self.context, settings=self.settings)
 
             async with execution:
-                stream = await execution.run(plan, source=self.source)
+                stream = await execution.arun(plan, source=self.source)
 
                 # An abandoned stream must close before the execution exits.
                 async with maybe_aclosing(stream) as items:

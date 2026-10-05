@@ -90,7 +90,7 @@ async def runner(
 async def plan_runner(plan: ExecutionPlan, test: bool = False) -> None:
     """Runs a prepared workflow asynchronously and prints the items it produces."""
     async with AsyncExecution(context=Context(test=test)) as execution:
-        stream = await execution.run(plan)
+        stream = await execution.arun(plan)
         items = [item async for item in stream]
         emit_result(items)
 

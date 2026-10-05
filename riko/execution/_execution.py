@@ -48,13 +48,12 @@ from riko.types._workflow import parse_port
 from riko.types._wrappers import AsyncModuleWrapperOutput, CoroutineFunc, ModuleWrapper
 
 from ._adapt import (
-    adapt_embed_for_async,
-    adapt_embed_for_sync,
-    drain_async,
+    async_drain,
     normalize_items,
     pull_stream,
     require_async_stream,
     require_stream,
+    select_embed,
 )
 from ._events import _NULL_EVENT_SINK
 from ._mapping import (
@@ -75,7 +74,7 @@ from ._plan import (
     close_resource,
 )
 from ._pools import open_pool
-from ._prepared import ExecMode, PreparedNode
+from ._prepared import Adapted, Native
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
@@ -88,10 +87,13 @@ if TYPE_CHECKING:
     from riko.definitions._context import Context
     from riko.definitions._resource_definition import Resource
     from riko.runtime._execution_plan import ExecutionPlan
-    from riko.types._compiler import GraphEdge
     from riko.types._events import EventSink
     from riko.types._sentinels import MissingType
-    from riko.types._wrappers import AsyncModuleWrapper, AysncFunc, SyncModuleWrapper
+    from riko.types._streams import Item
+    from riko.types._workflow import Endpoint, GraphEdge
+    from riko.types._wrappers import AysncFunc, SyncModuleWrapper
+
+    from ._prepared import AsyncSelection, PreparedNode
 
 
 type SyncExecSteps[T] = dict[str, Iterator[T]]
@@ -105,6 +107,8 @@ type ExtraInput[T] = Mapping[str, ExtraValues[T]]
 type ExtraOutput[T] = dict[str, ExtraValues[T]]
 type Resolution = _Acquired | _FailedAcquisition
 type Resolved = dict[Resource[Any], Resolution]
+
+DEFAULT_SEED: list[Item] = [{"forever": True}]
 
 
 @overload
@@ -144,7 +148,7 @@ def _bridge_inputs[T](  # noqa: E302
 
     for key, value in extra.items():
         if isinstance(value, AsyncIterable):
-            bridged[key] = drain_async(value, run_from_thread)
+            bridged[key] = async_drain(value, run_from_thread)
         elif isinstance(value, list):
             _bridged = (_bridge_inputs({key: v}).values() for v in value)
             bridged[key] = list(chain.from_iterable(_bridged))
@@ -157,6 +161,9 @@ def _bridge_inputs[T](  # noqa: E302
 async def _asyncify_call[T](func: Callable[..., T], *args: object) -> T:
     """
     Runs a blocking callable on a worker thread from the current event loop.
+
+    No execution's open check applies, so resource teardown and stream closing can
+    still offload work while an execution is shutting down.
 
     Args:
 
@@ -171,10 +178,13 @@ async def _asyncify_call[T](func: Callable[..., T], *args: object) -> T:
     return await asyncify(func)(*args)
 
 
-def _require_source[S](source: S | None) -> S:
-    """Requires the source a plan-less run streams unchanged."""
-    if source is None:
-        raise InvalidPipelineError("a run without a plan requires a source")
+def _require_source[S](source: S | None, output: str) -> S:
+    """Requires the seeded source an identity plan streams as its default output."""
+    if output != "default":
+        raise InvalidPipelineError(f"workflow has no output {output!r}")
+    elif source is None:
+        msg = "workflow has no nodes; an empty workflow requires a seeded source"
+        raise InvalidPipelineError(msg)
 
     return source
 
@@ -235,6 +245,17 @@ def _require_default_output_port(port: str, ref: str) -> None:
         raise InvalidPipelineError(msg)
 
 
+def _require_output(
+    plan: ExecutionPlan, output: str
+) -> tuple[Endpoint, frozenset[str]]:
+    """Requires a default-port output the plan exposes, with the nodes it runs."""
+    if (endpoint := plan.index.outputs.get(output)) is None:
+        raise InvalidPipelineError(f"workflow has no output {output!r}")
+
+    _require_default_output_port(endpoint.port, f"output {output!r}")
+    return endpoint, plan.index.required[output]
+
+
 @define(frozen=True, slots=True)
 class _Acquired:
     """Holds a successfully acquired resource value for single-flight replay."""
@@ -291,14 +312,22 @@ events = Factory(_event_sink, takes_self=True)
 
 
 @define(eq=False)
-class _BaseExecution:
-    """Shares the context reference and closed-state guard across executions."""
+class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
+    """
+    Shares the state and checks both executions run without awaiting.
+
+    That covers the context and settings, the closed-state guard, synchronous
+    exit-stack entry, cleanup-error reporting, the resolved-resource cache, and
+    resource-binding checks.
+    """
 
     context: Context | None = None
     settings: ExecutionSettings = field(default=DEF_EXECUTION_SETTINGS, kw_only=True)
     events: EventSink = field(default=events, kw_only=True)
+    _stack: S = field(init=False)
     _closing: bool = field(default=False, init=False)
     _cleanup_errors: list[Exception] = field(factory=list, init=False)
+    _resolved: Resolved = field(factory=dict, init=False)
 
     def emit(self, event: object) -> None:
         """
@@ -325,6 +354,41 @@ class _BaseExecution:
             func(*args)
         except Exception as error:  # noqa: BLE001
             self._cleanup_errors.append(error)
+
+    @overload
+    def enter_context(  # noqa: E704
+        self, cm: AbstractContextManager[BlockingPortal]
+    ) -> BlockingPortal: ...
+    @overload
+    def enter_context[V](self, cm: AbstractContextManager[V]) -> V: ...  # noqa: E704
+    def enter_context[V](  # noqa: E301
+        self, cm: AbstractContextManager[BlockingPortal | V]
+    ) -> BlockingPortal | V:
+        """
+        Enters a synchronous ``cm`` on the execution exit stack.
+
+        Args:
+
+            cm: A synchronous context manager to own for the execution.
+
+        Returns:
+
+            The value ``cm`` yields on entry.
+
+        """
+        self._require_open("add a resource to")
+        return self._stack.enter_context(cm)
+
+    def _require_bindings(self, binding: Mapping[str, str]) -> dict[str, Resource[Any]]:
+        """Requires the context to provide every resource a node binds, by slot."""
+        context = self.context
+        available = {} if context is None else context.resources
+
+        if missing := sorted(set(binding.values()).difference(available)):
+            names = ", ".join(repr(name) for name in missing)
+            raise InvalidPipelineError(f"resource(s) {names} not provided to execution")
+
+        return {slot: available[name] for slot, name in binding.items()}
 
     def _report_shutdown(
         self, exc: BaseException | None, raised: BaseException | None, suppressed: bool
@@ -360,7 +424,7 @@ class _BaseExecution:
 
 
 @define(eq=False)
-class SyncExecution[T](_BaseExecution):
+class SyncExecution[T](_BaseExecution[ExitStack]):
     """
     Runs a prepared workflow synchronously behind one owned exit stack.
 
@@ -391,7 +455,6 @@ class SyncExecution[T](_BaseExecution):
     """
 
     _stack: ExitStack = field(factory=ExitStack, init=False)
-    _resolved: Resolved = field(factory=dict, init=False)
 
     def __enter__(self) -> Self:
         return self
@@ -436,30 +499,6 @@ class SyncExecution[T](_BaseExecution):
         traceback: TracebackType | None,
     ) -> bool:
         return self.close(exc_type, exc, traceback)
-
-    @overload
-    def enter_context(  # noqa: E704
-        self, cm: AbstractContextManager[BlockingPortal]
-    ) -> BlockingPortal: ...
-    @overload
-    def enter_context(self, cm: AbstractContextManager[T]) -> T: ...  # noqa: E704
-    def enter_context(  # noqa: E301
-        self, cm: AbstractContextManager[BlockingPortal | T]
-    ) -> BlockingPortal | T:
-        """
-        Enters ``cm`` on the execution exit stack.
-
-        Args:
-
-            cm: A synchronous context manager to own for the execution.
-
-        Returns:
-
-            The value ``cm`` yields on entry.
-
-        """
-        self._require_open("add a resource to")
-        return self._stack.enter_context(cm)
 
     @cached_property
     def portal(self) -> BlockingPortal:
@@ -636,41 +675,9 @@ class SyncExecution[T](_BaseExecution):
 
         return cast("T", entry.value)
 
-    def _drain_async(self, source: AsyncIterable[T]) -> Iterator[T]:
+    def _async_drain(self, source: AsyncIterable[T]) -> Iterator[T]:
         """Pulls an async stream item by item through the execution portal."""
-        return drain_async(source, self.run_async)
-
-    def _select_embed(self, embed: PreparedNode, *, host_async: bool) -> ModuleWrapper:
-        """
-        Chooses a loop embed's callable in the mode its host pipe actually runs in.
-
-        Args:
-
-            embed: The embed node resolved alongside the loop node.
-            host_async: Whether the loop pipe itself runs asynchronously.
-
-        Returns:
-
-            The embed's native callable for that mode, or a host-mode wrapper
-            around its other-mode callable.
-
-        """
-        pipe, mode = embed.select(is_async=host_async)
-
-        if mode is ExecMode.NATIVE:
-            result = pipe
-        elif host_async:
-            sync_pipe = cast("SyncModuleWrapper", pipe)
-            result = adapt_embed_for_async(sync_pipe, _asyncify_call)
-        else:
-            async_pipe = cast("AsyncModuleWrapper", pipe)
-            result = adapt_embed_for_sync(async_pipe, self._drain_async)
-
-        return result
-
-    def _default_seed(self) -> Iterator[T]:
-        """Produces the seed fed to a node with no default or positional input."""
-        return iter([cast("T", {"forever": True})])
+        return async_drain(source, self.run_async)
 
     def _resolve_inputs(
         self,
@@ -699,20 +706,14 @@ class SyncExecution[T](_BaseExecution):
             extra["others"] = [stream for _, stream in ordered]
 
         if source is None:
-            source = iter(()) if indexed else self._default_seed()
+            seed_items = [] if indexed else cast("list[T]", DEFAULT_SEED)
+            source = iter(seed_items)
 
         return source, extra
 
     def _bind_resources(self, binding: Mapping[str, str]) -> ResourceView:
-        context = self.context
-        available = {} if context is None else context.resources
-
-        if missing := sorted(set(binding.values()).difference(available)):
-            names = ", ".join(repr(name) for name in missing)
-            raise InvalidPipelineError(f"resource(s) {names} not provided to execution")
-
-        values = {slot: self.acquire(available[name]) for slot, name in binding.items()}
-        return ResourceView(values)
+        items = self._require_bindings(binding).items()
+        return ResourceView({slot: self.acquire(resource) for slot, resource in items})
 
     def _map_stream(
         self, call: Callable[[T], Iterable[T]], source: Iterator[T]
@@ -749,9 +750,8 @@ class SyncExecution[T](_BaseExecution):
 
         """
         node = plan.nodes[node_id]
-        _pipe, mode = node.select(is_async=False)
-        host_async = mode is ExecMode.ADAPTER
-
+        selection = node.module.select_sync()
+        host_isasync = isinstance(selection, Adapted)
         incoming = plan.index.incoming.get(node_id, ())
         source, extra = self._resolve_inputs(incoming, steps, seed)
 
@@ -759,22 +759,27 @@ class SyncExecution[T](_BaseExecution):
             extra["resources"] = self._bind_resources(node.resources)
 
         if node.embed is not None:
-            extra["embed"] = self._select_embed(node.embed, host_async=host_async)
+            extra["embed"] = select_embed(
+                node.embed,
+                host_isasync=host_isasync,
+                run_sync=_asyncify_call,
+                drain=self._async_drain,
+            )
 
         extra.update(cast("Mapping[str, ModuleOptionValues]", node.options))
         conf = node.embed_or_self_conf
         mapped = self._policy.workers is not None and is_mappable(node, extra)
 
-        if mode is ExecMode.ADAPTER:
-            async_pipe = cast("AsyncModuleWrapper", _pipe)
+        if isinstance(selection, Adapted):
+            async_pipe = selection.pipe
             _stream = async_pipe(source, conf=conf, context=self.context, **extra)
             value = cast("AsyncModuleWrapperOutput[T]", _stream)
-            stream = self._drain_async(require_async_stream(value, async_pipe))
+            stream = self._async_drain(require_async_stream(value, async_pipe))
         elif mapped:
-            call = partial(_pipe, conf=conf, context=self.context, **extra)
+            call = partial(selection.pipe, conf=conf, context=self.context, **extra)
             stream = self._map_stream(cast("Callable[[T], Iterable[T]]", call), source)
         else:
-            pipe = cast("SyncModuleWrapper", _pipe)
+            pipe = selection.pipe
             _stream = pipe(source, conf=conf, context=self.context, **extra)
             value = cast("Iterator[T] | Iterator[Iterator[T]]", _stream)
             stream = require_stream(value, pipe)
@@ -792,7 +797,7 @@ class SyncExecution[T](_BaseExecution):
         resolved = self.run_async(value) if isawaitable(value) else value
 
         if isinstance(resolved, AsyncIterable):
-            stream = self._drain_async(resolved)
+            stream = self._async_drain(resolved)
         else:
             stream = iter(normalize_items(resolved))
 
@@ -800,7 +805,7 @@ class SyncExecution[T](_BaseExecution):
 
     def run(
         self,
-        plan: ExecutionPlan | None,
+        plan: ExecutionPlan,
         output: str = "default",
         *,
         source: T
@@ -817,13 +822,15 @@ class SyncExecution[T](_BaseExecution):
 
         Args:
 
-            plan: The prepared workflow to run, or ``None`` to stream ``source``
-                unchanged.
+            plan: The prepared workflow to run.
+
             output: The named output to produce.
-            source: A seed for the output's open input in place of the default
-                empty seed: one item, an item stream, an async item stream, or an
-                awaitable resolving to one of those. When omitted, only a node
-                with no default or positional input receives that default.
+
+            source: A seed for the output's open input in place of the default empty
+                seed. It can be one item, an item stream, an async item stream, or an
+                awaitable resolving to one of those. When omitted, only a node with no
+                default or positional input receives that default. A plan with no
+                nodes streams it unchanged as its default output.
 
         Returns:
 
@@ -831,17 +838,16 @@ class SyncExecution[T](_BaseExecution):
 
         Raises:
 
-            InvalidPipelineError: If ``plan`` and ``source`` are both ``None``,
-                if the plan exposes no such output, if
-                ``source`` is supplied but the output has no single open input,
-                or if the process executor is chosen and a node cannot be sent
-                to a worker process.
+            InvalidPipelineError: If the plan exposes no such output, if it has no
+                nodes and no ``source`` is given, if ``source`` is supplied but the
+                output has no single open input, or if the process executor is
+                chosen and a node cannot be sent to a worker process.
 
         """
         self._require_open("run")
 
-        if plan is None:
-            stream = self._resolve_source(_require_source(source))
+        if plan.workflow.is_empty:
+            stream = self._resolve_source(_require_source(source, output))
         else:
             stream = self._run_plan(plan, output, source)
 
@@ -858,12 +864,8 @@ class SyncExecution[T](_BaseExecution):
         | None,
     ) -> Iterator[T]:
         """Builds the item stream for one of the plan's named outputs."""
-        if (endpoint := plan.index.outputs.get(output)) is None:
-            raise InvalidPipelineError(f"workflow has no output {output!r}")
-
+        endpoint, required = _require_output(plan, output)
         steps: SyncExecSteps = {}
-        _require_default_output_port(endpoint.port, f"output {output!r}")
-        required = plan.required[output]
 
         if self._policy.executor is Executor.PROCESS:
             require_process_safe(plan, required, self.context)
@@ -883,7 +885,7 @@ _timeout = Factory(lambda self: self.settings.shutdown_timeout, takes_self=True)
 
 
 @define(eq=False)
-class AsyncExecution[T](_BaseExecution):
+class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
     """
     Runs a prepared workflow asynchronously behind one owned exit stack.
 
@@ -895,7 +897,6 @@ class AsyncExecution[T](_BaseExecution):
     shutdown_timeout: float | None = field(default=_timeout, kw_only=True)
     _stack: AsyncExitStack = field(factory=AsyncExitStack, init=False)
     _task_group: TaskGroup | None = field(default=None, init=False)
-    _resolved: Resolved = field(factory=dict, init=False)
     _inflight: dict[Resource[Any], Event] = field(factory=dict, init=False)
     _budget: Semaphore | None = field(default=None, init=False)
 
@@ -908,7 +909,7 @@ class AsyncExecution[T](_BaseExecution):
         await self._task_group.__aenter__()
         return self
 
-    async def _join_tasks(self, *, cancel: bool) -> None:
+    async def _ajoin_tasks(self, *, cancel: bool) -> None:
         if self._task_group is not None:
             if cancel:
                 self._task_group.cancel_scope.cancel()
@@ -920,7 +921,7 @@ class AsyncExecution[T](_BaseExecution):
             finally:
                 self._task_group = None
 
-    async def _unwind(
+    async def _aunwind(
         self,
         exc_type: type[BaseException] | None,
         exc: BaseException | None,
@@ -951,7 +952,7 @@ class AsyncExecution[T](_BaseExecution):
 
         return raised, suppressed
 
-    async def _shutdown(
+    async def _ashutdown(
         self,
         exc_type: type[BaseException] | None = None,
         exc: BaseException | None = None,
@@ -962,9 +963,9 @@ class AsyncExecution[T](_BaseExecution):
         suppressed = False
 
         try:
-            await self._join_tasks(cancel=exc_type is not None)
+            await self._ajoin_tasks(cancel=exc_type is not None)
         finally:
-            raised, suppressed = await self._unwind(exc_type, exc, traceback)
+            raised, suppressed = await self._aunwind(exc_type, exc, traceback)
 
         self._report_shutdown(exc, raised, suppressed)
         return suppressed
@@ -975,31 +976,7 @@ class AsyncExecution[T](_BaseExecution):
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> bool:
-        return await self._shutdown(exc_type, exc, traceback)
-
-    @overload
-    def enter_context(  # noqa: E704
-        self, cm: AbstractContextManager[BlockingPortal]
-    ) -> BlockingPortal: ...
-    @overload
-    def enter_context(self, cm: AbstractContextManager[T]) -> T: ...  # noqa: E704
-    def enter_context(  # noqa: E301
-        self, cm: AbstractContextManager[BlockingPortal | T]
-    ) -> BlockingPortal | T:
-        """
-        Enters a synchronous ``cm`` on the execution exit stack.
-
-        Args:
-
-            cm: A synchronous context manager to own for the execution.
-
-        Returns:
-
-            The value ``cm`` yields on entry.
-
-        """
-        self._require_open("add a resource to")
-        return self._stack.enter_context(cm)
+        return await self._ashutdown(exc_type, exc, traceback)
 
     async def enter_async_context(self, cm: AbstractAsyncContextManager[T]) -> T:
         """
@@ -1067,15 +1044,6 @@ class AsyncExecution[T](_BaseExecution):
 
         self._task_group.start_soon(func, *args)
 
-    async def _arun_sync[R](self, func: Callable[..., R], *args: object) -> R:
-        """
-        Runs a blocking sync callable on a worker thread without the open guard.
-
-        Resource teardown runs while the execution is closing, when the guarded
-        ``run_sync`` would refuse work, so lifecycle adaptation offloads through here.
-        """
-        return await asyncify(func)(*args)
-
     async def run_sync[R](self, func: Callable[..., R], *args: object) -> R:
         """
         Runs a blocking sync callable on a worker thread through the bridge.
@@ -1091,7 +1059,7 @@ class AsyncExecution[T](_BaseExecution):
 
         """
         self._require_open("run work in")
-        return await self._arun_sync(func, *args)
+        return await _asyncify_call(func, *args)
 
     async def aacquire(self, resource: Resource[T]) -> T:
         """
@@ -1124,7 +1092,7 @@ class AsyncExecution[T](_BaseExecution):
         if is_async:
             self.push_async_callback(cast("AysncFunc[T]", teardown), value)
         else:
-            self.push_async_callback(self._arun_sync, teardown, value)
+            self.push_async_callback(_asyncify_call, teardown, value)
 
     async def _acall_factory(self, plan: _ResourcePlan[T]) -> object:
         if (factory := plan.factory) is None:
@@ -1134,7 +1102,7 @@ class AsyncExecution[T](_BaseExecution):
             value: T = await factory(*plan.args, **plan.kwargs)
         else:
             func = cast("Callable[..., T]", partial(factory, *plan.args, **plan.kwargs))
-            value = await self._arun_sync(func)
+            value = await _asyncify_call(func)
 
         if (cleanup := plan.cleanup) not in (None, False):
             self._register_teardown(cleanup, value, is_async=is_async_callable(cleanup))
@@ -1146,7 +1114,7 @@ class AsyncExecution[T](_BaseExecution):
             cm = cast("AbstractAsyncContextManager[T]", plan.context_manager)
         else:
             _cm = cast("AbstractContextManager[T]", plan.context_manager)
-            cm = _WorkerContext(self._arun_sync, _cm)
+            cm = _WorkerContext(_asyncify_call, _cm)
 
         return await self.enter_async_context(cm)
 
@@ -1197,9 +1165,9 @@ class AsyncExecution[T](_BaseExecution):
 
         return entry
 
-    async def run(
+    async def arun(
         self,
-        plan: ExecutionPlan | None,
+        plan: ExecutionPlan,
         output: str = "default",
         *,
         source: T
@@ -1216,13 +1184,15 @@ class AsyncExecution[T](_BaseExecution):
 
         Args:
 
-            plan: The prepared workflow to run, or ``None`` to stream ``source``
-                unchanged.
+            plan: The prepared workflow to run.
+
             output: The named output to produce.
-            source: A seed for the output's open input in place of the default
-                empty seed: one item, an item stream, an async item stream, or an
-                awaitable resolving to one of those. When omitted, only a node
-                with no default or positional input receives that default.
+
+            source: A seed for the output's open input in place of the default empty
+                seed. It can be one item, an item stream, an async item stream, or an
+                awaitable resolving to one of those. When omitted, only a node with no
+                default or positional input receives that default. A plan with no
+                nodes streams it unchanged as its default output.
 
         Returns:
 
@@ -1230,16 +1200,16 @@ class AsyncExecution[T](_BaseExecution):
 
         Raises:
 
-            InvalidPipelineError: If ``plan`` and ``source`` are both ``None``,
-                if the plan exposes no such output, if
-                ``source`` is supplied but the output has no single open input,
-                or if the settings name the process executor.
+            InvalidPipelineError: If the plan exposes no such output, if it has no
+                nodes and no ``source`` is given, if ``source`` is supplied but the
+                output has no single open input, or if the settings name the process
+                executor.
 
         """
         self._require_open("run")
 
-        if plan is None:
-            stream = aiter(await self._aresolve_source(_require_source(source)))
+        if plan.workflow.is_empty:
+            stream = aiter(await self._aresolve_source(_require_source(source, output)))
         else:
             stream = await self._arun_plan(plan, output, source)
 
@@ -1258,12 +1228,8 @@ class AsyncExecution[T](_BaseExecution):
         """Builds the async item stream for one of the plan's named outputs."""
         policy = self._policy
 
-        if (endpoint := plan.index.outputs.get(output)) is None:
-            raise InvalidPipelineError(f"workflow has no output {output!r}")
-
+        endpoint, required = _require_output(plan, output)
         steps: AsyncExecSteps = {}
-        _require_default_output_port(endpoint.port, f"output {output!r}")
-        required = plan.required[output]
         seed = None if source is None else await self._aresolve_source(source)
         seed_target = None if seed is None else _seed_target(plan, required)
 
@@ -1292,12 +1258,7 @@ class AsyncExecution[T](_BaseExecution):
 
         return stream
 
-    def _adefault_seed(self) -> AsyncIterable[T]:
-        """Produces the seed fed to a node with no default or positional input."""
-        seed: list[T] = [cast("T", {"forever": True})]
-        return as_async(seed)
-
-    def _aresolve_inputs(
+    def _async_resolve_inputs(
         self,
         incoming: tuple[GraphEdge, ...],
         steps: AsyncExecSteps,
@@ -1324,59 +1285,21 @@ class AsyncExecution[T](_BaseExecution):
             extra["others"] = [stream for _, stream in ordered]
 
         if source is None:
-            items: list[T] = []
-            source = as_async(items) if indexed else self._adefault_seed()
+            seed_items = [] if indexed else cast("list[T]", DEFAULT_SEED)
+            source = as_async(seed_items)
 
         return source, extra
 
     async def _abind_resources(self, binding: Mapping[str, str]) -> ResourceView:
-        context = self.context
-        available = {} if context is None else context.resources
-
-        if missing := sorted(set(binding.values()).difference(available)):
-            names = ", ".join(repr(name) for name in missing)
-            raise InvalidPipelineError(f"resource(s) {names} not provided to execution")
-
-        items = binding.items()
-        values = {slot: await self.aacquire(available[name]) for slot, name in items}
+        items = self._require_bindings(binding).items()
+        values = {slot: await self.aacquire(resource) for slot, resource in items}
         return ResourceView(values)
-
-    def _select_embed(self, embed: PreparedNode, *, host_async: bool) -> ModuleWrapper:
-        """
-        Chooses a loop embed's callable in the mode its host pipe actually runs in.
-
-        Args:
-
-            embed: The embed node resolved alongside the loop node.
-            host_async: Whether the loop pipe itself runs asynchronously.
-
-        Returns:
-
-            The embed's native callable for that mode, or a host-mode wrapper
-            around its other-mode callable.
-
-        """
-        pipe, mode = embed.select(is_async=host_async)
-
-        if mode is ExecMode.NATIVE:
-            result = pipe
-        elif host_async:
-            sync_pipe = cast("SyncModuleWrapper", pipe)
-            result = adapt_embed_for_async(sync_pipe, self.run_sync)
-        else:
-            async_pipe = cast("AsyncModuleWrapper", pipe)
-            result = adapt_embed_for_sync(
-                async_pipe, partial(drain_async, call=run_from_thread)
-            )
-
-        return result
 
     def _build_item_call(
         self,
-        pipe: ModuleWrapper,
+        selection: AsyncSelection,
         node: PreparedNode,
         extra: ExtraInput,
-        mode: ExecMode,
         policy: AsyncPolicy,
     ) -> Callable[[T], Awaitable[Iterable[T]]]:
         """
@@ -1387,10 +1310,10 @@ class AsyncExecution[T](_BaseExecution):
         """
         conf = node.embed_or_self_conf
 
-        if mode is ExecMode.NATIVE:
+        if isinstance(selection, Native):
 
-            async def call_native(item: T) -> Iterable[T]:
-                raw = pipe(item, conf=conf, context=self.context, **extra)
+            async def acall_native(item: T) -> Iterable[T]:
+                raw = selection.pipe(item, conf=conf, context=self.context, **extra)
                 value = await as_awaitable(raw)
 
                 if isinstance(value, AsyncIterable):
@@ -1401,13 +1324,13 @@ class AsyncExecution[T](_BaseExecution):
 
                 return results
 
-            call = call_native
+            call = acall_native
         else:
             kwargs = _bridge_inputs(extra)
-            bound = partial(pipe, conf=conf, context=self.context, **kwargs)
+            bound = partial(selection.pipe, conf=conf, context=self.context, **kwargs)
             sync_call = cast("Callable[[T], Iterable[T]]", bound)
 
-            async def call_sync(item: T) -> Iterable[T]:
+            async def acall_adapted(item: T) -> Iterable[T]:
                 if policy.inline:
                     results = run_item(sync_call, item)
                 else:
@@ -1415,7 +1338,7 @@ class AsyncExecution[T](_BaseExecution):
 
                 return results
 
-            call = call_sync
+            call = acall_adapted
 
         return call
 
@@ -1441,7 +1364,7 @@ class AsyncExecution[T](_BaseExecution):
                 for item in result:
                     yield item
 
-    async def _run_sync_node(
+    async def _arun_sync_node(
         self,
         pipe: SyncModuleWrapper,
         node: PreparedNode,
@@ -1468,7 +1391,7 @@ class AsyncExecution[T](_BaseExecution):
 
         """
         bridged = _bridge_inputs(extra)
-        worker_source = drain_async(source, run_from_thread)
+        worker_source = async_drain(source, run_from_thread)
         conf = node.embed_or_self_conf
 
         def start() -> tuple[object, Iterator[T]]:
@@ -1477,7 +1400,7 @@ class AsyncExecution[T](_BaseExecution):
             return raw, require_stream(value, pipe)
 
         raw, iterator = await self.run_sync(start)
-        return pull_stream(iterator, raw, self.run_sync, self._arun_sync)
+        return pull_stream(iterator, raw, self.run_sync, _asyncify_call)
 
     async def _abuild_stream(
         self,
@@ -1507,30 +1430,34 @@ class AsyncExecution[T](_BaseExecution):
 
         """
         node = plan.nodes[node_id]
-        _pipe, mode = node.select(is_async=True)
-        host_async = mode is ExecMode.NATIVE
+        selection = node.module.select_async()
+        host_isasync = isinstance(selection, Native)
 
         incoming = plan.index.incoming.get(node_id, ())
-        source, extra = self._aresolve_inputs(incoming, steps, seed)
+        source, extra = self._async_resolve_inputs(incoming, steps, seed)
 
         if node.resources:
             extra["resources"] = await self._abind_resources(node.resources)
 
         if node.embed is not None:
-            extra["embed"] = self._select_embed(node.embed, host_async=host_async)
+            extra["embed"] = select_embed(
+                node.embed,
+                host_isasync=host_isasync,
+                run_sync=self.run_sync,
+                drain=partial(async_drain, call=run_from_thread),
+            )
 
         extra.update(cast("Mapping[str, ModuleOptionValues]", node.options))
         limit = policy.limit
 
         if limit is not None and is_mappable(node, extra):
-            call = self._build_item_call(_pipe, node, extra, mode, policy)
+            call = self._build_item_call(selection, node, extra, policy)
             stream = self._amap_stream(call, source, limit)
-        elif mode is ExecMode.ADAPTER:
-            pipe = cast("SyncModuleWrapper", _pipe)
-            stream = await self._run_sync_node(pipe, node, source, extra)
+        elif isinstance(selection, Adapted):
+            stream = await self._arun_sync_node(selection.pipe, node, source, extra)
         else:
             conf = node.embed_or_self_conf
-            async_pipe = cast("AsyncModuleWrapper", _pipe)
+            async_pipe = selection.pipe
             _stream = async_pipe(source, conf=conf, context=self.context, **extra)
             value = cast("AsyncModuleWrapperOutput[T]", _stream)
             stream = require_async_stream(value, async_pipe)
@@ -1539,7 +1466,7 @@ class AsyncExecution[T](_BaseExecution):
 
     async def aclose(self) -> None:
         """Joins the task group, then unwinds the exit stack behind a shield."""
-        await self._shutdown()
+        await self._ashutdown()
 
 
 __all__ = ["AsyncExecution", "SyncExecution"]

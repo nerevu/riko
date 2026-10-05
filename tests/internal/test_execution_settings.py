@@ -398,7 +398,7 @@ async def _arun(plan, settings, source=ITEMS):
     result: list = []
 
     async with execution:
-        stream = await execution.run(plan, source=source)
+        stream = await execution.arun(plan, source=source)
         result = [item async for item in stream]
 
     return result
@@ -475,7 +475,7 @@ async def test_async_run_refuses_the_process_executor() -> None:
 
     async with AsyncExecution(settings=settings) as execution:
         with pytest.raises(InvalidPipelineError, match="synchronous execution"):
-            await execution.run(plan, source=ITEMS)
+            await execution.arun(plan, source=ITEMS)
 
     assert threads == []
 
@@ -495,7 +495,7 @@ async def test_async_early_close_stops_pulling_the_source(ordered) -> None:
     first: dict = {}
 
     async with AsyncExecution(settings=settings) as execution:
-        stream = cast("AsyncGenerator", await execution.run(plan, source=tracked()))
+        stream = cast("AsyncGenerator", await execution.arun(plan, source=tracked()))
         first = await anext(stream)
         await stream.aclose()
 
@@ -518,7 +518,8 @@ async def test_async_early_close_on_an_unbounded_source_is_clean() -> None:
         settings = ExecutionSettings(concurrency=2, ordered=ordered)
 
         async with AsyncExecution(settings=settings) as execution:
-            stream = cast("AsyncGenerator", await execution.run(plan, source=forever()))
+            runner = execution.arun(plan, source=forever())
+            stream = cast("AsyncGenerator", await runner)
             assert "hash" in await anext(stream)
             await stream.aclose()
 

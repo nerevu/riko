@@ -11,15 +11,15 @@ from typing import TYPE_CHECKING
 from riko.base._config import EXACT_LAYERS as _EXACT_LAYERS
 from riko.base._config import LAYER_DEPENDENCIES as _RAW_LAYER_DEPENDENCIES
 from riko.base._config import PREFIX_LAYERS as _PREFIX_LAYERS
-from riko.base.exceptions import InvalidArchitectureError
-from riko.coercion._graph import (
+from riko.base._graph import (
     AnyGraph,
     FrozenGraph,
     SetGraph,
+    cyclic_nodes,
     descendants,
     freeze_graph,
-    topological_sort,
 )
+from riko.base.exceptions import InvalidArchitectureError
 
 from ._import_graph import (
     ModuleInfo,
@@ -178,7 +178,9 @@ def _validate_graph(name: str, graph: AnyGraph[str]) -> None:
         names = ", ".join(sorted(dangling))
         raise InvalidArchitectureError(f"undeclared layers: {names}")
 
-    topological_sort(graph, strict=True, name=name)
+    if cyclic := cyclic_nodes(graph):
+        msg = f"cyclic layer graph '{name}' through: {', '.join(sorted(cyclic))}"
+        raise InvalidArchitectureError(msg)
 
     for source, targets in graph.items():
         for target in targets:
