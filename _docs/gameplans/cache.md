@@ -46,7 +46,10 @@ Consequences:
 - the cache backend/resource is infrastructure, not the dataflow value itself;
 - seekability/replayability of a source is distinct from caching;
 - temporary buffering used by an operator is not cross-execution caching;
-- provider/HTTP transport caches do not satisfy `Pipeline.cache()` semantics.
+- provider/HTTP transport caches do not satisfy `Pipeline.cache()` semantics;
+- an incrementally retained dataset (keep what earlier runs fetched, fetch only what is missing)
+  is a write-then-read composition over durable Targets plus `StateStore`, never a `CacheNode`
+  mode; deciding what is already local belongs to push-down planning in `database-transforms.md`.
 
 ## 4. Default cache
 

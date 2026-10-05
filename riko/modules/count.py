@@ -19,18 +19,22 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Stream
-from riko.types._wrappers import PipeTuples
-
 from ._decorators import operator
 from ._iterutils import group_by
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from logging import Logger
+
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"extract": "count_key"}
 DEFAULTS: Defaults = {"count_key": None}

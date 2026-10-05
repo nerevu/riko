@@ -1,19 +1,17 @@
 # vim: sw=4:ts=4:expandtab
-"""
-tests
-~~~~~
+"""Provides application unit tests."""
 
-Provides application unit tests
-"""
+from __future__ import annotations
 
-from collections.abc import AsyncIterable
 from pathlib import Path
-from typing import Protocol, overload
+from typing import TYPE_CHECKING
 
 import pytest
 
 from riko.bado._backend import issync, run
-from riko.runtime.collections import AsyncPipe, SyncPipe
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterable
 
 TESTS_DIR = Path(__file__).parent.absolute()
 
@@ -34,10 +32,3 @@ def aresolve[T](aiterable: AsyncIterable[T]) -> list[T]:
         return [item async for item in aiterable]
 
     return run(_collect)
-
-
-class PipeBuilder(Protocol):
-    @overload
-    def __call__(self, pipe: type[SyncPipe]) -> SyncPipe: ...  # noqa: E704
-    @overload
-    def __call__(self, pipe: type[AsyncPipe]) -> AsyncPipe: ...  # noqa: E704

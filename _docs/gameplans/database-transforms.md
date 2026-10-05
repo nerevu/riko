@@ -95,14 +95,16 @@ grouped aggregate later
 ```
 
 Preparation/explain reports which operations were pushed down and which remain local. Do not inspect
-arbitrary Python callables to synthesize SQL.
+arbitrary Python callables to synthesize SQL. Reusing data an earlier run already retained locally
+(narrowing a read to only the missing subset) is a future push-down planning concern owned here; it
+is not a cache mode, per `cache.md`.
 
 ## 6. Write API
 
 Database mutation uses the common `Pipeline.write()` effect over a configured writable Target:
 
 ```python
-flow = flow.write(
+pipeline = pipeline.write(
     Target(
         Targets.POSTGRES,
         table="processed_orders",
@@ -268,6 +270,14 @@ D3  optional dbt-ibis evaluation
 Meza owns conversion work where applicable. Riko may temporarily provide adapters/protocols needed by
 the new architecture, but conversion implementation should be upstreamed/finalized there when it is
 generally useful.
+
+Upstream candidates currently implemented in Riko (each removes the Riko copy once meza ships it):
+
+- `listize` (`riko/coercion/_sequences.py`) — move back to meza;
+- `cast_datetime` (`riko/coercion/cast.py`) — inherit from meza's date casting;
+- `group_by` (`riko/modules/_iterutils.py`) — move to `meza.process.group`;
+- `_slugify` (`riko/cli/_docs.py`) — replace with meza's
+  `slugify(text, allow_unicode=True, regex_pattern=r"[^\w-]+")` once meza is updated.
 
 The batch/dataframe path avoids pandas as a mandatory intermediary. Arrow, Narwhals, Polars, pandas,
 SQL-native values, or Python objects are execution representations selected by capability/conversion

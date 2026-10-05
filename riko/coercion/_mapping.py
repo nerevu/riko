@@ -1,3 +1,7 @@
+"""Mapping normalization and validation helpers."""
+
+from __future__ import annotations
+
 from riko.types._guards import is_mapping
 
 
@@ -22,7 +26,32 @@ def invert_dict[K, V](d: dict[K, V]) -> dict[V, K]:
     return {v: k for k, v in d.items()}
 
 
-def validate_dict(item: object) -> dict:
+def validate_dict[K, V](item: object | dict[K, V]) -> dict[K, V]:
+    """
+    Copies a mapping into a plain dict.
+
+    Args:
+
+        item: Value expected to satisfy Riko's mapping guard.
+
+    Returns:
+
+        A plain dict containing the mapping's items.
+
+    Raises:
+
+        TypeError: When ``item`` is not mapping-like.
+
+    Examples:
+
+        >>> validate_dict({"a": 1})
+        {'a': 1}
+        >>> validate_dict([("a", 1)])
+        Traceback (most recent call last):
+        ...
+        TypeError: Expected a mapping, got list
+
+    """
     if not is_mapping(item):
         raise TypeError(f"Expected a mapping, got {type(item).__name__}")
 

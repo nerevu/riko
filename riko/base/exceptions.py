@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides riko specific exceptions
-"""
+"""Provides riko specific exceptions."""
 
 
 class RikoError(Exception):
@@ -16,6 +14,16 @@ class UnsupportedModuleError(ModuleError):
     def __init__(self, module_name: str):
         super().__init__(f"Unsupported riko module: {module_name}")
         self.module_name = module_name
+
+
+class TargetError(RikoError):
+    """Base class for target-related errors."""
+
+
+class UnsupportedTargetError(TargetError):
+    def __init__(self, target: str):
+        super().__init__(f"Unsupported riko target: {target}")
+        self.target = target
 
 
 class PipelineError(RikoError):
@@ -36,9 +44,18 @@ class PipelineStateError(PipelineError):
 
 
 class InvalidPipelineError(PipelineError):
+    """Raised when a workflow is malformed or cannot be executed as declared."""
+
     def __init__(self, msg: str):
         super().__init__(f"Invalid pipeline: {msg}")
         self.msg = msg
+
+
+class EmptyPipelineError(PipelineError, LookupError):
+    """Raised when a pipeline asked for its first item produces none."""
+
+    def __init__(self) -> None:
+        super().__init__("pipeline produced no items")
 
 
 class PubSubError(RikoError):
@@ -57,6 +74,23 @@ class DuplicateReceiverError(PubSubError):
         self.name = name
 
 
+class IdentityError(RikoError):
+    """Base class for canonical-identity errors."""
+
+
+class IdentityEncodingError(IdentityError):
+    def __init__(self, obj_type: type):
+        super().__init__(
+            f"cannot canonically encode value of type {obj_type.__name__!r}"
+        )
+        self.obj_type = obj_type
+
+
+class CyclicIdentityError(IdentityError):
+    def __init__(self):
+        super().__init__("cannot canonically encode a cyclic structure")
+
+
 class ImportLintError(RikoError): ...  # noqa: E701
 
 
@@ -67,16 +101,23 @@ class InvalidArchitectureError(ImportLintError): ...  # noqa: E701
 
 
 __all__ = [
+    "CyclicIdentityError",
     "DuplicateReceiverError",
+    "EmptyPipelineError",
+    "IdentityEncodingError",
+    "IdentityError",
     "ImportAnalysisError",
     "ImportLintError",
     "InvalidArchitectureError",
+    "InvalidPipelineError",
     "ModuleError",
     "PipelineError",
     "PipelineStateError",
     "PubSubError",
     "ReceiverUnavailableError",
     "RikoError",
+    "TargetError",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
+    "UnsupportedTargetError",
 ]

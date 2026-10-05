@@ -1,0 +1,274 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-417",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-424",
+                "port": "in:attrs_1_value"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-424",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-436",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-436",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-447",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-447",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-470",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-470",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-490",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-490",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-501",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-417": {
+            "conf": {
+                "debug": {
+                    "type": "text",
+                    "value": ""
+                },
+                "default": {
+                    "type": "text",
+                    "value": "Here's #: some #hashtags to play #with"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "q"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "Status update"
+                }
+            },
+            "id": "sw-417",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-424": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "value": {
+                            "terminal": "attrs_1_value",
+                            "type": "text"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-424",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-436": {
+            "conf": {
+                "combine": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "permit": {
+                    "type": "bool",
+                    "value": true
+                },
+                "rule": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "contains"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "#"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-436",
+            "name": "filter",
+            "type": "module"
+        },
+        "sw-447": {
+            "conf": {
+                "rule": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": " [^#]*"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": " "
+                        }
+                    },
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "^[^#]*"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": ""
+                        }
+                    }
+                ]
+            },
+            "id": "sw-447",
+            "name": "regex",
+            "options": {
+                "assign": "loop:regex",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-470": {
+            "conf": {
+                "delimiter": {
+                    "type": "text",
+                    "value": " "
+                }
+            },
+            "id": "sw-470",
+            "name": "tokenizer",
+            "options": {
+                "assign": "loop:tokenizer",
+                "count": "all",
+                "emit": true,
+                "field": "title"
+            },
+            "type": "module"
+        },
+        "sw-490": {
+            "conf": {
+                "combine": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "permit": {
+                    "type": "bool",
+                    "value": true
+                },
+                "rule": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "content"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "matches"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "#[\\w]"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-490",
+            "name": "filter",
+            "type": "module"
+        },
+        "sw-501": {
+            "conf": {
+                "rule": [
+                    {
+                        "copy": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "content"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "title"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-501",
+            "name": "rename",
+            "options": {
+                "assign": "loop:rename",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-501",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

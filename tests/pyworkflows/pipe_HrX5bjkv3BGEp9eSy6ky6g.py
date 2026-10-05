@@ -1,0 +1,76 @@
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""Hand-maintained typed probe for the pipe_HrX5bjkv3BGEp9eSy6ky6g fixture."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from riko.modules.feedautodiscovery import pipe as feedautodiscovery
+from riko.modules.fetch import pipe as fetch
+from riko.modules.sort import pipe as sort
+from riko.modules.truncate import pipe as truncate
+from riko.runtime._workflows import mark_subpipe
+from riko.types.modules import (
+    FeedAutoDiscoveryRawConf,
+    FetchRawConf,
+    SortRawConf,
+    TruncateRawConf,
+)
+
+if TYPE_CHECKING:
+    from riko import Context
+
+
+def pipe(item=None, context: Context | None = None, **_):
+    if context and context.describe_input:
+        _OUTPUT = []
+    elif context and context.describe_dependencies:
+        _OUTPUT = ["feedautodiscovery", "fetch", "sort", "truncate"]
+    else:
+        sw_149 = feedautodiscovery(
+            item,
+            conf=FeedAutoDiscoveryRawConf(
+                {"url": {"type": "url", "value": "file://riko/data/edition.cnn.html"}}
+            ),
+            context=context,
+        )
+        sw_157 = fetch(
+            sw_149,
+            conf=FetchRawConf({"url": {"subkey": "link", "type": "url"}}),
+            emit=True,
+            assign="loop:fetch",
+            count="all",
+            context=context,
+        )
+        sw_174 = sort(
+            sw_157,
+            conf=SortRawConf(
+                {
+                    "rule": [
+                        {
+                            "dir": {"type": "text", "value": "ASC"},
+                            "field": {"type": "text", "value": "pubDate"},
+                            "type": "datetime",
+                        }
+                    ]
+                }
+            ),
+            context=context,
+        )
+        sw_191 = truncate(
+            sw_174,
+            conf=TruncateRawConf({"count": {"type": "float", "value": "25"}}),
+            context=context,
+        )
+        _OUTPUT = sw_191
+
+    return _OUTPUT
+
+
+mark_subpipe(pipe, subtype="source")
+
+
+if __name__ == "__main__":
+    for i in pipe():
+        print(i)

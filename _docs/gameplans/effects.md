@@ -29,7 +29,7 @@ It consumes:
 definition:
 
 ```python
-flow = flow.write(target, format=...)
+pipeline = pipeline.write(target, format=...)
 ```
 
 On success, input records continue downstream unchanged. If the write is the graph leaf, ordinary
@@ -49,7 +49,7 @@ Compatibility is intentionally asymmetric:
   it carries no persisted-workflow obligation because no serialized `SinkNode` ever existed;
 - the shipped `riko.modules.write` Python module remains only until R5C replaces it with
   `Pipeline.write()` / `WriteNode`, then is removed with no deprecated wrapper or discovery entry;
-- released v1 workflow documents that contain the legacy `write` module are migrated at the v1
+- serialized `PipeDef`s (pipe definitions) that contain the legacy `write` module are migrated at the v1
   loader boundary to canonical `WriteNode` during the bounded v1 compatibility window owned by
   `extensibility.md`.
 
@@ -143,7 +143,7 @@ input record
 A write may buffer internally when the destination format requires framing/atomic publication, but
 that buffering must not change the Pipeline-level pass-through contract.
 
-`WriteNode` executes through the shared write-session mechanism (`prepare_write` → `WriteSession`)
+`WriteNode` executes through the shared write-session mechanism (`build_write` → `WriteSession`)
 that the fluent `write()` and `sink()` verbs already use; there is no separate effect-specific writer.
 Terminality (the interim `sink()`, returns a `WriteResult`) versus passthrough (`write`, keeps the
 stream flowing) is a consumption difference, not a distinct node family — R5C adds the canonical
@@ -190,7 +190,7 @@ Actions are not part of `Modules`; they have their own registered provider/actio
 The execution layer owns one event transport:
 
 ```python
-flow = flow.with_execution(event_sink=events)
+pipeline = pipeline.with_execution(event_sink=events)
 ```
 
 This gameplan defines effect-specific event/result values; it does not create effect-specific

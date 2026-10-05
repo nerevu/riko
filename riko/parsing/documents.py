@@ -1,42 +1,42 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.parsers
-~~~~~~~~~~~~
-
-Parses feeds, XML/HTML documents, and pipe configurations.
+Parses feeds and XML, HTML, and JSON documents.
 
 Attributes:
 
     XML_PARSER: Hardened lxml parser (entity, DTD, and network access
         disabled), or ``None`` when lxml is unavailable.
 
-    SKIP_SWITCH: Named text predicates backing ``get_skip``.
-
     ESCAPE: XML/HTML special-character to entity-reference map.
 
 """
 
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from __future__ import annotations
+
 from html.entities import name2codepoint
 from html.parser import HTMLParser
 from io import BytesIO, RawIOBase, StringIO
 from itertools import chain
 from json import JSONDecodeError, load, loads
-from logging import Logger
-from types import ModuleType
-from typing import TYPE_CHECKING, Any, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import feedparser
 import pygogo as gogo
 
 from riko.base._constants import STREAMING_THRESHOLD
 from riko.coercion._sequences import listize
-from riko.types._collections import RikoDict, Stringy, StringyDict
 from riko.types._guards import is_mapping
-from riko.types._io import FileLike
-from riko.types._streams import Item, Stream
 
 from ._dotdict import DotDict
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Mapping, Sequence
+    from logging import Logger
+    from types import ModuleType
+
+    from riko.types._collections import RikoDict, Stringy, StringyDict
+    from riko.types._io import FileLike
+    from riko.types._streams import Item, Stream
 
 try:
     from lxml import etree, html
@@ -90,9 +90,9 @@ if TYPE_CHECKING:
     from lxml.etree import _ElementTree as lxmlElementTree
 
 type AnyElementTree = (
-    "nativeElementTree | lxmlElementTree | nativeElementTree[nativeElement[str]]"
+    nativeElementTree | lxmlElementTree | nativeElementTree[nativeElement[str]]
 )
-type AnyElement = "nativeElement | lxmlElement"
+type AnyElement = nativeElement | lxmlElement
 
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 logger.debug(f"{IS_LXML=}")
@@ -175,7 +175,7 @@ def get_text(html: str, convert_charrefs: bool = False) -> str:
     return parser.data.getvalue()
 
 
-def extract_namespace(tree: AnyElementTree | AnyElement) -> str | None:
+def get_namespace(tree: AnyElementTree | AnyElement) -> str | None:
     """
     Extracts the XML namespace URI from an element's tag.
 
@@ -193,9 +193,9 @@ def extract_namespace(tree: AnyElementTree | AnyElement) -> str | None:
         >>> from xml.etree.ElementTree import fromstring
         >>>
         >>> tree = fromstring('<root xmlns="http://example.com/ns"/>')
-        >>> extract_namespace(tree)
+        >>> get_namespace(tree)
         'http://example.com/ns'
-        >>> extract_namespace(fromstring('<root/>'))
+        >>> get_namespace(fromstring('<root/>'))
 
     """
     tag = str(getattr(tree, "tag", None) or "")
@@ -330,7 +330,7 @@ def xpath(
         ['x']
 
     """
-    namespace = namespace or extract_namespace(tree) or ""
+    namespace = namespace or get_namespace(tree) or ""
     auto_pos = pos is None
 
     if auto_pos:
@@ -346,7 +346,7 @@ def xpath(
     ns_path = "/".join(f"{ns_prefix}:{tag}" for tag in tags[pos:]) if namespace else ""
 
     if hasattr(tree, "xpath"):
-        _xpath = cast(Union["lxmlElementTree", "lxmlElement"], tree).xpath
+        _xpath = cast("lxmlElementTree | lxmlElement", tree).xpath
         elements = _xpath(ns_path, namespaces=namespaces) if namespace else _xpath(path)
     elif namespace:
         elements = tree.findall(f".//{ns_path}", namespaces=namespaces)
@@ -360,8 +360,9 @@ def xml2etree(  # noqa: E302
     f: str | FileLike, xml: bool = True, html5: bool = False
 ) -> AnyElementTree:
     """
-    Parses XML/HTML into an ElementTree. External XML is parsed with a hardened
-    policy: entity resolution, DTD loading, and network access are disabled to
+    Parse XML or HTML into an ``ElementTree``.
+
+    External XML disables entity resolution, DTD loading, and network access to
     guard against XXE and entity-expansion attacks.
 
     Examples:
@@ -391,7 +392,7 @@ def xml2etree(  # noqa: E302
             logger.warning("lxml parser not found. Using html5lib instead.")
 
         element = cast("nativeElement", html.parse(f))
-        element_tree = cast("nativeElementTree", ElementTree(element))
+        element_tree = ElementTree(element)
 
     return element_tree
 
@@ -438,7 +439,7 @@ def element2dict(element: AnyElement) -> StringyDict:
 
     if text and not set(i).difference(["content"]):
         # element is leaf node and doesn't have attributes
-        result = cast(StringyDict, i["content"])
+        result = cast("StringyDict", i["content"])
     else:
         result = i
 
@@ -498,7 +499,7 @@ def any2dict(
                 prefix = path
 
             items = ijson.items(content, prefix, use_float=True)
-            yield from cast(Stream, items)
+            yield from cast("Stream", items)
         elif isinstance(content, str):
             try:
                 json = loads(content)
@@ -506,7 +507,7 @@ def any2dict(
                 logger.error(e)
             else:
                 value = DotDict(json).get(path, "")
-                yield from any2dict(cast(list[RikoDict], value), ext=None)
+                yield from any2dict(cast("list[RikoDict]", value), ext=None)
         else:
             try:
                 json_obj = load(content)
@@ -514,7 +515,7 @@ def any2dict(
                 logger.error(e)
             else:
                 value = DotDict(json_obj).get(path, "") if path else json_obj
-                yield from any2dict(cast(RikoDict, value), ext=None)
+                yield from any2dict(cast("RikoDict", value), ext=None)
     elif ext:
         raise TypeError(f"Invalid file type: '{ext}'")
     elif isinstance(content, str):
@@ -532,6 +533,7 @@ def text2entity(text: str) -> str:
 def entity2text(entitydef: str) -> str:
     """
     Converts an HTML entity reference into unicode.
+
     http://stackoverflow.com/a/58125/408556
     """
     if entitydef.startswith("&#x"):

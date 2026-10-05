@@ -1,25 +1,25 @@
 # vim: sw=4:ts=4:expandtab
 """
-Public module-discovery contracts: filtering combinations, API errors, and the
-input test-flag scoping. Exact metadata derivation lives in
-``tests/internal/test_metadata.py``.
+Tests public built-in module and discovery contracts.
+
+Exact metadata derivation is tested in ``tests/internal/test_metadata.py``.
 """
 
 import pytest
 
+from riko.execution.context import Context
 from riko.ext.codegen import list_modules
 from riko.modules import describe_module
 from riko.modules.input import pipe as input_pipe
-from riko.runtime.context import Context
 from riko.types._enums import CastType
 from riko.types.modules import InputConf
 
 
 def test_input_test_flag_scoped_to_test_context(monkeypatch):
     """
-    The auto-wired context.test skips the input prompt only in a test
-    context. A non-test context (test=False) still prompts, so the flag can
-    never silently suppress prompting outside of tests.
+    Limit the auto-wired test flag to test contexts.
+
+    Non-test contexts must still prompt for input.
     """
     monkeypatch.setattr("builtins.input", lambda *args: "typed")
     conf = InputConf({"prompt": "?", "default": "def", "type": CastType.TEXT})
@@ -27,6 +27,25 @@ def test_input_test_flag_scoped_to_test_context(monkeypatch):
     assert next(input_pipe(conf=conf, context=Context(test=True))) == "def"
     assert next(input_pipe(conf=conf, context=Context(test=False))) == "typed"
     assert next(input_pipe(conf=conf)) == "typed"
+
+
+def test_input_empty_inputs_uses_default(monkeypatch):
+    monkeypatch.setattr(
+        "builtins.input", lambda *args: pytest.fail("input() should not be called")
+    )
+    conf = InputConf({"prompt": "?", "default": "def", "type": CastType.TEXT})
+
+    assert next(input_pipe(conf=conf, inputs={})) == "def"
+    assert next(input_pipe(conf=conf, context=Context(inputs={}))) == "def"
+    assert Context().inputs is None
+
+
+def test_input_conf_test_flag_uses_default(monkeypatch):
+    monkeypatch.setattr(
+        "builtins.input", lambda *args: pytest.fail("input() should not be called")
+    )
+    conf = InputConf({"prompt": "How old are you?", "type": CastType.INT, "test": True})
+    assert next(input_pipe(conf=conf)) == 0
 
 
 def test_filter_non_loopable_modules():

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import partial
-from pathlib import Path
+from typing import TYPE_CHECKING
 
+from riko.base._config import EXACT_LAYERS as _EXACT_LAYERS
+from riko.base._config import LAYER_DEPENDENCIES as _RAW_LAYER_DEPENDENCIES
+from riko.base._config import PREFIX_LAYERS as _PREFIX_LAYERS
 from riko.base.exceptions import InvalidArchitectureError
 from riko.coercion._graph import (
     AnyGraph,
@@ -26,46 +28,11 @@ from ._import_graph import (
     resolve_import_targets,
 )
 
-_LAYER_DEPENDENCIES: FrozenGraph[str] = freeze_graph(
-    {
-        "base": set[str](),
-        "types": {"base"},
-        "coercion": {"types"},
-        "bado": {"types"},
-        "definitions": {"types"},
-        "io": {"coercion", "bado", "definitions"},
-        "parsing": {"io"},
-        "rss": {"parsing"},
-        "execution": {"bado", "definitions"},
-        "runtime": {"execution", "parsing"},
-        "modules": {"runtime", "rss"},
-        "api": {"modules"},
-        "cli": {"api"},
-    }
-)
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Mapping
+    from pathlib import Path
 
-
-_EXACT_LAYERS = {
-    "riko": "api",
-    "riko._package": "base",
-    "riko.runtime._resources": "execution",
-    "riko.runtime.context": "execution",
-}
-
-_PREFIX_LAYERS = {
-    "riko.bado": "bado",
-    "riko.base": "base",
-    "riko.cli": "cli",
-    "riko.coercion": "coercion",
-    "riko.definitions": "definitions",
-    "riko.ext": "modules",
-    "riko.io": "io",
-    "riko.modules": "modules",
-    "riko.parsing": "parsing",
-    "riko.rss": "rss",
-    "riko.runtime": "runtime",
-    "riko.types": "types",
-}
+_LAYER_DEPENDENCIES: FrozenGraph[str] = freeze_graph(_RAW_LAYER_DEPENDENCIES)
 
 
 class ViolationCodes(StrEnum):
@@ -179,6 +146,15 @@ def _gen_remaining(
         yield "<no layers>"
 
 
+def _format_group(nodes: Iterable[str]) -> str | None:
+    if len(ordered := sorted(nodes)) > 1:
+        formatted = f"{{{' | '.join(ordered)}}}"
+    else:
+        formatted = next(iter(ordered), None)
+
+    return formatted
+
+
 def _render_from(
     start: frozenset[str], layers: Mapping[frozenset[str], set[str]]
 ) -> Iterator[str]:
@@ -194,13 +170,23 @@ def _render_from(
     return filter(None, parts)
 
 
-def _format_group(nodes: Iterable[str]) -> str | None:
-    if len(ordered := sorted(nodes)) > 1:
-        formatted = f"{{{' | '.join(ordered)}}}"
-    else:
-        formatted = next(iter(ordered), None)
+def _validate_graph(name: str, graph: AnyGraph[str]) -> None:
+    declared = set(graph)
+    referenced = {node for targets in graph.values() for node in targets}
 
-    return formatted
+    if dangling := referenced - declared:
+        names = ", ".join(sorted(dangling))
+        raise InvalidArchitectureError(f"undeclared layers: {names}")
+
+    topological_sort(graph, strict=True, name=name)
+
+    for source, targets in graph.items():
+        for target in targets:
+            others = set(targets) - {target}
+
+            if any(target in descendants(other, graph) for other in others):
+                msg = f"redundant dependency: {source} -> {target}"
+                raise InvalidArchitectureError(msg)
 
 
 def _gen_layers(name: str, graph: AnyGraph[str], verbose=True) -> Iterator[str]:
@@ -223,25 +209,6 @@ def _gen_layers(name: str, graph: AnyGraph[str], verbose=True) -> Iterator[str]:
     else:
         parts = map(_format_group, layers.values())
         yield " < ".join(filter(None, parts))
-
-
-def _validate_graph(name: str, graph: AnyGraph[str]) -> None:
-    declared = set(graph)
-    referenced = {node for targets in graph.values() for node in targets}
-
-    if dangling := referenced - declared:
-        names = ", ".join(sorted(dangling))
-        raise InvalidArchitectureError(f"undeclared layers: {names}")
-
-    topological_sort(graph, strict=True, name=name)
-
-    for source, targets in graph.items():
-        for target in targets:
-            others = set(targets) - {target}
-
-            if any(target in descendants(other, graph) for other in others):
-                msg = f"redundant dependency: {source} -> {target}"
-                raise InvalidArchitectureError(msg)
 
 
 def generate_report(

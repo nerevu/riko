@@ -13,17 +13,22 @@ Basic usage::
     from tests._loopback import loopback_url
 
     with loopback_url("<rss>...</rss>", content_type="application/xml") as url:
-        stream = SyncPipe("fetch", conf={"url": url})
+        pipeline = Pipeline.from_module("fetch", conf={"url": url})
 
 Tests that use this should carry ``@pytest.mark.simulated_network``.
 """
 
+from __future__ import annotations
+
 import threading
-from collections.abc import Generator
 from contextlib import contextmanager, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import TYPE_CHECKING
 
-from riko.types._scalars import AnyStr
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from riko.types._scalars import AnyStr
 
 CHUNK = 8192
 

@@ -2,13 +2,15 @@
 
 """Lint and formatting helpers for the manage CLI."""
 
+from __future__ import annotations
+
 import shutil
-from collections.abc import Iterable
 from glob import glob
 from itertools import chain
 from pathlib import Path
 from subprocess import CalledProcessError, call, check_call, check_output
 from sys import exit
+from typing import TYPE_CHECKING
 
 import click
 
@@ -18,6 +20,9 @@ from ._build import _twine_check
 from ._docs import _check_docs, _check_rst
 from ._docstyle import format_issue, iter_summary_issues
 from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 _WORKFLOW_DIR = ROOT_DIR / ".github" / "workflows"
 
@@ -274,28 +279,7 @@ def _prettify_command(
 
     if yaml:
         return_code = _format_yaml(*where)
-    elif sort and _ruff:
-        sort_cmd = [_ruff, "check", "--select", "I", "--fix"]
-        style_cmd = [_ruff, "check", "--fix"]
-
-        if unsafe_fixes:
-            style_cmd.append("--unsafe-fixes")
-
-        if where:
-            sort_cmd.extend(where)
-            style_cmd.extend(where)
-
-        try:
-            check_call(sort_cmd)
-            check_call(style_cmd)
-        except CalledProcessError as e:
-            return_code = e.returncode
-        else:
-            return_code = 0
-    elif sort:
-        raise RuntimeError("ruff not found")
-
-    if _ruff and not return_code:
+    elif _ruff:
         cmd = [_ruff, "format"]
 
         if where:
@@ -307,7 +291,26 @@ def _prettify_command(
             return_code = e.returncode
         else:
             return_code = 0
-    elif not return_code:
+
+        if sort and not return_code:
+            sort_cmd = [_ruff, "check", "--select", "I", "--fix"]
+            style_cmd = [_ruff, "check", "--fix"]
+
+            if unsafe_fixes:
+                style_cmd.append("--unsafe-fixes")
+
+            if where:
+                sort_cmd.extend(where)
+                style_cmd.extend(where)
+
+            try:
+                check_call(sort_cmd)
+                check_call(style_cmd)
+            except CalledProcessError as e:
+                return_code = e.returncode
+            else:
+                return_code = 0
+    else:
         raise RuntimeError("ruff not found")
 
     exit(return_code)

@@ -13,7 +13,7 @@ from typing import cast
 
 import pytest
 
-from riko.runtime.context import Context, ExecutionMode
+from riko.execution.context import Context, ExecutionMode
 
 MODES = [
     (ExecutionMode.RUN, False, False),
@@ -65,6 +65,7 @@ class TestContextImmutability:
 
     def test_inputs_mapping_is_read_only(self):
         context = Context(inputs={"count": 2})
+        assert context.inputs is not None
 
         with pytest.raises(TypeError):
             context.inputs["count"] = 3  # pyright: ignore[reportIndexIssue]
@@ -82,22 +83,22 @@ class TestContextImmutability:
         assert derived is not base
         assert base.verbose is False
         assert derived.verbose is True
-        assert dict(base.inputs) == {"count": 2}
-        assert dict(derived.inputs) == {"limit": 5}
+        assert base.inputs == {"count": 2}
+        assert derived.inputs == {"limit": 5}
 
     def test_augment_source_mutation_does_not_leak(self):
         source = {"count": 2}
         context = Context(inputs=source)
         source["count"] = 99
-        assert context.inputs["count"] == 2
+        assert context.inputs == {"count": 2}
 
     def test_roundtrips_through_pickle(self):
         context = Context(mode=ExecutionMode.DESCRIBE, inputs={"count": 2}, test=True)
-        restored = cast(Context, loads(dumps(context)))  # noqa: S301
+        restored = cast("Context", loads(dumps(context)))  # noqa: S301
 
         assert restored.mode is ExecutionMode.DESCRIBE
         assert restored.test is True
-        assert dict(restored.inputs) == {"count": 2}
+        assert restored.inputs == {"count": 2}
 
         with pytest.raises(AttributeError):
             restored.mode = ExecutionMode.RUN  # pyright: ignore[reportAttributeAccessIssue]

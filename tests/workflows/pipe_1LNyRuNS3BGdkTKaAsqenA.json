@@ -1,0 +1,74 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-1",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-2",
+                "port": "in:symbol_in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-1": {
+            "conf": {
+                "default": {
+                    "type": "text",
+                    "value": "yhoo"
+                },
+                "input_key": {
+                    "type": "text",
+                    "value": "textinput1"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "textinput1"
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "Stock Symbol:"
+                },
+                "test": {
+                    "type": "bool",
+                    "value": "true"
+                },
+                "type": {
+                    "type": "text",
+                    "value": "text"
+                }
+            },
+            "id": "sw-1",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-2": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "symbol"
+                        },
+                        "value": {
+                            "terminal": "symbol_in",
+                            "type": "text"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-2",
+            "name": "itembuilder",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-2",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

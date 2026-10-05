@@ -1,0 +1,323 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-565",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in:pubdate"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-572",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in:description"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-576",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in:guid"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-580",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in:author"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-584",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in:title"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-588",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in:link"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-565": {
+            "conf": {
+                "debug": {
+                    "type": "datetime",
+                    "value": "0001-01-01T00:02Z"
+                },
+                "default": {
+                    "type": "datetime",
+                    "value": "10/14/2010"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "dateinput1"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "dateinput1"
+                },
+                "type": {
+                    "type": "text",
+                    "value": "date"
+                }
+            },
+            "id": "sw-565",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-572": {
+            "conf": {
+                "debug": {
+                    "type": "location",
+                    "value": ""
+                },
+                "default": {
+                    "type": "location",
+                    "value": "isle of wight, uk"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "locationinput1"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "locationinput1"
+                },
+                "type": {
+                    "type": "text",
+                    "value": "location"
+                }
+            },
+            "id": "sw-572",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-576": {
+            "conf": {
+                "debug": {
+                    "type": "float",
+                    "value": ""
+                },
+                "default": {
+                    "type": "float",
+                    "value": "12121"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "numberinput1"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "numberinput1"
+                },
+                "type": {
+                    "type": "text",
+                    "value": "int"
+                }
+            },
+            "id": "sw-576",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-580": {
+            "conf": {
+                "debug": {
+                    "type": "text",
+                    "value": "The debug is not private so can be left in?"
+                },
+                "default": {
+                    "type": "text",
+                    "value": ""
+                },
+                "name": {
+                    "type": "text",
+                    "value": "privateinput1"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "private_default": {
+                    "type": "text",
+                    "value": "on"
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "privateinput1"
+                }
+            },
+            "id": "sw-580",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-584": {
+            "conf": {
+                "debug": {
+                    "type": "text",
+                    "value": "does debeug text appear anywhere?"
+                },
+                "default": {
+                    "type": "text",
+                    "value": "This is default text - is there debug text too?"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "textinput1"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "textinput1"
+                }
+            },
+            "id": "sw-584",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-588": {
+            "conf": {
+                "debug": {
+                    "type": "url",
+                    "value": ""
+                },
+                "default": {
+                    "type": "url",
+                    "value": "file://riko/data/example.html"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "urlinput1"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "urlinput1"
+                },
+                "type": {
+                    "type": "text",
+                    "value": "url"
+                }
+            },
+            "id": "sw-588",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-592": {
+            "conf": {
+                "author": {
+                    "terminal": "author",
+                    "type": "text"
+                },
+                "description": {
+                    "subkey": "",
+                    "terminal": "description",
+                    "type": "text"
+                },
+                "guid": {
+                    "terminal": "guid",
+                    "type": "text"
+                },
+                "link": {
+                    "subkey": "",
+                    "terminal": "link",
+                    "type": "text"
+                },
+                "mediaContentHeight": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaContentType": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaContentURL": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaContentWidth": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaThumbHeight": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaThumbURL": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaThumbWidth": {
+                    "type": "text",
+                    "value": ""
+                },
+                "pubdate": {
+                    "subkey": "",
+                    "terminal": "pubdate",
+                    "type": "text"
+                },
+                "title": {
+                    "terminal": "title",
+                    "type": "text"
+                }
+            },
+            "id": "sw-592",
+            "name": "rssitembuilder",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-592",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

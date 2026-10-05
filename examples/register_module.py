@@ -15,16 +15,20 @@ Examples:
 
 """
 
-from typing import Any, cast
+from __future__ import annotations
 
-from riko import AsyncPipe, SyncPipe, issync, run
-from riko.coercion._dynamic_conf import DynamicConf
-from riko.ext import ModuleDefinition, operator, register
-from riko.types import Item, PipeTuples, Stream
+from typing import TYPE_CHECKING, Any, cast
+
+from riko import Pipeline, issync, run
+from riko.ext import ModuleDefinition, operator, register_module
+
+if TYPE_CHECKING:
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.types import Item, PipeTuples, Stream
 
 
 def _shout(item: Item) -> Item:
-    return cast(Item, {**item, "content": str(item.get("content", "")).upper()})
+    return cast("Item", {**item, "content": str(item.get("content", "")).upper()})
 
 
 def parser(
@@ -92,15 +96,16 @@ if __name__ == "__main__":
     if issync:
 
         def main() -> None:
-            print(list(SyncPipe(name, source=source)))
+            print(list(Pipeline(source=source).pipe(name)))
 
-        register(ModuleDefinition(name=name, sync_pipe=pipe))
+        register_module(ModuleDefinition(name=name, sync_pipe=pipe))
         main()
 
     else:
 
         async def amain() -> None:
-            print([item async for item in AsyncPipe(name, source=source)])
+            print([item async for item in Pipeline(source=source).pipe(name)])
 
-        register(ModuleDefinition(name=name, sync_pipe=pipe, async_pipe=async_pipe))
+        module = ModuleDefinition(name=name, sync_pipe=pipe, async_pipe=async_pipe)
+        register_module(module)
         run(amain)

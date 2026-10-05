@@ -29,6 +29,7 @@ classifiers=[
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "attrs>=26.1.0",
     "babel>=2.8.0,<3.0.0",
     "chardet>=3.0.4,<8.0.0",
     "click>=8.4.0",
@@ -77,7 +78,7 @@ lint = [
     "pygments>=2.20.0",
     "pylint>=4.0.5,<5.0.0",
     "pyright>=1.1.411",
-    "ruff>=0.16.5,<0.17.0",
+    "ruff>=0.16.10,<0.17.0",
 ]
 
 dev = [
@@ -92,12 +93,11 @@ dev = [
 manage = "riko.cli.manage:manager"
 run-pipe = "riko.cli.runpipe:run"
 benchmark = "riko.cli.benchmark:main"
-compile-pipe = "riko.cli.compile:run"
-convert-dag = "riko.cli.convert_dag:run"
-gen-config = "riko.cli.gen_config:main"
-gen-names = "riko.cli.gen_names:main"
-gen-pipelines = "riko.cli.gen_pipelines:main"
-gen-api-surface = "riko.cli.gen_api_surface:main"
+compile-workflow = "riko.cli.compile:run"
+build-workflow = "riko.cli.build_workflow:run"
+gen-config = "riko.cli._gen_config:main"
+gen-names = "riko.cli._gen_names:main"
+gen-api-surface = "riko.cli._gen_api_surface:main"
 
 [tool.uv]
 # Rebuild the local `riko` install when any source file changes, not just when
@@ -122,6 +122,8 @@ extend-exclude = [
 skip-magic-trailing-comma = true
 
 [tool.ruff.lint]
+future-annotations = true
+
 # E704 is default-ignored by ruff (formatter conflict) but suppressed for an
 # external flake8 run on overload one-liners; declare it so RUF102 doesn't flag
 # the `# noqa: E704` comments as invalid rule codes.
@@ -138,20 +140,14 @@ extend-select = [
     "N",    # pep8-naming
     "D",    # pydocstyle
     "S",    # flake8-bandit
+    "TC",   # flake8-typing-imports
     "T20",  # flake8-print
     "PT",   # flake8-pytest-style
     "PLC0415", # Import not at top of file
 ]
 
 ignore = [
-    # temp
-    "D400",  # missing-trailing-period
-    "D415",  # missing-terminal-punctuation
-    "D205",  # missing-blank-line-after-summary
-    "D200",  # unnecessary-multiline-docstring
-
     # docs
-    "D100",  # Missing docstring in public module
     "D101",  # undocumented-public-class
     "D102",  # undocumented-public-method
     "D103",  # undocumented-public-function
@@ -159,17 +155,15 @@ ignore = [
     "D107",  # undocumented-public-init
     "D401",  # non-imperative-mood
     "D417",  # undocumented-param
-    "D104",  #undocumented-public-package
 
     # misc
     "T201",  # print
     "T203",  # p-print
 
     # stylistic
-    "E731",  # do not assign a lambda expression, use a def
-    "E501",  # line too long
     "D301",  # escape-sequence-in-docstring
     "D412",  # blank-lines-between-header-and-content
+    "E731",  # do not assign a lambda expression, use a def
 
     # security
     "S404",
@@ -201,14 +195,15 @@ split-on-trailing-comma = false
     "S102",   # Use of `exec` detected
 ]
 
-"tests/pypipelines/*" = [
+"tests/pyworkflows/*" = [
+    "E501",  # Line too long (generated fixture data)
     "N999",  # Invalid module name
     "N802",  # Function name
     "N806",  # Variable in function should be lowercase (generated _OUTPUT)
     "UP009",  # UTF-8 encoding declaration (generated header)
 ]
 
-"examples/pypipelines/*" = [
+"examples/pyworkflows/*" = [
     "N999",  # Invalid module name
     "N802",  # Function name
     "N806",  # Variable in function should be lowercase (generated _OUTPUT)
@@ -216,6 +211,8 @@ split-on-trailing-comma = false
 ]
 
 [tool.pyright]
+venv = "riko"
+reportUnnecessaryCast = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
 exclude = [
     "**/pycache",

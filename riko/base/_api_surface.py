@@ -4,6 +4,7 @@
 BADO = frozenset(
     {
         "as_async",
+        "async_chain",
         "async_map",
         "async_map_stream",
         "async_read",
@@ -16,30 +17,11 @@ BADO = frozenset(
     }
 )
 
-IO_ = frozenset({"async_url_open", "async_write", "get_async_temp_file"})
+IO_ = frozenset({"async_url_open", "async_write", "async_get_temp_file"})
 
-COLLECTIONS = frozenset(
-    {
-        "AsyncCollection",
-        "AsyncPipe",
-        "Formats",
-        "PipeState",
-        "SyncCollection",
-        "SyncPipe",
-        "export",
-        "list_formats",
-    }
-)
+COLLECTIONS = frozenset({"Formats", "export", "list_formats"})
 
-COMPILE = frozenset(
-    {
-        "build_pipeline",
-        "compile_pipe",
-        "convert_dag",
-        "extract_dependencies",
-        "parse_pipe_def",
-    }
-)
+COMPILE = frozenset({"compile_workflow", "parse_dag"})
 
 MODULES = frozenset(
     {
@@ -53,11 +35,30 @@ MODULES = frozenset(
 )
 
 OTHER = frozenset(
-    {"Context", "ExecutionMode", "get_path", "get_temp_file", "list_modules"}
+    {
+        "Backends",
+        "Context",
+        "Edge",
+        "Endpoint",
+        "ExecutionMode",
+        "Executor",
+        "Node",
+        "Pipeline",
+        "Workflow",
+        "WorkflowLike",
+        "WorkflowDocument",
+        "WorkflowModule",
+        "get_path",
+        "get_temp_file",
+        "list_modules",
+    }
 )
 
 ROOT_EXCEPTIONS = frozenset(
     {
+        "EmptyPipelineError",
+        "InvalidPipelineError",
+        "PipelineError",
         "PipelineStateError",
         "RikoError",
         "UnsupportedModuleError",
@@ -75,39 +76,79 @@ PRIVATE_RESOLUTION = frozenset(
         "ModuleStore",
         "PackageStore",
         "PipeResolver",
-        "PipelineResolver",
+        "WorkflowResolver",
         "pipe_resolver",
-        "pipeline_resolver",
+        "workflow_resolver",
     }
 )
 
 EXTENSION = frozenset(
     {
+        "ActionNode",
         "AsyncOperatorWrapper",
         "AsyncProcessorWrapper",
         "AsyncSplitterWrapper",
+        "CacheNode",
         "DynamicConf",
+        "FileTarget",
         "ModuleDefinition",
         "ModuleMetadata",
         "ModuleName",
         "ModuleNameLike",
+        "ModuleNode",
         "ModuleRegistry",
         "ModuleSubtype",
         "ModuleType",
         "ModuleWrapper",
+        "PublishEdge",
+        "ReadNode",
+        "StreamEdge",
+        "SubscribeNode",
+        "SupportsActions",
+        "SupportsRead",
+        "SupportsWrite",
         "SyncOperatorWrapper",
         "SyncProcessorWrapper",
         "SyncSplitterWrapper",
-        "derive_category",
+        "Target",
+        "TargetRegistry",
+        "WriteCapabilities",
+        "WriteNode",
+        "get_module_category",
         "get_conf_type",
+        "migrate_v1_to_v2",
         "normalize_module_name",
+        "normalize_workflow",
         "operator",
+        "parse_document",
         "processor",
-        "register",
+        "register_module",
+        "register_workflow_store",
+        "register_target",
+        "serialize_workflow",
         "splitter",
     }
 )
 
 TYPES = frozenset(
-    {"AsyncStream", "Conf", "Feed", "Item", "Items", "PipeTuples", "Stream"}
+    {
+        "AsyncStream",
+        "AsyncItems",
+        "AsyncPipeTuples",
+        "Conf",
+        "EventSink",
+        "Feed",
+        "Item",
+        "Items",
+        "RawEdge",
+        "RawEndpoint",
+        "RawNode",
+        "RawWorkflow",
+        "PipeDag",
+        "PipeDef",
+        "PipeDefLike",
+        "PipeTuples",
+        "Stream",
+        "SyncPipeTuples",
+    }
 )

@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.base.locations
-~~~~~~~~~~~~~~
-
 Provides location lookup dictionaries.
 
 ``LOCATIONS`` is keyed by continent *and* by country, so a lookup may return
@@ -26,9 +23,13 @@ Attributes:
 
 """
 
-from types import MappingProxyType
+from __future__ import annotations
 
-from ._locations import Region
+from types import MappingProxyType
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ._locations import Region
 
 LOCATIONS: MappingProxyType[str, Region] = MappingProxyType(
     {

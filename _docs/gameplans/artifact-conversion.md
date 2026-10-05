@@ -161,7 +161,7 @@ mapping = {
 ```
 
 Allow constants and approved transformations, but do not load arbitrary Python lambdas from
-serialized workflow definitions. Python callers can still use callable pipes before the
+`WorkflowDocument`s (workflow documents). Python callers can still use callable pipes before the
 serializer.
 
 ## 10. vCard/contact output
@@ -374,8 +374,8 @@ riko render report-context.json template.md report.pdf
 riko artifact describe <ref>
 ```
 
-CLI convenience resolves to the same codec/render services used by Python and serialized
-workflow definitions.
+CLI convenience resolves to the same codec/render services used by Python and
+`WorkflowDocument`s.
 
 Frame-specific CLI behavior, if ever added, should call `tabular-interop.md` contracts
 rather than add independent coercion rules here.

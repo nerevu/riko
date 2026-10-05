@@ -1,12 +1,7 @@
 # vim: sw=4:ts=4:expandtab
-"""
-riko.modules._inference
-~~~~~~~~~~~~~~~~~~~~~~~~
+"""Provides return-kind inference for operator pipes."""
 
-Provides return-kind inference for operator pipes.
-
-Uses annotations, generator detection, and a small AST fallback.
-"""
+from __future__ import annotations
 
 import ast
 import builtins
@@ -23,12 +18,13 @@ from typing import (
     Union,
     get_args,
     get_origin,
-    get_type_hints,
 )
 
 import pygogo as gogo
 from typing_extensions import TypeIs
 
+import riko.types._streams as _streams_module
+from riko.base._typing import resolve_type_hints
 from riko.types.modules import (
     Inference,
     InferenceSource,
@@ -401,8 +397,11 @@ def gen_return_inferences(pipe: Callable) -> Iterator[ReturnInference]:
     if isgeneratorfunction(pipe) or isasyncgenfunction(pipe):
         yield ReturnInference(OperatorReturnKind.STREAM, InferenceSource.GENERATOR)
     else:
+        # Supplies the stream-type namespace so a PEP 563 (from __future__ import
+        # annotations) return hint like `-> Stream` still resolves when the module
+        # imports those names only under TYPE_CHECKING.
         try:
-            annotation = get_type_hints(pipe).get("return")
+            annotation = resolve_type_hints(pipe, _streams_module).get("return")
         except (NameError, TypeError):
             annotation = None
 
@@ -430,7 +429,7 @@ def gen_operator_return_kinds(pipe: Callable) -> Iterator[OperatorReturnKind]:
     """
     Reduces the full inferences to their bare return kinds.
 
-    The projection ``_derive_operator_subtypes`` (in ``riko.modules._derive``)
+    The projection ``_get_operator_subtypes`` (in ``riko.modules._derive``)
     consumes: it needs only the kinds to classify an operator as
     ``aggregator``/``composer``, not where each kind came from.
 

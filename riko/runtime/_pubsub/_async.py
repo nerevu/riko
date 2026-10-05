@@ -1,25 +1,13 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Asynchronous pub/sub backend.
+"""Asynchronous delivery for named in-process pub/sub channels."""
 
-Each named receiver is a lazily created rendezvous channel (an AnyIO memory
-object stream with ``max_buffer_size=0``). ``publish`` and ``subscribe`` both
-resolve the same named slot, so concurrent startup converges deterministically
-with no sleep, readiness event, or task-order assumption: whichever side
-arrives first waits through channel backpressure for the other. Completion is
-channel closure (one active publisher per receiver); a publish to a name that is
-never subscribed is bounded by a timeout and raises ``ReceiverUnavailableError``
-rather than dropping data or hanging.
-
-AnyIO objects are created lazily inside these operations, so the hub instance is
-safe to construct at import time even when the async extra is absent.
-"""
+from __future__ import annotations
 
 import itertools as it
-from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from riko.bado._backend import (
     MemoryObjectReceiveStream,
@@ -28,7 +16,11 @@ from riko.bado._backend import (
     fail_after,
 )
 from riko.base.exceptions import DuplicateReceiverError, ReceiverUnavailableError
-from riko.types._streams import Item
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Iterable
+
+    from riko.types._streams import Item
 
 
 class SubscriptionState(StrEnum):
@@ -90,7 +82,9 @@ class AsyncPubSubHub:
                 slot.state = SubscriptionState.CLOSED
 
     @asynccontextmanager
-    async def subscribe(self, name: str) -> AsyncIterator[MemoryObjectReceiveStream]:
+    async def subscribe(
+        self, name: str
+    ) -> AsyncGenerator[MemoryObjectReceiveStream, None]:
         slot = self._get_or_create(name)
 
         if slot.state is SubscriptionState.SUBSCRIBED:

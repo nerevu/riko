@@ -1,20 +1,37 @@
+"""
+Configuration parsing and per-item resolution helpers.
+
+Examples:
+
+    >>> from riko.parsing import resolve_conf
+    >>>
+    >>> resolve_conf(conf={"type": "text", "value": "hello"})
+    'hello'
+
+Attributes:
+
+    SKIP_SWITCH: Text predicates used by ``get_skip`` configuration rules.
+
+"""
+
+from __future__ import annotations
+
 import re
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict
 from time import struct_time
 from typing import TYPE_CHECKING, cast
 
-from riko.coercion._freeze import repr_cache
+from riko.coercion._canonical import repr_cache
 from riko.coercion._sequences import listize
 from riko.types._collections import RikoValue
-from riko.types._guards import is_mapping, is_sentinel, is_type_value
-from riko.types._options import SkipIf
-from riko.types._streams import Item, ItemOrValue
+from riko.types._guards import is_dataclass_inst, is_mapping, is_sentinel, is_type_value
 
 from ._dotdict import DotDict
 
 if TYPE_CHECKING:
-    from _typeshed import DataclassInstance
+    from riko.types._options import SkipIf
+    from riko.types._streams import Item, ItemOrValue, ItemValue
 
 
 SKIP_SWITCH: dict[str, Callable[[str, str], bool]] = {
@@ -46,7 +63,18 @@ def _conf_is_dynamic_cached(conf: object, **kwargs: object) -> bool:
 
 def conf_is_dynamic(conf: object, memoize: bool = False, **kwargs: object) -> bool:
     """
-    Whether ``conf`` holds a ``subkey`` or sentinel needing per-item parsing.
+    Reports whether configuration requires per-item parsing.
+
+    Args:
+
+        conf: Configuration value to inspect recursively.
+        memoize: Whether to use the representation-based cache.
+        **kwargs: Sentinel values used when identifying dynamic configuration.
+
+    Returns:
+
+        ``True`` when ``conf`` contains a subkey or sentinel that depends on an
+        input item, otherwise ``False``.
 
     Examples:
 
@@ -64,16 +92,17 @@ def conf_is_dynamic(conf: object, memoize: bool = False, **kwargs: object) -> bo
     return func(conf, **kwargs)
 
 
-def _parse_conf_uncached[VT](
+def _parse_conf_uncached[T](
     item: Item | None = None,
-    conf: VT | None = None,
-    default: VT | None = None,
-    **kwargs: VT,
-) -> VT | None:
+    conf: T | None = None,
+    default: T | None = None,
+    **kwargs: T,
+) -> T | None:
     parsed = default
+    dd_conf = DotDict.dictize([])
 
-    if is_dataclass(conf):
-        d_conf: dict[str, VT] | VT | None = asdict(cast("DataclassInstance", conf))
+    if is_dataclass_inst(conf):
+        d_conf: dict[str, T] | T | None = asdict(conf)
     else:
         d_conf = conf
 
@@ -81,39 +110,38 @@ def _parse_conf_uncached[VT](
 
     if isinstance(dd_conf, DotDict):
         if subkey := dd_conf.get("subkey"):
-            dd_item = DotDict.dictize(item) if item else DotDict()
-            parsed = dd_item.get(cast(str, subkey), **kwargs)
+            dd_item = DotDict.dictize(item) if item else DotDict[RikoValue]()
+            parsed = dd_item.get(cast("str", subkey), **kwargs)
         elif is_sentinel(dd_conf, **kwargs) or is_type_value(dd_conf):
-            # parsed = next(gen_dict(dd_conf, key=None, default_key=None, **kwargs))
-            parsed = cast(DotDict[VT], dd_conf).get()
+            parsed = cast("DotDict[T]", dd_conf).get()
         else:
             _parsed = {
                 k: _parse_conf_uncached(item, v, **kwargs)
                 for k, v in dd_conf.asdict(key=None, **kwargs).items()
             }
-            parsed = cast(VT, _parsed)
+            parsed = cast("T", _parsed)
     elif isinstance(dd_conf, (str, struct_time)):
         parsed = dd_conf
-    elif isinstance(dd_conf, (list, tuple)):
+    elif isinstance(dd_conf, (list, tuple, Sequence)):
         _parsed = [_parse_conf_uncached(item, c, **kwargs) for c in dd_conf]
-        parsed = cast(VT, _parsed)
+        parsed = cast("T", _parsed)
     elif dd_conf is not None:
-        parsed = cast(VT, dd_conf)
+        parsed = cast("T", dd_conf)
 
     return parsed
 
 
 @repr_cache
-def _parse_conf_cached[VT](
+def _parse_conf_cached[T](
     item: Item | None = None,
-    conf: VT | None = None,
-    default: VT | None = None,
-    **kwargs: VT,
-) -> VT | None:
+    conf: T | None = None,
+    default: T | None = None,
+    **kwargs: T,
+) -> T | None:
     return _parse_conf_uncached(item, conf, default=default, **kwargs)
 
 
-def parse_conf[VT](
+def resolve_conf[VT](
     item: Item | None = None,
     conf: VT | None = None,
     default: VT | None = None,
@@ -121,9 +149,22 @@ def parse_conf[VT](
     **kwargs: VT,
 ) -> VT | None:
     """
-    Resolves a pipe ``conf`` against an ``item`` by expanding subkeys and sentinels.
+    Resolves configuration against an item by expanding subkeys and sentinels.
 
-    Static confs are memoized by default. ``memoize`` forces the choice.
+    Static configurations are memoized by default; ``memoize`` can force or disable
+    caching for a specific call.
+
+    Args:
+
+        item: Input item used to resolve subkey references.
+        conf: Configuration value to parse recursively.
+        default: Value returned when ``conf`` does not produce another value.
+        memoize: Explicit cache choice, or ``None`` to cache only static config.
+        **kwargs: Sentinel values and options forwarded while resolving config.
+
+    Returns:
+
+        The resolved configuration value, or ``default`` when unresolved.
 
     Examples:
 
@@ -145,7 +186,7 @@ def parse_conf[VT](
         ...     "PARAM": params
         ... }
         >>> item = {"title": "the title"}
-        >>> parsed = parse_conf(item, conf=conf, objectify=True)
+        >>> parsed = resolve_conf(item, conf=conf, objectify=True)
         >>> parsed["count"], parsed["base"]
         ('all', 'http://example.com')
         >>> parsed["param"]
@@ -154,18 +195,18 @@ def parse_conf[VT](
         >>> conf.get(attrs_1=iter([{'content': 'baz'}]))
         {'content': 'baz'}
         >>> _parse_conf_cached.cache_clear()
-        >>> parse_conf(conf={'type': 'text', 'value': 'hello'})
+        >>> resolve_conf(conf={'type': 'text', 'value': 'hello'})
         'hello'
         >>> _parse_conf_cached.cache_info().hits
         0
-        >>> _ = parse_conf(conf={'type': 'text', 'value': 'hello'})
+        >>> _ = resolve_conf(conf={'type': 'text', 'value': 'hello'})
         >>> _parse_conf_cached.cache_info().hits
         1
-        >>> parse_conf(conf={'type': 'text', 'value': 'hello'}, memoize=False)
+        >>> resolve_conf(conf={'type': 'text', 'value': 'hello'}, memoize=False)
         'hello'
         >>> _parse_conf_cached.cache_info().hits
         1
-        >>> _ = parse_conf(conf={'type': 'text', 'value': 'hello'}, memoize=True)
+        >>> _ = resolve_conf(conf={'type': 'text', 'value': 'hello'}, memoize=True)
         >>> _parse_conf_cached.cache_info().hits
         2
 
@@ -246,10 +287,33 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
 
 def get_field(
     item: ItemOrValue | None = None, field: str = "", **kwargs: object
-) -> ItemOrValue:
-    """Extracts ``item[field]``, or ``item`` itself when no field is given."""
+) -> ItemValue:
+    """
+    Extracts a configured field from an item.
+
+    Args:
+
+        item: Mapping, ``DotDict``, or scalar value to inspect.
+        field: Field name to extract; an empty name returns ``item`` unchanged.
+        **kwargs: Dynamic values forwarded to ``DotDict.get``.
+
+    Returns:
+
+        The requested field value, ``None`` when an ordinary mapping lacks the
+        field, or ``item`` itself when no field is requested.
+
+    Examples:
+
+        >>> get_field({"title": "hello"}, "title")
+        'hello'
+        >>> get_field({"title": "hello"})
+        {'title': 'hello'}
+        >>> get_field({"title": "hello"}, "missing") is None
+        True
+
+    """
     if field and isinstance(item, DotDict):
-        value = item.get(field, **cast(dict[str, RikoValue], kwargs))
+        value = item.get(field, **cast("dict[str, RikoValue]", kwargs))
     elif field and is_mapping(item):
         value = item.get(field)
     else:

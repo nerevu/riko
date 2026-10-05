@@ -1,15 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Returns items from a stream until a certain amount of time has passed.
+Limits a stream by elapsed time.
 
-Contrast this with the truncate module, which also limits the number of items,
-but returns items based on a count.
-
-The sync pipe is lazy: items pass through as they arrive and the source is
-abandoned once the deadline is reached. The async pipe accepts either a sync
-stream or an async ``Feed`` (e.g. an async generator) and is eager — awaiting it
-collects items until the deadline, so it returns only once the timeout expires
-(bounding even an unbounded source) and holds every collected item in memory.
+The sync pipe yields items as they arrive. The async pipe collects items until
+the deadline before yielding them, so both paths can bound an unbounded source.
 
 Examples:
 
@@ -34,22 +28,27 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 from collections.abc import AsyncIterable, AsyncIterator, Generator, Iterable, Iterator
 from datetime import timedelta
-from logging import Logger
 from time import monotonic_ns
-from typing import Any, Self, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import pygogo as gogo
 
 from riko.bado.itertools import as_async
-from riko.coercion._configs import TimeoutObjconf
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Feed, Stream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import operator
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import TimeoutObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Feed, Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
 DEFAULTS: Defaults = {}
@@ -66,7 +65,7 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
     def __init__(
         self, elements: AsyncIterable[T] | Iterable[T], timeout_ms: int = 0
     ) -> None:
-        self.aiter = aiter(as_async(elements, cooperative=True))
+        self.aiter = as_async(elements, cooperative=True)
         self.timeout_ns = max(timeout_ms, 0) * NS_PER_MS
         self.deadline: int | None = None
 
@@ -123,7 +122,7 @@ class TimeoutIterator[T](Iterator[T]):
 
 
 async def async_parser(
-    stream: Stream | Feed, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
+    stream: Feed, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Asynchronously collects items until the configured duration elapses.
@@ -168,7 +167,7 @@ async def async_parser(
         2
 
     """
-    td_kwargs = cast(dict[str, int], {k: objconf[k] for k in objconf if k})
+    td_kwargs = cast("dict[str, int]", {k: objconf[k] for k in objconf if k})
     time_ms = timedelta(**td_kwargs) // timedelta(milliseconds=1)
     return await AsyncTimeoutIterator(stream, time_ms)
 
@@ -213,7 +212,7 @@ def parser(
 
     """
     # objconf only parses on __getitem__
-    td_kwargs = cast(dict[str, int], {k: objconf[k] for k in objconf if k})
+    td_kwargs = cast("dict[str, int]", {k: objconf[k] for k in objconf if k})
     time_ms = timedelta(**td_kwargs) // timedelta(milliseconds=1)
     return TimeoutIterator(stream, time_ms)
 
@@ -221,8 +220,7 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Asynchronously returns items from a stream until a certain amount of time has
-    passed.
+    Streams items until the timeout expires.
 
     Not lazy: awaiting collects items until the timeout expires and holds every
     collected item in memory. Accepts either a sync stream or an async ``Feed``
@@ -232,7 +230,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items | Feed): The source stream.
+        items (Feed): The source stream.
 
         conf (dict): The pipe configuration. Each key is cast to an int, so a
             numeric string is accepted. A total of 0 means no timeout and the

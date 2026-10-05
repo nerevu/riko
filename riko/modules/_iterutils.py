@@ -1,39 +1,38 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.coercion._sequences
-~~~~~~~~~~~~~~~
-
-Functional/iterable helpers: fan-out (``dispatch``/``broadcast``), grouping,
-dedup, chainable retry binding, and sort-key construction.
+Sort-key construction and grouping helpers used by built-in pipes.
 
 Attributes:
 
-    SORT_FILLER: Orderable stand-in (``-inf``) for a missing sort key.
+    SORT_FILLER: Orderable stand-in (``-inf``) for a sort value that cannot be cast.
     DATELIKE_TYPES: Cast types reduced to epoch timestamps for sorting.
     INVALID_DEF_TYPES: Cast types with no usable typed default.
     INVALID_TYPES: Cast types that cannot be cast at all.
     NON_SORTABLE: Types (mappings, sequences) that fall back to the default key.
-    noop: Identity function returning its argument unchanged.
 
 """
+
+from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, ItemsView, Iterable, Mapping, Sequence
 from datetime import UTC, date, tzinfo
 from datetime import datetime as dt
 from decimal import Decimal
-from logging import Logger
 from math import isnan
 from time import struct_time
-from typing import Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
-from riko.coercion._dates import date_to_datetime, ensure_tzinfo
+from riko.coercion._dates import date_to_datetime, normalize_tzinfo
 from riko.coercion.cast import CAST_SWITCH, cast_value
 from riko.types._enums import CastType
 from riko.types._scalars import PrimitiveValue, SortableValue
+
+if TYPE_CHECKING:
+    from logging import Logger
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -124,7 +123,7 @@ def _resolve_default(
         if unorderable or type_ in DATELIKE_TYPES:
             resolved = SORT_FILLER
         elif _default is not None:
-            resolved = cast(SortableValue, _default)
+            resolved = cast("SortableValue", _default)
     elif isinstance(default, Mapping):
         logger.warning(f"Invalid {default=}. Setting to empty string.")
     elif default is not None:
@@ -184,7 +183,7 @@ def def_itemgetter(
             casted = _resolve_uncastable(value, msg, default)
         elif type_:
             _casted = cast_value(value, CastType(type_))
-            casted = cast(PrimitiveValue, _casted)
+            casted = cast("PrimitiveValue", _casted)
         elif isinstance(value, (str, int, struct_time)):
             casted = value
         elif isinstance(value, NON_SORTABLE):
@@ -196,7 +195,7 @@ def def_itemgetter(
 
         if type_ in DATELIKE_TYPES and isinstance(casted, (date, dt)):
             if isinstance(casted, dt):
-                aware = ensure_tzinfo(casted, fallback_tzinfo=fallback_tzinfo)
+                aware = normalize_tzinfo(casted, fallback_tzinfo=fallback_tzinfo)
             else:
                 aware = date_to_datetime(casted, fallback_tzinfo=fallback_tzinfo)
 
@@ -210,7 +209,59 @@ def def_itemgetter(
     return keyfunc
 
 
-# TODO: move this to meza.process.group
+def build_sort_key(
+    attr: str,
+    default: PrimitiveValue | None = None,
+    type_: str | None = None,
+    fallback_tzinfo: tzinfo = UTC,
+) -> Callable[[Mapping | PrimitiveValue], tuple[bool, SortableValue]]:
+    """
+    Builds a sort key that tracks whether the sorted item contains the sort field.
+
+    The key is a ``(present, value)`` pair, so an item without the field never
+    has its filler compared against real values and sorts first ascending (last
+    descending) whatever the cast type. A ``default`` stands in for the missing
+    field instead, cast like any other value, so the item sorts among the rest.
+    A present but uncastable value still degrades to the orderable filler
+    ``def_itemgetter`` supplies.
+
+    Args:
+
+        attr: The key read from each item.
+        default: The value an item lacking ``attr`` sorts by, if any.
+        type_: Optional cast type applied to the value.
+        fallback_tzinfo: Fallback timezone assigned to naive datetimes
+
+    Returns:
+
+        A key function mapping an item to a ``(present, value)`` pair.
+
+    Examples:
+
+        >>> keyfunc = build_sort_key("n", type_="int")
+        >>> keyfunc({"n": "-5"}), keyfunc({}), keyfunc({"n": "abc"})
+        ((True, -5), (False, 0), (True, 0))
+        >>> sorted([{"n": 3}, {}, {"n": -5}], key=build_sort_key("n"))
+        [{}, {'n': -5}, {'n': 3}]
+        >>> sorted([{"n": 3}, {}, {"n": -5}], key=build_sort_key("n", 0))
+        [{'n': -5}, {}, {'n': 3}]
+
+    """
+    keyfunc = def_itemgetter(attr, type_=type_, fallback_tzinfo=fallback_tzinfo)
+
+    def key(item: Mapping | PrimitiveValue) -> tuple[bool, SortableValue]:
+        value = item.get(attr) if isinstance(item, Mapping) else item
+
+        if value is None and default is not None:
+            keyed = (True, keyfunc(default))
+        else:
+            keyed = (value is not None, keyfunc(item))
+
+        return keyed
+
+    return key
+
+
 def group_by[T: Mapping | PrimitiveValue](
     content: Iterable[T], attr: str, default: PrimitiveValue | None = None
 ) -> ItemsView[str, list[T]]:

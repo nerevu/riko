@@ -26,21 +26,26 @@ Attributes:
 
 """
 
-from collections.abc import Sequence
+from __future__ import annotations
+
 from functools import reduce
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.bado.itertools import coop_reduce
-from riko.coercion._configs import StrTransformObjconf
 from riko.coercion._sequences import listize
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types.modules import StrTransformConfRule
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from logging import Logger
+
+    from riko.coercion._configs import StrTransformObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types.modules import StrTransformConfRule
 
 OPTS: Opts = {
     "listize": True,

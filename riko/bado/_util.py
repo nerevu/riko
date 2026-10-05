@@ -1,15 +1,24 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.bado._util
-~~~~~~~~~~~~~~~
+Provides utility helpers for the Riko async runtime.
 
-AnyIO + httpx implementations used by :mod:`riko.bado._backend`.
+Examples:
 
-This module is private. Optional dependency handling and the sync-only fallback
-are provided by :mod:`riko.bado._backend`.
+    Basic usage::
+
+        >>> from riko import async_return, run
+        >>>
+        >>> async def main():
+        ...     print(await async_return("riko"))
+        >>>
+        >>> run(main)
+        riko
+
 """
 
-from collections.abc import Awaitable, Callable, Iterable
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
 from functools import partial
 from inspect import isawaitable
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
@@ -19,10 +28,12 @@ from riko.types._sentinels import MISSING
 from ._backend import AsyncClient, Path, create_task_group
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
+
     from ._backend import HTTPXResponse
 
 
-async def async_get(url: str, **kwargs: Any) -> "HTTPXResponse":
+async def async_get(url: str, **kwargs: Any) -> HTTPXResponse:
     """
     Fetches ``url`` via httpx and follows redirects.
 
@@ -52,7 +63,7 @@ async def async_read(  # noqa: E302
     return await (path.read_bytes() if binary else path.read_text(encoding))
 
 
-async def async_json(response: "HTTPXResponse") -> dict[str, Any]:
+async def async_json(response: HTTPXResponse) -> dict[str, Any]:
     """Parses the JSON body of ``response``."""
     return response.json()
 
@@ -84,7 +95,7 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
 
 
 async def as_awaitable[T](value: T | Awaitable[T]) -> T:
-    return cast(T, (await value)) if isawaitable(value) else value
+    return cast("T", (await value)) if isawaitable(value) else value
 
 
 async def maybe_deferred[T](
@@ -92,6 +103,48 @@ async def maybe_deferred[T](
 ) -> T:
     """Calls ``func`` and awaits its result only when it is awaitable."""
     return await as_awaitable(func(*args, **kwargs))
+
+
+@asynccontextmanager
+async def maybe_aclosing[T](iterator: T) -> AsyncGenerator[T, None]:
+    """
+    Closes *iterator* on exit when it has an ``aclose`` method.
+
+    Unlike :func:`contextlib.aclosing`, an iterator without ``aclose`` (such as a
+    plain async iterator) passes through untouched, so callers needn't check first.
+
+    Args:
+
+        iterator: The async iterator to close on exit.
+
+    Yields:
+
+        *iterator* itself.
+
+    Examples:
+
+        >>> from riko import run
+        >>>
+        >>> async def gen():
+        ...     yield 1
+        ...     yield 2
+        >>>
+        >>> async def main():
+        ...     async with maybe_aclosing(gen()) as items:
+        ...         async for item in items:
+        ...             break
+        ...
+        ...     print(item, items.ag_running, items.ag_frame)
+        >>>
+        >>> run(main)
+        1 False None
+
+    """
+    try:
+        yield iterator
+    finally:
+        if (aclose := getattr(iterator, "aclose", None)) is not None:
+            await aclose()
 
 
 def async_partial(f, **kwargs):

@@ -16,14 +16,20 @@ The inference is ``explicit isasync`` OR ``async def`` OR name == ``async_pipe``
 The combination tables below exercise every input to that expression.
 """
 
+from __future__ import annotations
+
 from collections.abc import AsyncIterator, Awaitable
 from inspect import isawaitable, iscoroutinefunction
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from riko.bado.itertools import as_async
 from riko.ext import operator, processor, splitter
+from riko.modules.forever import async_pipe as async_forever
+from riko.modules.split import async_pipe as async_split
 from riko.modules.timeout import async_pipe as timeout_async_pipe
-from riko.types._streams import Item
+from riko.modules.truncate import async_pipe as async_truncate
 from riko.types._wrappers import (
     AsyncProcessorWrapper,
     AsyncSplitterWrapper,
@@ -31,6 +37,9 @@ from riko.types._wrappers import (
     ProcessorWrapper,
 )
 from tests import async_test
+
+if TYPE_CHECKING:
+    from riko.types._streams import Item
 
 
 def _create_wrapper(name: str, *, iscoro: bool, isasync: bool) -> ProcessorWrapper:
@@ -74,13 +83,19 @@ class TestIsasyncInferenceValid:
 
 class TestExplicitIsasyncRequired:
     """
-    A sync callable that is the async interface but isn't named ``async_pipe``
-    (a lambda). This is the only case ``isasync=True`` is required.
+    Require ``isasync=True`` for an unusually named async-interface callable.
+
+    This covers a sync callable, such as a lambda, used as the async interface
+    without the name ``async_pipe``.
     """
 
     @async_test
     async def test_explicit_lambda_runs_as_async_pipe(self):
-        async_shout = processor(isasync=True)(shout)
+        async_shout = processor(isasync=True)(
+            lambda item, *args, **kwargs: str(
+                cast("Item", item).get("content", "")
+            ).upper()
+        )
         stream = async_shout({"content": "hi"}, assign="content")
         assert [item async for item in stream] == [{"content": "HI"}]
 
@@ -89,28 +104,21 @@ class TestInvalidCombinations:
     """A function named ``pipe`` that resolves async — always a contradiction."""
 
     @pytest.mark.parametrize(
-        ("iscoro", "isasync"),
+        ("iscoro", "isasync", "reason"),
         [
-            pytest.param(True, False, id="async_def"),
-            pytest.param(False, True, id="isasync=True"),
-            pytest.param(True, True, id="async_def+isasync=True"),
+            pytest.param(True, False, "an async def", id="async_def"),
+            pytest.param(False, True, "marked isasync=True", id="isasync=True"),
+            pytest.param(True, True, "an async def", id="async_def+isasync=True"),
         ],
     )
-    def test_async_named_pipe_raises(self, iscoro, isasync):
-        with pytest.raises(TypeError, match="async_pipe"):
+    def test_async_named_pipe_raises(self, iscoro, isasync, reason):
+        with pytest.raises(TypeError) as excinfo:
             _create_wrapper("pipe", iscoro=iscoro, isasync=isasync)
 
-    def test_error_names_the_offending_pipe_and_reason(self):
-        with pytest.raises(TypeError) as e:
-            _create_wrapper("pipe", iscoro=True, isasync=False)
-
-        message = str(e.value)
+        message = str(excinfo.value)
         assert "'pipe' is the synchronous interface" in message
-        assert "an async def" in message
-
-    def test_error_reason_reflects_explicit_flag(self):
-        with pytest.raises(TypeError, match="marked isasync=True"):
-            _create_wrapper("pipe", iscoro=False, isasync=True)
+        assert "async_pipe" in message
+        assert reason in message
 
     @pytest.mark.parametrize(
         ("decorator", "option"),
@@ -230,9 +238,64 @@ class TestAsyncProcessorDualProtocol:
 
     def test_wrapper_stubs_are_not_coroutine_functions(self):
         """
-        Reverting these stubs to ``async def`` types the call as a bare coroutine,
-        which drops ``__aiter__`` and reintroduces the ``async for`` type error.
+        Keep these stubs synchronous for async-iterator typing.
+
+        Changing them to ``async def`` makes the call a bare coroutine, drops
+        ``__aiter__``, and restores the ``async for`` type error.
         """
         assert not iscoroutinefunction(AsyncProcessorWrapper.__call__)
         assert not iscoroutinefunction(AsyncSplitterWrapper.__call__)
         assert not iscoroutinefunction(AsyncSubPipe.__call__)
+
+
+@pytest.mark.parametrize("decorator", [processor, operator, splitter])
+def test_bare_decorator_raises_at_decoration(decorator) -> None:
+    """
+    Decorating without calling the decorator first is an author error.
+
+    The decorated function would otherwise be swallowed as the positional
+    ``defaults`` and the mistake would surface only on the first call.
+    """
+    with pytest.raises(TypeError, match=rf"@{decorator.__name__}\(\)"):
+        decorator(shout)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="owned by the pending callable-pipes decorator work: a bare @processor "
+    "(no parentheses) is rejected at decoration instead of wrapping the function "
+    "as an unconfigured pipe",
+)
+def test_bare_processor_wraps_an_unconfigured_pipe() -> None:
+    pipe = processor(shout)  # pyright: ignore[reportArgumentType]
+    stream = pipe({"content": "hi"}, assign="content")  # pyright: ignore[reportCallIssue]
+    assert next(stream) == {"content": "HI"}
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="owned by the pending execution-owned split fan-out work: the async "
+    "splitter wrapper reads its input synchronously, so handing it an async "
+    "stream raises TypeError instead of yielding the branches",
+)
+@async_test
+async def test_async_splitter_accepts_an_async_input_stream() -> None:
+    source = as_async(iter([{"x": 1}]))
+    branches = async_split(source)  # pyright: ignore[reportArgumentType]
+    first = await anext(branches)
+    assert next(first) == {"x": 1}
+
+
+@pytest.mark.timeout(10)
+@pytest.mark.xfail(
+    strict=True,
+    reason="owned by the pending Feed-native streaming migration of truncate and the "
+    "final legacy-seam cleanup: an async operator whose parser is synchronous "
+    "materializes its whole async input before parsing, so truncate over an "
+    "endless async source never yields its first item",
+)
+@async_test
+async def test_async_truncate_stays_lazy_over_an_endless_source() -> None:
+    source = as_async(await async_forever(None, conf={}))
+    stream = async_truncate(source, conf={"count": 3})
+    assert await anext(stream) == {"forever": True}

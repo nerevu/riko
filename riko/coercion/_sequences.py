@@ -1,65 +1,50 @@
+"""Sequence normalization and fluent application helpers."""
+
+from __future__ import annotations
+
 import builtins
 import itertools
-from collections.abc import Callable, Iterable, Mapping, Sequence
 from functools import partial
 from inspect import signature
 from itertools import repeat
 from time import struct_time
-from typing import Any, TypeGuard, cast, overload
+from typing import TYPE_CHECKING, Any, Self, cast, overload
 
 from requests.structures import CaseInsensitiveDict
 
 from riko.base._iterutils import multi_try
-from riko.types._collections import BasicDict, RikoValue
-from riko.types._scalars import PrimitiveValueType
-from riko.types._streams import Item, Stream, StreamOrValueStream, ValueStream
+from riko.base.exceptions import InvalidPipelineError
+from riko.types._guards import is_listlike, is_mapping
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Mapping, Sequence
+
+    from riko.types._collections import BasicDict, RikoValue, StringyDict
+    from riko.types._streams import Item, Stream, StreamOrValueStream, ValueStream
 
 
-def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
-    """
-    Reports whether a value is listlike (a multi-item iterable).
-
-    A listlike value is any iterable that is not a mapping, primitive, or ``None``.
-
-    Args:
-
-        value: The object to classify.
-
-    Returns:
-
-        True when ``value`` maps over items, False when it is one item.
-
-    Examples:
-
-        >>> is_listlike([1, 2])
-        True
-        >>> is_listlike((1, 2))
-        True
-        >>> is_listlike(iter([1, 2]))
-        True
-        >>> is_listlike(range(3))
-        True
-        >>> is_listlike({"a": 1})
-        False
-        >>> is_listlike("ab")
-        False
-        >>> is_listlike(0)
-        False
-        >>> is_listlike(None)
-        False
-
-    """
-    if value is None or isinstance(
-        value, (PrimitiveValueType, dict, CaseInsensitiveDict, Mapping)
-    ):
-        result = False
+def lower_keys[T](obj: T) -> T:
+    if is_mapping(obj):
+        result = {
+            (k.lower() if isinstance(k, str) and k.isupper() else k): lower_keys(v)
+            for k, v in obj.items()
+        }
+    elif isinstance(obj, list):
+        result = [lower_keys(v) for v in obj]
     else:
-        result = isinstance(value, (Iterable, Sequence))
+        result = obj
 
-    return result
+    return cast("T", result)
 
 
-# TODO: move back to meza
+def require_sequence(value: object, what: str) -> Iterable[object]:
+    """Narrows a value to a non-string iterable or rejects it."""
+    if not is_listlike(value):
+        raise InvalidPipelineError(f"{what} must be a list")
+
+    return value
+
+
 @overload
 def listize(  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
     value: Item | Iterable[Item],
@@ -98,12 +83,12 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
 
     Examples:
 
-        >>> listize(x for x in range(3))  # doctest: +ELLIPSIS
-        <generator object <genexpr> at 0x...>
-        >>> listize([x for x in range(3)])
-        [0, 1, 2]
-        >>> listize(iter(x for x in range(3)))  # doctest: +ELLIPSIS
-        <generator object <genexpr> at 0x...>
+        >>> generator = (x for x in range(3))
+        >>> listize(generator) is generator
+        True
+        >>> values = [x for x in range(3)]
+        >>> listize(values) is values
+        True
         >>> listize(range(3))
         range(0, 3)
         >>> listize(0)
@@ -127,6 +112,10 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
 
 
 @overload
+def gen_items(  # noqa: E704
+    content: BasicDict | StringyDict, key: str | None = ...
+) -> Stream: ...
+@overload
 def gen_items(content: RikoValue) -> ValueStream: ...  # noqa: E704
 @overload  # noqa: E302
 def gen_items(  # noqa: E704
@@ -137,10 +126,35 @@ def gen_items(  # noqa: E704
     content: RikoValue, key: None = ..., yield_if_none: bool = ...
 ) -> ValueStream: ...
 def gen_items(  # noqa: E302
-    content: RikoValue, key: str | None = None, yield_if_none=False
+    content: RikoValue | BasicDict | StringyDict,
+    key: str | None = None,
+    yield_if_none=False,
 ) -> StreamOrValueStream:
+    """
+    Flattens nested Riko values into a stream of values or keyed items.
+
+    Args:
+
+        content: Scalar, mapping, or nested list/tuple content to emit.
+        key: Optional field name used to wrap each emitted value in a mapping.
+        yield_if_none: Whether a top-level ``None`` should be emitted.
+
+    Yields:
+
+        Flattened values, or mappings of ``key`` to each value when ``key`` is set.
+
+    Examples:
+
+        >>> list(gen_items([1, [2, 3]]))
+        [1, 2, 3]
+        >>> list(gen_items({"a": 1}, key="value"))
+        [{'value': {'a': 1}}]
+        >>> list(gen_items(None, yield_if_none=True))
+        [None]
+
+    """
     if isinstance(content, (struct_time, dict, CaseInsensitiveDict)):
-        yield {key: cast(BasicDict, content)} if key else content
+        yield {key: content} if key else content
     elif isinstance(content, (list, tuple)):
         for value in content:
             yield from gen_items(value, key)
@@ -173,13 +187,14 @@ class Chainable:
         self.method = method
         self.list = listize(data)
 
-    def __getattr__(self, name: str) -> "Chainable":
+    def __getattr__(self, name: str) -> Self:
         funcs = (partial(getattr, x) for x in [self.data, builtins, itertools])
-        zipped = zip(funcs, repeat(AttributeError))
+        zipped = zip(funcs, repeat(AttributeError), strict=False)
         method = multi_try(name, zipped, default=None)
-        return Chainable(self.data, method)
+        result = Chainable(self.data, method)
+        return cast("Self", result)
 
-    def __call__(self, *args: Any, **kwargs: object) -> "Chainable":
+    def __call__(self, *args: Any, **kwargs: object) -> Self:
         method = self.method
 
         if method is None:
@@ -198,4 +213,4 @@ class Chainable:
             else:
                 result = Chainable(method(args[0], self.data, **kwargs))
 
-        return result
+        return cast("Self", result)

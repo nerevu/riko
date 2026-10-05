@@ -1,0 +1,178 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-507",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-303",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-327",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-507",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-303",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-443",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-303": {
+            "conf": {
+                "rule": {
+                    "field": {
+                        "type": "text",
+                        "value": "href"
+                    },
+                    "newval": {
+                        "type": "text",
+                        "value": "link"
+                    },
+                    "op": {
+                        "type": "text",
+                        "value": "rename"
+                    }
+                }
+            },
+            "id": "sw-303",
+            "name": "rename",
+            "options": {
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-327": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/edition.cnn.html"
+                },
+                "xpath": {
+                    "type": "text",
+                    "value": "//a[img]"
+                }
+            },
+            "id": "sw-327",
+            "name": "xpathfetchpage",
+            "type": "module"
+        },
+        "sw-443": {
+            "conf": {
+                "author": {
+                    "type": "text",
+                    "value": ""
+                },
+                "description": {
+                    "subkey": "description",
+                    "type": "text"
+                },
+                "guid": {
+                    "type": "text",
+                    "value": ""
+                },
+                "link": {
+                    "subkey": "link",
+                    "type": "url"
+                },
+                "mediaContentHeight": {
+                    "subkey": "img.height",
+                    "type": "text"
+                },
+                "mediaContentType": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaContentURL": {
+                    "subkey": "img.src",
+                    "type": "url"
+                },
+                "mediaContentWidth": {
+                    "subkey": "img.width",
+                    "type": "text"
+                },
+                "mediaThumbHeight": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaThumbURL": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaThumbWidth": {
+                    "type": "text",
+                    "value": ""
+                },
+                "pubdate": {
+                    "type": "text",
+                    "value": ""
+                },
+                "title": {
+                    "subkey": "img.alt",
+                    "type": "text"
+                }
+            },
+            "id": "sw-443",
+            "name": "rssitembuilder",
+            "options": {
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-507": {
+            "embed": {
+                "conf": {
+                    "part": [
+                        {
+                            "type": "text",
+                            "value": "<img src=\""
+                        },
+                        {
+                            "subkey": "img.src",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": "\">"
+                        }
+                    ]
+                },
+                "name": "strconcat"
+            },
+            "id": "sw-507",
+            "name": "loop",
+            "options": {
+                "assign": "description",
+                "count": "all",
+                "emit": false
+            },
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-443",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

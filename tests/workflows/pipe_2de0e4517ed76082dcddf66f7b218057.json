@@ -1,0 +1,23 @@
+{
+    "edges": [],
+    "nodes": {
+        "sw-478": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/feeds.feedburner.com_ouseful.xml"
+                }
+            },
+            "id": "sw-478",
+            "name": "fetch",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-478",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

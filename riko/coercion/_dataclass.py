@@ -1,31 +1,51 @@
+"""Dataclass and rule coercion helpers used by module configuration."""
+
 from __future__ import annotations
 
 import re
 import sys
 from dataclasses import fields, is_dataclass
 from types import UnionType
-from typing import TYPE_CHECKING, Literal, Union, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Literal, Union, get_args, get_origin
 
 import riko.types._enums as names_module
 import riko.types._scalars as scalars_module
-from riko.types._collections import RikoValue, StringyDict, StringyList
-from riko.types._enums import ModuleName
+from riko.base._typing import resolve_type_hints
 from riko.types._guards import is_mapping
 from riko.types.modules import RegexConfRule, RegexRule
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
-    from riko.types._enums import ModuleNameLike
+    from riko.types._collections import RikoDict, RikoValue
 
     from ._dynamic_conf import DynamicConf
 
 
 def fromdict(
-    cls: type[DataclassInstance],
-    **data: DataclassInstance | RikoValue | StringyList | StringyDict,
+    cls: type[DataclassInstance], **data: DataclassInstance | RikoValue | RikoDict
 ) -> DataclassInstance:
     """
+    Builds a dataclass while coercing nested mappings into nested dataclasses.
+
+    Optional dataclass fields are resolved recursively. Union fields with multiple
+    non-``None`` alternatives are left unchanged because their target type is
+    ambiguous.
+
+    Args:
+
+        cls: Dataclass type to construct.
+        **data: Field values used to construct ``cls``.
+
+    Returns:
+
+        A new ``cls`` instance with unambiguous nested dataclasses coerced.
+
+    Raises:
+
+        TypeError: When ``cls`` is not a dataclass type.
+        ValueError: When a ``Literal`` field receives a value outside its choices.
+
     Examples:
 
         >>> from dataclasses import dataclass
@@ -54,8 +74,9 @@ def fromdict(
     caller = sys._getframe(1)
     callerns = {**caller.f_globals, **caller.f_locals}
     module = sys.modules[cls.__module__]
-    localns = {**callerns, **vars(module), **vars(names_module), **vars(scalars_module)}
-    hints = get_type_hints(cls, localns=localns, include_extras=True)
+    hints = resolve_type_hints(
+        cls, callerns, module, names_module, scalars_module, include_extras=True
+    )
 
     for f in fields(cls):
         if f.name not in data:
@@ -85,17 +106,63 @@ def fromdict(
     return cls(**data)
 
 
-def make_regex_rule(
+def build_regex_conf_rule(
     f: str, m: str, r: str, seriesmatch: bool = True, default: str | None = None
 ) -> RegexConfRule:
+    """
+    Builds a parsed regex configuration rule from compact arguments.
+
+    Args:
+
+        f: Item field to operate on.
+        m: Regular-expression pattern to match.
+        r: Replacement text.
+        seriesmatch: Whether later rules operate on the previous rule's result.
+        default: Value used when the source field is missing.
+
+    Returns:
+
+        A ``RegexConfRule`` containing the supplied values and standard defaults.
+
+    Examples:
+
+        >>> rule = build_regex_conf_rule("title", "foo", "bar")
+        >>> rule.field, rule.match, rule.replace, rule.seriesmatch
+        ('title', 'foo', 'bar', True)
+
+    """
     return RegexConfRule(
         field=f, match=m, replace=r, seriesmatch=seriesmatch, default=default
     )
 
 
-def get_regex_rule(
+def build_regex_rule(
     rule: DynamicConf | RegexConfRule, recompile: bool = False
 ) -> RegexRule:
+    """
+    Normalizes a parsed regex configuration into an executable rule mapping.
+
+    Args:
+
+        rule: Parsed dynamic or dataclass regex rule.
+        recompile: Whether to compile the match expression and translate ``$N``
+            replacement references for Python's regex engine.
+
+    Returns:
+
+        A normalized ``RegexRule`` used by regex processing modules.
+
+    Examples:
+
+        >>> rule = build_regex_rule(build_regex_conf_rule("title", "foo", "bar"))
+        >>> rule["field"], rule["match"], rule["replace"], rule["series"]
+        ('title', 'foo', 'bar', True)
+        >>> conf_rule = build_regex_conf_rule("title", "foo", "bar")
+        >>> compiled = build_regex_rule(conf_rule, True)
+        >>> compiled["match"].pattern
+        'foo'
+
+    """
     if not is_dataclass(rule):
         keys = {f.name for f in fields(RegexConfRule)}
         filtered = {k: v for k, v in rule.items() if k in keys}
@@ -128,8 +195,3 @@ def get_regex_rule(
     }
 
     return RegexRule(**nrule)
-
-
-def normalize_module_name(name: ModuleNameLike | None) -> str:
-    """Normalizes a module name to its canonical string."""
-    return name.value if isinstance(name, ModuleName) else name or ""

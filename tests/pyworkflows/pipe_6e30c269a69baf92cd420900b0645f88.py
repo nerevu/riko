@@ -1,0 +1,155 @@
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""Hand-maintained typed probe for the pipe_6e30c269a69baf92cd420900b0645f88 fixture."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from riko.modules.fetch import pipe as fetch
+from riko.modules.filter import pipe as _filter
+from riko.modules.regex import pipe as regex
+from riko.modules.rename import pipe as rename
+from riko.modules.sort import pipe as sort
+from riko.modules.union import pipe as union
+from riko.modules.uniq import pipe as uniq
+from riko.runtime._workflows import mark_subpipe
+from riko.types.modules import (
+    FetchRawConf,
+    FilterRawConf,
+    RegexRawConf,
+    RenameRawConf,
+    SortRawConf,
+    UniqRawConf,
+)
+
+if TYPE_CHECKING:
+    from riko import Context
+
+
+def pipe(item=None, context: Context | None = None, **_):
+    if context and context.describe_input:
+        _OUTPUT = []
+    elif context and context.describe_dependencies:
+        _OUTPUT = ["fetch", "filter", "regex", "rename", "sort", "union", "uniq"]
+    else:
+        sw_233 = fetch(
+            item,
+            conf=FetchRawConf(
+                {
+                    "url": {
+                        "type": "url",
+                        "value": "file://riko/data/rss.sueddeutsche.de_rss_Politik.xml",
+                    }
+                }
+            ),
+            context=context,
+        )
+        sw_135 = fetch(
+            None,
+            conf=FetchRawConf(
+                {
+                    "url": {
+                        "type": "url",
+                        "value": "file://riko/data/rss.sueddeutsche.de_rss_Topthemen.xml",
+                    }
+                }
+            ),
+            context=context,
+        )
+        sw_154 = union(None, conf={}, context=context, others=[sw_135, sw_233])
+        sw_173 = uniq(
+            sw_154,
+            conf=UniqRawConf({"uniq_key": {"type": "text", "value": "title"}}),
+            context=context,
+        )
+        sw_180 = _filter(
+            sw_173,
+            conf=FilterRawConf(
+                {
+                    "combine": {"type": "text", "value": "or"},
+                    "permit": {"type": "bool", "value": False},
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "link"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "/sport/"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "title"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "Bildstrecke:"},
+                        },
+                    ],
+                }
+            ),
+            context=context,
+        )
+        sw_210 = rename(
+            sw_180,
+            conf=RenameRawConf(
+                {
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "y:id.value"},
+                            "copy": {"type": "bool", "value": True},
+                            "newval": {"type": "text", "value": "link"},
+                        }
+                    ]
+                }
+            ),
+            emit=True,
+            assign="loop:rename",
+            count="all",
+            context=context,
+        )
+        sw_195 = regex(
+            sw_210,
+            conf=RegexRawConf(
+                {
+                    "rule": [
+                        {
+                            "singlelinematch": {"type": "bool", "value": True},
+                            "replace": {"type": "text", "value": ""},
+                            "field": {"type": "text", "value": "description"},
+                            "casematch": {"type": "bool", "value": True},
+                            "match": {"type": "text", "value": "</div>.*$"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "link"},
+                            "match": {"type": "text", "value": "^(.*\\/.*)\\/"},
+                            "replace": {"type": "text", "value": "$1/2.220/"},
+                        },
+                    ]
+                }
+            ),
+            emit=True,
+            assign="loop:regex",
+            count="all",
+            context=context,
+        )
+        sw_191 = sort(
+            sw_195,
+            conf=SortRawConf(
+                {
+                    "rule": [
+                        {
+                            "dir": {"type": "text", "value": "DESC"},
+                            "field": {"type": "text", "value": "pubDate"},
+                        }
+                    ]
+                }
+            ),
+            context=context,
+        )
+        _OUTPUT = sw_191
+
+    return _OUTPUT
+
+
+mark_subpipe(pipe, subtype="source")
+
+
+if __name__ == "__main__":
+    for i in pipe():
+        print(i)

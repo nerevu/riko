@@ -1,9 +1,32 @@
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+"""General iterable composition, fan-out, selection, and deduplication helpers."""
+
+from __future__ import annotations
+
 from itertools import chain, dropwhile, takewhile
-from typing import overload
+from typing import TYPE_CHECKING, overload
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
 
 def noop[T](item: T) -> T:
+    """
+    Passes an item through unchanged.
+
+    Args:
+
+        item: Value to pass through.
+
+    Returns:
+
+        The original ``item``.
+
+    Examples:
+
+        >>> noop({"value": 1})
+        {'value': 1}
+
+    """
     return item
 
 
@@ -158,6 +181,39 @@ def betwix[T](
     return last
 
 
+def partition[T](
+    values: Iterable[T], predicate: Callable[[T], bool] | None = None
+) -> tuple[list[T], list[T]]:
+    """
+    Splits an iterable into matching and non-matching lists by a predicate.
+
+    Args:
+
+        values: The source iterable.
+        predicate: The test applied to each element; defaults to truthiness.
+
+    Returns:
+
+        A ``(matching, non_matching)`` pair of lists, each preserving order.
+
+    Examples:
+
+        >>> partition([1, 2, 3, 4], lambda n: n % 2 == 0)
+        ([2, 4], [1, 3])
+        >>> partition([0, 1, "", "x"])
+        ([1, 'x'], [0, ''])
+
+    """
+    matching: list[T] = []
+    non_matching: list[T] = []
+    test = bool if predicate is None else predicate
+
+    for item in values:
+        (matching if test(item) else non_matching).append(item)
+
+    return matching, non_matching
+
+
 @overload
 def dispatch[T, U, X, Y](  # noqa: E704
     split: tuple[T, U],
@@ -240,11 +296,11 @@ def broadcast(  # noqa: E302
 
     Differs from ``map``, which applies multiple items to the same function::
 
-           /--> item --> len(item) --------> \
-          /                                   \
-    item -----> item --> hash(item) ------->  split
-          \                                   /
-           \--> item --> sorted(item) -----> /
+           /--> item --> len(item) ----------> \
+          /                                     \
+    item -----> item --> str.upper(item) ---->  split
+          \                                     /
+           \--> item --> sorted(item) --------> /
 
     Args:
 
@@ -258,8 +314,8 @@ def broadcast(  # noqa: E302
 
     Examples:
 
-        >>> broadcast("bar", len, hash, sorted)
-        (3, -6516517828960271057, ['a', 'b', 'r'])
+        >>> broadcast("bar", len, str.upper, sorted)
+        (3, 'BAR', ['a', 'b', 'r'])
 
     """
     return tuple(func(item, **kwargs) for func in funcs)

@@ -100,6 +100,43 @@ The context is immutable and execution-scoped. Never store the active tenant, su
 credential, or PowerShell session in process-global mutable state because MSP workloads may
 run several client operations concurrently.
 
+### Multi-tenant MSP application model
+
+An MSP serving many customer tenants does not register one application (and one secret) per
+customer. It registers **one multitenant application in the MSP tenant**; after admin consent
+in each customer tenant, Microsoft creates a service principal representing that application
+there:
+
+```text
+                 MSP tenant
+                     │
+              Riko application
+                     │
+       ┌─────────────┼─────────────┐
+       ▼             ▼             ▼
+  customer A     customer B     customer C
+  service        service        service
+  principal      principal      principal
+```
+
+One installation therefore carries **one credential reference and many tenant ids**; each
+execution selects the customer explicitly:
+
+```python
+MicrosoftContext(tenant_id=customer.tenant_id, credential="msp-microsoft")
+```
+
+and token acquisition targets that customer's tenant. This is why tenant and credential
+state are execution-scoped rather than global: concurrent operations for different customers
+must not leak one customer's tenant or session into another.
+
+**GDAP is not consent.** A partner relationship (GDAP) by itself does not authorize app-only
+Graph calls in a customer tenant; the partner-managed application still needs the customer
+(or an admin acting for the customer) to consent, which gives the customer traceability over
+that access. GDAP with App+User/MFA patterns is Microsoft's recommendation for delegated,
+interactive partner administration. Unattended automation should rely on properly consented
+application permissions rather than a technician authenticating every run.
+
 ## 5. PowerShell runner
 
 PowerShell is an optional execution adapter:
@@ -205,6 +242,19 @@ managed/workload identity when hosted appropriately
 
 Interactive/delegated setup and provider-facing status/refresh/revoke behavior follow
 `provider-integrations.md`. Serialized workflows carry only named credential references.
+
+Delegated login stays available as an **operator mode**, for example through the external
+package's CLI:
+
+```bash
+riko-ms auth login --tenant customer-a
+```
+
+It is the right tool for development, initial setup and consent, diagnostics, one-off
+customer environments, and operations Graph exposes only to delegated (signed-in user)
+access, where the call is constrained by both the granted scope and the user's own
+authorization. It is **not** the production path for unattended workflows such as
+Autopilot provisioning; those use the consented application permissions above.
 
 ## 8. Microsoft Graph adapter
 

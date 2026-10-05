@@ -1,0 +1,56 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-1",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-2",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-1": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "hello"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-1",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-2": {
+            "embed": {
+                "conf": {},
+                "name": "pipe:shout"
+            },
+            "id": "sw-2",
+            "name": "loop",
+            "options": {
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-2",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

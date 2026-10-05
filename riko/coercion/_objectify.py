@@ -1,18 +1,7 @@
 # vim: sw=4:ts=4:expandtab
-"""
-riko.coercion._objectify
-~~~~~~~~~~~~~~~
-A corrected ``Objectify`` (over meza's ``Objectify``) plus an ``objectify`` factory.
-It fixes:
+"""Provides case-insensitive mappings with dot-attribute access."""
 
-* casing: meza keys on the raw attribute names, so ``kw.KEY`` and ``kw.key``
-  diverge; here every key is lowercased at construction, so mixed-case input is
-  always reached through its lowercase name.
-* the ``Mapping`` contract: meza's class is a bare object with no ``__len__``;
-  here it subclasses ``Mapping`` and adds ``__len__``, so ``len()`` and the
-  mapping ABC work.
-
-"""
+from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
 from time import struct_time
@@ -21,13 +10,12 @@ from typing import TYPE_CHECKING, Any, TypeVar, overload
 from meza.fntools import Objectify as _Objectify
 from requests.structures import CaseInsensitiveDict
 
-from riko.types._streams import ItemOrValue
-from riko.types._wrappers import ArgCaster
-
 _VT = TypeVar("_VT")
 
 
 if TYPE_CHECKING:
+    from riko.types._streams import ItemOrValue
+    from riko.types._wrappers import ArgCaster
 
     class Objectify(Mapping[str, _VT]):
         """

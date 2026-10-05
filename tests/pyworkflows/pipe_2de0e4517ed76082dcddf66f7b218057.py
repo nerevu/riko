@@ -1,0 +1,45 @@
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""Hand-maintained typed probe for the pipe_2de0e4517ed76082dcddf66f7b218057 fixture."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from riko.modules.fetch import pipe as fetch
+from riko.runtime._workflows import mark_subpipe
+from riko.types.modules import FetchRawConf
+
+if TYPE_CHECKING:
+    from riko import Context
+
+
+def pipe(item=None, context: Context | None = None, **_):
+    if context and context.describe_input:
+        _OUTPUT = []
+    elif context and context.describe_dependencies:
+        _OUTPUT = ["fetch"]
+    else:
+        sw_478 = fetch(
+            item,
+            conf=FetchRawConf(
+                {
+                    "url": {
+                        "type": "url",
+                        "value": "file://riko/data/feeds.feedburner.com_ouseful.xml",
+                    }
+                }
+            ),
+            context=context,
+        )
+        _OUTPUT = sw_478
+
+    return _OUTPUT
+
+
+mark_subpipe(pipe, subtype="source")
+
+
+if __name__ == "__main__":
+    for i in pipe():
+        print(i)

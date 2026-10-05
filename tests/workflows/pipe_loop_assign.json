@@ -1,0 +1,63 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-1",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-2",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-1": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "a b c"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-1",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-2": {
+            "embed": {
+                "conf": {
+                    "delimiter": {
+                        "type": "text",
+                        "value": " "
+                    }
+                },
+                "name": "tokenizer"
+            },
+            "id": "sw-2",
+            "name": "loop",
+            "options": {
+                "assign": "tokens",
+                "count": "all",
+                "emit": false,
+                "field": "title"
+            },
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-2",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

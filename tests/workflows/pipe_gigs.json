@@ -1,0 +1,122 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-1",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-2",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-2",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-3",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-3",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-4",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-1": {
+            "conf": {
+                "path": {
+                    "type": "text",
+                    "value": "value.items"
+                },
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/gigs.json"
+                }
+            },
+            "id": "sw-1",
+            "name": "fetchdata",
+            "type": "module"
+        },
+        "sw-2": {
+            "conf": {
+                "uniq_key": {
+                    "type": "text",
+                    "value": "link"
+                }
+            },
+            "id": "sw-2",
+            "name": "uniq",
+            "type": "module"
+        },
+        "sw-3": {
+            "conf": {
+                "combine": {
+                    "type": "text",
+                    "value": "or"
+                },
+                "permit": {
+                    "type": "bool",
+                    "value": false
+                },
+                "rule": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "contains"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "php"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-3",
+            "name": "filter",
+            "type": "module"
+        },
+        "sw-4": {
+            "conf": {
+                "rule": [
+                    {
+                        "dir": {
+                            "type": "text",
+                            "value": "DESC"
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "pubDate"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-4",
+            "name": "sort",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-4",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

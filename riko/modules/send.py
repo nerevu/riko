@@ -1,12 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Pushes items to one or more named receivers.
+Pushes source items to one or more named receivers.
 
-Pairs with the ``receive`` module for in-process fan-out: ``send`` publishes to the
-names listed in ``others`` and passes the items through unchanged.
-
-This is the low-level interface. ``riko.SyncPipe.publish`` is the high-level path, both as
-``SyncPipe.publish(items, "alerts")`` and as ``flow.publish("alerts")`` mid-chain.
+Each source item also passes through unchanged, so the module can be used in the
+middle of a pipeline.
 
 Examples:
 
@@ -18,8 +15,7 @@ Examples:
         >>> target = receiver(conf={"name": "receiver1", "wait": 0.01, "max_wait": 2})
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
-        >>> stream = ({"x": x} for x in range(5))
-        >>> source = sender(stream, others=["receiver1"])
+        >>> source = sender([{"x": 0}], others=["receiver1"])
         >>> next(source)
         {'x': 0}
         >>> next(target)
@@ -34,20 +30,25 @@ Attributes:
 
 """
 
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.bado.itertools import as_async
-from riko.coercion._configs import SendObjconf
 from riko.runtime._pubsub import async_hub, sync_hub
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Feed, Stream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import operator
 from ._prepare import require_arg
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import SendObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Feed, Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"pollable": True, "emit": True}
 DEFAULTS: Defaults = {"max_wait": 5}
@@ -55,7 +56,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    stream: Stream | Feed,
+    stream: Feed,
     objconf: SendObjconf,
     tuples: PipeTuples,
     *,
@@ -66,8 +67,8 @@ async def async_parser(
     Asynchronously publishes each item to every target, then returns them.
 
     Receivers may start before or after the sender, so no startup ordering is
-    needed. Targets are completed even when a publish fails, so a healthy receiver isn't
-    left waiting.
+    needed. Backends are completed even when a publish fails, so a healthy receiver
+    isn't left waiting.
 
     Args:
 
@@ -166,7 +167,7 @@ def parser(
         for target in others:
             target_id = sync_hub.send(target, item)
 
-            if ids is not None and target_id is not None:
+            if not (ids is None or target_id is None):
                 ids[target] = target_id
 
         yield item
@@ -184,7 +185,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items | Feed): The source stream, sync or async.
+        items (Feed): The source stream, sync or async.
 
         conf (dict): The pipe configuration.
 

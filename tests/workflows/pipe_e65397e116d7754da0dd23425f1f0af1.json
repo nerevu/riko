@@ -1,0 +1,168 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-565",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-626",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-592",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-636",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-626",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-592",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-565": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/urlbuilder_feed.xml"
+                }
+            },
+            "id": "sw-565",
+            "name": "fetch",
+            "type": "module"
+        },
+        "sw-592": {
+            "conf": {
+                "rule": [
+                    {
+                        "copy": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "media:content.url"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "description"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-592",
+            "name": "rename",
+            "options": {
+                "assign": "loop:rename",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-626": {
+            "embed": {
+                "conf": {
+                    "base": {
+                        "type": "text",
+                        "value": "https://example.invalid/chart"
+                    },
+                    "param": [
+                        {
+                            "key": {
+                                "type": "text",
+                                "value": "cht"
+                            },
+                            "value": {
+                                "type": "text",
+                                "value": "qr"
+                            }
+                        },
+                        {
+                            "key": {
+                                "type": "text",
+                                "value": "chs"
+                            },
+                            "value": {
+                                "type": "text",
+                                "value": "200x200"
+                            }
+                        },
+                        {
+                            "key": {
+                                "type": "text",
+                                "value": "chl"
+                            },
+                            "value": {
+                                "subkey": "link",
+                                "type": "text"
+                            }
+                        }
+                    ],
+                    "path": {
+                        "type": "text",
+                        "value": ""
+                    }
+                },
+                "name": "urlbuilder"
+            },
+            "id": "sw-626",
+            "name": "loop",
+            "options": {
+                "assign": "media:content.url",
+                "count": "all",
+                "emit": false
+            },
+            "type": "module"
+        },
+        "sw-636": {
+            "conf": {
+                "rule": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "description"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "(.*)"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": "<img src=\"$1\" alt=\"QRcode\" /><br/>${title}"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-636",
+            "name": "regex",
+            "options": {
+                "assign": "loop:regex",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-636",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

@@ -1,8 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Casts an item field into a specific type.
-
-Useful as terminal data. Loopable.
+Casts an item field into a configured type.
 
 Examples:
 
@@ -21,18 +19,23 @@ Attributes:
 
 """
 
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._configs import TypecastObjconf
 from riko.coercion.cast import cast_value
 from riko.types._enums import CastType
-from riko.types._options import Defaults, Opts
-from riko.types._scalars import PrimitiveValue
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import TypecastObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._scalars import PrimitiveValue
 
 OPTS: Opts = {"field": "content"}
 DEFAULTS: Defaults = {"type": "text"}
@@ -183,5 +186,4 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
         False
 
     """
-    # TODO: add option to specify timezone
     return parser(*args, **kwargs)

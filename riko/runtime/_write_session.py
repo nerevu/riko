@@ -1,6 +1,7 @@
+"""Acquires and manages concrete write sessions for prepared writes."""
+
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import asynccontextmanager, contextmanager
 from enum import Enum, auto
 from io import StringIO
@@ -11,7 +12,7 @@ from riko.bado import _backend
 from riko.bado._backend import async_open, asyncify
 from riko.bado.itertools import as_async
 from riko.base._constants import ENCODING
-from riko.definitions._targets import File, prepare_write
+from riko.definitions._targets import FileTarget, build_write
 from riko.definitions._write import (
     AsyncWriteSession,
     Destination,
@@ -20,18 +21,28 @@ from riko.definitions._write import (
     WriteMode,
     WriteResult,
 )
+from riko.execution._resources import OneShotResource, Resource
 from riko.io._reencode import IterStringIO, Reencoder, reencode
-from riko.io._serialization import convert_records
-from riko.types._enums import FmtLike, Formats, KeyLike
+from riko.io._serialization import serialize_records
+from riko.types._enums import FmtLike, Formats, StrLike
 from riko.types._guards import is_mapping
-from riko.types._streams import AsyncItems, Item, Items, Stream
-from riko.types._wrappers import ConversionOutput
-
-from ._resources import OneShotResource, Resource
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Callable, Generator
+
     from _typeshed import OpenBinaryMode
     from anyio import AsyncFile
+
+    from riko.types._streams import (
+        AsyncItemGenerator,
+        AsyncItems,
+        Feed,
+        Item,
+        ItemGenerator,
+        Items,
+        Stream,
+    )
+    from riko.types._wrappers import ConversionOutput
 
 
 class _SessionState(Enum):
@@ -82,7 +93,7 @@ def _normalize_jsonl(content: str) -> str:
 
 class _FileWriteSession:
     def __init__(self, prepared: PreparedWrite):
-        if not isinstance(prepared.target, File):
+        if not isinstance(prepared.target, FileTarget):
             raise TypeError("_FileWriteSession requires a File target")
 
         self._buffer: list[Item] = []
@@ -90,19 +101,19 @@ class _FileWriteSession:
         self._result: WriteResult = WriteResult()
         self._state: _SessionState = _SessionState.OPEN
         self._written: int = 0
-        self.fmt: Formats = prepared.fmt or Formats.JSON
+        self.fmt: Formats = Formats.JSON if prepared.fmt is None else prepared.fmt
         self.mode: WriteMode = prepared.operation.mode
         self.operation = prepared.operation
-        self.target: File = prepared.target
+        self.target: FileTarget = prepared.target
 
         self.append_mode = self.mode is WriteMode.APPEND
         self.csv_format = self.fmt is Formats.CSV
         self.file_mode: OpenBinaryMode = "ab" if self.append_mode else "wb"
         self.jsonl_format = self.fmt is Formats.JSONL
-        self.path = Path(self.target.url)
+        self.path = Path(self.target.dest)
 
         self._fields: tuple[str, ...] | None = None
-        self._initial_fize_size: int | None = None
+        self._initial_file_size: int | None = None
         self._input_shape: _InputShape | None = None
         self._needs_newline: bool | None = None
         self._skip_header: bool | None = None
@@ -167,10 +178,10 @@ class _SyncFileWriteSession(_FileWriteSession):
     Examples:
 
         >>> from riko import get_temp_file
-        >>> from riko.definitions._targets import prepare_write
+        >>> from riko.definitions._targets import build_write
         >>>
         >>> with get_temp_file() as fp:
-        ...     prepared = prepare_write(fp.name, fmt="jsonl")
+        ...     prepared = build_write(fp.name, fmt="jsonl")
         ...     session = _SyncFileWriteSession(prepared)
         ...     session.acquire()
         ...     session.write([{"x": 0}, {"x": 1}])
@@ -199,20 +210,20 @@ class _SyncFileWriteSession(_FileWriteSession):
         return result
 
     @property
-    def initial_fize_size(self) -> int:
+    def initial_file_size(self) -> int:
         """Whether ``path`` exists and is non-empty."""
-        if self._initial_fize_size is None:
+        if self._initial_file_size is None:
             try:
-                self._initial_fize_size = self.path.stat().st_size
+                self._initial_file_size = self.path.stat().st_size
             except FileNotFoundError:
-                self._initial_fize_size = 0
+                self._initial_file_size = 0
 
-        return self._initial_fize_size
+        return self._initial_file_size
 
     @property
     def needs_newline(self) -> bool:
         if self._needs_newline is None:
-            if self.append_mode and self.initial_fize_size:
+            if self.append_mode and self.initial_file_size:
                 self._needs_newline = not self.ends_with_newline()
             else:
                 self._needs_newline = False
@@ -224,7 +235,7 @@ class _SyncFileWriteSession(_FileWriteSession):
     @property
     def skip_header(self) -> bool:
         if self._skip_header is None:
-            self._skip_header = (self.initial_fize_size or self._written) > 0
+            self._skip_header = (self.initial_file_size or self._written) > 0
         elif self._written and not self._skip_header:
             self._skip_header = True
 
@@ -242,10 +253,10 @@ class _SyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_temp_file
-            >>> from riko.definitions._targets import prepare_write
+            >>> from riko.definitions._targets import build_write
             >>>
             >>> with get_temp_file() as fp:
-            ...     prepare = prepare_write(fp.name, fmt="csv")
+            ...     prepare = build_write(fp.name, fmt="csv")
             ...     session = _SyncFileWriteSession(prepare)
             ...     session.acquire()
             ...     session.teardown()
@@ -259,7 +270,7 @@ class _SyncFileWriteSession(_FileWriteSession):
             items = self._validate_items(items)
 
         kwargs = {"skip_header": self.skip_header} if self.csv_format else {}
-        result = convert_records(items, self.fmt, **kwargs)
+        result = serialize_records(items, self.fmt, **kwargs)
 
         if result and self.jsonl_format:
             result = _normalize_jsonl(_as_text(result))
@@ -305,10 +316,10 @@ class _SyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_temp_file
-            >>> from riko.definitions._targets import prepare_write
+            >>> from riko.definitions._targets import build_write
             >>>
             >>> with get_temp_file() as fp:
-            ...     prepare = prepare_write(fp.name, fmt="jsonl")
+            ...     prepare = build_write(fp.name, fmt="jsonl")
             ...     session = _SyncFileWriteSession(prepare)
             ...     session.acquire()
             ...     session.write({"x": 0})
@@ -357,10 +368,10 @@ class _SyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_temp_file
-            >>> from riko.definitions._targets import prepare_write
+            >>> from riko.definitions._targets import build_write
             >>>
             >>> with get_temp_file() as fp:
-            ...     session = _SyncFileWriteSession(prepare_write(fp.name))
+            ...     session = _SyncFileWriteSession(build_write(fp.name))
             ...     session.acquire()
             ...     session.write([{"x": 1}])
             ...     result = session.finalize()
@@ -387,10 +398,10 @@ class _SyncFileWriteSession(_FileWriteSession):
         Examples:
 
             >>> from riko import get_temp_file
-            >>> from riko.definitions._targets import prepare_write
+            >>> from riko.definitions._targets import build_write
             >>>
             >>> with get_temp_file() as fp:
-            ...     prepare = prepare_write(fp.name, fmt="csv")
+            ...     prepare = build_write(fp.name, fmt="csv")
             ...     session = _SyncFileWriteSession(prepare)
             ...     session.acquire()
             ...     session.teardown()
@@ -421,24 +432,24 @@ class _AsyncFileWriteSession(_FileWriteSession):
         return result
 
     @property
-    async def ainitial_fize_size(self) -> int:
+    async def ainitial_file_size(self) -> int:
         """Whether ``path`` exists and is non-empty."""
-        if self._initial_fize_size is None:
+        if self._initial_file_size is None:
             path = _backend.Path(self.path)
 
             try:
                 file_stat = await path.stat()
             except FileNotFoundError:
-                self._initial_fize_size = 0
+                self._initial_file_size = 0
             else:
-                self._initial_fize_size = int(file_stat.st_size)
+                self._initial_file_size = int(file_stat.st_size)
 
-        return self._initial_fize_size
+        return self._initial_file_size
 
     @property
     async def aneeds_newline(self) -> bool:
         if self._needs_newline is None:
-            if self.append_mode and await self.ainitial_fize_size:
+            if self.append_mode and await self.ainitial_file_size:
                 self._needs_newline = not await self.aends_with_newline()
             else:
                 self._needs_newline = False
@@ -450,7 +461,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
     @property
     async def askip_header(self) -> bool:
         if self._skip_header is None:
-            self._skip_header = ((await self.ainitial_fize_size) or self._written) > 0
+            self._skip_header = ((await self.ainitial_file_size) or self._written) > 0
         elif self._written and not self._skip_header:
             self._skip_header = True
 
@@ -461,7 +472,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             self._ahandle = await async_open(self.path, self.file_mode)
 
     async def _aconvert(
-        self, items: Items | AsyncItems, validate: bool = False
+        self, items: Feed, validate: bool = False
     ) -> ConversionOutput | str:
         records = [item async for item in as_async(items)]
 
@@ -469,7 +480,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             records = self._validate_items(records)
 
         kwargs = {"skip_header": await self.askip_header} if self.csv_format else {}
-        result = await asyncify(convert_records)(records, self.fmt, **kwargs)
+        result = await asyncify(serialize_records)(records, self.fmt, **kwargs)
 
         if result and self.jsonl_format:
             result = _normalize_jsonl(_as_text(result))
@@ -483,7 +494,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
             self._written += await self._ahandle.write(_as_bytes(content))
 
-    async def _awrite_items(self, items: Items | AsyncItems) -> None:
+    async def _awrite_items(self, items: Feed) -> None:
         self.input_shape = _InputShape.STREAM
         content = await self._aconvert(items)
 
@@ -501,7 +512,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
         else:
             self._buffer.append(item)
 
-    async def write(self, value: Item | Items | AsyncItems) -> None:
+    async def write(self, value: Item | Feed) -> None:
         r"""
         Delivers one record or the whole record stream.
 
@@ -514,12 +525,12 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
         Examples:
 
-            >>> from riko import get_async_temp_file, issync, run
-            >>> from riko.definitions._targets import prepare_write
+            >>> from riko import async_get_temp_file, issync, run
+            >>> from riko.definitions._targets import build_write
             >>>
             >>> async def main():
-            ...     async with get_async_temp_file() as fp:
-            ...         prepare = prepare_write(fp.name, fmt="jsonl")
+            ...     async with async_get_temp_file() as fp:
+            ...         prepare = build_write(fp.name, fmt="jsonl")
             ...         session = _AsyncFileWriteSession(prepare)
             ...         await session.aacquire()
             ...         await session.write({"x": 0})
@@ -573,12 +584,12 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
         Examples:
 
-            >>> from riko import get_async_temp_file, issync, run
-            >>> from riko.definitions._targets import prepare_write
+            >>> from riko import async_get_temp_file, issync, run
+            >>> from riko.definitions._targets import build_write
             >>>
             >>> async def main():
-            ...     async with get_async_temp_file() as fp:
-            ...         session = _AsyncFileWriteSession(prepare_write(fp.name))
+            ...     async with async_get_temp_file() as fp:
+            ...         session = _AsyncFileWriteSession(build_write(fp.name))
             ...         await session.aacquire()
             ...         await session.write([{"x": 1}])
             ...         result = await session.afinalize()
@@ -628,10 +639,10 @@ def file_write_session(prepared: PreparedWrite) -> Generator[SyncWriteSession]:
     Examples:
 
         >>> from riko import get_temp_file
-        >>> from riko.definitions._targets import prepare_write
+        >>> from riko.definitions._targets import build_write
         >>>
         >>> with get_temp_file() as fp:
-        ...     prepared = prepare_write(fp.name)
+        ...     prepared = build_write(fp.name)
         ...
         ...     with file_write_session(prepared) as session:
         ...         session.write([{"x": 0}])
@@ -641,7 +652,7 @@ def file_write_session(prepared: PreparedWrite) -> Generator[SyncWriteSession]:
         True
 
     """
-    if not isinstance(prepared.target, File):
+    if not isinstance(prepared.target, FileTarget):
         raise NotImplementedError("only file targets can be written today")
 
     session = _SyncFileWriteSession(prepared)
@@ -658,7 +669,7 @@ def mint_write_resource(
     *,
     mode: WriteMode | str = WriteMode.REPLACE,
     fmt: FmtLike | None = None,
-    keys: KeyLike | None = None,
+    keys: StrLike | None = None,
 ) -> OneShotResource[SyncWriteSession]:
     """
     Mints an anonymous, execution-local write-session resource from a destination.
@@ -668,7 +679,7 @@ def mint_write_resource(
 
     Args:
 
-        dest: A path, ``Path``, or ``WriteTarget``.
+        dest: A path, ``Path``, or ``SupportsWrite`` target.
         mode: The write mode, as a ``WriteMode`` or its string value.
         fmt: The serialization format override, else derived from the extension.
         keys: The unified keys, interpreted per the target's capabilities.
@@ -679,7 +690,7 @@ def mint_write_resource(
 
     Examples:
 
-        >>> from riko.runtime._resources import OneShotResource
+        >>> from riko.execution._resources import OneShotResource
         >>>
         >>> resource = mint_write_resource("report.csv")
         >>> isinstance(resource, OneShotResource)
@@ -692,7 +703,7 @@ def mint_write_resource(
         'sync_contextmanager'
 
     """
-    prepared = prepare_write(dest, mode, fmt=fmt, keys=keys)
+    prepared = build_write(dest, mode, fmt=fmt, keys=keys)
     session = file_write_session(prepared)
     return Resource.from_lifecycle(session)
 
@@ -701,7 +712,7 @@ def mint_write_resource(
 async def async_file_write_session(
     prepared: PreparedWrite,
 ) -> AsyncGenerator[AsyncWriteSession]:
-    if not isinstance(prepared.target, File):
+    if not isinstance(prepared.target, FileTarget):
         raise NotImplementedError("only file targets can be written today")
 
     session = _AsyncFileWriteSession(prepared)
@@ -715,7 +726,7 @@ async def async_file_write_session(
 
 def write_through(
     source: Items, prepared: PreparedWrite, *, terminating: Callable[[], bool]
-) -> Generator[Item]:
+) -> ItemGenerator:
     """
     Passes each item through a lazily acquired write session unchanged.
 
@@ -750,11 +761,11 @@ def write_through(
 
 
 async def async_write_through(
-    source: Items | AsyncItems,
+    source: AsyncItems,
     prepared: PreparedWrite,
     *,
     terminating: Callable[[], bool] | None = None,
-) -> AsyncGenerator[Item]:
+) -> AsyncItemGenerator:
     """
     Passes each item through a lazily acquired write session unchanged.
 

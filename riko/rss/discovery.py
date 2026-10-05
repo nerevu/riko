@@ -1,24 +1,26 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides functions for finding RSS feeds from a site's LINK tags
-"""
+"""Provides functions for finding RSS feeds from a site's LINK tags."""
 
-from collections.abc import Iterable, Iterator
-from logging import Logger
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, cast
 
 import pygogo as gogo
 
+from riko.base._config import settings
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close
 from riko.parsing.documents import LinkParser
-from riko.types._io import StringFileLike
-from riko.types._streams import Stream
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+    from logging import Logger
     from xml.dom.minidom import Node
 
-TIMEOUT = 10
+    from riko.types._io import StringFileLike
+    from riko.types._streams import Stream
+
+TIMEOUT = settings.discovery_timeout
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -36,7 +38,7 @@ def file2entries(f: StringFileLike | Iterator[str], parser: RSSLinkParser) -> St
             yield dict(entry)
 
 
-def doc2entries(document: "Node") -> Iterator[object]:
+def doc2entries(document: Node) -> Iterator[object]:
     for node in document.childNodes:
         if hasattr(node, "attributes") and hasattr(node, "Attributes"):
             entry = node.attributes or {}
@@ -104,7 +106,7 @@ def get_rss(
     except ValueError:
         entries = file2entries(filter(None, url.splitlines()), parser)
     else:
-        stream = file2entries(cast(StringFileLike, f), parser)
+        stream = file2entries(cast("StringFileLike", f), parser)
         entries = auto_close(stream, f)
 
     if auto_sort:

@@ -1,12 +1,11 @@
 # vim: sw=4:ts=4:expandtab
 """
-Resolves a currency code, street/ip address, or coordinates to a location.
+Resolves a currency code, street/IP address, or coordinates to a location.
 
 Warning:
     Only ``type="currency"`` performs a real lookup. ``street_address`` and
-    ``ip_address`` ignore their input and return fixed placeholder data, and
-    ``coordinates`` echoes the supplied lat/lon but reports a placeholder
-    country. See ``riko.coercion.cast.lookup_street_address`` and friends.
+    ``ip_address`` return placeholder data, while ``coordinates`` preserves the
+    supplied coordinates with placeholder location metadata.
 
 Examples:
 
@@ -24,18 +23,23 @@ Attributes:
 
 """
 
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.base._locations import AnyLocation
-from riko.coercion._configs import GeolocateObjconf
 from riko.coercion.cast import cast_value
 from riko.types._enums import BasicCastType, CastType
-from riko.types._options import Defaults, Opts
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.base._locations import AnyLocation
+    from riko.coercion._configs import GeolocateObjconf
+    from riko.types._options import Defaults, Opts
 
 OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {"type": "street_address"}

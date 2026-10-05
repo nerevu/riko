@@ -1,6 +1,8 @@
 """
-Splits one date ``input`` into two streams and formats each differently with
-``dateformat`` (long form and year).
+Split one date input into long-form and year streams.
+
+Fanning a stream out into independently consumable branches is not available yet,
+so running this raises until that lands. The code shows the form it will take.
 
 Examples:
 
@@ -10,46 +12,45 @@ Examples:
 
 """
 
-from pprint import pprint
-from typing import cast
+from __future__ import annotations
 
-from riko.runtime.collections import AsyncPipe, SyncPipe
+from pprint import pprint
+from typing import TYPE_CHECKING, cast
+
+from riko import Pipeline
 from riko.types._enums import CastType
 from riko.types.modules import DateFormatConf, InputConf
 
-date_conf = InputConf({"type": CastType.DATE})
-date_in = {"content": "12/2/2014"}
+if TYPE_CHECKING:
+    from riko.types import AsyncStream, Item, Items
+
 long_conf = DateFormatConf({"format": "%B %d, %Y"})
 year_conf = DateFormatConf({"format": "%Y"})
+options = {"field": "content", "emit": True}
 
 
-def pipe(test=True):
-    kwargs = {"field": "content", "emit": True}
-    date_source, year_source = SyncPipe(
-        "input", conf=date_conf, inputs=date_in, test=test
-    ).split()
+def pipe(test: bool = True) -> list[Item]:
+    date_conf = InputConf({"type": CastType.DATE, "default": "12/2/2014", "test": test})
 
-    date_stream = SyncPipe("dateformat", source=date_source, conf=long_conf, **kwargs)
-    year_stream = SyncPipe("dateformat", source=year_source, conf=year_conf, **kwargs)
-    year = next(year_stream)
-    return [{"date": next(date_stream), "year": int(cast(str, year))}]
+    date_source, year_source = Pipeline.from_module("input", conf=date_conf).split(2)
+    date_stream = date_source.dateformat(conf=long_conf, options=options)
+    year_stream = year_source.dateformat(conf=year_conf, options=options)
+    year = next(iter(year_stream))
+    return [{"date": next(iter(date_stream)), "year": int(cast("str", year))}]
 
 
-async def async_pipe(test=True):
-    kwargs = {"field": "content", "emit": True}
-    streams = AsyncPipe("input", conf=date_conf, inputs=date_in, test=test).split()
-    date_source = await anext(streams)
-    year_source = await anext(streams)
+async def async_pipe(test: bool = True) -> AsyncStream:
+    date_conf = InputConf({"type": CastType.DATE, "default": "12/2/2014", "test": test})
 
-    date_stream = AsyncPipe("dateformat", source=date_source, conf=long_conf, **kwargs)
-
-    year_stream = AsyncPipe("dateformat", source=year_source, conf=year_conf, **kwargs)
-    year = await anext(year_stream)
-    date = await anext(date_stream)
-    yield {"date": date, "year": int(cast(str, year))}
+    date_source, year_source = Pipeline.from_module("input", conf=date_conf).split(2)
+    date_stream = date_source.dateformat(conf=long_conf, options=options)
+    year_stream = year_source.dateformat(conf=year_conf, options=options)
+    year = await anext(aiter(year_stream))
+    date = await anext(aiter(date_stream))
+    yield {"date": date, "year": int(cast("str", year))}
 
 
-def print_results(result) -> None:
+def print_results(result: Items) -> None:
     for i in result:
         pprint(i)
 

@@ -9,17 +9,28 @@
 `Pipeline[T]` is the sole reusable public pipeline definition. A pipeline is an immutable DAG; fluent chaining is shorthand for creating a new definition that shares prior structure.
 
 ```python
-flow = Pipeline("fetchdata", conf={"url": url}).filter(conf=filter_conf).map(normalize)
+pipeline = (
+    Pipeline.from_module("fetchdata", conf={"url": url})
+    .filter(conf=filter_conf)
+    .map(normalize)
+)
 ```
+
+> **Shipped (2026-09-27):** module-name fluent chaining — the canonical `Pipeline(workflow,
+> source=...)` constructor plus the `Pipeline.from_module(name, conf=...)` classmethod for
+> module seeding, `.pipe(name, conf=...)`, attribute chaining, `|` (name, `(name, conf)` pair,
+> or one-module template), and `items | Pipeline(...)` source seeding — each deriving a new
+> definition that shares prior structure. Callable `.map`/`.flat_map` in the example above remain target API owned by
+> [callable-pipes.md](callable-pipes.md); a strict-xfail tripwire guards the deferral.
 
 Execution is deliberately separate from definition:
 
 ```python
-list(flow)  # fresh private SyncExecution
-aiter(flow)  # fresh private AsyncExecution
+list(pipeline)  # fresh private SyncExecution
+aiter(pipeline)  # fresh private AsyncExecution
 ```
 
-`iter(flow)` creates a new one-shot private `SyncExecution`; `aiter(flow)` creates a new one-shot private `AsyncExecution`. Reusing the same pipeline definition creates independent executions with independent resource, portal, state-store-adapter, and fan-out lifetimes. There is no normal public `Execution(...)` construction API.
+`iter(pipeline)` creates a new one-shot private `SyncExecution`; `aiter(pipeline)` creates a new one-shot private `AsyncExecution`. Reusing the same pipeline definition creates independent executions with independent resource, portal, state-store-adapter, and fan-out lifetimes. There is no normal public `Execution(...)` construction API.
 
 The same `Pipeline` definition may run in either mode. Native implementations win and the runtime adapts only where the matching implementation is absent.
 
@@ -38,10 +49,10 @@ Step configuration is fixed when that step is declared. `with_config()` does not
 Execution-wide settings use a separate immutable definition operation:
 
 ```python
-flow = flow.with_execution(executor="thread", concurrency=8, ordered=False)
+pipeline = pipeline.with_execution(executor="thread", concurrency=8, ordered=False)
 ```
 
-There are no executing `collect()` / `first()` terminals in the target API. Normal execution remains Python iteration (`list(flow)`, `for`, `async for`). `take()` remains a transform.
+There is no executing `collect()` terminal in the target API. `first()` / `afirst()` are convenience readers equivalent to `next(iter(pipeline))` and an `aclosing`-wrapped `anext(aiter(pipeline))`: each starts a fresh execution, reads one item, and closes the run. They add no execution mode. On an empty pipeline they raise `EmptyPipelineError` (a `PipelineError` and a `LookupError`, decided 2026-10-04) unless a `default=` is given, so a bare `StopIteration` never leaks into an enclosing iterator and silently truncates it. `pipeline.open()` (decided 2026-10-04) is the scoped form of iteration for consumers that may stop early: each call returns a fresh, single-use run handle that is a context manager in both modes — `with pipeline.open() as stream` is `closing(iter(pipeline))` and `async with pipeline.open() as stream` is `aclosing(aiter(pipeline))` — so `with`/`async with` selects the engine exactly as `for`/`async for` does, and the run closes in the task that opened it when the block exits, including on `break`. The handle carries the run; the immutable `Pipeline` stores nothing, so nested or concurrent `open()` calls on one definition get independent runs. It is iteration with a guaranteed close, not a terminal or a public `Execution`: it adds no execution mode and exposes no execution object. `async with pipeline` directly is rejected because `__aexit__` would need per-run state on the definition. Normal execution remains Python iteration (`list(pipeline)`, `for`, `async for`). `take()` remains a transform.
 
 Pipeline immutability does not imply source replayability. One-shot iterators, lazy generators, subscriptions, and other one-shot sources preserve their native semantics; a second execution may therefore observe an already-consumed external source unless the source itself is replayable.
 
@@ -53,7 +64,7 @@ Every private execution owns exactly three lifetime primitives. Resources, fan-o
 |---|---|---|
 | exit stack (`ExitStack` / `AsyncExitStack`) | entry/exit order of every context-managed component | resources, state-store adapters, provider/MCP sessions, write sessions, channel ends |
 | task group (AnyIO task group or equivalent) | lifetime and cancellation scope of every execution-spawned task | subscriptions, split/publish branches, merge workers, internal service tasks |
-| bridge (AnyIO `BlockingPortal` / worker adaptation) | crossing between sync and async execution modes | async-only components under sync execution, blocking sync work under async execution |
+| bridge (AnyIO `BlockingPortal` / worker adaptation) | crossing between sync and async execution modes | async-only components under sync execution (one persistent portal, pulled item by item), blocking sync work under async execution (a worker thread whose output is pulled on demand) |
 
 The write-session lifecycle behind `write()`/`sink()` is one of these context-managed components: R4B owns its acquisition and teardown by entering it on the execution exit stack, exactly like any other resource. The session mechanism itself already exists (established alongside R3); R4B changes only the owner, so `WriteNode` under R5C acquires the same session without a second write-specific lifecycle stack.
 
@@ -82,7 +93,7 @@ potentially blocking sync acquisition or cleanup
     -> worker adaptation, then registered on the stack
 ```
 
-The same split applies in reverse for `SyncExecution`: an async-only context manager is entered through the execution portal, and its exit is registered on the sync `ExitStack`.
+The reverse direction under `SyncExecution` is asymmetric. Async value *production* — an async factory that yields a resolved value — is bridged through the execution portal and the produced value is owned on the sync `ExitStack`. Async-native *teardown* is not bridged: an async cleanup callable, an async-native context-manager lifecycle, or an owned value that only supports `aclose()` cannot be honored by a synchronous unwind and is permanently rejected with `InvalidPipelineError` before the resource is acquired, so the rejection never leaves a produced value or entered lifecycle behind. Run the pipeline under async execution to use async teardown.
 
 **Adaptation happens only at an execution boundary chosen during preparation.** Module, parser, factory, and extension code never creates event loops, portals, executors, worker threads, or task groups. Those belong to the execution that prepared the graph.
 
@@ -94,6 +105,8 @@ There is one public `Context`; there is no public `ExecutionContext`. `Context` 
 ctx2 = ctx.with_module(...)
 ctx3 = ctx2.with_resource(...)
 ```
+
+A `Pipeline` binds its environment with `pipeline.with_context(ctx)`, which stores the Context on the immutable definition (`pipeline.context`) for every run. `pipeline.with_resource(name, definition, *, credential=, lazy=)` is sugar that delegates to `Context.with_resource` on the pipeline's Context (or a default one) and derives a new pipeline, so `Context` stays the single resource binder; both carry through every chaining step, as do the `with_execution` settings.
 
 `with_module()` and `with_resource()` derive a child Context. A child may shadow an inherited module/resource binding; duplicate declarations within one normalization scope remain invalid. Built-ins remain static/global defaults, while Context-local module definitions may shadow them. Resource dependency names are late-bound against the effective Context during preparation, so a child resource override propagates through dependents without rebuilding those definitions.
 
@@ -116,16 +129,12 @@ The union admits an already-wrapped `ReusableResource` or a bare `LifecycleFacto
 Conceptually:
 
 ```text
-Resource[T]
-├── OneShotResource[T]        # one lifecycle acquisition; not Context-storable
-│   ├── _OwnedResource[T]     #   live value + explicit cleanup (compat form)
-│   └── _LifecycleResource[T] #   generator / context-manager lifecycle
+Resource[T]                   # variant carried as data, not a subclass:
+├── OneShotResource[T]        #   external (bool) / factory + kind mark the variant
 └── ReusableResource[T]       # Context-storable definition
-    ├── _ExternalResource[T]  #   caller-owned value; never closed
-    └── _FactoryResource[T]   #   Riko-owned provider recipe
 ```
 
-`Resource`, `OneShotResource`, and `ReusableResource` are public typing/construction abstractions. The concrete external/factory/owned/lifecycle variants are private implementation types and are not normal user construction surfaces. `Resource` is the public facade, with one constructor per intent:
+`Resource`, `OneShotResource`, and `ReusableResource` are the only classes. The owned/external/lifecycle/factory distinction is data on `Resource` — the `external` flag plus the `factory`/`kind`/`cleanup` fields — not a private subclass hierarchy. `reusable` follows the `OneShotResource` vs `ReusableResource` type; `external` is a field. The execution layer classifies these fields once into an executable lifecycle plan (strategy `EXTERNAL`/`OWNED`/`VALUE_FACTORY`/`LIFECYCLE`) and consumes the plan, never re-inspecting the original generator/context-manager/instance shape. `Resource` is the public facade, with one constructor per intent:
 
 | API | Accepted input | Interpretation | Parser receives | Lifecycle / cleanup | Resource type | Reusable? |
 |---|---|---|---|---|---|---|
@@ -357,13 +366,13 @@ Local declaration:
 
 ```python
 events = Pipeline.subscribe("events")
-flow = flow.publish(events)
+pipeline = pipeline.publish(events)
 ```
 
 An external subscription is an ordinary source:
 
 ```python
-flow = Pipeline(source=subscription)
+pipeline = Pipeline(source=subscription)
 ```
 
 `publish()` accepts a local subscription pipeline or an external `Publisher`. A published local subscription branch is attached to the owning execution. The user does not drain that branch to make cleanup occur; branch terminal values are discarded unless the branch has an explicit write/action/subscription-`func`/routing effect.
@@ -488,7 +497,7 @@ Automatic fingerprints are therefore suitable for process-local caching, debuggi
 Explicit `version=` is the authoritative semantic identity wherever checkpoints, idempotent side effects, or other durable behavior must survive a process restart, dependency upgrade, or deploy:
 
 ```python
-flow.map(transform, version="normalize-v3")
+pipeline.map(transform, version="normalize-v3")
 ```
 
 Docs, examples, and the checkpoint/idempotency guidance treat an explicit version as the normal thing to write at a durability boundary, not as an escape hatch for hard cases.
@@ -701,7 +710,7 @@ Preflight is a convenience only. `save()` performs authoritative validation itse
 A generic checkpoint is a side-effecting identity/durability boundary that persists the current logical value and then passes that value through unchanged:
 
 ```python
-flow = flow.checkpoint(id="normalized")
+pipeline = pipeline.checkpoint(id="normalized")
 ```
 
 Conceptually the payload is:
@@ -830,6 +839,8 @@ Determinism metadata influences replay/retry safety, semantic identity, caching,
 
 Bound concurrency rather than spawning work proportional to source size. Backpressure is structural: bounded queues/reorder buffers pause producers instead of silently dropping or relaxing ordering.
 
+`with_execution(concurrency=N)` is a per-execution ceiling, not a per-node allowance: the eligible nodes of one execution share at most `N` concurrent workers, so total parallelism never scales with graph size. A permit is held only while a callable runs and is released before any channel send or reorder-buffer wait, so a blocked producer can never starve the consumer that would unblock it. How the ceiling is apportioned across stages is a planner decision that defaults to one shared pool; per-stage allocation may arrive with the planner but never as a node-level concurrency knob. The per-call budget in the current async primitives is an implementation detail the execution layer wraps, not the contract.
+
 ### 6.2 Ordering
 
 ```python
@@ -866,6 +877,8 @@ A future explicit cancellation policy may distinguish draining from cancelling p
 
 When downstream execution stops early, active feeds are closed with `aclose()` when available. This applies to truncation, timeout, failure, cancellation, and consumer abandonment.
 
+**Open: abandoned async iteration (2026-10-04).** Consumer abandonment is only safe when the consumer closes the iterator (`contextlib.aclosing`, `aclose()`) or exhausts it. A bare `break` out of `async for item in pipeline` leaves `Pipeline.__aiter__`'s async generator suspended inside the run's task group, which was entered in the consumer's task. Garbage collection later closes the generator from a different task: shutdown cancels the task group's scope, the consumer task receives that cancellation, and its next cancel-scope exit raises `RuntimeError` (the PEP 789 async-generator/structured-concurrency conflict). No diagnostic can repair this, because the scope stays entered in the caller's task across every `yield`. The only structural fix — hosting each async run in a dedicated task — conflicts with the R4B ruling against new task groups/background producers (implementation-sequence § 5; § 1128 here), so the shipped contract (FAQ, README) requires closing an abandoned async iterator. `afirst()` closes its run before returning. The supported early-exit spelling is `async with pipeline.open() as stream` (see "Canonical definition and execution model" above; until it lands, `contextlib.aclosing(aiter(pipeline))`); it makes early exit safe for consumers who use it but cannot make a bare `async for … break` safe. Strict-xfail tripwire: `tests/public/test_async_pipe_lifecycle.py::TestAsyncClose::test_bare_break_leaves_the_callers_cancel_scope_intact`. Owner undecided; revisit if a run-hosting design that respects the task-group ruling emerges.
+
 Execution resource cleanup follows the resource rules above. If both execution and cleanup fail, cleanup is still attempted comprehensively; multiple independent failures use `ExceptionGroup`. The resource unwind shares the execution-level shutdown/cleanup budget; no per-resource timeout exists initially.
 
 ### Execution-mode adaptation (`Pipeline` sync <-> async)
@@ -885,7 +898,7 @@ Unknown synchronous extension code under async execution is treated as potential
 | `thread` | worker thread |
 | `process` | existing process machinery; no new contract implied here |
 
-Built-in pure transforms may be marked inline because Riko owns/tests them. A future planner may combine consecutive compatible sync-only steps into a worker "sync island" as an internal optimization; this must not change the public API or cross operator/resource/side-effect boundaries unsafely.
+Built-in pure transforms may be marked inline because Riko owns/tests them. A future planner may combine consecutive compatible sync-only steps into a worker "sync island", or partition the graph into streaming regions separated by operators that declare `require_bounded=True` ([§5.1](#51-boundedness)), as an internal optimization; this must not change the public API or cross operator/resource/side-effect boundaries unsafely. Planner output for such regions is exposed through the planning diagnostics owned by `callable-pipes.md`, not a second explain surface.
 
 ---
 
@@ -1044,7 +1057,7 @@ Pipeline(source=source, batch=True, batch_size=3)
 Batches are ordinary pipeline values. Therefore:
 
 ```python
-flow.map(func)
+pipeline.map(func)
 ```
 
 always passes the current logical value to `func`: an individual item in item mode or the current batch in batch mode. There is no separate `BatchPipe.map()` contract.
@@ -1114,7 +1127,9 @@ Structured concurrency is the final contract, not a preference: every branch, su
 
 ### Producer/consumer bridges
 
-Sync execution uses one persistent portal when bridging async-only components. Async execution runs unknown sync extension work on workers unless explicitly inline-safe. The runtime must never spin up an async runtime per item.
+Sync execution uses one persistent portal when bridging async-only components: the async stream is pulled one `__anext__` at a time on the portal loop and re-exposed as a lazy sync iterator. Async execution runs unknown sync extension work on workers unless explicitly inline-safe: the sync component runs on a worker thread, reads its async inputs lazily from there, and its output is pulled one item per `__anext__` as the consumer asks for it. Both directions are demand-driven — no background producer task, no channel, and no unbounded queue — so an error surfaces only after every item already produced has been delivered, and abandoning the stream closes the producer. The runtime must never spin up an async runtime per item.
+
+A cross-mode loop `embed` is adapted at execution time, against the host pipe's actual mode, into a host-mode wrapper that preserves the embed's discovery metadata (`name`/`type`/`subtype`/`subtypes`/`pollable`/`loopable`), so the loop machinery and subpipe detection treat the adapter as a native embed rather than seeing through it.
 
 ### Non-goals
 

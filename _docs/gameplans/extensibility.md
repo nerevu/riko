@@ -101,7 +101,8 @@ Deliverables:
 - conformance helpers for extension authors.
 
 Acceptance: built-ins and plugins validate through the same definition contract; invalid config or
-resource/topology requirements fail before source consumption; catalog generation does not import
+resource/topology requirements fail before source consumption (the config half is scheduled as R4E in
+[implementation-sequence.md](implementation-sequence.md)); catalog generation does not import
 uninstalled optional dependencies unnecessarily.
 
 ## E2. Plugin ecosystem v1
@@ -119,8 +120,8 @@ The shipped P8 architecture already separates:
 ModuleRegistry
     module implementations
 
-PipelineResolver
-    named composed pipelines
+WorkflowResolver
+    named workflows
 
 PipeResolver
     compiler-free resolution facade
@@ -167,7 +168,7 @@ v2 authoring sugar
     -> normalize_workflow()
 
 both
-    -> strict canonical WorkflowSpec v2
+    -> strict canonical Workflow v2
     -> validate
     -> compile / serialize / execute
 ```
@@ -175,13 +176,13 @@ both
 No compiler/runtime subsystem independently reinterprets authoring shorthand, old port names, inline
 targets, omitted outputs, or legacy v1 shapes.
 
-During the remaining 0.x line, Riko accepts **released** v1 documents only at the loader/migration
+During the remaining 0.x line, Riko accepts serialized `PipeDef`s (pipe definitions, the released v1 format) only at the loader/migration
 boundary, warns when migration occurs, normalizes immediately to v2, and serializes v2 only.
-`migrate_v1_to_v2()` is pure and testable. A released v1 module node named `write` migrates
+`migrate_v1_to_v2()` is pure and testable. A `PipeDef` module node named `write` migrates
 deterministically to canonical `WriteNode` plus its Target/Format representation; execution never
 keeps a parallel v1 `write` runtime.
 
-Released v1 terminal `_OUTPUT` pseudo-nodes are loader syntax only. `migrate_v1_to_v2()` consumes the
+`PipeDef` terminal `_OUTPUT` pseudo-nodes are loader syntax only. `migrate_v1_to_v2()` consumes the
 pseudo-node and its terminal wire, translates the producer endpoint to top-level canonical
 `outputs`, and drops the pseudo-node before canonical validation. No canonical node/edge or v2
 serializer recreates it.
@@ -191,6 +192,12 @@ v1 input. The offline `migrate_v1_to_v2()` utility may remain as a rescue/conver
 making v1 executable. Unreleased branch-only experiments, including the discarded public `sink()`
 surface, receive no loader compatibility and are not accepted as legacy grammar merely because a
 prototype once existed.
+
+> **Superseded — clean-break policy.** The temporary-0.x-v1-loader framing in this section (and the
+> acceptance bullets in §E3.10) is superseded by the R4A clean-break policy: v1 is **not** a maintained
+> runtime ingress. Each commit deletes the v1 construct its v2 replacement lands, the v1→v2 cutover
+> completes at **R4B**, and `migrate_v1_to_v2()` is a one-shot corpus/offline tool rather than a live
+> loader. Authoritative owner + deletion ledger: `implementation-sequence.md` R4A clean-break policy.
 
 ### E3.2 Canonical graph envelope
 
@@ -223,10 +230,11 @@ Top-level outputs are explicit references:
 There is no fake `type:"output"` module. Authoring may omit `outputs` only when exactly one
 unambiguous leaf exists; normalization materializes `outputs.default`.
 
-A canonical workflow must contain at least one executable node. Top-level `outputs` describe how a
-non-empty graph is exposed; they do not make an empty graph meaningful. Legacy
-`convert_dag({"modules": []})` therefore becomes a definition error when it is routed through this
-normalization boundary rather than producing an output-only pseudo-graph.
+A `Workflow` must contain at least one executable node. Top-level `outputs` describe how a
+non-empty graph is exposed; they do not make an empty graph meaningful. The bare-bones DAG (`PipeDag`) reader is
+`parse_dag`, which routes through this normalization boundary, so `parse_dag({"modules":
+[]})` is a definition error rather than an output-only pseudo-graph — shipped behaviour as of the
+CLI cutover, raising `InvalidPipelineError("workflow has no nodes")`.
 
 ### E3.3 Node families
 
@@ -255,10 +263,16 @@ id      graph-instance identity
 name    stable registered implementation identity
 label   optional human-readable text
 conf    registered module configuration; ModuleNode only
+embed   the module a loop runs per item, with that module's configuration; ModuleNode only
 params  registered action parameters; ActionNode only
 ```
 
 Other node families use their own typed structural fields rather than `conf`.
+
+**Landed 2026-09-29:** a loop's embedded module is the node field `ModuleNode.embed: Embed | None`
+rather than a `conf.embed` entry, so `conf` means registered module configuration and nothing else.
+`WorkflowDocument`s (workflow documents) carry a node-level `embed` key; `LoopConf` is deleted; loop stays a registered
+module (no `LoopNode`); `Pipeline.pipe`/`from_module` take `embed=` and `options=`.
 
 Resource slots are declared by the owning contract; canonical nodes use a normalized `resources`
 mapping. Authoring singular `resource` sugar is allowed only where the owning contract has exactly
@@ -289,6 +303,7 @@ Legacy stable ports normalize as:
 ```text
 _INPUT   -> in
 _OTHER   -> in:1
+_OTHER1  -> in:1   (alias of _OTHER; wiring both into one node is rejected)
 _OTHER2  -> in:2
 _OUTPUT  -> out
 _OUTPUT2 -> out:1
@@ -343,10 +358,13 @@ null and therefore must also be nullable. Canonical object schemas use
 
 ### E3.7 Targets and Formats
 
-`Target` is an immutable serializable endpoint/provider spec. `Format` is an immutable serializable
+A `Target` is a destination identified by its `backend`. The base `Target` protocol and its
+`SupportsRead`/`SupportsWrite`/`SupportsActions` capability refinements are behavior contracts (in `riko.types`); concrete
+`<Backend>Target` adapters implement them (in `riko.definitions`). `Format` is an immutable serializable
 interpretation/serialization spec. Resource bindings to live clients are separate.
 
-Canonical endpoint/provider vocabulary belongs under `Targets`, for example:
+Canonical endpoint/provider vocabulary belongs under `Backends` (renamed from `Targets` for symmetry
+with `Formats`), for example:
 
 ```text
 FILE
@@ -369,9 +387,12 @@ XML
 TEXT
 ```
 
-Targets use concrete backend granularity and are behaviorally inert definitions; adapters own
-behavior. A dedicated `TargetRegistry` parallels `ModuleRegistry`. Optional sync/async target
-protocols allow execution to adapt an implementation through its normal bridge.
+Backends use concrete granularity; adapters own behavior. A dedicated `TargetRegistry` parallels
+`ModuleRegistry`: it stores one self-describing adapter class per `backend` — the class is its own
+factory — exactly as `ModuleRegistry` stores one definition per name, and `resolve(backend)` returns the
+adapter class the caller then constructs. Two configurations of the same backend (prod vs. staging) are
+two constructions of one adapter, not two registrations. Sync/async is a session-layer concern, so one
+adapter serves both its capabilities.
 
 Read owns acquisition + interpretation. Write owns mutation/reconciliation. Format resolution order
 is:
@@ -425,15 +446,15 @@ more than one StreamEdge into one target stream port
 invalid/missing required fan-in positions
 undeclared resource slot
 unresolved Target/Resource/Input reference
-invalid registered module conf when the module contract is available
+invalid registered module conf when the module contract is available (R4E)
 invalid registered action params when the action contract is available
 invalid registered target configuration when the target contract is available
 ```
 
 Invalid graph/workflow structure raises `InvalidPipelineError`, a `PipelineError` subtype, rather
-than leaking traversal accidents such as `IndexError`/`KeyError`. At the legacy DAG adapter boundary,
-`convert_dag({"modules": []})` must fail immediately with this domain-error family (the message must
-state that at least one module/node is required) once R4A owns conversion.
+than leaking traversal accidents such as `IndexError`/`KeyError`. At the `PipeDag` reader boundary
+this now holds: `parse_dag({"modules": []})` fails immediately with that domain-error family,
+stating that the workflow has no nodes.
 
 Forward compatibility comes from explicit `format_version`, not from an older runtime silently
 executing a workflow whose new semantics it does not understand.
@@ -454,31 +475,32 @@ Acceptance:
   or publish edges;
 - normalize(normalize(x)) is stable;
 - v1 migration followed by v2 serialization never emits v1-only structure;
-- a released v1 `_OUTPUT` pseudo-node migrates to top-level canonical `outputs` and is never emitted
+- a `PipeDef` `_OUTPUT` pseudo-node migrates to top-level canonical `outputs` and is never emitted
   by v2 normalization/serialization;
 - empty v1 DAGs and empty v2 workflows fail with `InvalidPipelineError` before graph traversal or
   source consumption;
-- released v1 `write` normalizes to canonical `WriteNode` rather than executing a legacy module;
+- a `PipeDef` `write` module normalizes to canonical `WriteNode` rather than executing a legacy module;
 - normal v1 loading warns/migrates during 0.x and is rejected at the 1.0 runtime boundary, while an
   offline migration utility may remain;
 - GUI/CLI validation consumes the same normalized model as execution preparation;
 - a structurally valid node whose runtime capability is not implemented may round-trip, while
   execution fails with a clear unsupported-capability error.
 
-An `OperationSpec` may reference/reuse a serialized Workflow v2 definition, but this gameplan does
+An `OperationSpec` may reference/reuse a `WorkflowDocument`, but this gameplan does
 not extend the workflow format with Operations as Code source-of-truth, plan/apply/verify, import,
 compatibility, deployment, or drift semantics. Those stay in `operations-as-code.md`.
 
 ### E3.11 Reuse of the shipped graph index
 
-R4A does not reinterpret topology from scratch. The compiler already builds one immutable,
-runtime-neutral graph index (`_GraphIndex` in `riko/types/compile.py`, constructed once by
-`parse_pipe_def`) that both the legacy compiler and future execution planning consume: wire-level
+R4A does not reinterpret topology from scratch. The runtime already builds one immutable,
+runtime-neutral graph index (`GraphIndex` in `riko/types/_compiler.py`, constructed once by
+`index_workflow` in `riko/runtime/_graph_index.py`; its v1 builder `parse_pipe_def` was deleted at
+cutover step 5) that execution planning consumes: wire-level
 `edges`/`incoming`/`outgoing` carry full port identity, while node-level
 `order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs` carry scheduling facts. Topology is
 interpreted once, deterministically, and frozen. This is the structural substrate for
 `migrate_v1_to_v2()` / `normalize_workflow()` / `validate` (E3.1) and, downstream, R4B's
-`_ExecutionPlan`.
+`ExecutionPlan`.
 
 Shipped: the index replaces the old `ParsedPipeDef` `graph`+`wires` fields; `_get_input_module`,
 `_gen_pykwargs`, and topological ordering read the index instead of rescanning wires; `order` uses a
@@ -498,7 +520,7 @@ itself:
   begins with every declared node and treats disconnection as a validation question (E3.9), never
   silent erasure.
 
-R4B's `_ExecutionPlan` consumes the same structural facts (`order`/`edges`/`dependencies`) and adds
+R4B's `ExecutionPlan` consumes the same structural facts (`order`/`edges`/`dependencies`) and adds
 execution interpretation — resolved implementations, resource bindings, sync/async policy. The index
 holds structural facts only; execution concepts (resolved callables, portals, resource values, task
 groups) never move onto it.
@@ -746,7 +768,7 @@ The P8 registry/resolver seam is shipped and retained. Current work should build
 
 ```text
 ModuleRegistry
-PipelineResolver
+WorkflowResolver
 PipeResolver
 entry-point registration
 ```

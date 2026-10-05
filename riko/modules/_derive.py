@@ -1,13 +1,11 @@
 # vim: sw=4:ts=4:expandtab
-"""
-riko.modules._derive
-~~~~~~~~~~~~~~~~~~~~~
+"""Provides functions for deriving module subtypes and loop behavior."""
 
-Provides functions for deriving module subtypes and loop behavior.
-"""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from riko.types._enums import BasicCastType
-from riko.types._wrappers import ModuleParser
 from riko.types.modules import (
     ModuleSubtype,
     ModuleSubtypes,
@@ -17,10 +15,13 @@ from riko.types.modules import (
 
 from ._inference import gen_operator_return_kinds
 
+if TYPE_CHECKING:
+    from riko.types._wrappers import ModuleParser
+
 
 # Keep this module independent of riko.ext. It is imported while riko.modules is still
 # initializing.
-def _derive_operator_subtypes(
+def _get_operator_subtypes(
     pipe: ModuleParser,
 ) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
     subtype: ModuleSubtype | None = None
@@ -46,11 +47,11 @@ def _derive_operator_subtypes(
     return subtype, subtypes
 
 
-def derive_loopable(name: str, module_type: ModuleType | str) -> bool:
+def is_loopable(name: str, module_type: ModuleType | str) -> bool:
     return module_type == "processor" and name != "input"
 
 
-def derive_subtypes(
+def get_module_subtypes(
     pipe: ModuleParser,
     module_type: ModuleType | str,
     ftype: BasicCastType | None = None,
@@ -63,6 +64,6 @@ def derive_subtypes(
     elif module_type == "splitter":
         result = "splitter", {"splitter"}
     else:
-        result = _derive_operator_subtypes(pipe)
+        result = _get_operator_subtypes(pipe)
 
     return result

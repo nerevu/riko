@@ -2,7 +2,7 @@
 """
 Tests that generated Objconf types match their Conf definitions.
 
-Run ``manage codegen -m config`` to update generated configs.
+Run ``manage codegen --config`` to update generated configs.
 """
 
 import pathlib

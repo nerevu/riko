@@ -1,3 +1,5 @@
+"""File, path, opener, and closeable I/O typing contracts."""
+
 from __future__ import annotations
 
 from codecs import StreamReader

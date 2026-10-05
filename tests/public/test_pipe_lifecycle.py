@@ -1,33 +1,45 @@
 # vim: sw=4:ts=4:expandtab
 """
-One-shot lifecycle tests.
+Run lifetime for synchronous pipeline iteration.
 
-A pipe instance represents a single execution. It may be chained while NEW,
-RUNNING, or EXHAUSTED — chaining wraps whatever source is left (all / leftovers /
-nothing), like a native iterator; only a CLOSED or FAILED instance rejects
-chaining with PipelineStateError. Iteration never raises: an exhausted, closed,
-or failed instance re-iterates as an empty stream and never silently re-executes.
-Sync and async behave alike, so ``TestSyncLifecycle`` and ``TestAsyncLifecycle``
-mirror each other test-for-test.
+A ``Pipeline`` is a definition, not a run: the lifetime belongs to the execution
+that each iterator creates, so there is no pipeline-level state to inspect.
+Iterating again starts a fresh execution, and closing an iterator tears that one
+execution down without touching the definition.
 """
+
+from __future__ import annotations
 
 import pytest
 
-from riko.bado.itertools import async_iter
+from riko import Pipeline, parse_dag
 from riko.base._paths import get_path
-from riko.base.exceptions import PipelineStateError
-from riko.runtime.collections import (
-    AsyncCollection,
-    AsyncPipe,
-    PipeState,
-    SyncCollection,
-    SyncPipe,
-)
-from riko.types.modules import ItemBuilderConf
-from tests import skipif_issync
+from riko.types._compiler import DagModule, PipeDag
+from riko.types.modules import ConfArg, FetchRawConf, ItemBuilderConf
 
 BUILDER_CONF = ItemBuilderConf({"attrs": [{"key": "content", "value": "a,b,c"}]})
 SRC = [{"content": "x"}, {"content": "y"}]
+
+
+def _tokenized() -> Pipeline:
+    source = Pipeline.from_module("itembuilder", conf=BUILDER_CONF)
+    return source.tokenizer(options={"emit": True})
+
+
+def _fetch_node(index: int, url: str) -> DagModule:
+    """Builds one fetch module entry for the fan-in ``PipeDag``."""
+    conf = FetchRawConf({"url": ConfArg(type="url", value=url)})
+    return DagModule(id=f"f{index}", type="fetch", conf=conf)
+
+
+def _fanned_in(*urls: str) -> Pipeline:
+    """Builds a pipeline whose single union node merges one fetch per url."""
+    fetches = [_fetch_node(index, url) for index, url in enumerate(urls)]
+    ports = ["in" if index == 0 else f"in:{index}" for index in range(len(urls))]
+    wires = [[f"f{index}", "u", port] for index, port in enumerate(ports)]
+    union = DagModule(id="u", type="union")
+    dag = PipeDag(modules=[*fetches, union], wires=wires)
+    return Pipeline(parse_dag(dag))
 
 
 def _boom():
@@ -35,393 +47,97 @@ def _boom():
     yield  # pragma: no cover
 
 
-async def _coro_source():
-    return list(SRC)
+class TestReiteration:
+    def test_module_source_replays(self):
+        pipeline = _tokenized()
+        assert len(list(pipeline)) == 3
+        assert len(list(pipeline)) == 3
+
+    def test_replayable_source_replays(self):
+        pipeline = Pipeline(source=SRC).hash()
+        assert len(list(pipeline)) == 2
+        assert len(list(pipeline)) == 2
+
+    def test_one_shot_source_is_seen_consumed(self):
+        pipeline = iter(SRC) | Pipeline.from_module("hash")
+        assert len(list(pipeline)) == 2
+        assert list(pipeline) == []
+
+    def test_chaining_after_a_run_builds_a_fresh_run(self):
+        pipeline = _tokenized()
+        assert len(list(pipeline)) == 3
+        assert list(pipeline.count()) == [{"count": 3}]
 
 
-async def _raising_coro_source():
-    raise RuntimeError("boom")
-
-
-# The three source kinds `AsyncPipe._resolve_source` accepts.
-GOOD_SOURCES = [
-    pytest.param(lambda: list(SRC), id="sync-iterable"),
-    pytest.param(lambda: async_iter(SRC), id="async-iterable"),
-    pytest.param(_coro_source, id="awaitable"),
-]
-
-RAISING_SOURCES = [
-    pytest.param(_boom, id="sync-iterable"),
-    pytest.param(lambda: async_iter(_boom()), id="async-iterable"),
-    pytest.param(_raising_coro_source, id="awaitable"),
-]
-
-
-class TestSyncLifecycle:
-    def test_new_state(self):
-        assert SyncPipe("hash", source=SRC).state is PipeState.NEW
-
-    def test_exhausted_after_full_iteration(self):
-        flow = SyncPipe("hash", source=SRC)
-        assert len(list(flow)) == 2
-        assert flow.exhausted
-        assert flow.state is PipeState.EXHAUSTED
-
-    def test_exhausted_reiterates_empty_without_reexecution(self):
-        flow = SyncPipe("hash", source=SRC)
-        first = list(flow)
-        second = list(flow)
-        assert len(first) == 2
-        assert second == []
-
-    def test_chain_while_new_is_allowed(self):
-        chained = SyncPipe("itembuilder", conf=BUILDER_CONF).hash()
-        assert chained.state is PipeState.NEW
-
-    def test_chain_after_partial_iteration_wraps_remainder(self):
-        flow = SyncPipe("hash", source=SRC)
-        next(flow)
-        assert flow.state is PipeState.RUNNING
-        assert list(flow.count()) == [{"count": 1}]
-
-    def test_chain_after_exhaustion_is_allowed(self):
-        flow = SyncPipe("hash", source=SRC)
-        list(flow)
-        assert list(flow.count()) == [{"count": 0}]
-
-    def test_close_is_idempotent(self):
-        flow = SyncPipe("hash", source=SRC)
-        flow.close()
-        flow.close()
-        assert flow.closed
-        assert flow.state is PipeState.CLOSED
-
-    def test_chain_after_close_raises(self):
-        flow = SyncPipe("hash", source=SRC)
-        flow.close()
-
-        with pytest.raises(PipelineStateError):
-            flow.count()
-
-    def test_chain_after_failure_raises(self):
-        flow = SyncPipe("hash", source=_boom())
-
-        with pytest.raises(RuntimeError):
-            list(flow)
-
-        with pytest.raises(PipelineStateError):
-            flow.count()
-
-    def test_iterate_after_run_then_close_is_empty(self):
-        flow = SyncPipe("hash", source=SRC)
-        assert len(list(flow)) == 2
-        flow.close()
-        assert list(flow) == []
-
-    def test_close_before_iteration_does_not_execute(self):
-        ran = []
+class TestClose:
+    def test_close_before_the_first_item_never_runs_the_source(self):
+        ran: list[int] = []
 
         def source():
             ran.append(1)
             yield {"content": "x"}
 
-        flow = SyncPipe("hash", source=source())
-        flow.close()
-        assert list(flow) == []
-        assert ran == []
-
-    def test_collection_close_before_iteration_does_not_execute(self):
-        ran = []
-
-        def sources():
-            ran.append(1)
-            yield {"url": get_path("feed.xml")}
-
-        stream = SyncCollection(sources())
+        stream = iter(source() | Pipeline.from_module("hash"))
         stream.close()
         assert list(stream) == []
         assert ran == []
 
-    def test_failed_state_reiterates_empty(self):
-        flow = SyncPipe("hash", source=_boom())
-
-        with pytest.raises(RuntimeError):
-            list(flow)
-
-        assert flow.state is PipeState.FAILED
-        assert flow.failed
-        assert list(flow) == []
-
-    def test_context_manager_closes(self):
-        with SyncPipe("hash", source=SRC) as flow:
-            items = list(flow)
-
-        assert len(items) == 2
-        assert flow.closed
-        assert flow.state is PipeState.CLOSED
-
-    def test_collection_lifecycle(self):
-        stream = SyncCollection([{"url": get_path("feed.xml")}])
-        assert stream.state is PipeState.NEW
-        assert list(stream)
-        assert stream.exhausted
-        assert list(stream) == []
-
-    def test_collection_close_is_idempotent(self):
-        stream = SyncCollection([{"url": get_path("feed.xml")}])
+    def test_close_is_idempotent(self):
+        stream = iter(_tokenized())
         stream.close()
         stream.close()
-        assert stream.closed
-        assert stream.state is PipeState.CLOSED
-
-    def test_collection_failed_state(self):
-        def boom_sources():
-            raise RuntimeError("boom")
-            yield  # pragma: no cover
-
-        stream = SyncCollection(boom_sources())
-
-        try:
-            list(stream)
-        except RuntimeError:
-            pass
-
-        assert stream.state is PipeState.FAILED
-        assert stream.failed
         assert list(stream) == []
 
+    def test_early_close_stops_a_partially_consumed_run(self):
+        consumed: list[int] = []
 
-@skipif_issync
-class TestAsyncLifecycle:
-    def test_new_state(self):
-        assert AsyncPipe("itembuilder", conf=BUILDER_CONF).state is PipeState.NEW
+        def source():
+            for index in range(20):
+                consumed.append(index)
+                yield {"content": str(index)}
 
-    @pytest.mark.anyio
-    async def test_exhausted_after_full_iteration(self):
-        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
-        items = [item async for item in pipe]
-        assert items
-        assert pipe.exhausted
-        assert pipe.state is PipeState.EXHAUSTED
+        stream = iter(source() | Pipeline.from_module("hash"))
+        assert next(stream)
+        stream.close()
+        assert len(consumed) < 20
 
-    @pytest.mark.anyio
-    async def test_exhausted_reiterates_empty_without_reexecution(self):
-        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
-        first = [item async for item in pipe]
-        second = [item async for item in pipe]
-        assert first
-        assert second == []
-
-    def test_chain_while_new_is_allowed(self):
-        chained = AsyncPipe("itembuilder", conf=BUILDER_CONF).hash()
-        assert chained.state is PipeState.NEW
-
-    @pytest.mark.anyio
-    async def test_chain_after_partial_iteration_wraps_remainder(self):
-        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
-        await anext(pipe)
-        assert pipe.state is PipeState.RUNNING
-        assert [item async for item in pipe.count()] == [{"count": 2}]
-
-    @pytest.mark.anyio
-    async def test_chain_after_exhaustion_is_allowed(self):
-        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
-        [item async for item in pipe]
-        result = [item async for item in pipe.count()]
-        assert result == [{"count": 0}]
-
-    @pytest.mark.anyio
-    async def test_close_is_idempotent(self):
-        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF)
-        await pipe.aclose()
-        await pipe.aclose()
-        assert pipe.closed
-        assert pipe.state is PipeState.CLOSED
-
-    @pytest.mark.anyio
-    async def test_chain_after_close_raises(self):
-        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF)
-        await pipe.aclose()
-
-        with pytest.raises(PipelineStateError):
-            pipe.tokenizer()
-
-    @pytest.mark.anyio
-    async def test_chain_after_failure_raises(self):
-        async def boom():
-            raise RuntimeError("boom")
-
-        pipe = AsyncPipe(source=boom())
-
-        try:
-            [item async for item in pipe]
-        except RuntimeError:
-            pass
-
-        with pytest.raises(PipelineStateError):
-            pipe.tokenizer()
-
-    @pytest.mark.anyio
-    async def test_iterate_after_run_then_close_is_empty(self):
-        pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
-        items = [item async for item in pipe]
-        await pipe.aclose()
-        after = [item async for item in pipe]
-        assert items
-        assert after == []
-
-    @pytest.mark.anyio
-    async def test_close_before_iteration_does_not_execute(self):
-        ran = []
-
-        async def source():
-            ran.append(1)
-            yield {"content": "x"}
-
-        pipe = AsyncPipe("hash", source=source())
-        await pipe.aclose()
-        result = [item async for item in pipe]
-
-        assert result == []
-        assert ran == []
-
-    @pytest.mark.anyio
-    async def test_failed_state_reiterates_empty(self):
-        async def boom():
-            raise RuntimeError("boom")
-
-        pipe = AsyncPipe(source=boom())
-
-        try:
-            [item async for item in pipe]
-        except RuntimeError:
-            pass
-
-        reiter = [item async for item in pipe]
-
-        assert pipe.state is PipeState.FAILED
-        assert pipe.failed
-        assert reiter == []
-
-    @pytest.mark.anyio
-    async def test_context_manager_closes(self):
-        items = None
-
-        async with AsyncPipe("itembuilder", conf=BUILDER_CONF) as pipe:
-            items = [item async for item in pipe]
-
-        assert items
-        assert pipe.closed
-
-    @pytest.mark.anyio
-    async def test_collection_lifecycle(self):
-        stream = AsyncCollection([{"url": get_path("feed.xml")}])
-        assert stream.state is PipeState.NEW
-        assert [item async for item in stream]
-        assert stream.exhausted
-        assert [item async for item in stream] == []
-
-    @pytest.mark.anyio
-    async def test_collection_close_is_idempotent(self):
-        stream = AsyncCollection([{"url": get_path("feed.xml")}])
-        await stream.aclose()
-        await stream.aclose()
-        assert stream.closed
-        assert stream.state is PipeState.CLOSED
-
-    @pytest.mark.anyio
-    async def test_collection_close_before_iteration_does_not_execute(self):
-        ran = []
-
-        def sources():
-            ran.append(1)
-            yield {"url": get_path("feed.xml")}
-
-        stream = AsyncCollection(sources())
-        await stream.aclose()
-        assert [item async for item in stream] == []
-        assert stream.closed
-        assert ran == []
-
-    @pytest.mark.anyio
-    async def test_await_after_partial_iteration_consumes_remainder(self):
-        runs = []
-
-        def count[T](item: T) -> T:
-            runs.append(1)
-            return item
-
-        pipe = (
-            AsyncPipe("itembuilder", conf=BUILDER_CONF)
-            .tokenizer(emit=True)
-            .udf(func=count)
-        )
-        assert await anext(pipe) == {"content": "a"}
-        assert list(await pipe) == [{"content": "b"}, {"content": "c"}]
-        assert len(runs) == 3
-
-    @pytest.mark.anyio
-    async def test_await_twice_after_exhaustion_is_empty(self):
-        pipe = AsyncPipe(source=list(SRC))
-        assert list(await pipe) == SRC
-        assert list(await pipe) == []
-
-    @pytest.mark.anyio
-    async def test_collection_await_after_partial_iteration_consumes_remainder(self):
-        full = AsyncCollection([{"url": get_path("feed.xml")}])
-        total = len([item async for item in full])
-        stream = AsyncCollection([{"url": get_path("feed.xml")}])
-        await anext(stream)
-        rest = len(list(await stream))
-
-        assert total > 1
-        assert rest == total - 1
-
-    @pytest.mark.anyio
-    async def test_collection_async_pipe_after_partial_iteration_consumes_remainder(
-        self,
-    ):
-        full = AsyncCollection([{"url": get_path("feed.xml")}])
-        total = len([item async for item in full])
-        stream = AsyncCollection([{"url": get_path("feed.xml")}])
-        await anext(stream)
-        child = stream.async_pipe()
-        rest = len([item async for item in child])
-
-        assert total > 1
-        assert rest == total - 1
+    def test_closing_one_iterator_leaves_the_definition_runnable(self):
+        pipeline = _tokenized()
+        stream = iter(pipeline)
+        assert next(stream)
+        stream.close()
+        assert len(list(pipeline)) == 3
 
 
-@skipif_issync
-class TestAsyncSourceAdapter:
-    """
-    ``AsyncPipe._resolve_source`` accepts a sync iterable (via ``async_iter``),
-    an async iterable, and an awaitable. The lifecycle machine is source-agnostic
-    once resolved, so only the source-touching behaviors are exercised per kind.
-    """
+class TestFailure:
+    def test_failing_source_propagates(self):
+        pipeline = _boom() | Pipeline.from_module("hash")
 
-    @pytest.mark.parametrize("make_source", GOOD_SOURCES)
-    @pytest.mark.anyio
-    async def test_source_iterates(self, make_source):
-        pipe = AsyncPipe("hash", source=make_source())
-        result = [item async for item in pipe]
-        assert len(result) == len(SRC)
+        with pytest.raises(RuntimeError, match="boom"):
+            list(pipeline)
 
-    @pytest.mark.parametrize("make_source", RAISING_SOURCES)
-    @pytest.mark.anyio
-    async def test_source_failure_propagates(self, make_source):
-        pipe = AsyncPipe("hash", source=make_source())
+    def test_a_fresh_iteration_starts_cleanly_after_a_failure(self):
+        pipeline = _tokenized()
 
-        with pytest.raises(RuntimeError):
-            [item async for item in pipe]
+        with pytest.raises(RuntimeError, match="boom"):
+            list(_boom() | Pipeline.from_module("hash"))
 
-        assert pipe.failed
+        assert len(list(pipeline)) == 3
 
-    @pytest.mark.parametrize("make_source", GOOD_SOURCES)
-    @pytest.mark.anyio
-    async def test_source_closes(self, make_source):
-        pipe = AsyncPipe("hash", source=make_source())
-        items = [item async for item in pipe]
-        await pipe.aclose()
-        assert len(items) == len(SRC)
-        assert pipe.closed is True
+
+class TestFanIn:
+    @pytest.mark.smoke
+    def test_fan_in_merges_every_source(self):
+        one = len(list(_fanned_in(get_path("feed.xml"))))
+        both = len(list(_fanned_in(get_path("feed.xml"), get_path("feed.xml"))))
+        assert one
+        assert both == 2 * one
+
+    def test_fan_in_replays(self):
+        pipeline = _fanned_in(get_path("feed.xml"))
+        assert len(list(pipeline)) == len(list(pipeline))
+
+    def test_fan_in_close_before_iteration_produces_nothing(self):
+        stream = iter(_fanned_in(get_path("feed.xml")))
+        stream.close()
+        assert list(stream) == []

@@ -1,0 +1,143 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-551",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-613",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-605",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-551",
+                "port": "in:attrs_3_value"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-632",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-613",
+                "port": "in:1"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-551": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "attr1"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "val1"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "attrpath.attr2"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "val2"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "attrpath.attr3"
+                        },
+                        "value": {
+                            "terminal": "attrs_3_value",
+                            "type": "text"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "longpath.attrpath.attr3"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "val3"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-551",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-605": {
+            "conf": {
+                "part": {
+                    "type": "text",
+                    "value": "extVal"
+                }
+            },
+            "id": "sw-605",
+            "name": "strconcat",
+            "options": {
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-613": {
+            "id": "sw-613",
+            "name": "union",
+            "type": "module"
+        },
+        "sw-632": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "ATTR1"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "VAL1"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "attrpath.attr2"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "VAL2"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-632",
+            "name": "itembuilder",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-613",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

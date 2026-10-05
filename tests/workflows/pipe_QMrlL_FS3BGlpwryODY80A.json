@@ -1,0 +1,221 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-108",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-148",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-108",
+                "port": "out:1"
+            },
+            "target": {
+                "node": "sw-159",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-140",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-108",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-148",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-189",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-159",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-204",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-189",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-170",
+                "port": "in:1"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-204",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-170",
+                "port": "in:3"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-108": {
+            "id": "sw-108",
+            "name": "split",
+            "type": "module"
+        },
+        "sw-140": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/news.yahoo.com_rss_health.xml"
+                }
+            },
+            "id": "sw-140",
+            "name": "fetch",
+            "type": "module"
+        },
+        "sw-148": {
+            "conf": {
+                "combine": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "permit": {
+                    "type": "bool",
+                    "value": true
+                },
+                "rule": {
+                    "field": {
+                        "type": "text",
+                        "value": "summary"
+                    },
+                    "op": {
+                        "type": "text",
+                        "value": "contains"
+                    },
+                    "value": {
+                        "type": "text",
+                        "value": "weight"
+                    }
+                }
+            },
+            "id": "sw-148",
+            "name": "filter",
+            "type": "module"
+        },
+        "sw-159": {
+            "conf": {
+                "combine": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "permit": {
+                    "type": "bool",
+                    "value": true
+                },
+                "rule": {
+                    "field": {
+                        "type": "text",
+                        "value": "summary"
+                    },
+                    "op": {
+                        "type": "text",
+                        "value": "contains"
+                    },
+                    "value": {
+                        "type": "text",
+                        "value": "drug"
+                    }
+                }
+            },
+            "id": "sw-159",
+            "name": "filter",
+            "type": "module"
+        },
+        "sw-170": {
+            "id": "sw-170",
+            "name": "union",
+            "type": "module"
+        },
+        "sw-189": {
+            "conf": {
+                "rule": {
+                    "field": {
+                        "type": "text",
+                        "value": "title"
+                    },
+                    "match": {
+                        "type": "text",
+                        "value": "(.+)"
+                    },
+                    "replace": {
+                        "type": "text",
+                        "value": "[Weight] $1"
+                    }
+                }
+            },
+            "id": "sw-189",
+            "name": "regex",
+            "options": {
+                "assign": "loop:regex",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-204": {
+            "conf": {
+                "rule": {
+                    "field": {
+                        "type": "text",
+                        "value": "title"
+                    },
+                    "match": {
+                        "type": "text",
+                        "value": "(.+)"
+                    },
+                    "replace": {
+                        "type": "text",
+                        "value": "[Drugs] $1"
+                    }
+                }
+            },
+            "id": "sw-204",
+            "name": "regex",
+            "options": {
+                "assign": "loop:regex",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-170",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

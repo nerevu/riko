@@ -1,0 +1,84 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-234",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-246",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-242",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-234",
+                "port": "in:_1_URL"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-234": {
+            "conf": {
+                "url": {
+                    "terminal": "1_URL",
+                    "type": "url"
+                }
+            },
+            "id": "sw-234",
+            "name": "fetchsitefeed",
+            "type": "module"
+        },
+        "sw-242": {
+            "conf": {
+                "debug": {
+                    "type": "url",
+                    "value": "file://riko/data/www.bbc.co.uk_news.html"
+                },
+                "default": {
+                    "type": "url",
+                    "value": "file://riko/data/www.bbc.co.uk_news.html"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "urlinput1"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "Enter a URL"
+                }
+            },
+            "id": "sw-242",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-246": {
+            "conf": {
+                "count": {
+                    "type": "float",
+                    "value": "5"
+                }
+            },
+            "id": "sw-246",
+            "name": "truncate",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-246",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

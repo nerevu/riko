@@ -1,0 +1,1 @@
+"""Provides application functional tests."""

@@ -1,0 +1,114 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-123",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-135",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-131",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-106",
+                "port": "in:count"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-135",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-106",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-106": {
+            "conf": {
+                "count": {
+                    "terminal": "count",
+                    "type": "float"
+                }
+            },
+            "id": "sw-106",
+            "name": "tail",
+            "type": "module"
+        },
+        "sw-123": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/news.yahoo.com_rss_topstories.xml"
+                }
+            },
+            "id": "sw-123",
+            "name": "fetch",
+            "type": "module"
+        },
+        "sw-131": {
+            "conf": {
+                "debug": {
+                    "type": "int",
+                    "value": ""
+                },
+                "default": {
+                    "type": "int",
+                    "value": "5"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "numberinput1"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "How many items do you want in the feed?"
+                }
+            },
+            "id": "sw-131",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-135": {
+            "conf": {
+                "rule": [
+                    {
+                        "dir": {
+                            "type": "text",
+                            "value": "DESC"
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "title"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-135",
+            "name": "sort",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-106",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

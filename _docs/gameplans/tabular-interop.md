@@ -66,15 +66,15 @@ This plan does **not** own:
 Prefer one mode-neutral Pipeline entry point where possible:
 
 ```python
-flow = Pipeline.from_frame(df)
+pipeline = Pipeline.from_frame(df)
 ```
 
 Backend-specific conveniences may remain aliases when they improve discoverability:
 
 ```python
-flow = Pipeline.from_pandas(df)
-flow = Pipeline.from_arrow(table)
-flow = Pipeline.from_polars(frame)
+pipeline = Pipeline.from_pandas(df)
+pipeline = Pipeline.from_arrow(table)
+pipeline = Pipeline.from_polars(frame)
 ```
 
 They create ordinary immutable Pipeline definitions. There are no sync-only frame
@@ -117,13 +117,13 @@ Requirements:
 A concrete Pandas result is an explicit finite materialization:
 
 ```python
-df = flow.to_pandas()
+df = pipeline.to_pandas()
 ```
 
 Possible options:
 
 ```python
-flow.to_pandas(columns=None, index=None, dtype_backend=None)
+pipeline.to_pandas(columns=None, index=None, dtype_backend=None)
 ```
 
 Requirements:
@@ -139,14 +139,14 @@ Large-data workflows should prefer Pipeline batch mode or incremental Arrow batc
 than one giant DataFrame.
 
 `to_pandas()` is a representation/materialization boundary, not one of the removed generic
-execution terminals such as `collect()` / `first()`.
+execution terminals such as `collect()`.
 
 ## 7. Arrow input
 
 Arrow is the preferred typed interchange boundary when consumers can use it directly.
 
 ```python
-flow = Pipeline.from_arrow(table)
+pipeline = Pipeline.from_arrow(table)
 ```
 
 Accepted inputs may include:
@@ -170,9 +170,9 @@ Requirements:
 Concrete conversion APIs may include:
 
 ```python
-table = flow.to_arrow()
+table = pipeline.to_arrow()
 
-batches = flow.to_arrow_batches(batch_size=10_000)
+batches = pipeline.to_arrow_batches(batch_size=10_000)
 ```
 
 `to_arrow()` materializes a finite table. `to_arrow_batches()` is an incremental bridge
@@ -193,8 +193,8 @@ runtime should avoid redundant conversion/copying when it can safely reuse the n
 Polars remains optional. Convenience APIs may be:
 
 ```python
-flow = Pipeline.from_polars(frame)
-frame = flow.to_polars()
+pipeline = Pipeline.from_polars(frame)
+frame = pipeline.to_polars()
 ```
 
 Prefer Arrow/interchange-backed conversion where that is the safe efficient path rather
@@ -250,14 +250,14 @@ Backend choice is an execution representation decision. The logical Pipeline rem
 In item mode:
 
 ```python
-flow.map(func)
+pipeline.map(func)
 # func receives one item
 ```
 
 In batch mode:
 
 ```python
-flow.map(func)
+pipeline.map(func)
 # func receives the current batch
 ```
 
@@ -351,7 +351,7 @@ defined here.
 REST sources emit records by default and may opt into ordinary Pipeline batch mode:
 
 ```python
-flow = Pipeline("rest", conf=conf, batch=True, batch_size=1000)
+pipeline = Pipeline.from_module("rest", conf=conf, batch=True, batch_size=1000)
 ```
 
 REST pagination, auth, dependent endpoints, and cursors remain entirely in

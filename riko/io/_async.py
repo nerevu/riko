@@ -1,16 +1,12 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.io._async
-~~~~~~~~~~~~
-
-Async file and URL reading and writing for riko pipes (anyio + httpx).
+Asynchronous file and URL I/O helpers.
 
 Examples:
 
     Basic usage::
 
-        >>> from riko import get_path, run
-        >>> from riko.io._async import async_url_open
+        >>> from riko import async_url_open, get_path, run
         >>>
         >>> async def main():
         ...     async with async_url_open(get_path("spreadsheet.csv")) as f:
@@ -23,9 +19,7 @@ Examples:
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Generator, Iterator
 from io import BytesIO, StringIO, TextIOWrapper
-from logging import Logger
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import pygogo as gogo
@@ -36,16 +30,19 @@ from riko.bado import _backend
 from riko.bado._backend import async_open
 from riko.bado._util import async_get, async_read
 from riko.base._constants import ENCODING
-from riko.base._paths import get_abspath
-from riko.types._io import IOFileLike, PathLike
-from riko.types._scalars import AnyStr
+from riko.base._paths import normalize_url
 
 from ._sync import ext_from_content_type
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable, Generator, Iterator
+    from logging import Logger
+
     from _typeshed import OpenBinaryMode, OpenTextMode
 
     from riko.bado._backend import NamedTemporaryFile
+    from riko.types._io import IOFileLike, PathLike
+    from riko.types._scalars import AnyStr
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -119,7 +116,7 @@ def chunk(  # noqa: E302
 
     """
     result = _chunk(content, chunksize, *args, **kwargs)
-    return cast(Iterator[Chunk], result)
+    return cast("Iterator[Chunk]", result)
 
 
 @overload
@@ -170,7 +167,7 @@ def _chunk_content(  # noqa: E302
         yield from chunk(content, chunksize)
 
 
-def _coerce_chunk(raw: AnyStr, binary: bool, encoding: str) -> AnyStr:
+def _normalize_chunk(raw: AnyStr, binary: bool, encoding: str) -> AnyStr:
     if isinstance(raw, str):
         result: AnyStr = raw.encode(encoding) if binary else raw
     else:
@@ -295,8 +292,8 @@ def async_url_open(  # noqa: E302
     used with ``async with`` to auto-close it on exit. Use ``async with`` only when
     the buffer is consumed inside the block. When returning a lazy iterator that
     outlives the block, keep the ``await`` form and release the handle on iteration
-    end with :func:`riko.io._sync.auto_close` (an ``async with``would close it before the
-    caller ever reads it).
+    end with :func:`riko.io._sync.auto_close` (an ``async with`` would close it
+    before the caller ever reads it).
 
     Args:
 
@@ -368,7 +365,7 @@ async def async_url_read(
         Member
 
     """
-    url = get_abspath(url, offline=True)
+    url = normalize_url(url, offline=True)
 
     if url.startswith("http"):
         response = await async_get(url, timeout=timeout)
@@ -380,7 +377,7 @@ async def async_url_read(
 
 
 async def async_write(
-    filepath: PathLike,
+    dest: PathLike,
     content: AnyStr | IOFileLike,
     mode: str = "wb+",
     encoding: str = ENCODING,
@@ -395,7 +392,7 @@ async def async_write(
 
     Args:
 
-        filepath: The destination path.
+        dest: The destination path.
         content: The data to write.
         mode: The file mode; a ``"b"`` in it selects binary I/O.
         encoding: The text encoding used when ``mode`` is not binary.
@@ -408,10 +405,10 @@ async def async_write(
     Examples:
 
         >>> from io import StringIO
-        >>> from riko import get_async_temp_file, issync, run
+        >>> from riko import async_get_temp_file, run
         >>>
         >>> async def main():
-        ...     async with get_async_temp_file() as fp:
+        ...     async with async_get_temp_file() as fp:
         ...         await async_write(fp.name, StringIO("Hello World"))
         ...
         ...         with open(fp.name, mode="rb") as f:
@@ -427,11 +424,11 @@ async def async_write(
     progress = 0
     binary = "b" in mode
     open_encoding = None if binary else encoding
-    opener = async_open(filepath, mode, encoding=open_encoding)
+    opener = async_open(dest, mode, encoding=open_encoding)
 
     async with await opener as f:
         for normalized in _chunk_content(content, chunksize):
-            data = _coerce_chunk(normalized, binary, encoding)
+            data = _normalize_chunk(normalized, binary, encoding)
             await f.write(data)  # pyright: ignore[reportArgumentType]
             progress += len(data)
 
@@ -439,7 +436,7 @@ async def async_write(
     return written
 
 
-def get_async_temp_file() -> NamedTemporaryFile[bytes]:
+def async_get_temp_file() -> NamedTemporaryFile[bytes]:
     """
     Creates an auto-deleting named temporary file for async use.
 
@@ -456,7 +453,7 @@ def get_async_temp_file() -> NamedTemporaryFile[bytes]:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     async with get_async_temp_file() as f:
+        ...     async with async_get_temp_file() as f:
         ...         await f.write(b"hi")
         ...         print(f.name is not None)
         >>>

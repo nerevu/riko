@@ -1,12 +1,19 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides type guard functions for riko types.
-"""
+"""Provides type guard functions for riko types."""
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Awaitable, Callable, Generator, Mapping
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterable,
+    Awaitable,
+    Callable,
+    Generator,
+    Iterable,
+    Mapping,
+)
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
+from dataclasses import is_dataclass
 from inspect import (
     Parameter,
     Signature,
@@ -18,18 +25,22 @@ from inspect import (
     signature,
     unwrap,
 )
-from typing import TYPE_CHECKING, Any, TypeGuard
+from typing import TYPE_CHECKING, Any, TypeGuard, overload
 
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs
 
+from riko.base._config import SUBPIPE_TYPE
 from riko.base._strutils import replacer
+from riko.base.exceptions import InvalidPipelineError
 
 from ._io import AsyncCloseable, SyncCloseable
-from ._scalars import BasicValueType
+from ._scalars import BasicValueType, PrimitiveValueType
 from ._sentinels import MISSING, SentinelValue, StreamState
 
 if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
+
     from ._collections import BasicList
     from ._compiler import LoopModule, PipeModule
     from ._io import Closeable
@@ -43,7 +54,8 @@ if TYPE_CHECKING:
     from ._scalars import BasicValue
     from ._sentinels import MissingType, Sentinel
     from ._streams import Item, StatefulItem
-    from .modules import ConfArg
+    from ._wrappers import ModuleWrapper, SplitterWrapper, SubPipe
+    from .modules import Conf, ConfArg
 
 
 def _protocol_signature(method: Callable) -> Signature:
@@ -125,7 +137,7 @@ def isinstance_strict(obj: object, protocol: type, *methods: str) -> bool:
     return match
 
 
-def is_mapping[D, VT](val: Mapping[D, VT] | object) -> TypeIs[Mapping[D, VT]]:
+def is_mapping[K, V](val: Mapping[K, V] | object) -> TypeIs[Mapping[K, V]]:
     failure = False
 
     # Delay calling isinstance(val, Mapping) as much as possible
@@ -135,7 +147,29 @@ def is_mapping[D, VT](val: Mapping[D, VT] | object) -> TypeIs[Mapping[D, VT]]:
     return success or (False if failure else isinstance(val, Mapping))
 
 
-def is_stateful_item(val: Item | StatefulItem) -> TypeGuard[StatefulItem]:
+def is_dataclass_inst(value: object) -> TypeIs[DataclassInstance]:
+    return is_dataclass(value) and not isinstance(value, type)
+
+
+@overload
+def require_mapping(  # noqa: E704
+    value: Conf | None, what: str | None = "value"
+) -> Conf: ...
+@overload  # noqa: E302
+def require_mapping[K, V](  # noqa: E704
+    value: Mapping[K, V] | object, what: str | None = "value"
+) -> Mapping[K, V]: ...
+def require_mapping[K, V](  # noqa: E302
+    value: Mapping[K, V] | object, what: str | None = "value"
+) -> Mapping[K, V]:
+    """Narrows a value to a mapping or rejects it as malformed structure."""
+    if not is_mapping(value):
+        raise InvalidPipelineError(f"{what} must be a mapping")
+
+    return value
+
+
+def is_stateful_item(val: Item) -> TypeGuard[StatefulItem]:
     return isinstance(val.get("state"), StreamState) if is_mapping(val) else False
 
 
@@ -159,6 +193,85 @@ def is_value_seq(
     return bool(val and isinstance(val[0], BasicValueType))
 
 
+def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
+    """
+    Reports whether a value is listlike (a multi-item iterable).
+
+    A listlike value is any iterable that is not a mapping, primitive, or ``None``.
+
+    Args:
+
+        value: The object to classify.
+
+    Returns:
+
+        True when ``value`` maps over items, False when it is one item.
+
+    Examples:
+
+        >>> is_listlike([1, 2])
+        True
+        >>> is_listlike((1, 2))
+        True
+        >>> is_listlike(iter([1, 2]))
+        True
+        >>> is_listlike(range(3))
+        True
+        >>> is_listlike({"a": 1})
+        False
+        >>> is_listlike("ab")
+        False
+        >>> is_listlike(0)
+        False
+        >>> is_listlike(None)
+        False
+
+    """
+    if value is None or isinstance(
+        value, (PrimitiveValueType, bytes, dict, CaseInsensitiveDict, Mapping)
+    ):
+        result = False
+    else:
+        result = isinstance(value, Iterable)
+
+    return result
+
+
+def is_streamlike[T](
+    value: Iterable[T] | AsyncIterable[T] | object,
+) -> TypeGuard[Iterable[T] | AsyncIterable[T]]:
+    """
+    Reports whether a value represents a sync or async stream of values.
+
+    A streamlike value is listlike or any async iterable. Mappings, primitives, and
+    ``None`` are one item.
+
+    Args:
+
+        value: The object to classify.
+
+    Returns:
+
+        True when ``value`` streams values in either mode, False when it is one value.
+
+    Examples:
+
+        >>> async def agen():
+        ...     yield 1
+        >>>
+        >>> is_streamlike(agen())
+        True
+        >>> is_streamlike([1, 2])
+        True
+        >>> is_streamlike({"a": 1})
+        False
+        >>> is_streamlike("ab")
+        False
+
+    """
+    return is_listlike(value) or isinstance(value, AsyncIterable)
+
+
 def is_sentinel[VT](val: Mapping[str, VT], **kwargs: object) -> TypeGuard[Sentinel]:
     if SentinelValue in val:
         sentinel = str(val[SentinelValue])
@@ -175,6 +288,10 @@ def is_type_value(val: Mapping[Any, Any]) -> TypeGuard[ConfArg]:
 
 def is_loop_module(module: PipeModule) -> TypeGuard[LoopModule]:
     return module["type"] == "loop" and "embed" in module
+
+
+def is_subpipe[T: SubPipe](val: T | ModuleWrapper) -> TypeGuard[T]:
+    return callable(val) and getattr(val, "type", None) == SUBPIPE_TYPE
 
 
 def is_sync_gen_factory(
@@ -213,7 +330,9 @@ def is_async_context_manager(
     return candidate is val and isinstance(val, AbstractAsyncContextManager)
 
 
-def is_async_callable(val: object) -> TypeGuard[Callable[..., Awaitable]]:
+def is_async_callable[T](
+    val: Callable[..., Awaitable[T]] | object,
+) -> TypeGuard[Callable[..., Awaitable[T]]]:
     if callable(val):
         result = iscoroutinefunction(val) or iscoroutinefunction(type(val).__call__)
     else:
@@ -222,7 +341,7 @@ def is_async_callable(val: object) -> TypeGuard[Callable[..., Awaitable]]:
     return result
 
 
-def is_sync_callable(val: object) -> TypeGuard[Callable[..., object]]:
+def is_sync_callable[T](val: Callable[..., T] | object) -> TypeGuard[Callable[..., T]]:
     return callable(val) and not is_async_callable(val)
 
 
@@ -297,6 +416,59 @@ def is_lifecycle_factory(
 
 def is_value_factory(val: object) -> TypeGuard[ValueFactory]:
     return callable(val)
+
+
+def is_splitter(pipe: ModuleWrapper) -> TypeIs[SplitterWrapper]:
+    """
+    Reports whether ``pipe`` was decorated as a multi-output splitter.
+
+    The check reads the module type stamped on the wrapper at decoration, not
+    the shape of anything the pipe yields.
+
+    Args:
+
+        pipe: A resolved pipe wrapper.
+
+    Returns:
+
+        ``True`` when the pipe yields a stream of streams.
+
+    Examples:
+
+        >>> from riko.modules.count import pipe as count
+        >>> from riko.modules.split import pipe as split
+        >>> is_splitter(split), is_splitter(count)
+        (True, False)
+
+    """
+    return getattr(pipe, "type", None) == "splitter"
+
+
+def require_single_output(
+    value: ModuleWrapper, what: str | None = "pipe"
+) -> ModuleWrapper:
+    """
+    Rejects a multi-output splitter until port-keyed fan-out delivery is executable.
+
+    Args:
+
+        value: A resolved pipe wrapper.
+        what: How to name the pipe's holder in the error.
+
+    Returns:
+
+        ``value`` unchanged.
+
+    Raises:
+
+        InvalidPipelineError: If ``value`` is a splitter.
+
+    """
+    if is_splitter(value):
+        msg = f"{what} contains splitter: {value.name!r}. These are not yet executable."
+        raise InvalidPipelineError(msg)
+
+    return value
 
 
 def is_sync_closeable(val: object) -> TypeIs[SyncCloseable]:

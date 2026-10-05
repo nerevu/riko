@@ -1,59 +1,42 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules._loop
-~~~~~~~~~~~~~~~~~~
-Loop-specific execution, extracted from the generic operator decorator. Owns
-embedded-target validation, child-context creation (via ``_get_subpipe``), and
-the per-parent fold of an embedded processor over the source stream.
+Implements per-item loop execution for embedded modules.
 
-The loop runs the embed once per parent and folds its results back against *that
-parent* — ``count`` reduces per parent, ``emit`` yields the child results, and
-``assign`` stores each result on a preserved copy of the parent (one copy per
-result). This is the Yahoo per-parent contract, shared by ``loop_embed_sync`` and
-``loop_embed_async`` (``loop.async_pipe``) via the common ``_fold_parent``/
-``_take`` fold.
-
-The lazy-async loop runs the embed once per parent *sequentially* and yields the
-per-parent fold incrementally as an ``AsyncIterator`` — preserving parent order,
-applying backpressure (the source only advances as the consumer pulls), and
-letting ``count="first"`` stop after the first result without materializing the
-rest.
+Each source item is processed independently by the embedded module, and its
+results are emitted or assigned back to that same parent item.
 """
 
-from collections.abc import AsyncGenerator, Generator
+from __future__ import annotations
+
+from collections.abc import AsyncIterable, Generator
 from functools import partial
-from logging import Logger
-from typing import Literal, cast, overload
+from typing import TYPE_CHECKING, cast
 
 import pygogo as gogo
 
-from riko.bado._util import maybe_deferred
-from riko.bado.itertools import async_iter
-from riko.runtime._subpipe import is_subpipe
-from riko.runtime.context import Context
-from riko.types._compiler import CountValues, EmbedKwargs
-from riko.types._streams import (
-    AsyncItemsOrValues,
-    AsyncStreamOrValueStream,
-    Item,
-    Items,
-    ItemsOrValues,
-    Stream,
-    StreamOrValueStream,
-)
-from riko.types._wrappers import (
-    AsyncProcessorWrapper,
-    AsyncSubPipe,
-    SyncProcessorWrapper,
-    SyncSubPipe,
-)
+from riko.bado._util import maybe_aclosing, maybe_deferred
+from riko.bado.itertools import as_async
+from riko.types._guards import is_subpipe
 
-from ._assignment import get_subpipe
+from ._assignment import bind_subpipe
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.execution.context import Context
+    from riko.types._compiler import CountValues, EmbedKwargs
+    from riko.types._streams import AsyncItems, AsyncStream, Feed, Item, Items, Stream
+    from riko.types._wrappers import (
+        AsyncProcessorWrapper,
+        AsyncSubPipe,
+        SyncProcessorWrapper,
+        SyncSubPipe,
+    )
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def _take_first(results: ItemsOrValues) -> ItemsOrValues:
+def _take_first(results: Items) -> Stream:
     """
     Emits only the first result, then promptly closes the underlying iterator.
 
@@ -72,43 +55,27 @@ def _take_first(results: ItemsOrValues) -> ItemsOrValues:
             iterator.close()
 
 
-async def _atake_first(results: AsyncItemsOrValues) -> AsyncItemsOrValues:
-    iterator = aiter(results)
-
-    try:
+async def _atake_first(results: AsyncItems) -> AsyncStream:
+    async with maybe_aclosing(aiter(results)) as iterator:
         async for item in iterator:
             yield item
             break
-    finally:
-        if isinstance(iterator, AsyncGenerator):
-            await iterator.aclose()
 
 
-def _take(results: ItemsOrValues, count: CountValues | None = "all") -> ItemsOrValues:
-    return _take_first(results) if count == "first" else results
+def _take[T: Feed](results: T, count: CountValues | None = "all") -> T:
+    if count != "first":
+        result = results
+    elif isinstance(results, AsyncIterable):
+        result = _atake_first(results)
+    else:
+        result = _take_first(results)
+
+    return result
 
 
-def _atake(
-    results: AsyncItemsOrValues, count: CountValues | None = "all"
-) -> AsyncItemsOrValues:
-    return _atake_first(results) if count == "first" else results
-
-
-@overload
-def _fold_parent(  # noqa: E704
-    parent: Item, results: ItemsOrValues, assign: str, emit: Literal[False]
-) -> Stream: ...
-@overload  # noqa: E302
-def _fold_parent(  # noqa: E704
-    parent: Item, results: Items, assign: str, emit: bool
-) -> Stream: ...
-@overload  # noqa: E302
-def _fold_parent(  # noqa: E704
-    parent: Item, results: ItemsOrValues, assign: str, emit: bool
-) -> StreamOrValueStream: ...
 def _fold_parent(  # noqa: E302
-    parent: Item, results: ItemsOrValues, assign: str, emit: bool
-) -> StreamOrValueStream:
+    parent: Item, results: Stream, assign: str, emit: bool = False
+) -> Stream:
     """
     Fold a parent's per-child ``results`` back against that parent.
 
@@ -125,20 +92,20 @@ def _fold_parent(  # noqa: E302
 
     for value in results:
         yielded = True
-        yield value if emit else cast(Item, {**parent, assign: value})
+        yield value if emit else cast("Item", {**parent, assign: value})
 
     if not (yielded or emit):
         yield parent
 
 
-async def _afold_parent(
-    parent: Item, results: AsyncItemsOrValues, assign: str, emit: bool
-) -> AsyncItemsOrValues:
+async def _afold_parent(  # noqa: E302
+    parent: Item, results: Stream | AsyncStream, assign: str, emit: bool = False
+) -> AsyncStream:
     yielded = False
 
-    async for value in results:
+    async for value in as_async(results):
         yielded = True
-        yield value if emit else cast(Item, {**parent, assign: value})
+        yield value if emit else cast("Item", {**parent, assign: value})
 
     if not (yielded or emit):
         yield parent
@@ -148,38 +115,38 @@ def _run_loop_sync(
     embed: SyncProcessorWrapper | SyncSubPipe,
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
-    source: Stream,
+    source: Items,
     *,
     field: str | None,
-    assign: str | None = None,
-    emit: bool | None = None,
+    assign: str,
+    emit: bool,
     count: CountValues | None,
-) -> StreamOrValueStream:
-    embedder = get_subpipe(embed, context, embedded_kwargs, field=field)
+) -> Stream:
+    embedder = bind_subpipe(embed, context, embedded_kwargs, field=field)
 
     for parent in source:
-        items = _take(embedder(parent), count)
-        yield from _fold_parent(parent, items, assign or "", bool(emit))
+        stream = _take(embedder(parent), count)
+        yield from _fold_parent(parent, stream, assign, emit)
 
 
 async def _run_loop_async(
     embed: AsyncProcessorWrapper | AsyncSubPipe,
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
-    source: Stream,
+    source: Feed,
     *,
     field: str | None,
-    assign: str | None = None,
-    emit: bool | None = None,
+    assign: str,
+    emit: bool,
     count: CountValues | None,
-) -> AsyncStreamOrValueStream:
-    embedder = get_subpipe(embed, context, embedded_kwargs, field=field)
+) -> AsyncStream:
+    embedder = bind_subpipe(embed, context, embedded_kwargs, field=field)
 
-    async for parent in async_iter(source):
+    async for parent in as_async(source):
         items = await maybe_deferred(embedder, parent)
-        results = _atake(async_iter(items), count)
+        stream = _take(items, count)
 
-        async for value in _afold_parent(parent, results, assign or "", bool(emit)):
+        async for value in _afold_parent(parent, stream, assign, emit):
             yield value
 
 
@@ -191,10 +158,10 @@ def loop_embed_sync(
     module_name: str,
     *,
     field: str | None = None,
-    assign: str | None = None,
-    emit: bool | None = None,
+    assign: str,
+    emit: bool,
     count: CountValues | None = None,
-) -> tuple[bool, bool, StreamOrValueStream]:
+) -> tuple[bool, bool, Stream]:
     """
     Resolve the sync embedded stream for an operator invocation.
 
@@ -213,9 +180,9 @@ def loop_embed_sync(
     if embed is None:
         handled = False
     elif is_subpipe(embed):
-        # A sub-pipeline embed is self-contained, so it runs per parent with no
+        # A named-workflow embed is self-contained, so it runs per parent with no
         # embedded kwargs (its own modules carry their conf).
-        stream = loop(cast(SyncSubPipe, embed), None, context, source)
+        stream = loop(embed, None, context, source)
         looped = True
     elif embed_type and embed.loopable:
         stream = loop(embed, embedded_kwargs, context, source)
@@ -236,20 +203,21 @@ def loop_embed_async(
     embed: AsyncProcessorWrapper | AsyncSubPipe | None,
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
-    source: Stream,
+    source: Feed,
     op_module_name: str,
     *,
     field: str | None = None,
-    assign: str | None = None,
-    emit: bool | None = None,
+    assign: str,
+    emit: bool,
     count: CountValues | None = None,
-) -> tuple[bool, bool, AsyncStreamOrValueStream | Stream]:
+) -> tuple[bool, bool, Feed]:
     """
-    Lazy-async counterpart of ``loop_embed_sync``: constructs (without advancing)
-    a sequential per-parent async loop generator that yields results as the
-    consumer pulls. Unlike the eager path this neither materializes the source
-    nor runs the embeds concurrently — ordering, backpressure, and early exit on
-    ``count="first"`` fall out of sequential iteration.
+    Build the lazy async counterpart to ``loop_embed_sync``.
+
+    It returns a sequential per-parent async generator without advancing the source.
+    It does not materialize the source or run embeds concurrently, so ordering,
+    backpressure, and early exit on ``count="first"`` follow from sequential
+    iteration.
     """
     embed_type = embed.type if embed else None
     handled = True
@@ -260,9 +228,9 @@ def loop_embed_async(
     if embed is None:
         handled = False
     elif is_subpipe(embed):
-        # A sub-pipeline embed is self-contained, so it runs per parent with no
+        # A named-workflow embed is self-contained, so it runs per parent with no
         # embedded kwargs (its own modules carry their conf).
-        stream = loop(cast(AsyncSubPipe, embed), None, context, source)
+        stream = loop(embed, None, context, source)
         looped = True
     elif embed_type and embed.loopable:
         stream = loop(embed, embedded_kwargs, context, source)

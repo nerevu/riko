@@ -9,15 +9,21 @@ Examples:
 
 """
 
-from pprint import pprint
+from __future__ import annotations
 
-from riko.runtime.collections import AsyncPipe, SyncPipe
+from pprint import pprint
+from typing import TYPE_CHECKING
+
+from riko import Pipeline
 from riko.types.modules import (
     ItemBuilderConf,
     ParsedParam,
     StrReplaceConf,
     StrReplaceConfRule,
 )
+
+if TYPE_CHECKING:
+    from riko.types import Item, Items
 
 p232_conf = ItemBuilderConf(
     {
@@ -33,22 +39,24 @@ p421_conf = StrReplaceConf(
     {"rule": StrReplaceConfRule(find="empty", param="first", replace="ABC")}
 )
 
+p421_options = {"field": "author", "assign": "author"}
 
-def pipe(test=False):
-    stream = SyncPipe("itembuilder", conf=p232_conf, test=test).strreplace(
-        conf=p421_conf, field="author", assign="author"
+
+def pipe(test: bool = False) -> list[Item]:
+    pipeline = Pipeline.from_module("itembuilder", conf=p232_conf).strreplace(
+        conf=p421_conf, options=p421_options
     )
 
-    return list(stream)
+    return list(pipeline)
 
 
-def async_pipe(test=False):
-    return AsyncPipe("itembuilder", conf=p232_conf, test=test).strreplace(
-        conf=p421_conf, field="author", assign="author"
+def async_pipe(test: bool = False) -> Pipeline:
+    return Pipeline.from_module("itembuilder", conf=p232_conf).strreplace(
+        conf=p421_conf, options=p421_options
     )
 
 
-def print_results(result) -> None:
+def print_results(result: Items) -> None:
     for i in result:
         pprint(i)
 

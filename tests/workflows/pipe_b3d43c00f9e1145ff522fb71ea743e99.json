@@ -1,0 +1,198 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-580",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-595",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-595",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-636",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-636",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-655",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-655",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-666",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-580": {
+            "conf": {
+                "path": {
+                    "type": "text",
+                    "value": "results.called-constituencies"
+                },
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/www.theguardian.com_politics_api_general_election_2010_results_json.json"
+                }
+            },
+            "id": "sw-580",
+            "name": "fetchdata",
+            "type": "module"
+        },
+        "sw-595": {
+            "embed": {
+                "conf": {
+                    "gid": {
+                        "subkey": "result.winning-mp.aristotle-id",
+                        "type": "text"
+                    }
+                },
+                "name": "pipe:bd0834cfe6cdacb0bea5569505d330b8"
+            },
+            "id": "sw-595",
+            "name": "loop",
+            "options": {
+                "assign": "mpdetails",
+                "count": "first",
+                "emit": false
+            },
+            "type": "module"
+        },
+        "sw-619": {
+            "conf": {
+                "location": {
+                    "subkey": "mpdetails.university",
+                    "type": "text"
+                }
+            },
+            "id": "sw-619",
+            "name": "locationbuilder",
+            "options": {
+                "assign": "y:location",
+                "count": "first",
+                "emit": false
+            },
+            "type": "module"
+        },
+        "sw-636": {
+            "conf": {
+                "combine": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "permit": {
+                    "type": "bool",
+                    "value": true
+                },
+                "rule": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "mpdetails.university"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "matches"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": " .+"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-636",
+            "name": "filter",
+            "type": "module"
+        },
+        "sw-655": {
+            "conf": {
+                "rule": [
+                    {
+                        "copy": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "mpdetails.name"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "title"
+                        }
+                    },
+                    {
+                        "copy": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "mpdetails.school"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "description"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-655",
+            "name": "rename",
+            "type": "module"
+        },
+        "sw-666": {
+            "conf": {
+                "rule": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "(.*)"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": "$1 (${mpdetails.university})"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-666",
+            "name": "regex",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-666",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

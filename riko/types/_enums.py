@@ -1,13 +1,45 @@
+"""
+String enums shared by Riko's stable, extension, and implementation APIs.
+
+Examples:
+
+    >>> from riko import ExecutionMode, Formats
+    >>>
+    >>> Formats.JSON.value, ExecutionMode.RUN.value
+    ('json', 'run')
+
+"""
+
 from collections.abc import Iterable
 from enum import StrEnum
 
 
 class ModuleName(StrEnum):
-    """A type-safe module name."""
+    """
+    A type-safe module name base populated by module-name discovery.
+
+    Examples:
+
+        >>> from riko.ext import ModuleName
+        >>>
+        >>> issubclass(ModuleName, str)
+        True
+
+    """
 
 
 class Formats(StrEnum):
-    """How a write serializes records to a destination."""
+    """
+    How a write serializes records to a destination.
+
+    Examples:
+
+        >>> from riko import Formats
+        >>>
+        >>> Formats.JSON.value
+        'json'
+
+    """
 
     CSV = "csv"
     GEOJSON = "geojson"
@@ -17,8 +49,27 @@ class Formats(StrEnum):
     QIF = "qif"
 
 
+class Backends(StrEnum):
+    """The kind of backend a write reaches."""
+
+    FILE = "file"
+    HTTP = "http"
+    S3 = "s3"
+    POSTGRES = "postgres"
+    AIRTABLE = "airtable"
+    INTUNE = "intune"
+
+
 class LocationType(StrEnum):
-    """The kind of lookup ``cast_location`` performs."""
+    """
+    The kind of lookup ``cast_location`` performs.
+
+    Examples:
+
+        >>> LocationType.CURRENCY.value
+        'currency'
+
+    """
 
     COORDINATES = "coordinates"
     CURRENCY = "currency"
@@ -27,7 +78,15 @@ class LocationType(StrEnum):
 
 
 class BasicCastType(StrEnum):
-    """Cast types a module may set as its ``ftype``/``ptype``."""
+    """
+    Cast types a module may set as its ``ftype``/``ptype``.
+
+    Examples:
+
+        >>> BasicCastType.INT.value
+        'int'
+
+    """
 
     DATE = "date"
     DATETIME = "datetime"
@@ -41,7 +100,15 @@ class BasicCastType(StrEnum):
 
 
 class SortableCastType(StrEnum):
-    """Cast types whose values are orderable, for sort comparisons."""
+    """
+    Cast types whose values are orderable for sort comparisons.
+
+    Examples:
+
+        >>> SortableCastType.BOOL.value
+        'bool'
+
+    """
 
     BOOL = "bool"
     DATE = "date"
@@ -55,7 +122,15 @@ class SortableCastType(StrEnum):
 
 
 class CastType(StrEnum):
-    """Every destination type ``cast_value`` can dispatch to."""
+    """
+    Every destination type ``cast_value`` can dispatch to.
+
+    Examples:
+
+        >>> CastType.LOCATION.value
+        'location'
+
+    """
 
     BOOL = "bool"
     DATE = "date"
@@ -71,7 +146,17 @@ class CastType(StrEnum):
 
 
 class ExecutionMode(StrEnum):
-    """Whether a run executes the pipeline or only describes it."""
+    """
+    Whether a run executes the pipeline or only describes it.
+
+    Examples:
+
+        >>> from riko import ExecutionMode
+        >>>
+        >>> ExecutionMode.DESCRIBE_INPUTS.value
+        'describe_inputs'
+
+    """
 
     RUN = "run"
     DESCRIBE_INPUTS = "describe_inputs"
@@ -79,6 +164,34 @@ class ExecutionMode(StrEnum):
     DESCRIBE = "describe"
 
 
+class Executor(StrEnum):
+    """
+    Where a run executes per-item work.
+
+    ``AUTO`` lets the run pick: items run sequentially inline unless a
+    concurrency limit above one is set, in which case synchronous iteration
+    uses a thread pool. Under asynchronous iteration, native async work runs
+    inline and synchronous work runs on worker threads. ``INLINE`` never uses
+    workers, while ``THREAD`` and ``PROCESS`` use a pool of threads or worker
+    processes.
+
+    Examples:
+
+        >>> from riko import Executor
+        >>>
+        >>> Executor("thread") is Executor.THREAD, Executor.AUTO.value
+        (True, 'auto')
+
+    """
+
+    AUTO = "auto"
+    INLINE = "inline"
+    THREAD = "thread"
+    PROCESS = "process"
+
+
 type ModuleNameLike = str | ModuleName
-type KeyLike = str | Iterable[str]
+type StrLike = str | Iterable[str]
 type FmtLike = Formats | str
+type BackendLike = Backends | str
+type ExecutorLike = Executor | str

@@ -1,0 +1,104 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-149",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-157",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-157",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-174",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-174",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-191",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-149": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/edition.cnn.html"
+                }
+            },
+            "id": "sw-149",
+            "name": "feedautodiscovery",
+            "type": "module"
+        },
+        "sw-157": {
+            "conf": {
+                "url": {
+                    "subkey": "link",
+                    "type": "url"
+                }
+            },
+            "id": "sw-157",
+            "name": "fetch",
+            "options": {
+                "assign": "loop:fetch",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-174": {
+            "conf": {
+                "rule": [
+                    {
+                        "dir": {
+                            "type": "text",
+                            "value": "ASC"
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "pubDate"
+                        },
+                        "type": "datetime"
+                    }
+                ]
+            },
+            "id": "sw-174",
+            "name": "sort",
+            "type": "module"
+        },
+        "sw-191": {
+            "conf": {
+                "count": {
+                    "type": "float",
+                    "value": "25"
+                }
+            },
+            "id": "sw-191",
+            "name": "truncate",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-191",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

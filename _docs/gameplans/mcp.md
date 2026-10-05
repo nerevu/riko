@@ -393,7 +393,7 @@ MCP/capability modules are ordinary `Pipeline` modules and use the same definiti
 sync and async execution:
 
 ```python
-catalog = Pipeline(
+catalog = Pipeline.from_module(
     "capabilitycatalog",
     conf={
         "include": {
@@ -579,7 +579,7 @@ results/exceptions and server-specific concurrency limits.
 Where this maps directly onto Pipeline execution, prefer the common execution settings:
 
 ```python
-flow.with_execution(concurrency=8, ordered=False)
+pipeline.with_execution(concurrency=8, ordered=False)
 ```
 
 Capability-level fan-out that has additional `fail_fast`/collect/minimum-success semantics
@@ -735,7 +735,7 @@ credential reference
 → connector/OpenAPI executor
 ```
 
-Token values never enter capability plans, catalog records, pipeline definitions, operation specs,
+Token values never enter capability plans, catalog records, workflow documents, operation specs,
 compatibility reports, artifacts, or normal items.
 
 An authorizer-style API proxy is represented as configured OpenAPI capability providers, not

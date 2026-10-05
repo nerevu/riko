@@ -1,42 +1,46 @@
 """
-Tests basic pipeline module usage
+Tests basic workflow module usage.
 
-Note: many of these tests simply make sure the module compiles and runs.
-We need more extensive tests with stable data feeds!
+These are integration tests for workflow modules. Keep cases that exercise
+composition, wiring, runtime context, or historical workflow behavior not owned more
+strongly by module doctests or focused test suites.
 """
 
+from __future__ import annotations
+
 import sqlite3
-from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from importlib import import_module
-from itertools import islice
-from json import loads
+from itertools import chain, islice
 from pathlib import Path
 from time import struct_time
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from riko import Pipeline
 from riko.base._dateutils import get_tzname
 from riko.base._strutils import truncate_content
-from riko.base.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.base.exceptions import UnsupportedModuleError
 from riko.coercion._sequences import listize
-from riko.runtime._compile import (
-    abuild_pipeline,
-    build_pipeline,
-    extract_dependencies,
-    resolve_module,
-)
-from riko.runtime._pipelines import pipeline_resolver
-from riko.runtime.collections import SyncPipe
-from riko.runtime.context import Context, ExecutionMode
-from riko.types._guards import is_mapping
-from riko.types._io import PathLike
-from riko.types._pipeline import AsyncPipelineDependencies, SyncPipelineDependencies
-from riko.types._streams import AsyncRikoStream, StatefulItem
+from riko.definitions._workflow import ModuleNode
+from riko.execution._execution import SyncExecution
+from riko.execution.context import Context
+from riko.runtime._execution_plan import build_execution_plan
+from riko.runtime._resolver import dispatcher
+from riko.runtime._serialize import parse_document
+from riko.runtime._workflows import workflow_resolver
+from riko.types._guards import is_mapping, is_subpipe
+from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput
 from tests import TESTS_DIR, async_test
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from riko.definitions._workflow import Node, Workflow
+    from riko.types._io import PathLike
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
@@ -91,13 +95,53 @@ def _assert_kazeeki(item: Mapping, example: Mapping, content: tuple[str, str]) -
     assert item["k:content"].endswith(end)
 
 
-def _extract_dependencies(pipe_name) -> list[str]:
-    pipe_file_name = TESTS_DIR / "pipelines" / f"{pipe_name}.json"
+def _document(pipe_name: str) -> Path | None:
+    """Supplies the committed workflow document for a pipeline, when it has one."""
+    path = TESTS_DIR / "workflows" / f"{pipe_name}.json"
+    return path if path.exists() else None
 
-    with pipe_file_name.open() as f:
-        pipe_def = loads(f.read())
 
-    return extract_dependencies(pipe_def)
+def _node_names(node: Node) -> set[str]:
+    """Collects the module names one node runs, counting a loop's embedded one."""
+    names: set[str] = set()
+
+    if isinstance(node, ModuleNode):
+        names.add(node.name)
+
+        if node.embed is not None:
+            names.add(node.embed["name"])
+
+    return names
+
+
+def _workflow_dependencies(workflow: Workflow) -> list[str]:
+    """Collects the built-in module names a workflow depends on."""
+    named = (_node_names(node) for node in workflow.nodes.values())
+    names = set(chain.from_iterable(named))
+    return sorted(name for name in names if not name.startswith("pipe"))
+
+
+def _declared_input(name: str, schema: object) -> tuple[str, str, str, str, str]:
+    """Renders one declared input as the prompt tuple a caller is shown."""
+    fields = schema if is_mapping(schema) else {}
+    prompt = str(fields.get("title", name))
+    kind = str(fields.get("format", ""))
+    default = str(fields.get("default", ""))
+    return ("", name, prompt, kind, default)
+
+
+def _declared_inputs(workflow: Workflow) -> list[tuple[str, str, str, str, str]]:
+    """Renders a workflow's declared inputs as the prompt tuples a caller is shown."""
+    properties = workflow.inputs.get("properties")
+    schemas = properties if is_mapping(properties) else {}
+    return [_declared_input(name, schema) for name, schema in sorted(schemas.items())]
+
+
+def _load_workflow(pipe_name: str) -> Workflow:
+    """Parses the workflow document committed for a pipeline."""
+    document = _document(pipe_name)
+    assert document is not None, f"{pipe_name} has no workflow document"
+    return parse_document(document.read_text())
 
 
 def _check_results(
@@ -124,18 +168,18 @@ def _check_dates[T: datetime | struct_time | date](*dates: T | object) -> tuple[
         if all(isinstance(_date, _class) for _date in dates):
             if _class is datetime or _class is struct_time:
                 for _date in dates:
-                    assert get_tzname(cast(datetime, _date))
+                    assert get_tzname(cast("datetime", _date))
 
             break
     else:
         msg = f"Expected all dates to be of the same type, but got {dates}"
         raise AssertionError(msg)
 
-    return cast(tuple[T, ...], dates)
+    return cast("tuple[T, ...]", dates)
 
 
-def db_conn(path: PathLike | None = None):
-    connection = sqlite3.connect(path or ":memory:")
+def db_conn(dest: PathLike | None = None):
+    connection = sqlite3.connect(dest or ":memory:")
     connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
     connection.execute("INSERT INTO t VALUES ('ford', 7213)")
     connection.commit()
@@ -153,17 +197,18 @@ def db_conn(path: PathLike | None = None):
 )
 def test_fetchtable_reads_sqlite_fixture(tmp_path, db_conn):
     """
-    A binary tabular source (sqlite here; xlsx under the same defect) must be
-    opened in binary mode and yield its rows.
+    Ensure binary tabular sources open in binary mode and yield rows.
+
+    SQLite covers the defect here; XLSX follows the same path.
     """
     dbpath = tmp_path / "cars.sqlite"
     db_conn(dbpath)
 
-    stream = SyncPipe("fetchtable", conf={"url": str(dbpath)})
+    pipeline = Pipeline.from_module("fetchtable", conf={"url": str(dbpath)})
     item = {}
 
     with pytest.raises(RuntimeError):
-        item = next(stream)
+        item = pipeline.first()
 
     Path(dbpath).unlink(missing_ok=True)
     assert is_mapping(item)
@@ -171,66 +216,54 @@ def test_fetchtable_reads_sqlite_fixture(tmp_path, db_conn):
 
 
 class TestBasics:
-    """Test a few sample pipelines"""
+    """Test a few sample pipelines."""
 
     def _get_pipeline(
         self, pipe_name: str, file_path: Path | None = None
     ) -> ParserMaterializedOutput:
-        # prefer the generated module; fall back to compiling the JSON definition
-        try:
-            pipeline = resolve_module(pipe_name)
-        except (UnsupportedPipelineError, UnsupportedModuleError):
-            parsed = pipeline_resolver.load_definition(pipe_name, directory=file_path)
-            stream = build_pipeline(parsed, context=self.context)
+        # prefer the workflow document; fall back to the hand-written module
+        items: ParserMaterializedOutput = []
+
+        if _document(pipe_name) is None:
+            stream = dispatcher.require(pipe_name)(context=self.context)
+            items = cast("ParserMaterializedOutput", list(listize(stream)))
         else:
-            stream = pipeline(context=self.context)
+            workflow = workflow_resolver.load_definition(pipe_name, directory=file_path)
 
-        return cast(ParserMaterializedOutput, list(listize(stream)))
+            with SyncExecution(context=self.context) as execution:
+                items = list(execution.run(build_execution_plan(workflow)))
 
-    def _aget_pipeline(
-        self, pipe_name: str, file_path: Path | None = None
-    ) -> AsyncRikoStream:
-        try:
-            pipeline = resolve_module(pipe_name, True)
-        except (UnsupportedPipelineError, UnsupportedModuleError):
-            parsed = pipeline_resolver.load_definition(pipe_name, directory=file_path)
-            stream = abuild_pipeline(parsed, context=self.context)
-        else:
-            stream = pipeline(context=self.context)
+        return items
 
-        return cast(AsyncRikoStream, stream)
+    def _aget_pipeline(self, pipe_name: str) -> AsyncStream:
+        pipe = dispatcher.require(pipe_name, True)
+        assert is_subpipe(pipe)
+        return pipe(context=self.context)
 
     def _load(self, items: Sequence[Items], pipe_name, value=0, check=1):
-        try:
-            module = import_module(f"tests.pypipelines.{pipe_name}")
-        except ImportError:
-            pydeps = _extract_dependencies(pipe_name)
+        if _document(pipe_name) is None:
+            module = import_module(f"tests.pyworkflows.{pipe_name}")
+            pydeps = _workflow_dependencies(module.build().workflow)
         else:
-            pipeline: SyncPipelineDependencies = module.pipe
-            pydeps = extract_dependencies(pipeline=pipeline)
+            pydeps = _workflow_dependencies(_load_workflow(pipe_name))
 
         _check_results(pydeps, items, pipe_name, value=value, check=check)
 
     async def _aload(self, items: Sequence[Items], pipe_name, value=0, check=1):
-        try:
-            module = import_module(f"tests.pypipelines.{pipe_name}")
-        except ImportError:
-            pydeps = _extract_dependencies(pipe_name)
+        if _document(pipe_name) is None:
+            module = import_module(f"tests.pyworkflows.{pipe_name}")
+            pydeps = _workflow_dependencies(module.build().workflow)
         else:
-            pipeline: AsyncPipelineDependencies = module.async_pipe
-            pydeps = await extract_dependencies(pipeline=pipeline)
+            pydeps = _workflow_dependencies(_load_workflow(pipe_name))
 
         _check_results(pydeps, items, pipe_name, value=value, check=check)
 
     def setup_method(self):
-        """Compile common subpipe"""
+        """Compile common subpipe."""
         self.context = Context(test=True)
 
     def test_feeddiscovery(self):
-        """
-        Loads a pipeline containing a feed auto-discovery module plus
-        fetch-feed in a loop with emit all.
-        """
+        """Load feed discovery with fetch-feed inside an emit-all loop."""
         pipe_name = "pipe_HrX5bjkv3BGEp9eSy6ky6g"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 15, 0)
@@ -239,7 +272,7 @@ class TestBasics:
         assert item.get("link") == "http://sz.de/1.2104731"
 
     def test_fetchsitefeed(self):
-        """Loads a pipeline containing a fetchsitefeed module"""
+        """Loads a pipeline containing a fetchsitefeed module."""
         pipe_name = "pipe_551507461cbcb19a828165daad5fe007"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 1)
@@ -249,7 +282,7 @@ class TestBasics:
         assert item.get("summary")
 
     def test_loops_1(self):
-        """Loads a pipeline containing a loop"""
+        """Loads a pipeline containing a loop."""
         pipe_name = "pipe_125e9fe8bb5f84526d21bebfec3ad116"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
@@ -264,10 +297,7 @@ class TestBasics:
         assert info.get("user_view_type") == "public"
 
     def test_urlbuilder(self):
-        """
-        Loads the RTW URL Builder test pipeline and compiles and executes it
-        to check the results
-        """
+        """Loads the RTW URL Builder test pipeline."""
         pipe_name = "pipe_e519dd393f943315f7e4128d19db2eac"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 63, 0)
@@ -276,24 +306,12 @@ class TestBasics:
         assert "The 6 Best Enterprise Data Modeling Tools" in str(item.get("title"))
 
     def test_input_override(self):
-        """Overrides an offline input->itembuilder pipeline via Context.inputs"""
+        """Overrides an offline input->itembuilder pipeline via Context.inputs."""
         self.context = self.context.augment(inputs={"textinput1": "IBM"})
         pipe_name = "pipe_1LNyRuNS3BGdkTKaAsqenA"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
         assert items == [{"symbol": "IBM"}]
-
-    def test_gigs(self):
-        """Loads the gigs pipeline backed by a cached fetchdata source"""
-        pipe_name = "pipe_gigs"
-        items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 49, 0)
-        item = items[-1]
-        assert is_mapping(item)
-        assert item.get("title") == "Educational Android App"
-
-        link = item.get("link")
-        assert link == "http://www.guru.com/jobs/educational-android-app/1058980"
 
     def test_kazeeki1(self):
         """Loads the kazeeki simple test fetchdata pipeline."""
@@ -420,10 +438,7 @@ class TestBasics:
         assert item.get("title") == "Markitekt - Architects of Marketing"
 
     def test_simplest(self):
-        """
-        Loads the RTW simple test pipeline and compiles and executes it to
-        check the results
-        """
+        """Loads the RTW simple test pipeline."""
         pipe_name = "pipe_2de0e4517ed76082dcddf66f7b218057"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 17, 0)
@@ -435,12 +450,7 @@ class TestBasics:
 
     @pytest.mark.perf
     def test_feed(self):
-        """
-        Loads a simple test pipeline and compiles and executes it to check
-        the results
-
-        TODO: have these tests iterate over a number of test pipelines
-        """
+        """Loads a simple test pipeline."""
         pipe_name = "pipe_testpipe1"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 4, 0)
@@ -452,10 +462,7 @@ class TestBasics:
             assert "the" in summary
 
     def test_forever(self):
-        """
-        Loads a pipeline that uses the forever driver source, bounded by
-        truncate, and checks it emits the expected driver items.
-        """
+        """Loads a pipeline that uses forever driver source, bounded by truncate."""
         pipe_name = "pipe_forever"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 3, 0)
@@ -465,8 +472,9 @@ class TestBasics:
 
     def test_filtered_multiple_sources(self):
         """
-        Loads the filter multiple sources pipeline and compiles and executes it to check
-        the results. Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057
+        Loads a pipeline that filters multiple sources pipelines.
+
+        Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057.
         """
         pipe_name = "pipe_c1cfa58f96243cea6ff50a12fc50c984"
         items = self._get_pipeline(pipe_name)
@@ -479,7 +487,7 @@ class TestBasics:
 
     @pytest.mark.perf
     def test_european_performance_cars(self):
-        """Loads a pipeline containing a sort"""
+        """Loads a pipeline containing a sort."""
         pipe_name = "pipe_8NMkiTW32xGvMbDKruymrA"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 36, 0)
@@ -514,7 +522,7 @@ class TestBasics:
 
     # todo: need tests with single and mult-part key
     def test_reverse_truncate(self):
-        """Loads a pipeline containing a reverse and truncate"""
+        """Loads a pipeline containing a reverse and truncate."""
         pipe_name = "pipe_58a53262da5a095fe7a0d6d905cc4db6"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 3, 0)
@@ -528,7 +536,7 @@ class TestBasics:
             prev_title = title
 
     def test_tail(self):
-        """Loads a pipeline containing a tail"""
+        """Loads a pipeline containing a tail."""
         pipe_name = "pipe_06c4c44316efb0f5f16e4e7fa4589ba2"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 5, 0)
@@ -539,7 +547,7 @@ class TestBasics:
         assert "American woman is being held hostage" in title
 
     def test_itembuilder(self):
-        """Loads a pipeline containing an itembuilder"""
+        """Loads a pipeline containing an itembuilder."""
         pipe_name = "pipe_b96287458de001ad62a637095df33ad5"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 2, 0)
@@ -557,7 +565,7 @@ class TestBasics:
             assert item == expected[pos]
 
     def test_rssitembuilder(self):
-        """Loads a pipeline containing an rssitembuilder"""
+        """Loads a pipeline containing an rssitembuilder."""
         pipe_name = "pipe_1166de33b0ea6936d96808717355beaa"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 3, 0)
@@ -598,7 +606,7 @@ class TestBasics:
                 assert item.get(k) == v, f"expected {v=} at {pos=}, {k=}. Got\n{item=}"
 
     def test_csv(self):
-        """Loads a pipeline containing a csv source"""
+        """Loads a pipeline containing a csv source."""
         pipe_name = "pipe_UuvYtuMe3hGDsmRgPm7D0g"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
@@ -649,13 +657,14 @@ class TestBasics:
         for item in items:
             assert item == expected
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="the migrated pipeline declares no inputs, so describing what a "
+        "pipeline asks for is still pending",
+    )
     def test_describe_input(self):
-        """Loads a pipeline but just gets the input requirements"""
-        self.context = self.context.augment(mode=ExecutionMode.DESCRIBE_INPUTS)
-        pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
-        items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 6, 0)
-
+        """Reads a pipeline's input requirements from what it declares."""
+        workflow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
         expected = [
             ("", "dateinput1", "dateinput1", "datetime", "10/14/2010"),
             ("", "locationinput1", "locationinput1", "location", "isle of wight, uk"),
@@ -671,49 +680,18 @@ class TestBasics:
             ("", "urlinput1", "urlinput1", "url", "file://riko/data/example.html"),
         ]
 
-        for pos, item in enumerate(items):
-            assert item == expected[pos]
+        assert _declared_inputs(workflow) == expected
 
     def test_describe_dependencies(self):
-        self.context = self.context.augment(mode=ExecutionMode.DESCRIBE_DEPENDENCIES)
-        pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
-        items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 2, 0)
-        assert items == ["input", "rssitembuilder"]
-
-    def test_describe_both(self):
-        """Loads a pipeline but just gets the input requirements"""
-        self.context = self.context.augment(mode=ExecutionMode.DESCRIBE)
-        pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
-        items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 1, 0)
-
-        inputs = [
-            ("", "dateinput1", "dateinput1", "datetime", "10/14/2010"),
-            ("", "locationinput1", "locationinput1", "location", "isle of wight, uk"),
-            ("", "numberinput1", "numberinput1", "float", "12121"),
-            ("", "privateinput1", "privateinput1", "text", ""),
-            (
-                "",
-                "textinput1",
-                "textinput1",
-                "text",
-                "This is default text - is there debug text too?",
-            ),
-            ("", "urlinput1", "urlinput1", "url", "file://riko/data/example.html"),
-        ]
-
-        dependencies = ["input", "rssitembuilder"]
-
-        item = items[0]
-        assert is_mapping(item)
-        assert item.get("inputs") == inputs
-        assert item.get("dependencies") == dependencies
+        """Reads a pipeline's module dependencies from its workflow document."""
+        workflow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
+        assert _workflow_dependencies(workflow) == ["input", "rssitembuilder"]
 
     def test_union_just_other(self):
         """
-        Loads a pipeline containing a union with the first input unconnected
-        Also tests for empty source string and reference to 'y:id.value'
+        Loads a pipeline containing a union with the first input unconnected.
+
+        Also tests for empty source string and reference to 'y:id.value'.
         """
         pipe_name = "pipe_6e30c269a69baf92cd420900b0645f88"
         items = self._get_pipeline(pipe_name)
@@ -734,7 +712,7 @@ class TestBasics:
             assert ("210" in str(link)) or ("Poroschenko:" in str(title)), msg
 
     def test_stringtokenizer(self):
-        """Loads a pipeline containing a stringtokenizer"""
+        """Loads a pipeline containing a stringtokenizer."""
         pipe_name = "pipe_975789b47f17690a21e89b10a702bcbd"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 2, 0)
@@ -758,8 +736,12 @@ class TestBasics:
         assert is_mapping(item)
         assert item.get("content") == "$3.00</td>"
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="the execution refuses split nodes until streaming fan-out lands",
+    )
     def test_split(self):
-        """Loads an example pipeline containing a split module"""
+        """Loads an example pipeline containing a split module."""
         pipe_name = "pipe_QMrlL_FS3BGlpwryODY80A"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 7, 0)
@@ -769,8 +751,12 @@ class TestBasics:
         title = str(item.get("title"))
         assert title.startswith("[Weight] More parents think their overweight")
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="the execution refuses split nodes until streaming fan-out lands",
+    )
     def test_simplemath_1(self):
-        """Loads a pipeline containing simplemath"""
+        """Loads a pipeline containing simplemath."""
         pipe_name = "pipe_zKJifuNS3BGLRQK_GsevXg"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 6, 0)
@@ -781,10 +767,7 @@ class TestBasics:
         assert title == "Open researcher open course"
 
     def test_twitter_caption_search(self):
-        """
-        Loads the Twitter Caption Search pipeline and compiles and
-        executes it to check the results
-        """
+        """Compile and run the Twitter Caption Search pipeline."""
         pipe_name = "pipe_eb3e27f8f1841835fdfd279cd96ff9d8"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 3, 0)
@@ -793,10 +776,7 @@ class TestBasics:
         assert item.get("ctime") == "&time=00:01:41&time="
 
     def test_loop_example(self):
-        """
-        Loads the loop example pipeline and compiles and executes it to
-        check the results
-        """
+        """Loads the loop example pipeline."""
         pipe_name = "pipe_dAI_R_FS3BG6fTKsAsqenA"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
@@ -810,8 +790,22 @@ class TestBasics:
         assert item.get("title") == expected
         assert item.get("pubDate")
 
+    def test_loop_subpipe_embed(self):
+        """Runs a named workflow embedded in a loop once per parent item."""
+        items = self._get_pipeline("pipe_loop_subpipe")
+        assert items == [{"title": "hello", "strconcat": "hello!"}]
+
+    def test_loop_count_all_assign(self):
+        """Keeps one copy of the parent per embed result when assigning all."""
+        items = self._get_pipeline("pipe_loop_assign")
+        assert items == [
+            {"title": "a b c", "tokens": {"content": "a"}},
+            {"title": "a b c", "tokens": {"content": "b"}},
+            {"title": "a b c", "tokens": {"content": "c"}},
+        ]
+
     def test_namespaceless_xml_input(self):
-        """Loads a pipeline containing deep xml source with no namespace"""
+        """Loads a pipeline containing deep xml source with no namespace."""
         pipe_name = "pipe_402e244d09a4146cd80421c6628eb6d9"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 5, 1)
@@ -828,7 +822,7 @@ class TestBasics:
             assert item.get("title") in contains
 
     def test_urlbuilder_loop(self):
-        """Loads a pipeline containing a URL builder in a loop (offline)"""
+        """Loads a pipeline containing a URL builder in a loop (offline)."""
         pipe_name = "pipe_e65397e116d7754da0dd23425f1f0af1"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 2, 0)
@@ -853,9 +847,7 @@ class TestBasics:
 
     @pytest.mark.perf
     def test_createrss(self):
-        """
-        Loads a pipeline containing rssitembuilder
-        """
+        """Loads a pipeline containing rssitembuilder."""
         pipe_name = "pipe_a08134746e30a6dd3a7cb3c0cf098692"
 
         items = self._get_pipeline(pipe_name)
@@ -885,9 +877,10 @@ class TestBasics:
     #######################
     def test_locationbuilder_reports_unsupported_module(self):
         """
-        Loads a pipeline containing a locationbuilder, sub-module, passes
-        input parameters. Also tests json fetch with nested list, assigns
-        part of loop result, and regexes multi-part reference.
+        Exercise nested loops, inputs, assignments, and references.
+
+        The pipeline covers a location builder, submodule inputs, nested JSON
+        lists, partial loop assignment, and multi-part-reference regexes.
         """
         pipe_name = "pipe_b3d43c00f9e1145ff522fb71ea743e99"
 

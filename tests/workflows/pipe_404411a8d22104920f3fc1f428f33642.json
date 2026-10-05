@@ -1,0 +1,87 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-502",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-583",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-561",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-569",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-569",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-583",
+                "port": "in:count"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-502": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/feeds.delicious.com_v2_rss_popular_count=15.xml"
+                }
+            },
+            "id": "sw-502",
+            "name": "fetch",
+            "type": "module"
+        },
+        "sw-561": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/feeds.delicious.com_v2_rss_popular_count=3.xml"
+                }
+            },
+            "id": "sw-561",
+            "name": "fetch",
+            "type": "module"
+        },
+        "sw-569": {
+            "id": "sw-569",
+            "name": "count",
+            "options": {
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-583": {
+            "conf": {
+                "count": {
+                    "terminal": "count",
+                    "type": "float"
+                }
+            },
+            "id": "sw-583",
+            "name": "truncate",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-583",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

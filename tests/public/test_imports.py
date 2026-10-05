@@ -10,6 +10,7 @@ These tests exercise public imports rather than implementation details.
 """
 
 from importlib import import_module
+from importlib.resources import files
 from types import BuiltinFunctionType, FunctionType
 
 import pytest
@@ -20,7 +21,8 @@ import riko.base.exceptions
 import riko.ext
 import riko.modules
 import riko.modules._names
-import riko.runtime._compile
+import riko.runtime._codegen
+import riko.runtime._migrate
 import riko.runtime.collections
 import riko.types
 from riko.base._api_surface import (
@@ -38,7 +40,8 @@ from riko.base._api_surface import (
 SURFACE_MODULES = (
     riko.bado,
     riko.runtime.collections,
-    riko.runtime._compile,
+    riko.runtime._codegen,
+    riko.runtime._migrate,
     riko.ext,
     riko.modules,
     riko.base.exceptions,
@@ -52,10 +55,13 @@ PARTIAL_SURFACES = (
 CONF_TYPES = riko.types.modules.__all__
 
 
+CODEGEN = (COMPILE & {"compile_workflow"}) | {"RAW_CONFS", "render_value"}
+
 EQUAL_SURFACES = (
     (riko.bado, BADO),
     (riko.runtime.collections, COLLECTIONS),
-    (riko.runtime._compile, COMPILE),
+    (riko.runtime._codegen, CODEGEN),
+    (riko.runtime._migrate, {"parse_dag", "migrate_v1_to_v2"}),
     (riko.ext, EXTENSION),
     (riko, STABLE),
     (riko.types, TYPES),
@@ -67,6 +73,11 @@ def id_func(val):
         return val.__name__
     else:
         return "vs-set"
+
+
+@pytest.mark.smoke
+def test_package_ships_py_typed():
+    assert files("riko").joinpath("py.typed").is_file()
 
 
 @pytest.mark.smoke
@@ -87,9 +98,11 @@ def test_normal_module_confs_are_public():
     assert "ItemBuilderConf" in CONF_TYPES
 
 
-@pytest.mark.parametrize("name", CONF_TYPES)
-def test_raw_module_confs_are_private(name):
-    assert not name.endswith(("RawConf", "RawRule"))
+def test_raw_module_confs_are_private():
+    leaked = sorted(
+        name for name in CONF_TYPES if name.endswith(("RawConf", "RawRule"))
+    )
+    assert not leaked, f"Raw module confs leaked into riko.types.modules: {leaked}"
 
 
 def test_module_metadas_are_same():
@@ -102,20 +115,32 @@ def test_stable_names_importable(module, surface):
     assert all(hasattr(module, name) for name in surface)
 
 
-@pytest.mark.parametrize("name", riko.bado.__all__)
-def test_bado_reexports_are_same_object(name):
-    assert getattr(riko, name) is getattr(riko.bado, name)
+def test_bado_reexports_are_same_object():
+    mismatches = sorted(
+        name
+        for name in riko.bado.__all__
+        if getattr(riko, name) is not getattr(riko.bado, name)
+    )
+    assert not mismatches, f"Bado reexports differ from riko: {mismatches}"
 
 
-@pytest.mark.parametrize("name", sorted(ROOT_EXCEPTIONS))
-def test_exception_reexports_are_same_object(name):
-    assert getattr(riko, name) is getattr(riko.base.exceptions, name)
+def test_exception_reexports_are_same_object():
+    mismatches = sorted(
+        name
+        for name in ROOT_EXCEPTIONS
+        if getattr(riko, name) is not getattr(riko.base.exceptions, name)
+    )
+    assert not mismatches, f"Exception reexports differ from riko: {mismatches}"
 
 
-@pytest.mark.parametrize("module", SURFACE_MODULES)
-def test_no_accidental_internal_exports(module):
+def test_no_accidental_internal_exports():
     """Private resolution internals stay out of public namespace exports."""
-    assert PRIVATE_RESOLUTION.isdisjoint(module.__all__)
+    violations = {
+        module.__name__: sorted(PRIVATE_RESOLUTION.intersection(module.__all__))
+        for module in SURFACE_MODULES
+        if PRIVATE_RESOLUTION.intersection(module.__all__)
+    }
+    assert not violations, f"Private resolution internals exported: {violations}"
 
 
 @pytest.mark.parametrize("path", ["riko.ext.resolver", "riko.ext.pipelines"])
@@ -125,8 +150,7 @@ def test_resolution_internals_have_no_public_path(path):
         import_module(path)
 
 
-@pytest.mark.parametrize(("name", "val"), vars(riko).items())
-def test_no_leaked_public_functions(name, val):
+def test_no_leaked_public_functions():
     """
     No bare function leaks into the top-level namespace outside ``__all__``.
 
@@ -135,8 +159,13 @@ def test_no_leaked_public_functions(name, val):
     ``__all__``, so this guards callables rather than the whole attribute surface
     (that surface is pinned by ``test_equal_surface_matches_expected``).
     """
-    if not (name.startswith("_") or name in STABLE):
-        assert not isinstance(val, (FunctionType, BuiltinFunctionType))
+    leaked = sorted(
+        name
+        for name, val in vars(riko).items()
+        if not (name.startswith("_") or name in STABLE)
+        and isinstance(val, (FunctionType, BuiltinFunctionType))
+    )
+    assert not leaked, f"Top-level functions leaked outside STABLE: {leaked}"
 
 
 def test_stable_and_extension_do_not_intersect():
@@ -144,7 +173,12 @@ def test_stable_and_extension_do_not_intersect():
     assert not common, f"Stable and extension surfaces intersect: {common}"
 
 
-@pytest.mark.parametrize("module", SURFACE_MODULES)
-def test_all_has_no_duplicates(module):
-    names = module.__all__
-    assert len(names) == len(set(names))
+def test_all_has_no_duplicates():
+    duplicates = {
+        module.__name__: sorted(
+            {name for name in module.__all__ if module.__all__.count(name) > 1}
+        )
+        for module in SURFACE_MODULES
+        if len(module.__all__) != len(set(module.__all__))
+    }
+    assert not duplicates, f"Duplicate __all__ entries: {duplicates}"

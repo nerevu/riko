@@ -1,15 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Splits a stream into identical copies.
+Splits a finite stream into independent copies.
 
-Use split when you want to perform different operations on data from the same
-stream. The union module is the reverse of split, it merges multiple input
-streams into a single combined stream.
-
-Not lazy: handing out independent copies requires the whole stream up front, so
-the source is materialized and each branch replays it. For lazy fan-out use
-named ``send``/``receive`` channels instead. Each branch deep copies its items,
-so mutating one branch never affects another.
+The complete source is consumed before the branches are returned, and each
+branch receives independent item copies.
 
 Examples:
 
@@ -28,19 +22,23 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
+from __future__ import annotations
+
 from copy import deepcopy
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Stream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import splitter
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Cascade, Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"extract": "splits", "ptype": BasicCastType.INT, "objectify": False}
 DEFAULTS: Defaults = {"splits": 2}
@@ -49,7 +47,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 def parser(
     stream: Stream, splits: int, tuples: PipeTuples, **kwargs: object
-) -> Iterator[Stream]:
+) -> Cascade:
     """
     Splits the source into ``splits`` independent copies of the stream.
 
@@ -88,7 +86,7 @@ def parser(
 
 
 @splitter(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
+def async_pipe(*args: Any, **kwargs: object) -> Cascade:
     """
     Asynchronously splits a stream into identical copies.
 
@@ -126,7 +124,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
 
 
 @splitter(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
+def pipe(*args: Any, **kwargs: object) -> Cascade:
     """
     Splits a stream into identical copies.
 

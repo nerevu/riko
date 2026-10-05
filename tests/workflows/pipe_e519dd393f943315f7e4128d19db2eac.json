@@ -1,0 +1,138 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-492",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-481",
+                "port": "in:_1_URL"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-552",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-492",
+                "port": "in:PARAM_5_value"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-481": {
+            "conf": {
+                "offline": {
+                    "type": "bool",
+                    "value": true
+                },
+                "url": {
+                    "terminal": "1_URL",
+                    "type": "url"
+                }
+            },
+            "id": "sw-481",
+            "name": "fetch",
+            "type": "module"
+        },
+        "sw-492": {
+            "conf": {
+                "base": {
+                    "type": "text",
+                    "value": "news.google.com/rss"
+                },
+                "ext": {
+                    "type": "text",
+                    "value": "xml"
+                },
+                "param": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "hl"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "en-US"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "gl"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "US"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "ceid"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "US:en"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "q"
+                        },
+                        "value": {
+                            "terminal": "PARAM_5_value",
+                            "type": "text"
+                        }
+                    }
+                ],
+                "path": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-492",
+            "name": "urlbuilder",
+            "type": "module"
+        },
+        "sw-552": {
+            "conf": {
+                "debug": {
+                    "type": "text",
+                    "value": ""
+                },
+                "default": {
+                    "type": "text",
+                    "value": "enterprise mashup"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "q"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "Search term:"
+                }
+            },
+            "id": "sw-552",
+            "name": "input",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-481",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

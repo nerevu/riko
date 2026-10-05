@@ -1,3 +1,5 @@
+"""Shared pytest fixtures and collection hooks for the Riko test suite."""
+
 import importlib.util
 
 import pytest
@@ -5,16 +7,20 @@ import pytest
 from riko.bado._backend import issync
 from riko.base._paths import ROOT_DIR
 from riko.parsing.documents import IS_LXML
-from riko.runtime._pipelines import DirectoryStore, PackageStore, pipeline_resolver
 from riko.runtime._pubsub import reset_pubsub
+from riko.runtime._workflows import register_workflow_store, reset_workflow_resolver
 
-PIPELINE_DIR = ROOT_DIR / "tests" / "pipelines"
+WORKFLOW_DIR = ROOT_DIR / "tests" / "workflows"
 
-# The core compiler ships no named-pipeline locations; the suite supplies its
-# own generated-package store + JSON-definition directory (formerly hardcoded as
-# ``tests.pypipelines`` / ``tests/pipelines`` inside ``riko.runtime._compile``).
-store = PackageStore("tests.pypipelines")
-pipeline_resolver.configure(store=store, definitions=DirectoryStore(PIPELINE_DIR))
+
+@pytest.fixture(autouse=True)
+def workflow_store():
+    # Core ships no named-workflow locations; the suite supplies its own package of
+    # workflow modules plus the directory of workflow documents.
+    reset_workflow_resolver()
+    register_workflow_store(package="tests.pyworkflows", directory=WORKFLOW_DIR)
+    yield
+    reset_workflow_resolver()
 
 
 def _extra_missing(*modules: str) -> list[str]:

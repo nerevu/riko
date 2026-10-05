@@ -1,3 +1,5 @@
+"""Module defaults, wrapper options, and dispatch typing contracts."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
@@ -6,7 +8,7 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, TypedDict
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
 
-    from ._collections import BasicArg, RikoDict, RikoList
+    from ._collections import BasicArg, RikoList
     from ._compiler import CountValues
     from ._enums import BasicCastType, FmtLike
     from ._scalars import PrimitiveValue
@@ -21,7 +23,7 @@ class Defaults(TypedDict, total=False):
     count: int
     count_key: str | None
     clean: bool
-    currency: str  # TODO this should be an enum/literal
+    currency: str
     dedupe: bool
     default: BasicArg
     delimiter: str
@@ -45,7 +47,7 @@ class Defaults(TypedDict, total=False):
     name: str
     prompt: str
     param: dict[str, str | None]
-    parse_key: str
+    normalize_key: str
     permit: bool
     precision: int
     pubDate: str
@@ -90,7 +92,7 @@ class Casted[T, E](NamedTuple):
 
 
 class ItemDispatch[T, E](NamedTuple):
-    item: Item | RikoDict
+    item: Item
     casted: Casted[T, E]
 
 

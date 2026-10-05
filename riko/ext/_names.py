@@ -1,30 +1,41 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.ext.names
-~~~~~~~~~~~~~~
-
 Provides module-name normalization and discovery categories.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko import get_module_metadata
+        >>> from riko.ext import get_module_category
+        >>>
+        >>> metadata = get_module_metadata("fetch", strict=True)
+        >>> get_module_category(metadata)
+        'source'
+
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, overload
+
+from riko.base._config import SINK_NAMES
 
 if TYPE_CHECKING:
     from riko.types.modules import ModuleCategory, ModuleMetadata
 
-SINK_NAMES: frozenset[str] = frozenset({"output", "write"})
-
 
 @overload
-def derive_category(  # noqa: E704
-    metadata: "ModuleMetadata", *, provider: str = "riko", override: str
+def get_module_category(  # noqa: E704
+    metadata: ModuleMetadata, *, provider: str = "riko", override: str
 ) -> str: ...
 @overload  # noqa: E302
-def derive_category(  # noqa: E704
-    metadata: "ModuleMetadata", *, provider: str = "riko", override: None = ...
-) -> "ModuleCategory": ...
-def derive_category(  # noqa: E302
-    metadata: "ModuleMetadata", *, provider: str = "riko", override: str | None = None
-) -> "ModuleCategory | str":
+def get_module_category(  # noqa: E704
+    metadata: ModuleMetadata, *, provider: str = "riko", override: None = ...
+) -> ModuleCategory: ...
+def get_module_category(  # noqa: E302
+    metadata: ModuleMetadata, *, provider: str = "riko", override: str | None = None
+) -> ModuleCategory | str:
     """
     Derives the user-facing discovery category for a module.
 

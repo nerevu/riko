@@ -1,21 +1,15 @@
-from pathlib import Path
+"""Tests for the canonical-import and import-architecture lint checks."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from riko.cli._lint_canonical_imports import _iter_issues as canonical_issues
 from riko.cli._lint_import_architecture import generate_report, render_architecture
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
 
-# TODO: add tests for:
-# descendants, keyed topsort, frozen graph.
-# exact bare TYPE_CHECKING; typing.TYPE_CHECKING not exempt; else runtime.
-# from . import _private; mixed multi-target import.
-# transitive permission and forbidden direction.
-# local imports enforced.
-# same-layer private allowed / public forbidden.
-# type-only graph recorded but not violated.
-# dangling/cyclic/redundant architecture declaration.
-# deterministic diagnostics.
-# analysis error → exit 2; violation → 1; clean → 0.
-# complete ArchitectureReport rendering.
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def write(root: Path, path: str, text: str) -> None:
@@ -65,7 +59,11 @@ def test_type_checking_is_exempt(tmp_path: Path) -> None:
     write(
         root,
         "types/a.py",
-        "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from riko.runtime.b import thing\n",
+        (
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n"
+            "    from riko.runtime.b import thing\n"
+        ),
     )
     write(root, "runtime/__init__.py", "")
     write(root, "runtime/b.py", "thing = 1\n")

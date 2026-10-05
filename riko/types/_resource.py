@@ -1,3 +1,5 @@
+"""Resource factory and lifecycle typing contracts."""
+
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator

@@ -1,13 +1,22 @@
+"""
+Pipe definition, bare-bones DAG, and workflow graph-index typing contracts.
+
+A pipe definition (``PipeDef``) is the older ``src``/``tgt``-wired module listing; a
+``PipeDag`` is the bare-bones DAG mapping. Both expand into a ``Workflow``.
+"""
+
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from itertools import chain
 from typing import TYPE_CHECKING, Literal, NewType, NotRequired, Required, TypedDict
+
+from ._workflow import parse_port
 
 if TYPE_CHECKING:
     from ._module_ids import LoopableModuleId, ModuleId
-    from ._pipeline import PyInput
-    from .modules import AnyModuleRawConf, Conf
+    from .modules import AnyModuleRawConf, Conf, ModuleOptions
 
 
 PipeId = NewType("PipeId", str)
@@ -22,11 +31,6 @@ class EmbedRef(TypedDict):
 class LoopableEmbedRef(TypedDict):
     id: str
     type: LoopableModuleId | PipeId
-
-
-class XY(TypedDict):
-    x: int
-    y: int
 
 
 class LayoutItem(TypedDict):
@@ -52,34 +56,6 @@ class EmbedKwargs(TypedDict, total=False):
     conf: Conf
     field: str
     emit: bool
-
-
-class AbbrevStringModule(TypedDict):
-    alias: str
-    name: str
-    pipe_name: str
-    is_sub_pipe: bool
-
-
-class StringModule(AbbrevStringModule):
-    id: str
-    expr: str
-    splits: int
-    is_collection: bool
-
-
-class TemplateData(TypedDict):
-    uniq_modules: list[AbbrevStringModule]
-    modules: list[StringModule]
-    pipe_name: str
-    inputs: PyInput
-    dependencies: list[str]
-    embedded_pipes: dict[str, PipeModule]
-    last_module: str
-    raw_confs: list[str]
-    use_collection: bool
-    needs_await: bool
-    subtype: str
 
 
 class TypeCount(TypedDict):
@@ -161,28 +137,38 @@ class Wire(TypedDict):
 
 
 class PipeDef(TypedDict):
+    """
+    A pipe definition: the older ``src``/``tgt``-wired module listing.
+
+    ``migrate_v1_to_v2`` converts one into a ``Workflow``.
+    """
+
     modules: list[PipeModule]
     wires: list[Wire]
     layout: NotRequired[list[LayoutItem]]
     terminaldata: NotRequired[list[TerminalDataEntry]]
 
 
-@dataclass(frozen=True, slots=True)
-class _Edge:
-    """
-    One directed connection between two module ports.
+type PipeDefLike = PipeDef | Mapping[str, object]
+type ModuleOptionValues = bool | str | CountValues
 
-    Ports keep their legacy identifiers verbatim (``_INPUT``/``_OTHER``/``_OUTPUT``
-    for structural wiring, or a named keyword such as ``count``/``url`` for a named
-    secondary input) so the connection's meaning is interpreted in one place rather
-    than re-derived from raw wires at every call site.
+
+@dataclass(frozen=True, slots=True)
+class GraphEdge:
+    """
+    One directed stream connection between two workflow node ports.
+
+    Ports keep their workflow spelling: ``out`` on the source, and on the target
+    either the default ``in``, a positional ``in:1``/``in:2`` input, or a named
+    value input such as ``count``. ``is_valid`` reports whether the target port
+    is a positional stream input rather than a named value input.
 
     Attributes:
 
-        source: Python-safe id of the module the connection leaves.
-        target: Python-safe id of the module the connection enters.
-        source_port: Raw output-port id on ``source`` (e.g. ``_OUTPUT``).
-        target_port: Raw input-port id on ``target`` (e.g. ``_INPUT``/``count``).
+        source: Id of the node the connection leaves.
+        target: Id of the node the connection enters.
+        source_port: Output port on ``source`` (e.g. ``out``).
+        target_port: Input port on ``target`` (e.g. ``in``/``in:1``/``count``).
 
     """
 
@@ -191,16 +177,20 @@ class _Edge:
     source_port: str
     target_port: str
 
+    @property
+    def is_valid(self) -> bool:
+        return parse_port(self.target_port).is_positional
+
 
 @dataclass(frozen=True, slots=True)
-class _OutputRef:
+class OutputRef:
     """
-    A canonical pipeline output to replace the legacy ``_OUTPUT`` node.
+    One named output of a workflow.
 
     Attributes:
 
-        node: Python-safe id of the module that produces the output stream.
-        port: Canonical output-port name.
+        node: Id of the node that produces the output stream.
+        port: Output port on ``node`` (e.g. ``out``).
 
     """
 
@@ -209,18 +199,18 @@ class _OutputRef:
 
 
 @dataclass(frozen=True, slots=True)
-class _GraphIndex:
+class GraphIndex:
     """
-    Immutable, runtime-neutral interpretation of a pipe's wiring.
+    Immutable, runtime-neutral interpretation of a workflow's topology.
 
-    Built once per parse so both the current compiler and future execution planning
-    consume the same structural facts instead of rescanning raw wires. Edge lookups
-    (``incoming``/``outgoing``) carry full port identity. The
+    Execution planning and both sync and async executions read the same
+    structural facts from one index rather than rescanning the workflow's edges.
+    Edge lookups (``incoming``/``outgoing``) carry full port identity. The
     ``dependencies``/``dependents`` projection carries only node-level ordering.
 
     Attributes:
 
-        edges: Every wire connection, in listing order.
+        edges: Every stream edge, in listing order.
         incoming: Connections entering each node, keyed by target id.
         outgoing: Connections leaving each node, keyed by source id.
         dependencies: Node ids each node must run after.
@@ -228,67 +218,71 @@ class _GraphIndex:
         order: Node ids in topological (execution) order.
         roots: Node ids with no dependencies, in ``order``.
         leaves: Node ids with no dependents, in ``order``.
-        outputs: Canonical pipeline outputs, keyed by output name.
+        outputs: The workflow's named outputs, keyed by output name.
 
     """
 
-    edges: tuple[_Edge, ...]
-    incoming: Mapping[str, tuple[_Edge, ...]]
-    outgoing: Mapping[str, tuple[_Edge, ...]]
+    edges: tuple[GraphEdge, ...]
+    incoming: Mapping[str, tuple[GraphEdge, ...]]
+    outgoing: Mapping[str, tuple[GraphEdge, ...]]
     dependencies: Mapping[str, frozenset[str]]
     dependents: Mapping[str, frozenset[str]]
     order: tuple[str, ...]
     roots: tuple[str, ...]
     leaves: tuple[str, ...]
-    outputs: Mapping[str, _OutputRef]
+    outputs: Mapping[str, OutputRef]
 
+    def is_open(
+        self,
+        root: str | None = None,
+        attr: Literal["incoming", "outgoing", "edges"] = "incoming",
+    ) -> bool:
+        if attr == "edges" and root:
+            msg = "cannot validate edges by root; use 'incoming' or 'outgoing'"
+            raise ValueError(msg)
+        elif attr == "edges":
+            valid = all(edge.is_valid for edge in self.edges)
+        elif attr in {"incoming", "outgoing"}:
+            attr_: Mapping[str, tuple[GraphEdge, ...]] = getattr(self, attr)
+            edges = attr_.get(root, ()) if root else chain.from_iterable(attr_.values())
+            valid = all(edge.is_valid for edge in edges)
+        else:
+            msg = f"invalid {attr=}; must be 'incoming', 'outgoing', or 'edges'"
+            raise ValueError(msg)
 
-class ParsedPipeDef(TypedDict):
-    name: str
-    modules: dict[str, PipeModule]
-    embed: dict[str, PipeModule]
-    graph: _GraphIndex
-
-
-class PipelineDescription(TypedDict):
-    inputs: list[str | tuple[str, ...]]
-    dependencies: list[str]
+        return valid
 
 
 class DagModule(TypedDict):
     id: NotRequired[str]
     type: ModuleId | PipeId
-    conf: AnyModuleRawConf
+    conf: NotRequired[Conf]
+    options: NotRequired[ModuleOptions]
 
 
 class PipeDag(TypedDict):
     """
-    Bare-bones DAG expanded by ``riko.runtime._compile.convert_dag``.
+    A bare-bones DAG mapping that ``parse_dag`` expands into a ``Workflow``.
 
     ``wires`` is optional (omit for a linear chain in module listing order) and
-    holds ``(source_id, target_id)`` pairs. A module ``id`` is also optional and
-    defaults to ``sw-{n}`` (1-based listing order) — practical for the concise
-    wireless form; supply ids when ``wires`` reference them. Every expanded wire
-    targets ``_INPUT``, so fan-in operators such as ``union``/``join`` (whose
-    secondary inputs need ``_OTHER{n}`` targets) cannot be expressed here and
-    must be authored as a full ``PipeDef``.
+    holds ``(source_id, target_id)`` entries, optionally followed by the port the
+    wire enters — so a fan-in operator such as ``union``/``join`` is expressible
+    as ``("b", "union-1", "in:1")``. A module ``id`` is also optional and defaults
+    to ``sw-{n}`` (1-based listing order) — practical for the concise wireless
+    form; supply ids when ``wires`` reference them. The expansion adds no terminal
+    output node: the workflow's default output is its single leaf.
     """
 
     modules: list[DagModule]
-    wires: NotRequired[list[tuple[str, str]]]
+    wires: NotRequired[Sequence[Sequence[str]]]
 
-
-type PipelineDescriptionLike = PipelineDescription | str | tuple[str, ...]
-type PipelineDescriptions = Sequence[PipelineDescriptionLike]
-type PipelineDescriptionStream = Iterator[PipelineDescriptionLike]
 
 __all__ = [
     "DagModule",
     "LoopModule",
-    "ParsedPipeDef",
     "PipeDag",
     "PipeDef",
+    "PipeDefLike",
     "PipeModule",
-    "PipelineDescription",
     "Wire",
 ]

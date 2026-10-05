@@ -26,20 +26,25 @@ Attributes:
 
 """
 
-from collections.abc import Sequence
-from logging import Logger
-from typing import Any, cast
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 
-from riko.coercion._configs import ItemBuilderObjconf
 from riko.parsing._dotdict import DotDict
-from riko.types._collections import RikoDict
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types.modules import ParsedParam
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from logging import Logger
+
+    from riko.coercion._configs import ItemBuilderObjconf
+    from riko.types._collections import RikoDict
+    from riko.types._options import Defaults, Opts
+    from riko.types.modules import ParsedParam
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "listize": True, "extract": "attrs"}
 DEFAULTS: Defaults = {}
@@ -79,7 +84,7 @@ def parser(
 
     """
     item = {a["key"]: a["value"] for a in extraction}
-    return cast(RikoDict, DotDict(item).asdict())
+    return cast("RikoDict", DotDict(item).asdict())
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

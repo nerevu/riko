@@ -1,9 +1,12 @@
-from collections.abc import Callable
+"""Date/time parsing, normalization, and conversion helpers."""
+
+from __future__ import annotations
+
 from datetime import UTC, date, timedelta, tzinfo
 from datetime import datetime as dt
 from functools import cache
 from time import struct_time
-from typing import Literal, cast, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
@@ -14,11 +17,15 @@ from riko.base._dateutils import (
     AwareST,
     NaiveDT,
     NaiveST,
-    get_local_tz,
     get_tzname,
+    load_local_tz,
     tzinfo_from_tt,
 )
-from riko.types._scalars import DateDict
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from riko.types._scalars import DateDict
 
 TT_KEYS = (
     "year",
@@ -38,7 +45,7 @@ def _parse_date_cached(value: str) -> dt | BaseException:
     # cache doesn't work with exceptions, so we return the exception and raise it in the
     # caller
     try:
-        result = cast(dt, parser.parse(value, tzinfos=TZINFOS))
+        result = parser.parse(value, tzinfos=TZINFOS)
     except Exception as e:  # noqa: BLE001
         result = e
 
@@ -47,6 +54,8 @@ def _parse_date_cached(value: str) -> dt | BaseException:
 
 def parse_date_string(value: str) -> dt:
     """
+    Parses a date string into a datetime object.
+
     Examples:
 
         >>> from datetime import datetime
@@ -90,7 +99,7 @@ def date_to_datetime(  # noqa: E302
     fallback_tzinfo: tzinfo = UTC,
 ) -> AwareDT | None:
     if content:
-        _tzinfo = get_local_tz(try_local_tz, fallback_tzinfo)
+        _tzinfo = load_local_tz(try_local_tz, fallback_tzinfo)
         _date = dt(content.year, content.month, content.day, tzinfo=_tzinfo)
     else:
         _date = None
@@ -180,41 +189,43 @@ def tt_to_datedict(  # noqa: E302
 
 
 @overload
-def ensure_tzinfo(  # noqa: E704
+def normalize_tzinfo(  # noqa: E704
     _date: None, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo = ...
 ) -> None: ...
 @overload  # noqa: E302
-def ensure_tzinfo(  # noqa: E704
+def normalize_tzinfo(  # noqa: E704
     _date: AwareDT | NaiveDT | str,
     try_local_tz: bool | None = ...,
     fallback_tzinfo: tzinfo = ...,
 ) -> AwareDT: ...
 @overload  # noqa: E302
-def ensure_tzinfo(  # noqa: E704
+def normalize_tzinfo(  # noqa: E704
     _date: AwareST | NaiveST,
     try_local_tz: bool | None = ...,
     fallback_tzinfo: tzinfo = ...,
 ) -> AwareST: ...
 @overload  # noqa: E302
-def ensure_tzinfo(  # noqa: E704
+def normalize_tzinfo(  # noqa: E704
     _date: date, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo = ...
 ) -> date: ...
-def ensure_tzinfo(  # noqa: E302
+def normalize_tzinfo(  # noqa: E302
     _date: AwareDT | NaiveDT | AwareST | NaiveST | date | str | None,
     try_local_tz: bool | None = True,
     fallback_tzinfo: tzinfo = UTC,
 ) -> AwareDT | AwareST | date | None:
     """
+    Ensures that a datetime or struct_time object has timezone information.
+
     Examples:
 
         >>> import time
         >>> from datetime import datetime
         >>>
         >>> st = time.struct_time((2020, 6, 15, 12, 0, 0, 0, 0, -1))
-        >>> ensure_tzinfo(st, try_local_tz=False).tm_gmtoff
+        >>> normalize_tzinfo(st, try_local_tz=False).tm_gmtoff
         0
         >>> local = datetime(2020, 6, 15, 12).astimezone().utcoffset().total_seconds()
-        >>> ensure_tzinfo(st, try_local_tz=True).tm_gmtoff == local
+        >>> normalize_tzinfo(st, try_local_tz=True).tm_gmtoff == local
         True
 
     """
@@ -229,7 +240,7 @@ def ensure_tzinfo(  # noqa: E302
     if get_tzname(_date):
         new_date = _date
     else:
-        _tzinfo = get_local_tz(try_local_tz, fallback_tzinfo)
+        _tzinfo = load_local_tz(try_local_tz, fallback_tzinfo)
 
         if isinstance(_date, struct_time):
             new_date = tt_to_datetime(_date, def_tzinfo=_tzinfo)
@@ -244,6 +255,8 @@ def ensure_tzinfo(  # noqa: E302
 
 def get_date(unit: str, count: int, op: Callable) -> date | dt:
     """
+    Converts a unit of time into a date or datetime object.
+
     Examples:
 
         >>> from datetime import datetime

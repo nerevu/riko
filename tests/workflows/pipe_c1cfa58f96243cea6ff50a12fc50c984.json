@@ -1,0 +1,189 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-481",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-485",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-483",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-485",
+                "port": "in:1"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-485",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-486",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-479",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-506",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-486",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-506",
+                "port": "in:1"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-506",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-519",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-479": {
+            "id": "sw-479",
+            "name": "pipe:2de0e4517ed76082dcddf66f7b218057",
+            "type": "module"
+        },
+        "sw-481": {
+            "conf": {
+                "attrs": {
+                    "key": {
+                        "type": "text",
+                        "value": "link"
+                    },
+                    "value": {
+                        "type": "text",
+                        "value": "file://riko/data/www.slideshare.net_rss_user_psychemedia.xml"
+                    }
+                }
+            },
+            "id": "sw-481",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-483": {
+            "conf": {
+                "attrs": {
+                    "key": {
+                        "type": "text",
+                        "value": "link"
+                    },
+                    "value": {
+                        "type": "text",
+                        "value": "file://riko/data/feeds.delicious.com_v2_rss_psychemedia_count=15.xml"
+                    }
+                }
+            },
+            "id": "sw-483",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-485": {
+            "id": "sw-485",
+            "name": "union",
+            "type": "module"
+        },
+        "sw-486": {
+            "conf": {
+                "url": {
+                    "subkey": "link",
+                    "type": "url"
+                }
+            },
+            "id": "sw-486",
+            "name": "fetch",
+            "options": {
+                "assign": "loop:fetch",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-506": {
+            "id": "sw-506",
+            "name": "union",
+            "type": "module"
+        },
+        "sw-519": {
+            "conf": {
+                "combine": {
+                    "type": "text",
+                    "value": "or"
+                },
+                "permit": {
+                    "type": "bool",
+                    "value": true
+                },
+                "rule": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "contains"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "data"
+                        }
+                    },
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "description"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "contains"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "data"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-519",
+            "name": "filter",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-519",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

@@ -1,0 +1,110 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-579",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-610",
+                "port": "in:URL"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-606",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-579",
+                "port": "in:_1_PATH"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-579": {
+            "conf": {
+                "base": {
+                    "type": "text",
+                    "value": ""
+                },
+                "param": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": ""
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": ""
+                        }
+                    }
+                ],
+                "path": [
+                    {
+                        "terminal": "1_PATH",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": "json"
+                    }
+                ]
+            },
+            "id": "sw-579",
+            "name": "urlbuilder",
+            "type": "module"
+        },
+        "sw-606": {
+            "conf": {
+                "debug": {
+                    "type": "text",
+                    "value": ""
+                },
+                "default": {
+                    "type": "text",
+                    "value": "1276"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "gid"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "MP Guardian ID"
+                }
+            },
+            "id": "sw-606",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-610": {
+            "conf": {
+                "path": {
+                    "type": "text",
+                    "value": "person"
+                },
+                "url": {
+                    "terminal": "URL",
+                    "type": "url"
+                }
+            },
+            "id": "sw-610",
+            "name": "fetchdata",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-610",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

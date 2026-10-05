@@ -1,0 +1,161 @@
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""Hand-maintained typed probe for the pipe_8NMkiTW32xGvMbDKruymrA fixture."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from riko.modules.fetch import pipe as fetch
+from riko.modules.filter import pipe as _filter
+from riko.modules.sort import pipe as sort
+from riko.modules.union import pipe as union
+from riko.runtime._workflows import mark_subpipe
+from riko.types.modules import FetchRawConf, FilterRawConf, SortRawConf
+
+if TYPE_CHECKING:
+    from riko import Context
+
+
+def pipe(item=None, context: Context | None = None, **_):
+    if context and context.describe_input:
+        _OUTPUT = []
+    elif context and context.describe_dependencies:
+        _OUTPUT = ["fetch", "filter", "sort"]
+    else:
+        sw_35_1 = fetch(
+            None,
+            conf=FetchRawConf(
+                {
+                    "url": {
+                        "type": "url",
+                        "value": (
+                            "file://riko/data/www.fourtitude.com_news_publish_rss.xml"
+                        ),
+                    }
+                }
+            ),
+            context=context,
+        )
+        sw_35_2 = fetch(
+            None,
+            conf=FetchRawConf(
+                {
+                    "url": {
+                        "type": "url",
+                        "value": "file://riko/data/feeds.gawker.com_jalopnik_full.xml",
+                    }
+                }
+            ),
+            context=context,
+        )
+        sw_35_3 = fetch(
+            None,
+            conf=FetchRawConf(
+                {
+                    "url": {
+                        "type": "url",
+                        "value": "file://riko/data/www.autoblog.com_rss.xml",
+                    }
+                }
+            ),
+            context=context,
+        )
+        sw_35 = union(sw_35_1, conf={}, context=context, others=[sw_35_2, sw_35_3])
+        sw_54 = _filter(
+            sw_35,
+            conf=FilterRawConf(
+                {
+                    "combine": {"type": "text", "value": "or"},
+                    "permit": {"type": "bool", "value": True},
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "Porsche"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "Mercedes"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "BMW"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "Audi"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "VW"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "Lamborghini"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "Ferrari"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "Pagani"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "Aston"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "Lotus"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "TVR"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"type": "text", "value": "AMG"},
+                        },
+                    ],
+                }
+            ),
+            context=context,
+        )
+        sw_105 = sort(
+            sw_54,
+            conf=SortRawConf(
+                {
+                    "rule": [
+                        {
+                            "dir": {"type": "text", "value": "DESC"},
+                            "field": {"type": "text", "value": "pubDate"},
+                        }
+                    ]
+                }
+            ),
+            context=context,
+        )
+        _OUTPUT = sw_105
+
+    return _OUTPUT
+
+
+mark_subpipe(pipe, subtype="source")
+
+
+if __name__ == "__main__":
+    for i in pipe():
+        print(i)

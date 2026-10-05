@@ -1,10 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Formats a date field as text.
-
-``format`` is a ``strftime`` format string, so any specifier Python accepts
-works: ``"%m-%d-%Y"`` gives ``02-12-2008``, ``"%R"`` gives ``20:45``, and
-``"%A, %b %d, %y at %I:%M %p"`` gives ``Tuesday, Feb 12, 08 at 08:45 PM``.
+Formats a date field as text using a ``strftime`` format string.
 
 Examples:
 
@@ -23,17 +19,22 @@ Attributes:
 
 """
 
-import datetime
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._configs import DateFormatObjconf
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    import datetime
+    from logging import Logger
+
+    from riko.coercion._configs import DateFormatObjconf
+    from riko.types._options import Defaults, Opts
 
 OPTS: Opts = {"field": "date", "ftype": BasicCastType.DATETIME}
 DEFAULTS: Defaults = {"format": "%m/%d/%Y %H:%M:%S"}

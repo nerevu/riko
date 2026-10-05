@@ -1,0 +1,177 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-94",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-169",
+                "port": "in:OTHER"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-169",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-232",
+                "port": "in:count"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-224",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-250",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-242",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-243",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-243",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-169",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-243",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-94",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-250",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-232",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-250",
+                "port": "out:1"
+            },
+            "target": {
+                "node": "sw-242",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-169": {
+            "conf": {
+                "op": {
+                    "type": "text",
+                    "value": "subtract"
+                },
+                "other": {
+                    "terminal": "OTHER",
+                    "type": "float"
+                }
+            },
+            "id": "sw-169",
+            "name": "simplemath",
+            "options": {
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-224": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/TheEdTechie.xml"
+                }
+            },
+            "id": "sw-224",
+            "name": "fetch",
+            "type": "module"
+        },
+        "sw-232": {
+            "conf": {
+                "count": {
+                    "terminal": "count",
+                    "type": "float"
+                }
+            },
+            "id": "sw-232",
+            "name": "truncate",
+            "type": "module"
+        },
+        "sw-242": {
+            "id": "sw-242",
+            "name": "count",
+            "options": {
+                "assign": "content"
+            },
+            "type": "module"
+        },
+        "sw-243": {
+            "id": "sw-243",
+            "name": "split",
+            "type": "module"
+        },
+        "sw-250": {
+            "id": "sw-250",
+            "name": "split",
+            "type": "module"
+        },
+        "sw-94": {
+            "conf": {
+                "op": {
+                    "type": "text",
+                    "value": "modulo"
+                },
+                "other": {
+                    "type": "float",
+                    "value": "6"
+                }
+            },
+            "id": "sw-94",
+            "name": "simplemath",
+            "options": {
+                "emit": true
+            },
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-232",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

@@ -1,0 +1,111 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-138",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-180",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-286",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-138",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-138": {
+            "embed": {
+                "conf": {
+                    "part": [
+                        {
+                            "subkey": "headline",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": " ("
+                        },
+                        {
+                            "subkey": "severity",
+                            "type": "text"
+                        },
+                        {
+                            "type": "text",
+                            "value": ")"
+                        }
+                    ]
+                },
+                "name": "strconcat"
+            },
+            "id": "sw-138",
+            "name": "loop",
+            "options": {
+                "assign": "title",
+                "count": "all",
+                "emit": false
+            },
+            "type": "module"
+        },
+        "sw-180": {
+            "conf": {
+                "rule": [
+                    {
+                        "copy": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "expires"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "pubDate"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-180",
+            "name": "rename",
+            "options": {
+                "assign": "loop:rename",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-286": {
+            "conf": {
+                "path": {
+                    "type": "text",
+                    "value": "info"
+                },
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/capnorth.oes.ca.gov_89509.xml"
+                }
+            },
+            "id": "sw-286",
+            "name": "fetchdata",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-180",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

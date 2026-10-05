@@ -1,9 +1,7 @@
 """
-Tarjan's algorithm and topological sorting implementation in Python
+Graph traversal and topological sorting helpers.
 
-by Paul Harrison
-
-Public domain, do with it as you will
+Derived from the public-domain implementation by Paul Harrison.
 """
 
 from __future__ import annotations
@@ -32,43 +30,46 @@ type AnyGraph[T] = Graph[T] | FrozenGraph[T]
 
 def scc_sort[T: Hashable](graph: Graph[T], reverse: bool | None = False) -> SCC[T]:
     """
-    Identify strongly connected components in a graph using Tarjan's algorithm.
+    Identifies strongly connected components in a graph using Tarjan's algorithm.
 
     graph should be a dictionary mapping node names to an
     sequence of successor nodes.
 
-    # A --> B --> C --> D
-    >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}
-    >>> scc_sort(graph)
-    [('A',), ('B',), ('C',), ('D',)]
+    Examples:
 
-    # A --> B <--> C --> D
-    >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"B", "D"}}
-    >>> scc_sort(graph)
-    [('A',), ('B', 'C'), ('D',)]
+        # A --> B --> C --> D
+        >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}
+        >>> scc_sort(graph)
+        [('A',), ('B',), ('C',), ('D',)]
 
-    # A --> B --> D --> E
-    # ↓           ↑
-    # + --> C ----+
-    >>> graph = {"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}
-    >>> scc_sort(graph)
-    [('A',), ('C',), ('B',), ('D',), ('E',)]
+        # A --> B <--> C --> D
+        >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"B", "D"}}
+        >>> scc_sort(graph)
+        [('A',), ('B', 'C'), ('D',)]
 
-    # 0 --> 1 --> 2 --> 3
-    #       ↑     ↓
-    #       +-----+
-    >>> graph = {0: [1], 1: [2], 2: [1, 3]}
-    >>> scc_sort(graph)
-    [(0,), (1, 2), (3,)]
+        # A --> B --> D --> E
+        # ↓           ↑
+        # + --> C ----+
+        >>> graph = {"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}
+        >>> scc_sort(graph)
+        [('A',), ('C',), ('B',), ('D',), ('E',)]
 
-    #             6 ----+
-    #             ↓     ↓
-    # 0 --> 1 --> 2 --> 3
-    #       ↓     ↑
-    #       +---> 4 <-- 5
-    >>> graph = {0: [1], 1: [2, 4], 4: [2], 2: [3], 5: [4], 6: [2, 3]}
-    >>> scc_sort(graph)
-    [(6,), (5,), (0,), (1,), (4,), (2,), (3,)]
+        # 0 --> 1 --> 2 --> 3
+        #       ↑     ↓
+        #       +-----+
+        >>> graph = {0: [1], 1: [2], 2: [1, 3]}
+        >>> scc_sort(graph)
+        [(0,), (1, 2), (3,)]
+
+        #             6 ----+
+        #             ↓     ↓
+        # 0 --> 1 --> 2 --> 3
+        #       ↓     ↑
+        #       +---> 4 <-- 5
+        >>> graph = {0: [1], 1: [2, 4], 4: [2], 2: [3], 5: [4], 6: [2, 3]}
+        >>> scc_sort(graph)
+        [(6,), (5,), (0,), (1,), (4,), (2,), (3,)]
+
     """
     digraph = nx.DiGraph(graph)
     component_group: Iterable[set[T]] = nx.strongly_connected_components(digraph)
@@ -82,44 +83,49 @@ def native_topological_sort[T: Hashable](
     key: Callable[[T], SupportsRichComparison] | None = None,
 ) -> NodeList[T]:
     """
-    # A --> B --> C --> D
-    >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}
-    >>> native_topological_sort(graph)
-    ['A', 'B', 'C', 'D']
+    Native topological sort.
 
-    # A --> B <--> C --> D
-    >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"B", "D"}}
-    >>> native_topological_sort(graph)
-    Traceback (most recent call last):
-    ...
-    graphlib.CycleError: ('nodes are in a cycle', ['B', 'C', 'B'])
+    Examples:
 
-    # A --> B --> D --> E
-    # ↓           ↑
-    # + --> C ----+
-    >>> graph = {"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}
-    >>> native_topological_sort(graph)
-    ['A', 'C', 'B', 'D', 'E']
-    >>> native_topological_sort(graph, reverse=True)
-    ['E', 'D', 'B', 'C', 'A']
+        # A --> B --> C --> D
+        >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}
+        >>> native_topological_sort(graph)
+        ['A', 'B', 'C', 'D']
 
-    # 0 --> 1 --> 2 --> 3
-    #       ↑     ↓
-    #       +-----+
-    >>> graph = {0: [1], 1: [2], 2: [1, 3]}
-    >>> native_topological_sort(graph)
-    Traceback (most recent call last):
-    ...
-    graphlib.CycleError: ('nodes are in a cycle', [1, 2, 1])
+        # A --> B <--> C --> D
+        >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"B", "D"}}
+        >>> native_topological_sort(graph)
+        Traceback (most recent call last):
+        ...
+        graphlib.CycleError: ('nodes are in a cycle', ['B', 'C', 'B'])
 
-    #             6 ----+
-    #             ↓     ↓
-    # 0 --> 1 --> 2 --> 3
-    #       ↓     ↑
-    #       +---> 4 <-- 5
-    >>> graph = {0: [1], 1: [2, 4], 4: [2], 2: [3], 5: [4], 6: [2, 3]}
-    >>> native_topological_sort(graph)
-    [0, 5, 1, 6, 4, 2, 3]
+        # A --> B --> D --> E
+        # ↓           ↑
+        # + --> C ----+
+        >>> graph = {"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}
+        >>> native_topological_sort(graph)
+        ['A', 'C', 'B', 'D', 'E']
+        >>> native_topological_sort(graph, reverse=True)
+        ['E', 'D', 'B', 'C', 'A']
+
+        # 0 --> 1 --> 2 --> 3
+        #       ↑     ↓
+        #       +-----+
+        >>> graph = {0: [1], 1: [2], 2: [1, 3]}
+        >>> native_topological_sort(graph)
+        Traceback (most recent call last):
+        ...
+        graphlib.CycleError: ('nodes are in a cycle', [1, 2, 1])
+
+        #             6 ----+
+        #             ↓     ↓
+        # 0 --> 1 --> 2 --> 3
+        #       ↓     ↑
+        #       +---> 4 <-- 5
+        >>> graph = {0: [1], 1: [2, 4], 4: [2], 2: [3], 5: [4], 6: [2, 3]}
+        >>> native_topological_sort(graph)
+        [0, 5, 1, 6, 4, 2, 3]
+
     """
     ts = TopologicalSorter(graph)
 
@@ -163,40 +169,45 @@ def topological_sort[T: Hashable](  # noqa: E302
     name: str | None = None,
 ) -> NodeList[T] | SCC[T]:
     """
-    # A --> B --> C --> D
-    >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}
-    >>> topological_sort(graph)
-    ['A', 'B', 'C', 'D']
+    Topological sort.
 
-    # A --> B <--> C --> D
-    >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"B", "D"}}
-    >>> topological_sort(graph)
-    [('A',), ('B', 'C'), ('D',)]
+    Examples:
 
-    # A --> B --> D --> E
-    # ↓           ↑
-    # + --> C ----+
-    >>> graph = {"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}
-    >>> topological_sort(graph)
-    ['A', 'C', 'B', 'D', 'E']
-    >>> topological_sort(graph, reverse=True)
-    ['E', 'D', 'B', 'C', 'A']
+        # A --> B --> C --> D
+        >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}
+        >>> topological_sort(graph)
+        ['A', 'B', 'C', 'D']
 
-    # 0 --> 1 --> 2 --> 3
-    #       ↑     ↓
-    #       +-----+
-    >>> graph = {0: [1], 1: [2], 2: [1, 3]}
-    >>> topological_sort(graph)
-    [(0,), (1, 2), (3,)]
+        # A --> B <--> C --> D
+        >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"B", "D"}}
+        >>> topological_sort(graph)
+        [('A',), ('B', 'C'), ('D',)]
 
-    #             6 ----+
-    #             ↓     ↓
-    # 0 --> 1 --> 2 --> 3
-    #       ↓     ↑
-    #       +---> 4 <-- 5
-    >>> graph = {0: [1], 1: [2, 4], 4: [2], 2: [3], 5: [4], 6: [2, 3]}
-    >>> topological_sort(graph)
-    [0, 5, 1, 6, 4, 2, 3]
+        # A --> B --> D --> E
+        # ↓           ↑
+        # + --> C ----+
+        >>> graph = {"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}
+        >>> topological_sort(graph)
+        ['A', 'C', 'B', 'D', 'E']
+        >>> topological_sort(graph, reverse=True)
+        ['E', 'D', 'B', 'C', 'A']
+
+        # 0 --> 1 --> 2 --> 3
+        #       ↑     ↓
+        #       +-----+
+        >>> graph = {0: [1], 1: [2], 2: [1, 3]}
+        >>> topological_sort(graph)
+        [(0,), (1, 2), (3,)]
+
+        #             6 ----+
+        #             ↓     ↓
+        # 0 --> 1 --> 2 --> 3
+        #       ↓     ↑
+        #       +---> 4 <-- 5
+        >>> graph = {0: [1], 1: [2, 4], 4: [2], 2: [3], 5: [4], 6: [2, 3]}
+        >>> topological_sort(graph)
+        [0, 5, 1, 6, 4, 2, 3]
+
     """
     if ssc:
         result = scc_sort(graph, reverse=reverse)
@@ -235,7 +246,9 @@ def freeze_graph[T: Hashable](
     return MappingProxyType({k: frozenset(v) for k, v in items})
 
 
-def descendants[T: Hashable](source: T, graph: AnyGraph[T]) -> frozenset[T]:
+def descendants[T: Hashable](
+    source: T, graph: AnyGraph[T] = MappingProxyType({})
+) -> frozenset[T]:
     known = set(graph)
 
     for targets in graph.values():

@@ -29,7 +29,7 @@ R4B private execution.
 An immutable Pipeline definition may select an event sink through execution configuration:
 
 ```python
-flow = flow.with_execution(event_sink=events)
+pipeline = pipeline.with_execution(event_sink=events)
 ```
 
 The sink is execution configuration, not graph data and not a serialized Workflow v2 node.
@@ -123,7 +123,8 @@ checkpoint/state CAS outcome
 retry/disposition
 cancellation/deadline
 artifact publication
-aggregate counters
+aggregate counters (per-node input/output counts, active time, upstream/downstream wait time,
+                    queue occupancy, active workers)
 ```
 
 Not every item needs a public per-item event. Aggregate counters are preferred when they express the

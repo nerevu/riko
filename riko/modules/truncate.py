@@ -1,12 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Returns a specified number of items from a stream.
+Limits a stream to its first N items.
 
-Contrast this with the tail module, which also limits the number of items, but
-returns items from the bottom of the stream.
-
-Lazy: consumption stops once ``count`` items have been yielded, so the rest of
-the source is never read.
+Consumption stops after ``count`` items, so the remainder of the source is not
+read.
 
 Examples:
 
@@ -25,19 +22,24 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 from itertools import islice
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._configs import TruncateObjconf
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Stream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import operator
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import TruncateObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
 DEFAULTS: Defaults = {"start": 0, "count": 0}

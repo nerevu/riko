@@ -1,37 +1,41 @@
-from collections.abc import Awaitable, Callable, Iterator
+"""Benchmark command for timing sync, async, and parallel pipe execution."""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from functools import partial
 from itertools import chain
 from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 from time import sleep, time
 from timeit import repeat
+from typing import TYPE_CHECKING
 
 from riko.bado._backend import async_sleep, isasync
 from riko.bado._backend import run as async_run
 from riko.bado.itertools import async_map
 from riko.base._paths import get_path
+from riko.definitions._workflow import Pipeline
+from riko.execution._pools import get_chunksize, get_worker_cnt
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
-from riko.runtime.collections import (
-    AsyncCollection,
-    AsyncPipe,
-    SyncCollection,
-    SyncPipe,
-    get_chunksize,
-    get_worker_cnt,
-)
+from riko.runtime._normalize import normalize_workflow
 from riko.types._rss import RSSEntry
-from riko.types._streams import Items, RikoItem, RikoStream
-from riko.types._wrappers import (
-    AsyncPipeParser,
-    ParserMaterializedOutput,
-    ProcessorWrapperOutput,
-)
 from riko.types.modules import FetchConf
+
+if TYPE_CHECKING:
+    from riko.definitions._workflow import Workflow
+    from riko.types._streams import Item, Items
+    from riko.types._workflow import RawEdge, RawNode, RawWorkflow
+    from riko.types._wrappers import (
+        ParserMaterializedOutput,
+        SyncProcessorWrapperOutput,
+    )
 
 NUMBER = 1
 LOOPS = 1
 DELAY = 0.1
+UNION_ID = "union-1"
 
 files: list[str] = [
     "ouseful.xml",
@@ -52,11 +56,36 @@ files: list[str] = [
 
 urls: list[str] = [get_path(f) for f in files]
 confs: list[FetchConf] = [FetchConf({"url": url}) for url in urls]
-sources: list[dict[str, str]] = [{"url": url} for url in urls]
 length: int = len(files)
 iterable: list[float] = [DELAY for _ in files]
 
 type AsyncFunc = Callable[..., Awaitable[Iterator[RSSEntry]]]
+type AsyncTest = Callable[[], Awaitable[object]]
+
+
+def build_fanin() -> Workflow:
+    """Builds one workflow fanning a fetch of every feed into a single union."""
+    nodes: list[RawNode] = [
+        {"id": f"fetch-{pos}", "name": "fetch", "conf": conf}
+        for pos, conf in enumerate(confs)
+    ]
+    edges: list[RawEdge] = [
+        {
+            "source": {"node": f"fetch-{pos}", "port": "out"},
+            "target": {"node": UNION_ID, "port": "in" if pos == 0 else f"in:{pos}"},
+        }
+        for pos in range(length)
+    ]
+    nodes.append({"id": UNION_ID, "name": "union"})
+    workflow: RawWorkflow = {
+        "nodes": nodes,
+        "edges": edges,
+        "outputs": {"default": {"node": UNION_ID, "port": "out"}},
+    }
+    return normalize_workflow(workflow)
+
+
+fanin: Workflow = build_fanin()
 
 
 def baseline_sync() -> list[None]:
@@ -82,43 +111,47 @@ def sync_pipeline() -> ParserMaterializedOutput:
     return list(chain.from_iterable(pipes))
 
 
-def sync_pipe() -> list[RikoItem]:
-    streams = (SyncPipe("fetch", conf=conf) for conf in confs)
-    return list(chain.from_iterable(streams))
+def sync_pipe() -> Items:
+    results: list[Item] = []
+
+    for conf in confs:
+        results.extend(Pipeline.from_module("fetch", conf=conf))
+
+    return results
 
 
-def sync_collection() -> Items:
-    return list(SyncCollection(sources, sleep=DELAY))
-
-
-def par_sync_collection() -> Items:
-    return list(SyncCollection(sources, parallel=True, sleep=DELAY))
+def sync_workflow() -> Items:
+    return list(Pipeline(fanin))
 
 
 async def baseline_async() -> list[None]:
     return await async_map(async_sleep, iterable)
 
 
-async def delayed_fetch(conf: FetchConf) -> ProcessorWrapperOutput:
+async def delayed_fetch(conf: FetchConf) -> SyncProcessorWrapperOutput:
     await async_sleep(DELAY)
     return await async_fetch({}, conf)
 
 
-async def async_pipeline() -> list[ProcessorWrapperOutput]:
+async def async_pipeline() -> list[SyncProcessorWrapperOutput]:
     return await async_map(delayed_fetch, confs)
 
 
-async def async_pipe2() -> list[RikoStream]:
-    func = partial(AsyncPipe, "fetch", iter(()))
-    return await async_map(func, confs)
+async def async_pipe() -> Items:
+    results: list[Item] = []
+
+    for conf in confs:
+        pipeline = Pipeline.from_module("fetch", conf=conf)
+        results.extend([item async for item in pipeline])
+
+    return results
 
 
-async def async_collection() -> list[RikoItem]:
-    results = await AsyncCollection(sources, sleep=DELAY)
-    return list(results)
+async def async_workflow() -> Items:
+    return [item async for item in Pipeline(fanin)]
 
 
-def parse_results(results: list[float]) -> tuple[float, str]:
+def summarize_results(results: Sequence[float]) -> tuple[float, str]:
     switch = {0: "secs", 3: "msecs", 6: "usecs"}
     best = min(results)
 
@@ -136,7 +169,7 @@ def print_time(test: str, max_chars: int, run_time: float, units: str) -> None:
     print(msg.format(padded, NUMBER, LOOPS, run_time, units))
 
 
-async def run_async(tests: list[AsyncPipeParser], max_chars: int) -> None:
+async def run_async(tests: Sequence[AsyncTest], max_chars: int) -> None:
     for test in tests:
         results = []
 
@@ -150,7 +183,7 @@ async def run_async(tests: list[AsyncPipeParser], max_chars: int) -> None:
 
             results.append(loop)
 
-        run_time, units = parse_results(results)
+        run_time, units = summarize_results(results)
         print_time(test.__name__, max_chars, run_time, units)
 
 
@@ -162,12 +195,11 @@ def main() -> None:
         "baseline_procs",
         "sync_pipeline",
         "sync_pipe",
-        "sync_collection",
-        "par_sync_collection",
+        "sync_workflow",
     ]
 
     if isasync:
-        async_tests = [baseline_async, async_pipeline, async_pipe2, async_collection]
+        async_tests = [baseline_async, async_pipeline, async_pipe, async_workflow]
         combined_tests = sync_tests + [f.__name__ for f in async_tests]
     else:
         async_tests = []
@@ -177,7 +209,7 @@ def main() -> None:
 
     for test in sync_tests:
         results = run(f"{test}()", setup=f"from riko.cli.benchmark import {test}")
-        run_time, units = parse_results(results)
+        run_time, units = summarize_results(results)
         print_time(test, max_chars, run_time, units)
 
     if isasync:

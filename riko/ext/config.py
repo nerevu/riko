@@ -1,12 +1,19 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.ext.config
-~~~~~~~~~~~~~~~
-Parsed module configuration for extension authors. ``DynamicConf`` is the
-case-insensitive attribute/mapping bag that every parsed config is; it is the
-fallback used when a parser declares no precise config type. A module may declare
-a precise config by subclassing ``DynamicConf`` and annotating its ``objconf``
-parameter with it; ``get_conf_type`` derives that type from the annotation.
+Exposes parsed module configuration helpers to extension authors.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko.ext import DynamicConf, get_conf_type
+        >>>
+        >>> def parser(objconf: DynamicConf):
+        ...     return objconf
+        >>>
+        >>> get_conf_type(parser) is DynamicConf
+        True
+
 """
 
 from typing import get_type_hints

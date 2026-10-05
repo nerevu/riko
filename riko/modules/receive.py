@@ -1,14 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Receives items pushed by the send module.
+Receives items from a named in-process channel.
 
-Pairs with ``send`` for in-process fan-out: ``receive`` subscribes to a sender as named
-``others``.
-
-This is the low-level interface: it must be primed (the first ``next()`` registers the
-channel) and it emits a ``StreamState.PENDING`` marker on every poll that finds the queue
-empty, so a caller has to filter those out. ``riko.SyncPipe.subscribe`` is the high-level
-path — it registers up front and drains without ever emitting a marker.
+The sync pipe may emit ``StreamState.PENDING`` while waiting and stops after
+``max_wait`` seconds without an item.
 
 Examples:
 
@@ -17,12 +12,10 @@ Examples:
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.modules.send import pipe as sender
         >>>
-        >>> conf = {"name": "receiver1", "wait": 0.01, "max_wait": 2}
-        >>> target = receiver(conf=conf)
+        >>> target = receiver(conf={"name": "receiver1", "wait": 0.01, "max_wait": 2})
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
-        >>> stream = ({"x": x} for x in range(5))
-        >>> source = sender(stream, others=["receiver1"])
+        >>> source = sender([{"x": 0}], others=["receiver1"])
         >>> next(source)
         {'x': 0}
         >>> next(target)
@@ -37,27 +30,32 @@ Attributes:
 
 """
 
-from collections.abc import Callable, Iterator, Mapping
+from __future__ import annotations
+
 from inspect import signature
-from logging import Logger
 from time import sleep
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 from meza.fntools import dfilter
 
 from riko.base._strutils import gen_name
-from riko.coercion._configs import ReceiveObjconf
 from riko.runtime._pubsub import async_hub, coroutine, sync_hub
-from riko.runtime._pubsub._types import ReceiveFunc, Receiver
 from riko.types._enums import BasicCastType
 from riko.types._guards import is_missing_type, is_stateful_item
-from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING, StreamState
-from riko.types._streams import Item, StatefulItem, Stream, StreamOrValueStream
-from riko.types._wrappers import PipeTuples
+from riko.types._streams import Item, StatefulItem, Stream
 
 from ._decorators import operator
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator, Mapping
+    from logging import Logger
+
+    from riko.coercion._configs import ReceiveObjconf
+    from riko.runtime._pubsub._types import ReceiveFunc, Receiver
+    from riko.types._options import Defaults, Opts
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "pollable": True}
 DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5, "max_len": 256}
@@ -109,8 +107,6 @@ def register_receiver(
                         if state is StreamState.DONE and on_complete is not None:
                             on_complete()
                     else:
-                        item = cast(Item, item)
-
                         if on_receive is not None:
                             on_receive(item)
                             continue
@@ -162,7 +158,9 @@ async def async_parser(
 
     async with async_hub.subscribe(name) as receive_stream:
         async for item in receive_stream:
-            results.append(cast(Item, _apply(func, item, **fkwargs) if func else item))
+            results.append(
+                cast("Item", _apply(func, item, **fkwargs) if func else item)
+            )
 
     return iter(results)
 
@@ -173,7 +171,7 @@ def parser(
     tuples: PipeTuples,
     func: Callable[[Item], Item | None] | None = None,
     **kwargs: object,
-) -> StreamOrValueStream | Iterator[StatefulItem]:
+) -> Iterator[Item | None]:
     """
     Emits items as the sender pushes them.
 
@@ -278,7 +276,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> StreamOrValueStream | Iterator[StatefulItem]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[Item | None]:
     """
     Receives items pushed by the send module.
 
@@ -320,8 +318,8 @@ def pipe(*args: Any, **kwargs: object) -> StreamOrValueStream | Iterator[Statefu
 
         The marker exists so a poll on an empty queue neither blocks nor ends
         the stream. Setting ``max_wait`` to 0 makes the drain non-blocking
-        instead, which renders the marker unreachable — that is what
-        ``riko.SyncPipe.subscribe`` does.
+        instead, which renders the marker unreachable: the subscriber yields
+        whatever the channel already holds and then stops.
 
     Examples:
 

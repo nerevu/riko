@@ -5,6 +5,10 @@ Sorts a stream by one or more item fields.
 Not lazy: ranking needs every item, so the source is materialized and cannot be
 unbounded.
 
+Items lacking the sort field group first ascending (last descending) whatever the
+rule ``type``, rather than being compared with the values the other items carry.
+A rule ``default`` makes them sort as that value instead.
+
 Examples:
 
     Basic usage::
@@ -22,22 +26,27 @@ Attributes:
 
 """
 
-from collections.abc import Sequence
+from __future__ import annotations
+
 from functools import reduce
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.bado.itertools import async_reduce
 from riko.types._enums import SortableCastType
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Stream
-from riko.types._wrappers import PipeTuples
 from riko.types.modules import SortConfRule
 
 from ._decorators import operator
-from ._iterutils import def_itemgetter
+from ._iterutils import build_sort_key
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from logging import Logger
+
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
 sort_type = SortableCastType.TEXT
@@ -47,7 +56,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 def reducer(stream: Stream, rule: SortConfRule) -> Stream:
     reverse = rule.dir.lower() == "desc" if rule.dir else False
-    keyfunc = def_itemgetter(rule.field, type_=rule.type)
+    keyfunc = build_sort_key(rule.field, rule.default, type_=rule.type)
     return iter(sorted(stream, key=keyfunc, reverse=reverse))
 
 
@@ -77,7 +86,7 @@ async def async_parser(
     Examples:
 
         >>> from itertools import repeat
-        >>> from riko import run, issync
+        >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
@@ -88,10 +97,7 @@ async def async_parser(
         ...     result = await async_parser(stream, [rule], tuples, **kwargs)
         ...     print(next(result))
         >>>
-        >>> if issync:
-        ...     {"content": 4}
-        ... else:
-        ...     run(main)
+        >>> run(main)
         {'content': 4}
 
     """
@@ -165,6 +171,10 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
                     Values compare as strings when unset, so "10" sorts before
                     "9" (default: "text").
 
+                default (scalar): Value an item lacking ``field`` sorts by, cast
+                    like any other value. When unset such items group first
+                    ascending and last descending (default: None).
+
         context (Context): the execution context
 
     Kwargs:
@@ -223,6 +233,10 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
                     "datetime", "decimal", "float", "int", "pass", "text", "url".
                     Values compare as strings when unset, so "10" sorts before
                     "9" (default: "text").
+
+                default (scalar): Value an item lacking ``field`` sorts by, cast
+                    like any other value. When unset such items group first
+                    ascending and last descending (default: None).
 
         context (Context): the execution context
 

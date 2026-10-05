@@ -1,0 +1,197 @@
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""Hand-maintained typed probe for the pipe_UuvYtuMe3hGDsmRgPm7D0g fixture."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from riko.modules.csv import pipe as csv
+from riko.modules.filter import pipe as _filter
+from riko.modules.input import pipe as _input
+from riko.modules.loop import pipe as loop
+from riko.modules.rename import pipe as rename
+from riko.modules.strconcat import pipe as strconcat
+from riko.runtime._workflows import mark_subpipe
+from riko.types.modules import (
+    CsvRawConf,
+    FilterRawConf,
+    InputRawConf,
+    RenameRawConf,
+    StrconcatRawConf,
+)
+
+if TYPE_CHECKING:
+    from riko import Context
+
+
+def pipe(item=None, context: Context | None = None, **_):
+    if context and context.describe_input:
+        _OUTPUT = [("", "name", "Name", "text", "Lancaster")]
+    elif context and context.describe_dependencies:
+        _OUTPUT = ["csv", "filter", "input", "loop", "rename"]
+    else:
+        sw_371 = _input(
+            item,
+            conf=InputRawConf(
+                {
+                    "debug": {"type": "text", "value": ""},
+                    "default": {"type": "text", "value": "Lancaster"},
+                    "name": {"type": "text", "value": "name"},
+                    "position": {"type": "float", "value": ""},
+                    "prompt": {"type": "text", "value": "Name"},
+                }
+            ),
+            context=context,
+        )
+        sw_340 = csv(
+            None,
+            conf=CsvRawConf(
+                {
+                    "url": {
+                        "type": "url",
+                        "value": "file://riko/data/spreadsheets.google.com_pub_key=p1rHUqg4g420UMaN1sPvaRg&output=csv&range=a1_AB646.csv",
+                    },
+                    "other_sep": {"type": "text", "value": ""},
+                    "col_names": [
+                        {"type": "text", "value": "Member"},
+                        {"type": "text", "value": "firstName"},
+                        {"type": "text", "value": "TotalAllowancesClaimedIncTravel"},
+                        {"type": "text", "value": "TotalBasicAllowancesExcTravel"},
+                        {"type": "text", "value": "TotalTravelClaimed"},
+                        {"type": "text", "value": "CostofStayingAwayFromMainHome"},
+                        {"type": "text", "value": "LondonSupplement"},
+                        {"type": "text", "value": "OfficeRunningCosts"},
+                        {"type": "text", "value": "StaffingCosts"},
+                        {"type": "text", "value": "CentrallyPurchasedStationery"},
+                        {"type": "text", "value": "StationeryAssocdPostageCosts"},
+                        {"type": "text", "value": "CentralITProvision"},
+                        {"type": "text", "value": "StaffCoverAndOtherCosts"},
+                        {"type": "text", "value": "CommsAllowance"},
+                        {"type": "text", "value": "Mileage"},
+                        {"type": "text", "value": "MPRail"},
+                        {"type": "text", "value": "MPAir"},
+                        {"type": "text", "value": "MPMisc"},
+                        {"type": "text", "value": "MPOtherMileage"},
+                        {"type": "text", "value": "MPOtherRail"},
+                        {"type": "text", "value": "MPOtherAir"},
+                        {"type": "text", "value": "MPOtherEuropean"},
+                        {"type": "text", "value": "SpouseTotal"},
+                        {"type": "text", "value": "SpouseNumOfJourneys"},
+                        {"type": "text", "value": "FamilyTotal"},
+                        {"type": "text", "value": "FamilyNumOfJourneys"},
+                        {"type": "text", "value": "EmployeeTotal"},
+                        {"type": "text", "value": "EmployeeNumOfJourneys"},
+                    ],
+                    "delimiter": {"type": "text", "value": ","},
+                    "skip_rows": {"type": "int", "value": "0"},
+                }
+            ),
+            context=context,
+        )
+        sw_375 = _filter(
+            sw_340,
+            conf=FilterRawConf(
+                {
+                    "combine": {"type": "text", "value": "and"},
+                    "permit": {"type": "bool", "value": True},
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "Member"},
+                            "op": {"type": "text", "value": "contains"},
+                            "value": {"terminal": "RULE_1_value", "type": "text"},
+                        }
+                    ],
+                }
+            ),
+            context=context,
+            RULE_1_value=sw_371,
+        )
+        sw_385 = rename(
+            sw_375,
+            conf=RenameRawConf(
+                {
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "Member"},
+                            "copy": {"type": "bool", "value": True},
+                            "newval": {"type": "text", "value": "title"},
+                        }
+                    ]
+                }
+            ),
+            emit=True,
+            count="all",
+            context=context,
+        )
+        sw_400 = loop(
+            sw_385,
+            conf=StrconcatRawConf(
+                {
+                    "part": [
+                        {
+                            "type": "text",
+                            "value": "Total allowances claimed, inc travel: ",
+                        },
+                        {"type": "text", "subkey": "TotalAllowancesClaimedIncTravel"},
+                        {
+                            "type": "text",
+                            "value": "<br>Total basic allowances claimed, ex travel: ",
+                        },
+                        {"type": "text", "subkey": "TotalBasicAllowancesExcTravel"},
+                        {"type": "text", "value": "<br>Total Travel claimed: "},
+                        {"type": "text", "subkey": "TotalTravelClaimed"},
+                        {"type": "text", "value": "<br>MP Mileage: "},
+                        {"type": "text", "subkey": "Mileage"},
+                        {"type": "text", "value": "<br>MP Rail Travel: "},
+                        {"type": "text", "subkey": "MPRail"},
+                        {"type": "text", "value": "<br>MP Air Travel: "},
+                        {"type": "text", "subkey": "MPAir"},
+                        {
+                            "type": "text",
+                            "value": "<br>Cost of staying away from main home: ",
+                        },
+                        {"type": "text", "subkey": "CostofStayingAwayFromMainHome"},
+                        {"type": "text", "value": "<br>London Supplement: "},
+                        {"type": "text", "subkey": "LondonSupplement"},
+                        {"type": "text", "value": "<br>Office Running Costs: "},
+                        {"type": "text", "subkey": "OfficeRunningCosts"},
+                        {"type": "text", "value": "<br>Staffing Costs: "},
+                        {"type": "text", "subkey": "StaffingCosts"},
+                    ]
+                }
+            ),
+            emit=False,
+            assign="description",
+            count="all",
+            context=context,
+            embed=strconcat,
+        )
+        sw_573 = loop(
+            sw_400,
+            conf=StrconcatRawConf(
+                {
+                    "part": [
+                        {"type": "text", "subkey": "firstName"},
+                        {"type": "text", "value": " "},
+                        {"type": "text", "subkey": "Member"},
+                    ]
+                }
+            ),
+            emit=False,
+            assign="title",
+            count="all",
+            context=context,
+            embed=strconcat,
+        )
+        _OUTPUT = sw_573
+
+    return _OUTPUT
+
+
+mark_subpipe(pipe, subtype="transformer")
+
+
+if __name__ == "__main__":
+    for i in pipe():
+        print(i)

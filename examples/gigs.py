@@ -1,6 +1,5 @@
 """
-Fetches a freelance-jobs JSON feed, drops duplicate links, filters out PHP gigs,
-and reverse-sorts the rest.
+Fetch freelance jobs, drop duplicate links and PHP gigs, then reverse-sort the rest.
 
 Examples:
 
@@ -10,9 +9,12 @@ Examples:
 
 """
 
-from pprint import pprint
+from __future__ import annotations
 
-from riko import AsyncPipe, SyncPipe, get_path
+from pprint import pprint
+from typing import TYPE_CHECKING
+
+from riko import Pipeline, get_path
 from riko.types.modules import (
     FetchDataConf,
     FilterConf,
@@ -21,6 +23,9 @@ from riko.types.modules import (
     SortConfRule,
     UniqConf,
 )
+
+if TYPE_CHECKING:
+    from riko.types import Item, Items
 
 p1_conf = FetchDataConf({"url": get_path("gigs.json"), "path": "value.items"})
 p2_conf = UniqConf({"uniq_key": "link"})
@@ -35,27 +40,27 @@ p3_conf = FilterConf(
 p4_conf = SortConf({"rule": SortConfRule(field="", dir="desc")})
 
 
-def pipe(test=False):
-    stream = (
-        SyncPipe("fetchdata", conf=p1_conf, test=test)
+def pipe(test: bool = False) -> list[Item]:
+    pipeline = (
+        Pipeline.from_module("fetchdata", conf=p1_conf)
         .uniq(conf=p2_conf)
         .filter(conf=p3_conf)
         .sort(conf=p4_conf)
     )
 
-    return list(stream)
+    return list(pipeline)
 
 
-def async_pipe(test=False):
+def async_pipe(test: bool = False) -> Pipeline:
     return (
-        AsyncPipe("fetchdata", conf=p1_conf, test=test)
+        Pipeline.from_module("fetchdata", conf=p1_conf)
         .uniq(conf=p2_conf)
         .filter(conf=p3_conf)
         .sort(conf=p4_conf)
     )
 
 
-def print_results(result) -> None:
+def print_results(result: Items) -> None:
     for i in result:
         pprint(i)
 

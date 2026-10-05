@@ -1,0 +1,277 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-554",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-637",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-569",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-637",
+                "port": "in:2"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-637",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-656",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-656",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-688",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-688",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-730",
+                "port": "in:2"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-674",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-730",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-554": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "TITLE1"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-554",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-569": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "TITLE2"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "description"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "DESC"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "lostattribute"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "GONE"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-569",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-637": {
+            "id": "sw-637",
+            "name": "union",
+            "type": "module"
+        },
+        "sw-656": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "newtitle"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "NEWTITLE"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "value": {
+                            "subkey": "title",
+                            "type": "text"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-656",
+            "name": "itembuilder",
+            "options": {
+                "assign": "loop:itembuilder",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-674": {
+            "conf": {
+                "author": {
+                    "type": "text",
+                    "value": ""
+                },
+                "description": {
+                    "type": "text",
+                    "value": "b"
+                },
+                "guid": {
+                    "type": "text",
+                    "value": ""
+                },
+                "link": {
+                    "type": "text",
+                    "value": "http://example.com/test.php?this=that"
+                },
+                "mediaContentHeight": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaContentType": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaContentURL": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaContentWidth": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaThumbHeight": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaThumbURL": {
+                    "type": "text",
+                    "value": "http://example.com/a.jpg"
+                },
+                "mediaThumbWidth": {
+                    "type": "text",
+                    "value": ""
+                },
+                "pubdate": {
+                    "type": "text",
+                    "value": ""
+                },
+                "title": {
+                    "type": "text",
+                    "value": "a"
+                }
+            },
+            "id": "sw-674",
+            "name": "rssitembuilder",
+            "type": "module"
+        },
+        "sw-688": {
+            "embed": {
+                "conf": {
+                    "attrs": [
+                        {
+                            "key": {
+                                "type": "text",
+                                "value": "title"
+                            },
+                            "value": {
+                                "subkey": "newtitle",
+                                "type": "text"
+                            }
+                        },
+                        {
+                            "key": {
+                                "type": "text",
+                                "value": "description.content"
+                            },
+                            "value": {
+                                "type": "text",
+                                "value": "DESCRIPTION"
+                            }
+                        }
+                    ]
+                },
+                "name": "itembuilder"
+            },
+            "id": "sw-688",
+            "name": "loop",
+            "options": {
+                "assign": "loop:itembuilder",
+                "count": "all",
+                "emit": false
+            },
+            "type": "module"
+        },
+        "sw-730": {
+            "id": "sw-730",
+            "name": "union",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-730",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

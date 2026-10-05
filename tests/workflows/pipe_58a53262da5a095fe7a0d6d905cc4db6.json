@@ -1,0 +1,206 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-550-union",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-580",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-565",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-596",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-572",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-580",
+                "port": "in:1"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-580",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-565",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-596",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-625",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-606",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-572",
+                "port": "in:_1_URL"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-550-1",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-550-union",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-550-2",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-550-union",
+                "port": "in:1"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-550-1": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/blog.ouseful.info_feed.xml"
+                }
+            },
+            "id": "sw-550-1",
+            "name": "fetch",
+            "type": "module"
+        },
+        "sw-550-2": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/feeds.feedburner.com_TheEdTechie.xml"
+                }
+            },
+            "id": "sw-550-2",
+            "name": "fetch",
+            "type": "module"
+        },
+        "sw-550-union": {
+            "id": "sw-550-union",
+            "name": "union",
+            "type": "module"
+        },
+        "sw-565": {
+            "conf": {
+                "rule": [
+                    {
+                        "dir": {
+                            "type": "text",
+                            "value": "ASC"
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "title"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-565",
+            "name": "sort",
+            "type": "module"
+        },
+        "sw-572": {
+            "conf": {
+                "url": {
+                    "terminal": "1_URL",
+                    "type": "url"
+                }
+            },
+            "id": "sw-572",
+            "name": "fetch",
+            "type": "module"
+        },
+        "sw-580": {
+            "id": "sw-580",
+            "name": "union",
+            "type": "module"
+        },
+        "sw-596": {
+            "conf": {
+                "count": {
+                    "type": "float",
+                    "value": "3"
+                }
+            },
+            "id": "sw-596",
+            "name": "truncate",
+            "type": "module"
+        },
+        "sw-606": {
+            "conf": {
+                "base": {
+                    "type": "text",
+                    "value": "file://riko/data/www.greenhughes.com_rssfeed.xml"
+                },
+                "param": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": ""
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": ""
+                        }
+                    }
+                ],
+                "path": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-606",
+            "name": "urlbuilder",
+            "type": "module"
+        },
+        "sw-625": {
+            "id": "sw-625",
+            "name": "reverse",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-625",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

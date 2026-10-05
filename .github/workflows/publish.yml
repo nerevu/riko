@@ -62,23 +62,27 @@ jobs:
           tmp="$(mktemp -d)"
           cp -r tests "$tmp/tests"
           cd "$tmp"
+          dist="$(ls "$GITHUB_WORKSPACE"/dist/*.whl)"
           uv run --isolated --no-project \
-            --with "$GITHUB_WORKSPACE"/dist/*.whl \
+            --with "riko[async] @ file://$dist" \
             --with pytest \
             --with pytest-timeout \
             pytest -p no:cacheprovider -o addopts="" -m smoke \
-            tests/public/test_imports.py tests/public/test_collections.py
+            tests/public/test_imports.py tests/public/test_sync_async_parity.py \
+            tests/public/test_pipe_lifecycle.py tests/public/test_async_pipe_lifecycle.py
       - name: Smoke test (source distribution)
         run: |
           tmp="$(mktemp -d)"
           cp -r tests "$tmp/tests"
           cd "$tmp"
+          dist="$(ls "$GITHUB_WORKSPACE"/dist/*.tar.gz)"
           uv run --isolated --no-project \
-            --with "$GITHUB_WORKSPACE"/dist/*.tar.gz \
+            --with "riko[async] @ file://$dist" \
             --with pytest \
             --with pytest-timeout \
             pytest -p no:cacheprovider -o addopts="" -m smoke \
-            tests/public/test_imports.py tests/public/test_collections.py
+            tests/public/test_imports.py tests/public/test_sync_async_parity.py \
+            tests/public/test_pipe_lifecycle.py tests/public/test_async_pipe_lifecycle.py
       - name: Store the distribution packages
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

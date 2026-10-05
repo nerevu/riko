@@ -19,23 +19,27 @@ Examples:
 
         cd examples/riko-example-ext && uv pip install -e .
         python << 'EOF'
-        from riko import SyncPipe
+        from riko import Pipeline
 
-        source=[{'content': 'hi'}]
-        print(list(SyncPipe('example.shout', source=source)))
+        source = [{'content': 'hi'}]
+        print(next(iter(Pipeline(source=source).pipe('example.shout'))))
         EOF
 
 """
 
-from typing import Any, cast
+from __future__ import annotations
 
-from riko.coercion._dynamic_conf import DynamicConf
+from typing import TYPE_CHECKING, Any, cast
+
 from riko.ext import operator
-from riko.types import Item, PipeTuples, Stream
+
+if TYPE_CHECKING:
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.types import Item, PipeTuples, Stream
 
 
 def _shout(item: Item) -> Item:
-    return cast(Item, {**item, "content": str(item.get("content", "")).upper()})
+    return cast("Item", {**item, "content": str(item.get("content", "")).upper()})
 
 
 def parser(

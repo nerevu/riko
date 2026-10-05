@@ -1,0 +1,163 @@
+# vim: sw=4:ts=4:expandtab
+"""
+Building of a ``Workflow`` into an immutable execution plan.
+
+The build boundary validates the graph, indexes it, and resolves each node's
+implementation once, so the returned plan carries the resolution. It performs no
+invocation and acquires no resources; the sync/async executions run the plan
+without touching the resolver or registry.
+"""
+
+from __future__ import annotations
+
+from functools import partial
+from typing import TYPE_CHECKING
+
+from attrs import Factory, define, field
+
+from riko.coercion._graph import descendants
+from riko.definitions._workflow import require_module_node
+from riko.execution._prepared import PreparedNode
+from riko.types._collections import freeze_mapping
+
+from ._graph_index import index_workflow
+from ._resolver import dispatcher
+
+if TYPE_CHECKING:
+    from types import MappingProxyType
+
+    from riko.definitions._workflow import Node, Workflow
+    from riko.types._compiler import GraphIndex
+    from riko.types._workflow import NodeId
+    from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
+
+    from ._resolver import ResolverDispatcher
+
+
+type PreparedNodes = MappingProxyType[NodeId, PreparedNode]
+type RequiredNodes = MappingProxyType[str, frozenset[NodeId]]
+type ResolvedPipes = tuple[SyncModuleWrapper | None, AsyncModuleWrapper | None]
+
+
+def _index(self: ExecutionPlan) -> GraphIndex:
+    return index_workflow(self.workflow)
+
+
+def _required(self: ExecutionPlan) -> RequiredNodes:
+    _descendants = partial(descendants, graph=self.index.dependencies)
+    items = self.index.outputs.items()
+    required = {name: _descendants(ref.node) | {ref.node} for name, ref in items}
+    return freeze_mapping(required)
+
+
+required = Factory(_required, takes_self=True)
+
+
+@define(frozen=True, slots=True)
+class ExecutionPlan:
+    """
+    A prepared workflow: its graph index, resolved nodes, and per-output subgraphs.
+
+    Only ``nodes`` is supplied — it carries the once-resolved callables. The graph
+    index and per-output subgraphs derive from ``workflow``, so a plan is consistent
+    however it is constructed.
+
+    Attributes:
+
+        workflow: The ``Workflow`` that was prepared.
+        nodes: The resolved nodes, keyed by canonical node id.
+        index: The workflow's structural graph index.
+        required: For each named output, the node ids its subgraph must run.
+
+    """
+
+    workflow: Workflow = field(validator=lambda inst, field, value: value.validate())
+    nodes: PreparedNodes = field(converter=freeze_mapping)
+    index: GraphIndex = field(init=False, default=Factory(_index, takes_self=True))
+    required: RequiredNodes = field(init=False, default=required)
+
+
+def _resolve_pipes(name: str, dispatcher: ResolverDispatcher) -> ResolvedPipes:
+    dispatcher.validate(name)
+    resolve = partial(dispatcher.resolve, name)
+    return resolve(), resolve(is_async=True)
+
+
+def _build_embed(
+    base: PreparedNode, dispatcher: ResolverDispatcher
+) -> PreparedNode | None:
+    embed = require_module_node(base.node).embed
+
+    if embed is None:
+        result = None
+    else:
+        sync_pipe, async_pipe = _resolve_pipes(embed["name"], dispatcher)
+        result = PreparedNode(
+            node=base.node,
+            id=f"{base.id}::embed",
+            name=embed["name"],
+            conf=embed["conf"],
+            options={},
+            resources={},
+            sync_pipe=sync_pipe,
+            async_pipe=async_pipe,
+        )
+
+    return result
+
+
+def _build_node(node: Node, dispatcher: ResolverDispatcher) -> PreparedNode:
+    base = PreparedNode(node)
+    sync_pipe, async_pipe = _resolve_pipes(base.name, dispatcher)
+    embed = _build_embed(base, dispatcher)
+    return PreparedNode(node, sync_pipe=sync_pipe, async_pipe=async_pipe, embed=embed)
+
+
+def build_execution_plan(
+    workflow: Workflow, dispatcher: ResolverDispatcher = dispatcher
+) -> ExecutionPlan:
+    """
+    Builds an executable snapshot of ``workflow`` with every node resolved once.
+
+    Args:
+
+        workflow: The ``Workflow`` to prepare.
+        dispatcher: The pipe resolver supplying node implementations.
+
+    Returns:
+
+        The prepared plan: its graph index, resolved nodes, and per-output
+        subgraphs. No node runs and no resource is acquired here.
+
+    Raises:
+
+        InvalidPipelineError: If the graph is invalid, a source port fans out to
+            more than one edge, a node's positional inputs have gaps, a node
+            family has no execution runtime yet, or a node runs a multi-output
+            splitter.
+
+        UnsupportedModuleError: If a node's implementation is unresolved.
+
+    Examples:
+
+        >>> from riko.definitions._workflow import ModuleNode, Workflow
+        >>> from riko.types._workflow import Endpoint
+        >>> node = ModuleNode(id="count-1", name="count")
+        >>> workflow = Workflow(
+        ...     nodes={"count-1": node},
+        ...     outputs={"default": Endpoint("count-1", "out")},
+        ...     inputs={},
+        ...     edges=(),
+        ... )
+        >>> plan = build_execution_plan(workflow)
+        >>> sorted(plan.nodes)
+        ['count-1']
+
+    """
+    workflow.validate()
+    workflow.require_executable()
+    nodes = {id_: _build_node(node, dispatcher) for id_, node in workflow.nodes.items()}
+    return ExecutionPlan(workflow=workflow, nodes=nodes)
+
+
+__all__ = ["ExecutionPlan", "build_execution_plan"]

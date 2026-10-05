@@ -1,0 +1,90 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-1",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-2",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-1": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "link"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "www.google.com"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "google"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "author"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "$"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-1",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-2": {
+            "conf": {
+                "rule": [
+                    {
+                        "find": {
+                            "type": "text",
+                            "value": "$"
+                        },
+                        "param": {
+                            "type": "text",
+                            "value": "first"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": "USD"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-2",
+            "name": "strreplace",
+            "options": {
+                "assign": "author",
+                "field": "author"
+            },
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-2",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

@@ -375,7 +375,11 @@ These surfaces share service/resource implementations rather than duplicating ex
 - XLS/XLSX;
 - CKAN/Prometheus;
 - Singer/core-state/RDP bridge;
-- initial DB/record-store adapter proof.
+- initial DB/record-store adapter proof: the **AIRTABLE** keyed record-store Target adapter
+  (`append`/`merge`/`replace`/`delete` by declared keys, batched requests, rate limits) is the first
+  such adapter, required by the M4 monthly-reports release
+  ([implementation-sequence.md](implementation-sequence.md)); monthly-dashboard MD2 is only its
+  scenario write-mode conformance proof.
 
 ### C5 — Catalog/CLI integration
 

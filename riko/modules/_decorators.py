@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules._decorators
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
 Provides decorators for creating processor, operator, and splitter pipes.
 
 Examples:
@@ -20,102 +17,110 @@ Examples:
 
 """
 
-from collections.abc import (
-    AsyncIterable,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Generator,
-    Iterable,
-    Iterator,
-    Mapping,
-)
+from __future__ import annotations
+
+from collections.abc import AsyncIterable, AsyncIterator, Iterator
 from functools import partial, wraps
 from inspect import iscoroutinefunction
 from itertools import chain
-from logging import Logger
-from typing import ClassVar, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast, overload
 
 import pygogo as gogo
 
 from riko.bado._util import as_awaitable
-from riko.bado.itertools import as_async, async_iter, async_map
+from riko.bado.itertools import (
+    as_async,
+    async_iter,
+    async_map,
+    async_map_ordered_stream,
+)
 from riko.base._iterutils import dispatch
-from riko.coercion._dynamic_conf import DynamicConf
-from riko.coercion._sequences import is_listlike
-from riko.definitions._resources import bind_resources, coerce_binding
+from riko.definitions._resources import bind_resources, normalize_binding
+from riko.execution.context import Context
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
-from riko.runtime.context import Context
-from riko.types._collections import Inputs, RikoValue
 from riko.types._compiler import CountValues, EmbedKwargs
 from riko.types._enums import BasicCastType, ExecutionMode
-from riko.types._guards import is_mapping
-from riko.types._options import Casted, Defaults, ItemDispatch, Opts
-from riko.types._scalars import PrimitiveValue
+from riko.types._guards import is_listlike, is_mapping, is_streamlike
+from riko.types._options import Casted, Defaults, Opts
 from riko.types._streams import (
     AsyncItemsOrValues,
     AsyncStream,
-    AsyncStreamOrValueStream,
-    Feed,
     Item,
     ItemOrValue,
-    StatefulItem,
     Stream,
     StreamOrValueStream,
-    Streams,
-    ValueStream,
 )
-from riko.types._wrappers import (
-    AsyncOperatorParser,
-    AsyncOperatorWrapper,
-    AsyncOperatorWrapperOutput,
-    AsyncProcessorParser,
-    AsyncProcessorWrapper,
-    AsyncSplitterParser,
-    AsyncSplitterWrapper,
-    AsyncSubPipe,
-    AwaitableOperatorParser,
-    AwaitableProcessorParser,
-    AwaitableSplitterParser,
-    CastFuncs,
-    ModuleParser,
-    OperatorParser,
-    OperatorParserOutput,
-    OperatorWrapper,
-    OperatorWrapperInput,
-    OperatorWrapperOutput,
-    PipeTuples,
-    ProcessorParser,
-    ProcessorParserOutput,
-    ProcessorWrapper,
-    ProcessorWrapperInput,
-    ProcessorWrapperOutput,
-    SplitterParser,
-    SplitterWrapper,
-    SplitterWrapperInput,
-    SyncOperatorParser,
-    SyncOperatorWrapper,
-    SyncProcessorParser,
-    SyncProcessorWrapper,
-    SyncSplitterParser,
-    SyncSplitterWrapper,
-    SyncSubPipe,
-)
-from riko.types.modules import Conf, ModuleType
 
-from ._assignment import gen_assignments, get_assignment
-from ._derive import derive_loopable, derive_subtypes
+from ._assignment import build_assignment, gen_assignments
+from ._derive import get_module_subtypes, is_loopable
 from ._loop import loop_embed_async, loop_embed_sync
 from ._prepare import (
     PreparedModule,
-    get_casters,
-    get_parsers,
-    get_pieces_or_conf,
+    build_casters,
+    build_conf,
+    build_parsers,
     parse_and_cast,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable, Generator, Iterable, Mapping
+    from logging import Logger
+
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.types._collections import Inputs, RikoValue
+    from riko.types._wrappers import (
+        AsyncOperatorParser,
+        AsyncOperatorWrapper,
+        AsyncOperatorWrapperInput,
+        AsyncOperatorWrapperInternalOutput,
+        AsyncPipeTuples,
+        AsyncProcessorParser,
+        AsyncProcessorWrapper,
+        AsyncProcessorWrapperInternalOutput,
+        AsyncSplitterParser,
+        AsyncSplitterWrapper,
+        AsyncSplitterWrapperInput,
+        AsyncSubPipe,
+        AwaitableOperatorParser,
+        AwaitableProcessorParser,
+        AwaitableSplitterParser,
+        CastFuncs,
+        Dispatcher,
+        ModuleParser,
+        OperatorParser,
+        OperatorParserOutput,
+        OperatorWrapper,
+        PipeTuples,
+        ProcessorParser,
+        ProcessorParserOutput,
+        ProcessorWrapper,
+        ProcessorWrapperInput,
+        SplitterParser,
+        SplitterWrapper,
+        SplitterWrapperInput,
+        SyncOperatorParser,
+        SyncOperatorWrapper,
+        SyncOperatorWrapperInput,
+        SyncOperatorWrapperInternalOutput,
+        SyncPipeTuples,
+        SyncProcessorParser,
+        SyncProcessorWrapper,
+        SyncProcessorWrapperInput,
+        SyncProcessorWrapperInternalOutput,
+        SyncSplitterParser,
+        SyncSplitterWrapper,
+        SyncSplitterWrapperInput,
+        SyncSplitterWrapperOutput,
+        SyncSubPipe,
+    )
+    from riko.types.modules import Conf, ModuleType
+
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+
+type AsyncItemProcessor = Callable[
+    [ItemOrValue], Awaitable[SyncProcessorWrapperInternalOutput]
+]
 
 _PROCESSOR_FORBIDDEN_OPTS: frozenset[str] = frozenset({"embed"})
 _OPERATOR_FORBIDDEN_OPTS: frozenset[str] = frozenset({"skip_if"})
@@ -124,7 +129,7 @@ _SPLITTER_FORBIDDEN_OPTS: frozenset[str] = frozenset(
 )
 
 
-class _AsyncWrapperStream:
+class _AsyncWrapperStream[T]:
     """
     Dual-protocol result of an async ``processor``/``splitter`` wrapper.
 
@@ -143,20 +148,20 @@ class _AsyncWrapperStream:
     __slots__ = ("_agen", "_make")
 
     def __init__(
-        self, make: Callable[[], Awaitable[AsyncIterable[object] | Iterable[object]]]
+        self, make: Callable[..., Awaitable[AsyncIterable[T] | Iterable[T]]]
     ) -> None:
         self._make = make
-        self._agen: AsyncIterator[object] | None = None
+        self._agen: AsyncIterator[T] | None = None
 
-    def __await__(self) -> Generator[object, None, object]:
+    def __await__(self) -> Generator[Any, None, AsyncIterable[T] | Iterable[T]]:
         return self._make().__await__()
 
-    def __aiter__(self) -> AsyncIterator[object]:
+    def __aiter__(self) -> AsyncIterator[T]:
         return self
 
-    async def __anext__(self) -> object:
+    async def __anext__(self) -> T:
         if self._agen is None:
-            self._agen = aiter(as_async(await self._make()))
+            self._agen = as_async(await self._make())
 
         return await self._agen.__anext__()
 
@@ -177,7 +182,7 @@ class Module[B: (Literal[True], Literal[False])]:
 
     @overload
     def __init__(  # noqa: E704
-        self: "Module[Literal[True]]",
+        self: Module[Literal[True]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[True],
@@ -188,7 +193,7 @@ class Module[B: (Literal[True], Literal[False])]:
     ) -> None: ...
     @overload  # noqa: E301
     def __init__(  # noqa: E704
-        self: "Module[Literal[False]]",
+        self: Module[Literal[False]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[False] = ...,
@@ -207,10 +212,18 @@ class Module[B: (Literal[True], Literal[False])]:
         ptype: BasicCastType = BasicCastType.PASS,
         **opts: object,
     ):
+        if callable(defaults):
+            name = type(self).__name__
+            raise TypeError(
+                f"@{name} must be called before decorating (use @{name}()); the "
+                f"bare form is not supported yet and would have taken "
+                f"{defaults!r} as the pipe defaults"
+            )
+
         # Only called once on pipe import
         self.defaults: Defaults = defaults or Defaults()
         self._opts: Opts = Opts(ftype=ftype, ptype=ptype)
-        self._opts.update(cast(Opts, opts))
+        self._opts.update(cast("Opts", opts))
         self.isasync = isasync  # pyright: ignore[reportAttributeAccessIssue]
         self.pollable: bool = pollable
         self.types: set[str] = set()
@@ -275,9 +288,9 @@ class Module[B: (Literal[True], Literal[False])]:
         if module_type not in {"operator", "processor", "splitter"}:
             raise TypeError(f"Unsupported module type: {module_type!r}")
 
-        subtype, subtypes = derive_subtypes(pipe, module_type, **self._opts)
+        subtype, subtypes = get_module_subtypes(pipe, module_type, **self._opts)
         name = pipe.__module__.rsplit(".", 1)[-1]
-        loopable = derive_loopable(name, module_type)
+        loopable = is_loopable(name, module_type)
 
         setattr(wrapper, "name", name)  # noqa: B010
         setattr(wrapper, "type", module_type)  # noqa: B010
@@ -292,7 +305,7 @@ class Module[B: (Literal[True], Literal[False])]:
         module_name: str,
         conf: Conf | DynamicConf | None = None,
         *,
-        assign: str | None = "",
+        assign: str | None = None,
         **kwargs: object,
     ) -> PreparedModule[ItemOrValue, object]:
         """
@@ -322,9 +335,9 @@ class Module[B: (Literal[True], Literal[False])]:
             The immutable ``PreparedModule`` for this call.
 
         """
-        emit = cast(bool | None, kwargs.pop("emit", None))
+        emit = cast("bool | None", kwargs.pop("emit", None))
         def_emit = self._opts.get("emit") if emit is None else emit
-        def_assign = assign or self._opts.get("assign", "")
+        def_assign = self._opts.get("assign", "") if assign is None else assign
         opts: Opts = Opts(self._opts)
         opts.setdefault("objectify", self._opts.get("ptype") != BasicCastType.NONE)
 
@@ -346,7 +359,7 @@ class Module[B: (Literal[True], Literal[False])]:
 
         module_conf = DotDict(self.defaults)
         module_conf.update(conf or {})
-        _conf = cast(Conf, module_conf.asdict())
+        _conf = cast("Conf", module_conf.asdict())
 
         if _emit and assign and not callable(_emit):
             msg = f"Assign is set to {assign} for {module_name} but will be "
@@ -355,19 +368,19 @@ class Module[B: (Literal[True], Literal[False])]:
 
         opts["emit"] = _emit
         opts["assign"] = _assign
-        opts.update(cast(Opts, kwargs))
+        opts.update(cast("Opts", kwargs))
 
-        parsers, is_dynamic = get_parsers(opts, conf=_conf, **kwargs)
+        parsers, is_dynamic = build_parsers(opts, conf=_conf, **kwargs)
         static_casted = None
 
-        casters: CastFuncs[ItemOrValue, object] = get_casters(opts)
+        casters: CastFuncs[ItemOrValue, object] = build_casters(opts)
 
         if casters and not is_dynamic:
             parsed_conf = parsers.conf_parser({})
             args = (parsed_conf, self.defaults, opts, module_name)
-            parsed = get_pieces_or_conf(*args)
+            parsed = build_conf(*args)
             casted = dispatch(parsed, casters[1], casters[2])
-            static_casted = (casters[0], casted[0], cast(DynamicConf, casted[1]))
+            static_casted = (casters[0], casted[0], casted[1])
 
         return PreparedModule(
             name=module_name,
@@ -379,7 +392,7 @@ class Module[B: (Literal[True], Literal[False])]:
             emit=_emit,
             is_source=is_source,
             static_casted=static_casted,
-            resources=coerce_binding(opts.get("resources")),
+            resources=normalize_binding(opts.get("resources")),
         )
 
 
@@ -429,9 +442,9 @@ async def _materialize_terminal[T](value: object) -> object:  # noqa: E302
     """
     Drains an async terminal sub-source into a concrete sync iterator.
 
-    A terminal sub-source (an ``AsyncPipe`` passed as ``format``/``formatted`` or one
-    of ``union``'s ``others``) reaches the synchronous conf-parsing machinery, which
-    pulls it with ``next`` or ``chain``. An async iterable cannot satisfy this.
+    A terminal sub-source (an async pipeline passed as ``format``/``formatted`` or
+    one of ``union``'s ``others``) reaches the synchronous conf-parsing machinery,
+    which pulls it with ``next`` or ``chain``. An async iterable cannot satisfy this.
 
     Args:
 
@@ -451,9 +464,30 @@ async def _materialize_terminal[T](value: object) -> object:  # noqa: E302
     elif isinstance(value, (list, tuple)):
         materialized = [await _materialize_terminal(item) for item in value]
     else:
-        materialized = cast(T, value)
+        materialized = cast("T", value)
 
     return materialized
+
+
+async def _aprocess_stream[T](
+    wrapper: Callable[[T], Awaitable[Iterable[ItemOrValue]]], stream: AsyncIterable[T]
+) -> AsyncIterator[ItemOrValue]:
+    """
+    Maps a processor over an async stream lazily, in order, flattening its results.
+
+    Args:
+
+        wrapper: The per-item processor call, returning that item's results.
+        stream: The async stream of items to process.
+
+    Yields:
+
+        Each result of every item, in stream order.
+
+    """
+    async for processed in async_map_ordered_stream(wrapper, stream):
+        for value in processed:
+            yield value
 
 
 async def _materialize_terminals(**kwargs: object) -> dict[str, object]:
@@ -462,7 +496,7 @@ async def _materialize_terminals(**kwargs: object) -> dict[str, object]:
 
     The async operator and processor wrappers forward terminal sub-sources through
     ``**kwargs`` into the synchronous conf-parsing machinery. Each async stream is
-    materialized once here so parsing consumes it like its ``SyncPipe`` counterpart.
+    materialized once here so parsing consumes it like its synchronous counterpart.
 
     Args:
 
@@ -513,7 +547,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
     @overload
     def __init__(  # noqa: E704
-        self: "processor[Literal[True]]",
+        self: processor[Literal[True]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[True],
@@ -521,7 +555,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     ) -> None: ...
     @overload  # noqa: E301
     def __init__(  # noqa: E704
-        self: "processor[Literal[False]]",
+        self: processor[Literal[False]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[False] = ...,
@@ -642,13 +676,13 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         return parsed
 
-    def setup[T, E](
+    def setup[I, E](
         self,
-        prepared: PreparedModule[T, E],
+        prepared: PreparedModule[I, E],
         input_: DotDict[RikoValue],
         field: str | None = None,
         **kwargs: object,
-    ) -> tuple[ItemOrValue, Casted[T, E] | Casted[ItemOrValue, E], bool]:
+    ) -> tuple[ItemOrValue, Casted[I, E] | Casted[ItemOrValue, E], bool]:
         """
         Extracts and casts the input for a processor call.
 
@@ -671,7 +705,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         if prepared.static_casted:
             field_func, pre_casted_extract, pre_casted_conf = prepared.static_casted
-            field = field or prepared.opts.get("field", "")
+            field = prepared.opts.get("field", "") if field is None else field
             parsed_field = get_field(input_, field=field, **kwargs)
             casted_field = field_func(parsed_field)
             orig_item = input_
@@ -690,72 +724,15 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         return orig_item, casted, skip
 
-    @overload
-    def process(  # noqa: E704
+    def process[O: ItemOrValue](
         self,
         input_: DotDict[RikoValue],
-        stream: Stream | DotDict[RikoValue],
-        assign: str,
-        emit: bool = ...,
-        skip: bool = ...,
-    ) -> Stream: ...
-    @overload  # noqa: E301
-    def process(  # noqa: E704
-        self,
-        input_: DotDict[RikoValue],
-        stream: ProcessorParserOutput,
-        assign: str,
-        emit: Literal[False] = ...,
-        skip: Literal[False] = ...,
-    ) -> Stream: ...
-    @overload  # noqa: E301
-    def process(  # noqa: E704
-        self,
-        input_: DotDict[RikoValue],
-        stream: PrimitiveValue,
-        assign: str,
-        emit: Literal[True],
-        skip: Literal[False] = ...,
-    ) -> ValueStream: ...
-    @overload  # noqa: E301
-    def process(  # noqa: E704
-        self,
-        input_: DotDict[RikoValue],
-        stream: PrimitiveValue,
-        assign: str,
-        emit: Literal[False] = ...,
-        *,
-        skip: Literal[True],
-    ) -> ValueStream: ...
-    @overload  # noqa: E301
-    def process(  # noqa: E704
-        self,
-        input_: DotDict[RikoValue],
-        stream: PrimitiveValue,
-        assign: str,
-        emit: Literal[True],
-        skip: Literal[True],
-        count: CountValues | None = None,
-    ) -> ValueStream: ...
-    @overload  # noqa: E301
-    def process(  # noqa: E704
-        self,
-        input_: DotDict[RikoValue],
-        stream: ProcessorParserOutput,
-        assign: str,
-        emit: bool = ...,
-        skip: bool = ...,
-        count: CountValues | None = None,
-    ) -> ProcessorWrapperOutput: ...
-    def process(  # noqa: E301
-        self,
-        input_: DotDict[RikoValue],
-        stream: ProcessorParserOutput,
+        stream: ProcessorParserOutput[O],
         assign: str,
         emit: bool = False,
         skip: bool = False,
         count: CountValues | None = None,
-    ) -> ProcessorWrapperOutput:
+    ) -> StreamOrValueStream:
         """
         Assigns a parser's result back into the stream.
 
@@ -777,26 +754,28 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         """
         if skip or emit:
-            _, result = get_assignment(stream, skip=skip, count=count)
+            _, result = build_assignment(stream, skip=skip, count=count)
         else:
-            one, assignment = get_assignment(stream, skip=False, count=count)
+            one, assignment = build_assignment(stream, skip=False, count=count)
             result = gen_assignments(input_, assignment, assign=assign, one=one)
 
         return result
 
     @overload
-    def __call__[T, E](  # noqa: E704
-        self: "processor[Literal[True]]", pipe: AsyncProcessorParser[T, E]
+    def __call__[I, E, O: ItemOrValue](  # noqa: E704, E741
+        self: processor[Literal[True]], pipe: AsyncProcessorParser[I, E, O]
     ) -> AsyncProcessorWrapper: ...
     @overload  # noqa: E301
-    def __call__[T, E](  # noqa: E704
-        self: "processor[Literal[False]]", pipe: AwaitableProcessorParser[T, E]
+    def __call__[I, E, O: ItemOrValue](  # noqa: E704, E741
+        self: processor[Literal[False]], pipe: AwaitableProcessorParser[I, E, O]
     ) -> AsyncProcessorWrapper: ...
     @overload  # noqa: E301
-    def __call__[T, E](  # noqa: E704
-        self: "processor[Literal[False]]", pipe: SyncProcessorParser[T, E]
+    def __call__[I, E, O: ItemOrValue](  # noqa: E704, E741
+        self: processor[Literal[False]], pipe: SyncProcessorParser[I, E, O]
     ) -> SyncProcessorWrapper: ...
-    def __call__[T, E](self, pipe: ProcessorParser[T, E]) -> ProcessorWrapper:  # noqa: E301
+    def __call__[I, E, O: ItemOrValue](  # noqa: E301, E741
+        self, pipe: ProcessorParser[I, E, O]
+    ) -> ProcessorWrapper:
         """
         Creates a sync or async pipe that processes individual items.
 
@@ -846,10 +825,6 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         """
         module_name = pipe.__module__.split(".")[-1]
 
-        def async_wrapper(item=None, conf=None, *args, **kwargs):
-            make = partial(_async_wrapper_impl, item, conf, *args, **kwargs)
-            return _AsyncWrapperStream(make)
-
         async def _async_wrapper_impl(
             item: ProcessorWrapperInput | None = None,
             conf: Conf | None = None,
@@ -864,11 +839,14 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             test: bool | None = None,
             submodule: bool | None = None,
             **kwargs: object,
-        ) -> ProcessorWrapperOutput:
+        ) -> AsyncProcessorWrapperInternalOutput:
             kwargs = await _materialize_terminals(**kwargs)
+            process = self.process
+            prepare = self.prepare
+            processed: AsyncProcessorWrapperInternalOutput
 
-            if is_listlike(item):
-                _wrapper = partial(
+            if is_streamlike(item):
+                _partial = partial(
                     _async_wrapper_impl,
                     conf=conf,
                     context=context,
@@ -879,37 +857,36 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                     inputs=inputs,
                     **kwargs,
                 )
+                _wrapper = cast("AsyncItemProcessor", _partial)
 
-                mapped = await async_map(_wrapper, item)
-                processed = chain.from_iterable(mapped)
+                if isinstance(item, AsyncIterable):
+                    processed = _aprocess_stream(_wrapper, item)
+                else:
+                    mapped = await async_map(_wrapper, item)
+                    processed = chain.from_iterable(mapped)
             else:
-                input_ = self.parse(cast(ItemOrValue, item), module_name)
-                prepared = self.prepare(
+                input_ = self.parse(cast("ItemOrValue", item), module_name)
+                prepared = prepare(
                     module_name, conf=conf, assign=assign, count=count, **kwargs
                 )
                 assign = prepared.assign
-                orig_item, casted, skip = self.setup(
-                    prepared, input_, field=field, count=count, **kwargs
-                )
+                sets = self.setup(prepared, input_, field=field, count=count, **kwargs)
+                orig_item, casted, skip = sets
 
                 if skip:
                     args = (input_, orig_item, assign)
-                    processed = self.process(*args, emit=True, skip=True)
+                    processed = process(*args, emit=True, skip=True)
                 else:
-                    async_pipe = cast(AsyncProcessorParser[T, object], pipe)
                     _context = context or Context()
-                    akwargs = {"verbose": verbose, "test": test, "submodule": submodule}
-                    context = _context.augment(mode=mode, inputs=inputs, **akwargs)
+                    pkwargs = {"verbose": verbose, "test": test, "submodule": submodule}
+                    context = _context.augment(mode=mode, inputs=inputs, **pkwargs)
+
                     inputs = context.inputs
                     kwargs["test"] = context.test
                     pkwargs = _call_kwargs(prepared, context, count, kwargs)
-                    typed_casted = cast(Casted[T, E], casted)
-                    result = async_pipe(
-                        typed_casted.field,
-                        typed_casted.extraction,
-                        typed_casted.conf,
-                        **pkwargs,
-                    )
+                    typed_casted = cast("Casted[I, E]", casted)
+                    args = (typed_casted.extraction, typed_casted.conf)
+                    result = pipe(typed_casted.field, *args, **pkwargs)
                     stream = await as_awaitable(result)
                     args = (input_, stream, assign)
 
@@ -919,18 +896,20 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                         emit = bool(prepared.emit)
 
                     if emit:
-                        processed = self.process(
-                            *args, emit=True, skip=False, count=count
-                        )
+                        processed = process(*args, emit=True, skip=False, count=count)
                     else:
-                        processed = self.process(
-                            *args, emit=False, skip=False, count=count
-                        )
+                        processed = process(*args, emit=False, skip=False, count=count)
 
             return processed
 
+        def async_wrapper(
+            item=None, conf=None, *args, **kwargs
+        ) -> _AsyncWrapperStream[ItemOrValue]:
+            make = partial(_async_wrapper_impl, item, conf, *args, **kwargs)
+            return _AsyncWrapperStream(make)
+
         def sync_wrapper(
-            item: ProcessorWrapperInput | None = None,
+            item: SyncProcessorWrapperInput | None = None,
             conf: Conf | None = None,
             context: Context | None = None,
             *,
@@ -943,7 +922,9 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             test: bool | None = None,
             submodule: bool | None = None,
             **kwargs: object,
-        ) -> ProcessorWrapperOutput:
+        ) -> SyncProcessorWrapperInternalOutput:
+            process = self.process
+
             if is_listlike(item):
                 _wrapper = partial(
                     sync_wrapper,
@@ -959,10 +940,9 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
                 processed = chain.from_iterable(map(_wrapper, item))
             else:
-                input_ = self.parse(cast(ItemOrValue, item), module_name)
-                prepared = self.prepare(
-                    module_name, conf=conf, assign=assign, count=count, **kwargs
-                )
+                input_ = self.parse(cast("ItemOrValue", item), module_name)
+                args = (module_name, conf)
+                prepared = self.prepare(*args, assign=assign, count=count, **kwargs)
                 assign = prepared.assign
                 orig_item, casted, skip = self.setup(
                     prepared, input_, field=field, **kwargs
@@ -972,14 +952,14 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                     args = (input_, orig_item, assign)
                     processed = self.process(*args, emit=True, skip=True)
                 else:
-                    sync_pipe = cast(SyncProcessorParser[T, E], pipe)
+                    sync_pipe = cast("SyncProcessorParser[I, E, O]", pipe)
                     _context = context or Context()
                     akwargs = {"verbose": verbose, "test": test, "submodule": submodule}
                     context = _context.augment(mode=mode, inputs=inputs, **akwargs)
                     inputs = context.inputs
                     kwargs["test"] = context.test
                     pkwargs = _call_kwargs(prepared, context, count, kwargs)
-                    typed_casted = cast(Casted[T, E], casted)
+                    typed_casted = cast("Casted[I, E]", casted)
                     stream = sync_pipe(
                         typed_casted.field,
                         typed_casted.extraction,
@@ -994,20 +974,16 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                         emit = bool(prepared.emit)
 
                     if emit:
-                        processed = self.process(
-                            *args, emit=True, skip=False, count=count
-                        )
+                        processed = process(*args, emit=True, skip=False, count=count)
                     else:
-                        processed = self.process(
-                            *args, emit=False, skip=False, count=count
-                        )
+                        processed = process(*args, emit=False, skip=False, count=count)
 
             yield from processed
 
         isasync = self._resolve_isasync(pipe)
         wrapper = wraps(pipe)(async_wrapper if isasync else sync_wrapper)
         self._set_wrapper_metadata(wrapper, pipe, isasync)
-        return cast(ProcessorWrapper, wrapper)
+        return cast("ProcessorWrapper", wrapper)
 
 
 class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
@@ -1018,7 +994,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
     @overload
     def __init__(  # noqa: E704
-        self: "operator[Literal[True]]",
+        self: operator[Literal[True]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[True],
@@ -1026,7 +1002,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     ) -> None: ...
     @overload  # noqa: E301
     def __init__(  # noqa: E704
-        self: "operator[Literal[False]]",
+        self: operator[Literal[False]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[False] = ...,
@@ -1138,7 +1114,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         _reject_foreign_opts("operator", _OPERATOR_FORBIDDEN_OPTS, kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
-    def parse(self, items: OperatorWrapperInput | None = None) -> Stream:
+    def parse(self, items: SyncOperatorWrapperInput | None = None) -> Stream:
         """
         Normalizes a sync input stream into ``DotDict`` items.
 
@@ -1154,12 +1130,11 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             Each input element as a ``DotDict``.
 
         """
-        if items:
-            for item in items:
-                if is_mapping(item):
-                    yield DotDict(item)
-                else:
-                    yield DotDict({"content": item})
+        for item in items or []:
+            if is_mapping(item):
+                yield DotDict(item)
+            else:
+                yield DotDict({"content": item})
 
     async def aparse(self, items: AsyncItemsOrValues) -> AsyncStream:
         """
@@ -1183,13 +1158,37 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             else:
                 yield DotDict({"content": item})
 
-    def setup[T, E](
+    @overload
+    def setup[T, E](  # noqa: E704
+        self,
+        prepared: PreparedModule[T, E],
+        input_: Stream,
+        field: str | None = ...,
+        **kwargs: object,
+    ) -> tuple[SyncPipeTuples, Stream, Casted[Item, E] | Casted[T, E]]: ...
+    @overload  # noqa: E301
+    def setup[T, E](  # noqa: E704
+        self,
+        prepared: PreparedModule[T, E],
+        input_: AsyncStream,
+        field: str | None = ...,
+        **kwargs: object,
+    ) -> tuple[AsyncPipeTuples, AsyncStream, Casted[Item, E] | Casted[T, E]]: ...
+    @overload  # noqa: E301
+    def setup[T, E](  # noqa: E704
+        self,
+        prepared: PreparedModule[T, E],
+        input_: Stream | AsyncStream,
+        field: str | None = ...,
+        **kwargs: object,
+    ) -> tuple[PipeTuples, Stream | AsyncStream, Casted[Item, E] | Casted[T, E]]: ...
+    def setup[T, E](  # noqa: E301
         self,
         prepared: PreparedModule[T, E],
         input_: Stream | AsyncStream,
         field: str | None = None,
         **kwargs: object,
-    ) -> tuple[PipeTuples, Stream, Casted[Item, E] | Casted[T, E]]:
+    ) -> tuple[PipeTuples, Stream | AsyncStream, Casted[Item, E] | Casted[T, E]]:
         """
         Builds the per-item tuples and original stream for an operator call.
 
@@ -1216,15 +1215,14 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             _, pre_casted_extract, pre_casted_conf = prepared.static_casted
             objconf = pre_casted_conf
             casted = Casted[Item, E](DotDict(), pre_casted_extract, pre_casted_conf)
+            orig_stream = input_
 
             if isinstance(input_, AsyncIterator):
-                orig_stream = cast(Stream, input_)
-                tuples = cast(PipeTuples, ((item, objconf) async for item in input_))
+                tuples = ((item, objconf) async for item in input_)
             else:
-                orig_stream = input_
                 tuples = ((item, objconf) for item in input_)
         else:
-            _dispatcher: Callable[..., ItemDispatch] = partial(
+            _disp = partial(
                 parse_and_cast,
                 conf=prepared.conf,
                 parsers=prepared.parsers,
@@ -1234,7 +1232,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 pipe=prepared.name,
             )
             # Parses conf that can vary per item. Can't handle terminal input
-            dispatcher = cast(Callable[[Item, Opts], ItemDispatch[T, E]], _dispatcher)
+            dispatcher = cast("Dispatcher[T, E]", _disp)
 
             # - operators can't skip items
             # - purposely setting both tuples and orig_stream to maps of the same
@@ -1243,10 +1241,8 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             # - orig_stream parses conf that doesn't vary per item; may hold input
             if isinstance(input_, AsyncIterator):
                 adispatches = (dispatcher(item, prepared.opts) async for item in input_)
-                tuples = cast(
-                    PipeTuples, ((d.item, d.casted.conf) async for d in adispatches)
-                )
-                orig_stream = cast(Stream, (d.item async for d in adispatches))
+                tuples = ((d.item, d.casted.conf) async for d in adispatches)
+                orig_stream = (d.item async for d in adispatches)
             else:
                 dispatches = (dispatcher(item, prepared.opts) for item in input_)
                 tuples = ((d.item, d.casted.conf) for d in dispatches)
@@ -1256,34 +1252,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         return (tuples, orig_stream, casted)
 
-    @overload
-    def process(  # noqa: E704
-        self, stream: Stream | Iterator[StatefulItem], assign: str, emit: bool = ...
-    ) -> Stream: ...
-    @overload  # noqa: E301
-    def process(  # noqa: E704
-        self,
-        stream: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
-        assign: str,
-        emit: Literal[False] = ...,
-    ) -> Stream: ...
-    @overload  # noqa: E301
-    def process(  # noqa: E704
-        self, stream: PrimitiveValue, assign: str, emit: Literal[True]
-    ) -> ValueStream: ...
-    @overload  # noqa: E301
-    def process(  # noqa: E704
-        self,
-        stream: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
-        assign: str,
-        emit: bool = ...,
-    ) -> OperatorWrapperOutput: ...
-    def process(  # noqa: E301
-        self,
-        stream: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
-        assign: str,
-        emit: bool = False,
-    ) -> OperatorWrapperOutput:
+    def process[T: ItemOrValue](
+        self, stream: OperatorParserOutput[T], assign: str, emit: bool = False
+    ) -> StreamOrValueStream:
         """
         Assigns an operator parser's result into a single-item stream.
 
@@ -1302,7 +1273,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         """
         items = stream
-        one, assignment = get_assignment(items, skip=False)
+        one, assignment = build_assignment(items, skip=False)
 
         if emit:
             result = assignment
@@ -1312,18 +1283,20 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         return result
 
     @overload
-    def __call__[E](  # noqa: E704
-        self: "operator[Literal[True]]", pipe: AsyncOperatorParser[E]
+    def __call__[T: ItemOrValue, E](  # noqa: E704
+        self: operator[Literal[True]], pipe: AsyncOperatorParser[T, E]
     ) -> AsyncOperatorWrapper: ...
     @overload  # noqa: E301
-    def __call__[E](  # noqa: E704
-        self: "operator[Literal[False]]", pipe: AwaitableOperatorParser[E]
+    def __call__[T: ItemOrValue, E](  # noqa: E704
+        self: operator[Literal[False]], pipe: AwaitableOperatorParser[T, E]
     ) -> AsyncOperatorWrapper: ...
     @overload  # noqa: E301
-    def __call__[E](  # noqa: E704
-        self: "operator[Literal[False]]", pipe: SyncOperatorParser[E]
+    def __call__[T: ItemOrValue, E](  # noqa: E704
+        self: operator[Literal[False]], pipe: SyncOperatorParser[T, E]
     ) -> SyncOperatorWrapper: ...
-    def __call__[E](self, pipe: OperatorParser[E]) -> OperatorWrapper:  # noqa: E301
+    def __call__[T: ItemOrValue, E](  # noqa: E301
+        self, pipe: OperatorParser[T, E]
+    ) -> OperatorWrapper:
         """
         Creates a sync or async pipe that processes an entire stream.
 
@@ -1394,7 +1367,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         async_native = iscoroutinefunction(pipe)
 
         async def async_wrapper(
-            items: OperatorWrapperInput | Feed | None = None,
+            items: AsyncOperatorWrapperInput | None = None,
             conf: Conf | DynamicConf | None = None,
             context: Context | None = None,
             *,
@@ -1408,13 +1381,13 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             test: bool | None = None,
             submodule: bool | None = None,
             **kwargs: object,
-        ) -> AsyncOperatorWrapperOutput:
+        ) -> AsyncOperatorWrapperInternalOutput:
             if isinstance(items, AsyncIterable):
                 # Async-native composers (async def async_pipe, e.g. timeout/send)
                 # consume the async stream lazily to bound an infinite Feed. Legacy
                 # aggregators reuse the sync parser, which can't iterate async
                 # tuples, so materialize the async input here — the same legacy
-                # materialization seam the AsyncPipe collection path applies.
+                # materialization seam the async collection path applies.
                 if async_native:
                     input_ = self.aparse(items)
                 else:
@@ -1444,7 +1417,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 embed,
                 embedded_kwargs,
                 context,
-                cast(Stream, input_),
+                input_,
                 module_name,
                 field=field,
                 assign=assign,
@@ -1452,16 +1425,22 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 count=count,
             )
 
-            if looped:
-                processed = cast(AsyncStreamOrValueStream, embed_stream)
-            elif handled:
-                processed = async_iter(cast(Stream, embed_stream))
+            if looped or handled:
+                processed = as_async(embed_stream)
             else:
-                async_pipe = cast(AsyncOperatorParser[E], pipe)
                 pkwargs = _call_kwargs(prepared, context, count, kwargs)
-                extraction = cast(E, casted.extraction)
-                result = async_pipe(orig_stream, extraction, tuples, **pkwargs)
-                stream = await as_awaitable(result)
+                extraction = cast("E", casted.extraction)
+
+                if async_native:
+                    async_pipe = cast("AwaitableOperatorParser[T, E]", pipe)
+                    args = (orig_stream, extraction, tuples)
+                    stream = await async_pipe(*args, **pkwargs)
+                elif isinstance(orig_stream, Iterator) and isinstance(tuples, Iterator):
+                    sync_pipe = cast("SyncOperatorParser[T, E]", pipe)
+                    stream = sync_pipe(orig_stream, extraction, tuples, **pkwargs)
+                else:
+                    msg = "Async parser must be async def to parse async iterators"
+                    raise TypeError(msg)
 
                 if isinstance(stream, Iterator):
                     emit = bool(prepared.emit)
@@ -1472,11 +1451,11 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
                 processed = async_iter(self.process(stream, assign, emit=emit))
 
-            async for item in as_async(processed):
+            async for item in processed:
                 yield item
 
         def sync_wrapper(
-            items: OperatorWrapperInput | None = None,
+            items: SyncOperatorWrapperInput | None = None,
             conf: Conf | DynamicConf | None = None,
             context: Context | None = None,
             *,
@@ -1490,8 +1469,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             test: bool | None = None,
             submodule: bool | None = None,
             **kwargs: object,
-        ) -> OperatorWrapperOutput:
+        ) -> SyncOperatorWrapperInternalOutput:
             input_ = self.parse(items)
+
             prepared = self.prepare(
                 module_name, conf=conf, assign=assign, count=count, **kwargs
             )
@@ -1521,14 +1501,12 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 count=count,
             )
 
-            if looped:
-                processed = cast(StreamOrValueStream, embed_stream)
-            elif handled:
+            if looped or handled:
                 processed = embed_stream
             else:
-                sync_pipe = cast(SyncOperatorParser[E], pipe)
+                sync_pipe = cast("SyncOperatorParser[T, E]", pipe)
                 pkwargs = _call_kwargs(prepared, context, count, kwargs)
-                extraction = cast(E, casted.extraction)
+                extraction = cast("E", casted.extraction)
                 stream = sync_pipe(orig_stream, extraction, tuples, **pkwargs)
 
                 if isinstance(stream, Iterator):
@@ -1548,7 +1526,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             wrapper = wraps(pipe)(sync_wrapper)
 
         self._set_wrapper_metadata(wrapper, pipe, isasync)
-        return cast(OperatorWrapper, wrapper)
+        return cast("OperatorWrapper", wrapper)
 
 
 class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
@@ -1559,7 +1537,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
     @overload
     def __init__(  # noqa: E704
-        self: "splitter[Literal[True]]",
+        self: splitter[Literal[True]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[True],
@@ -1567,7 +1545,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     ) -> None: ...
     @overload  # noqa: E301
     def __init__(  # noqa: E704
-        self: "splitter[Literal[False]]",
+        self: splitter[Literal[False]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[False] = ...,
@@ -1656,7 +1634,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         input_: Stream | SplitterWrapperInput,
         field: str | None = None,
         **kwargs: object,
-    ) -> tuple[PipeTuples, Stream, Casted[T, E]]:
+    ) -> tuple[SyncPipeTuples, Stream, Casted[T, E]]:
         """
         Builds the per-item tuples and original stream for a splitter call.
 
@@ -1686,7 +1664,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             defaults=self.defaults,
             field=field,
         )
-        dispatcher = cast(Callable[[ItemOrValue, Opts], ItemDispatch], _dispatcher)
+        dispatcher = cast("Dispatcher[T, E]", _dispatcher)
         dispatches = (dispatcher(item, prepared.opts) for item in input_)
         tuples = ((d.item, d.casted.conf) for d in dispatches)
         orig_stream = (d.item for d in dispatches)
@@ -1695,15 +1673,15 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
     @overload
     def __call__[E](  # noqa: E704
-        self: "splitter[Literal[True]]", pipe: AsyncSplitterParser[E]
+        self: splitter[Literal[True]], pipe: AsyncSplitterParser[E]
     ) -> AsyncSplitterWrapper: ...
     @overload  # noqa: E301
     def __call__[E](  # noqa: E704
-        self: "splitter[Literal[False]]", pipe: AwaitableSplitterParser[E]
+        self: splitter[Literal[False]], pipe: AwaitableSplitterParser[E]
     ) -> AsyncSplitterWrapper: ...
     @overload  # noqa: E301
     def __call__[E](  # noqa: E704
-        self: "splitter[Literal[False]]", pipe: SyncSplitterParser[E]
+        self: splitter[Literal[False]], pipe: SyncSplitterParser[E]
     ) -> SyncSplitterWrapper: ...
     def __call__[E](self, pipe: SplitterParser[E]) -> SplitterWrapper:  # noqa: E301
         """
@@ -1734,43 +1712,45 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         """
         op_module_name = pipe.__module__.split(".")[-1]
 
-        def async_wrapper(item=None, conf=None, *args, **kwargs):
-            make = partial(_async_wrapper_impl, item, conf, *args, **kwargs)
-            return _AsyncWrapperStream(make)
-
         async def _async_wrapper_impl(
-            items: SplitterWrapperInput | None = None,
+            items: AsyncSplitterWrapperInput | None = None,
             conf: Conf | None = None,
             *,
             assign: str | None = None,
             field: str | None = None,
             **kwargs: object,
-        ) -> Streams:
+        ) -> SyncSplitterWrapperOutput:
             input_ = self.parse(items)
             prepared = self.prepare(op_module_name, conf=conf, assign=assign, **kwargs)
             tuples, orig_stream, casted = self.setup(
                 prepared, input_, field=field, **kwargs
             )
-            async_pipe = cast(AsyncSplitterParser[E], pipe)
-            extraction = cast(E, casted.extraction)
+            async_pipe = cast("AsyncSplitterParser[E]", pipe)  # pyright: ignore[reportUnnecessaryCast]
+            extraction = cast("E", casted.extraction)
             result = async_pipe(orig_stream, extraction, tuples, **kwargs)
             return await as_awaitable(result)
 
+        def async_wrapper(
+            item=None, conf=None, *args, **kwargs
+        ) -> _AsyncWrapperStream[Stream]:
+            make = partial(_async_wrapper_impl, item, conf, *args, **kwargs)
+            return _AsyncWrapperStream(make)
+
         def sync_wrapper(
-            items: SplitterWrapperInput | None = None,
+            items: SyncSplitterWrapperInput | None = None,
             conf: Conf | None = None,
             *,
             assign: str | None = None,
             field: str | None = None,
             **kwargs: object,
-        ) -> Streams:
+        ) -> SyncSplitterWrapperOutput:
             input_ = self.parse(items)
             prepared = self.prepare(op_module_name, conf=conf, assign=assign, **kwargs)
             tuples, orig_stream, casted = self.setup(
                 prepared, input_, field=field, **kwargs
             )
-            sync_pipe = cast(SyncSplitterParser[E], pipe)
-            extraction = cast(E, casted.extraction)
+            sync_pipe = cast("SyncSplitterParser[E]", pipe)
+            extraction = cast("E", casted.extraction)
             streams = sync_pipe(orig_stream, extraction, tuples, **kwargs)
             yield from streams
 
@@ -1780,4 +1760,4 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             wrapper = wraps(pipe)(sync_wrapper)
 
         self._set_wrapper_metadata(wrapper, pipe, isasync)
-        return cast(SplitterWrapper, wrapper)
+        return cast("SplitterWrapper", wrapper)

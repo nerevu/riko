@@ -1,55 +1,35 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko
-~~~~
+Stable application API for Riko.
 
-Public entry point for riko.
-
-Application code imports stable APIs from ``riko``. Extension
-authors import from ``riko.ext``. ``riko.bado`` provides the supported async
-runtime namespace, with selected helpers promoted into this stable surface.
-
-The stable, SemVer-guaranteed application-facing surface of riko. Import
-application code from here or from the top-level :mod:`riko` package, which
-re-exports this module.
-
-Extension-author symbols live in :mod:`riko.ext`. :mod:`riko.bado` is the
-supported async-runtime namespace; selected application-facing helpers from it
-are promoted here.
+Application code imports from this namespace; extension authors use ``riko.ext``.
+``riko.bado`` exposes the supported async-runtime namespace.
 """
 
-from riko.bado._backend import async_sleep, backend, isasync, issync, run
+from riko.bado._backend import async_chain, async_sleep, backend, isasync, issync, run
 from riko.bado._util import async_read, async_return
 from riko.bado.itertools import as_async, async_map, async_map_stream
 from riko.base._paths import get_path, get_temp_file
 from riko.base.exceptions import (
+    EmptyPipelineError,
+    InvalidPipelineError,
+    PipelineError,
     PipelineStateError,
     RikoError,
     UnsupportedModuleError,
     UnsupportedPipelineError,
 )
+from riko.definitions._workflow import Node, Pipeline, Workflow, WorkflowLike
+from riko.execution.context import Context
 from riko.ext.codegen import list_modules
-from riko.io._async import async_url_open, async_write, get_async_temp_file
+from riko.io._async import async_get_temp_file, async_url_open, async_write
 from riko.modules._metadata import describe_module, get_module_metadata
 from riko.modules._names import Modules, Sinks, Sources, Transforms
-from riko.runtime._compile import (
-    build_pipeline,
-    compile_pipe,
-    convert_dag,
-    extract_dependencies,
-    parse_pipe_def,
-)
-from riko.runtime.collections import (
-    AsyncCollection,
-    AsyncPipe,
-    PipeState,
-    SyncCollection,
-    SyncPipe,
-    export,
-    list_formats,
-)
-from riko.runtime.context import Context
-from riko.types._enums import ExecutionMode, Formats
+from riko.runtime._codegen import compile_workflow
+from riko.runtime._migrate import parse_dag
+from riko.runtime.collections import export, list_formats
+from riko.types._enums import Backends, ExecutionMode, Executor, Formats
+from riko.types._workflow import Edge, Endpoint, WorkflowDocument, WorkflowModule
 
 from ._package import PACKAGE_INFO
 
@@ -65,23 +45,33 @@ def __getattr__(name: str) -> str:
 __copyright__ = "Copyright 2015 Reuben Cummings"
 
 __all__ = [
-    "AsyncCollection",
-    "AsyncPipe",
+    "Backends",
     "Context",
+    "Edge",
+    "EmptyPipelineError",
+    "Endpoint",
     "ExecutionMode",
+    "Executor",
     "Formats",
+    "InvalidPipelineError",
     "Modules",
-    "PipeState",
+    "Node",
+    "Pipeline",
+    "PipelineError",
     "PipelineStateError",
     "RikoError",
     "Sinks",
     "Sources",
-    "SyncCollection",
-    "SyncPipe",
     "Transforms",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
+    "Workflow",
+    "WorkflowDocument",
+    "WorkflowLike",
+    "WorkflowModule",
     "as_async",
+    "async_chain",
+    "async_get_temp_file",
     "async_map",
     "async_map_stream",
     "async_read",
@@ -90,13 +80,9 @@ __all__ = [
     "async_url_open",
     "async_write",
     "backend",
-    "build_pipeline",
-    "compile_pipe",
-    "convert_dag",
+    "compile_workflow",
     "describe_module",
     "export",
-    "extract_dependencies",
-    "get_async_temp_file",
     "get_module_metadata",
     "get_path",
     "get_temp_file",
@@ -104,6 +90,6 @@ __all__ = [
     "issync",
     "list_formats",
     "list_modules",
-    "parse_pipe_def",
+    "parse_dag",
     "run",
 ]

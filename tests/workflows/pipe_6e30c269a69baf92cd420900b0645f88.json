@@ -1,0 +1,270 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-135",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-154",
+                "port": "in:1"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-154",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-173",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-173",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-180",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-180",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-210",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-195",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-191",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-210",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-195",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-233",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-154",
+                "port": "in:3"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-135": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/rss.sueddeutsche.de_rss_Topthemen.xml"
+                }
+            },
+            "id": "sw-135",
+            "name": "fetch",
+            "type": "module"
+        },
+        "sw-154": {
+            "id": "sw-154",
+            "name": "union",
+            "type": "module"
+        },
+        "sw-173": {
+            "conf": {
+                "uniq_key": {
+                    "type": "text",
+                    "value": "title"
+                }
+            },
+            "id": "sw-173",
+            "name": "uniq",
+            "type": "module"
+        },
+        "sw-180": {
+            "conf": {
+                "combine": {
+                    "type": "text",
+                    "value": "or"
+                },
+                "permit": {
+                    "type": "bool",
+                    "value": false
+                },
+                "rule": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "link"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "contains"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "/sport/"
+                        }
+                    },
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "contains"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "Bildstrecke:"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-180",
+            "name": "filter",
+            "type": "module"
+        },
+        "sw-191": {
+            "conf": {
+                "rule": [
+                    {
+                        "dir": {
+                            "type": "text",
+                            "value": "DESC"
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "pubDate"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-191",
+            "name": "sort",
+            "type": "module"
+        },
+        "sw-195": {
+            "conf": {
+                "rule": [
+                    {
+                        "casematch": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "description"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "</div>.*$"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": ""
+                        },
+                        "singlelinematch": {
+                            "type": "bool",
+                            "value": true
+                        }
+                    },
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "link"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "^(.*\\/.*)\\/"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": "$1/2.220/"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-195",
+            "name": "regex",
+            "options": {
+                "assign": "loop:regex",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-210": {
+            "conf": {
+                "rule": [
+                    {
+                        "copy": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "y:id.value"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "link"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-210",
+            "name": "rename",
+            "options": {
+                "assign": "loop:rename",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-233": {
+            "conf": {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/rss.sueddeutsche.de_rss_Politik.xml"
+                }
+            },
+            "id": "sw-233",
+            "name": "fetch",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-191",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

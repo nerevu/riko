@@ -1,0 +1,91 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-111",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-287",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-163",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-111",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-111": {
+            "conf": {
+                "end": {
+                    "type": "text",
+                    "value": "</tr>"
+                },
+                "start": {
+                    "type": "text",
+                    "value": "One Way</span>"
+                },
+                "token": {
+                    "type": "text",
+                    "value": "<td style=\"text-align: center;\">"
+                },
+                "url": {
+                    "subkey": "url",
+                    "type": "url"
+                }
+            },
+            "id": "sw-111",
+            "name": "fetchpage",
+            "options": {
+                "assign": "loop:fetchpage",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-163": {
+            "conf": {
+                "attrs": {
+                    "key": {
+                        "type": "text",
+                        "value": "url"
+                    },
+                    "value": {
+                        "type": "text",
+                        "value": "file://riko/data/www.caltrain.com_Fares_farechart.html"
+                    }
+                }
+            },
+            "id": "sw-163",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-287": {
+            "conf": {
+                "count": {
+                    "type": "float",
+                    "value": "100"
+                }
+            },
+            "id": "sw-287",
+            "name": "truncate",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-287",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

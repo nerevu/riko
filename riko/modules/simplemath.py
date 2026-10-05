@@ -24,22 +24,27 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 import operator
-from collections.abc import Callable
-from decimal import Decimal
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._configs import SimpleMathObjconf
 from riko.coercion.cast import cast_value
 from riko.types._enums import BasicCastType, CastType
-from riko.types._options import Defaults, Opts
-from riko.types._scalars import NumLike
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from decimal import Decimal
+    from logging import Logger
+
+    from riko.coercion._configs import SimpleMathObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._scalars import NumLike
 
 OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}
 DEFAULTS: Defaults = {}

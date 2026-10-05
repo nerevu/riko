@@ -12,20 +12,44 @@ Examples:
 
 """
 
+from __future__ import annotations
+
 from pprint import pprint
+from typing import TYPE_CHECKING
 
-from riko.runtime.collections import AsyncPipe, SyncPipe
-from riko.types._enums import CastType
-from riko.types.modules import DateFormatRawConf, InputConf, ItemBuilderRawConf, Param
+from riko import Pipeline, parse_dag
+from riko.types.modules import (
+    ConfArg,
+    DateFormatRawConf,
+    InputRawConf,
+    ItemBuilderRawConf,
+    Param,
+)
 
-format_conf = InputConf({"type": CastType.TEXT, "input_key": "format", "test": True})
-format_in = {"format": "%B %d, %Y"}
-date_conf = InputConf(
-    {"type": CastType.DATE, "default": "5/4/82", "prompt": "enter a date", "test": True}
+if TYPE_CHECKING:
+    from riko.types import Item, Items, PipeDag
+
+in_test = ConfArg({"type": "bool", "value": "true"})
+format_conf = InputRawConf(
+    {
+        "name": {"type": "text", "value": "format_input"},
+        "prompt": {"type": "text", "value": "enter a date format"},
+        "type": {"type": "text", "value": "text"},
+        "default": {"type": "text", "value": "%B %d, %Y"},
+        "test": in_test,
+    }
 )
-date_fmt_conf = DateFormatRawConf(
-    {"format": {"terminal": "format", "type": "text", "path": "format"}}
+
+date_conf = InputRawConf(
+    {
+        "name": {"type": "text", "value": "date_input"},
+        "prompt": {"type": "text", "value": "enter a date"},
+        "type": {"type": "text", "value": "date"},
+        "default": {"type": "text", "value": "5/4/82"},
+        "test": in_test,
+    }
 )
+date_fmt_conf = DateFormatRawConf({"format": {"terminal": "format", "type": "text"}})
 build_conf = ItemBuilderRawConf(
     {
         "attrs": Param(
@@ -37,29 +61,35 @@ build_conf = ItemBuilderRawConf(
     }
 )
 
-
-def pipe(test=False):
-    format_stream = SyncPipe("input", conf=format_conf, inputs=format_in)
-
-    formatted = SyncPipe("input", conf=date_conf).dateformat(
-        conf=date_fmt_conf, format=format_stream, field="content", emit=True
-    )
-
-    stream = SyncPipe("itembuilder", conf=build_conf, formatted=formatted, test=test)
-    return list(stream)
-
-
-def async_pipe(test=False):
-    format_stream = AsyncPipe("input", conf=format_conf, inputs=format_in)
-
-    formatted = AsyncPipe("input", conf=date_conf).dateformat(
-        conf=date_fmt_conf, format=format_stream, field="content", emit=True
-    )
-
-    return AsyncPipe("itembuilder", conf=build_conf, formatted=formatted, test=test)
+dag: PipeDag = {
+    "modules": [
+        {"id": "format", "type": "input", "conf": format_conf},
+        {"id": "date", "type": "input", "conf": date_conf},
+        {
+            "id": "formatted",
+            "type": "dateformat",
+            "conf": date_fmt_conf,
+            "options": {"field": "content", "emit": True},
+        },
+        {"id": "build", "type": "itembuilder", "conf": build_conf},
+    ],
+    "wires": [
+        ["format", "formatted", "in:format"],
+        ["date", "formatted"],
+        ["formatted", "build", "in:formatted"],
+    ],
+}
 
 
-def print_results(result) -> None:
+def pipe(test: bool = False) -> list[Item]:
+    return list(Pipeline(parse_dag(dag)))
+
+
+def async_pipe(test: bool = False) -> Pipeline:
+    return Pipeline(parse_dag(dag))
+
+
+def print_results(result: Items) -> None:
     for i in result:
         pprint(i)
 

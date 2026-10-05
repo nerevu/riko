@@ -26,24 +26,29 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
 from riko.base._constants import ENCODING
 from riko.base._iterutils import betwix
-from riko.coercion._configs import FetchPageObjconf
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch
 from riko.parsing.documents import get_text
 from riko.types._options import Defaults, Opts
-from riko.types._streams import Item
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from logging import Logger
+
+    from riko.coercion._configs import FetchPageObjconf
+    from riko.types._streams import Item
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING, "detag": False})
@@ -51,9 +56,6 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def get_string(content: str, start: str, end: str) -> str:
-    # TODO: convert relative links to absolute
-    # TODO: remove the closing tag if using an HTML tag stripped of HTML tags
-    # TODO: clean html with Tidy
     start_pos = content.find(start) if start else 0
     right = content[start_pos + (len(start) if start else 0) :]
     end_pos = right[1:].find(end) + 1 if end else len(right)

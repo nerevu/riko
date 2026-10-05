@@ -1,115 +1,134 @@
 # vim: sw=4:ts=4:expandtab
-"""
-riko.io._reencode
-~~~~~~~~~~~~~~
-A corrected ``Reencoder`` (over meza's ``Reencoder``) plus a ``reencode``
-factory. This whole module is meant to be ported wholesale into meza, after
-which riko drops it and imports ``reencode`` from ``meza.io`` again. It fixes:
-
-* ``read`` — meza treats ``n`` as a *line* count and, via a falsy ``if n``
-  guard, reads the entire stream when ``n == 0``, so a probing ``read(0)``
-  (e.g. html5lib's) silently drains the source and every later read hits EOF.
-  Here ``read`` honors ``n`` as documented (``0`` -> empty, negative/``None``
-  -> read all).
-* ``close`` — a ``StreamReader`` should close its underlying stream, but meza's
-  ``Reencoder`` only closes the decoded generator. It now retains the source
-  (``self._f``) and closes it. When the readable is a sub-stream of a larger
-  resource (e.g. a requests ``raw`` or a urlopen ``fp``), pass the owning
-  object as ``owner`` so ``close`` releases the whole resource.
-"""
+"""Provides byte/text re-encoding with file-like read and close semantics."""
 
 from __future__ import annotations
 
+import re
 from codecs import iterdecode, iterencode
-from collections.abc import Callable, Iterable, Iterator
 from itertools import chain
 from os import linesep
 from typing import TYPE_CHECKING, cast
 
+from meza import BOM
 from meza.io import IterStringIO as _IterStringIO
 from meza.io import Reencoder as _Reencoder
-from meza.io import groupby_line
 
 from riko.base._constants import ENCODING
 from riko.types._scalars import AnyStr
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Iterator
     from typing import Literal, overload
 
     from riko.types._io import FileLike, SyncCloseable
 
+LINE_BREAKS = re.compile(r"\r\n|\r|\n")
 
-class PatchedReencoder(_Reencoder):
-    def __init__[T: (str, bytes)](
-        self, f: FileLike, fromenc=ENCODING, toenc=ENCODING, decode=False
+
+def _terminate_lines[S: (str, bytes)](lines: list[S], newline: S) -> Iterator[S]:
+    """Appends ``newline`` to every line except the last."""
+    return chain((line + newline for line in lines[:-1]), filter(len, lines[-1:]))
+
+
+def _strip_bom(chunks: Iterable[str]) -> Iterator[str]:
+    """Drops a byte order mark from the start of the decoded text."""
+    started = False
+
+    for chunk in chunks:
+        yield chunk if started else chunk.removeprefix(BOM)
+        started = started or bool(chunk)
+
+
+def _gen_lines(chunks: Iterable[str], newline: str) -> Iterator[str]:
+    """Re-splits decoded text chunks into lines ending in ``newline``."""
+    pending = ""
+
+    for chunk in chunks:
+        text = pending + chunk
+        held = "\r" if text.endswith("\r") else ""
+        *lines, tail = LINE_BREAKS.split(text[: len(text) - len(held)])
+        yield from (line + newline for line in lines)
+        pending = tail + held
+
+    yield from _terminate_lines(LINE_BREAKS.split(pending), newline)
+
+
+class PatchedReencoder[T: AnyStr](_Reencoder):
+    join_char: T
+
+    def __init__[L: (str, bytes)](
+        self,
+        f: FileLike,
+        fromenc=ENCODING,
+        toenc=ENCODING,
+        decode=False,
+        remove_BOM=False,  # noqa: N803
     ):
         self.fileno = f.fileno
-        first_line: T = cast(T, next(f))
-        bytes_mode = isinstance(first_line, bytes)
-        rencode = not decode
-        chained = cast(Iterator[T], chain([first_line], f))
+        self.binary = not decode
+        first_line: L | None = cast("L | None", next(f, None))
 
-        if bytes_mode:
-            decoded = iterdecode(cast(Iterator[bytes], chained), fromenc)
-            self.binary = rencode
-            proper_newline = first_line.endswith(linesep.encode(fromenc))
+        if first_line is None:
+            _stream: Iterator[str] | Iterator[bytes] = iter(())
         else:
-            decoded = cast(Iterator[str], chained)
-            self.binary = bytes_mode or rencode
-            proper_newline = first_line.endswith(linesep)
+            chained = cast("Iterator[L]", chain([first_line], f))
 
-        stream = iterencode(decoded, toenc) if rencode else decoded
+            if isinstance(first_line, bytes):
+                decoded = iterdecode(cast("Iterator[bytes]", chained), fromenc)
+                proper_newline = first_line.endswith(linesep.encode(fromenc))
+            else:
+                decoded = cast("Iterator[str]", chained)
+                proper_newline = first_line.endswith(linesep)
 
-        if proper_newline:
-            self.join_char = b"" if self.binary else ""
-            _stream = stream
-        else:
-            groups = groupby_line(next(stream))
+            if remove_BOM:
+                decoded = _strip_bom(decoded)
 
             if self.binary:
-                self.join_char = linesep.encode(fromenc)
-                _stream = (bytes(cast(int, g)) for k, g in groups if k)
+                _stream = iterencode(decoded, toenc)
+            elif proper_newline:
+                _stream = decoded
             else:
-                self.join_char = cast(str, linesep)
-                _stream = (self.join_char.join(cast(str, g)) for k, g in groups if k)
+                _stream = _gen_lines(decoded, linesep)
 
+        self.join_char = cast("T", b"" if self.binary else "")
         self.stream = _stream  # pyright: ignore [reportAttributeAccessIssue]
 
 
 class IterStringIO(_IterStringIO):  # pyright: ignore[reportRedeclaration])
     def __buffer__(self, flags: int) -> memoryview:
-        """
-        Exposes the internal memory buffer directly for passing into bytes().
-        """
-        joined = b"".join(cast(Iterator[bytes], self.iter))
-        return memoryview(cast(bytes, joined))
+        """Exposes the internal memory buffer directly for passing into bytes()."""
+        joined = b"".join(cast("Iterator[bytes]", self.iter))
+        return memoryview(joined)
 
 
-class Reencoder[T: AnyStr](PatchedReencoder):  # pyright: ignore[reportRedeclaration])
+class Reencoder[T: AnyStr](PatchedReencoder[T]):  # pyright: ignore[reportRedeclaration])
     """Reencoder whose ``read`` honors ``n`` and closes its source/owner."""
 
     def __init__(self, f, *args, owner=None, **kwargs):
         self._f = f if owner is None else owner
-        super().__init__(f, *args, **kwargs)
-        self._chunks = cast(Iterator[T], self.stream)
-        self._join_char: T = cast(T, self.join_char)
-        self._buf: T = self._join_char
-        self.lineseps: T = cast(T, b"\r\n" if self.binary else "\r\n")
+
+        try:
+            super().__init__(f, *args, **kwargs)
+        except BaseException:
+            self._f.close()
+            raise
+
+        self._chunks = cast("Iterator[T]", self.stream)
+        self._buf: T = self.join_char
+        self.lineseps: T = cast("T", b"\r\n" if self.binary else "\r\n")
+
+    def join(self, parts: Iterable[T]) -> T:
+        return cast("Callable[[Iterable[T]], T]", self.join_char.join)(parts)
 
     def __buffer__(self, flags: int) -> memoryview:
-        """
-        Exposes the internal memory buffer directly for passing into bytes().
-        """
+        """Exposes the internal memory buffer directly for passing into bytes()."""
         if not isinstance(self._buf, bytes):
             raise TypeError("Buffer not enabled for str Reencoder")
 
         joined = self.join(self._chunks)
-        return memoryview(cast(bytes, joined))
+        return memoryview(cast("bytes", joined))
 
-    def join(self, parts: Iterable[T]) -> T:
-        return cast(Callable[[Iterable[T]], T], self._join_char.join)(parts)
-
-    def _parse_n(self, n: int | None = None) -> int | None:
+    def _normalize_n(self, n: int | None = None) -> int | None:
         """Parse ``n`` into a non-negative int or None."""
         return None if n is None or n < 0 else max(0, int(n))
 
@@ -127,16 +146,17 @@ class Reencoder[T: AnyStr](PatchedReencoder):  # pyright: ignore[reportRedeclara
     def _take(self, n: int | None = None) -> T:
         """Pop up to ``n`` items off the buffer, or all of it when ``n`` is None."""
         if n is None:
-            head, self._buf = self._buf, self._join_char
+            head, self._buf = self._buf, self.join_char
         else:
-            head, self._buf = cast(T, self._buf[:n]), cast(T, self._buf[n:])
+            head, self._buf = cast("T", self._buf[:n]), cast("T", self._buf[n:])
 
         return head
 
     def read(self, n: int | None = None) -> T:
-        if (parsed_n := self._parse_n(n)) is None:
-            result = self.join(chain((self._buf,), self._chunks))
-            self._buf = self._join_char
+        if (parsed_n := self._normalize_n(n)) is None:
+            rest = self._chunks
+            result = self.join(chain((self._buf,), rest) if self._buf else rest)
+            self._buf = self.join_char
         else:
             parts: list[T] = []
             remaining = parsed_n
@@ -151,11 +171,13 @@ class Reencoder[T: AnyStr](PatchedReencoder):  # pyright: ignore[reportRedeclara
 
     def readline(self, n=None, keepends=True) -> T:
         if not (self._buf or self._fill()):
-            line = self._join_char
+            line = self.join_char
         else:
-            line = self._take(self._parse_n(n))
+            line = self._take(self._normalize_n(n))
 
-        return line if keepends else cast(Callable[[T], T], line.rstrip)(self.lineseps)
+        return (
+            line if keepends else cast("Callable[[T], T]", line.rstrip)(self.lineseps)
+        )
 
     def _readlines(self, keepends=True) -> Iterator[T]:
         while self._buf or self._fill():
@@ -210,6 +232,8 @@ if TYPE_CHECKING:
             remove_BOM: bool = ...,  # noqa: N803
         ) -> None: ...
         def __buffer__(self, flags: int) -> memoryview: ...  # noqa: E704
+        def __iter__(self) -> Iterator[T]: ...  # noqa: E704
+        def __next__(self) -> T: ...  # noqa: E704
         def read(self, n: int | None = None) -> T: ...  # noqa: E704
         def readline(  # noqa: E301, E704
             self, n: int | None = None, keepends=True

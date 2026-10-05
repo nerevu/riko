@@ -1,14 +1,12 @@
 # vim: sw=4:ts=4:expandtab
 """
-Runs a submodule once per item.
+Runs an embedded module once per source item.
 
-A loop runs a processor or compiled sub-pipeline (``embed`` submodule)
-once per source item, and folds its output back into the stream. All processors
-except ``*input`` are loopable and may be embedded.
+The embedded result can replace the source item or be assigned back onto it.
 
 Examples:
-    1. Transform a field in place -- ``emit=True`` yields the submodule's
-       transformed items (each source item is replaced)::
+
+    Basic usage::
 
         >>> from riko.modules.loop import pipe
         >>> from riko.modules.regex import pipe as regex
@@ -22,10 +20,7 @@ Examples:
         >>> list(pipe(items, embed=regex, conf={"rule": [rule]}, emit=True))
         [{'title': 'heLLo'}, {'title': 'yeLLow'}]
 
-    2. Enrich each item with the first of many submodule results --
-       ``emit=False`` + ``assign`` + ``count="first"``. The submodule
-       (``tokenizer``) yields several values; the loop keeps the first and stores
-       it under the ``assign`` subkey::
+    Assigning the first embedded result::
 
         >>> from riko.modules.tokenizer import pipe as tokenizer
         >>>
@@ -44,17 +39,22 @@ Attributes:
 
 """
 
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._dynamic_conf import DynamicConf
 from riko.types._options import Defaults, Opts
-from riko.types._streams import Stream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import operator
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.types._streams import Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = {"listize": False, "parse": False}
 DEFAULTS: Defaults = Defaults({})
@@ -106,7 +106,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Kwargs:
 
         embed (callable): The submodule to run once per item. Any loopable
-            processor (everything except ``*input``) or a compiled sub-pipeline.
+            processor (everything except ``*input``) or a named workflow.
             Required.
 
         conf (dict): The **submodule's** configuration, not this pipe's.
@@ -159,7 +159,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Kwargs:
 
         embed (callable): The submodule to run once per item. Any loopable
-            processor (everything except ``*input``) or a compiled sub-pipeline.
+            processor (everything except ``*input``) or a named workflow.
             Required.
 
         conf (dict): The **submodule's** configuration, not this pipe's.

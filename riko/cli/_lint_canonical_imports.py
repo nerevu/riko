@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ._import_graph import (
     ModuleInfo,
@@ -12,6 +12,9 @@ from ._import_graph import (
     _resolve_from_module,
     collect_imports,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)

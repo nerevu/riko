@@ -1,0 +1,238 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-521",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-572",
+                "port": "in:URL"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-572",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-584",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-584",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-595",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-595",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-606",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-621",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-584",
+                "port": "in:RULE_1_value"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-521": {
+            "conf": {
+                "debug": {
+                    "type": "url",
+                    "value": ""
+                },
+                "default": {
+                    "type": "url",
+                    "value": "file://riko/data/rsc-ne-scotland.org.uk_mashe_ititle_xml_jisc10bean.xml"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "url"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "Caption URL"
+                }
+            },
+            "id": "sw-521",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-572": {
+            "conf": {
+                "path": {
+                    "type": "text",
+                    "value": "body.div.p"
+                },
+                "url": {
+                    "terminal": "URL",
+                    "type": "url"
+                }
+            },
+            "id": "sw-572",
+            "name": "fetchdata",
+            "type": "module"
+        },
+        "sw-584": {
+            "conf": {
+                "combine": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "permit": {
+                    "type": "bool",
+                    "value": true
+                },
+                "rule": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "content"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "contains"
+                        },
+                        "value": {
+                            "terminal": "RULE_1_value",
+                            "type": "text"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-584",
+            "name": "filter",
+            "type": "module"
+        },
+        "sw-595": {
+            "conf": {
+                "rule": [
+                    {
+                        "copy": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "begin"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "ctime"
+                        }
+                    },
+                    {
+                        "copy": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "content"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "title"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-595",
+            "name": "rename",
+            "options": {
+                "assign": "loop:rename",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-606": {
+            "conf": {
+                "rule": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "ctime"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "(.*)"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": "&time=$1"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-606",
+            "name": "regex",
+            "options": {
+                "assign": "loop:regex",
+                "count": "all",
+                "emit": true
+            },
+            "type": "module"
+        },
+        "sw-621": {
+            "conf": {
+                "debug": {
+                    "type": "text",
+                    "value": ""
+                },
+                "default": {
+                    "type": "text",
+                    "value": "maverick"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "q"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "Caption search term"
+                }
+            },
+            "id": "sw-621",
+            "name": "input",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-606",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

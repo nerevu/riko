@@ -1,44 +1,23 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.runtime._resources
-~~~~~~~~~~~~~~
+Resource factory classification, binding normalization, and resolved resource views.
 
-Execution resources for a pipeline.
+Attributes:
 
-A ``Resource`` is an immutable definition of an external dependency (e.g., an HTTP
-client, database session, credential-backed provider handle). riko owns the
-lifecycle of an owned resource and opens it during execution preparation. An
-``external`` resource is supplied by the caller and never closed by riko. A
-``ResourceView`` is the execution-bound mapping of resolved handles passed to
-parsers.
-
-This is the thin slice covering owned/external resources, sync/async open and close,
-the execution-bound view, and binding normalization. Lazy opening, ``from_factory``
-dependency graphs, and cross-mode bridging remain deferred.
-
-Examples:
-
-    Basic usage::
-
-        >>> from riko.definitions._resources import ResourceView
-        >>> from riko.runtime._resources import Resource
-        >>>
-        >>> resource = Resource.from_external(object())
-        >>> resource.external
-        True
-        >>> resource.reusable
-        True
-        >>> view = ResourceView({"db": resource.open()})
-        >>> view.db is view["db"]
-        True
+    VALUE_FACTORY_KINDS: Factory kinds that produce values without providing a
+        lifecycle context.
 
 """
+
+from __future__ import annotations
 
 import copyreg
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from inspect import unwrap
 from types import MappingProxyType
+from typing import TYPE_CHECKING, overload
 
+from riko.types._collections import freeze_mapping
 from riko.types._guards import (
     is_async_callable,
     is_async_cm_factory,
@@ -47,27 +26,22 @@ from riko.types._guards import (
     is_sync_cm_factory,
     is_sync_gen_factory,
 )
-from riko.types._io import Closeable
 from riko.types._resource import FactoryKind, ResourceFactory
 
-from ._resource_types import ResourcesLike, ReusableResources, Values
+from ._resource_types import BindingLike, ResourcesLike, ReusableResources, Values
 
-
-def _rebuild_mappingproxy(
-    items: dict[object, object],
-) -> MappingProxyType[object, object]:
-    """Rebuilds a read-only mapping from its pickled contents."""
-    return MappingProxyType(items)
+if TYPE_CHECKING:
+    from riko.types._io import Closeable
 
 
 def _reduce_mappingproxy(
     proxy: MappingProxyType[object, object],
 ) -> tuple[
-    Callable[[dict[object, object]], MappingProxyType[object, object]],
+    Callable[[Mapping[object, object]], MappingProxyType[object, object]],
     tuple[dict[object, object]],
 ]:
     """Reduces a read-only mapping so immutable containers survive pickling."""
-    return (_rebuild_mappingproxy, (dict(proxy),))
+    return (freeze_mapping, (dict(proxy),))
 
 
 copyreg.pickle(MappingProxyType, _reduce_mappingproxy)
@@ -142,7 +116,56 @@ def classify_factory[T](
     return kind
 
 
-def normalize_resources(resources: ResourcesLike) -> Mapping[str, str]:
+@overload
+def normalize_binding(  # noqa: E704
+    raw: BindingLike,
+) -> ResourcesLike: ...
+@overload
+def normalize_binding(raw: None) -> None: ...  # noqa: E704
+def normalize_binding(  # noqa: E302
+    raw: BindingLike | None,
+) -> ResourcesLike | None:
+    """
+    Narrows an untyped decoration option into a resource binding, or ``None``.
+
+    Args:
+
+        raw: The ``resources`` value pulled from a module's opts.
+
+    Returns:
+
+        A ``ResourcesLike`` representation of raw, or ``None`` when unset.
+
+    Raises:
+
+        TypeError: When ``raw`` is neither a string, mapping, nor iterable.
+
+    Examples:
+
+        >>> from riko.definitions._resources import normalize_binding
+        >>>
+        >>> normalize_binding("client")
+        'client'
+        >>> normalize_binding(["db", "cache"])
+        ['db', 'cache']
+        >>> normalize_binding(None)
+
+    """
+    if raw is None:
+        binding: ResourcesLike | None = None
+    elif isinstance(raw, str):
+        binding = raw
+    elif isinstance(raw, Mapping):
+        binding = {str(key): str(value) for key, value in raw.items()}
+    elif isinstance(raw, Iterable):
+        binding = [str(name) for name in raw]
+    else:
+        raise TypeError(f"invalid 'resources' binding: {raw!r}")
+
+    return binding
+
+
+def normalize_resources(value: ResourcesLike) -> Mapping[str, str]:
     """
     Normalizes a declared binding into local-alias-to-Context-name form.
 
@@ -165,55 +188,14 @@ def normalize_resources(resources: ResourcesLike) -> Mapping[str, str]:
         mappingproxy({'db': 'primary_db'})
 
     """
-    if isinstance(resources, str):
-        binding = {resources: resources}
-    elif isinstance(resources, Mapping):
-        binding = dict(resources)
+    if isinstance(value, str):
+        binding = {value: value}
+    elif isinstance(value, Mapping):
+        binding = dict(value)
     else:
-        binding = {name: name for name in resources}
+        binding = {name: name for name in value}
 
-    return MappingProxyType(binding)
-
-
-def coerce_binding(raw: object) -> ResourcesLike | None:
-    """
-    Narrows an untyped decoration option into a resource binding, or ``None``.
-
-    Args:
-
-        raw: The ``resources`` value pulled from a module's opts .
-
-    Returns:
-
-        A ``ResourcesLike`` representation of raw, or ``None`` when unset.
-
-    Raises:
-
-        TypeError: When ``raw`` is neither a string, mapping, nor iterable.
-
-    Examples:
-
-        >>> from riko.definitions._resources import coerce_binding
-        >>>
-        >>> coerce_binding("client")
-        'client'
-        >>> coerce_binding(["db", "cache"])
-        ['db', 'cache']
-        >>> coerce_binding(None)
-
-    """
-    if raw is None:
-        binding: ResourcesLike | None = None
-    elif isinstance(raw, str):
-        binding = raw
-    elif isinstance(raw, Mapping):
-        binding = {str(key): str(value) for key, value in raw.items()}
-    elif isinstance(raw, Iterable):
-        binding = [str(name) for name in raw]
-    else:
-        raise TypeError(f"invalid 'resources' binding: {raw!r}")
-
-    return binding
+    return freeze_mapping(binding)
 
 
 class ResourceView(Mapping[str, object]):
@@ -230,16 +212,25 @@ class ResourceView(Mapping[str, object]):
 
         resources["items"]
 
+    Args:
+
+        values: Resolved resource values keyed by their local binding names.
+
     Examples:
 
-        >>> from riko.definitions._resources import ResourceView
+        >>> from riko.execution._resources import Resource
         >>>
-        >>> value = object()
-        >>> view = ResourceView({"db": value})
-        >>> view.db is view["db"] is value
+        >>> resource = Resource.from_external(object())
+        >>> resource.external
+        True
+        >>> resource.reusable
+        True
+        >>> view = ResourceView({"db": resource.open()})
+        >>> view.db is view["db"]
         True
         >>> "db" in view
         True
+        >>> value = object()
         >>> reserved = ResourceView({"keys": value})
         >>> reserved["keys"] is value
         True
@@ -279,7 +270,9 @@ def bind_resources(
     Opens a node's declared ``binding`` against the Context resources.
 
     Each local name resolves to a Context resource, which is opened and exposed
-    under that alias.
+    under that alias. All name validation completes before any resource is opened:
+    a missing binding raises before a single sibling is acquired, so a name error
+    never leaves a partially opened view behind.
 
     Args:
 
@@ -289,10 +282,6 @@ def bind_resources(
     Returns:
 
         A view exposing each resource value under its local alias.
-
-    All name validation completes before any resource is opened: a missing binding
-    raises before a single sibling is acquired, so a name error never leaves a
-    partially opened view behind.
 
     Raises:
 
@@ -306,7 +295,7 @@ def bind_resources(
     Examples:
 
         >>> from riko.definitions._resources import bind_resources
-        >>> from riko.runtime._resources import Resource
+        >>> from riko.execution._resources import Resource
         >>>
         >>> value = object()
         >>> resources = {"primary": Resource.from_external(value)}
@@ -334,6 +323,6 @@ __all__ = [
     "ResourcesLike",
     "bind_resources",
     "classify_factory",
-    "coerce_binding",
+    "normalize_binding",
     "normalize_resources",
 ]

@@ -28,22 +28,27 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 from collections.abc import Mapping
-from logging import Logger
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 from meza.process import merge
 
-from riko.coercion._configs import JoinObjconf
 from riko.types._guards import is_mapping
 from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING
-from riko.types._streams import Item, Items, Stream
-from riko.types._wrappers import PipeTuples
 
 from ._decorators import operator
 from ._prepare import require_arg
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import JoinObjconf
+    from riko.types._streams import Item, Items, Stream
+    from riko.types._wrappers import PipeTuples
 
 OPTS: Opts = Opts()
 DEFAULTS: Defaults = {"join_key": None, "lower": False}
@@ -144,7 +149,7 @@ def parser(
         others = list(filter(is_mapping, other))
         joined = (merge([x, y]) for x in stream for y in others)
 
-    return cast(Stream, joined)
+    return cast("Stream", joined)
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)

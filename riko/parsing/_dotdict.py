@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides a class for creating case insensitive dicts with dot notation access
-"""
+"""Provides a class for creating case insensitive dicts with dot notation access."""
 
 from __future__ import annotations
 
@@ -9,8 +7,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from datetime import date
 from decimal import Decimal
 from functools import reduce
-from logging import Logger
-from typing import TYPE_CHECKING, Any, Self, TypeGuard, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Self, TypeGuard, TypeVar, cast, overload
 
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
@@ -18,7 +15,6 @@ from requests.structures import CaseInsensitiveDict
 from riko.base._strutils import replacer
 from riko.coercion._objectify import Objectify
 from riko.coercion.cast import CAST_SWITCH, cast_value
-from riko.types._collections import Key, RikoList, RikoValue
 from riko.types._enums import CastType
 from riko.types._guards import (
     is_known_sequence,
@@ -28,24 +24,26 @@ from riko.types._guards import (
     is_type_value,
     is_value_seq,
 )
-from riko.types._rss import RSSEntry
-from riko.types._scalars import BasicValue, PrimitiveValue
-from riko.types._sentinels import Sentinel, SentinelValue
-from riko.types._streams import Item, Stream
-from riko.types.modules import ConfArg
+from riko.types._sentinels import Sentinel, SentinelValue, StreamState
 
 if TYPE_CHECKING:
+    from logging import Logger
+
     from _typeshed import SupportsKeysAndGetItem
+
+    from riko.types._collections import Key, RikoList
+    from riko.types._scalars import BasicValue, PrimitiveValue
+    from riko.types._streams import Item, ItemOrValue, StatefulItem, Stream
+    from riko.types.modules import ConfArg
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
-
 TV_KEYS = ("type", "value")
-WIRE_KEYS = ("id", "src", "tgt")
 PASSTHROUGH_TYPES = (str, int, float, date, Decimal, Objectify)
 D = TypeVar("D")
 
-type Data[VT] = Iterable[tuple[str, VT]] | RSSEntry
+type Data[VT] = Iterable[tuple[str, VT]]
+type DotDictInput[VT] = Data[VT] | Item
 
 
 def parse_key(key: Key | None = None) -> list[str]:
@@ -86,27 +84,27 @@ def raw_get[VT](data: Mapping[str, VT], key: str) -> VT:
 
 
 @overload
-def parse_sentinel(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+def resolve_sentinel(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
     value: ConfArg, default: object | None = ...
 ) -> PrimitiveValue: ...
 @overload  # noqa: E302
-def parse_sentinel[D](  # noqa: E704
+def resolve_sentinel[D](  # noqa: E704
     value: Sentinel, default: D | None = ..., **kwargs: object
 ) -> Item | D | None: ...
 @overload  # noqa: E302
-def parse_sentinel[D, VT](  # noqa: E704
+def resolve_sentinel[D, VT](  # noqa: E704
     value: Mapping[str, VT],
     default: D | None = ...,  # pyright: ignore[reportInvalidTypeVarUse]
     **kwargs: VT,
 ) -> dict[str, VT]: ...
-def parse_sentinel[D, VT](  # noqa: E302
+def resolve_sentinel[D, VT](  # noqa: E302
     value: Sentinel | Mapping[str, VT], default: D | None = None, **kwargs: VT
 ) -> Item | D | dict[str, VT] | PrimitiveValue:
     if is_sentinel(value, **kwargs):
         key = replacer(value[SentinelValue], "")
 
         if stream := kwargs.get(key):
-            stream = cast(Stream, stream)
+            stream = cast("Stream", stream)
             parsed = next(stream, default)
         else:
             parsed = default
@@ -129,14 +127,14 @@ def parse_sentinel[D, VT](  # noqa: E302
         _parsed = {}
 
         for k, v in value.items():
-            _parsed[k] = parse_sentinel(v, v, **kwargs) if is_mapping(v) else v
+            _parsed[k] = resolve_sentinel(v, v, **kwargs) if is_mapping(v) else v
 
-        parsed = cast(dict[str, VT], _parsed)
+        parsed = cast("dict[str, VT]", _parsed)
 
     return parsed
 
 
-def parse_map[VT](
+def gen_map_items[VT](
     *keys: str, data: Mapping[str, VT], **kwargs: VT
 ) -> Iterator[tuple[str, VT | None]]:
     for key in keys:
@@ -145,7 +143,9 @@ def parse_map[VT](
         yield (key.lower(), v)
 
 
-def parse_dotdict[VT](*keys: str, data: DotDict[VT]) -> Iterator[tuple[str, VT | None]]:
+def gen_dotdict_items[VT](
+    *keys: str, data: DotDict[VT]
+) -> Iterator[tuple[str, VT | None]]:
     for key in keys:
         if key in data:
             value = raw_get(data, key)
@@ -153,7 +153,7 @@ def parse_dotdict[VT](*keys: str, data: DotDict[VT]) -> Iterator[tuple[str, VT |
         else:
             v = None
 
-        yield (key.lower(), cast(VT, v))
+        yield (key.lower(), v)
 
 
 @overload
@@ -194,41 +194,37 @@ def gen_dict[VT](  # noqa: E704
 def gen_dict[VT](  # noqa: E704
     data: VT, key: Key | None = ..., *, default_key: None, **kwargs: VT
 ) -> Iterator[VT | None]: ...
-def gen_dict[VT](  # noqa: E302
-    data: Sentinel
-    | ConfArg
-    | DotDict[VT]
-    | Mapping[str, VT]
-    | list[VT]
-    | tuple[VT, ...]
-    | VT
-    | None,
+def gen_dict(  # noqa: C901, E302
+    data: object,
     key: Key | None = None,
     default_key: str | None = "self",
-    **kwargs: VT,
-) -> Iterator[
-    tuple[str, VT | None] | VT | list[VT | None] | dict[str, VT | None] | None
-]:
+    **kwargs: object,
+) -> Iterator[object]:
     """
-    >>> r = DotDict({'a': {'value': 'bar'}})
-    >>> r
-    {'a': {'value': 'bar'}}
-    >>> dict(gen_dict(r))
-    {'a': {'value': 'bar'}}
-    >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
-    >>> r
-    {'a': 'baz'}
-    >>> dict(gen_dict(r))
-    {'a': 'baz'}
+    Generates a data tuple.
+
+    Examples:
+
+        >>> r = DotDict({'a': {'value': 'bar'}})
+        >>> r
+        {'a': {'value': 'bar'}}
+        >>> dict(gen_dict(r))
+        {'a': {'value': 'bar'}}
+        >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
+        >>> r
+        {'a': 'baz'}
+        >>> dict(gen_dict(r))
+        {'a': 'baz'}
+
     """
     if key:
         keys = parse_key(key)
     else:
         if is_mapping(data):
             if DotDict.is_self(data) and not kwargs:
-                data = parse_sentinel(cast(DotDict[VT], data), default=data)
+                data = resolve_sentinel(data, default=data)
             else:
-                data = DotDict(cast(Mapping[str, VT], data)).get(**kwargs)
+                data = DotDict(data).get(**kwargs)
 
         keys = []
 
@@ -236,11 +232,9 @@ def gen_dict[VT](  # noqa: E302
         keys = keys or data.keys()
 
         if DotDict.is_self(data) and not kwargs:
-            items = parse_dotdict(*keys, data=data)
+            items = gen_dotdict_items(*keys, data=data)
         else:
-            items = parse_map(*keys, data=data, **kwargs)
-
-        items = cast(Iterator[tuple[str, VT]], items)
+            items = gen_map_items(*keys, data=data, **kwargs)
 
         if default_key:
             yield from items
@@ -257,20 +251,9 @@ def gen_dict[VT](  # noqa: E302
         yield data
 
 
-# def is_wire(val) -> TypeIs[Wire]:
-#     if is_mapping(val) and len(val) == 3 and all(s in val for s in WIRE_KEYS):
-#         x = val["src"]
-#         x
-#         success = is_mapping(val["src"]) and is_mapping(val["tgt"])
-#     else:
-#         success = False
-#
-#     return success
-#
-#
 class DotDict[VT](CaseInsensitiveDict[VT]):
     """
-    A dictionary whose keys can be accessed using dot notation
+    A dictionary whose keys can be accessed using dot notation.
 
     Examples:
 
@@ -318,7 +301,9 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     """
 
-    def __init__(self, data: Mapping[str, VT] | Data[VT] | None = None, **kwargs: VT):
+    def __init__(
+        self, data: Mapping[str, VT] | DotDictInput[VT] | None = None, **kwargs: VT
+    ):
         super().__init__()
         self.update(data, **kwargs)
 
@@ -328,42 +313,44 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     @overload
     @classmethod
+    def dictize(cls, value: StatefulItem) -> DotDict[StreamState]: ...  # noqa: E704
+    @overload
+    @classmethod
     def dictize[V](cls, value: Mapping[str, V]) -> DotDict[V]: ...  # noqa: E704
+    @overload
+    @classmethod
+    def dictize[V](cls, value: Mapping[str, V], key: Key) -> V | None: ...  # noqa: E704
     @overload  # noqa: E301
     @classmethod
-    def dictize[V](cls, value: Mapping[str, V], key: Key) -> V: ...  # noqa: E704
-    @overload  # noqa: E301
-    @classmethod
-    def dictize[T, V](  # noqa: E704
+    def dictize[V, D](  # noqa: E704
         cls,
         value: Mapping[str, V],
         key: Key | None = ...,
-        default: T | None = ...,
+        default: D | None = ...,
         **kwargs: V,
-    ) -> T | None: ...
+    ) -> V | D | None: ...
     @overload  # noqa: E301
     @classmethod
-    def dictize[V](cls, value: V) -> V: ...  # noqa: E704
-    @overload  # noqa: E301
-    @classmethod
-    def dictize[V](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
-        cls, value: Mapping[str, V] | V
-    ) -> DotDict[V] | V: ...
+    def dictize[V](  # noqa: E704
+        cls, value: V
+    ) -> V: ...
     @classmethod  # noqa: E301
-    def dictize[T, V](
+    def dictize(
         cls,
-        value: Mapping[str, V] | V,
+        value: object,
         key: Key | None = None,
-        default: T | None = None,
-        **kwargs: V,
-    ) -> DotDict[V] | V | T | None:
+        default: object | None = None,
+        **kwargs: object,
+    ) -> object:
         if is_mapping(value):
-            if cls.is_self(value):
-                result = value
-            else:
-                result = cast(DotDict[V], cls(cast(Mapping[str, Any], value)))
+            mapping = cast("Mapping[str, object]", value)
 
-            if key or kwargs:
+            if cls.is_self(mapping):
+                result: object = mapping
+            else:
+                result = DotDict[object](mapping)
+
+            if key is not None or kwargs:
                 result = result.get(key=key, default=default, **kwargs)
         else:
             result = value
@@ -377,7 +364,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         key: str | int,
         default: D | None = ...,
         **kwargs: VT,
-    ) -> VT | dict[str, VT] | Item | RikoValue | D | None: ...
+    ) -> VT | dict[str, VT] | ItemOrValue | D | None: ...
     @overload  # noqa: E301
     def _parse_value(  # noqa: E704
         self,
@@ -387,26 +374,27 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         **kwargs: VT,
     ) -> RikoList | BasicValue: ...
     @overload  # noqa: E301
-    def _parse_value(  # noqa: E704
-        self, value: object, key: str | int, default: D | None = ..., **kwargs: VT
-    ) -> D | None: ...
+    def _parse_value[V, D](  # noqa: E704
+        self, value: V, key: str | int, default: D | None = ..., **kwargs: VT
+    ) -> V | D | None: ...
     def _parse_value(  # noqa: E301
-        self,
-        value: list[VT] | tuple[VT, ...] | Mapping[str, VT] | object,
-        key: str | int,
-        default: D | None = None,
-        **kwargs: VT,
-    ) -> VT | D | Any:
+        self, value: object, key: str | int, default: object | None = None, **kwargs: VT
+    ) -> object:
         """
-        >>> dd = DotDict()
-        >>> dd._parse_value([10, 20], 1, 'missing')
-        20
-        >>> dd._parse_value([10, 20], 5, 'missing')
-        'missing'
-        >>> dd._parse_value([{'b': 1}, {'b': 2}], 'b', 'missing')
-        [1, 2]
-        >>> dd._parse_value([{'b': 1}, {'b': 2}], 'z', 'missing')
-        'missing'
+        Parse value helper.
+
+        Examples:
+
+            >>> dd = DotDict()
+            >>> dd._parse_value([10, 20], 1, 'missing')
+            20
+            >>> dd._parse_value([10, 20], 5, 'missing')
+            'missing'
+            >>> dd._parse_value([{'b': 1}, {'b': 2}], 'b', 'missing')
+            [1, 2]
+            >>> dd._parse_value([{'b': 1}, {'b': 2}], 'z', 'missing')
+            'missing'
+
         """
         parsed = default
         msg = f"Ignoring unsupported key {key} to access {{0}} value {{1}}."
@@ -418,7 +406,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
                 if key in dd_value:
                     parsed = dd_value[key]
                 elif is_sentinel(value, **kwargs):
-                    parsed = parse_sentinel(value, default=default, **kwargs)
+                    parsed = resolve_sentinel(value, default=default, **kwargs)
 
                     if is_mapping(parsed) and key in parsed:
                         parsed = parsed[key]
@@ -430,7 +418,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             if is_mapping_seq(value):
                 if isinstance(key, str):
                     try:
-                        parsed = cast(RikoList, [v[key] for v in value])
+                        parsed = cast("RikoList", [v[key] for v in value])
                     except (KeyError, IndexError):
                         parsed = default
                 else:
@@ -452,11 +440,16 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     def __getitem__(self, key: Key) -> VT:
         """
-        >>> r = DotDict({'key': 'bar'})
-        >>> r['key']
-        'bar'
-        >>> r['KEY']
-        'bar'
+        __getitem__.
+
+        Examples:
+
+            >>> r = DotDict({'key': 'bar'})
+            >>> r['key']
+            'bar'
+            >>> r['KEY']
+            'bar'
+
         """
         keys = parse_key(key)
         value = raw_get(self, keys[0])
@@ -466,33 +459,38 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             msg = f"Ignoring unsupported key {key} to access non-mapping value {value}."
 
             if is_mapping(value):
-                value = cast(VT, value[key])
+                value = cast("VT", value[key])
             else:
                 logger.warning(msg)
 
         result = value
 
         if is_mapping(value):
-            parsed = parse_sentinel(value, default=value)
-            result = cast(VT, self.dictize(parsed))
+            parsed = resolve_sentinel(value, default=value)
+            result = cast("VT", self.dictize(parsed))
 
         return result
 
     def __setitem__(self, key: str, value: VT) -> None:
         """
-        >>> r = DotDict({'author': 'bar'})
-        >>> r
-        {'author': 'bar'}
-        >>> r['author.name'] = 'bar'
-        >>> r
-        {'author': {'name': 'bar'}}
-        >>> r['author.url'] = 'example.com'
-        >>> r
-        {'author': {'name': 'bar', 'url': 'example.com'}}
-        >>> c = DotDict({'count': 0})
-        >>> c['count.total'] = 1
-        >>> c
-        {'count': {'total': 1}}
+        __setitem__.
+
+        Examples:
+
+            >>> r = DotDict({'author': 'bar'})
+            >>> r
+            {'author': 'bar'}
+            >>> r['author.name'] = 'bar'
+            >>> r
+            {'author': {'name': 'bar'}}
+            >>> r['author.url'] = 'example.com'
+            >>> r
+            {'author': {'name': 'bar', 'url': 'example.com'}}
+            >>> c = DotDict({'count': 0})
+            >>> c['count.total'] = 1
+            >>> c
+            {'count': {'total': 1}}
+
         """
 
         def reducer(item: Self, key: str) -> Self:
@@ -506,10 +504,10 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
                 existing = None
 
             if existing is None:
-                existing = item[key] = cast(VT, {})
+                existing = item[key] = cast("VT", {})
                 # CaseInsensitiveDict.__setitem__(item, key, existing)
 
-            return cast(Self, existing)
+            return cast("Self", existing)
 
         keys = parse_key(key)
 
@@ -522,15 +520,28 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             reduced[last] = value
             CaseInsensitiveDict.update(self, item)
 
-    def __or__[V](self, other: Mapping[str, V]) -> Self:
+    @overload
+    def __or__(self, other: SupportsKeysAndGetItem[str, VT]) -> Self: ...  # noqa: E704
+    @overload  # noqa: E301
+    def __or__[T](  # noqa: E704
+        self, other: SupportsKeysAndGetItem[str, T]
+    ) -> DotDict[VT | T]: ...
+    def __or__[T](  # noqa: E301
+        self, other: SupportsKeysAndGetItem[str, T]
+    ) -> Self | DotDict[VT | T]:
         """
-        >>> r = DotDict({'key': 'bar'})
-        >>> r | {'key': 'baz'}
-        {'key': 'baz'}
-        >>> r | DotDict({'key': 'baz'})
-        {'key': 'baz'}
+        Merge another mapping, widening the value type to cover both sides.
+
+        Examples:
+
+            >>> r = DotDict({'key': 'bar'})
+            >>> r | {'key': 'baz'}
+            {'key': 'baz'}
+            >>> r | DotDict({'key': 'baz'})
+            {'key': 'baz'}
+
         """
-        dd = self.copy()
+        dd = cast("DotDict[VT | T]", self.copy())
         dd.update(other)
         return dd
 
@@ -552,44 +563,49 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         self, key: Key | None = None, default: D | None = None, **kwargs: VT
     ) -> Self | VT | D | Item | dict[str, VT] | PrimitiveValue:
         """
-        >>> r = DotDict({'key': 'bar'})
-        >>> r.get('key')
-        'bar'
-        >>> r.get('KEY')
-        'bar'
-        >>> r.get('KEY')
-        'bar'
-        >>> r.get('baz')
-        >>> r = DotDict({"terminal": "attrs_1", "type": "text"})
-        >>> r.get()
-        {'terminal': 'attrs_1', 'type': 'text'}
-        >>> r.get(attrs_1=iter(['baz']))
-        'baz'
-        >>> r.get(attrs_1=iter([{'content': 'baz'}]))
-        {'content': 'baz'}
-        >>> r.get('subkey')
-        >>> attrs = {
-        ...     "value": {"terminal": "attrs_1", "type": "text"},
-        ...     "key": {"type": "text", "value": "title"},
-        ... }
-        >>> r = DotDict({'attrs': attrs})
-        >>> r.get('attrs')
-        {'value': {'terminal': 'attrs_1', 'type': 'text'}, 'key': 'title'}
-        >>> r.get('attrs.key')
-        'title'
-        >>> r.get('attrs.value')
-        {'terminal': 'attrs_1', 'type': 'text'}
-        >>> r.get('subkey')
-        >>> r.get('attrs.value', attrs_1=iter([{'content': 'baz'}]))
-        {'content': 'baz'}
-        >>> r.get('attrs.value.content', attrs_1=iter([{'content': 'baz'}]))
-        'baz'
-        >>> r.get('attrs.value.foo', attrs_1=iter([{'content': 'baz'}]))
-        >>> r = DotDict({'stanzas': {'verses': ['verse1', 'verse2']}})
-        >>> r.get('stanzas.verses')
-        ['verse1', 'verse2']
-        >>> r.get('stanzas.verses.1')
-        'verse2'
+        Retrieves a value from a DotDict.
+
+        Examples:
+
+            >>> r = DotDict({'key': 'bar'})
+            >>> r.get('key')
+            'bar'
+            >>> r.get('KEY')
+            'bar'
+            >>> r.get('KEY')
+            'bar'
+            >>> r.get('baz')
+            >>> r = DotDict({"terminal": "attrs_1", "type": "text"})
+            >>> r.get()
+            {'terminal': 'attrs_1', 'type': 'text'}
+            >>> r.get(attrs_1=iter(['baz']))
+            'baz'
+            >>> r.get(attrs_1=iter([{'content': 'baz'}]))
+            {'content': 'baz'}
+            >>> r.get('subkey')
+            >>> attrs = {
+            ...     "value": {"terminal": "attrs_1", "type": "text"},
+            ...     "key": {"type": "text", "value": "title"},
+            ... }
+            >>> r = DotDict({'attrs': attrs})
+            >>> r.get('attrs')
+            {'value': {'terminal': 'attrs_1', 'type': 'text'}, 'key': 'title'}
+            >>> r.get('attrs.key')
+            'title'
+            >>> r.get('attrs.value')
+            {'terminal': 'attrs_1', 'type': 'text'}
+            >>> r.get('subkey')
+            >>> r.get('attrs.value', attrs_1=iter([{'content': 'baz'}]))
+            {'content': 'baz'}
+            >>> r.get('attrs.value.content', attrs_1=iter([{'content': 'baz'}]))
+            'baz'
+            >>> r.get('attrs.value.foo', attrs_1=iter([{'content': 'baz'}]))
+            >>> r = DotDict({'stanzas': {'verses': ['verse1', 'verse2']}})
+            >>> r.get('stanzas.verses')
+            ['verse1', 'verse2']
+            >>> r.get('stanzas.verses.1')
+            'verse2'
+
         """
         keys = parse_key(key)
         item = self
@@ -603,10 +619,10 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
                 item = self._parse_value(item, k, default=default, **kwargs)
         else:
-            item = parse_sentinel(item, default=item, **kwargs)
+            item = resolve_sentinel(item, default=item, **kwargs)
 
         if is_mapping(item) and is_sentinel(item, **kwargs):
-            item = parse_sentinel(item, default=default, **kwargs)
+            item = resolve_sentinel(item, default=default, **kwargs)
 
         return self.dictize(item)
 
@@ -615,8 +631,9 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     def delete(self, key: str) -> None:
         """
-        Delete a root or nested key. Matching is case-insensitive at every
-        level, including nested plain-dict values.
+        Deletes a root or nested key.
+
+        Matching is case-insensitive at every level, including nested plain-dict values.
 
         Examples:
 
@@ -644,7 +661,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             else:
                 value = None
 
-            return cast(Self, value) if is_mapping(value) else None
+            return cast("Self", value) if is_mapping(value) else None
 
         keys = parse_key(key)
         rest, last = keys[:-1], keys[-1]
@@ -665,42 +682,47 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         self, data: SupportsKeysAndGetItem[str, VT], **kwargs: VT
     ) -> None: ...
     @overload
-    def update(self, data: Data[VT]) -> None: ...  # noqa: E704
+    def update(self, data: DotDictInput[VT]) -> None: ...  # noqa: E704
     @overload  # noqa: E301
     def update(  # noqa: E704
-        self, data: Data[VT], **kwargs: VT
+        self, data: DotDictInput[VT], **kwargs: VT
     ) -> None: ...
-    @overload
-    def update[V](self, data: Mapping[str, V]) -> None: ...  # noqa: E704
     @overload
     def update(self, **kwargs: VT) -> None: ...  # noqa: E704
     @overload
     def update(self, data: None) -> None: ...  # noqa: E704
     def update(  # noqa: E301  # pyright: ignore[reportInconsistentOverload]
         self,
-        data: SupportsKeysAndGetItem[str, VT] | Data[VT] | None = None,
+        data: SupportsKeysAndGetItem[str, VT] | DotDictInput[VT] | None = None,
         **kwargs: VT,
     ):
         """
-        >>> r = DotDict({'author': 'bar'})
-        >>> r
-        {'author': 'bar'}
-        >>> r.update({'author.name': 'bar', 'author.url': 'example.com'})
-        >>> r
-        {'author': {'name': 'bar', 'url': 'example.com'}}
-        >>> r = DotDict({'author.name': 'bar', 'author.url': 'example.com'})
-        >>> r
-        {'author': {'name': 'bar', 'url': 'example.com'}}
+        Updates the DotDict with new data.
+
+        Supports dot notation for nested keys.
+
+        Examples:
+
+            >>> r = DotDict({'author': 'bar'})
+            >>> r
+            {'author': 'bar'}
+            >>> r.update({'author.name': 'bar', 'author.url': 'example.com'})
+            >>> r
+            {'author': {'name': 'bar', 'url': 'example.com'}}
+            >>> r = DotDict({'author.name': 'bar', 'author.url': 'example.com'})
+            >>> r
+            {'author': {'name': 'bar', 'url': 'example.com'}}
+
         """
         if is_mapping(data):
-            data = cast(Mapping[str, VT], data)
+            data = cast("Mapping[str, VT]", data)
             if self.is_self(data):
                 if kwargs:
                     _dict = data | kwargs
                 else:
                     return self._store.update(data._store)
             elif kwargs or any("." in k for k in data):
-                _dict = cast(dict[str, VT], {**data, **kwargs})
+                _dict = {**data, **kwargs}
             else:
                 for key, value in data.items():
                     CaseInsensitiveDict.__setitem__(self, key, value)  # noqa: PLC2801
@@ -724,16 +746,21 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     def asdict(self, key: Key | None = None, **kwargs: VT) -> dict[str, VT | None]:
         """
-        >>> r = DotDict({'a': {'value': 'bar'}})
-        >>> r
-        {'a': {'value': 'bar'}}
-        >>> r.asdict()
-        {'a': {'value': 'bar'}}
-        >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
-        >>> r
-        {'a': 'baz'}
-        >>> r.asdict()
-        {'a': 'baz'}
+        Formats a DotDict as a standard dictionary.
+
+        Examples:
+
+            >>> r = DotDict({'a': {'value': 'bar'}})
+            >>> r
+            {'a': {'value': 'bar'}}
+            >>> r.asdict()
+            {'a': {'value': 'bar'}}
+            >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
+            >>> r
+            {'a': 'baz'}
+            >>> r.asdict()
+            {'a': 'baz'}
+
         """
         items = gen_dict(self, key=key, default_key="self", **kwargs)
         return dict(items)

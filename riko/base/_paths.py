@@ -1,11 +1,19 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.base._paths
-~~~~~~~~~~
-File/URL path resolution: locating bundled data files (``get_path``) and
-normalizing file/http URLs to absolute form (``get_abspath``).
+File and URL path resolution for bundled data and external resources.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko import get_path
+        >>>
+        >>> get_path("spreadsheet.csv").startswith("file://")
+        True
+
 """
 
+from functools import partial
 from os import path
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -15,13 +23,23 @@ PACKAGE_DIR = Path(__file__).parent.parent.absolute()
 ROOT_DIR = PACKAGE_DIR.parent
 
 
-def get_path(name: str) -> str:
-    if name.startswith(("http", "file:")):
-        url = name
+def normalize_url(url: str, absolute: bool = True, offline: bool = False) -> str:
+    passable = ("http", "file:///" if absolute else "file:")
+
+    if url.startswith(passable):
+        pass
+    elif absolute and url.startswith("file://"):
+        abspath = (ROOT_DIR / url[7:]).absolute()
+        url = f"file://{abspath}"
+    elif offline:
+        url = f"file://{path.join(PACKAGE_DIR, 'data', url)}"
     else:
-        url = f"file://{path.join(PACKAGE_DIR, 'data', name)}"
+        url = f"http://{url}" if url and "://" not in url else url
 
     return url
+
+
+get_path: partial[str] = partial(normalize_url, absolute=False, offline=True)
 
 
 @overload
@@ -34,17 +52,3 @@ def get_temp_file(as_path: bool = False) -> str | IO[bytes]:  # noqa: E302
             return fp.name
     else:
         return NamedTemporaryFile(delete=True, delete_on_close=False)
-
-
-def get_abspath(url: str, offline: bool = False) -> str:
-    if url.startswith(("http", "file:///")):
-        pass
-    elif url.startswith("file://"):
-        abspath = (ROOT_DIR / url[7:]).absolute()
-        url = f"file://{abspath}"
-    elif offline:
-        url = get_path(url)
-    else:
-        url = f"http://{url}" if url and "://" not in url else url
-
-    return url

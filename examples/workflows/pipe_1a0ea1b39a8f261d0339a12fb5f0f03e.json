@@ -1,0 +1,117 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-1",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-2",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-2",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-3",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-3",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-4",
+                "port": "in:attrs_1_value"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-1": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "content"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "12/2/2014"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-1",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-2": {
+            "id": "sw-2",
+            "name": "datebuilder",
+            "options": {
+                "assign": "date"
+            },
+            "type": "module"
+        },
+        "sw-3": {
+            "conf": {
+                "format": {
+                    "type": "text",
+                    "value": "%B %d, %Y"
+                }
+            },
+            "id": "sw-3",
+            "name": "dateformat",
+            "options": {
+                "emit": true,
+                "field": "date"
+            },
+            "type": "module"
+        },
+        "sw-4": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "date"
+                        },
+                        "value": {
+                            "terminal": "attrs_1_value",
+                            "type": "text"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "year"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "1201"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-4",
+            "name": "itembuilder",
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-4",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

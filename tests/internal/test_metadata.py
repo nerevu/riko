@@ -1,14 +1,19 @@
 # vim: sw=4:ts=4:expandtab
 """
-Derived module metadata: ``get_module_metadata`` classification and the
-``@operator`` return-shape subtype inference.
+Test derived module metadata and return-shape inference.
+
+This covers ``get_module_metadata`` classification and ``@operator`` inference.
 """
 
-from collections.abc import Iterator
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 from riko.ext import operator
 from riko.modules._metadata import get_module_metadata
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 def test_operator_metadata():

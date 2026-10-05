@@ -7,13 +7,15 @@ generated module-name and module-id output. Generated files must match the
 current module catalog.
 """
 
+from __future__ import annotations
+
 import dataclasses
-from typing import get_args
+from typing import TYPE_CHECKING, get_args
 
 import pytest
 
 from riko.base._paths import PACKAGE_DIR
-from riko.ext._names import derive_category
+from riko.ext._names import get_module_category
 from riko.ext.codegen import (
     NameEntry,
     enum_member_name,
@@ -24,7 +26,9 @@ from riko.ext.codegen import (
 )
 from riko.modules._metadata import gen_module_catalog
 from riko.types._module_ids import LoopableModuleId, ModuleId
-from riko.types.modules import ModuleCategory
+
+if TYPE_CHECKING:
+    from riko.types.modules import ModuleCategory
 
 _NAMES = PACKAGE_DIR / "modules" / "_names.py"
 _MODULE_IDS = PACKAGE_DIR / "types" / "_module_ids.py"
@@ -52,7 +56,7 @@ _SINKS = {"write"}
 
 @pytest.fixture
 def categories() -> dict[str, ModuleCategory]:
-    return {md.name: derive_category(md) for md in gen_module_catalog()}
+    return {md.name: get_module_category(md) for md in gen_module_catalog()}
 
 
 def test_taxonomy_partition_matches_golden(categories):
@@ -67,14 +71,14 @@ def test_taxonomy_partition_matches_golden(categories):
 
 def test_provider_override_wins():
     md = next(iter(gen_module_catalog()))
-    assert derive_category(md, provider="microsoft") == "microsoft"
-    assert derive_category(md, provider="microsoft", override="custom") == "custom"
+    assert get_module_category(md, provider="microsoft") == "microsoft"
+    assert get_module_category(md, provider="microsoft", override="custom") == "custom"
 
 
 def test_sink_name_is_classified_as_sink():
     md = next(md for md in gen_module_catalog() if md.name == "fetch")
     renamed = dataclasses.replace(md, name="write")
-    assert derive_category(renamed) == "sink"
+    assert get_module_category(renamed) == "sink"
 
 
 @pytest.mark.parametrize(

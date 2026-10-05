@@ -1,30 +1,19 @@
 # vim: sw=4:ts=4:expandtab
-"""
-riko.modules._prepare
-~~~~~~~~~~~~~~~~~~~~~~
+"""Prepares modules for per-item dispatch."""
 
-Module preparation and per-item dispatch: the frozen ``PreparedModule`` record,
-conf merging/extraction, and the parser/caster construction that turns opts and
-conf into the callables a wrapper applies to each item.
-"""
+from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import cast, overload
+from typing import TYPE_CHECKING, cast, overload
 
 import pygogo as gogo
 
 from riko.base._iterutils import broadcast, dispatch
-from riko.base._locations import AnyLocation
-from riko.coercion._dynamic_conf import DynamicConf
 from riko.coercion._objectify import objectify
 from riko.coercion._sequences import listize
 from riko.coercion.cast import CAST_SWITCH, cast_none, cast_pass, cast_value
-from riko.definitions._resource_types import ResourcesLike
-from riko.parsing._dotdict import DotDict
-from riko.parsing.config import conf_is_dynamic, get_field, parse_conf
-from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
+from riko.parsing.config import conf_is_dynamic, get_field, resolve_conf
 from riko.types._enums import BasicCastType, CastType
 from riko.types._guards import is_mapping
 from riko.types._options import (
@@ -35,8 +24,6 @@ from riko.types._options import (
     Opts,
     ValueDispatch,
 )
-from riko.types._scalars import PrimitiveValue
-from riko.types._streams import Item, ItemOrValue
 from riko.types._wrappers import (
     ArgCaster,
     CastFuncs,
@@ -44,7 +31,18 @@ from riko.types._wrappers import (
     ParserOutput,
     SyncConfCastFunc,
 )
-from riko.types.modules import AnyModuleConf, Conf
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from riko.base._locations import AnyLocation
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.definitions._resource_types import ResourcesLike
+    from riko.parsing._dotdict import DotDict
+    from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
+    from riko.types._scalars import PrimitiveValue
+    from riko.types._streams import Item, ItemOrValue
+    from riko.types.modules import AnyModuleConf, Conf
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -164,10 +162,10 @@ def require_conf[T](  # noqa: E704
     if (value is None) or (strict and not value):
         raise TypeError(f"the {pipe!r} pipe requires the {key!r} conf key")
 
-    return cast(T, value)
+    return cast("T", value)
 
 
-def get_pieces_or_conf(
+def build_conf(
     parsed_conf: AnyModuleConf | Conf | None,
     defaults: Defaults,
     opts: Opts,
@@ -198,9 +196,9 @@ def get_pieces_or_conf(
 
     """
     if is_mapping(parsed_conf):
-        merged_conf = cast(AnyModuleConf, {**defaults, **parsed_conf})
+        merged_conf = cast("AnyModuleConf", {**defaults, **parsed_conf})
     else:
-        merged_conf = cast(AnyModuleConf, defaults)
+        merged_conf = cast("AnyModuleConf", defaults)
 
     if extract := opts.get("extract"):
         try:
@@ -209,7 +207,7 @@ def get_pieces_or_conf(
             label = f"the {pipe!r} pipe" if pipe else "this pipe"
             raise TypeError(f"{label} requires the {extract!r} conf key") from None
         else:
-            pieces = cast(BasicReturn, pieces)
+            pieces = cast("BasicReturn", pieces)
 
         pieces_or_conf = listize(pieces) if opts.get("listize") else pieces
     else:
@@ -298,7 +296,7 @@ def parse_and_cast[T, E](  # noqa: E302
     Parses and casts one item's field and conf into a dispatch record.
 
     Runs the field/conf parsers over the item, resolves the extract-or-conf via
-    ``get_pieces_or_conf``, applies the casters, and wraps the result as an item
+    ``build_conf``, applies the casters, and wraps the result as an item
     or value dispatch depending on whether the input is a mapping.
 
     Args:
@@ -319,14 +317,14 @@ def parse_and_cast[T, E](  # noqa: E302
 
     """
     defaults = defaults or Defaults({})
-    field = field or opts.get("field")
+    field = opts.get("field") if field is None else field
 
     if parsers:
         parsed_field, parsed_conf = broadcast(item, *parsers, field=field, **kwargs)
     else:
         parsed_field, parsed_conf = item, conf
 
-    pieces_or_conf, merged_conf = get_pieces_or_conf(parsed_conf, defaults, opts, pipe)
+    pieces_or_conf, merged_conf = build_conf(parsed_conf, defaults, opts, pipe)
     parsed = (parsed_field, pieces_or_conf, merged_conf)
     casted = dispatch(parsed, *casters) if casters else parsed
 
@@ -338,7 +336,7 @@ def parse_and_cast[T, E](  # noqa: E302
     return dispatched
 
 
-def get_parsers(opts: Opts, conf: Conf, **kwargs: object) -> tuple[ParseFuncs, bool]:
+def build_parsers(opts: Opts, conf: Conf, **kwargs: object) -> tuple[ParseFuncs, bool]:
     """
     Builds the field and conf parsers for a module, detecting dynamic conf.
 
@@ -366,26 +364,24 @@ def get_parsers(opts: Opts, conf: Conf, **kwargs: object) -> tuple[ParseFuncs, b
     if opts.get("ptype") == BasicCastType.NONE:
         conf_parser = cast_none
     elif conf_is_dynamic(conf, memoize=False, **kwargs):
-        conf_parser = partial(parse_conf, conf=conf, memoize=False)
+        conf_parser = partial(resolve_conf, conf=conf, memoize=False)
         is_dynamic = True
     else:
-        pre_parsed = parse_conf(None, conf=conf, memoize=True)
+        pre_parsed = resolve_conf(None, conf=conf, memoize=True)
         conf_parser = lambda _, **__: pre_parsed
 
     return ParseFuncs(field_parser, conf_parser), is_dynamic
 
 
 @overload
-def _get_caster[T](type_: None) -> ArgCaster[T]: ...  # noqa: E704
+def _build_caster[T](type_: None) -> ArgCaster[T]: ...  # noqa: E704
 @overload
-def _get_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
+def _build_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
 @overload  # noqa: E302
-def _get_caster(  # noqa: E704
-    type_: CastType,
-) -> ArgCaster[ItemOrValue | AnyLocation]: ...
-def _get_caster[T](  # noqa: E302
+def _build_caster(type_: CastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
+def _build_caster[T](  # noqa: E302
     type_: BasicCastType | CastType | None,
-) -> ArgCaster[T | PrimitiveValue | AnyLocation]:
+) -> ArgCaster[T | PrimitiveValue | ItemOrValue]:
     """
     Builds a caster for a destination type, degrading on an unknown one.
 
@@ -415,7 +411,7 @@ def _get_caster[T](  # noqa: E302
     return caster
 
 
-def get_casters(opts: Opts) -> CastFuncs[ItemOrValue, object]:
+def build_casters(opts: Opts) -> CastFuncs[ItemOrValue, object]:
     """
     Builds the field, extract, and conf casters from a module's options.
 
@@ -437,8 +433,8 @@ def get_casters(opts: Opts) -> CastFuncs[ItemOrValue, object]:
     ptype = opts.get("ptype")
     extract = opts.get("extract")
 
-    field_caster = _get_caster(ftype)
-    value_caster = _get_caster(ptype)
+    field_caster = _build_caster(ftype)
+    value_caster = _build_caster(ptype)
 
     if ptype == BasicCastType.NONE:
         extract_caster: ArgCaster[object] = cast_none
@@ -455,5 +451,5 @@ def get_casters(opts: Opts) -> CastFuncs[ItemOrValue, object]:
         extract_caster = value_caster
         _conf_caster = cast_pass
 
-    conf_caster = cast(SyncConfCastFunc, _conf_caster)
+    conf_caster = cast("SyncConfCastFunc", _conf_caster)
     return CastFuncs(field_caster, extract_caster, conf_caster)

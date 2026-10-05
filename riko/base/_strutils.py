@@ -1,10 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.base._strutils
-~~~~~~~~~~~~~~
-String helpers: identifier/key sanitization (``replacer``, ``slugify``), regex
-rule construction and multi-pass substitution, and the shared find/extract used
-by the ``refind`` and ``strfind`` pipes.
+Provides string sanitization, substitution, and extraction helpers.
 
 Attributes:
 
@@ -17,7 +13,8 @@ from __future__ import annotations
 
 import itertools as it
 import re
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from functools import reduce
 from operator import itemgetter
 from random import choice
 from typing import TYPE_CHECKING, cast
@@ -25,6 +22,8 @@ from typing import TYPE_CHECKING, cast
 from requests.structures import CaseInsensitiveDict
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Iterator
+
     from riko.types._scalars import BasicValue
     from riko.types.modules import FindConfRule, RegexRule
 
@@ -100,6 +99,11 @@ def gen_name(count: int = 2) -> Iterator[str]:
 
 def replacer(content: str, old: str, new: str = "_") -> str:
     """
+    Replaces ``old`` with ``new`` in ``content``.
+
+    Additionally prepends ``content`` with ``new`` if ``content`` starts with a number
+    or non-ASCII character.
+
     Examples:
 
         >>> replacer('', '')
@@ -120,11 +124,32 @@ def replacer(content: str, old: str, new: str = "_") -> str:
     return replaced
 
 
+def pythonise(
+    content: str, encoding: str = "ascii", replace: Sequence[str] = ("-", ":", "/", "")
+) -> str:
+    """
+    Builds a Python-friendly id from ``content``.
+
+    Args:
+
+        content: The raw id to sanitize.
+        encoding: The encoding used to drop non-representable characters.
+        replace: The substrings replaced with ``_``.
+
+    Returns:
+
+        The sanitized id.
+
+    """
+    reduced = reduce(replacer, replace, content)
+    return reduced.encode(encoding, "replace").decode(encoding)
+
+
 def multi_substitute(word: str, rules: Sequence[RegexRule]) -> str:
     """
-    Apply multiple regex rules to 'word'
-    http://code.activestate.com/recipes/
-    576710-multi-regex-single-pass-replace-of-multiple-regexe/
+    Applies multiple regex rules to 'word'.
+
+    http://code.activestate.com/recipes/576710-multi-regex-single-pass-replace-of-multiple-regexe/
     """
     flags = rules[0]["flags"]
 
@@ -294,4 +319,4 @@ def truncate_content[T](content: T | object, length: int = 20) -> T:
     else:
         truncated = content
 
-    return cast(T, truncated)
+    return cast("T", truncated)

@@ -1,5 +1,7 @@
 # vim: sw=4:ts=4:expandtab
-"""Tests the execution-resource foundation (``riko.runtime._resources`` + Context wiring)."""
+"""Tests execution-resource foundations and Context wiring."""
+
+from __future__ import annotations
 
 from contextlib import (
     AbstractAsyncContextManager,
@@ -7,27 +9,29 @@ from contextlib import (
     asynccontextmanager,
     contextmanager,
 )
+from dataclasses import dataclass
 from functools import partial
-from typing import cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import pytest
 
-from riko.definitions._resource_types import ResourceValue
+from riko.base.warnings import ResourceInterpretationWarning
 from riko.definitions._resources import bind_resources
-from riko.modules import operator
-from riko.runtime._resources import (
+from riko.execution._resources import (
     FactoryKind,
     OneShotResource,
     Resource,
     ReusableResource,
     classify_factory,
 )
-from riko.runtime.context import Context
-from riko.types._guards import is_context_manager
-from riko.types._io import CloseableType
-from riko.types._resource import LifecycleFactory, ValueFactory
-from riko.types._streams import Stream
+from riko.execution.context import Context
+from riko.modules import operator
+from riko.types._collections import freeze_mapping
 from tests import async_test
+
+if TYPE_CHECKING:
+    from riko.types._resource import LifecycleFactory, ValueFactory
+    from riko.types._streams import Stream
 
 _CREDENTIAL = "microsoft/cif"
 _SCALAR = 42
@@ -264,9 +268,7 @@ class TestValueFactory:
             )
 
         with pytest.raises(TypeError, match="Must provide a Closeable value"):
-            Resource(  # pyright: ignore[reportCallIssue]
-                factory  # pyright: ignore[reportArgumentType]
-            )
+            Resource(factory)
 
         with pytest.raises(TypeError, match="Invalid lifecycle factory"):
             Resource.from_lifecycle(factory)  # pyright: ignore[reportArgumentType]
@@ -327,53 +329,106 @@ class TestValueFactory:
             _test_open_close(resource, factory)
 
 
+type ValueKind = Literal[
+    "scalar", "closeable", "context-manager", "one-shot", "external"
+]
+
+
+@dataclass(frozen=True)
+class ValueCase:
+    fixture: str
+    kind: ValueKind
+
+
+VALUE_CASES = [
+    pytest.param(ValueCase("scalar", "scalar"), id="scalar"),
+    pytest.param(ValueCase("connection", "closeable"), id="connection"),
+    pytest.param(
+        ValueCase("sync_contextmanager", "context-manager"), id="sync-context-manager"
+    ),
+    pytest.param(ValueCase("one_shot_resource", "one-shot"), id="one-shot"),
+    pytest.param(ValueCase("external_resource", "external"), id="external"),
+]
+
+
 class TestValues:
-    @pytest.mark.parametrize(
-        "value_fixture",
-        [
-            "scalar",
-            "connection",
-            "sync_contextmanager",
-            "one_shot_resource",
-            "external_resource",
-        ],
-    )
-    def test_raises[T](self, value_fixture, request):
-        value: ResourceValue[T] | Resource[T] = request.getfixturevalue(value_fixture)
+    @pytest.mark.parametrize("case", VALUE_CASES)
+    def test_constructor_contract(self, case: ValueCase, request):
+        value = request.getfixturevalue(case.fixture)
 
-        if not isinstance(value, ReusableResource):
-            with pytest.raises(TypeError, match="Invalid resource factory"):
-                Context().with_resource(  # pyright: ignore[reportCallIssue]
-                    "value",
-                    value,  # pyright: ignore[reportArgumentType]
+        if case.kind == "external":
+            context = Context().with_resource("value", value)
+            resource = context.resources["value"]
+            _test_metadata(resource, ReusableResource, external=True, reusable=True)
+            _test_open_close(resource)
+
+            with pytest.raises(TypeError, match=r"credential.*lazy.*LifecycleFactory"):
+                Context().with_resource(
+                    "value", value, credential=_CREDENTIAL, lazy=True
                 )
+        else:
+            with pytest.raises(TypeError, match="Invalid resource factory"):
+                Context().with_resource("value", value)
 
-        if isinstance(value, Resource):
+        if case.kind in {"one-shot", "external"}:
             with pytest.raises(TypeError, match="Expected a resolved resource value"):
                 Resource(value)
-        elif isinstance(value, int):
+        elif case.kind == "scalar":
             with pytest.raises(TypeError, match="Must provide a Closeable value"):
                 Resource(value)
-        elif not isinstance(value, CloseableType):
+
+            owned = Resource(value, cleanup=lambda _: None)
+            _test_metadata(owned, OneShotResource, external=False, reusable=False)
+            _test_open_close(owned, value)
+
+            external = Resource.from_external(value)
+            _test_metadata(external, ReusableResource, external=True, reusable=True)
+            _test_open_close(external, value)
+        elif case.kind == "closeable":
+            owned = Resource(value)
+            _test_metadata(owned, OneShotResource, external=False, reusable=False)
+            _test_open_close(owned, value)
+
+            external = Resource.from_external(value)
+            _test_metadata(external, ReusableResource, external=True, reusable=True)
+            _test_open_close(external, value)
+        else:
             with pytest.raises(TypeError, match="Expected a resolved resource value"):
                 Resource(value)
 
             with pytest.raises(TypeError, match="Expected a resolved resource"):
                 Resource.from_external(value)
 
-        if not is_context_manager(value):
-            with pytest.raises(TypeError, match="Invalid lifecycle factory"):
-                Resource.from_lifecycle(value)  # pyright: ignore[reportArgumentType]
+        if case.kind == "context-manager":
+            lifecycle = Resource.from_lifecycle(value)
+            _test_metadata(lifecycle, OneShotResource, external=False, reusable=False)
 
-        if is_context_manager(value):
+            configured = Resource.from_lifecycle(
+                value, credential=_CREDENTIAL, lazy=True
+            )
+            _test_credential_and_lazy(configured)
+
+            with pytest.raises(NotImplementedError, match="execution layer"):
+                _test_open_close(lifecycle, value)
+
             with pytest.raises(TypeError, match=r"ValueFactory.*cleanup function"):
-                Resource.from_factory(value)  # pyright: ignore[reportArgumentType]
+                Resource.from_factory(value)
+
+            casted = cast("ValueFactory[AbstractContextManager[_Connection]]", value)
+
+            with pytest.warns(ResourceInterpretationWarning, match="context manager"):
+                factory = Resource.from_factory(casted, cleanup=cleanup_contextmanager)
+
+            _test_metadata(factory, ReusableResource, external=False, reusable=True)
         else:
+            with pytest.raises(TypeError, match="Invalid lifecycle factory"):
+                Resource.from_lifecycle(value)
+
             with pytest.raises(TypeError, match="Invalid resource factory"):
-                Resource.from_factory(value)  # pyright: ignore[reportArgumentType]
+                Resource.from_factory(value)
 
     @async_test
-    async def test_async_raises[T](
+    async def test_async_constructor_contract(
         self,
         async_connection: _AsyncConnection,
         async_contextmanager: AbstractAsyncContextManager[_AsyncConnection],
@@ -381,8 +436,13 @@ class TestValues:
         with pytest.raises(TypeError, match="Invalid resource factory"):
             Context().with_resource(  # pyright: ignore[reportCallIssue]
                 "value",
-                async_connection,  # pyright: ignore[reportArgumentType]
+                async_contextmanager,  # pyright: ignore[reportArgumentType]
             )
+
+        await _async_test_open_close(Resource(async_connection), async_connection)
+
+        external = Resource.from_external(async_connection)
+        await _async_test_open_close(external, async_connection)
 
         with pytest.raises(TypeError, match="Invalid resource factory"):
             Context().with_resource(  # pyright: ignore[reportCallIssue]
@@ -396,131 +456,15 @@ class TestValues:
         with pytest.raises(TypeError, match="Expected a resolved resource"):
             Resource.from_external(async_contextmanager)
 
+        lifecycle = Resource.from_lifecycle(async_contextmanager)
+
+        with pytest.raises(NotImplementedError, match="execution layer"):
+            await _async_test_open_close(lifecycle, async_contextmanager)
+
         with pytest.raises(TypeError, match=r"ValueFactory.*cleanup function"):
             Resource.from_factory(
                 async_contextmanager  # pyright: ignore[reportArgumentType]
             )
-
-    @pytest.mark.parametrize(
-        "value_fixture",
-        [
-            "scalar",
-            "connection",
-            "sync_contextmanager",
-            "one_shot_resource",
-            "external_resource",
-        ],
-    )
-    def test_credential_and_lazy_carried[T](self, value_fixture, request):
-        value: ResourceValue[T] | Resource[T] = request.getfixturevalue(value_fixture)
-
-        if isinstance(value, ReusableResource):
-            with pytest.raises(TypeError, match=r"credential.*lazy.*LifecycleFactory"):
-                Context().with_resource(
-                    "value",  # pyright: ignore[reportCallIssue]
-                    value,  # pyright: ignore[reportArgumentType]
-                    credential=_CREDENTIAL,
-                    lazy=True,
-                )
-
-        if is_context_manager(value):
-            resource = Resource.from_lifecycle(value, credential=_CREDENTIAL, lazy=True)
-            _test_credential_and_lazy(resource)
-
-    @pytest.mark.parametrize(
-        "value_fixture",
-        [
-            "scalar",
-            "connection",
-            "sync_contextmanager",
-            "one_shot_resource",
-            "external_resource",
-        ],
-    )
-    def test_resource_metadata[T](self, value_fixture, request):
-        value: ResourceValue[T] | Resource[T] = request.getfixturevalue(value_fixture)
-
-        if isinstance(value, ReusableResource):
-            context = Context().with_resource("value", value)
-            resource = context.resources["value"]
-            _test_metadata(resource, ReusableResource, external=True, reusable=True)
-
-        if isinstance(value, Resource):
-            pass
-        elif isinstance(value, int):
-            resource = Resource(value, cleanup=lambda x: None)
-            _test_metadata(resource, OneShotResource, external=False, reusable=False)
-        elif isinstance(value, CloseableType):
-            resource = Resource(value)
-            _test_metadata(resource, OneShotResource, external=False, reusable=False)
-
-        if isinstance(value, Resource):
-            pass
-        elif isinstance(value, (int, CloseableType)):
-            resource = Resource.from_external(value)
-            _test_metadata(resource, ReusableResource, external=True, reusable=True)
-
-        if is_context_manager(value):
-            resource = Resource.from_lifecycle(value)
-            _test_metadata(resource, OneShotResource, external=False, reusable=False)
-
-            casted = cast(ValueFactory[AbstractContextManager[_Connection]], value)
-            resource = Resource.from_factory(casted, cleanup=cleanup_contextmanager)
-            _test_metadata(resource, ReusableResource, external=False, reusable=True)
-
-    @pytest.mark.parametrize(
-        "value_fixture",
-        [
-            "scalar",
-            "connection",
-            "sync_contextmanager",
-            "one_shot_resource",
-            "external_resource",
-        ],
-    )
-    def test_resource_opens_and_closes[T](self, value_fixture, request):
-        value: ResourceValue[T] | Resource[T] = request.getfixturevalue(value_fixture)
-
-        if isinstance(value, ReusableResource):
-            context = Context().with_resource("value", value)
-            resource = context.resources["value"]
-            _test_open_close(resource)
-
-        if isinstance(value, Resource):
-            pass
-        elif isinstance(value, int):
-            resource = Resource(value, cleanup=lambda x: None)
-            _test_open_close(resource, value)
-        elif isinstance(value, CloseableType):
-            _test_open_close(Resource(value), value)
-
-        if isinstance(value, Resource):
-            pass
-        elif isinstance(value, (int, CloseableType)):
-            resource = Resource.from_external(value)
-            _test_open_close(resource, value)
-
-        if is_context_manager(value):
-            resource = Resource.from_lifecycle(value)
-
-            with pytest.raises(NotImplementedError, match="execution layer"):
-                _test_open_close(resource, value)
-
-    @async_test
-    async def test_resource_async_opens_and_closes[T](
-        self,
-        async_connection: _AsyncConnection,
-        async_contextmanager: AbstractAsyncContextManager[_AsyncConnection],
-    ):
-        await _async_test_open_close(Resource(async_connection), async_connection)
-
-        resource = Resource.from_external(async_connection)
-        await _async_test_open_close(resource, async_connection)
-
-        resource = Resource.from_lifecycle(async_contextmanager)
-
-        with pytest.raises(NotImplementedError, match="execution layer"):
-            await _async_test_open_close(resource, async_contextmanager)
 
 
 class TestResourceEcosystem:
@@ -548,10 +492,10 @@ class TestResourceEcosystem:
 
     def test_bind_resources_missing_binding_raises(self):
         with pytest.raises(TypeError, match="is not bound"):
-            bind_resources("connection", {})
+            bind_resources("connection", freeze_mapping({}))
 
     def test_bind_resources_validates_all_names_before_opening(self):
-        """Name validation must complete before resource acquisition"""
+        """Name validation must complete before resource acquisition."""
         opened: list[str] = []
 
         class _Spy:
@@ -573,10 +517,10 @@ class TestResourceEcosystem:
         external = Resource.from_external(connection)
         owned = Resource.from_lifecycle(sync_gen_factory)
 
-        assert bind_resources("db", {"db": external}).db is connection
+        assert bind_resources("db", freeze_mapping({"db": external})).db is connection
 
         with pytest.raises(NotImplementedError, match="execution layer"):
-            bind_resources("db", {"db": owned})  # pyright: ignore[reportArgumentType]
+            bind_resources("db", freeze_mapping({"db": owned}))  # pyright: ignore[reportArgumentType]
 
         with pytest.raises(TypeError, match="Invalid resource factory"):
             Context().with_resource(  # pyright: ignore[reportCallIssue]
@@ -600,10 +544,11 @@ class TestResourceEcosystem:
 
 class TestResourceImmutability:
     """
-    Resource definitions are structurally immutable. Fields cannot be reassigned
-    and definition-owned containers are read-only, but riko never recursively
-    freezes the arbitrary value a definition references. Do not reintroduce public
-    setters; the execution layer owns mutable resolved state, not the definition.
+    Keep resource definitions structurally immutable.
+
+    Fields cannot be reassigned and definition-owned containers are read-only, but
+    Riko does not recursively freeze arbitrary referenced values. Do not restore
+    public setters; mutable resolved state belongs to the execution layer.
     """
 
     def test_external_value_fields_are_read_only(self, connection: _Connection):

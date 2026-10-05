@@ -1,8 +1,27 @@
+"""Best-effort source formatting for generated Python code."""
+
 from subprocess import CalledProcessError, run
 
 
 def ruff_format(code: str) -> str:
-    """Format generated code with Ruff when available."""
+    """
+    Formats generated Python source with Ruff when available.
+
+    Args:
+
+        code: Python source to format.
+
+    Returns:
+
+        Ruff's formatted source, or the original source when Ruff is unavailable
+        or formatting fails.
+
+    Examples:
+
+        >>> ruff_format("x = 1\\n")
+        'x = 1\\n'
+
+    """
     try:
         result = run(
             ["ruff", "format", "-"],  # noqa: S607

@@ -2,17 +2,18 @@
 
 """Documentation lint helpers for the manage CLI."""
 
+from __future__ import annotations
+
 import re
 import tomllib
 from collections import Counter
-from collections.abc import Iterator
 from glob import glob
 from io import StringIO
 from os.path import basename, dirname, exists, isdir, join
 from pathlib import Path
 from shutil import which
 from subprocess import run
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from riko.base._paths import ROOT_DIR
 
@@ -24,6 +25,10 @@ try:
 except ImportError:
     publish_doctree = None
     nodes = None
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 _TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
 _LINE_ANCHOR_RE = re.compile(r"^L\d")
@@ -43,6 +48,7 @@ _ROOT_MARKDOWN = frozenset(
         "INTERNALS.md",
         "KEY_PATHS.md",
         "MILESTONES.md",
+        "ONBOARDING.md",
         "PHASE_CHECKLISTS.md",
         "ROADMAP.md",
         "RUNTIME_CONTRACT.md",
@@ -68,7 +74,8 @@ _STATUS_BANNER = re.compile(
 _SECTION_ROW = re.compile(r"^\|\s*(\d+)\s*\|", re.MULTILINE)
 _GAMEPLAN_LINK = re.compile(r"gameplans/([A-Za-z0-9._-]+\.md)")
 _NON_AUTHORITATIVE_HEADER = re.compile(
-    r"\b(retired|archived)\b|research/adr notebook|prior-art research|not as a task list",
+    r"\b(retired|archived)\b|research/adr notebook|prior-art research|"
+    r"not as a task list",
     re.IGNORECASE,
 )
 _NON_AUTHORITATIVE_TABLE_LINK = re.compile(r"\]\((?:archive|research)/")
@@ -86,12 +93,7 @@ _TARGET = re.compile(
 
 
 def _slugify(text: str) -> str:
-    r"""
-    Convert a heading to its GitHub anchor slug.
-
-    TODO: Update meza and replace with
-    slugify(text, allow_unicode=True, regex_pattern=r"[^\w-]+")
-    """
+    """Convert a heading to its GitHub anchor slug."""
     lowered = text.strip().lower()
     kept = "".join(c for c in lowered if c.isalnum() or c in {" ", "-", "_"})
     return kept.replace(" ", "-")
@@ -147,7 +149,8 @@ def _render_errors(path: str, doctree: Any) -> list[str]:
         raise RuntimeError("docutils not found")
     else:
         return [
-            f"{path}:{node.get('line', '?')}: [{node['type']}] {node.children[0].astext()}"
+            f"{path}:{node.get('line', '?')}: [{node['type']}] "
+            f"{node.children[0].astext()}"
             for node in doctree.findall(nodes.system_message)
             if node["level"] >= 2
         ]
@@ -358,7 +361,8 @@ def _check_docs() -> int:
 
     if counts != expected:
         problems.append(
-            f"{_ROADMAP}: section index must contain each §0-{_EXPECTED_SECTIONS - 1} once"
+            f"{_ROADMAP}: section index must contain each "
+            f"§0-{_EXPECTED_SECTIONS - 1} once"
         )
 
     linked = set(_GAMEPLAN_LINK.findall(roadmap))
@@ -374,28 +378,32 @@ def _check_docs() -> int:
 
     if offenders := _root_markdown_offenders():
         problems.append(
-            f"{_INTERNAL_DOCS}: root Markdown docs require explicit authority: {offenders}"
+            f"{_INTERNAL_DOCS}: root Markdown docs require explicit "
+            f"authority: {offenders}"
         )
 
     if _LEGACY_INSPIRATION.exists():
         problems.append(
-            f"{_LEGACY_INSPIRATION}: prior-art material belongs under research/inspiration/"
+            f"{_LEGACY_INSPIRATION}: prior-art material belongs under "
+            "research/inspiration/"
         )
 
     if offenders := _authority_namespace_offenders():
         problems.append(
-            f"{_GAMEPLANS}: archive/research material must leave gameplans/: {offenders}"
+            f"{_GAMEPLANS}: archive/research material must leave "
+            f"gameplans/: {offenders}"
         )
 
     if offenders := _non_authoritative_listing_offenders(roadmap):
         problems.append(
-            f"{_ROADMAP}: archive/research documents cannot appear in authority tables: "
-            f"{offenders}"
+            f"{_ROADMAP}: archive/research documents cannot appear in "
+            f"authority tables: {offenders}"
         )
 
     if offenders := _status_banner_offenders():
         problems.append(
-            f"{_GAMEPLANS}: status banners belong only in PHASE_CHECKLISTS.md: {offenders}"
+            f"{_GAMEPLANS}: status banners belong only in "
+            f"PHASE_CHECKLISTS.md: {offenders}"
         )
 
     if offenders := _phase_closure_offenders():

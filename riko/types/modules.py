@@ -1,19 +1,22 @@
+"""Static config contracts for the built-in pipe modules."""
+
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from re import Pattern, RegexFlag
 from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict
 
-from ._compiler import EmbedRef
-from ._io import PathLike
+from ._compiler import EmbedRef, PipeModule
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+    from re import Pattern, RegexFlag
+
     from _typeshed import DataclassInstance
 
-    from ._compiler import PipeModule
+    from ._compiler import CountValues
     from ._enums import CastType, FmtLike, LocationType, SortableCastType
+    from ._io import PathLike
     from ._scalars import BasicValue
 
 
@@ -140,6 +143,7 @@ class SortRawRule(TypedDict, total=False):
     field: Required[Value]
     dir: Value
     type: str
+    default: Value
 
 
 class SortRawConf(TypedDict):
@@ -417,7 +421,7 @@ class UrlBuilderRawConf(TypedDict, total=False):
 
 
 class UrlParseRawConf(TypedDict, total=False):
-    parse_key: Value
+    normalize_key: Value
 
 
 class XpathFetchPageRawConf(TypedDict):
@@ -477,9 +481,11 @@ type AnyModuleRawConf = (
 
 class EmbeddedModule(EmbedRef, total=False):
     """
-    A loop's embedded submodule hoisted to a standalone ``{id, type, conf}``
-    descriptor for code generation. Built by ``compile.gen_modules(embedded=True)``
-    from the loop's compact top-level ``embed`` plus its ``conf``.
+    Describe a loop's embedded submodule for code generation.
+
+    The descriptor is ``{id, type, conf}`` and comes from
+    ``compile.gen_modules(embedded=True)`` using the loop's top-level ``embed`` and
+    ``conf``.
     """
 
     conf: Required[AnyModuleRawConf]
@@ -517,6 +523,7 @@ class SortConfRule:
     dir: Literal["asc", "desc"] = "asc"
     cast: bool = False  # Not implemented
     type: SortableCastType | None = None
+    default: BasicValue | None = None
 
 
 @dataclass
@@ -817,11 +824,11 @@ class UrlBuilderConf(TypedDict, total=False):
 
 
 class UrlParseConf(TypedDict, total=False):
-    parse_key: str
+    normalize_key: str
 
 
 class WriteConf(TypedDict, total=False):
-    url: Required[PathLike]
+    dest: Required[PathLike]
     fmt: FmtLike | None
     mode: str
 
@@ -835,9 +842,8 @@ class XpathFetchPageConf(TypedDict, total=False):
 
 # General
 type ConfDictValues = PipeModule | ParsedParam
-
 type RawConfValues = dict[str, str | int | bool]
-
+type OptionValues = bool | str | CountValues
 
 type ConfValues = (
     BasicValue
@@ -912,6 +918,29 @@ type AnyModuleConf = (
 
 type Conf = AnyModuleConf | AnyModuleRawConf
 
+
+class Embed(TypedDict):
+    """
+    A loop's embedded module: the registered name run once per parent item.
+
+    ``conf`` is the configuration that module parses.
+
+    """
+
+    id: NotRequired[str]
+    conf: Conf
+    name: str
+
+
+class ModuleOptions(TypedDict, total=False):
+    """Call options forwarded to a module callable alongside its configuration."""
+
+    emit: bool
+    assign: str
+    field: str
+    count: CountValues
+
+
 __all__ = [
     "AggregateConf",
     "AnyConfRule",
@@ -920,6 +949,7 @@ __all__ = [
     "CsvConf",
     "CurrencyFormatConf",
     "DateFormatConf",
+    "Embed",
     "ExchangeRateConf",
     "FeedAutoDiscoveryConf",
     "FetchConf",
@@ -938,6 +968,7 @@ __all__ = [
     "ModuleCategory",
     "ModuleClass",
     "ModuleMetadata",
+    "ModuleOptions",
     "ModuleSubtype",
     "ModuleSubtypes",
     "ModuleType",

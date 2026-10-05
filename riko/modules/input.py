@@ -1,35 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Obtains and parses user input.
+Obtains and casts user input.
 
-Use this module any time you need to obtain and parse user input to wire into
-another pipe. Not loopable.
-
-The value is read from ``inputs`` when given, falls back to ``conf["default"]``
-under ``test``, and otherwise prompts on stdin.
-
-Valid Date Values
-
-Obvious date formats:
-
-    Jan. 12, 2001
-    10/21/1958
-    15 JUN 06
-
-Plus some unusual formats as well:
-
-    now
-    today
-    yesterday
-    tomorrow
-    +3 days
-    -10 weeks
-    last year
-    next month
-    1181230100
-
-Note: Relative date/time calculations reference the current UTC time. Timezones
-are not currently supported.
+Values come from ``inputs`` when supplied, from the configured default in test
+mode, and otherwise from stdin.
 
 Examples:
 
@@ -40,9 +14,6 @@ Examples:
         >>> conf = {"prompt": "How old are you?", "type": "int"}
         >>> next(pipe(conf=conf, inputs={"content": "30"}))
         30
-        >>> conf["test"] = True
-        >>> next(pipe(conf=conf))
-        0
 
 Attributes:
 
@@ -51,20 +22,25 @@ Attributes:
 
 """
 
-from logging import Logger
-from typing import Any, cast
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 
-from riko.coercion._configs import InputObjconf
 from riko.coercion.cast import SourceOpts, cast_value
-from riko.types._collections import Inputs
 from riko.types._enums import CastType
-from riko.types._options import Defaults, Opts
-from riko.types._scalars import PrimitiveValue
-from riko.types._streams import Item
 
 from ._decorators import processor
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import InputObjconf
+    from riko.types._collections import Inputs
+    from riko.types._options import Defaults, Opts
+    from riko.types._scalars import PrimitiveValue
+    from riko.types._streams import Item
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {
@@ -113,7 +89,7 @@ def parser(
         30
 
     """
-    if inputs := cast(Inputs | None, kwargs.get("inputs")):
+    if (inputs := cast("Inputs | None", kwargs.get("inputs"))) is not None:
         value = inputs.get(objconf.input_key, objconf.default)
     elif objconf.test or skip or kwargs.get("test"):
         value = objconf.default

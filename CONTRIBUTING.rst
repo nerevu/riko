@@ -282,6 +282,45 @@ doctests show real returned values.
 - Let ``ruff`` format code instead of hand-tuning style around the formatter.
 - Avoid unrelated formatting, renaming, or cleanup in a focused pull request.
 
+Function names
+^^^^^^^^^^^^^^
+
+Name a function by what it does. When choosing among the general-purpose verbs
+below, each row's rule is the test:
+
+=============  =====================================  ===========================================================  ===========================
+Verb           Meaning                                Rule                                                         Example
+=============  =====================================  ===========================================================  ===========================
+``get``        Query or compute a value               No ambient state; doesn't canonicalize or construct          ``get_document_format``
+``parse``      Representation → semantic structure    Malformed input raises; no resolution context                ``parse_document``
+``normalize``  Accepted form → canonical form         Idempotent; output is itself an accepted form                ``normalize_url``
+``resolve``    Pick the effective value               Uses reference/context/fallback; "no match" is not an error  ``resolve_format``
+``require``    Enforce a required value or condition  Raises on failure; never defaults or substitutes             ``require_str``
+``load``       Acquire from outside                   Crosses an external/provider boundary                        ``load_settings``
+``validate``   Check a contract                       Raises if invalid; never transforms or replaces              ``Workflow.validate``
+``build``      Assemble a new artifact                Dependencies explicit; failures may raise                    ``build_conf``
+=============  =====================================  ===========================================================  ===========================
+
+``require`` is the general narrow-or-raise verb, not "``resolve`` that raises":
+``require(resolve(...))`` is one specialization of it, which is why guards such
+as ``require_str`` and ``require_mapping`` use it. ``build`` covers what other
+code bases call ``prepare``, ``convert``, or ``make``.
+
+A ``resolve`` function may still raise. What it must not do is treat absence as an
+error when a fallback is part of its contract: missing input falls back, while
+input that is present but invalid raises. For example, ``resolve_format`` picks an
+explicit format, then the destination's extension, then ``json``, so
+``resolve_format("out", None)`` returns ``json`` while
+``resolve_format(None, "bogus")`` raises ``ValueError``. Raising alone does not
+make a function a ``require``. Name it ``require`` when its purpose is to enforce
+that a needed value exists, and it never falls back to a default.
+
+Specialized verbs are not alternatives to weigh against the table: use ``cast``
+for coercion, ``compile`` for the compiler, ``generate``/``gen_`` for code
+generation and Python generators, ``migrate`` for version migration,
+``serialize``, ``register``, ``read``/``write``/``open``/``close``, and
+``is``/``has`` for predicates.
+
 Adding or changing a built-in module
 ------------------------------------
 
@@ -310,11 +349,21 @@ A built-in module change commonly requires work in several places:
 
        uv run manage codegen --config --names
 
-5. Add or update sync and async tests where both execution paths exist.
-6. Add deterministic examples to the module docstring or cookbook.
-7. Update the FAQ catalog when adding, removing, or materially changing a
+5. Add or update sync and async tests where both execution paths exist. An
+   asynchronous test is a native ``async def`` decorated with ``async_test``
+   from ``tests/__init__.py``. Never wrap a coroutine in a synchronous test
+   body. A test stays a plain ``def`` under ``skipif_issync`` only when the
+   synchronous path is deliberately what it exercises (for example, the
+   synchronous execution driving an async-only module). If the synchronous
+   runner is incidental, drop it and write the test as a native ``async def``.
+6. Import async primitives such as ``fail_after``, ``checkpoint``, or
+   ``async_sleep`` from ``riko.bado._backend``, never from ``anyio`` directly.
+   CI also runs the suite without the async extra, and a module-level
+   ``import anyio`` fails collection before ``async_test`` can skip anything.
+7. Add deterministic examples to the module docstring or cookbook.
+8. Update the FAQ catalog when adding, removing, or materially changing a
    built-in module.
-8. Run the preferred validation sequence above.
+9. Run the preferred validation sequence above.
 
 The configuration drift guard (``tests/internal/test_gen_config.py``) fails when
 the ``<Name>Conf`` contracts and ``riko/coercion/_configs.py`` fall out of sync.

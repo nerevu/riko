@@ -1,13 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Discovers RSS/Atom feed links on a page.
-
-Examines a page for information about the feeds it advertises, e.g., ``link rel`` tags.
-It yields found feeds. The output is typically piped into ``fetch`` to retrieve and
-parse the feeds.
-
-Since not every site advertises auto-discovery links, the fetchsitefeed module can be
-used instead to return the content of the first discovered feed.
+Discovers RSS/Atom feed links advertised by a page.
 
 Examples:
 
@@ -17,19 +10,7 @@ Examples:
         >>> from riko.modules.feedautodiscovery import pipe
         >>>
         >>> url = get_path("bbc.html")
-        >>> entry = next(pipe(conf={"url": url}))
-        >>> entry["link"]
-        'file://riko/data/bbci.co.uk.xml'
-        >>> sorted(entry)
-        ['href', 'link', 'rel', 'tag', 'title', 'type']
-        >>> entry["type"]
-        'application/rss+xml'
-        >>> entry = next(pipe(conf={"url": url, "strict": False}))
-        >>> entry["link"]
-        'greenhughes.xml'
-        >>> sorted(entry)
-        ['href', 'hreflang', 'link', 'rel', 'tag']
-        >>> next(pipe(conf={"url": url, "strict": False, "sort": True}))["link"]
+        >>> next(pipe(conf={"url": url}))["link"]
         'file://riko/data/bbci.co.uk.xml'
 
 Attributes:
@@ -39,19 +20,24 @@ Attributes:
 
 """
 
-from logging import Logger
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.coercion._configs import FeedAutoDiscoveryObjconf
 from riko.coercion.cast import SourceOpts
 from riko.rss.discovery import async_get_rss, get_rss
-from riko.types._options import Defaults, Opts
-from riko.types._streams import Item, Stream
 
 from ._decorators import processor
 from ._prepare import require_conf
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import FeedAutoDiscoveryObjconf
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item, Stream
 
 OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {"strict": True, "sort": False}

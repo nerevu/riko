@@ -1,17 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """
-Filters (includes or excludes) items from a stream.
+Filters items in a stream with one or more comparison rules.
 
-With filter you create rules that compare item elements to values you specify.
-So, for example, you may create a rule that says "permit items where the
-item.description contains 'kittens'". Or a rule that says "omit any items where
-the item.y:published is before yesterday".
-
-A single filter module can contain multiple rules. You can choose whether those
-rules will permit or block items that match those rules. Finally, you can choose
-whether an item must match all the rules, or if it can just match any rule.
-
-Lazy: items are tested and yielded one at a time.
+Rules can include or exclude matching items and can be combined with all/any
+semantics. Items are tested and yielded lazily.
 
 Examples:
 
@@ -28,33 +20,38 @@ Attributes:
 
     OPTS: Operator wrapper options.
     DEFAULTS: Default operator configuration.
-    ALLOW_INF: Whether to allow ``inf``/``-inf`` to compare numerically (default: False)
+    ALLOW_INF: Whether to allow ``inf``/``-inf`` to compare numerically.
 
 """
 
+from __future__ import annotations
+
 import operator as op
 import re
-from collections.abc import Callable, Iterable, Sequence
-from datetime import date
 from decimal import Decimal, InvalidOperation
-from logging import Logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 from dateutil.parser import ParserError
 
-from riko.coercion._freeze import repr_cache
+from riko.coercion._canonical import repr_cache
 from riko.coercion._objectify import Objectify
 from riko.coercion.cast import cast_date, cast_decimal
 from riko.parsing._dotdict import DotDict
 from riko.types._guards import is_mapping
-from riko.types._options import Defaults, Opts
 from riko.types._sentinels import MISSING
-from riko.types._streams import Item, Stream
-from riko.types._wrappers import PipeTuples
-from riko.types.modules import FilterConfRule
 
 from ._decorators import operator
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Sequence
+    from datetime import date
+    from logging import Logger
+
+    from riko.types._options import Defaults, Opts
+    from riko.types._streams import Item, Stream
+    from riko.types._wrappers import SyncPipeTuples
+    from riko.types.modules import FilterConfRule
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
 DEFAULTS: Defaults = {"combine": "and", "permit": True, "stop": False}
@@ -70,11 +67,11 @@ def _ordered[T](
     compare: Callable[[Decimal | str, Decimal | str], bool],
 ) -> Callable[[T, T], bool]:
     """
-    Wraps an ordered comparison so it compares numerically only when *every*
-    operand is a comparable number (or numeric string), and lexicographically
-    otherwise. Coercion is all-or-nothing: a single non-numeric operand (e.g.
-    ``"abc"``) demotes the whole comparison to strings, so a mixed pair never
-    compares a ``Decimal`` against a ``str``.
+    Compare operands numerically only when all are numeric.
+
+    Otherwise comparison is lexicographic. A single non-numeric operand, such as
+    ``"abc"``, demotes the whole comparison to strings and avoids comparing
+    ``Decimal`` with ``str``.
 
     A non-finite operand is a comparable number only for ``inf``/``-inf`` and only
     when the module-level ``ALLOW_INF`` flag is enabled (default off, so those
@@ -93,8 +90,6 @@ def _ordered[T](
 
 
 SWITCH: dict[str, Callable[..., bool]] = {
-    # TODO: add support for all containment semantics
-    # 2 in [1, 2, 3]  or "a" in {"a": 1}
     "after": op.gt,
     "atleast": _ordered(op.ge),
     "atmost": _ordered(op.le),
@@ -144,19 +139,21 @@ def parse_arg[VT](arg: VT, op: str, memoize: bool = False) -> str | date | VT | 
     return func(arg, op)
 
 
-def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
+def evaluate_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
     """
+    Evaluates a single rule against an item.
+
     Examples:
 
         >>> from meza.fntools import Objectify
         >>>
         >>> numeric = Objectify({"field": "x", "op": "atleast", "value": 3})
-        >>> parse_rule(numeric, {"x": 5})
+        >>> evaluate_rule(numeric, {"x": 5})
         True
-        >>> parse_rule(numeric, {})
+        >>> evaluate_rule(numeric, {})
         False
         >>> unknown = Objectify({"field": "x", "op": "bogus", "value": 3})
-        >>> parse_rule(unknown, {"x": 5})
+        >>> evaluate_rule(unknown, {"x": 5})
         False
 
     """
@@ -199,7 +196,10 @@ def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
 
 
 def parser(
-    _: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs: object
+    _: Stream,
+    extract: Sequence[FilterConfRule],
+    tuples: SyncPipeTuples,
+    **kwargs: object,
 ) -> Stream:
     """
     Filters the stream to items that match (or fail to match) every rule.
@@ -266,7 +266,7 @@ def parser(
             msg = f"Invalid combine: '{objconf.combine}'. (Expected 'and' or 'or')"
             logger.error(msg)
         else:
-            result = func(parse_rule(rule, item, **kwargs) for rule in extract)
+            result = func(evaluate_rule(rule, item, **kwargs) for rule in extract)
 
             if (result and objconf.permit) or not (result or objconf.permit):
                 yield item

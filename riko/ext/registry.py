@@ -1,9 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.ext.registry
-~~~~~~~~~~~~~~~~~
-
-Provides registration and resolution for named modules.
+Provides registration and resolution for named modules and workflows.
 
 Resolution order is runtime registration, entry point, then built-in module.
 
@@ -18,17 +15,37 @@ Examples:
         >>>
         >>> registry = ModuleRegistry()
         >>> registry.register(ModuleDefinition(name="double", sync_pipe=double))
-        >>> list(registry.resolve("double")([{"x": 2}]))
+        >>> list(registry.require("double")([{"x": 2}]))
         [{'x': 4}]
 
 Attributes:
 
-    ENTRY_POINT_GROUP: Entry point group scanned for third-party modules.
-    registry: Process-global registry backing ``register`` and pipe resolution.
+    module_registry: Process-global registry backing ``register_module`` and pipe
+        resolution.
 
 """
 
 from riko.definitions.modules import ModuleDefinition
-from riko.runtime._registry import ModuleRegistry, register, reset_registry
+from riko.runtime._module_registry import (
+    ModuleRegistry,
+    register_module,
+    reset_module_registry,
+)
+from riko.runtime._target_registry import (
+    TargetRegistry,
+    register_target,
+    reset_target_registry,
+)
+from riko.runtime._workflows import register_workflow_store, reset_workflow_resolver
 
-__all__ = ["ModuleDefinition", "ModuleRegistry", "register", "reset_registry"]
+__all__ = [
+    "ModuleDefinition",
+    "ModuleRegistry",
+    "TargetRegistry",
+    "register_module",
+    "register_target",
+    "register_workflow_store",
+    "reset_module_registry",
+    "reset_target_registry",
+    "reset_workflow_resolver",
+]

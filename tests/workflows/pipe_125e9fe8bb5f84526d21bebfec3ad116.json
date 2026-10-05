@@ -1,0 +1,181 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-61",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-142",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-142",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-351",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-467",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-61",
+                "port": "in"
+            },
+            "type": "stream"
+        },
+        {
+            "source": {
+                "node": "sw-479",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-467",
+                "port": "in:attrs_1_value"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-142": {
+            "conf": {
+                "path": {
+                    "type": "text",
+                    "value": "items"
+                },
+                "url": {
+                    "subkey": "api",
+                    "type": "url"
+                }
+            },
+            "id": "sw-142",
+            "name": "fetchdata",
+            "options": {
+                "assign": "info",
+                "count": "first",
+                "emit": false
+            },
+            "type": "module"
+        },
+        "sw-351": {
+            "conf": {
+                "rule": [
+                    {
+                        "copy": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "info.user_view_type"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "description"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-351",
+            "name": "rename",
+            "type": "module"
+        },
+        "sw-467": {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "value": {
+                            "terminal": "attrs_1_value",
+                            "type": "text"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-467",
+            "name": "itembuilder",
+            "type": "module"
+        },
+        "sw-479": {
+            "conf": {
+                "debug": {
+                    "type": "text",
+                    "value": ""
+                },
+                "default": {
+                    "type": "text",
+                    "value": "defunkt"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "textinput1"
+                },
+                "position": {
+                    "type": "float",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "Enter Text"
+                }
+            },
+            "id": "sw-479",
+            "name": "input",
+            "type": "module"
+        },
+        "sw-61": {
+            "embed": {
+                "conf": {
+                    "base": {
+                        "type": "text",
+                        "value": "api.github.com_search_users"
+                    },
+                    "ext": {
+                        "type": "text",
+                        "value": "json"
+                    },
+                    "param": [
+                        {
+                            "key": {
+                                "type": "text",
+                                "value": "q"
+                            },
+                            "value": {
+                                "subkey": "title",
+                                "type": "text"
+                            }
+                        }
+                    ]
+                },
+                "name": "urlbuilder"
+            },
+            "id": "sw-61",
+            "name": "loop",
+            "options": {
+                "assign": "api",
+                "count": "all",
+                "emit": false
+            },
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-351",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

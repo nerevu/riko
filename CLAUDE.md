@@ -24,11 +24,12 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 | `riko/types/` | static contracts: streams/items, configs, options, compiler/pipeline/resource/I/O types, enums/wrappers |
 | `riko/coercion/` | casts, `DynamicConf`, **generated** objconf classes, objectification, graph/freeze/normalization helpers |
 | `riko/bado/` | stable async backend/iterator API; transport/file I/O is in `riko/io/` |
-| `riko/definitions/` | immutable/declarative module, resource, target, and write contracts |
+| `riko/definitions/` | immutable/declarative module, resource, target, write, and Workflow v2 graph contracts |
 | `riko/io/` | sync/async URL/file I/O, serialization, re-encoding |
 | `riko/parsing/` | config parsing, `DotDict`, XML/HTML/document parsing |
 | `riko/rss/` | feed discovery, parsing, entry normalization |
-| `riko/runtime/` | executable orchestration: collections, compiler, resolver/registry, pipelines, pub/sub, write sessions; `context.py` + `_resources.py` are the explicit execution sublayer |
+| `riko/execution/` | explicit execution layer: one-shot sync/async executions, lifetime primitives, execution-local resource acquisition, event sink, execution context; `context.py` + `_resources.py` live here |
+| `riko/runtime/` | executable orchestration: collections, compiler, resolver/registry, pipelines, pub/sub, write sessions |
 | `riko/modules/` | built-in pipe implementations; private decorator/preparation/metadata/looping internals; generated discovery names |
 | `riko/ext/` | supported extension-author facade + extension codegen/name helpers; shares the `modules` architecture layer |
 | `riko/cli/` | CLI commands, private generators, docs checks, and import-contract linters; `manage.py` stays a thin composer |
@@ -36,9 +37,12 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 Important concrete locations:
 
 - collections/export/write verbs: `riko/runtime/collections.py`
-- compiler: `riko/runtime/_compile.py` + `_compile_repr.py`
+- graph index for execution planning: `riko/runtime/_graph_index.py`
+- v2 code generator behind `compile_workflow`/`compile-workflow`: `riko/runtime/_codegen.py`
+- CLI workflow-document front door: `riko/cli/_workflow.py`
 - pub/sub: `riko/runtime/_pubsub/`
-- execution context/resources: `riko/runtime/context.py` + `_resources.py`
+- executions/preparation: `riko/execution/_execution.py` + `_prepared.py`; the frozen plan is `riko/runtime/_execution_plan.py`
+- execution context/resources: `riko/execution/context.py` + `_resources.py`
 - declarative write model: `riko/definitions/_write.py` + `_targets.py`
 - async I/O: `riko/io/_async.py`
 - exceptions/API declarations: `riko/base/exceptions.py` + `_api_surface.py`
@@ -56,7 +60,7 @@ base < types < {bado | coercion | definitions} < io < parsing < rss
         {rss | runtime} < modules < api < cli
 ```
 
-`riko.runtime.context` and `riko.runtime._resources` map to `execution`; the rest
+`riko.execution.context` and `riko.execution._resources` map to `execution`; the rest
 of `riko.runtime` maps to `runtime`. `riko.ext` and `riko.modules` share the
 `modules` layer. `riko.__init__` is `api`; `riko._package` is `base`.
 
@@ -84,9 +88,9 @@ owning layer.
 | `_docs/archive/` | superseded historical plans; history only |
 | `_docs/DOCUMENTATION_STANDARD.md` | authoritative docstring/doctest/`__init__.py` standard |
 | `_docs/API_SURFACE.md` | STABLE `riko` / EXTENSION `riko.ext` / private import contract; generated name blocks come from `riko/base/_api_surface.py` |
-| `docs/CHANGES.rst` | user-observable changelog; no private implementation-move journaling |
+| `docs/CHANGES.rst` | user-observable changelog vs the last release; no private implementation-move journaling; an unreleased feature (`Pipeline`) is one "Added" bullet edited in place, never a stream of "gained/now" deltas (`_docs/INTERNALS.md`) |
 | `docs/MIGRATION.rst` | consolidated supported migration guide |
-| `docs/DAG_FORMAT.rst` | bare-bones DAG format + `convert-dag`/`compile-pipe` |
+| `docs/DAG_FORMAT.rst` | bare-bones DAG format + `build-workflow`/`compile-workflow`/`run-pipe` |
 | `README.rst`, `docs/{FAQ,COOKBOOK,INSTALLATION}.rst`, `CONTRIBUTING.rst` | user-facing docs |
 
 ## API Tiers
@@ -109,7 +113,7 @@ falls back to its empty/sync-only behavior. There is no Twisted backend and no
 `RIKO_ASYNC_BACKEND` environment switch.
 
 Async transport/file operations are separate: `async_url_open`, `async_write`, and
-`get_async_temp_file` live under `riko/io/` and are promoted to the stable `riko`
+`async_get_temp_file` live under `riko/io/` and are promoted to the stable `riko`
 surface.
 
 ## Cross-cutting invariants
@@ -120,6 +124,11 @@ new permanent bullet here.
 
 - **`is None` over truthiness** — `0`, `False`, and `""` are valid values. Missing
   data is not the same as a present falsy value.
+- **One canonical identity system** — durable identity (checkpoints, generation,
+  idempotency, fingerprints) uses the shared freezing/encoding layer in
+  `riko/coercion/_freeze.py` (`freeze`/`canonical_bytes`/`digest`), never Python's
+  randomized `hash()` or an ad-hoc encoder. It distinguishes types Python conflates and
+  raises on unsupported/cyclic values; process-local caches may bypass instead of raising.
 - **Immutable prepare** — `Module.prepare()` returns a frozen `PreparedModule` with
   no mutable call cache; call-site options cannot leak across items/concurrent
   invocations.
@@ -150,9 +159,25 @@ new permanent bullet here.
   (`logger.warning` + carry on). Missing required call arguments are programming
   errors and raise; `require_arg` in `riko/modules/_prepare.py` owns that pattern.
 - Docstrings follow `_docs/DOCUMENTATION_STANDARD.md`: annotations own types except
-  the documented pipe conventions; summaries use third-person present; modules keep
-  a `Basic usage::` example; public behavior carries doctest coverage where
-  appropriate.
+  the documented pipe conventions; summaries use third-person present. Public
+  modules (including private files that define re-exported public APIs) keep a useful
+  entry-point example; one example is a soft default, not a cap when distinct modes
+  or a complete workflow need more. Public package docstrings preserve namespace
+  purpose/audience/stability rather than collapsing to generic one-liners.
+- No internal jargon in shipped text. Phase codes (`R4B`/`P10`), gameplan/section
+  refs, `_docs/` paths, and ticket ids never appear in docstrings, comments, test
+  names/`xfail` reasons, `docs/*.rst`, or runtime messages — say what the behavior or
+  pending capability is in plain English; keep phase cross-refs in `_docs/` and here.
+  Full rule: `_docs/DOCUMENTATION_STANDARD.md` (No internal jargon in shipped text).
+- **A `Pipeline` variable is `pipeline`, never `flow`** — in code, tests, examples,
+  docs, gameplans, and drafts alike: `pipeline = Pipeline.from_module(...)`,
+  `pipeline = pipeline.with_execution(...)`, `stream = iter(pipeline)`. `flow` names
+  only a bare `Workflow` (`flow = pipeline.workflow`). Don't copy `flow = ...` from
+  older text; rename it.
+- **Workflow forms go by their type names** — `Workflow`, `RawWorkflow`,
+  `WorkflowDocument` ("workflow document" on first use), `PipeDef` ("pipe definition"
+  on first use), `PipeDag`; old JSON is a "serialized `PipeDef`". Full rule and
+  exemptions: `_docs/DOCUMENTATION_STANDARD.md` (No internal jargon in shipped text).
 - New code is fully typed and documented. Prefer type narrowing over `cast`; narrow
   untyped values once at the boundary and carry the tightened type forward.
 - Guard optional imports with `try/except` and set the backend/feature flag in the
@@ -161,6 +186,35 @@ new permanent bullet here.
   and the overload layout conflict.
 - Keep package-local imports relative; canonical import and architecture rules are
   enforced by `manage lint imports`.
+- **`StrEnum` vs `Literal`.** Use a `StrEnum` when a caller **supplies the value at a
+  Python call site** (a parameter, or a field callers construct) or for a runtime
+  **state** — they get named members and one import instead of magic strings; `.value`
+  is canonical. Use a `Literal[...]` when the value only **arrives as a serialized/JSON
+  string**, is produced internally and merely read/matched (a return tag / discriminant),
+  or is a fixed `ClassVar` tag. Non-string internal markers/states use a plain `Enum`.
+  **Carve-out:** the metadata axes `ModuleType`/`ModuleCategory`/`ModuleSubtype` stay
+  `Literal` even though they appear as `list_modules(...)` args — their canonical form is
+  the bare metadata string; the discovery *tree* is the enum layer.
+- **Function-verb vocabulary.** Name a function by what it does. The eight verbs a
+  developer weighs are defined in the table below; each row's hard rule is the test.
+  `require` is not "`resolve` but raising": it is the general narrow-or-raise /
+  prerequisite-enforcement verb, and `require(resolve(...))` is one specialization of
+  it, which is why the `require_str`/`require_mapping`/`require_options` guard family
+  carries it. `build` absorbs the old `prepare`/`convert`/`make`. Specialized verbs are
+  not alternatives to weigh: `cast` (coercion), `compile` (compiler), `generate`/`gen_`
+  (codegen / Python-generator convention), `migrate` (version migration), `serialize`,
+  `register`, `read`/`write`/`open`/`close`, and `is`/`has` for predicates.
+
+| Verb | Meaning | Raising | Idempotency | Context / lookup | Hard rule |
+|---|---|---|---|---|---|
+| **`get`** | Query or compute a value from explicit semantic inputs | **MAY raise** for invalid input | No requirement | **MUST NOT** acquire external/ambient state | Returns information; does not canonicalize or construct a substantial artifact |
+| **`parse`** | Representation/grammar → semantic structure | Malformed input **MUST raise** | No requirement | **MUST NOT** use resolution context | Input is a representation *of* the output |
+| **`normalize`** | Accepted form → canonical equivalent form | Invalid form **MUST raise** | **MUST** be idempotent | **MUST NOT** use resolution context | Canonical output must itself be an accepted form |
+| **`resolve`** | Determine an effective value/object using reference, context, fallback, or precedence | **MUST NOT use "no match" as an error when absence/fallback is part of the contract**; invalid input may raise | No requirement | **MUST** involve reference/context/fallback/precedence | Chooses what applies rather than canonicalizing the input |
+| **`require`** | Enforce that a required value/object/precondition exists and return it in usable form | Requirement failure **MUST raise** | No general requirement | **MAY** use lookup/context, but need not | **MUST NOT silently default, repair, or substitute** for a missing required value |
+| **`load`** | Acquire through external/ambient/provider boundary | Acquisition failure normally surfaces | No requirement | **MUST** cross an acquisition boundary | Obtains data/state from somewhere outside the supplied semantic value |
+| **`validate`** | Check a contract | Invalid value **MUST raise** | Observationally idempotent | May inspect explicit supporting information | **MUST NOT transform or return a replacement value** |
+| **`build`** | Assemble a new semantic artifact | Construction failure may raise | No requirement | Dependencies should be explicit | Creates a new artifact from semantic components |
 
 ## Project Quirks
 
@@ -168,21 +222,27 @@ new permanent bullet here.
   shell venv should win over the default `.venv`.
 - **Python 3.12+** — `requires-python = ">=3.12"`; use PEP 695 type params and
   modern union syntax.
-- **Doctests are tests** — configured pytest testpaths include source/docs/examples;
-  avoid duplicating the same happy-path example across surfaces.
+- **Doctests are tests** — configured pytest testpaths include source/docs/examples.
+  Before deleting a doc example, confirm its behavior still has an executable owner;
+  before adding a replacement pytest test, check function/class doctests first.
+  Async/Bado doctests are skipped automatically when async support is unavailable,
+  so do not add `issync` fallback branches solely for doctest collection.
 - **`manage`** — `riko.cli.manage:manager` is the Click entry point. `manage.py`
   composes private command modules by reason to change. It collides with
   `mezmorize`'s console script in some install orders; use
   `python -m riko.cli.manage` if the wrong executable wins.
 - **Codegen selectors** — `manage codegen` defaults to config; `--config`,
-  `--names`, `--pipes`, `--api` are additive; `--all` runs all generators.
+  `--names`, `--api` are additive; `--all` runs all generators.
 - **Generated files are never hand-edited** — `riko/coercion/_configs.py`,
-  `riko/modules/_names.py`, `riko/types/_module_ids.py`, generated pipeline fixture
-  trees, and the marked name blocks in `_docs/API_SURFACE.md` all have canonical
-  sources and drift guards. Details: `_docs/INTERNALS.md`.
+  `riko/modules/_names.py`, `riko/types/_module_ids.py`, and the marked name blocks
+  in `_docs/API_SURFACE.md` all have canonical sources and drift guards. The
+  `workflows`/`pyworkflows` fixture trees are not generated; they are
+  `WorkflowDocument`s plus hand-maintained typed probes. Details: `_docs/INTERNALS.md`.
 - **Lint selectors are additive** — bare `manage lint` is Ruff; `manage lint --all`
-  runs the standard lint suite including import contracts. Type verification,
-  pylint strict mode, and distribution checks remain explicit heavyweight checks.
+  runs the whole standard suite (Ruff, RST, `--docs`, `--docstrings`, actionlint,
+  YAML, and all import contracts), so none of those need a separate run. Type
+  verification (`--check-types`/`--verify-types`), pylint strict mode, and
+  distribution checks remain explicit heavyweight checks.
 - **Docs stay consistent by lint** — `manage lint --docs` guards the authoritative
   `_docs/` model; transient scratch material does not belong in authoritative root
   docs.
@@ -192,3 +252,10 @@ new permanent bullet here.
   (serialization) is not `Sinks` (pipe category).
 - **meza is pinned by `pyproject.toml`**; lower-level conversion ownership remains
   with meza where the runtime contract says so.
+- **Tunable knobs live in `riko/base/_config.py`** — static project policy
+  (`LAYER_DEPENDENCIES`/`EXACT_LAYERS`/`PREFIX_LAYERS`, consumed and frozen by the import
+  linter; `SINK_NAMES`; `SUBPIPE_TYPE`; the legacy port/output tokens
+  `INPUT_PORT`/`OUTPUT_PORT`/`OTHER_PORT`/`OUTPUT_MODULE` shared by `_normalize`/
+  `_migrate`) plus a frozen `Settings` with `RIKO_*` env overrides (`load_settings`; a malformed value logs a warning and falls back
+  to the default). Existing names (`DEF_CONNECTION_COUNT`, `TIMEOUT`, `EXCHANGE_API`, …)
+  re-source from `settings`; add operator-tunable defaults here, not as scattered literals.

@@ -1,0 +1,49 @@
+{
+    "edges": [
+        {
+            "source": {
+                "node": "sw-493",
+                "port": "out"
+            },
+            "target": {
+                "node": "sw-500",
+                "port": "in"
+            },
+            "type": "stream"
+        }
+    ],
+    "nodes": {
+        "sw-493": {
+            "id": "sw-493",
+            "name": "pipe:2de0e4517ed76082dcddf66f7b218057",
+            "type": "module"
+        },
+        "sw-500": {
+            "embed": {
+                "conf": {
+                    "listize": {
+                        "type": "bool",
+                        "value": true
+                    }
+                },
+                "name": "termextractor"
+            },
+            "id": "sw-500",
+            "name": "loop",
+            "options": {
+                "assign": "terms",
+                "count": "all",
+                "emit": false,
+                "field": "title"
+            },
+            "type": "module"
+        }
+    },
+    "outputs": {
+        "default": {
+            "node": "sw-500",
+            "port": "out"
+        }
+    },
+    "version": "2"
+}

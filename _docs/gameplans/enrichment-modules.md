@@ -100,6 +100,15 @@ after any coalesce pipe that consumes staging columns.
 `regex` remains the replacement module for solicitation-ID normalization. `rename` remains
 field renaming only. Their docs gain cross-references but no new semantics.
 
+Unowned feature backlog on existing modules (no phase yet):
+
+- `filter`: full containment semantics (`2 in [1, 2, 3]`, `"a" in {"a": 1}`); today
+  `contains`/`doesnotcontain` are case-insensitive substring tests only.
+- `fetchpage`/`xpathfetchpage`: convert relative links to absolute, drop the closing tag
+  when the start token is a stripped HTML tag, and optionally clean HTML with Tidy.
+- `currency` option: decided to stay `str` — it arrives as serialized configuration (so a
+  `Literal` would be the shape), but enumerating ISO 4217 codes is not worth the upkeep.
+
 ## 6b. `geolocate` — retire the stub lookups
 
 Three of `geolocate`'s four `type` values return **fixed placeholder data**, which
@@ -152,19 +161,28 @@ delegates to it rather than carrying a second, weaker copy.
 What remains is that `cast_datetime` timezone should be settable (per call via `conf`,
 or per pipeline via `Context`) with UTC as the default.
 
+The same setting covers `typecast`'s date/datetime casts (it has no timezone option today)
+and the pending `dateformat` timezone setting (strict xfail in `tests/functional/test_examples.py`).
+
+Related backlog: `riko/base/_dateutils.py` builds its abbreviation table from `pytz`
+(`pytz>=2019.3` in `pyproject.toml`); replace that with `zoneinfo`/`tzdata` and drop the
+dependency.
+
 This is additive, so it is not SemVer-gated.
 
 **Resolved:** the epoch-default half of this section. `CAST_SWITCH["date"]` and
 `["datetime"]` now default to `None`, so a miss is detectable, and the two roles
 `default` was serving are separated — `def_itemgetter` converts date sort keys to
-epoch floats and fills a miss with `_iterutils.SORT_FILLER` (`-inf`), which cannot
-collide with a real date the way the epoch did. `dateformat` guards on `None` and
+epoch floats and degrades an uncastable value to `_iterutils.SORT_FILLER` (`-inf`),
+which cannot collide with a real date the way the epoch did. A missing field is not
+compared at all: `build_sort_key` leads the key with a presence flag, and a rule
+`default` opts back into sorting it as a value. `dateformat` guards on `None` and
 returns `""`.
 
 ## 7. Composition
 
 Do not add public `applys()` or `transform_csv()` abstractions. Users compose named modules
-through normal fluent chaining or serialized pipeline definitions. The compiler may fuse
+through normal fluent chaining or `WorkflowDocument`s (workflow documents). The compiler may fuse
 compatible record transforms later, but fusion must preserve events, errors, ordering,
 and module-level observability.
 

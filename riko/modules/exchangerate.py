@@ -27,26 +27,32 @@ Attributes:
 
 """
 
-from collections.abc import Mapping
+from __future__ import annotations
+
 from decimal import Decimal
 from json import load, loads
-from logging import Logger
 from os import getenv
-from typing import Any, TypedDict, cast
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 import pygogo as gogo
 
 from riko.bado._util import async_get, async_json
+from riko.base._config import settings
 from riko.base._constants import ENCODING
-from riko.coercion._configs import ExchangeRateObjconf
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch
 from riko.types._enums import BasicCastType
-from riko.types._options import Defaults, Opts
 
 from ._decorators import processor
 
-EXCHANGE_API = "https://openexchangerates.org/api/latest.json"
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from logging import Logger
+
+    from riko.coercion._configs import ExchangeRateObjconf
+    from riko.types._options import Defaults, Opts
+
+EXCHANGE_API = settings.exchange_api
 PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_ID")}
 
 OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
@@ -66,7 +72,7 @@ class RatesJson(TypedDict):
     rates: Mapping[str, str]
 
 
-def parse_response(rates: Mapping[str, str | float]) -> dict[str, Decimal]:
+def normalize_rates(rates: Mapping[str, str | float]) -> dict[str, Decimal]:
     if rates:
         resp = {k: Decimal(v) for k, v in rates.items() if v}
     else:
@@ -148,11 +154,11 @@ async def async_parser(
         rates = await async_json(r)
     else:
         content = await async_url_read(objconf.url)
-        rates = cast(dict[str, Any], loads(content).get("rates", {}))
+        rates = cast("dict[str, Any]", loads(content).get("rates", {}))
 
     if rates and not same_currency:
         places = Decimal(10) ** -objconf.precision
-        rates = parse_response(rates)
+        rates = normalize_rates(rates)
         rate = calc_rate(base, objconf.currency, places=places, **rates)
 
     return rate
@@ -201,7 +207,7 @@ def parser(
 
             if rates := json.get("rates", {}):
                 places = Decimal(10) ** -objconf.precision
-                rates = parse_response(rates)
+                rates = normalize_rates(rates)
                 rate = calc_rate(base, objconf.currency, places=places, **rates)
 
     return rate

@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.coercion.cast
-~~~~~~~~~
-
 Provides type casting capabilities.
 
 Dispatch is by destination type; ``CAST_SWITCH`` maps each type to its caster
@@ -25,55 +22,52 @@ Attributes:
 
 """
 
+from __future__ import annotations
+
 from ast import literal_eval
-from collections.abc import Callable
 from datetime import date, timedelta
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
 from functools import partial
 from json import loads
-from logging import Logger
 from operator import add, sub
 from time import gmtime, struct_time
-from typing import Literal, cast, overload
+from typing import TYPE_CHECKING, Literal, cast, overload
 from urllib.parse import quote, urlparse
 
 import pygogo as gogo
 
-from riko.base._dateutils import get_local_tz
-from riko.base._locations import AnyLocation, IPAddress, Location
+from riko.base._dateutils import load_local_tz
 from riko.base.currencies import CURRENCY_CODES
 from riko.base.locations import LOCATIONS
-from riko.types._collections import BasicArg
 from riko.types._enums import BasicCastType, CastType, LocationType
-from riko.types._options import Opts
-from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
-from riko.types._wrappers import PreCaster
 
 from ._dates import (
     date_to_tt,
-    ensure_tzinfo,
     get_date,
+    normalize_tzinfo,
     parse_date_string,
     tt_to_datedict,
     tt_to_datetime,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from logging import Logger
+
+    from riko.base._locations import AnyLocation, IPAddress, Location
+    from riko.types._collections import BasicArg
+    from riko.types._options import Opts
+    from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
+    from riko.types._wrappers import PreCaster
+
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 MATH_WORDS = {"seconds", "minutes", "hours", "days", "weeks", "months", "years"}
 TEXT_WORDS = {"last", "next", "week", "month", "year"}
-GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
-    "coordinates": lambda x: lookup_coordinates(x),  # noqa: PLW0108
-    "street_address": lambda x: lookup_street_address(x),  # noqa: PLW0108
-    "ip_address": lambda x: lookup_ip_address(x),  # noqa: PLW0108
-    "currency": lambda x: CURRENCY_CODES.get(x, {}),
-}
-
+KWARG_TYPES = {CastType.DATE, CastType.DATETIME, CastType.LOCATION}
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
-
-KWARG_TYPES = {CastType.DATE, CastType.DATETIME, CastType.LOCATION}
 SourceOpts: Opts = {"ftype": BasicCastType.NONE}
 
 
@@ -282,6 +276,14 @@ def lookup_coordinates(
     return location
 
 
+GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
+    "coordinates": lookup_coordinates,  # noqa: PLW0108
+    "street_address": lookup_street_address,  # noqa: PLW0108
+    "ip_address": lookup_ip_address,  # noqa: PLW0108
+    "currency": lambda x: CURRENCY_CODES.get(x, {}),
+}
+
+
 def cast_location(
     address: BasicValue, loc_type: LocationType = LocationType.STREET_ADDRESS
 ) -> AnyLocation:
@@ -311,13 +313,12 @@ def cast_location(
     result = GEOLOCATERS[loc_type](str(address))
 
     if location := result.get("location"):
-        extra = LOCATIONS.get(str(location), cast(dict[str, str], {}))
-        result = cast(AnyLocation, {**result, **extra})
+        extra = LOCATIONS.get(str(location), cast("dict[str, str]", {}))
+        result = cast("AnyLocation", {**result, **extra})
 
     return result
 
 
-# TODO: inherit from meza
 @overload
 def cast_datetime(  # noqa: E704
     value: DateLike, *, try_local_tz: bool = ...
@@ -401,7 +402,7 @@ def cast_datetime(  # noqa: E302
         count = words[0].lstrip("+-")
         unit = f"{words[-1].rstrip('s')}s" if len(words) == 2 else ""
         textish = set(words).intersection(TEXT_WORDS)
-        now = dt.now(get_local_tz(try_local_tz=try_local_tz))
+        now = dt.now(load_local_tz(try_local_tz=try_local_tz))
         today = now.date()
         named = {
             "today": today,
@@ -425,7 +426,7 @@ def cast_datetime(  # noqa: E302
             _date = _date.date()
 
     if isinstance(_date, dt):
-        _date = ensure_tzinfo(_date, try_local_tz=try_local_tz)
+        _date = normalize_tzinfo(_date, try_local_tz=try_local_tz)
 
     if _date and as_datedict:
         tt = tt or date_to_tt(_date)

@@ -1,16 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-Fetches a web page and yields the nodes matched by an XPath.
+Fetches a page and yields nodes matched by an XPath expression.
 
-Use ``xpath`` to narrow what you extract; e.g., ``"/a"`` for every link,
-``"/img"`` for every image, ``"/rss/channel/item"`` for feed entries. Without
-one the whole document is returned as a single nested item. The result can be
-converted into an RSS/JSON feed or combined with the regex and string builder
-pipes.
-
-The format is taken from the url's extension and defaults to ``html`` for an
-extension-less http url. Set ``html5`` to parse with the HTML5 parser instead
-of HTML4.
+Without an ``xpath``, the whole document is returned as one nested item.
 
 Examples:
 
@@ -31,33 +23,33 @@ Attributes:
 
 """
 
-from logging import Logger
+from __future__ import annotations
+
 from os.path import splitext
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pygogo as gogo
 
 from riko.base._constants import ENCODING
-from riko.coercion._configs import XpathFetchPageObjconf
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close
 from riko.parsing.documents import any2dict
-from riko.types._io import FileLike
 from riko.types._options import Defaults
-from riko.types._streams import Item, Stream
 
 from ._decorators import processor
 from ._prepare import require_conf
 
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from riko.coercion._configs import XpathFetchPageObjconf
+    from riko.types._io import FileLike
+    from riko.types._streams import Item, Stream
+
 OPTS = SourceOpts
 DEFAULTS = Defaults({"encoding": ENCODING, "html5": False})
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
-
-
-# TODO: convert relative links to absolute
-# TODO: remove the closing tag if using an HTML tag stripped of HTML tags
-# TODO: clean html with Tidy
 
 
 async def async_parser(
@@ -167,7 +159,7 @@ def parser(
         ext = "html"
 
     with Fetch(url, encoding=objconf.encoding) as f:
-        content = cast(FileLike, f)
+        content = cast("FileLike", f)
         yield from any2dict(content, ext, objconf.html5, path=objconf.xpath)
 
 
