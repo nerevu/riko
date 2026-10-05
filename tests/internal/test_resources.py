@@ -16,15 +16,16 @@ from typing import TYPE_CHECKING, Literal, cast
 import pytest
 
 from riko.base.warnings import ResourceInterpretationWarning
-from riko.definitions._resources import bind_resources
-from riko.execution._resources import (
+from riko.definitions._context import Context
+from riko.definitions._resource_definition import (
     FactoryKind,
     OneShotResource,
     Resource,
     ReusableResource,
     classify_factory,
 )
-from riko.execution.context import Context
+from riko.definitions._resources import bind_resources
+from riko.execution._plan import aclose_resource, close_resource
 from riko.modules import operator
 from riko.types._collections import freeze_mapping
 from tests import async_test
@@ -137,7 +138,7 @@ def _test_open_close(resource, value: object | None = None):
     if isinstance(value, _Connection):
         assert value.opened
 
-    resource.close(value)
+    close_resource(resource, value)
 
     if isinstance(value, _Connection):
         assert value.closed is not resource.external
@@ -154,7 +155,7 @@ async def _async_test_open_close(resource, value: object | None = None):
     if isinstance(value, _AsyncConnection):
         assert value.opened
 
-    await resource.aclose(value)
+    await aclose_resource(resource, value)
 
     if isinstance(value, _AsyncConnection):
         assert value.closed is not resource.external

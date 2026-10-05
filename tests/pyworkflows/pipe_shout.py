@@ -11,7 +11,7 @@ from riko.runtime._workflows import mark_subpipe
 from riko.types.modules import StrconcatRawConf
 
 if TYPE_CHECKING:
-    from riko.execution.context import Context
+    from riko.definitions._context import Context
 
 
 def pipe(item=None, context: Context | None = None, **_):

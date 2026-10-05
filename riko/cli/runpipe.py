@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING
 from riko.bado._backend import run as async_run
 from riko.base._paths import ROOT_DIR
 from riko.base.exceptions import InvalidPipelineError
+from riko.definitions._context import Context
 from riko.execution._execution import AsyncExecution, SyncExecution
-from riko.execution.context import Context
 from riko.runtime._execution_plan import build_execution_plan
 
 from ._workflow import read_document, require_workflow

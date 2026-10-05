@@ -24,9 +24,9 @@ from riko.base._dateutils import get_tzname
 from riko.base._strutils import truncate_content
 from riko.base.exceptions import UnsupportedModuleError
 from riko.coercion._sequences import listize
+from riko.definitions._context import Context
 from riko.definitions._workflow import ModuleNode
 from riko.execution._execution import SyncExecution
-from riko.execution.context import Context
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._resolver import dispatcher
 from riko.runtime._serialize import parse_document

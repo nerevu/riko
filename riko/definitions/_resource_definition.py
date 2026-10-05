@@ -1,16 +1,13 @@
-"""Executes owned, external, one-shot, and reusable resource lifecycles."""
+"""Declares owned, external, one-shot, and reusable resource definitions."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal, Never, Self, cast, overload
 from warnings import warn
 
-from riko.bado._util import maybe_deferred
 from riko.base.warnings import ResourceInterpretationWarning
-from riko.definitions._resources import VALUE_FACTORY_KINDS, classify_factory
 from riko.types._collections import freeze_mapping
 from riko.types._guards import (
-    is_async_closeable,
     is_async_context_manager,
     is_closeable,
     is_context_manager,
@@ -26,11 +23,14 @@ from riko.types._resource import (
     ValueFactory,
 )
 
+from ._resources import VALUE_FACTORY_KINDS, classify_factory
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from riko.definitions._resource_types import ResolvedValue
-    from riko.types._io import Closeable, SyncCloseable
+    from riko.types._io import Closeable
+
+    from ._resource_types import ResolvedValue
 
 
 class Resource[T]:
@@ -52,7 +52,7 @@ class Resource[T]:
 
     Examples:
 
-        >>> from riko.execution._resources import Resource
+        >>> from riko.definitions._resource_definition import Resource
         >>>
         >>> class _Connection:
         ...    def __init__(self):
@@ -69,7 +69,6 @@ class Resource[T]:
         >>> value = resource.open()
         >>> value
         <..._Connection object at ...>
-        >>> resource.close(value)
         >>> resource.external
         True
         >>> resource.reusable
@@ -365,7 +364,7 @@ class Resource[T]:
 
         Examples:
 
-            >>> from riko.execution._resources import Resource
+            >>> from riko.definitions._resource_definition import Resource
             >>>
             >>> class Client:
             ...     closed = False
@@ -376,9 +375,8 @@ class Resource[T]:
             >>> resource = Resource.from_external(value)
             >>> resource.open() is value
             True
-            >>> resource.close(value)
-            >>> value.closed
-            False
+            >>> resource.external
+            True
 
         """
         cls._reject_non_value(value)
@@ -414,7 +412,7 @@ class Resource[T]:
 
         Examples:
 
-            >>> from riko.execution._resources import (
+            >>> from riko.definitions._resource_definition import (
             ...     FactoryKind,
             ...     OneShotResource,
             ...     Resource,
@@ -487,62 +485,6 @@ class Resource[T]:
             raise NotImplementedError(self._execution_error("entry"))
 
         return self.value
-
-    def close(self, value: T) -> None:
-        """
-        Closes an owned ``handle``.
-
-        A ``cleanup`` override supplies the return value; otherwise the value's own
-        ``close()`` is invoked for its side effect and ``None`` is returned. An
-        external resource is a caller-owned no-op.
-
-        Args:
-
-            value: The resource value to close.
-
-        Raises:
-
-            NotImplementedError: When the resource is a factory/lifecycle
-                declaration; the execution layer tears it down instead.
-
-        """
-        if self._factory is not None:
-            raise NotImplementedError(self._execution_error("teardown"))
-        elif self._external or self._cleanup is False:
-            pass
-        elif self._cleanup is None:
-            cast("SyncCloseable", value).close()
-        else:
-            self._cleanup(value)
-
-    async def aclose(self, value: T) -> None:
-        """
-        Closes an owned ``handle`` preferring ``aclose()`` then ``close()``.
-
-        A ``cleanup`` override supplies the return value; otherwise the value's own
-        ``aclose()``/``close()`` is invoked for its side effect. An external
-        resource is a caller-owned no-op.
-
-        Args:
-
-            value: The resource value to close.
-
-        Raises:
-
-            NotImplementedError: When the resource is a factory/lifecycle
-                declaration; the execution layer tears it down instead.
-
-        """
-        if self._factory is not None:
-            raise NotImplementedError(self._execution_error("teardown"))
-        elif self._external or self._cleanup is False:
-            pass
-        elif self._cleanup is not None:
-            await maybe_deferred(self._cleanup, value)
-        elif is_async_closeable(value):
-            await value.aclose()
-        else:
-            cast("SyncCloseable", value).close()
 
 
 class OneShotResource[T](Resource[T]):

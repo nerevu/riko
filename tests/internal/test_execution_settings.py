@@ -11,7 +11,9 @@ import pytest
 from riko.bado._backend import async_sleep
 from riko.base._config import settings as config
 from riko.base.exceptions import InvalidPipelineError
+from riko.definitions._context import Context
 from riko.definitions._execution import ExecutionSettings
+from riko.definitions._resource_definition import Resource
 from riko.definitions._workflow import ModuleNode, StreamEdge, Workflow
 from riko.definitions.modules import ModuleDefinition
 from riko.execution import _execution
@@ -24,8 +26,6 @@ from riko.execution._mapping import (
     resolve_sync_policy,
 )
 from riko.execution._pools import PoolHandle, get_worker_cnt
-from riko.execution._resources import Resource
-from riko.execution.context import Context
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._module_registry import ModuleRegistry
 from riko.runtime._resolver import ResolverDispatcher

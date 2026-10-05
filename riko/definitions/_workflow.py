@@ -90,6 +90,7 @@ from riko.types.modules import (
     OptionValues,
 )
 
+from ._context import Context
 from ._execution import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from ._resources import normalize_resources
 from ._targets import build_write, normalize_enum, normalize_strs
@@ -98,14 +99,13 @@ from ._write import WriteMode
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Generator, Iterator, Mapping
 
-    from riko.execution._resources import ReusableResource
-    from riko.execution.context import Context
     from riko.types._enums import ExecutorLike, FmtLike, StrLike
     from riko.types._events import EventSink
     from riko.types._resource import LifecycleFactory
     from riko.types._streams import SourceLike
     from riko.types._workflow import EdgeFamily, NodeFamily
 
+    from ._resource_definition import ReusableResource
     from ._resource_types import ResourceDefinition
     from ._write import Destination
 
@@ -989,8 +989,6 @@ class Pipeline(Generic[T]):
             ['db']
 
         """
-        from riko.execution.context import Context  # noqa: PLC0415
-
         base = Context() if self.context is None else self.context
         bound = base.with_resource(  # pyright: ignore[reportCallIssue]
             name,

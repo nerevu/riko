@@ -8,8 +8,8 @@ from pprint import pprint
 from riko import Pipeline
 from riko.base._paths import get_path
 from riko.coercion._dataclass import build_regex_conf_rule
+from riko.definitions._context import Context
 from riko.execution._execution import SyncExecution
-from riko.execution.context import Context
 from riko.runtime._execution_plan import build_execution_plan
 from riko.types.modules import (
     CurrencyFormatConf,

@@ -17,17 +17,19 @@ from typing import TYPE_CHECKING, Literal, cast
 
 from attrs import define, field
 
+from riko.bado._util import maybe_deferred
 from riko.definitions._resources import VALUE_FACTORY_KINDS
+from riko.types._guards import is_async_closeable
 from riko.types._resource import FactoryKind
 from riko.types._sentinels import MISSING
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Generator, Mapping
 
+    from riko.definitions._resource_definition import Resource
+    from riko.types._io import SyncCloseable
     from riko.types._resource import AnyContextManager, Cleanup, ValueFactory
     from riko.types._sentinels import MissingType
-
-    from ._resources import Resource
 
 
 _ASYNC_KINDS = frozenset(
@@ -144,4 +146,65 @@ def build_resource_plan[T](resource: Resource[T]) -> _ResourcePlan[T]:
     return plan
 
 
-__all__ = ["build_resource_plan"]
+def close_resource[T](resource: Resource[T], value: T) -> None:
+    """
+    Closes an owned resource's value.
+
+    A ``cleanup`` override is called with the value. Otherwise the value's own
+    ``close()`` is invoked. An external resource, or one declared with
+    ``cleanup=False``, is left open for its caller.
+
+    Args:
+
+        resource: The owned resource definition.
+        value: The resource value to close.
+
+    Examples:
+
+        >>> from riko.definitions._resource_definition import Resource
+        >>>
+        >>> class Client:
+        ...     closed = False
+        ...     def close(self):
+        ...         self.closed = True
+        >>>
+        >>> owned, external = Client(), Client()
+        >>> close_resource(Resource(owned), owned)
+        >>> close_resource(Resource.from_external(external), external)
+        >>> owned.closed, external.closed
+        (True, False)
+
+    """
+    if resource.external or resource.cleanup is False:
+        pass
+    elif resource.cleanup is None:
+        cast("SyncCloseable", value).close()
+    else:
+        resource.cleanup(value)
+
+
+async def aclose_resource[T](resource: Resource[T], value: T) -> None:
+    """
+    Closes an owned resource's value with a preference of ``aclose()`` over ``close()``.
+
+    A ``cleanup`` override is called (and awaited when async) with the value.
+    Otherwise the value's own ``aclose()`` or ``close()`` is invoked. An external
+    resource, or one declared with ``cleanup=False``, is left open for its caller.
+
+    Args:
+
+        resource: The owned resource definition.
+        value: The resource value to close.
+
+    """
+    if resource.external or resource.cleanup is False:
+        pass
+    elif resource.cleanup is not None:
+        await maybe_deferred(resource.cleanup, value)
+    elif is_async_closeable(value):
+        await value.aclose()
+    else:
+        cast("SyncCloseable", value).close()
+
+
+__all__ = ["aclose_resource", "build_resource_plan", "close_resource"]

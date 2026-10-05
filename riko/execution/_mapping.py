@@ -31,12 +31,12 @@ if TYPE_CHECKING:
     from multiprocessing.pool import ApplyResult
     from types import TracebackType
 
+    from riko.definitions._context import Context
     from riko.definitions._execution import ExecutionSettings
     from riko.runtime._execution_plan import ExecutionPlan
 
     from ._pools import AnyPool, PoolHandle
     from ._prepared import PreparedNode
-    from .context import Context
 
 __all__ = [
     "AsyncPolicy",

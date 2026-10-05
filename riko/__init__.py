@@ -19,8 +19,8 @@ from riko.base.exceptions import (
     UnsupportedModuleError,
     UnsupportedPipelineError,
 )
+from riko.definitions._context import Context
 from riko.definitions._workflow import Node, Pipeline, Workflow, WorkflowLike
-from riko.execution.context import Context
 from riko.ext.codegen import list_modules
 from riko.io._async import async_get_temp_file, async_url_open, async_write
 from riko.modules._metadata import describe_module, get_module_metadata

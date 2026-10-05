@@ -27,14 +27,15 @@ from riko.types._collections import FrozenMap, freeze_mapping
 from riko.types._enums import ExecutionMode
 from riko.types._guards import is_lifecycle_factory
 
-from ._resources import Resource, ReusableResource
+from ._resource_definition import Resource, ReusableResource
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from riko.definitions._resource_types import ResourceDefinition, ReusableResources
     from riko.types._collections import Inputs
     from riko.types._resource import LifecycleFactory
+
+    from ._resource_types import ResourceDefinition, ReusableResources
 
 INPUT_MODES = {ExecutionMode.DESCRIBE_INPUTS, ExecutionMode.DESCRIBE}
 DEPENDENCY_MODES = {ExecutionMode.DESCRIBE_DEPENDENCIES, ExecutionMode.DESCRIBE}

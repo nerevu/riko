@@ -12,6 +12,7 @@ from riko.bado import _backend
 from riko.bado._backend import async_open, asyncify
 from riko.bado.itertools import as_async
 from riko.base._constants import ENCODING
+from riko.definitions._resource_definition import OneShotResource, Resource
 from riko.definitions._targets import FileTarget, build_write
 from riko.definitions._write import (
     AsyncWriteSession,
@@ -21,7 +22,6 @@ from riko.definitions._write import (
     WriteMode,
     WriteResult,
 )
-from riko.execution._resources import OneShotResource, Resource
 from riko.io._reencode import IterStringIO, Reencoder, reencode
 from riko.io._serialization import serialize_records
 from riko.types._enums import FmtLike, Formats, StrLike
@@ -690,7 +690,7 @@ def mint_write_resource(
 
     Examples:
 
-        >>> from riko.execution._resources import OneShotResource
+        >>> from riko.definitions._resource_definition import OneShotResource
         >>>
         >>> resource = mint_write_resource("report.csv")
         >>> isinstance(resource, OneShotResource)

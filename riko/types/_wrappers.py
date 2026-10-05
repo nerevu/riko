@@ -35,7 +35,7 @@ from ._streams import (
 
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.execution.context import Context
+    from riko.definitions._context import Context
 
     from ._scalars import NumLike, PrimitiveValue
     from ._streams import Cascade, Feed, Item, Items

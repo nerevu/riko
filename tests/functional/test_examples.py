@@ -9,8 +9,8 @@ from importlib import import_module
 import pytest
 
 from riko.base._paths import ROOT_DIR
+from riko.definitions._context import Context
 from riko.execution._execution import SyncExecution
-from riko.execution.context import Context
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._serialize import parse_document
 from tests import async_test

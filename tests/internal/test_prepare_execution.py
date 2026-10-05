@@ -10,6 +10,8 @@ from riko.bado._backend import fail_after
 from riko.bado._util import maybe_deferred
 from riko.bado.itertools import as_async
 from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
+from riko.definitions._context import Context
+from riko.definitions._resource_definition import Resource
 from riko.definitions._workflow import (
     CacheNode,
     ModuleNode,
@@ -26,8 +28,6 @@ from riko.execution._adapt import (
 )
 from riko.execution._execution import AsyncExecution, SyncExecution
 from riko.execution._prepared import ExecMode, PreparedNode
-from riko.execution._resources import Resource
-from riko.execution.context import Context
 from riko.modules._decorators import processor, splitter
 from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop_pipe

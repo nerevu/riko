@@ -18,6 +18,7 @@ import pytest
 
 from riko import Pipeline
 from riko.bado import as_async
+from riko.definitions._resource_definition import FactoryKind, OneShotResource
 from riko.definitions._targets import (
     FileTarget,
     build_write,
@@ -28,7 +29,6 @@ from riko.definitions._targets import (
 )
 from riko.definitions._workflow import WriteNode
 from riko.definitions._write import WriteCapabilities, WriteMode, WriteResult
-from riko.execution._resources import FactoryKind, OneShotResource
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail
 from riko.runtime import _write_session

@@ -21,9 +21,9 @@ import pytest
 
 from riko.base._strutils import pythonise
 from riko.base.exceptions import InvalidPipelineError
+from riko.definitions._context import Context
 from riko.definitions._workflow import ModuleNode, Pipeline, Workflow, WriteNode
 from riko.execution._execution import AsyncExecution, SyncExecution
-from riko.execution.context import Context
 from riko.runtime._codegen import compile_workflow
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._normalize import normalize_workflow

@@ -10,8 +10,8 @@ import pytest
 from riko.bado import async_sleep
 from riko.bado._backend import Event, create_task_group
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
+from riko.definitions._resource_definition import Resource
 from riko.execution import AsyncExecution, SyncExecution
-from riko.execution._resources import Resource
 from riko.io import async_url_open
 from tests import async_test
 from tests._loopback import loopback_url

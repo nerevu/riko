@@ -67,7 +67,13 @@ from ._mapping import (
     resolve_sync_policy,
     run_item,
 )
-from ._plan import _ResourcePlan, _ResourceStrategy, build_resource_plan
+from ._plan import (
+    _ResourcePlan,
+    _ResourceStrategy,
+    aclose_resource,
+    build_resource_plan,
+    close_resource,
+)
 from ._pools import open_pool
 from ._prepared import ExecMode, PreparedNode
 
@@ -79,14 +85,14 @@ if TYPE_CHECKING:
     from anyio.abc import TaskGroup
     from anyio.from_thread import BlockingPortal
 
+    from riko.definitions._context import Context
+    from riko.definitions._resource_definition import Resource
     from riko.runtime._execution_plan import ExecutionPlan
     from riko.types._compiler import GraphEdge
     from riko.types._events import EventSink
     from riko.types._sentinels import MissingType
     from riko.types._wrappers import AsyncModuleWrapper, AysncFunc, SyncModuleWrapper
 
-    from ._resources import Resource
-    from .context import Context
 
 type SyncExecSteps[T] = dict[str, Iterator[T]]
 type AsyncExecSteps[T] = dict[str, AsyncIterator[T]]
@@ -581,7 +587,7 @@ class SyncExecution[T](_BaseExecution):
             value: object = plan.value
         elif plan.strategy is _ResourceStrategy.OWNED:
             value = plan.value
-            self.callback(plan.resource.close, value)
+            self.callback(close_resource, plan.resource, value)
         elif plan.strategy is _ResourceStrategy.VALUE_FACTORY:
             value = self._call_factory(plan)
         else:
@@ -1150,7 +1156,8 @@ class AsyncExecution[T](_BaseExecution):
         elif plan.strategy is _ResourceStrategy.OWNED:
             value = plan.value
             is_async = _owned_teardown_is_async(plan.resource, value)
-            teardown = plan.resource.aclose if is_async else plan.resource.close
+            close = aclose_resource if is_async else close_resource
+            teardown = partial(close, plan.resource)
             self._register_teardown(teardown, value, is_async=is_async)
         elif plan.strategy is _ResourceStrategy.VALUE_FACTORY:
             value = await self._acall_factory(plan)

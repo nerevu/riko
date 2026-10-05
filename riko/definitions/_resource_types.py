@@ -10,7 +10,7 @@ from riko.types._io import Closeable
 from riko.types._resource import AnyContextManager, LifecycleFactory
 
 if TYPE_CHECKING:
-    from riko.execution._resources import ReusableResource
+    from ._resource_definition import ReusableResource
 
 
 type ReusableResources = FrozenMap[ReusableResource[Any]]

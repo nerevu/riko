@@ -35,8 +35,8 @@ from riko.bado.itertools import (
     async_map_ordered_stream,
 )
 from riko.base._iterutils import dispatch
+from riko.definitions._context import Context
 from riko.definitions._resources import bind_resources, normalize_binding
-from riko.execution.context import Context
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
 from riko.types._compiler import CountValues, EmbedKwargs
