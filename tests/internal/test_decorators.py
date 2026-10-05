@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 from riko.bado.itertools import as_async
+from riko.definitions._context import Context
 from riko.ext import operator, processor, splitter
 from riko.modules.forever import async_pipe as async_forever
 from riko.modules.split import async_pipe as async_split
@@ -39,7 +40,7 @@ from riko.types._wrappers import (
 from tests import async_test
 
 if TYPE_CHECKING:
-    from riko.types._streams import Item
+    from riko.types._streams import Cascade, Item, Stream
 
 
 def _create_wrapper(name: str, *, iscoro: bool, isasync: bool) -> ProcessorWrapper:
@@ -284,6 +285,26 @@ async def test_async_splitter_accepts_an_async_input_stream() -> None:
     branches = async_split(source)  # pyright: ignore[reportArgumentType]
     first = await anext(branches)
     assert next(first) == {"x": 1}
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="owned by the pending execution-owned split fan-out work: the splitter "
+    "wrapper does not resolve an execution context, so its parser receives the raw "
+    "context object instead of the context's inputs",
+)
+def test_splitter_resolves_the_execution_context_for_its_parser() -> None:
+    seen: dict[str, object] = {}
+
+    @splitter(objectify=False)
+    def pipe(stream: Stream, _: object, __: object, **kwargs: object) -> Cascade:
+        seen.update(kwargs)
+        return iter([stream])
+
+    context = Context(inputs={"name": "riko"})
+    list(pipe(iter([{"x": 1}]), context=context))
+    assert "context" not in seen
+    assert seen.get("inputs") == {"name": "riko"}
 
 
 @pytest.mark.timeout(10)
