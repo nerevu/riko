@@ -10,6 +10,8 @@ from riko.parsing.documents import IS_LXML
 from riko.runtime._pubsub import reset_pubsub
 from riko.runtime._workflows import register_workflow_store, reset_workflow_resolver
 
+pytest_plugins = ["pytester", "tests._timeouts"]
+
 WORKFLOW_DIR = ROOT_DIR / "tests" / "workflows"
 
 

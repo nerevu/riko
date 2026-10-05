@@ -11,7 +11,7 @@ import pytest
 from feedparser import FeedParserDict
 
 from riko.base._dateutils import TZINFOS
-from riko.base._paths import get_path
+from riko.base._paths import ROOT_DIR, get_path
 from riko.coercion._canonical import repr_cache
 from riko.coercion._dates import date_to_tt, parse_date_string, tt_to_datedict
 from riko.io._sync import Fetch
@@ -268,3 +268,40 @@ class TestPrepare:
         conf = cast("Conf", {"n": value})
         pieces, _ = build_conf(conf, {}, {"extract": "n", "listize": True})
         assert pieces == expected
+
+
+_TIMEOUT_SUITE = """
+import time
+
+import pytest
+
+
+@pytest.mark.timeout(0.5, method="signal")
+@pytest.mark.xfail(strict=True, reason="never ends")
+def test_hangs():
+    time.sleep(5)
+
+
+@pytest.mark.xfail(strict=True, reason="known defect")
+def test_fails():
+    assert False
+"""
+
+
+class TestTimeouts:
+    def test_a_timeout_fails_an_xfail_test(
+        self, pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """
+        An xfail test that ends by its timeout is reported as failed.
+
+        Runs in a subprocess so the signal never fires under this process's
+        coverage tracer.
+        """
+        monkeypatch.setenv("PYTHONPATH", str(ROOT_DIR))
+        pytester.makepyfile(_TIMEOUT_SUITE)
+        result = pytester.runpytest_subprocess(
+            "-p", "tests._timeouts", "-p", "no:cacheprovider", "-o", "addopts="
+        )
+        result.assert_outcomes(failed=1, xfailed=1)
+        result.stdout.fnmatch_lines(["*test_hangs hit its timeout*never ends*"])

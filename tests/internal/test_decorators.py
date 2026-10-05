@@ -18,7 +18,7 @@ The combination tables below exercise every input to that expression.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Awaitable
+from collections.abc import AsyncIterator, Awaitable, Iterator
 from inspect import isawaitable, iscoroutinefunction
 from typing import TYPE_CHECKING, cast
 
@@ -27,7 +27,6 @@ import pytest
 from riko.bado.itertools import as_async
 from riko.definitions._context import Context
 from riko.ext import operator, processor, splitter
-from riko.modules.forever import async_pipe as async_forever
 from riko.modules.split import async_pipe as async_split
 from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.modules.truncate import async_pipe as async_truncate
@@ -307,16 +306,28 @@ def test_splitter_resolves_the_execution_context_for_its_parser() -> None:
     assert seen.get("inputs") == {"name": "riko"}
 
 
-@pytest.mark.timeout(10)
 @pytest.mark.xfail(
     strict=True,
     reason="owned by the pending Feed-native streaming migration of truncate and the "
     "final legacy-seam cleanup: an async operator whose parser is synchronous "
-    "materializes its whole async input before parsing, so truncate over an "
-    "endless async source never yields its first item",
+    "materializes its whole async input before parsing, so truncate pulls its "
+    "entire source before yielding its first item",
 )
 @async_test
-async def test_async_truncate_stays_lazy_over_an_endless_source() -> None:
-    source = as_async(await async_forever(None, conf={}))
-    stream = async_truncate(source, conf={"count": 3})
-    assert await anext(stream) == {"forever": True}
+async def test_async_truncate_stays_lazy_over_a_long_source() -> None:
+    """
+    Truncate yields its first item without pulling past its count.
+
+    The source is long but finite so the test ends on its own: an endless source
+    would rely on a timeout interrupting the materialization.
+    """
+    pulled: list[int] = []
+
+    def source() -> Iterator[Item]:
+        for i in range(10_000):
+            pulled.append(i)
+            yield {"i": i}
+
+    stream = async_truncate(as_async(source()), conf={"count": 3})
+    assert await anext(stream) == {"i": 0}
+    assert len(pulled) <= 3
