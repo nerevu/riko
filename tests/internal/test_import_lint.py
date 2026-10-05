@@ -70,6 +70,22 @@ def test_type_checking_is_exempt(tmp_path: Path) -> None:
     assert not generate_report(root).violations
 
 
+def test_function_local_upward_import_fails(tmp_path: Path) -> None:
+    root = tmp_path / "riko"
+    write(root, "__init__.py", "")
+    write(root, "types/__init__.py", "")
+    write(
+        root,
+        "types/a.py",
+        "def load():\n    from riko.runtime.b import thing\n\n    return thing\n",
+    )
+    write(root, "runtime/__init__.py", "")
+    write(root, "runtime/b.py", "thing = 1\n")
+    report = generate_report(root)
+    assert len(report.violations) == 1
+    assert report.violations[0].target_label == "runtime"
+
+
 def test_unclassified_fails(tmp_path: Path) -> None:
     root = tmp_path / "riko"
     write(root, "__init__.py", "")

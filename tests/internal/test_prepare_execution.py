@@ -12,13 +12,7 @@ from riko.bado.itertools import as_async
 from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
 from riko.definitions._context import Context
 from riko.definitions._resource_definition import Resource
-from riko.definitions._workflow import (
-    CacheNode,
-    ModuleNode,
-    Pipeline,
-    StreamEdge,
-    Workflow,
-)
+from riko.definitions._workflow import CacheNode, ModuleNode, StreamEdge, Workflow
 from riko.definitions.modules import ModuleDefinition
 from riko.execution._adapt import (
     adapt_embed_for_async,
@@ -42,6 +36,7 @@ from riko.runtime._module_registry import (
     register_module,
     reset_module_registry,
 )
+from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import ResolverDispatcher
 from riko.runtime._workflows import mark_subpipe, workflow_resolver
 from riko.types._enums import BasicCastType

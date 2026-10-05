@@ -15,11 +15,11 @@ from riko.bado._backend import async_sleep, isasync
 from riko.bado._backend import run as async_run
 from riko.bado.itertools import async_map
 from riko.base._paths import get_path
-from riko.definitions._workflow import Pipeline
 from riko.execution._pools import get_chunksize, get_worker_cnt
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
 from riko.runtime._normalize import normalize_workflow
+from riko.runtime._pipeline import Pipeline
 from riko.types._rss import RSSEntry
 from riko.types.modules import FetchConf
 

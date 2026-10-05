@@ -265,16 +265,12 @@ def generate_report(
                     nodes = type_only[source_layer]
                     remaining = _gen_remaining(source_layer, nodes, dependencies)
                     type_only[source_layer] = set(remaining)
-                elif ref.kind == "local":
-                    local_only[source_layer].add(target_layer)
-                    nodes = local_only[source_layer]
-                    remaining = _gen_remaining(source_layer, nodes, dependencies)
-                    local_only[source_layer] = set(remaining)
                 else:
-                    observed[source_layer].add(target_layer)
-                    nodes = observed[source_layer]
+                    graph = local_only if ref.kind == "local" else observed
+                    graph[source_layer].add(target_layer)
+                    nodes = graph[source_layer]
                     remaining = _gen_remaining(source_layer, nodes, dependencies)
-                    observed[source_layer] = set(remaining)
+                    graph[source_layer] = set(remaining)
                     reachable = descendants(source_layer, dependencies)
 
                     if target_layer not in reachable:

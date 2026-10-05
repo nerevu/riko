@@ -9,8 +9,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from riko.base.exceptions import InvalidPipelineError
-from riko.definitions._workflow import ModuleNode, Pipeline
+from riko.definitions._workflow import ModuleNode
 from riko.runtime._migrate import parse_dag
+from riko.runtime._pipeline import Pipeline
 from riko.types._workflow import Endpoint
 from riko.types.modules import TruncateRawConf
 from tests import TESTS_DIR

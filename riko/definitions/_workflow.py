@@ -1,19 +1,25 @@
 # vim: sw=4:ts=4:expandtab
 """
-The immutable ``Workflow`` graph model and the public ``Pipeline`` wrapper.
+The immutable ``Workflow`` graph model and the ``PipelineDefinition`` around it.
 
 Six closed node families (``ModuleNode``/``ReadNode``/``WriteNode``/``CacheNode``/
 ``ActionNode``/``SubscribeNode``) and two edge families (``StreamEdge``/``PublishEdge``)
-compose a ``Workflow`` graph, wrapped by the public immutable ``Pipeline``. This is
-the structural definition surface only: nodes carry declarative intent, never execution
-state, and no node runs here. ``WriteNode`` and ``ActionNode`` carry a ``backend`` and
-serialization ``fmt`` rather than a live resource or write session.
+compose a ``Workflow`` graph.  by the  This is the structural immutable definition that
+wraps the nodes and edges.
+
+Nodes carry declarative intent, never execution state, and no node runs here.
+``WriteNode`` and ``ActionNode`` carry a ``backend`` and serialization ``fmt`` rather
+than a live resource or write session.
 
 Examples:
 
     Basic usage::
 
-        >>> from riko.definitions._workflow import ModuleNode, Pipeline, Workflow
+        >>> from riko.definitions._workflow import (
+        ...     ModuleNode,
+        ...     PipelineDefinition,
+        ...     Workflow,
+        ... )
         >>> from riko.types._workflow import Endpoint
         >>>
         >>> node = ModuleNode(id="fetch-1", name="fetch")
@@ -23,7 +29,7 @@ Examples:
         ...     outputs={"default": Endpoint(node.id, "out")},
         ...     inputs={},
         ... )
-        >>> Pipeline(workflow).workflow.outputs["default"]
+        >>> PipelineDefinition(workflow).workflow.outputs["default"]
         Endpoint(node='fetch-1', port='out')
 
 """
@@ -31,7 +37,6 @@ Examples:
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from contextlib import aclosing, closing
 from functools import partial
 from inspect import isawaitable
 from itertools import chain
@@ -42,6 +47,7 @@ from typing import (
     ClassVar,
     Generic,
     Literal,
+    Self,
     TypeGuard,
     cast,
     overload,
@@ -50,7 +56,7 @@ from typing import (
 from attrs import define, evolve, field, fields
 from typing_extensions import TypeVar
 
-from riko.base.exceptions import EmptyPipelineError, InvalidPipelineError
+from riko.base.exceptions import InvalidPipelineError
 from riko.types._collections import (
     FreezeMapping,
     FrozenConf,
@@ -97,7 +103,7 @@ from ._targets import build_write, normalize_enum, normalize_strs
 from ._write import WriteMode
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Generator, Iterator, Mapping
+    from collections.abc import Callable, Iterator, Mapping
 
     from riko.types._enums import ExecutorLike, FmtLike, StrLike
     from riko.types._events import EventSink
@@ -147,7 +153,7 @@ _normalize_mode = partial(normalize_enum, WriteMode, default=WriteMode.REPLACE)
 def _is_source(value: object) -> TypeGuard[SourceLike]:
     """A seed on the left of ``|``: a stream, an async stream, or an awaitable."""
     seedlike = is_streamlike(value) or isawaitable(value)
-    return seedlike and not isinstance(value, Pipeline)
+    return seedlike and not isinstance(value, PipelineDefinition)
 
 
 def _is_pipe_spec(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
@@ -617,15 +623,18 @@ _optional_workflow = narrow_def_from_require(_require_workflow, default=_EMPTY_S
 
 
 @define(frozen=True, slots=True)
-class Pipeline(Generic[T]):
+class PipelineDefinition(Generic[T]):
     """
-    A public immutable, runnable wrapper around a ``Workflow``.
+    An immutable, composable definition of a pipeline around a ``Workflow``.
 
-    ``Pipeline`` is the stable application surface. Iterating it yields its default
-    output stream which is generic over T.
+    It carries everything a run needs (the graph, a seeded source, the context, and
+    the execution settings) and composes new definitions, but never runs. The stable
+    ``Pipeline`` adds running; every composition method returns the caller's own
+    class, so composing a ``Pipeline`` yields a ``Pipeline``.
 
-    ``Pipeline(workflow)`` wraps a built graph. ``Pipeline.from_module(name)`` seeds a
-    module by name, ``Pipeline(source=items)`` seeds a source, and ``Pipeline()``
+    ``PipelineDefinition(workflow)`` wraps a built graph,
+    ``PipelineDefinition.from_module(name)`` seeds a module by name,
+    ``PipelineDefinition(source=items)`` seeds a source, and ``PipelineDefinition()``
     starts an empty template to compose with ``|``. A source is one item, an item
     stream, an async item stream, or an awaitable resolving to one of those; each
     execution resolves it at the same boundary.
@@ -643,12 +652,13 @@ class Pipeline(Generic[T]):
 
     Examples:
 
-        >>> pipeline = Pipeline.from_module("fetch").pipe("sort", conf={"combine": "a"})
-        >>> sorted(pipeline.workflow.nodes)
+        >>> fetch = PipelineDefinition.from_module("fetch")
+        >>> definition = fetch.pipe("sort", conf={"combine": "a"})
+        >>> sorted(definition.workflow.nodes)
         ['fetch-1', 'sort-1']
-        >>> pipeline.workflow.outputs["default"]
+        >>> definition.workflow.outputs["default"]
         Endpoint(node='sort-1', port='out')
-        >>> Pipeline(source=[{"x": 1}]).source
+        >>> PipelineDefinition(source=[{"x": 1}]).source
         [{'x': 1}]
 
     """
@@ -668,7 +678,7 @@ class Pipeline(Generic[T]):
         conf: Conf | None = None,
         options: ModuleOptions | None = None,
         embed: Embed | None = None,
-    ) -> Pipeline:
+    ) -> Self:
         """
         Builds a pipeline seeded with a single named module node.
 
@@ -688,11 +698,11 @@ class Pipeline(Generic[T]):
 
         Examples:
 
-            >>> fetch = Pipeline.from_module("fetch")
-            >>> pipeline = fetch.pipe("sort", conf={"combine": "a"})
-            >>> sorted(pipeline.workflow.nodes)
+            >>> fetch = PipelineDefinition.from_module("fetch")
+            >>> definition = fetch.pipe("sort", conf={"combine": "a"})
+            >>> sorted(definition.workflow.nodes)
             ['fetch-1', 'sort-1']
-            >>> pipeline.workflow.outputs["default"]
+            >>> definition.workflow.outputs["default"]
             Endpoint(node='sort-1', port='out')
 
         """
@@ -701,7 +711,7 @@ class Pipeline(Generic[T]):
         )
         return cls(workflow)
 
-    def _derive(self, workflow: Workflow, source: SourceLike | None) -> Pipeline:
+    def _derive(self, workflow: Workflow, source: SourceLike | None) -> Self:
         """Builds a sibling pipeline over a derived workflow and source."""
         return evolve(self, workflow=workflow, source=source)
 
@@ -712,7 +722,7 @@ class Pipeline(Generic[T]):
         conf: FrozenConf | Conf | None = None,
         options: FrozenOptions | ModuleOptions | None = None,
         embed: Embed | None = None,
-    ) -> Pipeline:
+    ) -> Self:
         """
         Chains the next module by name by re-pointing the default output to it.
 
@@ -732,19 +742,19 @@ class Pipeline(Generic[T]):
 
         Examples:
 
-            >>> fetch = Pipeline.from_module("fetch")
-            >>> pipeline = fetch.pipe("sort", conf={"combine": "a"})
-            >>> sorted(pipeline.workflow.nodes)
+            >>> fetch = PipelineDefinition.from_module("fetch")
+            >>> definition = fetch.pipe("sort", conf={"combine": "a"})
+            >>> sorted(definition.workflow.nodes)
             ['fetch-1', 'sort-1']
-            >>> pipeline.workflow.outputs["default"]
+            >>> definition.workflow.outputs["default"]
             Endpoint(node='sort-1', port='out')
             >>> delimiter = {"type": "text", "value": " "}
             >>> embed = {"name": "tokenizer", "conf": {"delimiter": delimiter}}
-            >>> pipeline = Pipeline.from_module("itembuilder")
-            >>> pipeline = pipeline.loop(embed=embed, options={"emit": True})
-            >>> pipeline.workflow.nodes["loop-1"].embed["name"]
+            >>> builder = PipelineDefinition.from_module("itembuilder")
+            >>> looped = builder.loop(embed=embed, options={"emit": True})
+            >>> looped.workflow.nodes["loop-1"].embed["name"]
             'tokenizer'
-            >>> dict(pipeline.workflow.nodes["loop-1"].options)
+            >>> dict(looped.workflow.nodes["loop-1"].options)
             {'emit': True}
 
         """
@@ -765,7 +775,7 @@ class Pipeline(Generic[T]):
         conf: FrozenConf | Conf | None = None,
         options: FrozenOptions | ModuleOptions | None = None,
         embed: Embed | None = None,
-    ) -> Pipeline:
+    ) -> Self:
         """
         Appends a write to ``dest``, or chains the ``write`` module without one.
 
@@ -805,16 +815,11 @@ class Pipeline(Generic[T]):
 
         Examples:
 
-            >>> pipeline = Pipeline(source=[{"x": 1}]).write("out.csv")
-            >>> sorted(pipeline.workflow.nodes)
+            >>> definition = PipelineDefinition(source=[{"x": 1}]).write("out.csv")
+            >>> sorted(definition.workflow.nodes)
             ['write-1']
-            >>> pipeline.workflow.outputs["default"]
+            >>> definition.workflow.outputs["default"]
             Endpoint(node='write-1', port='out')
-            >>> try:
-            ...     pipeline.first()
-            ... except Exception as error:
-            ...     print(type(error).__name__)
-            InvalidPipelineError
 
         """
         if dest is None:
@@ -838,7 +843,7 @@ class Pipeline(Generic[T]):
         ordered: bool | MissingType | None = MISSING,
         event_sink: EventSink | MissingType | None = MISSING,
         shutdown_timeout: float | MissingType | None = MISSING,
-    ) -> Pipeline:
+    ) -> Self:
         """
         Derives a pipeline whose runs execute with the given settings.
 
@@ -875,13 +880,13 @@ class Pipeline(Generic[T]):
 
         Examples:
 
-            >>> base = Pipeline.from_module("fetch")
-            >>> pipeline = base.with_execution(executor="thread", concurrency=4)
-            >>> pipeline.settings.executor.value, pipeline.settings.concurrency
+            >>> base = PipelineDefinition.from_module("fetch")
+            >>> threaded = base.with_execution(executor="thread", concurrency=4)
+            >>> threaded.settings.executor.value, threaded.settings.concurrency
             ('thread', 4)
-            >>> pipeline.with_execution(ordered=True).settings.concurrency
+            >>> threaded.with_execution(ordered=True).settings.concurrency
             4
-            >>> print(pipeline.with_execution(concurrency=None).settings.concurrency)
+            >>> print(threaded.with_execution(concurrency=None).settings.concurrency)
             None
             >>> print(base.settings.concurrency)
             None
@@ -902,7 +907,7 @@ class Pipeline(Generic[T]):
         }
         return evolve(self, settings=evolve(self.settings, **changes))
 
-    def with_context(self, context: Context) -> Pipeline:
+    def with_context(self, context: Context) -> Self:
         """
         Derives a pipeline whose runs use ``context``.
 
@@ -922,8 +927,9 @@ class Pipeline(Generic[T]):
             >>> from riko import Context
             >>>
             >>> context = Context(inputs={"limit": 5})
-            >>> pipeline = Pipeline.from_module("fetch").with_context(context)
-            >>> pipeline.context is context
+            >>> fetch = PipelineDefinition.from_module("fetch")
+            >>> definition = fetch.with_context(context)
+            >>> definition.context is context
             True
 
         """
@@ -937,7 +943,7 @@ class Pipeline(Generic[T]):
         *,
         credential: str | None = ...,
         lazy: bool = ...,
-    ) -> Pipeline: ...
+    ) -> Self: ...
     @overload  # noqa: E301
     def with_resource[R](  # noqa: E704
         self,
@@ -946,7 +952,7 @@ class Pipeline(Generic[T]):
         *,
         credential: None = ...,
         lazy: Literal[False] = ...,
-    ) -> Pipeline: ...
+    ) -> Self: ...
     def with_resource[R](  # noqa: E301
         self,
         name: str,
@@ -954,7 +960,7 @@ class Pipeline(Generic[T]):
         *,
         credential: str | None = None,
         lazy: bool = False,
-    ) -> Pipeline:
+    ) -> Self:
         """
         Derives a pipeline whose runs bind a resource ``definition`` to ``name``.
 
@@ -984,8 +990,9 @@ class Pipeline(Generic[T]):
             >>> def open_db():
             ...     yield {"rows": []}
             >>>
-            >>> pipeline = Pipeline.from_module("fetch").with_resource("db", open_db)
-            >>> sorted(pipeline.context.resources)
+            >>> fetch = PipelineDefinition.from_module("fetch")
+            >>> definition = fetch.with_resource("db", open_db)
+            >>> sorted(definition.context.resources)
             ['db']
 
         """
@@ -1001,7 +1008,7 @@ class Pipeline(Generic[T]):
     @classmethod
     def subscribe(
         cls, name: str, *, func: Callable[..., object] | None = None, **policy: object
-    ) -> Pipeline:
+    ) -> Self:
         """
         Declares a local subscription to a named published stream.
 
@@ -1022,7 +1029,9 @@ class Pipeline(Generic[T]):
         """
         raise NotImplementedError("local subscriptions are not available yet")
 
-    def publish(self, subscription: Pipeline, *, isolate: bool = True) -> Pipeline:
+    def publish(
+        self, subscription: PipelineDefinition, *, isolate: bool = True
+    ) -> Self:
         """
         Publishes this pipeline's records to a declared subscription.
 
@@ -1042,7 +1051,7 @@ class Pipeline(Generic[T]):
         """
         raise NotImplementedError("publishing to a subscription is not available yet")
 
-    def split(self, n: int = 2) -> tuple[Pipeline, ...]:
+    def split(self, n: int = 2) -> tuple[Self, ...]:
         """
         Fans the stream out into ``n`` independently consumable branches.
 
@@ -1061,7 +1070,7 @@ class Pipeline(Generic[T]):
         """
         raise NotImplementedError("streaming fan-out is not available yet")
 
-    def map(self, func: Callable[..., object], **kwargs: object) -> Pipeline:
+    def map(self, func: Callable[..., object], **kwargs: object) -> Self:
         """
         Appends a callable that runs over the stream as its own node.
 
@@ -1081,7 +1090,7 @@ class Pipeline(Generic[T]):
         """
         raise NotImplementedError("chaining a callable as a node is not available yet")
 
-    def __getattr__(self, name: str) -> Callable[..., Pipeline]:
+    def __getattr__(self, name: str) -> Callable[..., Self]:
         """
         Chains any module by attribute, so ``.sort()`` appends the sort module.
 
@@ -1095,7 +1104,7 @@ class Pipeline(Generic[T]):
 
         return partial(self.pipe, name)
 
-    def _or_template(self, other: Pipeline) -> Pipeline:
+    def _or_template(self, other: PipelineDefinition) -> Self:
         """Chains a single-module, source-less pipeline used as a reusable template."""
         nodes = other.workflow.nodes.values()
         node = next(iter(nodes)) if len(nodes) == 1 else None
@@ -1110,7 +1119,7 @@ class Pipeline(Generic[T]):
 
         return chained
 
-    def __or__(self, other: object) -> Pipeline:
+    def __or__(self, other: object) -> Self:
         """
         Chains a module name, config pair, or single-module template using ``|``.
 
@@ -1124,11 +1133,12 @@ class Pipeline(Generic[T]):
 
         Examples:
 
-            >>> pipeline = Pipeline.from_module("fetch") | "sort"
-            >>> sorted(pipeline.workflow.nodes)
+            >>> definition = PipelineDefinition.from_module("fetch") | "sort"
+            >>> sorted(definition.workflow.nodes)
             ['fetch-1', 'sort-1']
-            >>> pipeline = Pipeline.from_module("fetch") | ("sort", {"combine": "a"})
-            >>> dict(pipeline.workflow.nodes["sort-1"].conf)
+            >>> fetch = PipelineDefinition.from_module("fetch")
+            >>> configured = fetch | ("sort", {"combine": "a"})
+            >>> dict(configured.workflow.nodes["sort-1"].conf)
             {'combine': 'a'}
 
         """
@@ -1137,14 +1147,14 @@ class Pipeline(Generic[T]):
         elif _is_pipe_spec(other):
             name, conf = other
             chained = self.pipe(name, conf=conf)
-        elif isinstance(other, Pipeline):
+        elif isinstance(other, PipelineDefinition):
             chained = self._or_template(other)
         else:
-            chained = NotImplemented
+            chained = cast("Self", NotImplemented)
 
         return chained
 
-    def __ror__(self, other: object) -> Pipeline:
+    def __ror__(self, other: object) -> Self:
         """
         Seeds a source on the left of ``|``.
 
@@ -1160,15 +1170,15 @@ class Pipeline(Generic[T]):
         Examples:
 
             >>> items = [{"x": 1}, {"x": 2}]
-            >>> pipeline = items | Pipeline.from_module("sort")
-            >>> pipeline.source is items
+            >>> definition = items | PipelineDefinition.from_module("sort")
+            >>> definition.source is items
             True
 
         """
         if self.source is None and _is_source(other):
             primed = self._derive(self.workflow, other)
         else:
-            primed = NotImplemented
+            primed = cast("Self", NotImplemented)
 
         return primed
 
@@ -1177,140 +1187,13 @@ class Pipeline(Generic[T]):
         """Whether the pipeline seeds a source but chains no module."""
         return self.source is not None and not self.workflow.nodes
 
-    def __iter__(self) -> Generator[T, None]:
-        """
-        Synchronously runs the pipeline with its context and execution settings.
-
-        Each iteration creates a fresh one-shot execution that owns the run's
-        resources for the lifetime of the returned iterator.
-
-        Yields:
-
-            The items produced at the pipeline's default output.
-
-        """
-        from riko.execution._execution import SyncExecution  # noqa: PLC0415
-        from riko.runtime._execution_plan import build_execution_plan  # noqa: PLC0415
-
-        plan = None if self._is_source_only else build_execution_plan(self.workflow)
-
-        with SyncExecution(self.context, settings=self.settings) as execution:
-            yield from execution.run(plan, source=self.source)
-
-    def __aiter__(self) -> AsyncGenerator[T, None]:
-        """
-        Asynchronously runs the pipeline with its context and execution settings.
-
-        Each iteration creates a fresh one-shot execution that owns the run's
-        resources for the lifetime of the returned async iterator.
-
-        Yields:
-
-            The items produced at the pipeline's default output.
-
-        """
-        from riko.bado._util import maybe_aclosing  # noqa: PLC0415
-        from riko.execution._execution import AsyncExecution  # noqa: PLC0415
-        from riko.runtime._execution_plan import build_execution_plan  # noqa: PLC0415
-
-        async def _run() -> AsyncGenerator[T, None]:
-            workflow = self.workflow
-            plan = None if self._is_source_only else build_execution_plan(workflow)
-            execution = AsyncExecution(self.context, settings=self.settings)
-
-            async with execution:
-                stream = await execution.run(plan, source=self.source)
-
-                # An abandoned stream must close before the execution exits.
-                async with maybe_aclosing(stream) as items:
-                    async for item in items:
-                        yield item
-
-        return _run()
-
-    def first(self, default: T | MissingType = MISSING) -> T:
-        """
-        Runs the pipeline just long enough to read its first item.
-
-        The run is closed as soon as the item is read.
-
-        Args:
-
-            default: The value returned when the pipeline produces no items.
-
-        Returns:
-
-            The first item at the pipeline's default output, or ``default``.
-
-        Raises:
-
-            EmptyPipelineError: If the pipeline produces no items and no
-                ``default`` is given.
-
-        Examples:
-
-            >>> Pipeline(source=[{"x": 1}, {"x": 2}]).first()
-            {'x': 1}
-            >>> print(Pipeline(source=[]).first(default=None))
-            None
-            >>> Pipeline(source=[]).first()
-            Traceback (most recent call last):
-            riko.base.exceptions.EmptyPipelineError: pipeline produced no items
-
-        """
-        with closing(iter(self)) as stream:
-            item = next(stream, default)
-
-        if isinstance(item, MissingType):
-            raise EmptyPipelineError
-
-        return item
-
-    async def afirst(self, default: T | MissingType = MISSING) -> T:
-        """
-        Asynchronously runs the pipeline just long enough to read its first item.
-
-        The run is closed as soon as the item is read.
-
-        Args:
-
-            default: The value returned when the pipeline produces no items.
-
-        Returns:
-
-            The first item at the pipeline's default output, or ``default``.
-
-        Raises:
-
-            EmptyPipelineError: If the pipeline produces no items and no
-                ``default`` is given.
-
-        Examples:
-
-            >>> from riko import issync, run
-            >>>
-            >>> async def main():
-            ...     print(await Pipeline(source=[]).afirst(default=None))
-            >>>
-            >>> print(None) if issync else run(main)
-            None
-
-        """
-        async with aclosing(aiter(self)) as stream:
-            item = await anext(stream, default)
-
-        if isinstance(item, MissingType):
-            raise EmptyPipelineError
-
-        return item
-
 
 __all__ = [
     "ActionNode",
     "CacheNode",
     "ModuleNode",
     "Node",
-    "Pipeline",
+    "PipelineDefinition",
     "PublishEdge",
     "ReadNode",
     "StreamEdge",

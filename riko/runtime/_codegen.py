@@ -12,7 +12,7 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.definitions._workflow import Pipeline
+        >>> from riko.runtime._pipeline import Pipeline
         >>> from riko.runtime._codegen import compile_workflow
         >>>
         >>> attrs = {"key": "title", "value": "riko"}

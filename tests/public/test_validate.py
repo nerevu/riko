@@ -11,8 +11,9 @@ exposed outputs.
 import pytest
 
 from riko.base.exceptions import InvalidPipelineError
-from riko.definitions._workflow import Pipeline, Workflow
+from riko.definitions._workflow import Workflow
 from riko.ext import ModuleNode, PublishEdge, StreamEdge, SubscribeNode
+from riko.runtime._pipeline import Pipeline
 from riko.types._workflow import Endpoint
 
 
