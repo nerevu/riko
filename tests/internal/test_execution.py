@@ -133,7 +133,7 @@ def test_sync_enter_after_close_raises() -> None:
     execution = SyncExecution()
     execution.close()
 
-    with pytest.raises(PipelineStateError):
+    with pytest.raises(PipelineStateError, match="the execution in state 'closing'"):
         execution.enter_context(nullcontext(1))
 
 
@@ -146,6 +146,41 @@ def test_sync_lone_cleanup_error_raises_bare() -> None:
 
     with pytest.raises(RuntimeError, match="cleanup failed"):
         execution.close()
+
+
+def test_sync_repeated_close_does_not_reraise_cleanup_error() -> None:
+    calls: list[str] = []
+
+    def boom() -> None:
+        calls.append("cleanup")
+        raise RuntimeError("cleanup failed")
+
+    execution = SyncExecution()
+    execution.callback(boom)
+
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        execution.close()
+
+    assert execution.close() is False
+    assert calls == ["cleanup"]
+
+
+@async_test
+async def test_async_repeated_close_does_not_reraise_cleanup_error() -> None:
+    calls: list[str] = []
+
+    async def boom() -> None:
+        calls.append("cleanup")
+        raise RuntimeError("cleanup failed")
+
+    execution = AsyncExecution()
+    execution.push_async_callback(boom)
+
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        await execution.aclose()
+
+    await execution.aclose()
+    assert calls == ["cleanup"]
 
 
 def test_sync_cleanup_error_is_grouped_with_primary_error() -> None:
@@ -218,53 +253,6 @@ async def test_async_exit_stack_unwinds_lifo() -> None:
         await execution.enter_async_context(track("b"))
 
     assert events == ["open a", "open b", "close b", "close a"]
-
-
-@async_test
-async def test_async_joins_tasks_before_resource_teardown() -> None:
-    events: list[str] = []
-
-    @contextmanager
-    def resource():
-        try:
-            yield
-        finally:
-            events.append("resource-closed")
-
-    async def worker() -> None:
-        events.append("task-done")
-
-    async with AsyncExecution() as execution:
-        execution.enter_context(resource())
-        execution.spawn(worker)
-
-    assert events == ["task-done", "resource-closed"]
-
-
-@async_test
-async def test_async_failure_cancels_tasks_and_unwinds() -> None:
-    events: list[str] = []
-
-    @contextmanager
-    def resource():
-        try:
-            yield
-        finally:
-            events.append("resource-closed")
-
-    async def forever() -> None:
-        await async_sleep(3600)
-
-    async def fail() -> None:
-        async with AsyncExecution() as execution:
-            execution.enter_context(resource())
-            execution.spawn(forever)
-            raise ValueError("boom")
-
-    with pytest.raises(ValueError, match="boom"):
-        await fail()
-
-    assert events == ["resource-closed"]
 
 
 @async_test
@@ -735,19 +723,6 @@ async def test_async_acquire_teardown_on_failure() -> None:
     assert events == ["close"]
 
 
-def test_sync_unacquired_lifecycle_stays_closed() -> None:
-    events: list[str] = []
-
-    def db():
-        events.append("open")
-        yield "value"
-
-    with SyncExecution():
-        Resource.from_lifecycle(db, lazy=True)
-
-    assert events == []
-
-
 def _sync_http_client(url: str, events: list[str]):
     def connect():
         response = urlopen(url)  # noqa: S310
@@ -851,11 +826,8 @@ def test_sync_external_http_client_torn_down_on_failure() -> None:
 
 @pytest.mark.simulated_network
 @async_test
-async def test_async_external_http_client_torn_down_on_cancellation() -> None:
+async def test_async_external_http_client_torn_down_on_failure() -> None:
     events: list[str] = []
-
-    async def forever() -> None:
-        await async_sleep(3600)
 
     async def fail() -> None:
         with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
@@ -863,7 +835,6 @@ async def test_async_external_http_client_torn_down_on_cancellation() -> None:
                 await execution.aacquire(
                     Resource.from_lifecycle(_async_http_client(url, events))
                 )
-                execution.spawn(forever)
                 raise ValueError("boom")
 
     with pytest.raises(ValueError, match="boom"):

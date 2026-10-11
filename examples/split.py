@@ -35,8 +35,8 @@ def pipe(test: bool = True) -> list[Item]:
     date_source, year_source = Pipeline.from_module("input", conf=date_conf).split(2)
     date_stream = date_source.dateformat(conf=long_conf, options=options)
     year_stream = year_source.dateformat(conf=year_conf, options=options)
-    year = next(iter(year_stream))
-    return [{"date": next(iter(date_stream)), "year": int(cast("str", year))}]
+    year = year_stream.first()
+    return [{"date": date_stream.first(), "year": int(cast("str", year))}]
 
 
 async def async_pipe(test: bool = True) -> AsyncStream:
@@ -45,8 +45,8 @@ async def async_pipe(test: bool = True) -> AsyncStream:
     date_source, year_source = Pipeline.from_module("input", conf=date_conf).split(2)
     date_stream = date_source.dateformat(conf=long_conf, options=options)
     year_stream = year_source.dateformat(conf=year_conf, options=options)
-    year = await anext(aiter(year_stream))
-    date = await anext(aiter(date_stream))
+    year = await year_stream.afirst()
+    date = await date_stream.afirst()
     yield {"date": date, "year": int(cast("str", year))}
 
 

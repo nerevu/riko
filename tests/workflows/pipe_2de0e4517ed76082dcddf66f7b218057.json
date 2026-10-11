@@ -8,9 +8,9 @@
                     "value": "file://riko/data/feeds.feedburner.com_ouseful.xml"
                 }
             },
+            "family": "module",
             "id": "sw-478",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         }
     },
     "outputs": {

@@ -3,7 +3,7 @@ r"""
 Replaces text in item fields using regular expressions.
 
 Search-and-replace on steroids. Each rule reads "in *field*, replace *match*
-with *replace*", and several rules can run in sequence. Unlike most pipes, this
+with *replace*", and several rules can run in sequence. Unlike most modules, this
 rewrites fields on the item itself rather than producing a separate value, so
 rules may target different fields in one pass.
 
@@ -21,7 +21,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -48,11 +48,11 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import RegexObjconf
     from riko.types._collections import RikoValue
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item
     from riko.types.modules import RegexConfRule, RegexRule
 
-OPTS: Opts = {"listize": True, "extract": "rule", "emit": True}
+OPTS: DecorationOptions = {"listize": True, "extract": "rule", "emit": True}
 DEFAULTS: Defaults = {"multi": False}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -69,7 +69,7 @@ async def async_parser(
 
         item: The entry to process.
         rules: The parsed replacement rules.
-        objconf: The pipe configuration, containing `multi`.
+        objconf: The module configuration, containing `multi`.
 
     Returns:
 
@@ -100,7 +100,7 @@ async def async_parser(
     multi = objconf.multi
     recompile = not multi
 
-    async def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict[RikoValue]:
+    async def areducer(item: Item, rules: Sequence[RegexRule]) -> DotDict[RikoValue]:
         field = rules[0]["field"]
         word = item.get(field, MISSING, **kwargs)
 
@@ -120,7 +120,7 @@ async def async_parser(
     regex_rules = [build_regex_rule(r, recompile=recompile) for r in rules]
     grouped = group_by(regex_rules, "field")
     field_rules = [g[1] for g in grouped]
-    return await async_reduce(reducer, field_rules, item)
+    return await async_reduce(areducer, field_rules, item)
 
 
 def parser(
@@ -135,7 +135,7 @@ def parser(
 
         item: The entry to process.
         rules: The parsed replacement rules.
-        objconf: The pipe configuration, containing `multi`.
+        objconf: The module configuration, containing `multi`.
 
     Returns:
 
@@ -197,11 +197,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The replacement criteria. Required.
 
-                field (str): Item attribute to rewrite.
+                field (str): Item field to rewrite.
 
                 match (str): Regex to search for.
 
@@ -224,7 +224,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
             multi (bool): Whether to combine rules sharing a flag set into one
                 pass (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -280,11 +280,11 @@ def pipe(*args: Any, **kwargs: object) -> Item:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The replacement criteria. Required.
 
-                field (str): Item attribute to rewrite.
+                field (str): Item field to rewrite.
 
                 match (str): Regex to search for.
 
@@ -307,7 +307,7 @@ def pipe(*args: Any, **kwargs: object) -> Item:
             multi (bool): Whether to combine rules sharing a flag set into one
                 pass (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

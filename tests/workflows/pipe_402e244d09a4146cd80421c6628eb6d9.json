@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-572",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-587",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-587",
                 "port": "out"
@@ -19,8 +20,7 @@
             "target": {
                 "node": "sw-598",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -35,9 +35,9 @@
                     "value": "file://riko/data/www.bbc.co.uk_programmes_b006mvlc_episodes_player.xml"
                 }
             },
+            "family": "module",
             "id": "sw-572",
-            "name": "fetchdata",
-            "type": "module"
+            "name": "fetchdata"
         },
         "sw-587": {
             "conf": {
@@ -86,14 +86,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-587",
             "name": "rename",
             "options": {
                 "assign": "loop:rename",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-598": {
             "conf": {
@@ -114,14 +114,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-598",
             "name": "regex",
             "options": {
                 "assign": "loop:regex",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         }
     },
     "outputs": {

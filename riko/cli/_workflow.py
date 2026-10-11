@@ -17,7 +17,7 @@ Examples:
 
         >>> from riko.cli._workflow import get_document_format, normalize_document
         >>>
-        >>> dag = {"modules": [{"type": "forever"}, {"type": "truncate"}]}
+        >>> dag = {"modules": [{"name": "forever"}, {"name": "truncate"}]}
         >>> get_document_format(dag).value
         'dag'
         >>> list(normalize_document(dag).nodes)
@@ -36,13 +36,15 @@ from typing import TYPE_CHECKING, TypeGuard
 from riko.base._config import OUTPUT_MODULE
 from riko.base._logging import logger
 from riko.base.exceptions import InvalidPipelineError
+from riko.definitions._workflow import Workflow
 from riko.runtime._migrate import migrate_v1_to_v2, parse_dag
 from riko.runtime._normalize import normalize_workflow
 from riko.types._guards import is_listlike, is_mapping
 
 if TYPE_CHECKING:
-    from riko.definitions._workflow import Workflow, WorkflowLike
+    from riko.definitions._workflow import WorkflowLike
     from riko.types._compiler import PipeDag, PipeDefLike
+    from riko.types._io import PathLike
 
 _SHAPE_ERROR = "the input needs 'nodes' or 'modules'"
 _WIRE_KEYS = frozenset({"src", "tgt"})
@@ -62,7 +64,7 @@ class DocumentFormat(StrEnum):
     V2 = "v2"
 
 
-def read_document(path: Path | str) -> tuple[DocumentMapping | None, str]:
+def read_document(path: PathLike) -> tuple[DocumentMapping | None, str]:
     """
     Reads a JSON input from ``path``, or from stdin when it is ``-``.
 
@@ -112,8 +114,9 @@ def read_document(path: Path | str) -> tuple[DocumentMapping | None, str]:
 
 
 def is_workflowlike(value: object) -> TypeGuard[WorkflowLike]:
-    """Reports whether ``value`` is a ``WorkflowLike`` mapping."""
-    return is_mapping(value) and bool({"nodes", "version"}.intersection(value))
+    """Reports whether ``value`` is a ``Workflow`` or a ``WorkflowLike`` mapping."""
+    is_raw = is_mapping(value) and bool({"nodes", "version"}.intersection(value))
+    return is_raw or isinstance(value, Workflow)
 
 
 def is_pipedeflike(value: object) -> TypeGuard[PipeDefLike]:
@@ -146,9 +149,10 @@ def get_document_format(document: DocumentMapping) -> DocumentFormat:
     """
     Detects which of the readable shapes ``document`` is written in.
 
-    A mapping listing ``nodes``, or declaring the workflow format version it targets,
-    is a ``WorkflowLike``. One listing ``modules`` is either a ``PipeDef``, recognised
-    by its wire mappings and its terminal output module, or a ``PipeDag``.
+    A ``Workflow``, or a mapping listing ``nodes`` or declaring the workflow format
+    version it targets, is a ``WorkflowLike``. One listing ``modules`` is either a
+    ``PipeDef``, recognised by its wire mappings and its ``output`` node, or a
+    ``PipeDag``.
 
     Args:
 
@@ -189,6 +193,9 @@ def normalize_document(
 ) -> Workflow:
     """
     Converts parsed input of any readable shape into a validated ``Workflow``.
+
+    A ``Workflow`` is itself a readable shape, so normalizing a result again returns
+    an equal ``Workflow``.
 
     Args:
 

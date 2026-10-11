@@ -15,7 +15,17 @@ Examples:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
+from enum import StrEnum
+from typing import (
+    TYPE_CHECKING,
+    ClassVar,
+    Literal,
+    Protocol,
+    overload,
+    runtime_checkable,
+)
+
+from riko.base.exceptions import InvalidPipelineError
 
 if TYPE_CHECKING:
     from riko.definitions._write import WriteCapabilities
@@ -25,7 +35,7 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class Target(Protocol):
-    """A destination identified by its backend."""
+    """An endpoint identified by its backend."""
 
     backend: ClassVar[Backends]
 
@@ -72,4 +82,59 @@ class SupportsActions(Target, Protocol):
     """
 
 
-__all__ = ["SupportsActions", "SupportsRead", "SupportsWrite", "Target"]
+@overload
+def resolve_enum[E: StrEnum](  # noqa: E704
+    enum: type[E],
+    value: E | str | None,
+    what: str | None = ...,
+    *,
+    default: E | None = ...,
+    strict: Literal[True] = ...,
+    error: type[Exception] = ...,
+) -> E: ...
+@overload  # noqa: E302
+def resolve_enum[E: StrEnum](  # noqa: E704
+    enum: type[E],
+    value: E | str | None,
+    what: str | None = ...,
+    *,
+    default: E | None = ...,
+    strict: Literal[False],
+    error: type[Exception] = ...,
+) -> E | None: ...
+@overload  # noqa: E302
+def resolve_enum[E: StrEnum](  # noqa: E704
+    enum: type[E],
+    value: E | str | None,
+    what: str | None = ...,
+    *,
+    default: E | None = ...,
+    strict: bool,
+    error: type[Exception] = ...,
+) -> E | None: ...
+def resolve_enum[E: StrEnum](  # noqa: E302
+    enum: type[E],
+    value: E | str | None,
+    what: str | None = None,
+    *,
+    default: E | None = None,
+    strict: bool = True,
+    error: type[Exception] = InvalidPipelineError,
+) -> E | None:
+    """Resolves a name or member into the given string enum, or raises ``error``."""
+    what = enum.__name__ if what is None else what
+
+    if value is None and default is None and strict:
+        raise error(f"missing required {what}")
+    elif value is None:
+        result = default
+    else:
+        try:
+            result = value if isinstance(value, enum) else enum(value)
+        except ValueError as e:
+            raise error(f"Invalid {what}: {value!r}") from e
+
+    return result
+
+
+__all__ = ["SupportsActions", "SupportsRead", "SupportsWrite", "Target", "resolve_enum"]

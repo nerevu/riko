@@ -14,8 +14,8 @@ Examples:
         >>> count = {"count": {"type": "int", "value": "3"}}
         >>> dag = {
         ...     "modules": [
-        ...         {"type": "forever"},
-        ...         {"type": "truncate", "conf": count},
+        ...         {"name": "forever"},
+        ...         {"name": "truncate", "conf": count},
         ...     ]
         ... }
         >>> workflow = parse_dag(dag)

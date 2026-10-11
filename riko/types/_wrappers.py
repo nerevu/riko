@@ -20,10 +20,9 @@ from typing import (
     Protocol,
     TypedDict,
     overload,
-    runtime_checkable,
 )
 
-from ._options import ItemDispatch, Opts
+from ._options import DecorationOptions, ItemDispatch
 from ._streams import (
     AsyncItems,
     AsyncStream,
@@ -52,7 +51,7 @@ type Interface = Literal["pipe", "async_pipe"]
 
 # Input/Output
 type Func[T] = Callable[..., T]
-type AysncFunc[T] = Callable[..., Awaitable[T]]
+type AsyncFunc[T] = Callable[..., Awaitable[T]]
 type CoroutineFunc = Callable[..., Coroutine[object, object, object]]
 type ProcessorParserOutput[O: ItemOrValue] = O | Iterator[O]
 type OperatorParserOutput[T: ItemOrValue] = T | Iterator[T] | Stream
@@ -71,7 +70,7 @@ class PreCaster[T](TypedDict):
     func: Caster[T]
 
 
-type Dispatcher[T, E] = Callable[[Item, Opts], ItemDispatch[T, E]]
+type Dispatcher[T, E] = Callable[[Item, DecorationOptions], ItemDispatch[T, E]]
 type ConversionOutput = Iterable[str] | StringIO
 type ConversionFunc = Callable[..., ConversionOutput]
 
@@ -117,7 +116,6 @@ class CastFuncs[T, E](NamedTuple):
     conf_caster: SyncConfCastFunc
 
 
-@runtime_checkable
 class ModuleWrapper(Protocol):
     __name__: str
     __qualname__: str
@@ -323,14 +321,16 @@ type SplitterWrapperOutput = SyncSplitterWrapperOutput | AsyncSplitterWrapperOut
 type SplitterWrapperInput = SyncSplitterWrapperInput | AsyncSplitterWrapperInput
 
 type SubPipe = SyncSubPipe | AsyncSubPipe
+type AnyModuleWrapper = SyncModuleWrapper | AsyncModuleWrapper
 type ModuleParser = ProcessorParser | OperatorParser | SplitterParser
 
 
 class Resolver(Protocol):
     """
-    Resolve a pipe name to its callable and report its available interfaces.
+    Resolves a module name or ``pipe_<id>`` name to its pipe callable and interfaces.
 
-    Leaf modules use ``ModuleRegistry``; ``pipe_*`` named workflows use
+    Modules such as ``fetch`` use ``ModuleRegistry``. Stored workflows
+    (``WorkflowStore`` entries looked up by their ``pipe_<id>`` name) use
     ``WorkflowResolver``.
     """
 
@@ -348,4 +348,3 @@ class Resolver(Protocol):
 
     def is_compatible(self, name: str) -> bool: ...  # noqa: E704
     def require_interfaces(self, name: str) -> frozenset[Interface]: ...  # noqa: E704
-    def load_definition(self, name: str) -> object: ...  # noqa: E704

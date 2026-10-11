@@ -17,7 +17,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -38,11 +38,11 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import InputObjconf
     from riko.types._collections import Inputs
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import Item
 
-OPTS: Opts = SourceOpts
+OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = {
     "type": "text",
     "default": "",
@@ -70,7 +70,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `prompt`, `default`, `type`
+        objconf: The module configuration, containing `prompt`, `default`, `type`
             and `input_key`.
         skip: Whether to use ``default`` instead of prompting.
 
@@ -109,13 +109,13 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             prompt (str): Command line prompt shown when reading from stdin
                 (default: "Enter text").
 
-            default (scalar): Value used when the input is missing or skipped
-                (default: "").
+            default (scalar): Value used when no input value is given or
+                prompting is skipped (default: "").
 
             type (str): Type to cast the value to, one of "bool", "date",
                 "datetime", "decimal", "float", "int", "location", "none",
@@ -127,7 +127,7 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
             test (bool): Whether to use ``default`` instead of prompting
                 (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -174,13 +174,13 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             prompt (str): Command line prompt shown when reading from stdin
                 (default: "Enter text").
 
-            default (scalar): Value used when the input is missing or skipped
-                (default: "").
+            default (scalar): Value used when no input value is given or
+                prompting is skipped (default: "").
 
             type (str): Type to cast the value to, one of "bool", "date",
                 "datetime", "decimal", "float", "int", "location", "none",
@@ -192,7 +192,7 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
             test (bool): Whether to use ``default`` instead of prompting
                 (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

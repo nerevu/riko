@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Tests the stable ``export`` verb and the ``Formats`` catalog it is keyed by."""
+"""Tests the stable ``export`` verb and the ``Formats`` enum it is keyed by."""
 
 from riko import Pipeline, export
 from riko.io._serialization import CONVERSION_FUNCS
@@ -18,7 +18,7 @@ EXPECTED = [
 
 
 class TestExportFormats:
-    """``Formats`` members mirror the ``export`` converter registry."""
+    """``Formats`` members mirror the ``export`` converters."""
 
     def test_member_and_string_export_identically(self):
         items = [{"a": 1}]

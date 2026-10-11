@@ -18,11 +18,15 @@ import pytest
 
 from riko import Pipeline
 from riko.bado import as_async
+from riko.base.exceptions import (
+    InvalidPipelineError,
+    PipelineStateError,
+    UnsupportedTargetError,
+)
 from riko.definitions._resource_definition import FactoryKind, OneShotResource
 from riko.definitions._targets import (
     FileTarget,
     build_write,
-    normalize_strs,
     normalize_target,
     resolve_format,
     validate_target_mode,
@@ -36,15 +40,18 @@ from riko.runtime._write_session import (
     _SessionState,
     _SyncFileWriteSession,
     async_file_write_session,
-    async_write_through,
+    awrite_through,
+    build_write_resource,
     file_write_session,
-    mint_write_resource,
     write_through,
 )
+from riko.types._collections import normalize_strs
 from riko.types._enums import Backends, Formats
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from riko.types._io import PathLike
     from riko.types._streams import Feed, Items
 
@@ -75,7 +82,7 @@ async def _asink(
 ) -> WriteResult:
     """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
     async with async_file_write_session(build_write(dest, mode, **kwargs)) as session:
-        await session.write(items)
+        await session.awrite(items)
         result = await session.afinalize()
 
     return result
@@ -116,20 +123,20 @@ class TestResolveFormat:
 
 class TestNormalizeKeys:
     def test_empty_key_rejected(self):
-        with pytest.raises(ValueError, match="non-empty"):
+        with pytest.raises(InvalidPipelineError, match="non-empty"):
             normalize_strs(["id", ""])
 
     def test_duplicate_keys_rejected(self):
-        with pytest.raises(ValueError, match="duplicate"):
+        with pytest.raises(InvalidPipelineError, match="duplicate"):
             normalize_strs(["id", "id"])
 
     @pytest.mark.parametrize("value", [[1, 2], ["a", 1], [None]])
     def test_non_string_keys_rejected(self, value):
-        with pytest.raises(ValueError, match="non-empty strings"):
+        with pytest.raises(InvalidPipelineError, match="non-empty strings"):
             normalize_strs(value)
 
     def test_non_iterable_rejected(self):
-        with pytest.raises(TypeError, match="string or iterable"):
+        with pytest.raises(InvalidPipelineError, match="string or iterable"):
             normalize_strs(42)  # pyright: ignore[reportArgumentType]
 
 
@@ -206,14 +213,14 @@ class TestConverterPath:
 
     def _spy(self, monkeypatch):
         calls = []
-        original = _write_session.serialize_records
+        original = _write_session.serialize_items
 
         def spy(items, fmt, **kwargs):
             materialized = list(items)
             calls.append(materialized)
             return original(materialized, fmt, **kwargs)
 
-        monkeypatch.setattr(_write_session, "serialize_records", spy)
+        monkeypatch.setattr(_write_session, "serialize_items", spy)
         return calls
 
     def test_sink_converts_whole_stream_once(self, monkeypatch, tmp_path):
@@ -271,7 +278,7 @@ class TestCsv:
         path = tmp_path / "out.csv"
         rows = [{"a": 1}, {"a": 2, "b": 3}]
 
-        with pytest.raises(ValueError, match="unexpected fields"):
+        with pytest.raises(ValueError, match="not in the CSV header"):
             list(write_through(rows, build_write(path), terminating=_never))
 
 
@@ -333,7 +340,7 @@ class TestFramed:
 
 class TestMintWriteResource:
     def test_never_stored_in_context(self):
-        resource = mint_write_resource("report.csv")
+        resource = build_write_resource("report.csv")
 
         assert isinstance(resource, OneShotResource)
         assert resource.reusable is False
@@ -365,7 +372,9 @@ class TestSessionLifecycle:
         session.write(ITEMS)
         session.finalize()
 
-        with pytest.raises(RuntimeError, match="finalized"):
+        with pytest.raises(
+            PipelineStateError, match="the write session in state 'finalized'"
+        ):
             session.write(ITEMS)
 
         session.teardown()
@@ -374,7 +383,7 @@ class TestSessionLifecycle:
         session = self._session(tmp_path)
         session.abort()
 
-        with pytest.raises(RuntimeError, match="aborted"):
+        with pytest.raises(PipelineStateError, match="aborted"):
             session.write(ITEMS)
 
         session.teardown()
@@ -411,7 +420,7 @@ class TestSessionLifecycle:
         session = self._session(tmp_path)
         session.write(ITEMS)
 
-        with pytest.raises(RuntimeError, match="cannot mix item and stream"):
+        with pytest.raises(PipelineStateError, match="cannot mix item and stream"):
             session.write({"x": 0})
 
         session.teardown()
@@ -420,7 +429,7 @@ class TestSessionLifecycle:
         session = self._session(tmp_path)
         session.write({"x": 0})
 
-        with pytest.raises(RuntimeError, match="cannot mix item and stream"):
+        with pytest.raises(PipelineStateError, match="cannot mix item and stream"):
             session.write(ITEMS)
 
         session.teardown()
@@ -429,7 +438,7 @@ class TestSessionLifecycle:
         session = self._session(tmp_path)
         session.write(ITEMS)
 
-        with pytest.raises(RuntimeError, match="cannot attempt multiple stream"):
+        with pytest.raises(PipelineStateError, match="cannot attempt multiple stream"):
             session.write(ITEMS)
 
         session.teardown()
@@ -479,21 +488,44 @@ class TestSyncWriteExecution:
 
         assert not path.exists()
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "a streaming replace write opens its destination for writing up front, "
+            "so a failed run destroys the old content until writes publish atomically"
+        ),
+    )
+    @pytest.mark.parametrize(
+        ("name", "original"), [("out.csv", b"a\n1\n"), ("out.jsonl", b'{"a": 1}\n')]
+    )
+    def test_failed_replace_keeps_original_content(self, tmp_path, name, original):
+        path = tmp_path / name
+        path.write_bytes(original)
+
+        def source() -> Iterator[dict[str, int]]:
+            yield {"a": 2}
+            raise ValueError("boom")
+
+        stream = write_through(source(), build_write(path), terminating=_never)
+
+        with pytest.raises(ValueError, match="boom"):
+            list(stream)
+
+        assert path.read_bytes() == original
+
 
 @skipif_issync
 class TestAsyncWriteExecution:
     @async_test
     async def test_passthrough_preserves_stream(self, tmp_path):
         prepared = build_write(tmp_path / "out.json")
-        stream = async_write_through(as_async(ITEMS), prepared, terminating=_never)
+        stream = awrite_through(as_async(ITEMS), prepared, terminating=_never)
         assert [item async for item in stream] == ITEMS
 
     @async_test
     async def test_writes_mid_chain(self, tmp_path):
         path = tmp_path / "out.json"
-        stream = async_write_through(
-            as_async(ITEMS), build_write(path), terminating=_never
-        )
+        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
         tailed = async_tail(stream, conf={"count": 1})
         assert [item async for item in tailed] == [{"x": 2}]
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
@@ -502,18 +534,14 @@ class TestAsyncWriteExecution:
     async def test_csv_singleton_preserves_schema(self, tmp_path):
         path = tmp_path / "out.csv"
         rows = [{"a": 1, "b": 2}, {"b": 4, "a": 3}]
-        stream = async_write_through(
-            as_async(rows), build_write(path), terminating=_never
-        )
+        stream = awrite_through(as_async(rows), build_write(path), terminating=_never)
         _ = [item async for item in stream]
         assert path.read_bytes() == b"a,b\r\n1,2\r\n3,4\r\n"
 
     @async_test
     async def test_graceful_close_finalizes_prefix(self, tmp_path):
         path = tmp_path / "out.json"
-        stream = async_write_through(
-            as_async(ITEMS), build_write(path), terminating=_never
-        )
+        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
         await anext(stream)
         await stream.aclose()
         assert path.read_bytes() == b'[{"x": 0}]'
@@ -521,9 +549,7 @@ class TestAsyncWriteExecution:
     @async_test
     async def test_terminate_aborts(self, tmp_path):
         path = tmp_path / "out.json"
-        stream = async_write_through(
-            as_async(ITEMS), build_write(path), terminating=_always
-        )
+        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_always)
         await anext(stream)
         await stream.aclose()
         assert not path.exists()
@@ -531,9 +557,7 @@ class TestAsyncWriteExecution:
     @async_test
     async def test_exception_aborts(self, tmp_path):
         path = tmp_path / "out.json"
-        stream = async_write_through(
-            as_async(ITEMS), build_write(path), terminating=_never
-        )
+        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
         await anext(stream)
 
         with pytest.raises(RuntimeError, match="boom"):
@@ -564,7 +588,7 @@ class TestSink:
         prepared = build_write(_RecordStore(), "replace")
 
         with (
-            pytest.raises(NotImplementedError, match="only file targets"),
+            pytest.raises(UnsupportedTargetError, match="_RecordStore"),
             file_write_session(prepared),
         ):
             pass  # pragma: no cover
@@ -657,7 +681,7 @@ class TestPipelineWrite:
     def test_non_file_target_execution_unsupported(self):
         pipeline = Pipeline(source=ITEMS).write(_RecordStore())
 
-        with pytest.raises(NotImplementedError, match="only file targets"):
+        with pytest.raises(UnsupportedTargetError, match="_RecordStore"):
             list(pipeline)
 
     def test_write_does_not_rerun_preceding_module(self, tmp_path):

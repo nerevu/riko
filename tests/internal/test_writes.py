@@ -1,8 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """Tests the declarative write model (``riko.definitions._write``)."""
 
-from dataclasses import FrozenInstanceError
-
 import pytest
 
 from riko.definitions._write import WriteCapabilities, WriteMode, WriteOperation
@@ -37,7 +35,7 @@ class TestWriteOperation:
     def test_is_frozen(self):
         op = WriteOperation(WriteMode.REPLACE)
 
-        with pytest.raises(FrozenInstanceError):
+        with pytest.raises(AttributeError):
             op.mode = WriteMode.APPEND  # pyright: ignore[reportAttributeAccessIssue]
 
 

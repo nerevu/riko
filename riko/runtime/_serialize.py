@@ -23,43 +23,19 @@ Examples:
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator, Mapping
-from dataclasses import fields, is_dataclass
+from dataclasses import is_dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import attrs
-from attrs import AttrsInstance
 
+from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._workflow import Node, Workflow
+from riko.types._collections import serialize_attrs, serialize_dataclass
+from riko.types._guards import is_mapping
 from riko.types._workflow import Edge, WorkflowDocument
 
 from ._normalize import normalize_workflow
-
-if TYPE_CHECKING:
-    from _typeshed import DataclassInstance
-
-
-def _has_value(_: object = None, value: object = None) -> bool:
-    return not (value is None or isinstance(value, (Mapping, tuple)) and not value)
-
-
-def _serialize_dataclass(
-    instance: DataclassInstance | type[DataclassInstance], *keep_fields: str
-) -> Iterator[tuple[str, object]]:
-    keep = frozenset(keep_fields)
-
-    for field in fields(instance):
-        value = getattr(instance, field.name)
-
-        if _has_value(value=value) or field.name in keep:
-            yield (field.name, value)
-
-
-def _serialize_attrs(instance: AttrsInstance, *keep_fields: str) -> dict[str, object]:
-    keep = frozenset(keep_fields)
-    filterer = lambda field, value: _has_value(field, value) or field.name in keep
-    return attrs.asdict(instance, recurse=False, filter=filterer)
 
 
 class WorkflowEncoder(json.JSONEncoder):
@@ -67,17 +43,17 @@ class WorkflowEncoder(json.JSONEncoder):
 
     def default(self, o: object) -> Any:
         if isinstance(o, Workflow):
-            result = _serialize_attrs(o, "edges")
+            result = serialize_attrs(o, "edges")
         elif isinstance(o, (Node, Edge)):
-            result = {"type": o.family, **_serialize_attrs(o)}
+            result = {"family": o.family, **serialize_attrs(o)}
+        elif is_mapping(o):
+            result = dict(o)
         elif attrs.has(type(o)):
-            result = attrs.asdict(o, recurse=False, filter=_has_value)
+            result = serialize_attrs(o)
         elif is_dataclass(o):
-            result = dict(_serialize_dataclass(o))
+            result = serialize_dataclass(o)
         elif isinstance(o, tuple):
             result = list(o)
-        elif isinstance(o, Mapping):
-            result = dict(o)
         elif isinstance(o, Enum):
             result = o.value
         else:
@@ -102,6 +78,11 @@ def parse_document(document: WorkflowDocument | str) -> Workflow:
 
         The reconstructed :class:`~riko.definitions._workflow.Workflow`.
 
+    Raises:
+
+        InvalidPipelineError: If ``document`` is not valid JSON or does not describe a
+            workflow.
+
     Examples:
 
         >>> from json import dumps
@@ -111,7 +92,12 @@ def parse_document(document: WorkflowDocument | str) -> Workflow:
         'fetch'
 
     """
-    return normalize_workflow(json.loads(document))
+    try:
+        raw = json.loads(document)
+    except ValueError as e:
+        raise InvalidPipelineError(f"malformed WorkflowDocument: {e}") from e
+
+    return normalize_workflow(raw)
 
 
 def serialize_workflow(
@@ -128,9 +114,9 @@ def serialize_workflow(
     Args:
 
         workflow: The :class:`~riko.definitions._workflow.Workflow` to serialize.
-        indent: Number of spaces to indent each nesting level by. The readable form
-            ends with a trailing newline; pass ``None`` for the compact single-line
-            form.
+
+        indent: Number of spaces to indent each nesting level by. Pass ``None`` for the
+            compact single-line form.
 
     Returns:
 
@@ -144,13 +130,8 @@ def serialize_workflow(
         >>> document = serialize_workflow(workflow).decode("utf-8")
         >>> document.splitlines()[1]
         '    "edges": [],'
-        >>> document.endswith("\\n")
-        True
-
-        Compact form::
-
-            >>> serialize_workflow(workflow, indent=None)
-            b'{"edges":[],"nodes":{"fetch-1":{"id":"fetch-1","name":"fetch","type":"module"}},"outputs":{"default":{"node":"fetch-1","port":"out"}},"version":"2"}'
+        >>> serialize_workflow(workflow, indent=None)
+        b'{"edges":[],"nodes":{"fetch-1":{"family":"module","id":"fetch-1",...ut"}},"version":"2"}'
 
     """
     if indent is None:

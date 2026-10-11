@@ -12,6 +12,7 @@ Examples:
 
 from collections.abc import Iterable
 from enum import StrEnum
+from typing import Literal
 
 
 class ModuleName(StrEnum):
@@ -30,7 +31,7 @@ class ModuleName(StrEnum):
 
 class Formats(StrEnum):
     """
-    How a write serializes records to a destination.
+    How a write serializes items to a destination.
 
     Examples:
 
@@ -123,7 +124,7 @@ class SortableCastType(StrEnum):
 
 class CastType(StrEnum):
     """
-    Every destination type ``cast_value`` can dispatch to.
+    Every cast type ``cast_value`` can dispatch to.
 
     Examples:
 
@@ -147,7 +148,9 @@ class CastType(StrEnum):
 
 class ExecutionMode(StrEnum):
     """
-    Whether a run executes the pipeline or only describes it.
+    Whether a workflow module's pipe runs its workflow or only describes it.
+
+    A ``Pipeline`` ignores the describe modes and always runs.
 
     Examples:
 
@@ -169,11 +172,11 @@ class Executor(StrEnum):
     Where a run executes per-item work.
 
     ``AUTO`` lets the run pick: items run sequentially inline unless a
-    concurrency limit above one is set, in which case synchronous iteration
-    uses a thread pool. Under asynchronous iteration, native async work runs
-    inline and synchronous work runs on worker threads. ``INLINE`` never uses
-    workers, while ``THREAD`` and ``PROCESS`` use a pool of threads or worker
-    processes.
+    concurrency limit above one (or ``"auto"``) is set, in which case
+    synchronous iteration uses a thread pool. Under asynchronous iteration,
+    native async work runs inline and synchronous work runs on worker threads.
+    ``INLINE`` never uses workers, while ``THREAD`` and ``PROCESS`` use a pool of
+    threads or worker processes.
 
     Examples:
 
@@ -195,3 +198,4 @@ type StrLike = str | Iterable[str]
 type FmtLike = Formats | str
 type BackendLike = Backends | str
 type ExecutorLike = Executor | str
+type ConcurrencyLike = int | Literal["auto"]

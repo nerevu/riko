@@ -22,7 +22,7 @@ import attrs
 
 from riko.base.exceptions import CyclicIdentityError, IdentityEncodingError
 
-from ._dates import normalize_tzinfo, tt_to_datetime
+from ._dates import resolve_aware_datetime, tt_to_datetime
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
@@ -89,12 +89,12 @@ def _canon_decimal(value: Decimal) -> str:
 
 
 def _canon_datetime(value: datetime) -> str:
-    aware = value if value.tzinfo else normalize_tzinfo(value, try_local_tz=False)
+    aware = value if value.tzinfo else resolve_aware_datetime(value, try_local_tz=False)
     return aware.astimezone(UTC).isoformat()
 
 
 def _canon_struct_time(value: struct_time) -> str:
-    moment = tt_to_datetime(normalize_tzinfo(value, try_local_tz=False))
+    moment = tt_to_datetime(resolve_aware_datetime(value, try_local_tz=False))
     return moment.astimezone(UTC).isoformat()
 
 
@@ -106,6 +106,10 @@ def canonical_json(canon: CanonicalValue) -> bytes:
 
         Byte-stable JSON with no insignificant whitespace.
 
+    Raises:
+
+        IdentityEncodingError: If a string has no UTF-8 encoding.
+
     Examples:
 
         >>> canonical_json(canonicalize(1))
@@ -115,7 +119,13 @@ def canonical_json(canon: CanonicalValue) -> bytes:
     dumped = json.dumps(
         canon, ensure_ascii=False, separators=(",", ":"), allow_nan=False
     )
-    return dumped.encode("utf-8")
+
+    try:
+        encoded = dumped.encode("utf-8")
+    except UnicodeEncodeError as e:
+        raise IdentityEncodingError(str) from e
+
+    return encoded
 
 
 def _sort_key(canon: CanonicalValue) -> bytes:

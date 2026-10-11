@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
-from riko.bado._backend import async_sleep
+from riko.bado._backend import async_sleep, fail_after
 from riko.base._config import settings as config
-from riko.base.exceptions import InvalidPipelineError
+from riko.base.exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._context import Context
 from riko.definitions._execution import ExecutionSettings
 from riko.definitions._resource_definition import Resource
@@ -28,7 +28,7 @@ from riko.execution._mapping import (
 from riko.execution._pools import PoolHandle, get_worker_cnt
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._module_registry import ModuleRegistry
-from riko.runtime._resolver import ResolverDispatcher
+from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflows import workflow_resolver
 from riko.types._enums import Executor
 from riko.types._workflow import Endpoint
@@ -44,10 +44,9 @@ ITEMS = [{"x": x} for x in range(20)]
 
 
 def _workflow(nodes, edges=(), resources=()):
-    keyed = {node.id: node for node in nodes}
     last = nodes[-1].id
     outputs = {"default": Endpoint(last, "out")}
-    return Workflow(nodes=keyed, outputs=outputs, edges=edges, resources=resources)
+    return Workflow(nodes=nodes, outputs=outputs, edges=edges, resources=resources)
 
 
 def _chain(*nodes):
@@ -73,7 +72,7 @@ def _loopable(func) -> Any:
 
 def _hash_plan(*names):
     nodes = [ModuleNode(id=f"n{i}", name=name) for i, name in enumerate(names)]
-    return build_execution_plan(_chain(*nodes))
+    return build_execution_plan(_chain(*nodes), dispatcher)
 
 
 def _run_sync(plan, settings=None, source=ITEMS):
@@ -130,22 +129,31 @@ SYNC_POLICIES = [
     ({"executor": "inline", "concurrency": 4}, SyncPolicy(Executor.INLINE, None)),
     ({"executor": "thread", "concurrency": 3}, SyncPolicy(Executor.THREAD, 3)),
     ({"executor": "process", "concurrency": 2}, SyncPolicy(Executor.PROCESS, 2)),
+    ({"executor": "thread"}, SyncPolicy(Executor.THREAD, 1)),
+    ({"executor": "process"}, SyncPolicy(Executor.PROCESS, 1)),
+    ({"concurrency": "auto"}, SyncPolicy(Executor.THREAD, get_worker_cnt(0))),
     (
-        {"executor": "thread"},
+        {"executor": "thread", "concurrency": "auto"},
         SyncPolicy(Executor.THREAD, get_worker_cnt(0, threads=True)),
     ),
     (
-        {"executor": "process"},
+        {"executor": "process", "concurrency": "auto"},
         SyncPolicy(Executor.PROCESS, get_worker_cnt(0, threads=False)),
     ),
+    ({"executor": "inline", "concurrency": "auto"}, SyncPolicy(Executor.INLINE, None)),
 ]
 
 ASYNC_POLICIES = [
     ({}, AsyncPolicy(None, False)),
     ({"concurrency": 4}, AsyncPolicy(4, False)),
-    ({"executor": "inline"}, AsyncPolicy(config.connection_count, True)),
+    ({"executor": "inline"}, AsyncPolicy(1, True)),
     ({"executor": "inline", "concurrency": 3}, AsyncPolicy(3, True)),
-    ({"executor": "thread"}, AsyncPolicy(config.connection_count, False)),
+    ({"executor": "thread"}, AsyncPolicy(1, False)),
+    ({"concurrency": "auto"}, AsyncPolicy(config.concurrency_limit, False)),
+    (
+        {"executor": "inline", "concurrency": "auto"},
+        AsyncPolicy(config.concurrency_limit, True),
+    ),
     ({"executor": "thread", "concurrency": 3}, AsyncPolicy(3, False)),
 ]
 
@@ -153,13 +161,6 @@ ASYNC_POLICIES = [
 @pytest.mark.parametrize(("kwargs", "expected"), SYNC_POLICIES)
 def test_sync_policy_table(kwargs, expected) -> None:
     assert resolve_sync_policy(ExecutionSettings(**kwargs)) == expected
-
-
-def test_sync_policy_without_concurrency_is_bounded_and_parallel() -> None:
-    for executor in ("thread", "process"):
-        workers = resolve_sync_policy(ExecutionSettings(executor=executor)).workers
-        assert workers is not None
-        assert workers > 1
 
 
 @pytest.mark.parametrize(("kwargs", "expected"), ASYNC_POLICIES)
@@ -193,6 +194,36 @@ def test_sync_run_without_settings_opens_no_pool(opened) -> None:
     assert opened == []
 
 
+def test_sync_sequential_run_has_no_worker_pool() -> None:
+    with SyncExecution() as execution, pytest.raises(PipelineStateError):
+        _ = execution._pool
+
+
+def _passthru(stream, **_):
+    yield from stream
+
+
+_passthru.type = "operator"  # pyright: ignore[reportFunctionMemberAccess]
+
+
+@async_test
+async def test_async_long_sync_only_chain_completes() -> None:
+    # Each sync-only node holds a worker thread while it pulls its upstream, so
+    # a chain longer than the default thread limit must still get a thread each.
+    pipe = cast("SyncModuleWrapper", _passthru)
+    definition = ModuleDefinition(name="passthru", sync_pipe=pipe)
+    nodes = [ModuleNode(id=f"n{i}", name="passthru") for i in range(45)]
+    plan = build_execution_plan(_chain(*nodes), dispatcher=_dispatcher(definition))
+    result: list = []
+
+    with fail_after(20):
+        async with AsyncExecution() as execution:
+            stream = await execution.arun(plan, source=ITEMS[:2])
+            result = [item async for item in stream]
+
+    assert result == ITEMS[:2]
+
+
 @pytest.mark.slow
 def test_sync_auto_concurrency_maps_on_a_thread_pool(opened, released) -> None:
     plan = _hash_plan("hash", "hash")
@@ -212,9 +243,18 @@ def test_sync_ordered_concurrency_keeps_source_order() -> None:
 
 
 @pytest.mark.slow
-def test_sync_thread_executor_sizes_its_pool_from_the_machine(opened) -> None:
+def test_sync_thread_executor_without_concurrency_runs_one_item_at_a_time(
+    opened,
+) -> None:
     plan = _hash_plan("hash")
     _run_sync(plan, ExecutionSettings(executor="thread"))
+    assert opened == [(Executor.THREAD, 1)]
+
+
+@pytest.mark.slow
+def test_sync_auto_concurrency_sizes_its_pool_from_the_machine(opened) -> None:
+    plan = _hash_plan("hash")
+    _run_sync(plan, ExecutionSettings(executor="thread", concurrency="auto"))
     assert opened == [(Executor.THREAD, get_worker_cnt(0, threads=True))]
 
 
@@ -350,7 +390,7 @@ def _loop_dispatcher(embed_pipe=None):
 def test_process_executor_refuses_a_resource_node(opened) -> None:
     node = ModuleNode(id="h", name="hash", resources={"slot": "primary"})
     workflow = _workflow([node], resources=("primary",))
-    plan = build_execution_plan(workflow)
+    plan = build_execution_plan(workflow, dispatcher)
     context = Context().with_resource("primary", Resource.from_external(object()))
     settings = ExecutionSettings(executor="process", concurrency=2)
     execution = SyncExecution(context, settings=settings)

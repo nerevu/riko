@@ -2,8 +2,9 @@
 Runs a pipe script, a workflow module, or a workflow document from the CLI.
 
 A pipe script is a Python file that defines ``pipe(test=False)``. A workflow module
-(``WorkflowModule``) is the Python source ``compile-workflow`` generates. A workflow
-document (``WorkflowDocument``) is a serialized ``Workflow``.
+(``WorkflowModule``) is Python source defining ``pipe`` and/or ``async_pipe`` over an
+item, a stream, or nothing, plus a ``context``, such as ``compile-workflow`` output. A
+workflow document (``WorkflowDocument``) is a serialized ``Workflow``.
 """
 
 from __future__ import annotations
@@ -21,15 +22,14 @@ from riko.bado._backend import run as async_run
 from riko.base._paths import ROOT_DIR
 from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._context import Context
-from riko.execution._execution import AsyncExecution, SyncExecution
-from riko.runtime._execution_plan import build_execution_plan
+from riko.runtime._pipeline import Pipeline
 
 from ._workflow import read_document, require_workflow
 
 if TYPE_CHECKING:
     from types import ModuleType
 
-    from riko.runtime._execution_plan import ExecutionPlan
+    from riko.types._io import PathLike
     from riko.types._wrappers import AsyncModuleWrapper
 
 io_error = FileNotFoundError
@@ -87,23 +87,27 @@ async def runner(
     cb(result) if callable(cb) else None
 
 
-async def plan_runner(plan: ExecutionPlan, test: bool = False) -> None:
-    """Runs a prepared workflow asynchronously and prints the items it produces."""
-    async with AsyncExecution(context=Context(test=test)) as execution:
-        stream = await execution.arun(plan)
-        items = [item async for item in stream]
-        emit_result(items)
+async def aemit_result(pipeline: Pipeline) -> None:
+    """
+    Runs a pipeline asynchronously and prints the items it produces.
+
+    Args:
+
+        pipeline: The pipeline to iterate with ``async for``.
+
+    """
+    emit_result([item async for item in pipeline])
 
 
-def run_document(path: str, isasync: bool = False, test: bool = False) -> None:
+def run_document(path: PathLike, isasync: bool = False, test: bool = False) -> None:
     """
     Runs the ``WorkflowDocument`` at ``path`` and prints what it produces.
 
     Args:
 
         path: The path to the ``WorkflowDocument``.
-        isasync: Whether to run the ``Workflow`` through the asynchronous execution.
-        test: Whether to run with the modules' default inputs.
+        isasync: Whether to iterate the pipeline asynchronously.
+        test: Whether to use default input values instead of prompting.
 
     """
     document, _ = read_document(path)
@@ -112,15 +116,10 @@ def run_document(path: str, isasync: bool = False, test: bool = False) -> None:
         sys.exit(f"Workflow document {path} not found!")
 
     try:
-        plan = build_execution_plan(require_workflow(document))
+        pipeline = Pipeline(require_workflow(document), context=Context(test=test))
+        async_run(aemit_result, pipeline) if isasync else emit_result(pipeline)
     except InvalidPipelineError as e:
         sys.exit(str(e))
-
-    if isasync:
-        async_run(plan_runner, plan, test)
-    else:
-        with SyncExecution(context=Context(test=test)) as execution:
-            emit_result(execution.run(plan))
 
 
 def get_example_dirs() -> list[Path]:
@@ -140,12 +139,12 @@ def get_example_dirs() -> list[Path]:
     return [local] if local.resolve() == checkout.resolve() else [local, checkout]
 
 
-def resolve_example(pipeid: str) -> str | ModuleType | None:
+def resolve_example(pipeid: str) -> Path | ModuleType | None:
     """
-    Resolves an example id to the pipe script or ``WorkflowDocument`` it names.
+    Resolves an id to the example pipe script or ``WorkflowDocument`` it names.
 
-    Each example directory is searched for ``<pipeid>.py``, then
-    ``workflows/<pipeid>.json``, before moving to the next directory.
+    Each candidate example directory is searched for ``<pipeid>.py`` and
+    ``workflows/<pipeid>.json`` files.
 
     Args:
 
@@ -165,7 +164,7 @@ def resolve_example(pipeid: str) -> str | ModuleType | None:
         searched = ", ".join(str(directory) for directory in dirs)
         sys.exit(f"Example {pipeid} not found in {searched}!")
     elif found.suffix == ".json":
-        target: str | ModuleType | None = str(found)
+        target: Path | ModuleType | None = found
     else:
         target = load_file(file2name(found.name), str(found))
 
@@ -174,24 +173,28 @@ def resolve_example(pipeid: str) -> str | ModuleType | None:
 
 def resolve_target(
     path: str | None = None, pipeid: str | None = None
-) -> str | ModuleType | None:
+) -> Path | ModuleType | None:
     """
-    Resolves a run target: a pipe script, workflow module, or ``WorkflowDocument``.
+    Resolves a run target: a pipe script, ``WorkflowModule``, or ``WorkflowDocument``.
+
+    A pipe script is a Python file defining ``pipe(test=False)``; a ``WorkflowModule``
+    is Python source defining ``pipe`` and/or ``async_pipe`` over an item, a stream,
+    or nothing, plus a ``context``; and a ``WorkflowDocument`` is a serialized
+    ``Workflow``.
 
     Args:
 
-        path: The path to a pipe script, a ``WorkflowModule``, or a
-            ``WorkflowDocument``.
-
-        pipeid: The id of an example pipe script or workflow document.
+        path: The path to a pipe script, ``WorkflowModule``, or ``WorkflowDocument``.
+        pipeid: The id of a pipe script/``WorkflowDocument`` in the example directory.
 
     Returns:
 
-        The loaded pipe script or ``WorkflowModule``, or path to a ``WorkflowDocument``.
+        The imported pipe script or ``WorkflowModule``, or the path to a
+        ``WorkflowDocument``.
 
     """
     if path is not None and path.endswith(".json"):
-        target: str | ModuleType | None = path
+        target: Path | ModuleType | None = Path(path)
     elif path is not None:
         try:
             target = load_file(file2name(path), path)
@@ -254,7 +257,7 @@ def run() -> None:
     args = parser.parse_args()
     target = resolve_target(args.path, args.pipeid)
 
-    if isinstance(target, str):
+    if isinstance(target, Path):
         run_document(target, args.isasync, args.test)
     else:
         printer = getattr(target, "print_results", emit_result)

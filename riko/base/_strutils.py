@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, cast
 
 from requests.structures import CaseInsensitiveDict
 
+from ._iterutils import map_values
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
 
@@ -309,11 +311,40 @@ def slugify(text: str) -> str:
     return text.lower().strip().replace(" ", "-")
 
 
+def get_doc_summary(obj: object) -> str | None:
+    """
+    Gets the first non-blank line of an object's docstring.
+
+    Args:
+
+        obj: Any object; one without a docstring has no summary.
+
+    Returns:
+
+        The stripped summary line, or ``None`` when the docstring is missing or blank.
+
+    Examples:
+
+        >>> def shout():
+        ...     '''
+        ...     Shouts each item.
+        ...
+        ...     More detail.
+        ...     '''
+        >>> get_doc_summary(shout)
+        'Shouts each item.'
+        >>> get_doc_summary(lambda: None)
+
+    """
+    lines = (getattr(obj, "__doc__", None) or "").strip().splitlines()
+    return lines[0].strip() if lines else None
+
+
 def truncate_content[T](content: T | object, length: int = 20) -> T:
     if isinstance(content, str):
         truncated = content[:length] + "…" if len(content) > length else content
     elif isinstance(content, (dict, CaseInsensitiveDict, Mapping)):
-        truncated = {k: truncate_content(v) for k, v in content.items()}
+        truncated = map_values(truncate_content, content)
     elif isinstance(content, (list, tuple, Sequence)):
         truncated = [truncate_content(v) for v in content]
     else:

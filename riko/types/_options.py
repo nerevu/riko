@@ -1,4 +1,4 @@
-"""Module defaults, wrapper options, and dispatch typing contracts."""
+"""Module defaults, decoration options, and dispatch typing contracts."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ class Defaults(TypedDict, total=False):
     wait: int
 
 
-class Opts(TypedDict, total=False):
+class DecorationOptions(TypedDict, total=False):
     ftype: BasicCastType
     ptype: BasicCastType
     assign: str
@@ -82,6 +82,34 @@ class Opts(TypedDict, total=False):
     objectify: bool
     parse: bool
     pollable: bool
+    skip_if: SkipIf
+
+
+class SharedDecorationOptions(TypedDict, total=False):
+    """Decoration options every pipe decorator reads."""
+
+    defaults: Defaults | None
+    isasync: bool
+    ftype: BasicCastType
+    ptype: BasicCastType
+    assign: str
+    extract: str
+    field: str
+    listize: bool
+    objectify: bool
+    parse: bool
+
+
+class OperatorDecorationOptions(SharedDecorationOptions, total=False):
+    """Decoration options the ``operator`` decorator reads."""
+
+    pollable: bool
+    emit: bool | Callable[[ParserOutput], bool] | None
+
+
+class ProcessorDecorationOptions(OperatorDecorationOptions, total=False):
+    """Decoration options the ``processor`` decorator reads."""
+
     skip_if: SkipIf
 
 

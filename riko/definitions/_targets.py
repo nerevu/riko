@@ -14,14 +14,13 @@ Examples:
 """
 
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
-from typing import ClassVar, Literal, overload
+from typing import ClassVar
 
-from riko.base.exceptions import InvalidPipelineError
+from riko.types._collections import normalize_strs
 from riko.types._enums import Backends, FmtLike, Formats, StrLike
 from riko.types._io import PathLike, PathLikeType
-from riko.types._targets import SupportsWrite
+from riko.types._targets import SupportsWrite, resolve_enum
 
 from ._write import (
     Destination,
@@ -33,103 +32,6 @@ from ._write import (
 
 _FILE_APPEND_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
 _FILE_INCREMENTAL_FORMATS: frozenset[Formats] = frozenset({Formats.CSV, Formats.JSONL})
-
-
-@overload
-def normalize_enum[E: StrEnum](  # noqa: E704
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = ...,
-    *,
-    default: E | None = ...,
-    strict: Literal[True] = ...,
-) -> E: ...
-@overload  # noqa: E302
-def normalize_enum[E: StrEnum](  # noqa: E704
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = ...,
-    *,
-    default: E | None = ...,
-    strict: Literal[False],
-) -> E | None: ...
-@overload  # noqa: E302
-def normalize_enum[E: StrEnum](  # noqa: E704
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = ...,
-    *,
-    default: E | None = ...,
-    strict: bool,
-) -> E | None: ...
-def normalize_enum[E: StrEnum](  # noqa: E302
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = None,
-    *,
-    default: E | None = None,
-    strict: bool = True,
-) -> E | None:
-    """Resolves a name or member into the given string enum, or rejects it."""
-    what = enum.__name__ if what is None else what
-
-    if value is None and default is None and strict:
-        raise InvalidPipelineError(f"missing required {what}")
-    elif value is None:
-        result = default
-    else:
-        try:
-            result = value if isinstance(value, enum) else enum(value)
-        except ValueError as e:
-            raise ValueError(f"Invalid {what}: {value!r}") from e
-
-    return result
-
-
-def normalize_strs(value: StrLike | None, what="keys") -> tuple[str, ...]:
-    """
-    Normalizes ``value`` into a tuple of keys.
-
-    A bare string is wrapped; each item of an iterable must be a non-empty string.
-
-    Args:
-
-        value: One key, an iterable of keys, or ``None``.
-
-    Returns:
-
-        The keys as a tuple, empty when ``value`` is ``None``.
-
-    Raises:
-
-        TypeError: When ``value`` is not a string or iterable of strings.
-        ValueError: When a key is empty or not a string, or the keys contain a
-            duplicate.
-
-    Examples:
-
-        >>> normalize_strs("id")
-        ('id',)
-        >>> normalize_strs(["a", "b"])
-        ('a', 'b')
-        >>> normalize_strs(None)
-        ()
-
-    """
-    if value is None:
-        keys: tuple[str, ...] = ()
-    else:
-        try:
-            keys = (value,) if isinstance(value, str) else tuple(value)
-        except TypeError as e:
-            raise TypeError(f"{what} must be a string or iterable of strings") from e
-
-        if not all(key and isinstance(key, str) for key in keys):
-            raise ValueError(f"{what} must be non-empty strings")
-        elif len(set(keys)) != len(keys):
-            raise ValueError(f"duplicate {what} are not allowed: {keys!r}")
-
-    return keys
 
 
 def validate_target_mode(
@@ -179,7 +81,7 @@ def resolve_format(dest: PathLike | None, fmt: FmtLike | None) -> Formats:
     Resolves a serialization format from an explicit ``fmt``.
 
     An explicit ``fmt`` wins. Otherwise the dest's lowercased extension is used.
-    Anything else falls back to ``json``.
+    Anything else falls back to ``"json"``.
 
     Args:
 
@@ -209,13 +111,13 @@ def resolve_format(dest: PathLike | None, fmt: FmtLike | None) -> Formats:
     else:
         resolved = fmt
 
-    return normalize_enum(Formats, resolved, default=Formats.JSON)
+    return resolve_enum(Formats, resolved, default=Formats.JSON, error=ValueError)
 
 
 @dataclass(frozen=True, slots=True)
 class FileTarget:
     """
-    A file target: serialize records with a ``Formats`` converter and write a path.
+    A file target: serialize items with a ``Formats`` converter and write a path.
 
     The target owns its format-dependent behavior: a line-oriented format (csv/jsonl)
     is appendable and delivered incrementally; a whole-document format
@@ -228,7 +130,7 @@ class FileTarget:
         backend: The backend this target serves.
         dest: The destination path.
         fmt: The ``Formats`` converter name, or ``None`` to derive it from the
-            path extension (default: ``json``).
+            path extension (default: "json").
 
     Examples:
 
@@ -351,6 +253,7 @@ def build_write(
 
     Raises:
 
+        TypeError: When ``keys`` is not a string or iterable of strings.
         ValueError: For an invalid ``(dest, mode, keys, fmt)`` combination.
 
     Examples:
@@ -365,9 +268,9 @@ def build_write(
 
     """
     target = normalize_target(dest)
-    resolved_mode = WriteMode(mode)
+    resolved_mode = resolve_enum(WriteMode, mode, error=ValueError)
     capabilities = target.capabilities(fmt)
-    normalized_keys = normalize_strs(keys)
+    normalized_keys = normalize_strs(keys, type_error=TypeError, value_error=ValueError)
 
     validate_target_mode(target, resolved_mode, capabilities, keys=normalized_keys)
     operation = WriteOperation(resolved_mode, keys=normalized_keys)
@@ -377,7 +280,6 @@ def build_write(
 __all__ = [
     "FileTarget",
     "build_write",
-    "normalize_strs",
     "normalize_target",
     "resolve_format",
     "validate_target_mode",

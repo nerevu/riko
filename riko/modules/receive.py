@@ -25,7 +25,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
 
 """
@@ -54,10 +54,10 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import ReceiveObjconf
     from riko.runtime._pubsub._types import ReceiveFunc, Receiver
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = {"ftype": BasicCastType.NONE, "pollable": True}
+OPTS: DecorationOptions = {"ftype": BasicCastType.NONE, "pollable": True}
 DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5, "max_len": 256}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -87,7 +87,7 @@ def register_receiver(
 ) -> None:
     # See https://github.com/ICRAR/ijson#push-interfaces
     if func is not None and on_receive is not None:
-        msg = "the 'receive' pipe accepts either 'func' or 'on_receive', not both"
+        msg = "the 'receive' module accepts either 'func' or 'on_receive', not both"
         raise TypeError(msg)
 
     if name not in sync_hub.receivers:
@@ -139,8 +139,8 @@ async def async_parser(
 
     Args:
 
-        _: The source stream. Unused; items arrive from the sender.
-        objconf: The pipe configuration, containing `name`.
+        _: The input stream. Unused; items arrive from the sender.
+        objconf: The module configuration, containing `name`.
         tuples: Iterable of (item, objconf). Unused.
 
         func: Applied to each received item. It gets the kwargs it names, or
@@ -177,9 +177,9 @@ def parser(
 
     Args:
 
-        _: The source stream. Unused; items arrive from the sender.
+        _: The input stream. Unused; items arrive from the sender.
 
-        objconf: The pipe configuration, containing `name`, `wait`, `max_wait`
+        objconf: The module configuration, containing `name`, `wait`, `max_wait`
             and `max_len`.
 
         tuples: Iterable of (item, objconf). Unused.
@@ -246,14 +246,14 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream. Unused.
+        items (Items): The input stream. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             name (str): Receiver identifier the sender targets. A random name
                 is generated when unset (default: "").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -285,9 +285,9 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[Item | None]:
 
     Args:
 
-        items (Items): The source stream. Unused.
+        items (Items): The input stream. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             name (str): Receiver identifier the sender targets. A random name
                 is generated when unset (default: "").
@@ -300,7 +300,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[Item | None]:
             max_len (int): Queue capacity. The oldest item is dropped with a
                 warning when full (default: 256).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

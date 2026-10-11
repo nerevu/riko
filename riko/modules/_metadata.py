@@ -97,14 +97,45 @@ def get_module_metadata(  # noqa: E704
 def get_module_metadata(  # noqa: E302
     name: ModuleNameLike, strict: bool = False
 ) -> ModuleMetadata | None:
+    """
+    Derives a built-in module's metadata from its pipe callables.
+
+    Args:
+
+        name: Built-in module name.
+        strict: Whether to raise instead of returning ``None`` when the name is not
+            a built-in module or the module declares no metadata.
+
+    Returns:
+
+        The module's metadata, or ``None`` when ``strict`` is false and the name has
+        none.
+
+    Raises:
+
+        ValueError: When ``strict`` is true and the name has no metadata.
+        TypeError: When the module's sync and async pipes disagree about their
+            metadata.
+
+    Examples:
+
+        >>> get_module_metadata("count").type
+        'operator'
+        >>> get_module_metadata("does-not-exist") is None
+        True
+
+    """
     canonical = normalize_module_name(name)
-    module = import_module(f"{_PACKAGE}.{canonical}")
-    pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
-    targets = tuple(cast("ModuleWrapper", pipe) for pipe in pipes if callable(pipe))
-    label = module.__name__
-    metadata = _metadata_from_targets(
-        canonical, targets, label=label, strict_naming=True
-    )
+    module = import_or_else(f"{_PACKAGE}.{canonical}") if canonical else None
+
+    if module is None:
+        metadata = None
+    else:
+        pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
+        targets = tuple(cast("ModuleWrapper", pipe) for pipe in pipes if callable(pipe))
+        metadata = _metadata_from_targets(
+            canonical, targets, label=module.__name__, strict_naming=True
+        )
 
     if strict and metadata is None:
         raise ValueError(f"Module {name!r} has no metadata")
@@ -112,7 +143,7 @@ def get_module_metadata(  # noqa: E302
     return metadata
 
 
-def gen_module_catalog(name: str | None = None) -> Iterator[ModuleMetadata]:
+def gen_module_catalog() -> Iterator[ModuleMetadata]:
     package = import_module(_PACKAGE)
 
     for info in iter_package_modules(package.__path__):
@@ -147,11 +178,6 @@ def gen_registry_catalog() -> Iterator[ModuleMetadata]:
 
         if metadata:
             yield metadata
-
-
-def _gen_doc(module: object) -> Iterator[str]:
-    lines = (getattr(module, "__doc__", "") or "").strip().splitlines()
-    return map(str.strip, lines)
 
 
 def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
@@ -198,7 +224,6 @@ def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
                     module=module,
                     sync_pipe=getattr(module, "pipe", None),
                     async_pipe=getattr(module, "async_pipe", None),
-                    description=next(_gen_doc(module), None),
                 )
     else:
         definition = None

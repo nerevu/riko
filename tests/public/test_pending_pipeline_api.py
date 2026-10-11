@@ -2,21 +2,25 @@
 """
 Tripwires for the parts of the ``Pipeline`` surface that are declared but inert.
 
-Each case is written against the call form it will have once the capability
-lands and asserts the behavior its retired predecessor asserted, so the strict
-xfail flips to a pass the moment the capability ships.
+Each case is written against the call form and behavior it will have once the
+capability lands, so the strict xfail flips to a pass the moment the capability
+ships. Most assert what their retired predecessor asserted; subscriptions are the
+exception, because a subscription is observed through its ``func`` as items are
+published rather than drained afterwards.
 """
 
 from __future__ import annotations
 
 from operator import itemgetter
 from time import perf_counter
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
-from riko import Pipeline
-from riko.types._guards import is_mapping, is_stateful_item
+from riko.base.exceptions import InvalidPipelineError
+from riko.modules._names import Transforms
+from riko.runtime._pipeline import Pipeline
+from riko.types._guards import is_stateful_item
 from riko.types.modules import (
     ItemBuilderConf,
     ParsedParam,
@@ -26,7 +30,7 @@ from riko.types.modules import (
 )
 
 if TYPE_CHECKING:
-    from riko.types._streams import Items
+    from riko.types._streams import Item
 
 SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
 VALUE = "once is 1x,twice is 2x,thrice is 3x"
@@ -50,6 +54,10 @@ SPLIT_PENDING = pytest.mark.xfail(
 CALLABLE_PENDING = pytest.mark.xfail(
     strict=True, reason="Pipeline.map() is not available yet"
 )
+SEED_PENDING = pytest.mark.xfail(
+    strict=True,
+    reason="an unseeded pipeline yields a placeholder item instead of raising",
+)
 PREDICATE_PENDING = pytest.mark.xfail(
     strict=True, reason="gating a node on a per-item predicate is not available yet"
 )
@@ -66,23 +74,25 @@ class TestSubscriptions:
     """Named local subscriptions fed by a publishing pipeline."""
 
     def test_published_items_interleave_with_the_sender(self):
-        events = Pipeline.subscribe("receiver1")
+        seen: list[object] = []
+        events = Pipeline.subscribe("receiver1", func=seen.append)
         stream = iter(_tokenized().publish(events))
-        received = iter(events)
 
         assert next(stream) == EXPECTED[0]
-        assert next(received) == EXPECTED[0]
+        assert seen == EXPECTED[:1]
         assert next(stream) == EXPECTED[1]
-        assert next(received) == EXPECTED[1]
+        assert seen == EXPECTED[:2]
 
     def test_every_subscription_receives_the_whole_batch_in_order(self):
-        first = Pipeline.subscribe("receiver1")
-        second = Pipeline.subscribe("receiver2")
+        first_seen: list[object] = []
+        second_seen: list[object] = []
+        first = Pipeline.subscribe("receiver1", func=first_seen.append)
+        second = Pipeline.subscribe("receiver2", func=second_seen.append)
         sender = _tokenized().publish(first).publish(second)
 
         assert list(sender) == EXPECTED
-        assert list(first) == EXPECTED
-        assert list(second) == EXPECTED
+        assert first_seen == EXPECTED
+        assert second_seen == EXPECTED
 
     def test_func_runs_per_item_and_items_pass_through(self):
         seen: list[object] = []
@@ -90,17 +100,17 @@ class TestSubscriptions:
         sender = _tokenized().publish(archive)
 
         assert list(sender) == EXPECTED
-        assert list(archive) == EXPECTED
         assert seen == EXPECTED
 
     def test_two_publishers_reach_one_subscription(self):
-        events = Pipeline.subscribe("shared")
+        seen: list[object] = []
+        events = Pipeline.subscribe("shared", func=seen.append)
         one = Pipeline(source=[{"content": "a"}]).hash().publish(events)
         two = Pipeline(source=[{"content": "b"}]).hash().publish(events)
 
         assert len(list(one)) == 1
         assert len(list(two)) == 1
-        assert len(list(events)) == 2
+        assert len(seen) == 2
 
     def test_an_undrained_subscription_does_not_block_the_publisher(self):
         events = Pipeline.subscribe("undrained")
@@ -111,13 +121,18 @@ class TestSubscriptions:
         assert list(Pipeline.subscribe("idle")) == []
         assert perf_counter() - started < 0.5
 
-    def test_lifecycle_markers_do_not_leak_into_received_items(self):
-        events = Pipeline.subscribe("leakcheck")
-        list(_tokenized().publish(events))
-        drained = cast("Items", list(events))
+    def test_draining_after_publishing_starts_a_fresh_empty_run(self):
+        events = Pipeline.subscribe("fresh")
+        assert list(_tokenized().publish(events)) == EXPECTED
+        assert list(events) == []
 
-        assert drained == EXPECTED
-        assert not any(is_stateful_item(item) for item in drained if is_mapping(item))
+    def test_lifecycle_markers_do_not_leak_into_received_items(self):
+        seen: list[Item] = []
+        events = Pipeline.subscribe("leakcheck", func=seen.append)
+        list(_tokenized().publish(events))
+
+        assert seen == EXPECTED
+        assert not any(is_stateful_item(item) for item in seen)
 
 
 @SPLIT_PENDING
@@ -181,3 +196,11 @@ class TestConditionalNodes:
             skip_if=lambda item: item.get("kind") != "hourly",
         )
         assert [item.get("rate") for item in pipeline] == ["$1 / hr", "$1"]
+
+
+@SEED_PENDING
+def test_an_unseeded_pipeline_requires_a_seed():
+    pipeline = Pipeline.from_module(Transforms.REVERSE)
+
+    with pytest.raises((InvalidPipelineError, TypeError), match="seed"):
+        list(pipeline)

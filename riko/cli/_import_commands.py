@@ -11,28 +11,28 @@ import click
 from riko.base._paths import PACKAGE_DIR
 from riko.base.exceptions import ImportLintError
 
-from ._lint_canonical_imports import check_canonical_imports
+from ._lint_canonical_imports import lint_canonical_imports
 from ._lint_import_architecture import (
-    generate_report,
+    lint_architecture,
+    load_architecture_report,
     render_architecture,
-    validate_architecture,
 )
-from ._lint_relative_imports import check_relative_imports
+from ._lint_relative_imports import lint_relative_imports
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-def _check_architecture(root: Path) -> int:
-    report = generate_report(root)
+def _lint_architecture_imports(root: Path) -> int:
+    report = load_architecture_report(root)
     print(render_architecture(report))
-    return validate_architecture(report)
+    return lint_architecture(report)
 
 
 _IMPORT_CHECKS: dict[str, Callable[[Path], int]] = {
-    "canonical": check_canonical_imports,
-    "relative": check_relative_imports,
-    "architecture": _check_architecture,
+    "canonical": lint_canonical_imports,
+    "relative": lint_relative_imports,
+    "architecture": _lint_architecture_imports,
 }
 
 

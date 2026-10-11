@@ -36,7 +36,7 @@ Remove credentials, tokens, private URLs, and sensitive data before posting.
 Feature proposals
 ^^^^^^^^^^^^^^^^^
 
-Explain the problem before proposing an API. Describe why existing ``pipes`` or
+Explain the problem before proposing an API. Describe why existing ``modules`` or
 ordinary Python composition are insufficient, and keep the initial scope narrow.
 Large changes should be discussed before substantial implementation work begins.
 Remember that this is a volunteer-driven project, and that contributions are
@@ -132,20 +132,31 @@ The common development commands are:
 
 ``manage lint``
     Run Ruff lint plus ``ruff format --check`` by default. Standard checks may be
-    selected additively with ``--rst``, ``--docs``, ``--actions``, ``--yaml``, and
-    ``--docstrings``. ``manage lint --all`` runs all standard checks, including
-    all import-contract checks. Type completeness, strict pylint, and distribution
-    checks remain explicit via ``--check-types``, ``--verify-types``, ``--strict``,
-    and ``--dist``.
+    selected additively with ``--rst``, ``--docs``, ``--actions``, ``--yaml``,
+    ``--docstrings``, ``--terms`` (phrases the reserved-terms rules replace),
+    ``--literals`` (single-quoted or backticked default values), and
+    ``--deps`` (imports that ``pyproject.toml`` does not declare, declared
+    dependencies nothing imports, and typing stubs shipped as runtime requirements).
+    ``manage lint --all`` runs all standard checks, including all import-contract ones.
+    Type completeness, strict pylint, and distribution checks remain explicit via
+    ``--check-types``, ``--verify-types``, ``--strict``, and ``--dist``.
 
 ``manage lint imports``
     Check internal import contracts. With no selector it runs the canonical-import
     check. Use ``--canonical``, ``--relative``, and ``--architecture`` additively,
     or ``--all`` for all three.
 
+``manage upgrade``
+    Upgrade every locked dependency to the newest version ``pyproject.toml``
+    allows, then sync the active environment to the new lock. Use repeatable
+    ``--package`` to upgrade only named packages, ``--no-sync`` to update
+    ``uv.lock`` alone, and ``--daily`` to skip when a full upgrade already
+    succeeded today. CI installs exactly what ``uv.lock`` pins and never
+    upgrades, so commit the updated lock with the change it was tested against.
+
 ``manage codegen``
     Regenerate derived repository artifacts. With no selector it regenerates
-    configuration types. Use ``--config``, ``--names``, ``--pipes``, and ``--api``
+    configuration types. Use ``--config``, ``--names``, and ``--api``
     additively, or ``--all`` for every generator.
 
 Daily development workflow
@@ -182,56 +193,63 @@ Before requesting review, use this order. It keeps generated files current befor
 formatting, proves the changed behavior with a narrow test first, then widens to
 the repository-wide checks:
 
-1. Regenerate any affected artifacts.
+1. Upgrade locked dependencies, so new tool releases surface locally rather
+   than in CI.
+
+   .. code-block:: bash
+
+       uv run manage upgrade --daily
+
+2. Regenerate any affected artifacts.
 
    .. code-block:: bash
 
        uv run manage codegen --config
 
-   Choose the relevant ``--config``, ``--names``, ``--pipes``, and ``--api``
+   Choose the relevant ``--config``, ``--names``, and ``--api``
    selectors, or use ``--all`` when appropriate. Skip this step when no generated
    input changed.
 
-2. Format the changed code (and YAML, when applicable).
+3. Format the changed code (and YAML, when applicable).
 
    .. code-block:: bash
 
        uv run manage prettify
        uv run manage prettify --yaml
 
-3. Run focused tests for the behavior being changed.
+4. Run focused tests for the behavior being changed.
 
    .. code-block:: bash
 
        uv run manage test --no-cov tests/path/to/test_file.py
 
-4. Run the complete local test suite.
+5. Run the complete local test suite.
 
    .. code-block:: bash
 
        uv run manage test --no-cov
 
-5. Run the standard repository lint bundle.
+6. Run the standard repository lint bundle.
 
    .. code-block:: bash
 
        uv run manage lint --all
 
-6. Run both type-checking passes explicitly.
+7. Run both type-checking passes explicitly.
 
    .. code-block:: bash
 
        uv run manage lint --check-types
        uv run manage lint --verify-types
 
-7. Run the supported-version matrix when the change affects packaging,
+8. Run the supported-version matrix when the change affects packaging,
    dependencies, typing, async behavior, or interpreter-specific code.
 
    .. code-block:: bash
 
        uvx tox run
 
-Steps 4--6 match the core test/lint/type checks used by CI. ``manage lint --all``
+Steps 5--7 match the core test/lint/type checks used by CI. ``manage lint --all``
 intentionally does not include the type checks, strict pylint, or distribution
 checks, so keep the two pyright commands explicit.
 
@@ -276,7 +294,8 @@ doctests show real returned values.
 - Import application APIs from ``riko``.
 - Import supported module-authoring decorators and protocols from ``riko.ext``.
 - Treat underscore-prefixed modules and implementation details as private.
-- Preserve sync and async output parity when a module exposes both paths.
+- Preserve sync and async output parity when a module exposes both ``pipe`` and
+  ``async_pipe``.
 - Keep pipelines single-use and iterator semantics explicit.
 - Add type annotations for new public and extension-facing code.
 - Let ``ruff`` format code instead of hand-tuning style around the formatter.
@@ -292,13 +311,13 @@ below, each row's rule is the test:
 Verb           Meaning                                Rule                                                         Example
 =============  =====================================  ===========================================================  ===========================
 ``get``        Query or compute a value               No ambient state; doesn't canonicalize or construct          ``get_document_format``
-``parse``      Representation → semantic structure    Malformed input raises; no resolution context                ``parse_document``
-``normalize``  Accepted form → canonical form         Idempotent; output is itself an accepted form                ``normalize_url``
+``parse``      Representation → semantic structure    Malformed input raises; forbids reference/context/fallback   ``parse_document``
+``normalize``  Accepted form → canonical form         Idempotent/no default=; output is itself an accepted form    ``normalize_url``
 ``resolve``    Pick the effective value               Uses reference/context/fallback; "no match" is not an error  ``resolve_format``
 ``require``    Enforce a required value or condition  Raises on failure; never defaults or substitutes             ``require_str``
 ``load``       Acquire from outside                   Crosses an external/provider boundary                        ``load_settings``
 ``validate``   Check a contract                       Raises if invalid; never transforms or replaces              ``Workflow.validate``
-``build``      Assemble a new artifact                Dependencies explicit; failures may raise                    ``build_conf``
+``build``      Assemble a new artifact                Produces a new composite from inputs; failures may raise     ``build_conf``
 =============  =====================================  ===========================================================  ===========================
 
 ``require`` is the general narrow-or-raise verb, not "``resolve`` that raises":

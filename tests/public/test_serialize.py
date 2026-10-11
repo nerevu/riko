@@ -25,16 +25,21 @@ RICH_RAW = {
         {
             "id": "read-1",
             "name": "read",
-            "type": "read",
+            "family": "read",
             "backend": "http",
             "fmt": "json",
         },
         {"id": "filter-1", "name": "filter", "conf": {"rule": {"field": "x"}}},
-        {"id": "sub-1", "name": "listen", "type": "subscribe", "policy": {"buffer": 0}},
+        {
+            "id": "sub-1",
+            "name": "listen",
+            "family": "subscribe",
+            "policy": {"buffer": 0},
+        },
         {
             "id": "write-1",
             "name": "store",
-            "type": "write",
+            "family": "write",
             "backend": "file",
             "fmt": "csv",
             "mode": "append",
@@ -47,7 +52,7 @@ RICH_RAW = {
         {
             "source": {"node": "filter-1"},
             "target": {"node": "sub-1"},
-            "type": "publish",
+            "family": "publish",
         },
         {"source": {"node": "filter-1"}, "target": {"node": "write-1"}},
     ],
@@ -55,17 +60,17 @@ RICH_RAW = {
 }
 
 RICH_GOLDEN = (
-    b'{"edges":[{"source":{"node":"read-1","port":"out"},"target":{"node":"filter-1",'
-    b'"port":"in"},"type":"stream"},{"source":{"node":"filter-1","port":"out"},"target'
-    b'":{"node":"sub-1","port":"in"},"type":"publish"},{"source":{"node":"filter-1","'
-    b'port":"out"},"target":{"node":"write-1","port":"in"},"type":"stream"}],"inputs":'
-    b'{"since":{"type":"string"}},"nodes":{"filter-1":{"conf":{"rule":{"field":"x"}},'
-    b'"id":"filter-1","name":"filter","type":"module"},"read-1":{"backend":"http","fmt'
-    b'":"json","id":"read-1","name":"read","type":"read"},"sub-1":{"id":"sub-1","name"'
-    b':"listen","policy":{"buffer":0},"type":"subscribe"},"write-1":{"backend":"file",'
-    b'"fmt":"csv","id":"write-1","keys":["id"],"mode":"append","name":"store","resource'
-    b's":{"db":"db"},"type":"write"}},"outputs":{"default":{"node":"write-1","port":"'
-    b'out"}},"resources":["db"],"version":"2"}'
+    b'{"edges":[{"family":"stream","source":{"node":"read-1","port":"out"},"target":{"'
+    b'node":"filter-1","port":"in"}},{"family":"publish","source":{"node":"filter-1","'
+    b'port":"out"},"target":{"node":"sub-1","port":"in"}},{"family":"stream","source":'
+    b'{"node":"filter-1","port":"out"},"target":{"node":"write-1","port":"in"}}],"inpu'
+    b'ts":{"since":{"type":"string"}},"nodes":{"filter-1":{"conf":{"rule":{"field":"x"'
+    b'}},"family":"module","id":"filter-1","name":"filter"},"read-1":{"backend":"http"'
+    b',"family":"read","fmt":"json","id":"read-1","name":"read"},"sub-1":{"family":"su'
+    b'bscribe","id":"sub-1","name":"listen","policy":{"buffer":0}},"write-1":{"backend'
+    b'":"file","family":"write","fmt":"csv","id":"write-1","keys":["id"],"mode":"appen'
+    b'd","name":"store","resources":{"db":"db"}}},"outputs":{"default":{"node":"write-'
+    b'1","port":"out"}},"resources":["db"],"version":"2"}'
 )
 
 TOPOLOGIES = {
@@ -79,14 +84,14 @@ TOPOLOGIES = {
             {
                 "id": "r",
                 "name": "read",
-                "type": "read",
+                "family": "read",
                 "backend": "s3",
                 "fmt": "jsonl",
             },
             {
                 "id": "w",
                 "name": "store",
-                "type": "write",
+                "family": "write",
                 "backend": "file",
                 "keys": ["k"],
             },
@@ -95,14 +100,14 @@ TOPOLOGIES = {
         "outputs": {"default": {"node": "w", "port": "out"}},
     },
     "cache": {
-        "nodes": [{"id": "c", "name": "cache", "type": "cache", "policy": {"ttl": 5}}]
+        "nodes": [{"id": "c", "name": "cache", "family": "cache", "policy": {"ttl": 5}}]
     },
     "action": {
         "nodes": [
             {
                 "id": "a",
                 "name": "notify",
-                "type": "action",
+                "family": "action",
                 "backend": "intune",
                 "params": {"scope": "all"},
             }
@@ -111,10 +116,10 @@ TOPOLOGIES = {
     "publish-subscribe": {
         "nodes": [
             {"id": "p", "name": "produce"},
-            {"id": "s", "name": "listen", "type": "subscribe"},
+            {"id": "s", "name": "listen", "family": "subscribe"},
         ],
         "edges": [
-            {"source": {"node": "p"}, "target": {"node": "s"}, "type": "publish"}
+            {"source": {"node": "p"}, "target": {"node": "s"}, "family": "publish"}
         ],
         "outputs": {"default": {"node": "p", "port": "out"}},
     },
@@ -158,6 +163,12 @@ PIPE_DEF = {
         },
     ],
 }
+
+
+@pytest.mark.parametrize("document", ["{bad", b"\xff", "[]"])
+def test_unparseable_documents_are_invalid_pipelines(document):
+    with pytest.raises(InvalidPipelineError):
+        parse_document(document)
 
 
 def test_golden_bytes():
@@ -232,7 +243,7 @@ def test_write_node_destination_survives():
                 {
                     "id": "w",
                     "name": "store",
-                    "type": "write",
+                    "family": "write",
                     "backend": "file",
                     "dest": "out.jsonl",
                     "fmt": "jsonl",
@@ -249,6 +260,7 @@ def test_migration_then_serialization_emits_no_pipe_def_structure():
     data = serialize_workflow(migrate_v1_to_v2(PIPE_DEF), indent=None)
     text = data.decode("utf-8")
     assert b'"version":"2"' in data
+
     for token in ("_OUTPUT", "_INPUT", "wires", '"src"', '"tgt"', '"type":"output"'):
         assert token not in text
 
@@ -296,6 +308,44 @@ def test_non_json_native_conf_value_rejected(value):
     raw = {"nodes": [{"id": "n", "name": "tag", "conf": {"x": value}}]}
 
     with pytest.raises(InvalidPipelineError):
+        normalize_workflow(raw)
+
+
+_NODE_VALUE_PLACEMENTS = {
+    "options": lambda value: {"name": "tag", "options": {"assign": value}},
+    "embed": lambda value: {
+        "name": "loop",
+        "embed": {"name": "tag", "conf": {"x": value}},
+    },
+    "policy": lambda value: {
+        "family": "cache",
+        "name": "cache",
+        "policy": {"x": value},
+    },
+    "params": lambda value: {
+        "family": "action",
+        "name": "notify",
+        "backend": "file",
+        "params": {"x": value},
+    },
+}
+
+
+@pytest.mark.parametrize("value", [Decimal("1.50"), {"a", "b"}, b"bytes", float("nan")])
+@pytest.mark.parametrize("placement", sorted(_NODE_VALUE_PLACEMENTS))
+def test_non_json_native_node_value_rejected(placement, value):
+    raw = {"nodes": [{"id": "n", **_NODE_VALUE_PLACEMENTS[placement](value)}]}
+
+    with pytest.raises(InvalidPipelineError, match="JSON-native"):
+        normalize_workflow(raw)
+
+
+def test_non_string_policy_key_rejected():
+    raw = {
+        "nodes": [{"id": "n", "family": "cache", "name": "cache", "policy": {1: True}}]
+    }
+
+    with pytest.raises(InvalidPipelineError, match="mapping key must be of type str"):
         normalize_workflow(raw)
 
 

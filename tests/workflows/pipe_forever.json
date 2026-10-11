@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-1",
                 "port": "out"
@@ -8,15 +9,14 @@
             "target": {
                 "node": "sw-2",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
         "sw-1": {
+            "family": "module",
             "id": "sw-1",
-            "name": "forever",
-            "type": "module"
+            "name": "forever"
         },
         "sw-2": {
             "conf": {
@@ -25,9 +25,9 @@
                     "value": "3"
                 }
             },
+            "family": "module",
             "id": "sw-2",
-            "name": "truncate",
-            "type": "module"
+            "name": "truncate"
         }
     },
     "outputs": {

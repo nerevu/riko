@@ -8,8 +8,6 @@ detection, omitted-outputs materialization, input shorthand, resource sugar, and
 idempotency over an already-normalized ``Workflow``.
 """
 
-from types import MappingProxyType
-
 import pytest
 
 from riko.base.exceptions import InvalidPipelineError
@@ -25,6 +23,7 @@ from riko.definitions._workflow import (
 from riko.definitions._write import WriteMode
 from riko.ext import normalize_workflow
 from riko.runtime._normalize import _normalize_port
+from riko.types._collections import FrozenDict
 from riko.types._enums import Backends, Formats
 from riko.types._workflow import Endpoint
 
@@ -72,10 +71,10 @@ def test_family_dispatch_and_enum_coercion():
     workflow = normalize_workflow(
         {
             "nodes": [
-                {"name": "read", "type": "read", "backend": "file", "fmt": "csv"},
+                {"name": "read", "family": "read", "backend": "file", "fmt": "csv"},
                 {
                     "name": "write",
-                    "type": "write",
+                    "family": "write",
                     "backend": "s3",
                     "fmt": "jsonl",
                     "mode": "append",
@@ -97,8 +96,38 @@ def test_family_dispatch_and_enum_coercion():
 
 
 def test_unknown_backend_raises():
-    with pytest.raises(ValueError, match="Invalid Backends"):
-        normalize_workflow({"nodes": [{"name": "r", "type": "read", "backend": "ftp"}]})
+    with pytest.raises(InvalidPipelineError, match="Invalid Backends"):
+        normalize_workflow(
+            {"nodes": [{"name": "r", "family": "read", "backend": "ftp"}]}
+        )
+
+
+@pytest.mark.parametrize(
+    ("node", "match"),
+    [
+        pytest.param(
+            {"name": "fetch", "resources": 5}, "node 'resources'", id="resources"
+        ),
+        pytest.param(
+            {"name": "w", "family": "write", "backend": "file", "keys": 5},
+            "WriteNode 'keys' must be a string",
+            id="keys-type",
+        ),
+        pytest.param(
+            {"name": "w", "family": "write", "backend": "file", "keys": ["a", "a"]},
+            "duplicate WriteNode 'keys'",
+            id="keys-duplicate",
+        ),
+        pytest.param(
+            {"name": "w", "family": "write"},
+            r"missing WriteNode key\(s\): \['backend'\]",
+            id="missing-backend",
+        ),
+    ],
+)
+def test_malformed_node_values_raise_invalid_pipeline(node, match):
+    with pytest.raises(InvalidPipelineError, match=match):
+        normalize_workflow({"nodes": [node]})
 
 
 def test_unknown_node_family_raises():
@@ -108,7 +137,7 @@ def test_unknown_node_family_raises():
 
 def test_missing_node_name_raises():
     with pytest.raises(InvalidPipelineError, match="node 'name'"):
-        normalize_workflow({"nodes": [{"type": "module"}]})
+        normalize_workflow({"nodes": [{"family": "module"}]})
 
 
 def test_legacy_ports_map_to_canonical_grammar():
@@ -154,7 +183,7 @@ def test_publish_edge_detected_from_subscribe_target():
         {
             "nodes": [
                 {"id": "a", "name": "fetch"},
-                {"id": "s", "name": "sub", "type": "subscribe"},
+                {"id": "s", "name": "sub", "family": "subscribe"},
             ],
             "edges": [{"source": {"node": "a"}, "target": {"node": "s"}}],
         }
@@ -205,6 +234,14 @@ def test_input_mapping_passes_through():
     assert workflow.inputs["n"] == schema
 
 
+@pytest.mark.parametrize("declaration", [5, ["a"], None])
+def test_input_without_type_name_or_schema_raises(declaration):
+    raw = {"nodes": [{"id": "a", "name": "fetch"}], "inputs": {"n": declaration}}
+
+    with pytest.raises(InvalidPipelineError, match="type name or mapping"):
+        normalize_workflow(raw)
+
+
 def test_bare_string_resource_binds_to_itself():
     workflow = normalize_workflow(
         {"nodes": [{"id": "a", "name": "fetch", "resources": "db"}]}
@@ -239,35 +276,39 @@ def test_duplicate_ids_rejected():
 
 
 def test_invalid_write_mode_rejected():
-    with pytest.raises(ValueError, match="Invalid WriteMode"):
+    with pytest.raises(InvalidPipelineError, match="Invalid WriteMode"):
         normalize_workflow(
             {
                 "nodes": [
-                    {"name": "w", "type": "write", "backend": "file", "mode": "apend"}
+                    {"name": "w", "family": "write", "backend": "file", "mode": "apend"}
                 ]
             }
         )
 
 
 def test_invalid_format_rejected():
-    with pytest.raises(ValueError, match="Invalid Formats"):
+    with pytest.raises(InvalidPipelineError, match="Invalid Formats"):
         normalize_workflow(
-            {"nodes": [{"name": "r", "type": "read", "backend": "file", "fmt": "xml"}]}
+            {
+                "nodes": [
+                    {"name": "r", "family": "read", "backend": "file", "fmt": "xml"}
+                ]
+            }
         )
 
 
 def test_unknown_node_field_rejected():
-    with pytest.raises(InvalidPipelineError, match="unknown ModuleNode field"):
+    with pytest.raises(InvalidPipelineError, match="unknown ModuleNode key"):
         normalize_workflow({"nodes": [{"name": "fetch", "bogus": 1}]})
 
 
 def test_unknown_top_level_field_rejected():
-    with pytest.raises(InvalidPipelineError, match="unknown Workflow field"):
+    with pytest.raises(InvalidPipelineError, match="unknown Workflow key"):
         normalize_workflow({"nodes": [{"name": "fetch"}], "bogus": 1})
 
 
 def test_unknown_edge_field_rejected():
-    with pytest.raises(InvalidPipelineError, match="unknown Edge field"):
+    with pytest.raises(InvalidPipelineError, match="unknown Edge key"):
         normalize_workflow(
             {
                 "nodes": [{"id": "a", "name": "fetch"}],
@@ -299,7 +340,7 @@ def test_explicit_stream_family_to_subscribe_is_preserved():
         {
             "nodes": [
                 {"id": "a", "name": "fetch"},
-                {"id": "s", "name": "sub", "type": "subscribe"},
+                {"id": "s", "name": "sub", "family": "subscribe"},
             ],
             "edges": [
                 {"source": {"node": "a"}, "target": {"node": "s"}, "family": "stream"}
@@ -338,7 +379,7 @@ def test_write_dest_is_preserved():
     workflow = normalize_workflow(
         {
             "nodes": [
-                {"name": "w", "type": "write", "backend": "file", "dest": "out.json"}
+                {"name": "w", "family": "write", "backend": "file", "dest": "out.json"}
             ]
         }
     )
@@ -363,7 +404,7 @@ def test_normalizing_a_workflow_is_a_fixed_point():
         {
             "nodes": [
                 {"name": "fetch"},
-                {"name": "write", "type": "write", "backend": "file"},
+                {"name": "write", "family": "write", "backend": "file"},
             ],
             "edges": [{"source": {"node": "fetch-1"}, "target": {"node": "write-1"}}],
         }
@@ -376,7 +417,7 @@ def test_normalize_renormalizes_a_hand_built_workflow():
     a = ModuleNode(id="a", name="fetch")
     b = ModuleNode(id="b", name="filter")
     hand = Workflow(
-        nodes={"a": a, "b": b},
+        nodes=[a, b],
         edges=(StreamEdge(Endpoint("a", "_OUTPUT"), Endpoint("b", "_OTHER2")),),
         outputs={"default": Endpoint("b", "_OUTPUT")},
         inputs={},
@@ -398,7 +439,7 @@ def test_mapping_key_matching_inner_id_allowed():
 
 
 def test_unknown_endpoint_field_rejected():
-    with pytest.raises(InvalidPipelineError, match="unknown Endpoint field"):
+    with pytest.raises(InvalidPipelineError, match="unknown Endpoint key"):
         normalize_workflow(
             {
                 "nodes": [{"id": "a", "name": "f"}, {"id": "b", "name": "g"}],
@@ -416,7 +457,7 @@ def test_format_alias_maps_to_fmt():
                 {
                     "id": "r",
                     "name": "read",
-                    "type": "read",
+                    "family": "read",
                     "backend": "file",
                     "format": "csv",
                 }
@@ -428,15 +469,15 @@ def test_format_alias_maps_to_fmt():
     assert read.fmt is Formats.CSV
 
 
-def test_format_and_fmt_together_rejected():
-    with pytest.raises(InvalidPipelineError, match="'fmt' or 'format'"):
+def test_conflicting_format_and_fmt_rejected():
+    with pytest.raises(InvalidPipelineError, match="conflicting node 'fmt'/'format'"):
         normalize_workflow(
             {
                 "nodes": [
                     {
                         "id": "r",
                         "name": "read",
-                        "type": "read",
+                        "family": "read",
                         "backend": "file",
                         "fmt": "csv",
                         "format": "jsonl",
@@ -444,6 +485,14 @@ def test_format_and_fmt_together_rejected():
                 ]
             }
         )
+
+
+def test_agreeing_format_and_fmt_accepted():
+    node = {"id": "r", "name": "read", "family": "read", "backend": "file"}
+    workflow = normalize_workflow({"nodes": [{**node, "fmt": "csv", "format": "csv"}]})
+    read = workflow.nodes["r"]
+    assert isinstance(read, ReadNode)
+    assert read.fmt is Formats.CSV
 
 
 @pytest.mark.parametrize("port", ["out:-1", "in:-1", "out:a b"])
@@ -498,7 +547,7 @@ def test_raw_call_options_are_accepted():
 
 
 def test_unknown_call_option_is_rejected():
-    with pytest.raises(InvalidPipelineError, match="unknown module option"):
+    with pytest.raises(InvalidPipelineError, match="unknown ModuleNode 'options' key"):
         normalize_workflow({"nodes": [{"name": "tokenizer", "options": {"bogus": 1}}]})
 
 
@@ -513,7 +562,7 @@ def test_nested_conf_is_deeply_frozen_and_isolated():
     assert node.conf is not None
     assert node.conf.get("nested") == {"k": 1}
     assert node.conf.get("list") == (1, 2)
-    assert isinstance(node.conf.get("nested"), MappingProxyType)
+    assert isinstance(node.conf.get("nested"), FrozenDict)
 
 
 def test_raw_embed_becomes_a_read_only_node_field():
@@ -527,7 +576,7 @@ def test_raw_embed_becomes_a_read_only_node_field():
     node = workflow.nodes["loop-1"]
     assert isinstance(node, ModuleNode)
     assert node.embed == {"name": "tokenizer", "conf": {"d": " "}}
-    assert isinstance(node.embed, MappingProxyType)
+    assert isinstance(node.embed, FrozenDict)
     assert node.conf == {}
 
 
@@ -541,14 +590,14 @@ def test_embed_conf_defaults_to_empty_when_omitted():
 
 
 def test_unknown_embed_key_is_rejected():
-    with pytest.raises(InvalidPipelineError, match="unknown embed key"):
+    with pytest.raises(InvalidPipelineError, match="unknown ModuleNode 'embed' key"):
         normalize_workflow(
             {"nodes": [{"name": "loop", "embed": {"name": "tokenizer", "bogus": 1}}]}
         )
 
 
 def test_embed_without_a_name_is_rejected():
-    with pytest.raises(InvalidPipelineError, match="missing embed key"):
+    with pytest.raises(InvalidPipelineError, match="missing ModuleNode 'embed' key"):
         normalize_workflow({"nodes": [{"name": "loop", "embed": {"conf": {}}}]})
 
 
@@ -561,3 +610,40 @@ def test_normalizing_a_workflow_with_an_embed_is_a_fixed_point():
         }
     )
     assert normalize_workflow(workflow) == workflow
+
+
+def test_generated_ids_skip_explicit_ids():
+    nodes = [{"name": "fetch"}, {"id": "fetch-1", "name": "sort"}]
+    workflow = normalize_workflow({"nodes": nodes})
+    assert list(workflow.nodes) == ["fetch-2", "fetch-1"]
+
+
+def test_null_endpoint_port_takes_the_default_port():
+    workflow = normalize_workflow(
+        {
+            "nodes": [{"id": "a", "name": "forever"}, {"id": "b", "name": "sort"}],
+            "edges": [
+                {
+                    "source": {"node": "a", "port": None},
+                    "target": {"node": "b", "port": None},
+                }
+            ],
+        }
+    )
+    (edge,) = workflow.edges
+    assert (edge.source, edge.target) == (Endpoint("a", "out"), Endpoint("b", "in"))
+
+
+def test_node_type_key_points_to_name_and_family():
+    node = {"id": "a", "type": "fetch", "conf": {"url": "x"}}
+
+    with pytest.raises(InvalidPipelineError, match="a module goes in 'name'"):
+        normalize_workflow({"nodes": [node]})
+
+
+def test_edge_type_key_rejected():
+    edge = {"source": {"node": "a"}, "target": {"node": "b"}, "type": "stream"}
+    nodes = [{"id": "a", "name": "fetch"}, {"id": "b", "name": "filter"}]
+
+    with pytest.raises(InvalidPipelineError, match="type"):
+        normalize_workflow({"nodes": nodes, "edges": [edge]})

@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-521",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-572",
                 "port": "in:URL"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-572",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-584",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-584",
                 "port": "out"
@@ -30,10 +31,10 @@
             "target": {
                 "node": "sw-595",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-595",
                 "port": "out"
@@ -41,10 +42,10 @@
             "target": {
                 "node": "sw-606",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-621",
                 "port": "out"
@@ -52,8 +53,7 @@
             "target": {
                 "node": "sw-584",
                 "port": "in:RULE_1_value"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -80,9 +80,9 @@
                     "value": "Caption URL"
                 }
             },
+            "family": "module",
             "id": "sw-521",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-572": {
             "conf": {
@@ -95,9 +95,9 @@
                     "type": "url"
                 }
             },
+            "family": "module",
             "id": "sw-572",
-            "name": "fetchdata",
-            "type": "module"
+            "name": "fetchdata"
         },
         "sw-584": {
             "conf": {
@@ -126,9 +126,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-584",
-            "name": "filter",
-            "type": "module"
+            "name": "filter"
         },
         "sw-595": {
             "conf": {
@@ -163,14 +163,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-595",
             "name": "rename",
             "options": {
                 "assign": "loop:rename",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-606": {
             "conf": {
@@ -191,14 +191,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-606",
             "name": "regex",
             "options": {
                 "assign": "loop:regex",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-621": {
             "conf": {
@@ -223,9 +223,9 @@
                     "value": "Caption search term"
                 }
             },
+            "family": "module",
             "id": "sw-621",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         }
     },
     "outputs": {

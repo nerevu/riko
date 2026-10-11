@@ -6,8 +6,8 @@ Point a ``ModuleDefinition`` at any object exposing ``pipe`` / ``async_pipe`` an
 the registry reads both interfaces off it. Here we give the built-in ``count`` a
 second, namespaced name without touching riko core.
 
-For explicit interface callables, see ``register_module.py``. For the packaged
-entry-point plugin path, see ``riko-example-ext/``.
+For explicit interface callables, see ``register_module.py``. For the installable
+extension package, see ``riko-example-ext/``.
 
 Examples:
 

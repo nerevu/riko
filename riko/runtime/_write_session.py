@@ -12,6 +12,7 @@ from riko.bado import _backend
 from riko.bado._backend import async_open, asyncify
 from riko.bado.itertools import as_async
 from riko.base._constants import ENCODING
+from riko.base.exceptions import PipelineStateError, UnsupportedTargetError
 from riko.definitions._resource_definition import OneShotResource, Resource
 from riko.definitions._targets import FileTarget, build_write
 from riko.definitions._write import (
@@ -23,7 +24,7 @@ from riko.definitions._write import (
     WriteResult,
 )
 from riko.io._reencode import IterStringIO, Reencoder, reencode
-from riko.io._serialization import serialize_records
+from riko.io._serialization import serialize_items
 from riko.types._enums import FmtLike, Formats, StrLike
 from riko.types._guards import is_mapping
 
@@ -55,13 +56,13 @@ class _SessionState(Enum):
 
 
 class _InputShape(Enum):
-    """How a session's records arrive: repeated singletons or one whole stream."""
+    """How a session's items arrive: repeated singletons or one whole stream."""
 
     ITEM = auto()
     STREAM = auto()
 
 
-def _as_text(content: str | ConversionOutput) -> str:
+def _cast_text(content: str | ConversionOutput) -> str:
     """Coalesces converter output (a string, ``StringIO``, or chunks) into text."""
     if isinstance(content, StringIO):
         text = content.getvalue()
@@ -73,7 +74,7 @@ def _as_text(content: str | ConversionOutput) -> str:
     return text
 
 
-def _as_bytes(
+def _cast_bytes(
     content: str | ConversionOutput,
 ) -> IterStringIO | Reencoder[bytes] | bytes:
     if isinstance(content, StringIO):
@@ -128,22 +129,27 @@ class _FileWriteSession:
         if self._input_shape is None:
             self._input_shape = value
         elif self._input_shape is not value:
-            raise RuntimeError("cannot mix item and stream delivery")
+            state = f"{self._input_shape.name.lower()} delivery"
+            msg = "mix item and stream delivery in"
+            raise PipelineStateError(state, msg, subject="write session")
         elif self._input_shape is _InputShape.STREAM:
-            raise RuntimeError("cannot attempt multiple stream deliveries")
+            action = "attempt multiple stream deliveries in"
+            raise PipelineStateError("stream delivery", action, subject="write session")
 
     def _require_open(self) -> None:
         if self._state is not _SessionState.OPEN:
-            raise RuntimeError(f"write session is {self._state.name.lower()}")
+            state = self._state.name.lower()
+            raise PipelineStateError(state, "write to", subject="write session")
 
-    def _validate_items(self, items: Items) -> Stream:
+    def _gen_csv_records(self, items: Items) -> Stream:
         if self.csv_format:
             for item in items:
                 if self._fields is None:
                     self._fields = tuple(item)
                 else:
                     if extra := set(item).difference(self._fields):
-                        msg = f"CSV record has unexpected fields: {sorted(extra)!r}"
+                        _extra = sorted(extra)
+                        msg = f"item has fields not in the CSV header: {_extra!r}"
                         raise ValueError(msg)
 
                 yield {k: item.get(k) for k in self._fields}
@@ -162,7 +168,7 @@ class _SyncFileWriteSession(_FileWriteSession):
     r"""
     A live, execution-owned file write session.
 
-    Acquires the destination once, receives records (``Item``/``Items``) via
+    Acquires the destination once, receives items (``Item``/``Items``) via
     :meth:`write`, then commits with :meth:`finalize` or abandons with :meth:`abort`
     before :meth:`teardown` releases the file. An incremental format (csv/jsonl) emits
     each converted chunk as it arrives. A framed format (json/geojson/…) stages the
@@ -265,31 +271,33 @@ class _SyncFileWriteSession(_FileWriteSession):
         if self._incremental:
             self._handle = self.path.open(self.file_mode)
 
-    def _convert(self, items: Items, validate: bool = False) -> ConversionOutput | str:
+    def _serialize(
+        self, items: Items, validate: bool = False
+    ) -> ConversionOutput | str:
         if validate:
-            items = self._validate_items(items)
+            items = self._gen_csv_records(items)
 
         kwargs = {"skip_header": self.skip_header} if self.csv_format else {}
-        result = serialize_records(items, self.fmt, **kwargs)
+        result = serialize_items(items, self.fmt, **kwargs)
 
         if result and self.jsonl_format:
-            result = _normalize_jsonl(_as_text(result))
+            result = _normalize_jsonl(_cast_text(result))
 
         return result
 
-    def _emit(self, content: ConversionOutput | str) -> None:
+    def _write_content(self, content: ConversionOutput | str) -> None:
         if content and self._handle is not None:
             if self.needs_newline:
                 self._written += self._handle.write(b"\n")
 
-            self._written += self._handle.write(_as_bytes(content))
+            self._written += self._handle.write(_cast_bytes(content))
 
     def _write_items(self, items: Items) -> None:
         self.input_shape = _InputShape.STREAM
-        content = self._convert(items)
+        content = self._serialize(items)
 
         if self._incremental:
-            self._emit(content)
+            self._write_content(content)
         else:
             self._staged = content
 
@@ -297,21 +305,21 @@ class _SyncFileWriteSession(_FileWriteSession):
         self.input_shape = _InputShape.ITEM
 
         if self._incremental:
-            content = self._convert([item], validate=True)
-            self._emit(content)
+            content = self._serialize([item], validate=True)
+            self._write_content(content)
         else:
             self._buffer.append(item)
 
     def write(self, value: Item | Items) -> None:
         r"""
-        Delivers one record or the whole record stream.
+        Delivers one item or the whole stream.
 
-        A mapping is one record (the temporary singleton path); anything else is the
+        A mapping is one item (the temporary singleton path); anything else is the
         logical stream (the native converter path).
 
         Args:
 
-            value: One record, or the record stream.
+            value: One item, or the stream.
 
         Examples:
 
@@ -338,7 +346,7 @@ class _SyncFileWriteSession(_FileWriteSession):
         if self._staged is not None:
             content = self._staged
         elif self._buffer:
-            content = self._convert(self._buffer)
+            content = self._serialize(self._buffer)
         else:
             content = ""
 
@@ -348,7 +356,7 @@ class _SyncFileWriteSession(_FileWriteSession):
         if not self._incremental:
             if content := self._framed_content():
                 with Path(self.path).open("wb") as f:
-                    self._written += f.write(_as_bytes(content))
+                    self._written += f.write(_cast_bytes(content))
         elif self._handle is not None:
             self._handle.flush()
 
@@ -471,35 +479,35 @@ class _AsyncFileWriteSession(_FileWriteSession):
         if self._incremental:
             self._ahandle = await async_open(self.path, self.file_mode)
 
-    async def _aconvert(
+    async def _aserialize(
         self, items: Feed, validate: bool = False
     ) -> ConversionOutput | str:
-        records = [item async for item in as_async(items)]
+        collected = [item async for item in as_async(items)]
 
         if validate:
-            records = self._validate_items(records)
+            collected = self._gen_csv_records(collected)
 
         kwargs = {"skip_header": await self.askip_header} if self.csv_format else {}
-        result = await asyncify(serialize_records)(records, self.fmt, **kwargs)
+        result = await asyncify(serialize_items)(collected, self.fmt, **kwargs)
 
         if result and self.jsonl_format:
-            result = _normalize_jsonl(_as_text(result))
+            result = _normalize_jsonl(_cast_text(result))
 
         return result
 
-    async def _aemit(self, content: ConversionOutput | str) -> None:
+    async def _awrite_content(self, content: ConversionOutput | str) -> None:
         if content and self._ahandle is not None:
             if await self.aneeds_newline:
                 self._written += await self._ahandle.write(b"\n")
 
-            self._written += await self._ahandle.write(_as_bytes(content))
+            self._written += await self._ahandle.write(_cast_bytes(content))
 
     async def _awrite_items(self, items: Feed) -> None:
         self.input_shape = _InputShape.STREAM
-        content = await self._aconvert(items)
+        content = await self._aserialize(items)
 
         if self._incremental:
-            await self._aemit(content)
+            await self._awrite_content(content)
         else:
             self._staged = content
 
@@ -507,21 +515,21 @@ class _AsyncFileWriteSession(_FileWriteSession):
         self.input_shape = _InputShape.ITEM
 
         if self._incremental:
-            content = await self._aconvert([item], validate=True)
-            await self._aemit(content)
+            content = await self._aserialize([item], validate=True)
+            await self._awrite_content(content)
         else:
             self._buffer.append(item)
 
-    async def write(self, value: Item | Feed) -> None:
+    async def awrite(self, value: Item | Feed) -> None:
         r"""
-        Delivers one record or the whole record stream.
+        Delivers one item or the whole stream.
 
-        A mapping is one record (the temporary singleton path); anything else is the
+        A mapping is one item (the temporary singleton path); anything else is the
         logical stream (the native converter path).
 
         Args:
 
-            value: One record, or the record stream.
+            value: One item, or the stream.
 
         Examples:
 
@@ -533,7 +541,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             ...         prepare = build_write(fp.name, fmt="jsonl")
             ...         session = _AsyncFileWriteSession(prepare)
             ...         await session.aacquire()
-            ...         await session.write({"x": 0})
+            ...         await session.awrite({"x": 0})
             ...         _ = await session.afinalize()
             ...         await session.ateardown()
             ...
@@ -555,7 +563,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
         if self._staged is not None:
             content = self._staged
         elif self._buffer:
-            content = await self._aconvert(self._buffer)
+            content = await self._aserialize(self._buffer)
         else:
             content = ""
 
@@ -565,7 +573,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
         if not self._incremental:
             if content := await self._aframed_content():
                 async with await async_open(self.path, "wb") as f:
-                    self._written += await f.write(_as_bytes(content))
+                    self._written += await f.write(_cast_bytes(content))
         elif self._ahandle is not None:
             await self._ahandle.flush()
 
@@ -591,7 +599,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             ...     async with async_get_temp_file() as fp:
             ...         session = _AsyncFileWriteSession(build_write(fp.name))
             ...         await session.aacquire()
-            ...         await session.write([{"x": 1}])
+            ...         await session.awrite([{"x": 1}])
             ...         result = await session.afinalize()
             ...         same = await session.afinalize()
             ...         await session.ateardown()
@@ -653,7 +661,7 @@ def file_write_session(prepared: PreparedWrite) -> Generator[SyncWriteSession]:
 
     """
     if not isinstance(prepared.target, FileTarget):
-        raise NotImplementedError("only file targets can be written today")
+        raise UnsupportedTargetError(type(prepared.target).__name__)
 
     session = _SyncFileWriteSession(prepared)
     session.acquire()
@@ -664,7 +672,7 @@ def file_write_session(prepared: PreparedWrite) -> Generator[SyncWriteSession]:
         session.teardown()
 
 
-def mint_write_resource(
+def build_write_resource(
     dest: Destination,
     *,
     mode: WriteMode | str = WriteMode.REPLACE,
@@ -692,7 +700,7 @@ def mint_write_resource(
 
         >>> from riko.definitions._resource_definition import OneShotResource
         >>>
-        >>> resource = mint_write_resource("report.csv")
+        >>> resource = build_write_resource("report.csv")
         >>> isinstance(resource, OneShotResource)
         True
         >>> resource.reusable
@@ -713,7 +721,7 @@ async def async_file_write_session(
     prepared: PreparedWrite,
 ) -> AsyncGenerator[AsyncWriteSession]:
     if not isinstance(prepared.target, FileTarget):
-        raise NotImplementedError("only file targets can be written today")
+        raise UnsupportedTargetError(type(prepared.target).__name__)
 
     session = _AsyncFileWriteSession(prepared)
     await session.aacquire()
@@ -742,7 +750,7 @@ def write_through(
 
     Yields:
 
-        Each source item, unchanged.
+        Each input item, unchanged.
 
     """
     with file_write_session(prepared) as session:
@@ -760,7 +768,7 @@ def write_through(
             session.finalize()
 
 
-async def async_write_through(
+async def awrite_through(
     source: AsyncItems,
     prepared: PreparedWrite,
     *,
@@ -781,13 +789,13 @@ async def async_write_through(
 
     Yields:
 
-        Each source item, unchanged.
+        Each input item, unchanged.
 
     """
     async with async_file_write_session(prepared) as session:
         try:
             async for item in as_async(source):
-                await session.write(item)
+                await session.awrite(item)
                 yield item
         except GeneratorExit:
             abort = False if terminating is None else terminating()

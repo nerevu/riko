@@ -21,7 +21,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -45,11 +45,15 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import UrlBuilderObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item
     from riko.types.modules import ObjconfParam
 
-OPTS: Opts = {"ftype": BasicCastType.NONE, "extract": "param", "listize": True}
+OPTS: DecorationOptions = {
+    "ftype": BasicCastType.NONE,
+    "extract": "param",
+    "listize": True,
+}
 DEFAULTS: Defaults = {"param": {}}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -64,7 +68,7 @@ def parser(
 
         _: The item. Unused.
         param: The parsed query parameters.
-        objconf: The pipe configuration, containing `base`, `path` and `ext`.
+        objconf: The module configuration, containing `base`, `path` and `ext`.
 
     Returns:
 
@@ -122,12 +126,12 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
         item (Item | Items): The entry, or stream of entries, supplying values.
 
-        conf (dict): The pipe configuration. Every value is either a literal or
+        conf (dict): The module configuration. Every value is either a literal or
             a ``{"subkey": ...}`` reference reading it from ``item``.
 
             base (str): The scheme and server name. Required.
 
-            path (str | list[str]): The resource path. A list is joined with slashes
+            path (str | list[str]): The URL path. A list is joined with slashes
                 (default: None).
 
             param (dict | list[dict]): The query parameters (default: none).
@@ -138,7 +142,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
             ext (str): Extension to append, which also rewrites the url as a
                 filename for offline use (default: None).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -195,12 +199,12 @@ def pipe(*args: Any, **kwargs: object) -> str:
 
         item (Item | Items): The entry, or stream of entries, supplying values.
 
-        conf (dict): The pipe configuration. Every value is either a literal or
+        conf (dict): The module configuration. Every value is either a literal or
             a ``{"subkey": ...}`` reference reading it from ``item``.
 
             base (str): The scheme and server name. Required.
 
-            path (str | list[str]): The resource path. A list is joined with slashes
+            path (str | list[str]): The URL path. A list is joined with slashes
                 (default: None).
 
             param (dict | list[dict]): The query parameters (default: none).
@@ -211,7 +215,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
             ext (str): Extension to append, which also rewrites the url as a
                 filename for offline use (default: None).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

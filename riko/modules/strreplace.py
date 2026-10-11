@@ -20,7 +20,7 @@ Examples:
 Attributes:
 
     OPS: Replacement strategies, keyed by ``param``.
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -42,10 +42,10 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import StrReplaceObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types.modules import StrReplaceConfRule
 
-OPTS: Opts = {
+OPTS: DecorationOptions = {
     "ftype": BasicCastType.TEXT,
     "listize": True,
     "field": "content",
@@ -78,7 +78,7 @@ async def async_parser(
 
         word: The string to transform.
         rules: The parsed replacement rules.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -116,7 +116,7 @@ def parser(
 
         word: The string to transform.
         rules: The parsed replacement rules.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -147,7 +147,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The replacement criteria. Required.
 
@@ -158,11 +158,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
                     "first", "last". An unrecognized value replaces every
                     occurrence (default: "every").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to search (default: "content").
+        field (str): Item field to search (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
             True (default: "strreplace").
@@ -208,7 +208,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The replacement criteria. Required.
 
@@ -219,11 +219,11 @@ def pipe(*args: Any, **kwargs: object) -> str:
                     "first", "last". An unrecognized value replaces every
                     occurrence (default: "every").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to search (default: "content").
+        field (str): Item field to search (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
             True (default: "strreplace").

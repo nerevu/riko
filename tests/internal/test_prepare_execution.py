@@ -1,16 +1,18 @@
 # vim: sw=4:ts=4:expandtab
 """Tests for workflow indexing and execution preparation."""
 
-from threading import get_ident
+from __future__ import annotations
+
+from threading import Event, get_ident
 from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from riko.bado._backend import fail_after
-from riko.bado._util import maybe_deferred
+from riko.bado._backend import async_sleep, asyncify, create_task_group, fail_after
+from riko.bado._util import maybe_async
 from riko.bado.itertools import as_async
 from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
-from riko.definitions import _workflow as workflow_module
+from riko.definitions import _workflow as workflow_definitions
 from riko.definitions._context import Context
 from riko.definitions._resource_definition import Resource
 from riko.definitions._workflow import CacheNode, ModuleNode, StreamEdge, Workflow
@@ -22,8 +24,8 @@ from riko.execution._adapt import (
     require_stream,
 )
 from riko.execution._execution import AsyncExecution, SyncExecution
-from riko.execution._prepared import Adapted, Native, ResolvedModule
-from riko.modules._decorators import processor, splitter
+from riko.execution._prepared import ResolvedModule
+from riko.modules._decorators import operator, processor, splitter
 from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop_pipe
 from riko.modules.split import async_pipe as async_split
@@ -37,25 +39,26 @@ from riko.runtime._module_registry import (
     reset_module_registry,
 )
 from riko.runtime._pipeline import Pipeline
-from riko.runtime._resolver import ResolverDispatcher
+from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflows import mark_subpipe, workflow_resolver
 from riko.types._enums import BasicCastType
 from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from riko.types._streams import AsyncItemGenerator, Cascade
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
-    from riko.types.modules import ModuleOptions
+    from riko.types.modules import CallOptions
 
 _sync_pipe = cast("SyncModuleWrapper", lambda source, **_: iter(source or {}))
 _async_pipe = cast("AsyncModuleWrapper", lambda source, **_: as_async(source or {}))
 
 
 def _workflow(nodes, outputs, edges=(), resources=()):
-    keyed = {node.id: node for node in nodes}
     return Workflow(
-        nodes=keyed, outputs=outputs, inputs={}, edges=edges, resources=resources
+        nodes=nodes, outputs=outputs, inputs={}, edges=edges, resources=resources
     )
 
 
@@ -63,7 +66,7 @@ def _dispatcher(*definitions):
     registry = ModuleRegistry()
 
     for definition in definitions:
-        registry.register(definition)
+        registry.register(definition, replace=True)
 
     return ResolverDispatcher(registry, workflow_resolver)
 
@@ -79,7 +82,7 @@ def test_graph_index_derives_and_freezes_from_its_inputs() -> None:
 
     assert index.edges == (edge,)
     assert index.incoming["b"] == (edge,)
-    assert index.dependencies["b"] == frozenset({"a"})
+    assert index.upstream["b"] == frozenset({"a"})
     assert index.required["default"] == frozenset({"a", "b"})
     assert index.roots == ("a", "c")
 
@@ -100,8 +103,8 @@ def test_workflow_index_orders_and_indexes() -> None:
     assert index.order.index("a") < index.order.index("b")
     assert set(index.roots) == {"a", "c"}
     assert set(index.leaves) == {"b", "c"}
-    assert index.dependencies["b"] == frozenset({"a"})
-    assert index.dependents["a"] == frozenset({"b"})
+    assert index.upstream["b"] == frozenset({"a"})
+    assert index.downstream["a"] == frozenset({"b"})
     assert index.incoming["b"][0].source == "a"
     assert index.outgoing["a"][0].target == "b"
     assert set(index.outputs) == {"default", "extra"}
@@ -114,9 +117,7 @@ def test_prepare_selects_native_sync() -> None:
     )
     plan = build_execution_plan(_module_workflow(), dispatcher=_dispatcher(definition))
     node = plan.nodes["n"]
-    selection = node.module.select_sync()
-    assert isinstance(selection, Native)
-    assert selection.pipe is _sync_pipe
+    assert node.module.select_sync() is _sync_pipe
 
 
 def test_prepare_selects_native_async() -> None:
@@ -125,27 +126,21 @@ def test_prepare_selects_native_async() -> None:
     )
     plan = build_execution_plan(_module_workflow(), dispatcher=_dispatcher(definition))
     node = plan.nodes["n"]
-    selection = node.module.select_async()
-    assert isinstance(selection, Native)
-    assert selection.pipe is _async_pipe
+    assert node.module.select_async() is _async_pipe
 
 
 def test_prepare_adapts_sync_only_under_async() -> None:
     definition = ModuleDefinition(name="m", sync_pipe=_sync_pipe)
     plan = build_execution_plan(_module_workflow(), dispatcher=_dispatcher(definition))
     node = plan.nodes["n"]
-    selection = node.module.select_async()
-    assert isinstance(selection, Adapted)
-    assert selection.pipe is _sync_pipe
+    assert node.module.select_async() is _sync_pipe
 
 
 def test_prepare_adapts_async_only_under_sync() -> None:
     definition = ModuleDefinition(name="m", async_pipe=_async_pipe)
     plan = build_execution_plan(_module_workflow(), dispatcher=_dispatcher(definition))
     node = plan.nodes["n"]
-    selection = node.module.select_sync()
-    assert isinstance(selection, Adapted)
-    assert selection.pipe is _async_pipe
+    assert node.module.select_sync() is _async_pipe
 
 
 def test_prepare_does_not_invoke_the_pipe() -> None:
@@ -170,14 +165,14 @@ def test_execution_plan_indexes_the_workflow_once(monkeypatch) -> None:
         calls.append(args)
         return GraphIndex(*args)  # pyright: ignore[reportArgumentType]
 
-    monkeypatch.setattr(workflow_module, "GraphIndex", counting)
-    plan = build_execution_plan(_module_workflow("count"))
+    monkeypatch.setattr(workflow_definitions, "GraphIndex", counting)
+    plan = build_execution_plan(_module_workflow("count"), dispatcher)
     assert plan.index is plan.workflow.index
     assert len(calls) == 1
 
 
 def test_empty_plan_streams_its_seeded_source() -> None:
-    plan = build_execution_plan(Workflow(nodes={}, outputs={}))
+    plan = build_execution_plan(Workflow(nodes=[], outputs={}), dispatcher)
 
     with SyncExecution() as execution:
         assert list(execution.run(plan, source=[{"x": 1}])) == [{"x": 1}]
@@ -185,7 +180,7 @@ def test_empty_plan_streams_its_seeded_source() -> None:
 
 @async_test
 async def test_empty_plan_streams_its_seeded_source_async() -> None:
-    plan = build_execution_plan(Workflow(nodes={}, outputs={}))
+    plan = build_execution_plan(Workflow(nodes=[], outputs={}), dispatcher)
 
     async with AsyncExecution() as execution:
         stream = await execution.arun(plan, source={"x": 1})
@@ -193,7 +188,7 @@ async def test_empty_plan_streams_its_seeded_source_async() -> None:
 
 
 def test_empty_plan_without_a_source_raises() -> None:
-    plan = build_execution_plan(Workflow(nodes={}, outputs={}))
+    plan = build_execution_plan(Workflow(nodes=[], outputs={}), dispatcher)
 
     with (
         SyncExecution() as execution,
@@ -203,7 +198,7 @@ def test_empty_plan_without_a_source_raises() -> None:
 
 
 def test_empty_plan_exposes_only_the_default_output() -> None:
-    plan = build_execution_plan(Workflow(nodes={}, outputs={}))
+    plan = build_execution_plan(Workflow(nodes=[], outputs={}), dispatcher)
 
     with (
         SyncExecution() as execution,
@@ -213,10 +208,10 @@ def test_empty_plan_exposes_only_the_default_output() -> None:
 
 
 def test_build_plan_rejects_a_nodeless_workflow_with_outputs() -> None:
-    workflow = Workflow(nodes={}, outputs={"default": Endpoint("x", "out")})
+    workflow = Workflow(nodes=[], outputs={"default": Endpoint("x", "out")})
 
     with pytest.raises(InvalidPipelineError, match="no nodes"):
-        build_execution_plan(workflow)
+        build_execution_plan(workflow, dispatcher)
 
 
 def test_execution_plan_snapshots_resolution() -> None:
@@ -307,9 +302,9 @@ def test_run_chains_nodes_through_stream_edge() -> None:
 
 
 def test_module_node_rejects_an_unknown_option() -> None:
-    options = cast("ModuleOptions", {"bogus": 1})
+    options = cast("CallOptions", {"bogus": 1})
 
-    with pytest.raises(InvalidPipelineError, match="unknown module option"):
+    with pytest.raises(InvalidPipelineError, match="unknown ModuleNode 'options' key"):
         ModuleNode(id="n", name="m", options=options)
 
 
@@ -585,6 +580,25 @@ def test_resolved_module_refuses_a_splitter_pipe_on_construction() -> None:
         ResolvedModule("split", {}, async_pipe=async_split)
 
 
+def test_resolved_module_reads_mode_from_the_slot() -> None:
+    # Plain undecorated callables carry no mode marker, so the slot decides.
+    module = ResolvedModule("m", {}, sync_pipe=_sync_pipe, async_pipe=_async_pipe)
+    sync_only = ResolvedModule("m", {}, sync_pipe=_sync_pipe)
+    async_only = ResolvedModule("m", {}, async_pipe=_async_pipe)
+
+    assert not module.is_async_pipe(module.select_sync())
+    assert module.is_async_pipe(module.select_async())
+    assert not sync_only.is_async_pipe(sync_only.select_async())
+    assert async_only.is_async_pipe(async_only.select_sync())
+
+
+def test_resolved_module_rejects_one_callable_in_both_slots() -> None:
+    shared = cast("AsyncModuleWrapper", _sync_pipe)
+
+    with pytest.raises(InvalidPipelineError, match="both sync and async"):
+        ResolvedModule("m", {}, sync_pipe=_sync_pipe, async_pipe=shared)
+
+
 def test_require_stream_refuses_a_splitter_pipe_without_consuming() -> None:
     # The execution-side boundary earns its narrowing from the pipe's declared
     # type, so a splitter's output is refused before any of it is read.
@@ -653,6 +667,89 @@ def test_run_resource_lifecycle_owned_by_execution() -> None:
     assert events == ["open", "close"]
 
 
+def _resource_reader_plan():
+    @operator()
+    def reader(stream, objconf, tuples, **kwargs):
+        yield {"got": kwargs["resources"]["slot"]}
+
+    sync_pipe = cast("SyncModuleWrapper", reader)
+    dispatcher = _dispatcher(ModuleDefinition(name="reader", sync_pipe=sync_pipe))
+    node = ModuleNode(id="n", name="reader", resources={"slot": "primary"})
+    workflow = _workflow(
+        [node], {"default": Endpoint("n", "out")}, resources=("primary",)
+    )
+    return build_execution_plan(workflow, dispatcher=dispatcher)
+
+
+def _lifecycle(events: list[str]):
+    def db():
+        events.append("open")
+
+        try:
+            yield "conn"
+        finally:
+            events.append("close")
+
+    return db
+
+
+def test_run_decorated_module_reads_execution_resources() -> None:
+    plan = _resource_reader_plan()
+    external = Context().with_resource("primary", Resource.from_external("ext"))
+
+    with SyncExecution(external) as execution:
+        assert list(execution.run(plan)) == [{"got": "ext"}]
+
+    events: list[str] = []
+    owned = Context().with_resource("primary", _lifecycle(events))
+
+    with SyncExecution(owned) as execution:
+        assert list(execution.run(plan)) == [{"got": "conn"}]
+        assert events == ["open"]
+
+    assert events == ["open", "close"]
+
+
+@async_test
+async def test_arun_decorated_module_reads_execution_resources() -> None:
+    plan = _resource_reader_plan()
+    events: list[str] = []
+    context = Context().with_resource("primary", _lifecycle(events))
+
+    async with AsyncExecution(context) as execution:
+        stream = await execution.arun(plan)
+        assert [item async for item in stream] == [{"got": "conn"}]
+
+    assert events == ["open", "close"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "pending lazy resource acquisition: a lazy resource bound to a node is "
+        "acquired when the run starts even though the node never reads it"
+    ),
+)
+def test_run_defers_an_unused_lazy_resource() -> None:
+    def ignore(items, **_):
+        yield from items
+
+    sync_pipe = cast("SyncModuleWrapper", ignore)
+    dispatcher = _dispatcher(ModuleDefinition(name="ignore", sync_pipe=sync_pipe))
+    node = ModuleNode(id="n", name="ignore", resources={"slot": "primary"})
+    workflow = _workflow(
+        [node], {"default": Endpoint("n", "out")}, resources=("primary",)
+    )
+    plan = build_execution_plan(workflow, dispatcher=dispatcher)
+    events: list[str] = []
+    context = Context().with_resource("primary", _lifecycle(events), lazy=True)
+
+    with SyncExecution(context) as execution:
+        assert list(execution.run(plan, source=[{"x": 1}])) == [{"x": 1}]
+
+    assert events == []
+
+
 def test_run_rejects_unprovided_resource() -> None:
     def reader(items, **_):
         yield {}
@@ -701,7 +798,7 @@ def test_run_rejects_missing_output() -> None:
 
     with (
         SyncExecution() as execution,
-        pytest.raises(InvalidPipelineError, match="output"),
+        pytest.raises(InvalidPipelineError, match="no workflow output 'nope'"),
     ):
         execution.run(plan, "nope")
 
@@ -937,7 +1034,7 @@ def test_prepare_adapts_async_only_embed_under_sync() -> None:
     plan = build_execution_plan(_prepare_loop(), dispatcher=dispatcher)
     embed = plan.nodes["loop"].embed
     assert embed is not None
-    assert isinstance(embed.select_sync(), Adapted)
+    assert embed.select_sync() is _async_pipe
 
 
 def test_prepare_adapts_sync_only_embed_under_async() -> None:
@@ -949,7 +1046,7 @@ def test_prepare_adapts_sync_only_embed_under_async() -> None:
     embed = plan.nodes["loop"].embed
 
     assert embed is not None
-    assert isinstance(embed.select_async(), Adapted)
+    assert embed.select_async() is _sync_pipe
 
 
 @skipif_issync
@@ -1528,7 +1625,7 @@ async def test_arun_runs_sync_only_embed_off_the_event_loop() -> None:
 
     async def fakeloop(items, embed=_sync_pipe, **_):
         async for row in as_async(items):
-            for value in await maybe_deferred(embed, row):
+            for value in await maybe_async(embed, row):
                 yield value
 
     dispatcher = _dispatcher(
@@ -1543,7 +1640,7 @@ async def test_arun_runs_sync_only_embed_off_the_event_loop() -> None:
     loop_thread = get_ident()
 
     assert embed is not None
-    assert isinstance(embed.select_async(), Adapted)
+    assert embed.select_async() is up
 
     async with AsyncExecution() as execution:
         stream = await execution.arun(plan)
@@ -1632,9 +1729,9 @@ def test_run_count_first_stays_lazy_for_an_async_only_embed() -> None:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="owned by the pending lazy cross-mode embed work: a sync-only embed under "
-    "an async loop is collected to a list on the worker before the loop takes "
-    "its first result, so count='first' cannot stop the child early",
+    reason="owned by the pending lazy sync-under-async embed work: a sync-only "
+    "embed under an async loop is collected to a list on the worker before the "
+    "loop takes its first result, so count='first' cannot stop the child early",
 )
 @async_test
 async def test_arun_count_first_stays_lazy_for_a_sync_only_embed() -> None:
@@ -1654,3 +1751,44 @@ async def test_arun_count_first_stays_lazy_for_a_sync_only_embed() -> None:
     ]
     assert produced == [0, 0]
     assert closed == ["a", "b"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="an async execution enters and exits a sync lifecycle resource on "
+    "whichever worker threads are free, so a thread-bound client can be closed "
+    "on a thread other than the one that opened it",
+)
+@async_test
+async def test_async_sync_lifecycle_resource_exits_on_its_entry_thread() -> None:
+    threads: dict[str, int] = {}
+    started, release = Event(), Event()
+
+    def lifecycle() -> Generator[str]:
+        threads["enter"] = get_ident()
+
+        try:
+            yield "client"
+        finally:
+            threads["exit"] = get_ident()
+
+    def occupy() -> None:
+        started.set()
+        release.wait()
+
+    async def aoccupy() -> None:
+        await asyncify(occupy)()
+
+    with fail_after(10):
+        async with create_task_group() as tg:
+            try:
+                async with AsyncExecution() as execution:
+                    await execution.aacquire(Resource.from_lifecycle(lifecycle))
+                    tg.start_soon(aoccupy)
+
+                    while not started.is_set():
+                        await async_sleep(0.01)
+            finally:
+                release.set()
+
+    assert threads["exit"] == threads["enter"]

@@ -67,10 +67,10 @@ The compiler implementation lives under `riko/runtime/`:
 
 - `riko/runtime/_codegen.py` — the Workflow v2 generator behind `compile_workflow`.
 - `riko/runtime/_migrate.py` — `parse_dag` (`PipeDag`) and `migrate_v1_to_v2` (`PipeDef`, a pipe definition).
-- `riko/runtime/_graph_index.py` — builds the `GraphIndex` execution planning reads.
+- `GraphIndex` (`riko/types/_workflow.py`) — derives the topology from node ids, edges, and outputs; `Workflow.index` builds it, and validation and execution planning both read it.
 - `riko/runtime/templates/` — `pyworkflow.txt`, the v2 generator template.
-- `riko/types/_compiler.py` — graph-index, `PipeDef`/`PipeDefLike`, and `PipeDag`
-  type contracts; the last three are exported on `riko.types`.
+- `riko/types/_compiler.py` — `PipeDef`/`PipeDefLike` and `PipeDag` type contracts;
+  all three are exported on `riko.types`.
 
 The console scripts are v2-native. `riko/cli/_workflow.py` is their one document front
 door: it detects whether a document is a serialized `PipeDag`, a serialized `PipeDef`, or
@@ -140,13 +140,26 @@ sync when source is moved between package groups.
 ## Tooling & environment notes
 
 - **`manage` is a thin composer.** `riko/cli/manage.py` registers commands; private
-  `_build`, `_lint`, `_docs`, `_test`, `_codegen`, `_release`, and import-lint
-  modules own implementation by reason to change.
+  `_build`, `_lint`, `_docs`, `_test`, `_upgrade`, `_codegen`, `_release`, and
+  import-lint modules own implementation by reason to change.
 - **`manage` console-script collision.** `mezmorize` also declares a `manage`
   script. If install order selects the wrong executable, invoke
   `python -m riko.cli.manage`. Tox uses the module form to avoid that ambiguity.
 - **`uv`.** Use `uv run --active ...` when the current shell environment should win
   over the default `.venv`.
+- **`uv.lock` is the only tool-version source.** CI installs with `uv sync --locked`
+  and runs ruff through `uv run --no-sync`; tox uses the lock runner. The pre-commit
+  ruff hooks are `language: python` local hooks pinning `ruff==<locked>` in pre-commit's
+  own environment, so they need neither `uv` on the Git client's `PATH` nor an active
+  venv (`uv run --active` without `VIRTUAL_ENV` silently falls back to a stale
+  `.venv`). That pin is the one copy of a locked version outside `uv.lock`:
+  `manage upgrade` rewrites it and `manage lint --deps` fails when it drifts. Upgrades
+  happen locally: `manage upgrade` runs `uv lock --upgrade` (or `--upgrade-package`
+  per `--package`) and syncs the active environment with every group and extra. `--daily` skips when
+  `.cache/last-upgrade` holds today's date, which only a successful full upgrade and
+  sync writes. `PYRIGHT_PYTHON_FORCE_VERSION` never reaches tox (not in `pass_env`)
+  and must not be added; `[tool.pyright] pythonPlatform = "Linux"` keeps local type
+  checks on CI's platform.
 - **Python 3.12+.** Prefer PEP 695 type parameters and modern union syntax.
 - **Doctests are tests.** Source/docs examples under the configured pytest testpaths
   are collected; avoid copying the same happy-path example into multiple files.

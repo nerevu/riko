@@ -24,7 +24,6 @@ from riko.types._enums import Executor
 from riko.types._guards import is_streamlike
 
 from ._pools import get_worker_cnt
-from ._prepared import Adapted, Native
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -33,10 +32,9 @@ if TYPE_CHECKING:
 
     from riko.definitions._context import Context
     from riko.definitions._execution import ExecutionSettings
-    from riko.runtime._execution_plan import ExecutionPlan
 
     from ._pools import AnyPool, PoolHandle
-    from ._prepared import PreparedNode
+    from ._prepared import ExecutionPlan, PreparedNode
 
 __all__ = [
     "AsyncPolicy",
@@ -88,8 +86,8 @@ def resolve_sync_policy(settings: ExecutionSettings) -> SyncPolicy:
 
     ``AUTO`` maps across threads only when ``concurrency`` asks for more than one
     item in flight; ``INLINE`` never opens a pool. An explicit thread or process
-    executor without a ``concurrency`` gets a pool sized from the machine's
-    cores rather than one worker or an unbounded count.
+    executor without a ``concurrency`` runs one item at a time on that executor.
+    ``concurrency="auto"`` sizes the pool from the machine's cores.
 
     Args:
 
@@ -108,19 +106,27 @@ def resolve_sync_policy(settings: ExecutionSettings) -> SyncPolicy:
         SyncPolicy(executor=<Executor.INLINE: 'inline'>, workers=None)
         >>> resolve_sync_policy(ExecutionSettings(concurrency=4))
         SyncPolicy(executor=<Executor.THREAD: 'thread'>, workers=4)
+        >>> resolve_sync_policy(ExecutionSettings(concurrency="auto")).workers > 1
+        True
 
     """
     executor, concurrency = settings.executor, settings.concurrency
+    is_auto = concurrency == "auto"
+    is_wide = is_auto or (isinstance(concurrency, int) and concurrency > 1)
 
-    if executor is Executor.AUTO and concurrency is not None and concurrency > 1:
-        policy = SyncPolicy(Executor.THREAD, concurrency)
-    elif executor in {Executor.AUTO, Executor.INLINE}:
+    if executor is Executor.INLINE or (executor is Executor.AUTO and not is_wide):
         policy = SyncPolicy(Executor.INLINE, None)
-    elif concurrency is None:
-        workers = get_worker_cnt(0, threads=executor is Executor.THREAD)
-        policy = SyncPolicy(executor, workers)
     else:
-        policy = SyncPolicy(executor, concurrency)
+        chosen = Executor.THREAD if executor is Executor.AUTO else executor
+
+        if is_auto:
+            workers = get_worker_cnt(0, threads=chosen is Executor.THREAD)
+        elif isinstance(concurrency, int):
+            workers = concurrency
+        else:
+            workers = 1
+
+        policy = SyncPolicy(chosen, workers)
 
     return policy
 
@@ -130,9 +136,10 @@ def resolve_async_policy(settings: ExecutionSettings) -> AsyncPolicy:
     Decides how many items an asynchronous run keeps in flight per run.
 
     ``AUTO`` stays sequential unless ``concurrency`` is set. An explicit
-    ``INLINE`` or ``THREAD`` executor without a ``concurrency`` uses the
-    project's default connection ceiling; ``INLINE`` also keeps synchronous
-    pipes on the event-loop thread.
+    ``INLINE`` or ``THREAD`` executor without a ``concurrency`` keeps one item in
+    flight on that executor. ``INLINE`` also keeps synchronous pipes on the
+    event-loop thread. ``concurrency="auto"`` keeps the default concurrency limit in
+    flight.
 
     Args:
 
@@ -154,6 +161,8 @@ def resolve_async_policy(settings: ExecutionSettings) -> AsyncPolicy:
         >>>
         >>> resolve_async_policy(ExecutionSettings(concurrency=4))
         AsyncPolicy(limit=4, inline=False)
+        >>> resolve_async_policy(ExecutionSettings(concurrency="auto")).limit > 1
+        True
         >>> resolve_async_policy(ExecutionSettings(executor="process"))
         Traceback (most recent call last):
         riko.base.exceptions.InvalidPipelineError: ...requires synchronous execution
@@ -164,10 +173,14 @@ def resolve_async_policy(settings: ExecutionSettings) -> AsyncPolicy:
     if executor is Executor.PROCESS:
         msg = "the process executor requires synchronous execution"
         raise InvalidPipelineError(msg)
-    elif executor is Executor.AUTO:
-        policy = AsyncPolicy(concurrency, False)
     else:
-        limit = config.connection_count if concurrency is None else concurrency
+        if concurrency == "auto":
+            limit = config.concurrency_limit
+        elif isinstance(concurrency, int) or executor is Executor.AUTO:
+            limit = concurrency
+        else:
+            limit = 1
+
         policy = AsyncPolicy(limit, executor is Executor.INLINE)
 
     return policy
@@ -203,14 +216,14 @@ def is_mappable(node: PreparedNode, extra: Mapping[str, object]) -> bool:
     """
     Reports whether a node's items may run one at a time across workers.
 
-    Only a loopable node qualifies, and only when none of its secondary inputs is
-    a stream: a stream-valued input is shared by the whole call and cannot be
+    Only a loopable node qualifies, and only when none of its extra arguments is
+    a stream: a secondary input stream is shared by the whole call and cannot be
     split per item. Resource views, option values, and embed callables are fine.
 
     Args:
 
         node: The prepared node about to run.
-        extra: The secondary inputs and call arguments bound for the node.
+        extra: The secondary input streams and call arguments bound for the node.
 
     Returns:
 
@@ -221,13 +234,14 @@ def is_mappable(node: PreparedNode, extra: Mapping[str, object]) -> bool:
         >>> from riko.definitions._workflow import ModuleNode, Workflow
         >>> from riko.execution._mapping import is_mappable
         >>> from riko.runtime._execution_plan import build_execution_plan
+        >>> from riko.runtime._resolver import dispatcher
         >>> from riko.types._workflow import Endpoint
         >>>
         >>> workflow = Workflow(
-        ...     nodes={"h": ModuleNode(id="h", name="hash")},
+        ...     nodes=[ModuleNode(id="h", name="hash")],
         ...     outputs={"default": Endpoint("h", "out")},
         ... )
-        >>> node = build_execution_plan(workflow).nodes["h"]
+        >>> node = build_execution_plan(workflow, dispatcher).nodes["h"]
         >>> is_mappable(node, {"emit": True}), is_mappable(node, {"other": iter([])})
         (True, False)
 
@@ -238,11 +252,11 @@ def is_mappable(node: PreparedNode, extra: Mapping[str, object]) -> bool:
     return node.loopable and not has_streams
 
 
-def _process_unsafe_reason(
+def _get_process_unsafe_reason(
     node: PreparedNode, context: Context | None
 ) -> tuple[str | None, BaseException | None]:
     embed = node.embed
-    pipe = node.module.select_sync().pipe
+    pipe = node.module.select_sync()
     embed_pipe = None if embed is None else embed.select_sync()
     conf, options = node.embed_or_self_conf, dict(node.options)
     reason: str | None = None
@@ -250,13 +264,11 @@ def _process_unsafe_reason(
 
     if node.resources:
         reason = "live resource values cannot cross a process boundary"
-    elif isinstance(embed_pipe, Adapted):
+    elif embed is not None and embed.is_async_pipe(embed_pipe):
         reason = "its embedded module has no synchronous implementation"
     else:
-        shipped = None if embed_pipe is None else embed_pipe.pipe
-
         try:
-            pickle.dumps((pipe, conf, options, context, shipped))
+            pickle.dumps((pipe, conf, options, context, embed_pipe))
         except (pickle.PicklingError, TypeError, AttributeError) as error:
             reason, cause = f"it cannot be pickled ({error})", error
 
@@ -277,8 +289,8 @@ def require_process_safe(
     Args:
 
         plan: The prepared workflow being run.
-        required: The node ids the selected output runs.
-        context: The execution context shipped to each worker.
+        required: The node ids the selected workflow output runs.
+        context: The run environment shipped to each worker.
 
     Raises:
 
@@ -290,23 +302,25 @@ def require_process_safe(
         >>> from riko.definitions._workflow import ModuleNode, Workflow
         >>> from riko.execution._mapping import require_process_safe
         >>> from riko.runtime._execution_plan import build_execution_plan
+        >>> from riko.runtime._resolver import dispatcher
         >>> from riko.types._workflow import Endpoint
         >>>
         >>> workflow = Workflow(
-        ...     nodes={"h": ModuleNode(id="h", name="hash")},
+        ...     nodes=[ModuleNode(id="h", name="hash")],
         ...     outputs={"default": Endpoint("h", "out")},
         ... )
-        >>> plan = build_execution_plan(workflow)
+        >>> plan = build_execution_plan(workflow, dispatcher)
         >>> require_process_safe(plan, {"h"}, None) is None
         True
 
     """
     for node_id in required:
         node = plan.nodes[node_id]
-        mapped = node.loopable and isinstance(node.module.select_sync(), Native)
+        module = node.module
+        mapped = node.loopable and not module.is_async_pipe(module.select_sync())
 
         reason, cause = (
-            _process_unsafe_reason(node, context) if mapped else (None, None)
+            _get_process_unsafe_reason(node, context) if mapped else (None, None)
         )
 
         if reason is not None:
@@ -421,12 +435,10 @@ class _PoolLifetime:
 
         Raises:
 
-            RuntimeError: If the pool was already released.
+            PipelineStateError: If the pool was already released.
 
         """
-        if (pool := self.handle.pool) is None:
-            raise RuntimeError("Cannot reuse a closed worker pool")
-
+        pool = self.handle.require_pool()
         mapper = _map_ordered if ordered else _map_unordered
         self._active += 1
 

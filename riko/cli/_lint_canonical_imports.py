@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from ._import_graph import (
     ModuleInfo,
-    _get_modules,
+    _load_modules,
     _resolve_from_module,
     collect_imports,
 )
@@ -93,7 +93,7 @@ def _canonical_source(
 
 
 def _iter_issues(root: Path) -> tuple[_CanonicalIssue, ...]:
-    modules = _get_modules(root)
+    modules = _load_modules(root)
     source_map = {module.name: _runtime_symbol_sources(module) for module in modules}
     issues: list[_CanonicalIssue] = []
 
@@ -122,7 +122,7 @@ def _iter_issues(root: Path) -> tuple[_CanonicalIssue, ...]:
     return tuple(issues)
 
 
-def check_canonical_imports(root: Path) -> int:
+def lint_canonical_imports(root: Path) -> int:
     issues = _iter_issues(root)
 
     for issue in issues:

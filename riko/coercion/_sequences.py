@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any, Self, cast, overload
 from requests.structures import CaseInsensitiveDict
 
 from riko.base._iterutils import multi_try
-from riko.base.exceptions import InvalidPipelineError
 from riko.types._guards import is_listlike, is_mapping
 
 if TYPE_CHECKING:
@@ -35,14 +34,6 @@ def lower_keys[T](obj: T) -> T:
         result = obj
 
     return cast("T", result)
-
-
-def require_sequence(value: object, what: str) -> Iterable[object]:
-    """Narrows a value to a non-string iterable or rejects it."""
-    if not is_listlike(value):
-        raise InvalidPipelineError(f"{what} must be a list")
-
-    return value
 
 
 @overload

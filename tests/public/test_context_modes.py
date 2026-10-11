@@ -8,12 +8,18 @@ have been removed; describe_input/describe_dependencies remain as read-only
 properties derived from the mode.
 """
 
+from __future__ import annotations
+
 from pickle import dumps, loads  # noqa: S403
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from riko.definitions._context import Context, ExecutionMode
+from riko.runtime._pipeline import Pipeline
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 MODES = [
     (ExecutionMode.RUN, False, False),
@@ -60,8 +66,9 @@ class TestContextImmutability:
         with pytest.raises(AttributeError):
             context.verbose = True  # pyright: ignore[reportAttributeAccessIssue]
 
-        with pytest.raises(AttributeError):
-            context.submodule = True  # pyright: ignore[reportAttributeAccessIssue]
+    def test_rejects_the_removed_submodule_flag(self):
+        with pytest.raises(TypeError):
+            Context(submodule=True)  # pyright: ignore[reportCallIssue]
 
     def test_inputs_mapping_is_read_only(self):
         context = Context(inputs={"count": 2})
@@ -78,7 +85,7 @@ class TestContextImmutability:
 
     def test_augment_returns_independent_snapshot(self):
         base = Context(inputs={"count": 2}, verbose=False)
-        derived = base.augment(verbose=True, inputs={"limit": 5})
+        derived = base.replace(verbose=True, inputs={"limit": 5})
 
         assert derived is not base
         assert base.verbose is False
@@ -102,3 +109,25 @@ class TestContextImmutability:
 
         with pytest.raises(AttributeError):
             restored.mode = ExecutionMode.RUN  # pyright: ignore[reportAttributeAccessIssue]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="a Pipeline runs its modules even when its context only asks to describe "
+    "it, until pipelines can declare their inputs and dependencies",
+)
+@pytest.mark.parametrize(
+    "mode", [ExecutionMode.DESCRIBE_INPUTS, ExecutionMode.DESCRIBE_DEPENDENCIES]
+)
+def test_describing_pipeline_does_not_run_it(mode):
+    pulled: list[dict[str, int]] = []
+
+    def source() -> Iterator[dict[str, int]]:
+        for item in [{"x": 1}, {"x": 2}]:
+            pulled.append(item)
+            yield item
+
+    pipeline = Pipeline(source=source()).hash()
+    described = pipeline.with_context(Context(mode=mode))
+    list(described)
+    assert pulled == []

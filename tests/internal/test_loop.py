@@ -240,7 +240,7 @@ class TestImplicitLooping:
 
 
 class TestSubpipeLoop:
-    """Named workflows use the same per-parent fold without sharing execution."""
+    """Stored workflows use the same per-parent fold without sharing execution."""
 
     @pytest.mark.parametrize(("kwargs", "expected"), SUBPIPE_FOLD_CASES)
     def test_fold_per_parent(self, kwargs, expected):
@@ -332,7 +332,7 @@ class TestAsyncLoop:
 
 @skipif_issync
 class TestAsyncSubpipeLoop:
-    """Async named workflows preserve the local per-parent fold contract."""
+    """Async stored workflows preserve the local per-parent fold contract."""
 
     @pytest.mark.parametrize(("kwargs", "expected"), ASYNC_SUBPIPE_FOLD_CASES)
     @pytest.mark.anyio
@@ -368,3 +368,29 @@ class TestAsyncSubpipeLoop:
         assert result == [{"content": "a0"}, {"content": "b0"}]
         assert produced == [0, 0]
         assert closed == ["a", "b"]
+
+
+def _custom_embed(item=None, **_):
+    return iter([{"content": "x"}])
+
+
+class TestCustomEmbed:
+    """An undecorated embed is reported as unsupported and leaves parents untouched."""
+
+    def test_passes_parents_through(self, caplog):
+        result = loop(iter(PARENTS), embed=_custom_embed)  # pyright: ignore[reportArgumentType]
+
+        assert list(result) == PARENTS
+        assert any("Custom embedded modules" in r.message for r in caplog.records)
+
+
+@skipif_issync
+class TestAsyncCustomEmbed:
+    """The async loop treats an undecorated embed the same way as the sync loop."""
+
+    @pytest.mark.anyio
+    async def test_passes_parents_through(self, caplog):
+        stream = async_loop(iter(PARENTS), embed=_custom_embed)  # pyright: ignore[reportArgumentType]
+
+        assert [item async for item in stream] == PARENTS
+        assert any("Custom embedded modules" in r.message for r in caplog.records)

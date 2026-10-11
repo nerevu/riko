@@ -232,18 +232,18 @@ def test_stream_rejects_negative_buffer(stream):
 
 
 @async_test
-async def test_async_map_rejects_negative_connections():
-    with pytest.raises(ValueError, match="connections cannot be negative"):
+async def test_async_map_rejects_negative_limit():
+    with pytest.raises(ValueError, match="limit cannot be negative"):
         await async_map(_double, range(3), -1)
 
 
 @async_test
-async def test_async_map_allows_unlimited_connections():
+async def test_async_map_allows_no_limit():
     result = await async_map(_double, range(3), 0)
     assert result == [0, 2, 4]
 
 
-async def _afeed(items, delay=0.0):
+async def _gen_items(items, delay=0.0):
     for item in items:
         if delay:
             await async_sleep(delay)
@@ -252,16 +252,16 @@ async def _afeed(items, delay=0.0):
 
 
 @skipif_issync
-def test_async_merge_yields_all_records():
-    feeds = [_afeed([1, 2]), _afeed([3, 4]), _afeed([5])]
-    assert sorted(aresolve(async_merge(feeds, limit=2))) == [1, 2, 3, 4, 5]
+def test_async_merge_yields_every_value():
+    iterables = [_gen_items([1, 2]), _gen_items([3, 4]), _gen_items([5])]
+    assert sorted(aresolve(async_merge(iterables, limit=2))) == [1, 2, 3, 4, 5]
 
 
 @async_test
-async def test_async_merge_interleaves_across_feeds():
-    """A fast feed's records surface before a slow feed finishes (incremental)."""
-    slow = _afeed(["slow1", "slow2"], delay=0.05)
-    fast = _afeed(["fast1", "fast2"])
+async def test_async_merge_interleaves_across_iterables():
+    """A fast iterable's items surface before a slow one finishes (incremental)."""
+    slow = _gen_items(["slow1", "slow2"], delay=0.05)
+    fast = _gen_items(["fast1", "fast2"])
     out = [item async for item in async_merge([slow, fast], limit=2)]
     assert sorted(out) == ["fast1", "fast2", "slow1", "slow2"]
     assert out.index("fast2") < out.index("slow2")
@@ -270,13 +270,13 @@ async def test_async_merge_interleaves_across_feeds():
 @skipif_issync
 def test_async_merge_rejects_bad_limit():
     with pytest.raises(ValueError, match="limit must be at least 1"):
-        aresolve(async_merge([_afeed([1])], limit=0))
+        aresolve(async_merge([_gen_items([1])], limit=0))
 
 
 @skipif_issync
 def test_async_merge_rejects_negative_buffer():
     with pytest.raises(ValueError, match="buffer cannot be negative"):
-        aresolve(async_merge([_afeed([1])], buffer=-1))
+        aresolve(async_merge([_gen_items([1])], buffer=-1))
 
 
 async def _forever(closed: list[bool]):

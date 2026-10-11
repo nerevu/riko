@@ -1,13 +1,13 @@
 # vim: sw=4:ts=4:expandtab
 """
-Creates a single-item data source from assigned attributes.
+Creates a single-item data source from assigned fields.
 
 With the item builder module, you can create a single-item data source by
-assigning values to one or more item attributes.
+assigning values to one or more item fields.
 
 Its strength is restructuring and renaming several elements at once. When fed an
-input stream, an assigned value can read an existing attribute of that stream,
-so attributes can be reassigned or used to build entirely new ones.
+input stream, an assigned value can read an existing field of that stream,
+so fields can be reassigned or used to build entirely new ones.
 
 Examples:
 
@@ -21,7 +21,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -43,10 +43,14 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import ItemBuilderObjconf
     from riko.types._collections import RikoDict
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types.modules import ParsedParam
 
-OPTS: Opts = {"ftype": BasicCastType.NONE, "listize": True, "extract": "attrs"}
+OPTS: DecorationOptions = {
+    "ftype": BasicCastType.NONE,
+    "listize": True,
+    "extract": "attrs",
+}
 DEFAULTS: Defaults = {}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -58,16 +62,16 @@ def parser(
     **kwargs: object,
 ) -> RikoDict:
     """
-    Builds one item from the resolved attributes.
+    Builds one item from the resolved fields.
 
     A dotted ``key`` creates a nested value, so ``"desc.content"`` yields
     ``{"desc": {"content": ...}}``.
 
     Args:
 
-        _: The item. Unused; the attributes arrive already resolved.
-        extraction: The resolved attributes, each with a `key` and `value`.
-        objconf: The pipe configuration. Unused.
+        _: The item. Unused; the fields arrive already resolved.
+        extraction: The resolved fields, each with a `key` and `value`.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -90,21 +94,21 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
     """
-    Asynchronously builds a single item from assigned attributes.
+    Asynchronously builds a single item from assigned fields.
 
     Args:
 
         item (Item | Items): The entry, or stream of entries, supplying values.
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
-            attrs (dict | list[dict]): The attributes to assign. Required.
+            attrs (dict | list[dict]): The fields to assign. Required.
 
-                key (str): The attribute name. A dotted key nests, so
+                key (str): The field name. A dotted path nests, so
                     ``"desc.content"`` yields ``{"desc": {"content": ...}}``.
-                value (str | dict): The attribute value, either a literal or a
+                value (str | dict): The field value, either a literal or a
                     ``{"subkey": ...}`` reference reading it from ``item``.
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -146,21 +150,21 @@ def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> RikoDict:
     """
-    Builds a single item from assigned attributes.
+    Builds a single item from assigned fields.
 
     Args:
 
         item (Item | Items): The entry, or stream of entries, supplying values.
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
-            attrs (dict | list[dict]): The attributes to assign. Required.
+            attrs (dict | list[dict]): The fields to assign. Required.
 
-                key (str): The attribute name. A dotted key nests, so
+                key (str): The field name. A dotted path nests, so
                     ``"desc.content"`` yields ``{"desc": {"content": ...}}``.
-                value (str | dict): The attribute value, either a literal or a
+                value (str | dict): The field value, either a literal or a
                     ``{"subkey": ...}`` reference reading it from ``item``.
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

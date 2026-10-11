@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, cast, overload
@@ -18,10 +19,10 @@ from riko.types._enums import BasicCastType, CastType
 from riko.types._guards import is_mapping
 from riko.types._options import (
     Casted,
+    DecorationOptions,
     Defaults,
     ItemDispatch,
     ItemOrValueDispatch,
-    Opts,
     ValueDispatch,
 )
 from riko.types._wrappers import (
@@ -37,7 +38,6 @@ if TYPE_CHECKING:
 
     from riko.base._locations import AnyLocation
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.definitions._resource_types import ResourcesLike
     from riko.parsing._dotdict import DotDict
     from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
     from riko.types._scalars import PrimitiveValue
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def require_arg[T](value: T | None, name: str, pipe: str, strict: bool = False) -> T:
+def require_arg[T](value: T | None, name: str, module: str, strict: bool = False) -> T:
     """
     Narrows a required pipe argument, or reports which one is unusable.
 
@@ -64,7 +64,7 @@ def require_arg[T](value: T | None, name: str, pipe: str, strict: bool = False) 
 
         name: The argument being validated, used in the error message.
 
-        pipe: The pipe name, used in the error message.
+        module: The module name, used in the error message.
 
         strict: Whether to also reject a present but falsy value, e.g. an empty
             ``others`` list that would publish to nobody. Use it only where a
@@ -86,7 +86,7 @@ def require_arg[T](value: T | None, name: str, pipe: str, strict: bool = False) 
         >>> require_arg(None, "func", "udf")
         Traceback (most recent call last):
             ...
-        TypeError: the 'udf' pipe requires the 'func' keyword argument
+        TypeError: the 'udf' module requires the 'func' keyword argument
 
         A falsy value passes unless ``strict`` is set:
 
@@ -95,17 +95,17 @@ def require_arg[T](value: T | None, name: str, pipe: str, strict: bool = False) 
         >>> require_arg([], "others", "send", strict=True)
         Traceback (most recent call last):
             ...
-        TypeError: the 'send' pipe requires the 'others' keyword argument
+        TypeError: the 'send' module requires the 'others' keyword argument
 
     """
     if (value is None) or (strict and not value):
-        raise TypeError(f"the {pipe!r} pipe requires the {name!r} keyword argument")
+        raise TypeError(f"the {module!r} module requires the {name!r} keyword argument")
 
     return value
 
 
 def require_conf[T](  # noqa: E704
-    objconf: DynamicConf, key: str, pipe: str, strict: bool = False
+    objconf: DynamicConf, key: str, module: str, strict: bool = False
 ) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
     """
     Resolves a required conf value, or reports which one is unusable.
@@ -116,11 +116,11 @@ def require_conf[T](  # noqa: E704
 
     Args:
 
-        objconf: The parsed pipe configuration.
+        objconf: The parsed module configuration.
 
         key: The conf key that must be set.
 
-        pipe: The pipe name, used in the error message.
+        module: The module name, used in the error message.
 
         strict: Whether to also reject a present but falsy value, e.g. a ``url``
             set to ``""``. Use it only where a falsy value can never be
@@ -145,7 +145,7 @@ def require_conf[T](  # noqa: E704
         >>> require_conf(Objectify({}), "url", "csv")
         Traceback (most recent call last):
             ...
-        TypeError: the 'csv' pipe requires the 'url' conf key
+        TypeError: the 'csv' module requires the 'url' conf key
 
         A falsy value passes unless ``strict`` is set:
 
@@ -154,13 +154,13 @@ def require_conf[T](  # noqa: E704
         >>> require_conf(Objectify({"url": ""}), "url", "csv", strict=True)
         Traceback (most recent call last):
             ...
-        TypeError: the 'csv' pipe requires the 'url' conf key
+        TypeError: the 'csv' module requires the 'url' conf key
 
     """
     value = getattr(objconf, key, None)
 
     if (value is None) or (strict and not value):
-        raise TypeError(f"the {pipe!r} pipe requires the {key!r} conf key")
+        raise TypeError(f"the {module!r} module requires the {key!r} conf key")
 
     return cast("T", value)
 
@@ -168,8 +168,8 @@ def require_conf[T](  # noqa: E704
 def build_conf(
     parsed_conf: AnyModuleConf | Conf | None,
     defaults: Defaults,
-    opts: Opts,
-    pipe: str = "",
+    opts: DecorationOptions,
+    module: str = "",
 ) -> tuple[BasicReturn | AnyModuleConf | list[BasicReturn] | None, AnyModuleConf]:
     """
     Merges conf over defaults and optionally extracts a single conf value.
@@ -184,7 +184,7 @@ def build_conf(
         parsed_conf: The per-item parsed conf, or ``None``.
         defaults: The module's default conf.
         opts: The decoration options (``extract``/``listize``).
-        pipe: The pipe name, used in the error message.
+        module: The module name, used in the error message.
 
     Returns:
 
@@ -204,7 +204,7 @@ def build_conf(
         try:
             pieces = next(v for k, v in merged_conf.items() if k.lower() == extract)
         except StopIteration:
-            label = f"the {pipe!r} pipe" if pipe else "this pipe"
+            label = f"the {module!r} module" if module else "this module"
             raise TypeError(f"{label} requires the {extract!r} conf key") from None
         else:
             pieces = cast("BasicReturn", pieces)
@@ -228,68 +228,105 @@ class PreparedModule[T, E]:
     Attributes:
 
         name: The module name.
-        conf: The merged pipe configuration.
+        conf: The merged module configuration.
         opts: The resolved decoration/call options.
         parsers: The field and conf parsers.
         casters: The field, extract, and conf casters.
         assign: The field results are assigned to.
         emit: Whether — or a predicate deciding whether — to emit rather than
             assign.
-        is_source: Whether the pipe is a source (``ftype`` is ``"none"``).
+        is_source: Whether the module is a source (``ftype`` is ``"none"``).
         static_casted: Precomputed cast for conf that does not vary per item, or
             ``None`` when the conf is dynamic.
-        resources: The node's declared resource binding, or ``None``.
 
     """
 
     name: str
     conf: Conf
-    opts: Opts
+    opts: DecorationOptions
     parsers: ParseFuncs
     casters: CastFuncs[ItemOrValue, E]
     assign: str
     emit: bool | Callable[[ParserOutput], bool] | None
     is_source: bool
     static_casted: tuple[ArgCaster[T], E, DynamicConf] | None
-    resources: ResourcesLike | None = None
+
+    def resolve_emit(self, output: ParserOutput[ItemOrValue]) -> bool:
+        """
+        Decides whether a parser's result is emitted rather than assigned.
+
+        An ``emit`` predicate decides from the result itself, except for a lazy
+        iterator, which it cannot inspect without consuming; an iterator and a
+        plain flag use the flag's truthiness.
+
+        Args:
+
+            output: The parser's result.
+
+        Returns:
+
+            True when the result is emitted as is.
+
+        Examples:
+
+            >>> from riko.types._guards import is_mapping
+            >>> prepared = PreparedModule(
+            ...     name="pipe", conf={}, opts={}, parsers=None, casters=None,
+            ...     assign="content", emit=is_mapping, is_source=False,
+            ...     static_casted=None,
+            ... )
+            >>> prepared.resolve_emit({"x": 1})
+            True
+            >>> prepared.resolve_emit("x")
+            False
+            >>> prepared.resolve_emit(iter([{"x": 1}]))
+            True
+
+        """
+        if callable(self.emit) and not isinstance(output, Iterator):
+            emit = bool(self.emit(output))
+        else:
+            emit = bool(self.emit)
+
+        return emit
 
 
 @overload
-def parse_and_cast[T, E](  # noqa: E704
+def resolve_and_cast[T, E](  # noqa: E704
     item: Item | RikoDict | DotDict[RikoValue],
-    opts: Opts,
+    opts: DecorationOptions,
     conf: Conf,
     *,
     parsers: ParseFuncs,
     casters: CastFuncs[T, E],
     defaults: Defaults | None = ...,
     field: str | None = ...,
-    pipe: str = ...,
+    module: str = ...,
     **kwargs: object,
 ) -> ItemDispatch[T, E]: ...
 @overload  # noqa: E302
-def parse_and_cast[T, E](  # noqa: E704
+def resolve_and_cast[T, E](  # noqa: E704
     item: PrimitiveValue | RikoList,
-    opts: Opts,
+    opts: DecorationOptions,
     conf: Conf,
     *,
     parsers: ParseFuncs,
     casters: CastFuncs[T, E],
     defaults: Defaults | None = ...,
     field: str | None = ...,
-    pipe: str = ...,
+    module: str = ...,
     **kwargs: object,
 ) -> ValueDispatch[T, E]: ...
-def parse_and_cast[T, E](  # noqa: E302
+def resolve_and_cast[T, E](  # noqa: E302
     item: ItemOrValue,
-    opts: Opts,
+    opts: DecorationOptions,
     conf: Conf,
     *,
     parsers: ParseFuncs,
     casters: CastFuncs[T, E],
     defaults: Defaults | None = None,
     field: str | None = None,
-    pipe: str = "",
+    module: str = "",
     **kwargs: object,
 ) -> ItemOrValueDispatch[T, E]:
     """
@@ -302,14 +339,14 @@ def parse_and_cast[T, E](  # noqa: E302
     Args:
 
         item: The input item or value.
-        opts: The resolved options.
-        conf: The merged pipe configuration.
+        opts: The resolved decoration and call options.
+        conf: The merged module configuration.
         parsers: The field and conf parsers.
         casters: The field, extract, and conf casters.
         defaults: The module's default conf.
         field: Optional field whose value replaces the item.
-        pipe: The pipe name, used in error messages.
-        **kwargs: Extra options forwarded to the parsers.
+        module: The module name, used in error messages.
+        **kwargs: Extra keyword arguments forwarded to the parsers.
 
     Returns:
 
@@ -324,7 +361,7 @@ def parse_and_cast[T, E](  # noqa: E302
     else:
         parsed_field, parsed_conf = item, conf
 
-    pieces_or_conf, merged_conf = build_conf(parsed_conf, defaults, opts, pipe)
+    pieces_or_conf, merged_conf = build_conf(parsed_conf, defaults, opts, module)
     parsed = (parsed_field, pieces_or_conf, merged_conf)
     casted = dispatch(parsed, *casters) if casters else parsed
 
@@ -336,18 +373,20 @@ def parse_and_cast[T, E](  # noqa: E302
     return dispatched
 
 
-def build_parsers(opts: Opts, conf: Conf, **kwargs: object) -> tuple[ParseFuncs, bool]:
+def build_parsers(
+    opts: DecorationOptions, conf: Conf, **kwargs: object
+) -> tuple[ParseFuncs, bool]:
     """
     Builds the field and conf parsers for a module, detecting dynamic conf.
 
-    A ``none`` ftype/ptype yields a null parser. A conf that varies per item is
-    parsed lazily per call (dynamic); otherwise it is parsed once and memoized.
+    A ``"none"`` ``ftype``/``ptype`` yields a null parser. A conf that varies per item
+    is parsed lazily per call (dynamic); otherwise it is parsed once and memoized.
 
     Args:
 
         opts: The decoration options (``ftype``/``ptype``).
-        conf: The merged pipe configuration.
-        **kwargs: Extra options forwarded to dynamic-conf detection.
+        conf: The merged module configuration.
+        **kwargs: Extra keyword arguments forwarded to dynamic-conf detection.
 
     Returns:
 
@@ -383,14 +422,14 @@ def _build_caster[T](  # noqa: E302
     type_: BasicCastType | CastType | None,
 ) -> ArgCaster[T | PrimitiveValue | ItemOrValue]:
     """
-    Builds a caster for a destination type, degrading on an unknown one.
+    Builds a caster for a cast type, degrading on an unknown one.
 
     An unrecognized ``type_`` logs a warning and falls back to ``cast_pass``
     (pass-through) rather than raising.
 
     Args:
 
-        type_: The destination cast type, or ``None`` for pass-through.
+        type_: The cast type, or ``None`` for pass-through.
 
     Returns:
 
@@ -411,13 +450,13 @@ def _build_caster[T](  # noqa: E302
     return caster
 
 
-def build_casters(opts: Opts) -> CastFuncs[ItemOrValue, object]:
+def build_casters(opts: DecorationOptions) -> CastFuncs[ItemOrValue, object]:
     """
     Builds the field, extract, and conf casters from a module's options.
 
     Honors ``ftype``/``ptype`` for the field and extract casters and combines
-    ``objectify``/``listize`` to decide how extract and conf are cast; a ``none``
-    ptype disables casting for both.
+    ``objectify``/``listize`` to decide how extract and conf are cast; a ``"none"``
+    ``ptype`` disables casting for both.
 
     Args:
 

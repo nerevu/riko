@@ -14,7 +14,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -34,10 +34,10 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import TypecastObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._scalars import PrimitiveValue
 
-OPTS: Opts = {"field": "content"}
+OPTS: DecorationOptions = {"field": "content"}
 DEFAULTS: Defaults = {"type": "text"}
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
@@ -53,7 +53,7 @@ def parser(
 
         content: The value to cast.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `type`.
+        objconf: The module configuration, containing `type`.
 
     Returns:
 
@@ -85,17 +85,17 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             type (str): Type to cast to, one of "bool", "date", "datetime",
                 "decimal", "float", "int", "location", "none", "pass", "text",
                 "url" (default: "text").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to cast. A missing field casts ``None``
+        field (str): Item field to cast. A missing field casts ``None``
             (default: "content").
 
         assign (str): Field the cast value is assigned to. Ignored when ``emit``
@@ -138,17 +138,17 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             type (str): Type to cast to, one of "bool", "date", "datetime",
                 "decimal", "float", "int", "location", "none", "pass", "text",
                 "url" (default: "text").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to cast. A missing field casts ``None``
+        field (str): Item field to cast. A missing field casts ``None``
             (default: "content").
 
         assign (str): Field the cast value is assigned to. Ignored when ``emit``

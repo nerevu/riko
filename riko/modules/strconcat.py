@@ -18,7 +18,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -36,10 +36,10 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import StrconcatObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item
 
-OPTS: Opts = {"listize": True, "extract": "part"}
+OPTS: DecorationOptions = {"listize": True, "extract": "part"}
 DEFAULTS: Defaults = {}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -57,7 +57,7 @@ def parser(
 
         _: The item. Unused; the parts arrive already resolved.
         extraction: The resolved parts.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -84,18 +84,19 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             part (str | dict | list): The pieces to join, in order. A single
                 piece is wrapped in a list. A str is used verbatim; a dict
                 resolves to a value and must hold one of:
 
-                    subkey (str): Item attribute supplying the piece. Dotted keys
-                    read nested values, e.g. ``"img.src"``.
+                    subkey (str): Item field supplying the piece. A dotted
+                    path reads a nested value, e.g. ``"img.src"``.
 
-                    terminal (str): Id of a wired pipe supplying the piece.
+                    terminal (str): Name of the input port (``in:<name>``) whose
+                    stream supplies the piece.
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -150,18 +151,19 @@ def pipe(*args: Any, **kwargs: object) -> str:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             part (str | dict | list): The pieces to join, in order. A single
                 piece is wrapped in a list. A str is used verbatim; a dict
                 resolves to a value and must hold one of:
 
-                    subkey (str): Item attribute supplying the piece. Dotted keys
-                    read nested values, e.g. ``"img.src"``.
+                    subkey (str): Item field supplying the piece. A dotted
+                    path reads a nested value, e.g. ``"img.src"``.
 
-                    terminal (str): Id of a wired pipe supplying the piece.
+                    terminal (str): Name of the input port (``in:<name>``) whose
+                    stream supplies the piece.
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

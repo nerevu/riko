@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Handles sub-pipe binding and item assignment."""
+"""Handles loop embed binding and item assignment."""
 
 from __future__ import annotations
 
@@ -81,8 +81,7 @@ def bind_subpipe(  # noqa: E302
     else:
         kwargs = {}
 
-    embed_context = context.augment(submodule=True)
-    return partial(embed, **kwargs, context=embed_context)
+    return partial(embed, **kwargs, context=context)
 
 
 @overload

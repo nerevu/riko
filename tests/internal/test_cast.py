@@ -68,6 +68,19 @@ class TestTryLocalTz:
 
         assert offset == timedelta(hours=9)
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="owned by the settable date timezone work: with try_local_tz, named "
+        "days ('now') use the local zone but counted offsets ('+1 seconds') stay UTC",
+    )
+    @pytest.mark.usefixtures("tokyo")
+    def test_relative_offsets_share_the_named_day_zone(self):
+        named = cast_datetime("now", try_local_tz=True)
+        offset = cast_datetime("+1 seconds", try_local_tz=True)
+        assert named is not None
+        assert offset is not None
+        assert offset.utcoffset() == named.utcoffset()
+
     def test_keyword_only(self):
         with pytest.raises(TypeError):
             cast_datetime("now", False, False, True)  # pyright: ignore[reportCallIssue]

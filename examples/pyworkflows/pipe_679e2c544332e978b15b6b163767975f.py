@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
-"""Hand-maintained typed probe for the pipe_679e2c544332e978b15b6b163767975f fixture."""
+"""
+Runs the workflow ``../workflows/pipe_679e2c544332e978b15b6b163767975f.json`` describes.
+
+This module's typed configuration classes let a type checker catch a bad node ``conf``.
+"""
 
 from __future__ import annotations
 
@@ -9,18 +13,19 @@ from typing import TYPE_CHECKING
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.strreplace import pipe as strreplace
 from riko.runtime._workflows import mark_subpipe
+from riko.types._enums import ExecutionMode
 from riko.types.modules import ItemBuilderRawConf, StrReplaceRawConf
 
 if TYPE_CHECKING:
     from riko import Context
 
 
+INPUTS = []
+DEPENDENCIES = ["itembuilder", "strreplace"]
+
+
 def pipe(item=None, context: Context | None = None, **_):
-    if context and context.describe_input:
-        _OUTPUT = []
-    elif context and context.describe_dependencies:
-        _OUTPUT = ["itembuilder", "strreplace"]
-    else:
+    if context is None or context.mode is ExecutionMode.RUN:
         sw_1 = itembuilder(
             item,
             conf=ItemBuilderRawConf(
@@ -61,6 +66,12 @@ def pipe(item=None, context: Context | None = None, **_):
             context=context,
         )
         _OUTPUT = sw_2
+    elif context.mode is ExecutionMode.DESCRIBE:
+        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        _OUTPUT = INPUTS
+    else:
+        _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
 

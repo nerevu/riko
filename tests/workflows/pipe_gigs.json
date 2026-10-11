@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-1",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-2",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-2",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-3",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-3",
                 "port": "out"
@@ -30,8 +31,7 @@
             "target": {
                 "node": "sw-4",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -46,9 +46,9 @@
                     "value": "file://riko/data/gigs.json"
                 }
             },
+            "family": "module",
             "id": "sw-1",
-            "name": "fetchdata",
-            "type": "module"
+            "name": "fetchdata"
         },
         "sw-2": {
             "conf": {
@@ -57,9 +57,9 @@
                     "value": "link"
                 }
             },
+            "family": "module",
             "id": "sw-2",
-            "name": "uniq",
-            "type": "module"
+            "name": "uniq"
         },
         "sw-3": {
             "conf": {
@@ -88,9 +88,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-3",
-            "name": "filter",
-            "type": "module"
+            "name": "filter"
         },
         "sw-4": {
             "conf": {
@@ -107,9 +107,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-4",
-            "name": "sort",
-            "type": "module"
+            "name": "sort"
         }
     },
     "outputs": {

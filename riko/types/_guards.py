@@ -27,10 +27,11 @@ from inspect import (
 )
 from typing import TYPE_CHECKING, Any, TypeGuard, overload
 
+import attrs
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs
 
-from riko.base._config import SUBPIPE_TYPE
+from riko.base._config import PIPE_ID_PREFIXES, SUBPIPE_TYPE
 from riko.base._strutils import replacer
 from riko.base.exceptions import InvalidPipelineError
 
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
     from ._collections import BasicList
-    from ._compiler import LoopModule, PipeModule
+    from ._compiler import PipeId
     from ._io import Closeable
     from ._resource import (
         AnyContextManager,
@@ -53,9 +54,9 @@ if TYPE_CHECKING:
     )
     from ._scalars import BasicValue
     from ._sentinels import MissingType, Sentinel
-    from ._streams import Item, StatefulItem
+    from ._streams import AnyIterable, Item, StatefulItem
     from ._wrappers import ModuleWrapper, SplitterWrapper, SubPipe
-    from .modules import Conf, ConfArg
+    from .modules import AnyConfRule, Conf, ConfArg
 
 
 def _protocol_signature(method: Callable) -> Signature:
@@ -93,7 +94,7 @@ def _signature_compatible(expected: Signature, actual: Signature) -> bool:
     return result
 
 
-def isinstance_strict(obj: object, protocol: type, *methods: str) -> bool:
+def isinstance_strict[P](obj: object, protocol: type[P], *methods: str) -> TypeIs[P]:
     """Check runtime protocol membership and method call compatibility."""
     match = False
 
@@ -151,20 +152,40 @@ def is_dataclass_inst(value: object) -> TypeIs[DataclassInstance]:
     return is_dataclass(value) and not isinstance(value, type)
 
 
+def is_attrs_inst(value: object) -> TypeIs[attrs.AttrsInstance]:
+    return attrs.has(type(value)) and not is_mapping(value)
+
+
+def is_conf_rule(value: object) -> TypeIs[AnyConfRule]:
+    return is_dataclass_inst(value) and type(value).__name__.endswith("ConfRule")
+
+
 @overload
 def require_mapping(  # noqa: E704
-    value: Conf | None, what: str | None = "value"
+    value: Conf | None,
+    what: str | None = "value",
+    *,
+    error: type[Exception] = InvalidPipelineError,
+    **_,
 ) -> Conf: ...
 @overload  # noqa: E302
 def require_mapping[K, V](  # noqa: E704
-    value: Mapping[K, V] | object, what: str | None = "value"
+    value: Mapping[K, V] | object,
+    what: str | None = "value",
+    *,
+    error: type[Exception] = InvalidPipelineError,
+    **_,
 ) -> Mapping[K, V]: ...
 def require_mapping[K, V](  # noqa: E302
-    value: Mapping[K, V] | object, what: str | None = "value"
+    value: Mapping[K, V] | object,
+    what: str | None = "value",
+    *,
+    error: type[Exception] = InvalidPipelineError,
+    **_,
 ) -> Mapping[K, V]:
-    """Narrows a value to a mapping or rejects it as malformed structure."""
+    """Narrows a value to a mapping or raises ``error`` as malformed structure."""
     if not is_mapping(value):
-        raise InvalidPipelineError(f"{what} must be a mapping")
+        raise error(f"{what} must be a mapping")
 
     return value
 
@@ -237,9 +258,17 @@ def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
     return result
 
 
-def is_streamlike[T](
-    value: Iterable[T] | AsyncIterable[T] | object,
-) -> TypeGuard[Iterable[T] | AsyncIterable[T]]:
+def require_sequence(
+    value: object, what: str, *, error: type[Exception] = InvalidPipelineError, **_
+) -> Iterable[object]:
+    """Narrows a value to a non-string iterable or raises ``error``."""
+    if not is_listlike(value):
+        raise error(f"{what} must be a list")
+
+    return value
+
+
+def is_streamlike[T](value: AnyIterable[T] | object) -> TypeGuard[AnyIterable[T]]:
     """
     Reports whether a value represents a sync or async stream of values.
 
@@ -252,7 +281,7 @@ def is_streamlike[T](
 
     Returns:
 
-        True when ``value`` streams values in either mode, False when it is one value.
+        True when ``value`` streams values (sync or async), False when it is one value.
 
     Examples:
 
@@ -286,8 +315,19 @@ def is_type_value(val: Mapping[Any, Any]) -> TypeGuard[ConfArg]:
     return len(val) == 2 and "type" in val and "value" in val
 
 
-def is_loop_module(module: PipeModule) -> TypeGuard[LoopModule]:
-    return module["type"] == "loop" and "embed" in module
+def is_pipe_id(value: object) -> TypeIs[PipeId]:
+    """
+    Reports whether ``value`` is a stored workflow's ``pipe_<id>`` name.
+
+    ``pipe:<id>`` is accepted too, since lookups read it as ``pipe_<id>``.
+
+    Examples:
+
+        >>> is_pipe_id("pipe_demo"), is_pipe_id("pipe:demo"), is_pipe_id("fetch")
+        (True, True, False)
+
+    """
+    return isinstance(value, str) and value.startswith(PIPE_ID_PREFIXES)
 
 
 def is_subpipe[T: SubPipe](val: T | ModuleWrapper) -> TypeGuard[T]:
@@ -330,9 +370,15 @@ def is_async_context_manager(
     return candidate is val and isinstance(val, AbstractAsyncContextManager)
 
 
-def is_async_callable[T](
-    val: Callable[..., Awaitable[T]] | object,
-) -> TypeGuard[Callable[..., Awaitable[T]]]:
+@overload
+def is_async_callable[T](  # noqa: E704
+    val: Callable[..., T | Awaitable[T]],
+) -> TypeGuard[Callable[..., Awaitable[T]]]: ...
+@overload  # noqa: E302
+def is_async_callable(  # noqa: E704
+    val: object,
+) -> TypeGuard[Callable[..., Awaitable[object]]]: ...
+def is_async_callable(val: object) -> bool:  # noqa: E302
     if callable(val):
         result = iscoroutinefunction(val) or iscoroutinefunction(type(val).__call__)
     else:
@@ -445,7 +491,7 @@ def is_splitter(pipe: ModuleWrapper) -> TypeIs[SplitterWrapper]:
 
 
 def require_single_output(
-    value: ModuleWrapper, what: str | None = "pipe"
+    value: ModuleWrapper, what: str | None = "pipe", **_
 ) -> ModuleWrapper:
     """
     Rejects a multi-output splitter until port-keyed fan-out delivery is executable.

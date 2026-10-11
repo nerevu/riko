@@ -141,7 +141,7 @@ def _gen_aliases(
         yield (mid, f"    {member} = {class_name}.{member}", member)
 
 
-def _get_module_block(
+def _generate_module_block(
     groups: Mapping[ModuleCategory | str, Iterable[NameEntry]],
 ) -> str:
     resolved: dict[str, str] = {}
@@ -168,7 +168,7 @@ def generate_module_names(*entries: NameEntry) -> str:
     """Generate the typed module-name definitions."""
     groups = _group(entries)
     classes = _gen_class_blocks(groups)
-    module = _get_module_block(groups)
+    module = _generate_module_block(groups)
     body = "\n\n\n".join([*classes, module])
     return ruff_format(f"{_HEADER}\n\n{_NAMES_DOC}\n\n{_IMPORT}\n\n\n{body}\n")
 
@@ -233,7 +233,7 @@ def list_modules(  # noqa: E302
     catalog = {metadata.name: metadata for metadata in gen_module_catalog()}
     catalog.update((metadata.name, metadata) for metadata in gen_registry_catalog())
 
-    # dynamic filter pipe import shadows the builtin filter
+    # dynamic filter module import shadows the builtin filter
     filtered = builtins.filter(match, catalog.values())
     modules = sorted(filtered, key=lambda module: module.name)
     return modules if show_metadata else [module.name for module in modules]

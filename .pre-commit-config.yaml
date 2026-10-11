@@ -1,21 +1,26 @@
 repos:
-  # The locked ruff (see `manage upgrade`), so hooks match `manage lint` and CI.
+  # Pre-commit installs the locked ruff in its own environment, so the hooks match
+  # `manage lint` and CI from any Git client. `manage upgrade` rewrites the pin and
+  # `manage lint --deps` fails when it drifts from uv.lock.
   - repo: local
     hooks:
       - id: ruff-check-imports
         name: ruff (sort imports)
-        entry: uv run --active --no-sync ruff check --select I --fix --config pyproject.toml
-        language: system
+        entry: ruff check --select I --fix --config pyproject.toml
+        language: python
+        additional_dependencies: [ruff==0.16.10]
         types_or: [python, pyi]
       - id: ruff-check
         name: ruff (check)
-        entry: uv run --active --no-sync ruff check --fix --config pyproject.toml
-        language: system
+        entry: ruff check --fix --config pyproject.toml
+        language: python
+        additional_dependencies: [ruff==0.16.10]
         types_or: [python, pyi]
       - id: ruff-format
         name: ruff (format)
-        entry: uv run --active --no-sync ruff format --config pyproject.toml
-        language: system
+        entry: ruff format --config pyproject.toml
+        language: python
+        additional_dependencies: [ruff==0.16.10]
         types_or: [python, pyi]
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12

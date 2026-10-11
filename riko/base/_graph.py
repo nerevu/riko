@@ -6,12 +6,14 @@ Derived from the public-domain implementation by Paul Harrison.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Hashable, Iterable, Mapping
+from collections.abc import Callable, Collection, Hashable, Iterable, Iterator, Mapping
 from graphlib import CycleError, TopologicalSorter
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal, overload
+from typing import TYPE_CHECKING
 
 import networkx as nx
+
+from ._iterutils import map_values, sort_stably
 
 if TYPE_CHECKING:
     from _typeshed import SupportsRichComparison
@@ -24,11 +26,12 @@ type SetGraph[T: Hashable] = Mapping[T, NodeSet[T]]
 type SCC[T: Hashable] = list[tuple[T, ...]]
 type FrozenGraph[T: Hashable] = MappingProxyType[T, frozenset[T]]
 type AnyGraph[T] = Graph[T] | FrozenGraph[T]
+type SortKey[T] = Callable[[T], SupportsRichComparison] | None
 
 
 def scc_sort[T: Hashable](graph: Graph[T], reverse: bool | None = False) -> SCC[T]:
     """
-    Identifies strongly connected components in a graph using Tarjan's algorithm.
+    Identifies strongly connected components in a graph.
 
     graph should be a dictionary mapping node names to an
     sequence of successor nodes.
@@ -69,16 +72,14 @@ def scc_sort[T: Hashable](graph: Graph[T], reverse: bool | None = False) -> SCC[
         [(6,), (5,), (0,), (1,), (4,), (2,), (3,)]
 
     """
-    digraph = nx.DiGraph({node: list(targets) for node, targets in graph.items()})
-    component_group: Iterable[set[T]] = nx.strongly_connected_components(digraph)
-    scc = [tuple(components) for components in component_group]
+    digraph = nx.DiGraph(map_values(sort_stably, graph))
+    components = nx.strongly_connected_components(digraph)
+    scc = [tuple(sort_stably(component)) for component in components]
     return scc if reverse else scc[::-1]
 
 
 def native_topological_sort[T: Hashable](
-    graph: Graph[T],
-    reverse: bool | None = False,
-    key: Callable[[T], SupportsRichComparison] | None = None,
+    graph: Graph[T], reverse: bool | None = False, key: SortKey[T] = None
 ) -> NodeList[T]:
     """
     Native topological sort.
@@ -125,7 +126,7 @@ def native_topological_sort[T: Hashable](
         [0, 5, 1, 6, 4, 2, 3]
 
     """
-    ts = TopologicalSorter(graph)
+    ts = TopologicalSorter(map_values(sort_stably, graph))
 
     if key is None:
         static_order = list(ts.static_order())
@@ -141,35 +142,29 @@ def native_topological_sort[T: Hashable](
     return static_order if reverse else static_order[::-1]
 
 
-@overload
-def topological_sort[T: Hashable](  # noqa: E704
-    graph: Graph[T], *, ssc: Literal[True]
-) -> SCC[T]: ...
-@overload  # noqa: E302
-def topological_sort[T: Hashable](  # noqa: E704
-    graph: Graph[T], *, strict: Literal[True]
-) -> NodeList[T]: ...
-@overload  # noqa: E302
-def topological_sort[T: Hashable](  # noqa: E704
-    graph: Graph[T], *, ssc: bool = ...
-) -> NodeList[T] | SCC[T]: ...
-@overload  # noqa: E302
-def topological_sort[T: Hashable](  # noqa: E704
-    graph: Graph[T], *, ssc: bool = ..., strict: bool = ...
-) -> NodeList[T] | SCC[T]: ...
-def topological_sort[T: Hashable](  # noqa: E302
+def topological_sort[T: Hashable](
     graph: Graph[T],
     *,
     reverse: bool | None = False,
-    ssc: bool | None = False,
     strict: bool | None = False,
-    key: Callable[[T], SupportsRichComparison] | None = None,
-) -> NodeList[T] | SCC[T]:
+    key: SortKey[T] = None,
+) -> SCC[T]:
     """
-    Topological sort.
+    Orders a graph's nodes as groups, whether or not it has a cycle.
 
-    Unless ``strict`` is set, a cyclic graph falls back to its strongly connected
-    components in order.
+    An acyclic graph sorts into one-node groups, and a cyclic one falls back to its
+    strongly connected components unless ``strict`` is set.
+
+    Args:
+
+        graph: Each node mapped to the nodes that come after it.
+        reverse: Whether to return the groups last first.
+        strict: Whether a cycle raises instead of falling back to components.
+        key: Orders the nodes that become ready together in an acyclic graph.
+
+    Returns:
+
+        The nodes in topological order, grouped by strongly connected component.
 
     Raises:
 
@@ -177,31 +172,19 @@ def topological_sort[T: Hashable](  # noqa: E302
 
     Examples:
 
-        # A --> B --> C --> D
-        >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}
-        >>> topological_sort(graph)
-        ['A', 'B', 'C', 'D']
-
-        # A --> B <--> C --> D
-        >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"B", "D"}}
-        >>> topological_sort(graph)
-        [('A',), ('B', 'C'), ('D',)]
-
         # A --> B --> D --> E
         # ↓           ↑
         # + --> C ----+
         >>> graph = {"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}
         >>> topological_sort(graph)
-        ['A', 'C', 'B', 'D', 'E']
+        [('A',), ('C',), ('B',), ('D',), ('E',)]
         >>> topological_sort(graph, reverse=True)
-        ['E', 'D', 'B', 'C', 'A']
+        [('E',), ('D',), ('B',), ('C',), ('A',)]
 
-        # 0 --> 1 --> 2 --> 3
-        #       ↑     ↓
-        #       +-----+
-        >>> graph = {0: [1], 1: [2], 2: [1, 3]}
+        # A --> B <--> C --> D
+        >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"B", "D"}}
         >>> topological_sort(graph)
-        [(0,), (1, 2), (3,)]
+        [('A',), ('B', 'C'), ('D',)]
 
         #             6 ----+
         #             ↓     ↓
@@ -210,52 +193,15 @@ def topological_sort[T: Hashable](  # noqa: E302
         #       +---> 4 <-- 5
         >>> graph = {0: [1], 1: [2, 4], 4: [2], 2: [3], 5: [4], 6: [2, 3]}
         >>> topological_sort(graph)
-        [0, 5, 1, 6, 4, 2, 3]
-
-    """
-    if ssc:
-        result = scc_sort(graph, reverse=reverse)
-    else:
-        try:
-            result = native_topological_sort(graph, reverse=reverse, key=key)
-        except CycleError:
-            if strict:
-                raise
-
-            result = scc_sort(graph, reverse=reverse)
-
-    return result
-
-
-def topological_groups[T: Hashable](
-    graph: Graph[T], reverse: bool | None = False
-) -> SCC[T]:
-    """
-    Orders a graph's nodes as groups, whether or not it has a cycle.
-
-    An acyclic graph sorts into one-node groups, and a cyclic one falls back to its
-    strongly connected components.
-
-    Args:
-
-        graph: Each node mapped to the nodes that come after it.
-        reverse: Whether to return the groups last first.
-
-    Returns:
-
-        The nodes in dependency order, grouped by strongly connected component.
-
-    Examples:
-
-        >>> topological_groups({"a": {"b"}, "b": set()})
-        [('a',), ('b',)]
-        >>> topological_groups({"a": {"b"}, "b": {"a"}, "c": set()})
-        [('c',), ('b', 'a')]
+        [(0,), (5,), (1,), (6,), (4,), (2,), (3,)]
 
     """
     try:
-        nodes = native_topological_sort(graph, reverse=reverse)
+        nodes = native_topological_sort(graph, reverse=reverse, key=key)
     except CycleError:
+        if strict:
+            raise
+
         result = scc_sort(graph, reverse=reverse)
     else:
         result = [(node,) for node in nodes]
@@ -273,7 +219,7 @@ def cyclic_nodes[T: Hashable](graph: Graph[T], groups: SCC[T] | None = None) -> 
     Args:
 
         graph: Each node mapped to the nodes that come after it.
-        groups: The graph's ``topological_groups``, when already computed.
+        groups: The graph's ``topological_sort`` groups, when already computed.
 
     Returns:
 
@@ -282,10 +228,10 @@ def cyclic_nodes[T: Hashable](graph: Graph[T], groups: SCC[T] | None = None) -> 
     Examples:
 
         >>> cyclic_nodes({"a": {"b"}, "b": {"a"}, "c": {"c"}, "d": set()})
-        ['c', 'b', 'a']
+        ['c', 'a', 'b']
 
     """
-    _groups = topological_groups(graph) if groups is None else groups
+    _groups = topological_sort(graph) if groups is None else groups
     is_cyclic = lambda group: len(group) > 1 or group[0] in graph.get(group[0], ())
     return [node for group in _groups if is_cyclic(group) for node in group]
 
@@ -322,7 +268,7 @@ def edges_to_graph[T: Hashable](
 
 def reverse_graph[T: Hashable](graph: AnyGraph[T]) -> dict[T, set[T]]:
     """
-    Flips a graphs edges by mapping each node to the nodes that point to it.
+    Flips a graph's edges by mapping each node to the nodes that point to it.
 
     Args:
 
@@ -368,8 +314,31 @@ def leaves[T: Hashable](graph: AnyGraph[T]) -> list[T]:
     return [node for node, successors in graph.items() if not successors]
 
 
+def gen_redundant_edges[T: Hashable](graph: AnyGraph[T]) -> Iterator[tuple[T, T]]:
+    """
+    Lists the edges of an acyclic graph that another path already implies.
+
+    Args:
+
+        graph: Each node mapped to the nodes that come after it.
+
+    Yields:
+
+        Each ``(source, target)`` edge that another path already implies.
+
+    Examples:
+
+        >>> next(gen_redundant_edges({"a": {"b", "c"}, "b": {"c"}}))
+        ('a', 'c')
+
+    """
+    digraph = nx.DiGraph(map_values(sort_stably, graph))
+    kept = nx.transitive_reduction(digraph).edges
+    yield from sort_stably(set(digraph.edges).difference(kept))
+
+
 def freeze_graph[T: Hashable](
-    graph: AnyGraph[T], key: Callable[[T], SupportsRichComparison] | None = None
+    graph: AnyGraph[T], key: SortKey[T] = None
 ) -> FrozenGraph[T]:
     if key is None:
         items = graph.items()
@@ -382,22 +351,9 @@ def freeze_graph[T: Hashable](
 def descendants[T: Hashable](
     source: T, graph: AnyGraph[T] = MappingProxyType({})
 ) -> frozenset[T]:
-    known = set(graph)
+    digraph = nx.DiGraph(map_values(sort_stably, graph))
 
-    for targets in graph.values():
-        known.update(targets)
-
-    if source not in known:
+    if source not in digraph:
         raise KeyError(source)
 
-    seen: set[T] = set()
-    stack = list(graph.get(source, ()))
-
-    while stack:
-        if (node := stack.pop()) == source or node in seen:
-            continue
-
-        seen.add(node)
-        stack.extend(graph.get(node, ()))
-
-    return frozenset(seen)
+    return frozenset(nx.descendants(digraph, source))

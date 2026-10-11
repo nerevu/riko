@@ -24,17 +24,17 @@ Examples:
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections import defaultdict
+from collections.abc import Iterable, Iterator, Mapping
 from itertools import count, starmap
-from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, get_args
+from typing import TYPE_CHECKING, Any, cast, get_args
 
-from attrs import asdict
+from attrs import AttrsInstance
 
 from riko.base._config import INPUT_PORT, OTHER_PORT, OUTPUT_PORT
 from riko.base._graph import edges_to_graph, leaves
+from riko.base._iterutils import map_values, unzip
 from riko.base.exceptions import InvalidPipelineError
-from riko.coercion._sequences import require_sequence
 from riko.definitions._workflow import (
     ActionNode,
     CacheNode,
@@ -49,13 +49,15 @@ from riko.definitions._workflow import (
     get_family_edges,
 )
 from riko.types._collections import (
+    FrozenDict,
     FrozenJSON,
-    field_names,
-    freeze_mapping,
+    freeze_json,
+    require_from_attrs,
     require_str,
     require_strlike,
+    serialize_attrs,
 )
-from riko.types._guards import is_mapping, require_mapping
+from riko.types._guards import is_mapping, require_mapping, require_sequence
 from riko.types._workflow import (
     WORKFLOW_VERSION,
     Edge,
@@ -70,16 +72,14 @@ from riko.types._workflow import (
 
 if TYPE_CHECKING:
     from riko.definitions._workflow import WorkflowLike
-    from riko.types._workflow import JSONSchema
 
 
-_EDGE_ALIASES = frozenset({"src", "tgt", "from", "to"})
+_ALIASES: Mapping[str, Mapping[str, str]] = {"node": {"format": "fmt"}, "edge": {}}
+_REJECTED_EDGE_KEYS = frozenset({"src", "tgt", "from", "to"})
 
-
-def _reject_unknown(present: Mapping[str, object], cls: type, *extra: str) -> None:
-    """Rejects any shorthand key outside the closed set for ``what``."""
-    if unknown := sorted(set(present).difference([*field_names(cls), *extra])):
-        raise InvalidPipelineError(f"unknown {cls.__name__} field(s): {unknown}")
+require_endpoint = require_from_attrs(Endpoint, exclude={"port"})
+require_edge = require_from_attrs(Edge)
+require_workflow = require_from_attrs(Workflow, exclude={"nodes", "outputs"})
 
 
 def _get_legacy_index(port: str, prefix: str, default: int) -> int:
@@ -133,34 +133,64 @@ _NODE_BUILDERS: Mapping[str, type[Node]] = {
 }
 
 
-def _build_node(family: object | None = "module", **fields: Any) -> Node:
+def _resolve_aliases[T](raw: Mapping[str, T], kind: str) -> dict[str, T]:
+    """Folds each aliased field onto its name and accepts both only when they agree."""
+    resolved = dict(raw)
+
+    for alias, name in _ALIASES[kind].items():
+        primary, value = resolved.get(name), resolved.pop(alias, None)
+
+        if primary is None and value is not None:
+            resolved[name] = value
+        elif value is not None and value != primary:
+            what = f"{kind} {name!r}/{alias!r}"
+            raise InvalidPipelineError(f"conflicting {what}: {primary!r} and {value!r}")
+
+    return resolved
+
+
+def _build_node(raw: RawNode) -> Node:
     """Dispatches a ``RawNode`` to its closed node family builder."""
-    resolved = str(fields.pop("type", family))
+    if "type" in raw:
+        hint = "a module goes in 'name', a node family in 'family'"
+        msg = f"unknown node key 'type': {hint}"
+        raise InvalidPipelineError(msg)
 
-    if "format" in fields and "fmt" in fields:
-        raise InvalidPipelineError("use 'fmt' or 'format', not both")
-    elif "format" in fields:
-        fields["fmt"] = fields.pop("format")
+    resolved = _resolve_aliases(raw, "node")
+    _family = resolved.pop("family", None)
+    family = "module" if _family is None else str(_family)
 
-    if (builder := _NODE_BUILDERS.get(resolved)) is None:
-        raise InvalidPipelineError(f"unknown node family: {resolved!r}")
+    if (builder := _NODE_BUILDERS.get(family)) is None:
+        raise InvalidPipelineError(f"unknown node family: {family!r}")
 
-    _reject_unknown(fields, builder)
-    return builder(**fields)
+    require_from_attrs(builder)(resolved)
+    return builder(**cast("dict[str, Any]", resolved))
 
 
-def _normalize_node(*raw_nodes: object) -> Iterator[RawNode]:
-    """Pairs list-authored nodes with explicit or generated ``<name>-<occurrence>``."""
-    counts: dict[str, int] = {}
-
+def _gen_node_info(
+    raw_nodes: Iterable[object],
+) -> Iterator[tuple[str | None, dict[str, Any]]]:
     for raw_node in raw_nodes:
-        node: dict[str, Any] = dict(require_mapping(raw_node, "node"))
-        name = node.get("name")
+        node = dict(require_mapping(raw_node, "node"))
+        taken = None if node.get("id") is None else str(node["id"])
+        yield taken, node
 
+
+def _gen_nodes(raw_nodes: Iterable[object]) -> Iterator[RawNode]:
+    """Pairs list-authored nodes with explicit or generated ``<name>-<occurrence>``."""
+    _taken, nodes = unzip(_gen_node_info(raw_nodes))
+    taken = set(_taken)
+    counts: dict[str, int] = defaultdict(int)
+
+    for node in nodes:
         if (node_id := node.pop("id", None)) is None:
-            name = require_str(name, "node 'name'")
-            counts[name] = counts.get(name, 0) + 1
-            node_id = f"{name}-{counts[name]}"
+            name = require_str(node.get("name"), "node 'name'")
+            counts[name] += 1
+
+            while (node_id := f"{name}-{counts[name]}") in taken:
+                counts[name] += 1
+
+            taken.add(node_id)
 
         yield RawNode(id=str(node_id), **node)
 
@@ -177,14 +207,14 @@ def _keyed_node(key: object, raw_node: object) -> dict[str, Any]:
     return node
 
 
-def _normalize_nodes(raw_nodes: object) -> dict[str, Node]:
-    """Normalizes list- or mapping-authored nodes into canonical id-keyed nodes."""
+def _build_nodes(raw_nodes: object) -> dict[str, Node]:
+    """Builds canonical id-keyed nodes from list- or mapping-authored nodes."""
     if isinstance(raw_nodes, Mapping):
         _nodes = starmap(_keyed_node, raw_nodes.items())
     else:
         _nodes = require_sequence(raw_nodes, "nodes")
 
-    built = [_build_node(**node) for node in _normalize_node(*_nodes)]
+    built = [_build_node(node) for node in _gen_nodes(_nodes)]
     result = {node.id: node for node in built}
 
     if len(result) != len(built):
@@ -193,12 +223,17 @@ def _normalize_nodes(raw_nodes: object) -> dict[str, Node]:
     return result
 
 
+def resolve_port(port: object, default: str) -> str:
+    """Resolves an authored endpoint port."""
+    return default if port is None else str(port)
+
+
 def _normalize_endpoint(raw: object, default_port: str) -> Endpoint:
     """Normalizes a ``RawEndpoint`` into a canonical ``node``/``port`` reference."""
-    endpoint = require_mapping(raw, "endpoint")
-    _reject_unknown(endpoint, Endpoint)
+    endpoint = require_endpoint(require_mapping(raw, "endpoint"))
     node = require_str(endpoint.get("node"), "edge endpoint 'node'")
-    port = _normalize_port(str(endpoint.get("port", default_port)), default_port)
+    resolved = resolve_port(endpoint.get("port"), default_port)
+    port = _normalize_port(resolved, default_port)
     _validate_port(port)
     return Endpoint(node, port)
 
@@ -217,16 +252,16 @@ def _resolve_edge_family(family: object, target: Endpoint, **nodes: Node) -> boo
 
 def _normalize_edge(raw: object, **nodes: Node) -> Edge:
     """Normalizes one ``RawEdge``."""
-    edge = require_mapping(raw, "edge")
+    _edge = require_mapping(raw, "edge")
 
-    if present := _EDGE_ALIASES.intersection(edge):
+    if present := _REJECTED_EDGE_KEYS.intersection(_edge):
         raise InvalidPipelineError(f"use 'source'/'target', not {sorted(present)}")
 
-    _reject_unknown(edge, Edge, "type")
-    source = _normalize_endpoint(edge.get("source"), "out")
-    target = _normalize_endpoint(edge.get("target"), "in")
-    family = edge.get("family", edge.get("type"))
-    publish = _resolve_edge_family(family, target, **nodes)
+    resolved = _resolve_aliases(_edge, "edge")
+    edge = require_edge(resolved)
+    source = _normalize_endpoint(edge["source"], "out")
+    target = _normalize_endpoint(edge["target"], "in")
+    publish = _resolve_edge_family(edge.get("family"), target, **nodes)
     return PublishEdge(source, target) if publish else StreamEdge(source, target)
 
 
@@ -246,30 +281,34 @@ def _normalize_outputs(raw: object, *edges: Edge, **nodes: Node) -> dict[str, En
     return result
 
 
-def _normalize_input(raw: object) -> FrozenJSON:
-    """Normalizes an input declaration shorthand into a full JSON Schema mapping."""
-    if isinstance(raw, str):
-        result = {"type": raw}
-    elif is_mapping(raw):
-        result = raw
-    else:
+def _require_input(raw: object) -> str | Mapping[str, object]:
+    """Narrows an input declaration to a type name or schema mapping, or raises."""
+    if not (isinstance(raw, str) or is_mapping(raw)):
         raise InvalidPipelineError("input must be a type name or mapping")
 
-    return freeze_mapping(result)
+    return raw
 
 
-def _normalize_inputs(raw: object) -> JSONSchema:
-    """Normalizes declared inputs into name-keyed full JSON Schema mappings."""
+def _normalize_input(raw: object) -> FrozenDict[str, FrozenJSON]:
+    """Normalizes an input declaration shorthand into a full JSON Schema mapping."""
+    declaration = _require_input(raw)
+    result = {"type": declaration} if isinstance(declaration, str) else declaration
+    return freeze_json(result)
+
+
+def _normalize_inputs(raw: object) -> dict[str, FrozenDict[str, FrozenJSON]]:
+    """Normalizes input declarations into name-keyed full JSON Schema mappings."""
     inputs = {} if raw is None else require_mapping(raw, "inputs")
-    resolved = {name: _normalize_input(schema) for name, schema in inputs.items()}
-    return MappingProxyType(resolved)
+    return map_values(_normalize_input, inputs)
 
 
-def _gen_raw[K, V, R](values: Mapping[K, V], raw: type[R]) -> Iterator[tuple[K, R]]:
-    extra = lambda value: {"type": value.family} if isinstance(value, Node) else {}
+def _gen_raw[K, V: AttrsInstance, R](
+    values: Mapping[K, V], raw: type[R]
+) -> Iterator[tuple[K, R]]:
+    extra = lambda value: {"family": value.family} if isinstance(value, Node) else {}
 
     for key, _value in values.items():
-        yield key, raw(**asdict(_value), **extra(_value))
+        yield key, raw(**serialize_attrs(_value, recurse=True), **extra(_value))
 
 
 def _raw_workflow(workflow: Workflow) -> RawWorkflow:
@@ -281,7 +320,7 @@ def _raw_workflow(workflow: Workflow) -> RawWorkflow:
             "nodes": dict(_gen_raw(workflow.nodes, RawNode)),
             "edges": [v for _, v in _gen_raw(edges, RawEdge)],
             "outputs": dict(_gen_raw(workflow.outputs, RawEndpoint)),
-            "inputs": workflow.inputs,
+            "inputs": map_values(_require_input, workflow.inputs),
             "resources": workflow.resources,
             "version": workflow.version,
         }
@@ -316,7 +355,7 @@ def normalize_workflow(raw: WorkflowLike) -> Workflow:
         ...     {
         ...         "nodes": [
         ...             {"id": "fetch-1", "name": "fetch"},
-        ...             {"name": "write", "type": "write", "backend": "file"},
+        ...             {"name": "write", "family": "write", "backend": "file"},
         ...         ],
         ...         "edges": [
         ...             {"source": {"node": "fetch-1"}, "target": {"node": "write-1"}}
@@ -330,22 +369,21 @@ def normalize_workflow(raw: WorkflowLike) -> Workflow:
 
     """
     source = _raw_workflow(raw) if isinstance(raw, Workflow) else raw
-    workflow = require_mapping(source, "workflow")
-    _reject_unknown(workflow, Workflow)
+    workflow = require_workflow(require_mapping(source, "workflow"))
     _resources = workflow.get("resources")
     version = workflow.get("version", WORKFLOW_VERSION)
-    nodes = _normalize_nodes(workflow.get("nodes", ()))
+    nodes = _build_nodes(workflow.get("nodes", ()))
     _edges = require_sequence(workflow.get("edges", ()), "edges")
     edges = [_normalize_edge(edge, **nodes) for edge in _edges]
 
     return Workflow(
-        nodes=nodes,
+        nodes=nodes.values(),
         outputs=_normalize_outputs(workflow.get("outputs"), *edges, **nodes),
         inputs=_normalize_inputs(workflow.get("inputs")),
         edges=edges,
-        resources=None if _resources is None else require_strlike(_resources),
+        resources=() if _resources is None else require_strlike(_resources),
         version=require_str(version, "workflow 'version'"),
     )
 
 
-__all__ = ["normalize_workflow"]
+__all__ = ["normalize_workflow", "resolve_port"]

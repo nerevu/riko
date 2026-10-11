@@ -2,6 +2,6 @@
 
 from ._config import settings
 
-DEF_CONNECTION_COUNT = settings.connection_count
+DEF_CONCURRENCY_LIMIT = settings.concurrency_limit
 STREAMING_THRESHOLD = settings.streaming_threshold
 ENCODING = settings.encoding

@@ -19,8 +19,8 @@ Examples:
         ...     "edges": [{"source": {"node": "gen"}, "target": {"node": "trunc"}}],
         ... }
         >>> source = compile_workflow(workflow, "pipe_demo")
-        >>> print(next(l for l in source.splitlines() if l.startswith("def pipe")))
-        def pipe(item=None, context: Context | None = None, **_):
+        >>> print(next(l for l in source.splitlines() if l.startswith("pipe")))
+        pipe = build_workflow_pipes(
 
     CLI composition::
 

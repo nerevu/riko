@@ -185,7 +185,7 @@ def test_pipe_def_write_wrapper_option_rejected():
 
 
 def test_pipe_def_write_unknown_conf_key_rejected():
-    with pytest.raises(InvalidPipelineError, match="write option"):
+    with pytest.raises(InvalidPipelineError, match="WriteConf key"):
         migrate_v1_to_v2(
             {
                 "modules": [
@@ -205,13 +205,11 @@ def test_write_module_without_format_defaults_to_none():
     assert node.fmt is None
 
 
-def test_module_extras_fold_into_conf():
-    workflow = migrate_v1_to_v2(
-        {"modules": [{"id": "c", "type": "count", "conf": {"x": 1}, "bogus": True}]}
-    )
-    node = workflow.nodes["c"]
-    assert isinstance(node, ModuleNode)
-    assert node.conf == {"bogus": True, "x": 1}
+def test_module_unknown_key_rejected():
+    with pytest.raises(InvalidPipelineError, match="unknown PipeModule key"):
+        migrate_v1_to_v2(
+            {"modules": [{"id": "c", "type": "count", "conf": {"x": 1}, "bogus": 1}]}
+        )
 
 
 def test_module_call_options_become_node_options():
@@ -384,7 +382,9 @@ def test_migrated_workflow_carries_no_pipe_def_structure():
 
 
 def test_malformed_module_raises():
-    with pytest.raises(InvalidPipelineError, match="module 'type'"):
+    with pytest.raises(
+        InvalidPipelineError, match=r"missing PipeModule key\(s\): \['type'\]"
+    ):
         migrate_v1_to_v2({"modules": [{"id": "a", "conf": {}}]})
 
 

@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-138",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-180",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-286",
                 "port": "out"
@@ -19,8 +20,7 @@
             "target": {
                 "node": "sw-138",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -48,14 +48,14 @@
                 },
                 "name": "strconcat"
             },
+            "family": "module",
             "id": "sw-138",
             "name": "loop",
             "options": {
                 "assign": "title",
                 "count": "all",
                 "emit": false
-            },
-            "type": "module"
+            }
         },
         "sw-180": {
             "conf": {
@@ -76,14 +76,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-180",
             "name": "rename",
             "options": {
                 "assign": "loop:rename",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-286": {
             "conf": {
@@ -96,9 +96,9 @@
                     "value": "file://riko/data/capnorth.oes.ca.gov_89509.xml"
                 }
             },
+            "family": "module",
             "id": "sw-286",
-            "name": "fetchdata",
-            "type": "module"
+            "name": "fetchdata"
         }
     },
     "outputs": {

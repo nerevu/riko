@@ -64,7 +64,7 @@ def _fanned_in(names: tuple[str, ...]) -> Pipeline:
         for branch, port in zip(branches, ports, strict=True)
     )
     workflow = Workflow(
-        nodes={node.id: node for node in [*branches, union]},
+        nodes=[*branches, union],
         edges=edges,
         outputs={"default": Endpoint(union.id, "out")},
         inputs={},

@@ -15,6 +15,8 @@ Examples:
         (True, None)
         >>> evolve(settings, concurrency=4).concurrency
         4
+        >>> evolve(settings, concurrency="auto").concurrency
+        'auto'
         >>> ExecutionSettings(concurrency=0)
         Traceback (most recent call last):
         ValueError: ExecutionSettings 'concurrency' must be at least 1, got 0
@@ -24,11 +26,15 @@ Examples:
 from __future__ import annotations
 
 from math import isnan
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from attrs import define, field
 
-from riko.types._collections import validator_from_require
+from riko.types._collections import (
+    def_from_require,
+    require_instance,
+    validator_from_require,
+)
 from riko.types._enums import Executor
 
 if TYPE_CHECKING:
@@ -37,23 +43,22 @@ if TYPE_CHECKING:
 __all__ = ["DEF_EXECUTION_SETTINGS", "ExecutionSettings"]
 
 
-def _require_concurrency(value: object, what: str | None = "value") -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError(f"{what} must be an int or None")
+def _require_concurrency(
+    value: object, what: str | None = "value", **_
+) -> int | Literal["auto"]:
+    if value == "auto":
+        concurrency: int | Literal["auto"] = "auto"
+    elif isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{what} must be an int, 'auto', or None")
     elif value < 1:
         raise ValueError(f"{what} must be at least 1, got {value}")
+    else:
+        concurrency = value
 
-    return value
-
-
-def _require_bool(value: object, what: str | None = "value") -> bool:
-    if not isinstance(value, bool):
-        raise TypeError(f"{what} must be a bool")
-
-    return value
+    return concurrency
 
 
-def _require_timeout(value: object, what: str | None = "value") -> float:
+def _require_timeout(value: object, what: str | None = "value", **_) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise TypeError(f"{what} must be a number or None")
     elif isnan(value) or value < 0:
@@ -62,9 +67,11 @@ def _require_timeout(value: object, what: str | None = "value") -> float:
     return value
 
 
-_concurrency = validator_from_require(_require_concurrency, optional=True)
-_ordered = validator_from_require(_require_bool)
-_timeout = validator_from_require(_require_timeout, optional=True)
+_concurrency = def_from_require(
+    _require_concurrency, what="ExecutionSettings 'concurrency'"
+)
+_is_bool = validator_from_require(require_instance, bool, error=TypeError)
+_is_timeout = validator_from_require(_require_timeout, optional=True)
 
 
 @define(frozen=True, slots=True)
@@ -77,8 +84,8 @@ class ExecutionSettings:
         executor: Where per-item work runs; a string such as ``"thread"`` is
             accepted and an unknown one raises ``ValueError``.
 
-        concurrency: The per-run ceiling on items in flight, or ``None`` to run
-            items sequentially.
+        concurrency: The per-run ceiling on items in flight, ``"auto"`` to size
+            it for the machine, or ``None`` to run items sequentially.
 
         ordered: Whether mapped results keep source order.
 
@@ -109,10 +116,12 @@ class ExecutionSettings:
     """
 
     executor: Executor = field(default=Executor.AUTO, converter=Executor)
-    concurrency: int | None = field(default=None, validator=_concurrency)
-    ordered: bool = field(default=False, validator=_ordered)
+    concurrency: int | Literal["auto"] | None = field(
+        default=None, converter=_concurrency
+    )
+    ordered: bool = field(default=False, validator=_is_bool)
     event_sink: EventSink | None = field(default=None, repr=False)
-    shutdown_timeout: float | None = field(default=None, validator=_timeout)
+    shutdown_timeout: float | None = field(default=None, validator=_is_timeout)
 
 
 DEF_EXECUTION_SETTINGS = ExecutionSettings()

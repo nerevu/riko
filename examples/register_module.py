@@ -3,8 +3,8 @@
 Registers a module with **explicit** interface callables.
 
 Assign ``ModuleDefinition``'s ``pipe`` / ``async_pipe`` kwargs to a
-``SyncOperatorWrapper`` / ``AsyncOperatorWrapper``. For the packaged entry-point plugin
-path, see ``riko-example-ext/``. For the ``module=`` convention, see
+``SyncOperatorWrapper`` / ``AsyncOperatorWrapper``. For the installable extension
+package, see ``riko-example-ext/``. For the ``module=`` convention, see
 ``register_alias.py``.
 
 Examples:

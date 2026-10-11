@@ -8,7 +8,7 @@ from dataclasses import fields, is_dataclass
 from types import UnionType
 from typing import TYPE_CHECKING, Literal, Union, get_args, get_origin
 
-import riko.types._enums as names_module
+import riko.types._enums as enums_module
 import riko.types._scalars as scalars_module
 from riko.base._typing import resolve_type_hints
 from riko.types._guards import is_mapping
@@ -71,12 +71,11 @@ def fromdict(
     # Adds the caller's namespace so dataclasses defined in a local scope (e.g. a
     # doctest or test body) resolve PEP 563 string (from __future__ import annotations)
     # annotations
+    module = sys.modules[cls.__module__]
     caller = sys._getframe(1)
     callerns = {**caller.f_globals, **caller.f_locals}
-    module = sys.modules[cls.__module__]
-    hints = resolve_type_hints(
-        cls, callerns, module, names_module, scalars_module, include_extras=True
-    )
+    namespaces = (callerns, module, enums_module, scalars_module)
+    hints = resolve_type_hints(cls, *namespaces, include_extras=True)
 
     for f in fields(cls):
         if f.name not in data:

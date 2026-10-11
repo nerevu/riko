@@ -20,9 +20,9 @@ from riko.types._enums import ModuleName
 from riko.types._guards import is_mapping
 from riko.types._workflow import Endpoint
 from riko.types.modules import (
+    CallOptions,
     ConfArg,
     Embed,
-    ModuleOptions,
     SortConf,
     SortConfRule,
     TokenizerConf,
@@ -32,7 +32,7 @@ from tests import async_test
 
 _SORT_CONF_RULE = SortConfRule(dir="desc")
 _SORT_CONF = SortConf({"rule": _SORT_CONF_RULE})
-_OPTIONS = ModuleOptions(emit=True, field="title")
+_OPTIONS = CallOptions(emit=True, field="title")
 
 SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
 
@@ -49,7 +49,7 @@ _EMBED = Embed(name="tokenizer", conf=tokenizer_conf)
 def _workflow():
     node = Pipeline.from_module("fetch").workflow.nodes["fetch-1"]
     return Workflow(
-        nodes={node.id: node}, outputs={"default": Endpoint(node.id, "out")}, inputs={}
+        nodes=[node], outputs={"default": Endpoint(node.id, "out")}, inputs={}
     )
 
 

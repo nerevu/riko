@@ -23,7 +23,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
 
 """
@@ -37,9 +37,9 @@ from meza import io
 
 from riko.definitions._targets import resolve_format
 from riko.io._async import async_write
-from riko.io._serialization import serialize_records
+from riko.io._serialization import serialize_items
 from riko.types._io import IOFileLike, IOFileLikeType
-from riko.types._options import Defaults, Opts
+from riko.types._options import DecorationOptions, Defaults
 from riko.types._scalars import AnyStr, AnyStrType
 
 from ._decorators import operator
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     from riko.types._streams import Items, Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = Opts()
+OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = Defaults({"fmt": None, "mode": "wb+"})
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -67,7 +67,7 @@ def _prepare_content(items: Items, objconf: WriteObjconf) -> AnyStr | IOFileLike
     else:
         if not objconf.dest:
             logger.warning("The destination is not set. Skipping writing.")
-        elif (content := serialize_records(items, fmt)) is None:
+        elif (content := serialize_items(items, fmt)) is None:
             logger.warning(f"The {fmt} converter produced no content")
         elif not isinstance(content, (AnyStrType, IOFileLikeType)):
             logger.warning(f"The {fmt} converter produced unwritable content")
@@ -83,13 +83,13 @@ async def async_parser(
 
     Args:
 
-        stream: The source. Note: this shares the ``tuples`` iterator, so
+        stream: The input stream. Note: this shares the ``tuples`` iterator, so
             consuming it will consume ``tuples`` as well.
 
         objconf: The item independent configuration: ``dest``, ``fmt``, and ``mode``.
 
         tuples: Iterable of ``(item, objconf)`` pairs, where ``item`` is an
-            element in the source stream. Note: this shares the ``stream``
+            element in the input stream. Note: this shares the ``stream``
             iterator, so consuming it will consume ``stream`` as well.
 
     Returns:
@@ -133,13 +133,13 @@ def parser(
 
     Args:
 
-        stream: The source. Note: this shares the ``tuples`` iterator, so
+        stream: The input stream. Note: this shares the ``tuples`` iterator, so
             consuming it will consume ``tuples`` as well.
 
         objconf: The item independent configuration: ``dest``, ``fmt``, and ``mode``.
 
         tuples: Iterable of ``(item, objconf)`` pairs, where ``item`` is an
-            element in the source stream. Note: this shares the ``stream``
+            element in the input stream. Note: this shares the ``stream``
             iterator, so consuming it will consume ``stream`` as well.
 
     Returns:
@@ -179,9 +179,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration. Must contain the key 'dest'.
+        conf (dict): The module configuration. Must contain the key 'dest'.
 
             dest (PathLike): the destination file path
 
@@ -190,14 +190,14 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
             mode (str): the file open mode (default: 'wb+')
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        assign (str): Field the output stream is assigned to. Ignored when ``emit`` is
+        assign (str): Field each item is assigned to. Ignored when ``emit`` is
             True (default: "write").
 
-        emit (bool): Whether to emit the output stream directly rather than assigning
+        emit (bool): Whether to emit each item directly rather than assigning
             it. Overrides ``assign`` (default: True).
 
     Yields:
@@ -208,7 +208,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Notes:
 
         Nothing is written and a warning is logged when ``dest`` is unset,
-        ``fmt`` is ``'list'``/``'tuple'``, ``fmt`` is invalid, or the converter
+        ``fmt`` is ``"list"``/``"tuple"``, ``fmt`` is invalid, or the converter
         produces no content. The stream still passes through unchanged in every case.
 
     Examples:
@@ -239,9 +239,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration. Must contain the key 'dest'.
+        conf (dict): The module configuration. Must contain the key 'dest'.
 
             dest (PathLike): the destination file path
 
@@ -250,14 +250,14 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
             mode (str): the file open mode (default: 'wb+')
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        assign (str): Field the output stream is assigned to. Ignored when ``emit`` is
+        assign (str): Field each item is assigned to. Ignored when ``emit`` is
             True (default: "write").
 
-        emit (bool): Whether to emit the output stream directly rather than assigning
+        emit (bool): Whether to emit each item directly rather than assigning
             it. Overrides ``assign`` (default: True).
 
     Yields:
@@ -268,7 +268,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Notes:
 
         Nothing is written and a warning is logged when ``dest`` is unset,
-        ``fmt`` is ``'list'``/``'tuple'``, ``fmt`` is invalid, or the converter
+        ``fmt`` is ``"list"``/``"tuple"``, ``fmt`` is invalid, or the converter
         produces no content. The stream still passes through unchanged in every case.
 
     Examples:

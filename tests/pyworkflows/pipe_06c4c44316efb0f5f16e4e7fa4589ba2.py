@@ -11,20 +11,19 @@ from riko.modules.input import pipe as _input
 from riko.modules.sort import pipe as sort
 from riko.modules.tail import pipe as tail
 from riko.runtime._workflows import mark_subpipe
+from riko.types._enums import ExecutionMode
 from riko.types.modules import FetchRawConf, InputRawConf, SortRawConf, TailRawConf
 
 if TYPE_CHECKING:
     from riko import Context
 
 
+INPUTS = [("", "numberinput1", "How many items do you want in the feed?", "int", "5")]
+DEPENDENCIES = ["fetch", "input", "sort", "tail"]
+
+
 def pipe(item=None, context: Context | None = None, **_):
-    if context and context.describe_input:
-        _OUTPUT = [
-            ("", "numberinput1", "How many items do you want in the feed?", "int", "5")
-        ]
-    elif context and context.describe_dependencies:
-        _OUTPUT = ["fetch", "input", "sort", "tail"]
-    else:
+    if context is None or context.mode is ExecutionMode.RUN:
         sw_123 = fetch(
             item,
             conf=FetchRawConf(
@@ -74,6 +73,12 @@ def pipe(item=None, context: Context | None = None, **_):
             count=sw_131,
         )
         _OUTPUT = sw_106
+    elif context.mode is ExecutionMode.DESCRIBE:
+        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        _OUTPUT = INPUTS
+    else:
+        _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
 

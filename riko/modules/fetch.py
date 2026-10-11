@@ -17,7 +17,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
     keys: Entry fields every parsed feed provides.
 
@@ -43,11 +43,11 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import FetchObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._rss import RSSEntry
     from riko.types._streams import Item
 
-OPTS: Opts = SourceOpts
+OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = {"encoding": ENCODING}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 keys: set[str] = {"author", "dc:creator", "id", "link", "pubDate", "summary", "title"}
@@ -65,7 +65,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`.
+        objconf: The module configuration, containing `url`.
 
     Returns:
 
@@ -106,7 +106,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`.
+        objconf: The module configuration, containing `url`.
 
     Returns:
 
@@ -135,18 +135,18 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
-    Asynchronously fetches an RSS feed and yields one feed entries.
+    Asynchronously fetches an RSS feed and yields its entries.
 
     Args:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The feed to fetch, local or remote. Required.
             encoding (str): Feed encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -169,7 +169,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
     Notes:
 
-        ``memoize`` is ignored on this path.
+        ``memoize`` is ignored by the async pipe.
 
     Examples:
 
@@ -191,20 +191,20 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
-    Fetches an RSS feed and yields one feed entries.
+    Fetches an RSS feed and yields its entries.
 
     Args:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The feed to fetch, local or remote. Required.
             encoding (str): Feed encoding (default: "utf-8").
             memoize (bool): Whether to cache the fetched feed (default:
                 False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

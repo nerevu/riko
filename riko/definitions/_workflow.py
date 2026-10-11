@@ -22,12 +22,9 @@ Examples:
         ... )
         >>> from riko.types._workflow import Endpoint
         >>>
-        >>> node = ModuleNode(id="fetch-1", name="fetch")
         >>> workflow = Workflow(
-        ...     nodes={node.id: node},
-        ...     edges=(),
-        ...     outputs={"default": Endpoint(node.id, "out")},
-        ...     inputs={},
+        ...     nodes=[ModuleNode(id="fetch-1", name="fetch")],
+        ...     outputs={"default": Endpoint("fetch-1", "out")},
         ... )
         >>> PipelineDefinition(workflow).workflow.outputs["default"]
         Endpoint(node='fetch-1', port='out')
@@ -37,10 +34,10 @@ Examples:
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterable, Mapping
 from functools import cached_property, partial
 from inspect import isawaitable
 from itertools import chain
-from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -58,27 +55,39 @@ from typing_extensions import TypeVar
 
 from riko.base.exceptions import InvalidPipelineError
 from riko.types._collections import (
-    FreezeMapping,
     FrozenConf,
-    FrozenConfValues,
-    FrozenMap,
+    FrozenDict,
+    FrozenJSON,
     FrozenOptions,
-    FrozenOptionValues,
     FrozenParams,
     FrozenPolicy,
-    JSONSchema,
-    deep_freeze_mapping,
     def_from_require,
-    freeze_value,
+    def_from_typed_dict,
+    freeze_json,
+    instances_freezer,
+    mapping_converter,
     narrow_def_from_require,
     narrow_from_require,
+    normalize_strs,
+    optional_mapping_converter,
     require_binding,
+    require_from_typed_dict,
+    require_instance,
+    require_instances,
     require_str,
     validator_from_require,
+    validator_from_typed_dict,
 )
+from riko.types._compiler import DagModule, Embed, EmbedRef, PipeModule
 from riko.types._enums import Backends, Formats, ModuleNameLike
-from riko.types._guards import is_mapping, is_streamlike, require_mapping
+from riko.types._guards import (
+    is_mapping,
+    is_streamlike,
+    require_mapping,
+    require_sequence,
+)
 from riko.types._sentinels import MISSING, MissingType
+from riko.types._targets import resolve_enum
 from riko.types._workflow import (
     WORKFLOW_VERSION,
     Edge,
@@ -91,23 +100,24 @@ from riko.types._workflow import (
 )
 from riko.types.modules import (
     AnyModuleConf,
+    CallOptions,
     Conf,
     ConfValues,
-    Embed,
-    ModuleOptions,
+    MaybeFrozenConf,
     OptionValues,
+    WriteConf,
 )
 
 from ._context import Context
 from ._execution import DEF_EXECUTION_SETTINGS, ExecutionSettings
-from ._resources import normalize_resources
-from ._targets import build_write, normalize_enum, normalize_strs
+from ._resource_types import ResourcesLike
+from ._targets import build_write
 from ._write import WriteMode
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator, Mapping
+    from collections.abc import Callable, Iterator
 
-    from riko.types._enums import ExecutorLike, FmtLike, StrLike
+    from riko.types._enums import ConcurrencyLike, ExecutorLike, FmtLike, StrLike
     from riko.types._events import EventSink
     from riko.types._resource import LifecycleFactory
     from riko.types._streams import SourceLike
@@ -117,39 +127,56 @@ if TYPE_CHECKING:
     from ._resource_types import ResourceDefinition
     from ._write import Destination
 
-_FROZEN_OPTIONS: FrozenMap[FrozenOptionValues] = MappingProxyType({})
-_FROZEN_PARAMS: FrozenMap[FrozenOptionValues] = MappingProxyType({})
-_FROZEN_POLICY: FrozenMap[FrozenOptionValues] = MappingProxyType({})
-_FROZEN_CONF: FrozenMap[FrozenConfValues] = MappingProxyType({})
-_MODULE_OPTION_KEYS = frozenset(ModuleOptions.__annotations__)
-_EMBED_KEYS = frozenset(Embed.__annotations__)
-_EMPTY_INPUTS: JSONSchema = MappingProxyType({})
-_EMPTY_RESOURCES: FrozenMap[str] = MappingProxyType({})
+_FROZEN_OPTIONS: FrozenOptions = FrozenDict()
+_FROZEN_PARAMS: FrozenDict[str, FrozenJSON] = FrozenDict()
+_FROZEN_POLICY: FrozenDict[str, FrozenJSON] = FrozenDict()
+_EMPTY_INPUTS: FrozenDict[str, FrozenJSON] = FrozenDict()
+_EMPTY_OUTPUTS: FrozenDict[str, Endpoint] = FrozenDict()
+_EMPTY_NODES: FrozenDict[NodeId, Node] = FrozenDict()
+_EMPTY_EDGES: tuple[Edge, ...] = ()
+_EMPTY_RESOURCES: tuple[str, ...] = ()
+EMPTY_BINDINGS: FrozenDict[str, str] = FrozenDict()
+FROZEN_CONF: FrozenConf = FrozenDict()
 
 T = TypeVar("T", default=Any)
 type WorkflowLike = Workflow | RawWorkflow | Mapping[str, object]
+type ConfInput = MaybeFrozenConf | Mapping[str, ConfValues]
+type OptionsInput = CallOptions | FrozenOptions | Mapping[str, OptionValues]
+type NodesInput = Iterable[Node]
+type OutputsInput = Mapping[str, Endpoint]
 
+_WRITE_MODES = {"w": WriteMode.REPLACE, "a": WriteMode.APPEND}
+_normalize_backend = partial(resolve_enum, Backends)
+_normalize_format = partial(resolve_enum, Formats, strict=False)
+_normalize_mode = partial(resolve_enum, WriteMode, default=WriteMode.REPLACE)
 
-def freeze_mapping_value(value: Mapping[str, object]) -> JSONSchema:
-    return freeze_value(value)
-
-
-def freeze_conf(value: Mapping[str, ConfValues]) -> FrozenConf:
-    return cast("FrozenConf", freeze_value(value))
-
-
-def freeze_options(value: Mapping[str, OptionValues]) -> FrozenOptions:
-    return cast("FrozenOptions", freeze_value(value))
-
-
-optional_binding = def_from_require(require_binding)
-optional_resources = def_from_require(normalize_resources, default=_EMPTY_RESOURCES)
+optional_mapping = def_from_require(require_mapping)
 optional_str = narrow_def_from_require(require_str)
-resource_converter = [optional_binding, optional_resources]
 
-_normalize_backend = partial(normalize_enum, Backends)
-_normalize_format = partial(normalize_enum, Formats, strict=False)
-_normalize_mode = partial(normalize_enum, WriteMode, default=WriteMode.REPLACE)
+require_embed_ref = require_from_typed_dict(EmbedRef)
+keys_converter = partial(normalize_strs, what="WriteNode 'keys'")
+endpoint_freezer = instances_freezer(Endpoint, "Workflow output")
+json_converter = partial(optional_mapping_converter, freeze_json)
+outputs_converter = mapping_converter(
+    endpoint_freezer, OutputsInput, what="Workflow 'outputs'"
+)
+binding_converter = narrow_def_from_require(
+    require_binding, EMPTY_BINDINGS, "node 'resources'", accepted=ResourcesLike
+)
+conf_converter = partial(json_converter, ConfInput)
+options_converter = json_converter(OptionsInput, what="ModuleNode 'options'")
+inputs_converter = mapping_converter(freeze_json, what="Workflow 'inputs'")
+
+resource_names_converter = partial(
+    normalize_strs, what="Workflow 'resources'", strict=True
+)
+_module_conf_converter = conf_converter(what="ModuleNode 'conf'")
+
+
+def _edges_converter(value: Iterable[Edge]) -> tuple[Edge, ...]:
+    """Requires every workflow edge to be an ``Edge``."""
+    edges = require_sequence(value, "Workflow 'edges'")
+    return tuple(require_instances(Edge, edges, "Workflow edge"))
 
 
 def _is_source(value: object) -> TypeGuard[SourceLike]:
@@ -158,7 +185,7 @@ def _is_source(value: object) -> TypeGuard[SourceLike]:
     return seedlike and not isinstance(value, PipelineDefinition)
 
 
-def _is_pipe_spec(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
+def _is_module_pair(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
     """A ``(name, conf)`` pair on the right of ``|``."""
     return (
         isinstance(value, tuple)
@@ -168,72 +195,86 @@ def _is_pipe_spec(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
     )
 
 
-def mapping_converter[V, FV](
-    freezer: Callable[[Mapping[str, V]], FrozenMap[FV]], what: str | None = None
-) -> Callable[[FrozenMap[FV] | Mapping[str, V] | object], FrozenMap[FV]]:
-    optional_mapping = def_from_require(require_mapping, default={}, what=what)
-
-    def converter(value: object | None) -> FrozenMap[FV]:
-        return freezer(cast("Mapping[str, V]", optional_mapping(value)))
-
-    return converter
+def _normalize_embed_conf(
+    value: Mapping[str, object], what: str | None = None, **_
+) -> Mapping[str, object]:
+    """Fills an omitted embed ``conf`` with an empty configuration."""
+    return value if "conf" in value else {**value, "conf": {}}
 
 
-def conf_converter(
-    what: str | None = None,
-) -> Callable[[FrozenConf | Conf | Mapping[str, ConfValues] | None], FrozenConf]:
-    return mapping_converter(freeze_conf, f"{what} 'conf'" if what else "conf")
+def parse_write_mode(mode: str) -> WriteMode:
+    """Translates a ``PipeDef`` file-open write mode into a ``WriteMode``."""
+    head = mode[:1].lower()
 
-
-def options_converter(
-    what: str | None = None,
-) -> Callable[
-    [FrozenOptions | ModuleOptions | Mapping[str, OptionValues] | None], FrozenOptions
-]:
-    return mapping_converter(freeze_options, f"{what} 'options'" if what else "options")
-
-
-def params_converter(
-    what: str | None = None,
-) -> Callable[[FrozenParams | Mapping[str, OptionValues] | None], FrozenParams]:
-    return mapping_converter(freeze_options, f"{what} 'params'" if what else "params")
-
-
-def policy_converter(
-    what: str | None = None,
-) -> Callable[[FrozenPolicy | Mapping[str, OptionValues] | None], FrozenPolicy]:
-    what = f"{what} 'policy'" if what else "policy"
-    return mapping_converter(freeze_options, what)
-
-
-def require_options(
-    value: Mapping[str, object], what: str = "options"
-) -> ModuleOptions:
-    """Confirms every key of ``value`` names a supported module call option."""
-    if unknown := set(value).difference(_MODULE_OPTION_KEYS):
-        msg = f"unknown module option(s) in {what}: {sorted(unknown)}"
+    if (write_mode := _WRITE_MODES.get(head)) is None:
+        msg = f"cannot migrate pipe definition write mode: {mode!r}"
         raise InvalidPipelineError(msg)
 
-    return cast("ModuleOptions", value)
+    return write_mode
 
 
-def normalize_embed(value: Mapping[str, object], what: str = "embed") -> Embed:
-    """Confirms an embed names its module and carries only its supported keys."""
-    if unknown := set(value).difference(_EMBED_KEYS):
-        raise InvalidPipelineError(f"unknown embed key(s) in {what}: {sorted(unknown)}")
-    elif "name" not in value:
-        raise InvalidPipelineError(f"missing embed key in {what}: 'name'")
-    else:
-        _conf = value.get("conf", {})
-        _id = value.get("id")
-        name = require_str(value["name"], f"{what} 'name'")
-        conf = cast("Conf", require_mapping(_conf, f"{what} 'conf'"))
-        embed = Embed(name=name, conf=conf)
+def require_embed_fields(value: Embed, what: str = "embed") -> Embed:
+    """Validates an Embed's keys."""
+    require_str(value["name"], f"{what} 'name'")
+    require_mapping(value["conf"], f"{what} 'conf'")
+    optional_str(value.get("id"))
+    return value
 
-        if (_id := value.get("id")) is not None:
-            embed["id"] = require_str(_id, f"{what} 'id'")
 
-    return embed
+def require_embed_ref_fields(value: EmbedRef, what: str = "embed") -> EmbedRef:
+    """Validates an EmbedRef's keys."""
+    require_str(value["type"], f"{what} 'type'")
+    require_str(value["id"], f"{what} 'id'")
+    return value
+
+
+def require_dag_name(value: DagModule, what: str = "dag module") -> str:
+    """
+    Requires a ``DagModule``'s module name, read from ``name`` or its older ``type``.
+
+    Raises:
+
+        InvalidPipelineError: If neither key is present, or both are and disagree.
+
+    """
+    name, type_ = value.get("name"), value.get("type")
+
+    if name is None and type_ is None:
+        raise InvalidPipelineError(f"{what} needs a 'name'")
+    elif name is not None and type_ is not None and name != type_:
+        msg = f"conflicting {what} 'name'/'type': {name!r} and {type_!r}"
+        raise InvalidPipelineError(msg)
+
+    return require_str(type_ if name is None else name, f"{what} 'name'")
+
+
+def require_dag_fields(value: DagModule, what: str = "dag module") -> DagModule:
+    """Validates a ``DagModule``'s keys."""
+    optional_str(value.get("id"))
+    require_dag_name(value, what)
+    optional_mapping(value.get("conf"))
+    return value
+
+
+def resolve_write_mode(value: WriteConf, what: str = "write conf") -> WriteMode | None:
+    """Translates a ``WriteConf``'s mode into a ``WriteMode`` (``None`` when absent)."""
+    mode = optional_str(value.get("mode"))
+    return None if mode is None else parse_write_mode(mode)
+
+
+def require_v1_pipe_fields(value: PipeModule, what: str = "module") -> PipeModule:
+    """Validates a ``PipeModule``'s keys."""
+    require_str(value["id"], f"{what} 'id'")
+    require_str(value["type"], f"{what} 'type'")
+    require_mapping(value["conf"], f"{what} 'conf'")
+    return value
+
+
+def require_v1_loop_fields(value: PipeModule, what: str = "loop module") -> PipeModule:
+    """Validates a ``loop`` ``PipeModule``'s embed."""
+    embed = require_mapping(value.get("embed"), f"{what} 'embed'")
+    require_embed_ref_fields(require_embed_ref(embed))
+    return value
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -241,47 +282,52 @@ class Node:
     """The identity, resource bindings, and label every node family carries."""
 
     family: ClassVar[NodeFamily]
-    id: NodeId
+    id: NodeId = field(validator=validator_from_require(require_str))
     name: str = field(converter=narrow_from_require(require_str))
-    resources: Mapping[str, str] = field(
-        default=_EMPTY_RESOURCES, converter=resource_converter
+    resources: FrozenDict[str, str] = field(
+        default=EMPTY_BINDINGS, converter=binding_converter
     )
-    label: str = field(default=None, converter=optional_str)
+    label: str | None = field(default=None, converter=optional_str)
 
     @property
-    def declared_resources(self) -> set[str]:
-        """Collect the resource slots referenced by nodes."""
+    def referenced_resources(self) -> set[str]:
+        """Collects the Context resource names this node binds."""
         return set(self.resources.values())
 
 
 @define(frozen=True, slots=True, kw_only=True)
 class ModuleNode(Node):
     """
-    A registered transform/operator node (split/branch/route/union/join/loop too).
+    A module node: any module, including split/branch/route/union/join/loop.
 
-    ``conf`` is the configuration the node's own module parses. ``options`` are the
-    call options forwarded to the module callable itself, such as ``emit``,
-    ``assign``, ``field``, and ``count``. ``embed`` names the module a ``loop`` runs
-    once per item, together with that module's own configuration.
+    Attributes:
+
+        conf: the configuration the node's own module parses.
+
+        options: the call options forwarded to the module callable itself, such as
+            ``emit``, ``assign``, ``field``, and ``count``.
+
+        embed: names the module a ``loop`` runs once per item, together with that
+            module's own configuration.
 
     """
 
     family: ClassVar[NodeFamily] = "module"
-    conf: FrozenConf = field(
-        default=_FROZEN_CONF, converter=conf_converter("ModuleNode")
-    )
+    conf: FrozenConf = field(default=FROZEN_CONF, converter=_module_conf_converter)
     options: FrozenOptions = field(
         default=_FROZEN_OPTIONS,
-        converter=options_converter("ModuleNode"),
-        validator=validator_from_require(require_options),
+        converter=options_converter,
+        validator=validator_from_typed_dict(CallOptions),
     )
     embed: Embed | None = field(
         default=None,
         converter=[
             def_from_require(require_mapping, what="ModuleNode 'embed'"),
-            def_from_require(normalize_embed, what="ModuleNode 'embed'"),
-            def_from_require(freeze_mapping_value),
+            def_from_require(_normalize_embed_conf),
+            def_from_typed_dict(Embed, what="ModuleNode 'embed'"),
+            freeze_json,
         ],
+        validator=validator_from_require(require_embed_fields, optional=True),
     )
 
 
@@ -296,14 +342,14 @@ class ReadNode(Node):
 
 @define(frozen=True, slots=True, kw_only=True)
 class WriteNode(Node):
-    """A node that writes a record stream to a backend destination with a format."""
+    """A node that writes an item stream to a backend destination with a format."""
 
     family: ClassVar[NodeFamily] = "write"
     backend: Backends = field(converter=_normalize_backend)
     dest: str | None = field(default=None, converter=optional_str)
     fmt: Formats | None = field(default=None, converter=_normalize_format)
     mode: WriteMode = field(default=WriteMode.REPLACE, converter=_normalize_mode)
-    keys: tuple[str, ...] = field(default=(), converter=normalize_strs)
+    keys: tuple[str, ...] = field(default=(), converter=keys_converter)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -313,7 +359,7 @@ class ActionNode(Node):
     family: ClassVar[NodeFamily] = "action"
     backend: Backends = field(converter=_normalize_backend)
     params: FrozenParams = field(
-        default=_FROZEN_PARAMS, converter=params_converter("ActionNode")
+        default=_FROZEN_PARAMS, converter=json_converter(what="ActionNode 'params'")
     )
 
 
@@ -323,7 +369,7 @@ class CacheNode(Node):
 
     family: ClassVar[NodeFamily] = "cache"
     policy: FrozenPolicy = field(
-        default=_FROZEN_POLICY, converter=policy_converter("CacheNode")
+        default=_FROZEN_POLICY, converter=json_converter(what="CacheNode 'policy'")
     )
 
 
@@ -333,20 +379,20 @@ class SubscribeNode(Node):
 
     family: ClassVar[NodeFamily] = "subscribe"
     policy: FrozenPolicy = field(
-        default=_FROZEN_POLICY, converter=policy_converter("SubscribeNode")
+        default=_FROZEN_POLICY, converter=json_converter(what="SubscribeNode 'policy'")
     )
 
 
 @define(frozen=True, slots=True)
 class StreamEdge(Edge):
-    """A stream edge delivering records from a source port to a target port."""
+    """A stream edge delivering items from a source port to a target port."""
 
     family: ClassVar[EdgeFamily] = "stream"
 
 
 @define(frozen=True, slots=True)
 class PublishEdge(Edge):
-    """A publish edge delivering a producer's output to a subscribe node."""
+    """A publish edge delivering a producer's output stream to a subscribe node."""
 
     family: ClassVar[EdgeFamily] = "publish"
 
@@ -379,7 +425,7 @@ def get_family_edges(
     return [edge for edge in edges if edge.family == family]
 
 
-def require_module_node(value: Node, what: str | None = None) -> ModuleNode:
+def require_module_node(value: Node, what: str | None = None, **_) -> ModuleNode:
     if not isinstance(value, ModuleNode):
         what = value.family if what is None else what
         raise InvalidPipelineError(f"{what} node execution is not yet supported")
@@ -387,10 +433,27 @@ def require_module_node(value: Node, what: str | None = None) -> ModuleNode:
     return value
 
 
+def nodes_converter(value: NodesInput) -> FrozenDict[NodeId, Node]:
+    """Keys each workflow node by its id, rejecting a mapping or a repeated id."""
+    if value is _EMPTY_NODES:
+        result = _EMPTY_NODES
+    else:
+        _nodes = require_sequence(value, "Workflow 'nodes'")
+        nodes = list(require_instances(Node, _nodes, "Workflow node"))
+        keyed = {node.id: node for node in nodes}
+
+        if len(keyed) < len(nodes):
+            raise InvalidPipelineError("Workflow 'nodes' must not repeat a node id")
+
+        result = FrozenDict.from_frozen(keyed)
+
+    return result
+
+
 @define(frozen=True, slots=True)
 class Workflow:
     """
-    The strict in-memory workflow graph: nodes, edges, outputs, and inputs.
+    The strict in-memory workflow graph: nodes, edges, outputs, and input declarations.
 
     Construction canonicalizes field-local representation details such as immutable
     mappings and resource-name shorthand. Does not perform shorthand normalization
@@ -399,19 +462,18 @@ class Workflow:
 
     Attributes:
 
-        nodes: The graph nodes keyed by canonical node id.
+        nodes: The graph nodes (given as an iterable and stored keyed by node id).
         edges: The stream and publish edges, in listing order.
-        outputs: The named exposed outputs, each an endpoint reference.
-        inputs: The declared inputs, each a JSON Schema.
-        resources: The declared resource slot names.
+        outputs: The workflow outputs: named endpoints the workflow exposes.
+        inputs: The declared JSON Schemas.
+        resources: The workflow declared resources (must include each one a node binds).
         version: The workflow format version.
 
     Examples:
 
-        >>> node = ModuleNode(id="fetch-1", name="fetch")
         >>> workflow = Workflow(
-        ...     nodes={node.id: node},
-        ...     outputs={"default": Endpoint(node.id, "out")},
+        ...     nodes=[ModuleNode(id="fetch-1", name="fetch")],
+        ...     outputs={"default": Endpoint("fetch-1", "out")},
         ...     resources="db",
         ... )
         >>> workflow.resources
@@ -421,11 +483,19 @@ class Workflow:
 
     """
 
-    nodes: Mapping[NodeId, Node] = field(converter=FreezeMapping[NodeId, Node]())
-    outputs: Mapping[str, Endpoint] = field(converter=FreezeMapping[str, Endpoint]())
-    inputs: JSONSchema = field(default=_EMPTY_INPUTS, converter=deep_freeze_mapping)
-    edges: tuple[Edge, ...] = field(factory=tuple, converter=tuple)
-    resources: tuple[str, ...] = field(factory=tuple, converter=normalize_strs)
+    nodes: FrozenDict[NodeId, Node] = field(
+        default=_EMPTY_NODES, converter=nodes_converter
+    )
+    outputs: FrozenDict[str, Endpoint] = field(
+        default=_EMPTY_OUTPUTS, converter=outputs_converter
+    )
+    inputs: FrozenDict[str, FrozenJSON] = field(
+        default=_EMPTY_INPUTS, converter=inputs_converter
+    )
+    edges: tuple[Edge, ...] = field(default=_EMPTY_EDGES, converter=_edges_converter)
+    resources: tuple[str, ...] = field(
+        default=_EMPTY_RESOURCES, converter=resource_names_converter
+    )
     version: str = WORKFLOW_VERSION
 
     def family_sources(self, family: EdgeFamily = "stream") -> Counter[tuple[str, str]]:
@@ -483,10 +553,10 @@ class Workflow:
         return list(chain(ends, self.outputs.values()))
 
     @property
-    def declared_resources(self) -> set[str]:
-        """Collect the resource slots referenced by nodes."""
+    def referenced_resources(self) -> set[str]:
+        """Collects the Context resource names the workflow's nodes bind."""
         nodes = self.nodes.values()
-        return set(chain.from_iterable(node.declared_resources for node in nodes))
+        return set(chain.from_iterable(node.referenced_resources for node in nodes))
 
     def validate(self) -> None:
         """
@@ -495,10 +565,10 @@ class Workflow:
         Raises:
 
             InvalidPipelineError: If the graph is structurally invalid: an unsupported
-                version, an empty node set, a node keyed under another id, a dangling
+                version, an empty node set, a dangling
                 edge or output reference, more than one stream edge into a port, a
                 publish/subscribe edge mismatch, a misdirected or malformed port, a
-                cycle, an unresolved resource, or no exposed output.
+                cycle, an unresolved resource, or no workflow output.
 
         """
         endpoints = {endpoint.node for endpoint in self.endpoints}
@@ -509,8 +579,6 @@ class Workflow:
             raise InvalidPipelineError(msg)
         elif not self.nodes:
             raise InvalidPipelineError("workflow has no nodes")
-        elif mismatched := [key for key, node in self.nodes.items() if key != node.id]:
-            raise InvalidPipelineError(f"node id does not match its key: {mismatched}")
         elif missing := endpoints.difference(self.nodes):
             msg = f"references to missing node(s): {sorted(missing)}"
             raise InvalidPipelineError(msg)
@@ -526,11 +594,12 @@ class Workflow:
         elif cyclic := list(self.index.cyclic):
             msg = f"edges form a cycle through node(s): {cyclic}"
             raise InvalidPipelineError(msg)
-        elif undeclared := sorted(self.declared_resources.difference(self.resources)):
+        elif undeclared := sorted(self.referenced_resources.difference(self.resources)):
             msg = f"unresolved resource reference(s): {undeclared}"
             raise InvalidPipelineError(msg)
         elif not self.outputs:
-            raise InvalidPipelineError("workflow exposes no output; declare 'outputs'")
+            msg = "workflow exposes no workflow output; declare 'outputs'"
+            raise InvalidPipelineError(msg)
 
     def require_executable(self) -> None:
         """
@@ -560,10 +629,10 @@ class Workflow:
         return result
 
 
-_EMPTY_SPEC = Workflow(nodes={}, outputs={}, inputs={})
+_EMPTY_WORKFLOW = Workflow(nodes=[], outputs={}, inputs={})
 
 
-def _mint_node_id(workflow: Workflow, name: str) -> NodeId:
+def _get_node_id(workflow: Workflow, name: str) -> NodeId:
     """Mints a conflict free ``<name>-<occurrence>`` node id."""
     count = len([node for node in workflow.nodes.values() if node.name == name]) + 1
     candidate = f"{name}-{count}"
@@ -577,7 +646,7 @@ def _mint_node_id(workflow: Workflow, name: str) -> NodeId:
 
 def _build_appended_workflow(node: Node, workflow: Workflow | None = None) -> Workflow:
     """Builds a workflow with ``node``s and re-points the default output to it."""
-    workflow = _EMPTY_SPEC if workflow is None else workflow
+    workflow = _EMPTY_WORKFLOW if workflow is None else workflow
 
     if (tail := workflow.outputs.get("default")) is None:
         edges = workflow.edges
@@ -585,7 +654,7 @@ def _build_appended_workflow(node: Node, workflow: Workflow | None = None) -> Wo
         edges = (*workflow.edges, StreamEdge(tail, Endpoint(node.id, "in")))
 
     return Workflow(
-        nodes={**workflow.nodes, node.id: node},
+        nodes=[*workflow.nodes.values(), node],
         outputs={**workflow.outputs, "default": Endpoint(node.id, "out")},
         inputs=workflow.inputs,
         edges=edges,
@@ -599,12 +668,12 @@ def _build_chained_workflow(
     workflow: Workflow | None = None,
     *,
     conf: FrozenConf | Conf | None = None,
-    options: FrozenOptions | ModuleOptions | None = None,
+    options: FrozenOptions | CallOptions | None = None,
     embed: Embed | None = None,
 ) -> Workflow:
     """Builds a workflow that appends a module node and re-points the default output."""
-    workflow = _EMPTY_SPEC if workflow is None else workflow
-    node_id = _mint_node_id(workflow, name)
+    workflow = _EMPTY_WORKFLOW if workflow is None else workflow
+    node_id = _get_node_id(workflow, name)
     node = ModuleNode(id=node_id, name=name, conf=conf, options=options, embed=embed)
     return _build_appended_workflow(node, workflow)
 
@@ -621,7 +690,7 @@ def _build_write_workflow(
     prepared = build_write(dest, mode, fmt=fmt, keys=keys)
     location: object = getattr(prepared.target, "dest", None)
     node = WriteNode(
-        id=_mint_node_id(workflow, "write"),
+        id=_get_node_id(workflow, "write"),
         name="write",
         backend=prepared.target.backend,
         dest=None if location is None else str(location),
@@ -632,7 +701,7 @@ def _build_write_workflow(
     return _build_appended_workflow(node, workflow)
 
 
-def _require_workflow(value: object) -> Workflow:
+def _require_workflow(value: object, what: str | None = None, **_) -> Workflow:
     if not isinstance(value, Workflow):
         msg = "Pipeline() takes a Workflow or None; use Pipeline.from_module(name) "
         msg += "for a module or Pipeline(source=items) to seed an item stream"
@@ -641,7 +710,13 @@ def _require_workflow(value: object) -> Workflow:
     return value
 
 
-_optional_workflow = narrow_def_from_require(_require_workflow, default=_EMPTY_SPEC)
+_optional_workflow = narrow_def_from_require(_require_workflow, default=_EMPTY_WORKFLOW)
+_is_context = validator_from_require(
+    require_instance, Context, optional=True, error=TypeError
+)
+_is_settings = validator_from_require(
+    require_instance, ExecutionSettings, error=TypeError
+)
 
 
 @define(frozen=True, slots=True)
@@ -651,23 +726,29 @@ class PipelineDefinition(Generic[T]):
 
     Composition returns the caller's own class; ``Pipeline`` adds running. Build one
     from a ``Workflow``, ``from_module(name)``, ``source=items``, or empty for ``|``.
-    A seeded source is not copied, so a generator is consumed by the first run.
+    A seed is not copied, so a generator is consumed by the first run.
 
     Attributes:
 
         workflow: The ``Workflow`` this pipeline runs.
 
-        source: The seeded source, or ``None`` when the graph supplies its own.
+        source: The seed (the items the pipeline starts from), or ``None`` when the
+            graph supplies its own.
 
-        context: The environment each run uses, including its bound resources, or
+        context: The environment each run uses, including the resources it provides, or
             ``None`` for a default one.
 
         settings: How each run executes its per-item work.
 
+    Raises:
+
+        TypeError: If ``context`` is not a ``Context`` or ``settings`` is not an
+            ``ExecutionSettings``.
+
     Examples:
 
         >>> fetch = PipelineDefinition.from_module("fetch")
-        >>> definition = fetch.pipe("sort", conf={"combine": "a"})
+        >>> definition = fetch.sort(conf={"combine": "a"})
         >>> sorted(definition.workflow.nodes)
         ['fetch-1', 'sort-1']
         >>> definition.workflow.outputs["default"]
@@ -677,11 +758,13 @@ class PipelineDefinition(Generic[T]):
 
     """
 
-    workflow: Workflow = field(default=_EMPTY_SPEC, converter=_optional_workflow)
+    workflow: Workflow = field(default=_EMPTY_WORKFLOW, converter=_optional_workflow)
     source: SourceLike | None = field(default=None, repr=False)
-    context: Context | None = field(default=None, kw_only=True, repr=False)
+    context: Context | None = field(
+        default=None, kw_only=True, repr=False, validator=_is_context
+    )
     settings: ExecutionSettings = field(
-        default=DEF_EXECUTION_SETTINGS, kw_only=True, repr=False
+        default=DEF_EXECUTION_SETTINGS, kw_only=True, repr=False, validator=_is_settings
     )
 
     @classmethod
@@ -690,18 +773,18 @@ class PipelineDefinition(Generic[T]):
         name: ModuleNameLike,
         *,
         conf: Conf | None = None,
-        options: ModuleOptions | None = None,
+        options: CallOptions | None = None,
         embed: Embed | None = None,
     ) -> Self:
         """
-        Builds a pipeline seeded with a single named module node.
+        Builds a pipeline whose sole node is the named module.
 
         Module existence is not checked here, so a typo surfaces as a
         module-resolution failure when the pipeline runs rather than now.
 
         Args:
 
-            name: The seeding module's name.
+            name: The module's name.
             conf: The module's configuration, if any.
             options: The call options forwarded to the module, if any.
             embed: The module a loop runs per item, with its configuration, if any.
@@ -713,7 +796,7 @@ class PipelineDefinition(Generic[T]):
         Examples:
 
             >>> fetch = PipelineDefinition.from_module("fetch")
-            >>> definition = fetch.pipe("sort", conf={"combine": "a"})
+            >>> definition = fetch.sort(conf={"combine": "a"})
             >>> sorted(definition.workflow.nodes)
             ['fetch-1', 'sort-1']
             >>> definition.workflow.outputs["default"]
@@ -734,7 +817,7 @@ class PipelineDefinition(Generic[T]):
         name: ModuleNameLike,
         *,
         conf: FrozenConf | Conf | None = None,
-        options: FrozenOptions | ModuleOptions | None = None,
+        options: FrozenOptions | CallOptions | None = None,
         embed: Embed | None = None,
     ) -> Self:
         """
@@ -787,13 +870,13 @@ class PipelineDefinition(Generic[T]):
         fmt: FmtLike | None = None,
         keys: StrLike | None = None,
         conf: FrozenConf | Conf | None = None,
-        options: FrozenOptions | ModuleOptions | None = None,
+        options: FrozenOptions | CallOptions | None = None,
         embed: Embed | None = None,
     ) -> Self:
         """
         Appends a write to ``dest``, or chains the ``write`` module without one.
 
-        Given a destination, the new pipeline declares where its records go, how
+        Given a destination, the new pipeline declares where its items go, how
         they are serialized, and how they reconcile with what is already there.
         Given no destination, the call chains the shipped ``write`` module with
         the module arguments instead, so attribute chaining keeps working.
@@ -804,7 +887,7 @@ class PipelineDefinition(Generic[T]):
             dest: The destination path or write target, or ``None`` to chain the
                 ``write`` module.
 
-            mode: How the records reconcile with the destination's contents.
+            mode: How the items reconcile with the destination's contents.
 
             fmt: The serialization format, or ``None`` to derive one.
 
@@ -853,7 +936,7 @@ class PipelineDefinition(Generic[T]):
         self,
         *,
         executor: ExecutorLike | MissingType | None = MISSING,
-        concurrency: int | MissingType | None = MISSING,
+        concurrency: ConcurrencyLike | MissingType | None = MISSING,
         ordered: bool | MissingType | None = MISSING,
         event_sink: EventSink | MissingType | None = MISSING,
         shutdown_timeout: float | MissingType | None = MISSING,
@@ -871,7 +954,8 @@ class PipelineDefinition(Generic[T]):
                 ``"thread"``, or ``"process"``. ``None`` selects ``"auto"``.
 
             concurrency: Max number of items that item-wise modules can work on at once
-                across the whole run. ``None`` selects sequential processing.
+                across the whole run. ``"auto"`` selects a size based on the machine.
+                ``None`` selects sequential processing.
 
             ordered: Restores result source order. ``None`` selects completion order.
 
@@ -925,7 +1009,7 @@ class PipelineDefinition(Generic[T]):
         """
         Derives a pipeline whose runs use ``context``.
 
-        The context supplies the run's inputs, mode, and bound resources, and
+        The context supplies the run's input values, mode, and resources, and
         replaces any context this pipeline already carries.
 
         Args:
@@ -976,19 +1060,20 @@ class PipelineDefinition(Generic[T]):
         lazy: bool = False,
     ) -> Self:
         """
-        Derives a pipeline whose runs bind a resource ``definition`` to ``name``.
+        Derives a pipeline whose runs provide a resource ``definition`` as ``name``.
 
-        The binding is added to this pipeline's context, or to a default context
-        when it has none, exactly as ``Context.with_resource`` binds it. A
-        factory is entered only when a run needs it, so ``credential``/``lazy``
+        The resource is added to this pipeline's context, or to a default context
+        when it has none, exactly as ``Context.with_resource`` provides it. A
+        factory is entered by the run rather than here, so ``credential``/``lazy``
         apply only to a factory.
 
         Args:
 
-            name: The name the resource is bound to.
+            name: The Context name the resource is provided under.
             definition: A ``Resource``/``LifecycleFactory`` that wraps a resource value.
             credential: A credential reference for a factory.
-            lazy: Whether a factory defers entry until first use.
+            lazy: Whether entry should defer until first use. Not yet honored: a run
+                acquires every resource its nodes bind, whether or not it is used.
 
         Returns:
 
@@ -1011,12 +1096,7 @@ class PipelineDefinition(Generic[T]):
 
         """
         base = Context() if self.context is None else self.context
-        bound = base.with_resource(  # pyright: ignore[reportCallIssue]
-            name,
-            definition,  # pyright: ignore[reportArgumentType]
-            credential=credential,
-            lazy=lazy,
-        )
+        bound = base.with_resource(name, definition, credential=credential, lazy=lazy)
         return evolve(self, context=bound)
 
     @classmethod
@@ -1086,12 +1166,13 @@ class PipelineDefinition(Generic[T]):
 
     def __getattr__(self, name: str) -> Callable[..., Self]:
         """
-        Chains any module by attribute, so ``.sort()`` appends the sort module.
+        Chains a module by attribute. E.g., ``.sort()`` appends the sort module.
 
-        Every unknown non-underscore attribute is treated as a module name, so a
-        typo surfaces as a module-resolution failure rather than ``AttributeError``.
-        Mapping names are excluded to keep a pipeline from looking dict-like to
-        duck-typed callers.
+        A module named like an existing ``Pipeline`` method (e.g., ``split``) needs to
+        use ``.pipe(name)``, since the method wins. Any other non-underscore attribute
+        is treated as a module name. This means a typo surfaces as a module-resolution
+        failure rather than ``AttributeError``. Mapping names are excluded to keep a
+        pipeline from looking dict-like to duck-typed callers.
         """
         if name.startswith("_") or name in {"keys", "values", "items", "get"}:
             raise AttributeError(name)
@@ -1138,7 +1219,7 @@ class PipelineDefinition(Generic[T]):
         """
         if isinstance(other, str):
             chained = self.pipe(other)
-        elif _is_pipe_spec(other):
+        elif _is_module_pair(other):
             name, conf = other
             chained = self.pipe(name, conf=conf)
         elif isinstance(other, PipelineDefinition):
@@ -1150,16 +1231,16 @@ class PipelineDefinition(Generic[T]):
 
     def __ror__(self, other: object) -> Self:
         """
-        Seeds a source on the left of ``|``.
+        Seeds the pipeline with the items on the left of ``|``.
 
         Args:
 
-            other: The item stream, async item stream, or awaitable to bind as
-                this pipeline's source.
+            other: The item stream, async item stream, or awaitable to seed this
+                pipeline with.
 
         Returns:
 
-            A new pipeline bound to the seeded source.
+            A new pipeline seeded with ``other``.
 
         Examples:
 

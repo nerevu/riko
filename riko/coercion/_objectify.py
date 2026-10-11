@@ -69,6 +69,21 @@ else:
         def __len__(self):
             return len(self.data)
 
+        def __contains__(self, key):
+            """
+            Reports whether ``key`` is one of the stored keys.
+
+            Membership matches the lowercased keys that ``keys()`` lists, so a
+            missing key is absent even though reading it returns ``None``.
+
+            Examples:
+                >>> kw = Objectify({"URL": "x"})
+                >>> ("url" in kw, "zzz" in kw)
+                (True, False)
+
+            """
+            return key in self.data
+
 
 @overload
 def objectify[T](data: Mapping[str, T]) -> Objectify[T]: ...  # noqa: E704

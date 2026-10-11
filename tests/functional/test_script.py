@@ -27,8 +27,8 @@ BENCHMARK_LABELS = [
     "baseline_sync",
     "baseline_threads",
     "baseline_procs",
+    "sync_module",
     "sync_pipeline",
-    "sync_pipe",
     "sync_workflow",
 ]
 DEMO_PARAMS = [
@@ -123,13 +123,13 @@ def run_module(module: str, *args: str, **kwargs) -> subprocess.CompletedProcess
     )
 
 
-def test_build_workflow_pipes_to_compile_stdin():
+def test_build_workflow_output_compiles_from_stdin():
     convert = run_module("build_workflow", str(DAG_PATH))
     compiled = run_module("compile", "-", input=convert.stdout)
 
     assert '"version": "2"' in convert.stdout
     assert '"nodes"' in convert.stdout
-    assert "def pipe(" in compiled.stdout
+    assert "pipe = build_workflow_pipes(" in compiled.stdout
     assert "TruncateRawConf" in compiled.stdout
 
 
@@ -142,7 +142,7 @@ def test_build_workflow_and_compile(tmp_path):
     assert not convert.stdout
     assert '"version": "2"' in converted
     assert '"nodes"' in converted
-    assert "def pipe(" in compiled.stdout
+    assert "pipe = build_workflow_pipes(" in compiled.stdout
     assert "TruncateRawConf" in compiled.stdout
 
 
@@ -157,7 +157,7 @@ def test_build_workflow_compact_matches_the_serializer():
 def test_build_workflow_format_override_rejects_wrong_shape():
     convert = run_module("build_workflow", str(DAG_PATH), "--format", "v2")
     assert convert.returncode == 1
-    assert "unknown Workflow field" in convert.stderr
+    assert "unknown Workflow key(s)" in convert.stderr
     assert "Traceback" not in convert.stderr
 
 

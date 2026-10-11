@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, cast
 
 import pygogo as gogo
 
-from riko.coercion._dates import date_to_tt, normalize_tzinfo
+from riko.coercion._dates import date_to_tt, resolve_aware_datetime
 from riko.types._guards import is_mapping
 
 if TYPE_CHECKING:
@@ -84,7 +84,7 @@ def resolve_date(entry: ParserRSSEntry, *keys: str) -> struct_time | None:
             isinstance(value, str) and value
         ):
             try:
-                normalized = normalize_tzinfo(value)
+                normalized = resolve_aware_datetime(value)
             except (ValueError, OverflowError):
                 logger.warning(f"skipping unparseable {key} date {value!r}")
             else:

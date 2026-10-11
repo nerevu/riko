@@ -29,7 +29,7 @@ from contextlib import aclosing
 from functools import partial
 from typing import TYPE_CHECKING, cast, overload
 
-from riko.base._constants import DEF_CONNECTION_COUNT
+from riko.base._constants import DEF_CONCURRENCY_LIMIT
 from riko.types._sentinels import MISSING
 
 from ._backend import (
@@ -41,7 +41,7 @@ from ._backend import (
     create_memory_object_stream,
     create_task_group,
 )
-from ._util import maybe_aclosing, maybe_deferred
+from ._util import maybe_aclosing, maybe_async
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -52,6 +52,8 @@ if TYPE_CHECKING:
         Iterable,
     )
 
+    from riko.types._streams import AnyIterable
+
 
 def _cap[T, S](
     func: Callable[[T], Awaitable[S]], budget: Semaphore | None
@@ -60,8 +62,8 @@ def _cap[T, S](
     Caps *func*'s concurrency against a shared *budget* semaphore.
 
     Sharing one budget across the leaf ``async_map*`` calls bounds their
-    combined in-flight connections. Nested fan-out (a collection over
-    sources of items) cannot multiply the connection count.
+    combined in-flight calls. Nested fan-out (a collection over
+    several item streams) cannot multiply the call count.
 
     Budget the leaf I/O only, never an outer coordinating call: a call holding
     a slot while its own children wait for slots is a classic deadlock. So the
@@ -88,15 +90,16 @@ def _cap[T, S](
     return wrapped
 
 
-def as_async[T](
-    source: AsyncIterable[T] | Iterable[T], cooperative: bool = False
-) -> AsyncIterator[T]:
+def as_async[T](source: AnyIterable[T], cooperative: bool = False) -> AsyncIterator[T]:
     """
     Adapts *source* to an ``AsyncIterator``.
 
     Args:
 
         source: A sync or async iterable.
+
+        cooperative: For a sync *source*, yield control before each item so
+            concurrent tasks (e.g. a timeout) can run (default: False).
 
     Returns:
 
@@ -180,7 +183,7 @@ async def coop_reduce[T, S](  # noqa: E302 # pyright: ignore[reportInconsistentO
         content: The sequence to reduce.
 
         initial: Starting accumulator value. When ``None`` (default) the first element
-            is consumed as the seed (``None`` if *content* is empty).
+            is consumed as the starting value (``None`` if *content* is empty).
 
     Returns:
 
@@ -224,7 +227,7 @@ def async_reduce[T, S](
         content: The sequence to reduce.
 
         initial: Starting accumulator value. When ``None`` (default) consumes the first
-            element as the seed.
+            element as the starting value.
 
     Returns:
 
@@ -246,7 +249,7 @@ def async_reduce[T, S](
 
     async def work(async_func, content, value):
         for item in content:
-            value = await maybe_deferred(async_func, value, item)
+            value = await maybe_async(async_func, value, item)
 
         return value
 
@@ -256,7 +259,7 @@ def async_reduce[T, S](
 async def async_map[T, S](
     func: Callable[[T], Awaitable[S]],
     content: Iterable[T],
-    connections: int = 0,
+    limit: int = 0,
     *,
     budget: Semaphore | None = None,
     **kwargs: object,
@@ -270,7 +273,7 @@ async def async_map[T, S](
 
         content: The items to map over.
 
-        connections: Maximum number of concurrent calls. ``0`` (default) runs them all
+        limit: Maximum number of concurrent calls. ``0`` (the default) runs them all
             at once.
 
         budget: A semaphore shared across maps that caps how many calls run at
@@ -296,13 +299,13 @@ async def async_map[T, S](
         [0, 2, 4]
 
     """
-    if connections < 0:
-        raise ValueError("connections cannot be negative")
+    if limit < 0:
+        raise ValueError("limit cannot be negative")
 
     _func = _cap(partial(func, **kwargs) if kwargs else func, budget)
     items = list(content)
     results: list[S | object] = [MISSING] * len(items)
-    limiter = CapacityLimiter(connections) if connections else None
+    limiter = CapacityLimiter(limit) if limit else None
 
     async def work(index: int, item: T) -> None:
         if limiter is None:
@@ -319,7 +322,7 @@ async def async_map[T, S](
 
 
 async def _pool_stream[T, S](
-    source: AsyncIterable[T] | Iterable[T],
+    source: AnyIterable[T],
     drain: Callable[[T, MemoryObjectSendStream[S]], Awaitable[None]],
     *,
     limit: int,
@@ -332,7 +335,7 @@ async def _pool_stream[T, S](
     pushes each *source* item into an unbuffered input stream, and the workers pull
     from it. They *drain* per item with a *buffer*-sized output stream. *drain* sends
     zero or more results per item: one for a map (``async_map_stream``), many for a
-    feed (``async_merge``).
+    merge (``async_merge``).
 
     Because the input stream is unbuffered, the source advances only as workers free up.
     This bounds in-flight memory to ``limit`` open items plus ``buffer`` queued results.
@@ -400,9 +403,9 @@ async def _pool_stream[T, S](
 
 async def async_map_stream[T, S](
     func: Callable[[T], Awaitable[S]],
-    source: AsyncIterable[T] | Iterable[T],
+    source: AnyIterable[T],
     *,
-    limit: int = DEF_CONNECTION_COUNT,
+    limit: int = DEF_CONCURRENCY_LIMIT,
     buffer: int = 0,
     budget: Semaphore | None = None,
 ) -> AsyncGenerator[S, None]:
@@ -414,11 +417,11 @@ async def async_map_stream[T, S](
 
     Args:
 
-        func: An async function applied to each source item.
+        func: An async function applied to each input item.
 
         source: The items to map over.
 
-        limit: Maximum number of concurrent calls (default: ``DEF_CONNECTION_COUNT``).
+        limit: Maximum number of concurrent calls (default: ``DEF_CONCURRENCY_LIMIT``).
 
         buffer: Size of the completed-results queue (default: 0).
 
@@ -458,9 +461,9 @@ async def async_map_stream[T, S](
 
 async def async_map_ordered_stream[T, S](
     func: Callable[[T], Awaitable[S]],
-    source: AsyncIterable[T] | Iterable[T],
+    source: AnyIterable[T],
     *,
-    limit: int = 16,
+    limit: int = DEF_CONCURRENCY_LIMIT,
     buffer: int = 0,
     budget: Semaphore | None = None,
 ) -> AsyncGenerator[S, None]:
@@ -472,11 +475,11 @@ async def async_map_ordered_stream[T, S](
 
     Args:
 
-        func: An async function applied to each source item.
+        func: An async function applied to each input item.
 
         source: The items to map over.
 
-        limit: Maximum number of concurrent calls (default: 16).
+        limit: Maximum number of concurrent calls (default: ``DEF_CONCURRENCY_LIMIT``).
 
         buffer: Extra items per window beyond *limit* (default: 0).
 
@@ -525,52 +528,54 @@ async def async_map_ordered_stream[T, S](
 
 
 async def async_merge[S](
-    feeds: AsyncIterable[AsyncIterable[S]] | Iterable[AsyncIterable[S]],
+    iterables: AnyIterable[AsyncIterable[S]],
     *,
-    limit: int = DEF_CONNECTION_COUNT,
+    limit: int = DEF_CONCURRENCY_LIMIT,
     buffer: int = 0,
 ) -> AsyncGenerator[S, None]:
     """
-    Merges many async feeds into one interleaved stream.
+    Merges many async iterables of items into one interleaved stream.
 
-    Like :func:`async_map_stream`, but each source item is a *feed*. Items
-    interleave across feeds as they are produced, rather than one feed at a
-    time. *limit* and *buffer* bound in-flight memory.
+    Like :func:`async_map_stream`, but each input item is itself an async
+    iterable. Items interleave across iterables as they are produced, rather than
+    one iterable at a time. *limit* and *buffer* bound in-flight memory.
 
     Args:
 
-        feeds: The async feeds to merge.
+        iterables: The async iterables to merge.
 
-        limit: Maximum number of feeds drained concurrently (default:
-            ``DEF_CONNECTION_COUNT``).
+        limit: Maximum number of iterables drained concurrently (default:
+            ``DEF_CONCURRENCY_LIMIT``).
 
-        buffer: Size of the merged-records queue (default: 0).
+        buffer: Size of the merged-items queue (default: 0).
 
     Yields:
 
-        Each record from every feed, in arrival order.
+        Each item from every iterable, in arrival order.
 
     Examples:
 
         >>> from riko import run
         >>>
-        >>> async def feed(*items):
+        >>> async def gen_items(*items):
         ...     for item in items:
         ...         yield item
         >>>
         >>> async def main():
-        ...     merged = async_merge([feed(1, 2), feed(3, 4)], limit=2)
-        ...     print(sorted([record async for record in merged]))
+        ...     merged = async_merge([gen_items(1, 2), gen_items(3, 4)], limit=2)
+        ...     print(sorted([item async for item in merged]))
         >>>
         >>> run(main)
         [1, 2, 3, 4]
 
     """
 
-    async def drain(feed: AsyncIterable[S], results: MemoryObjectSendStream[S]) -> None:
-        async with maybe_aclosing(aiter(feed)) as items:
+    async def drain(
+        iterable: AsyncIterable[S], results: MemoryObjectSendStream[S]
+    ) -> None:
+        async with maybe_aclosing(aiter(iterable)) as items:
             async for item in items:
                 await results.send(item)
 
-    async for item in _pool_stream(feeds, drain, limit=limit, buffer=buffer):
+    async for item in _pool_stream(iterables, drain, limit=limit, buffer=buffer):
         yield item

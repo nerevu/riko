@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Sort-key construction and grouping helpers used by built-in pipes.
+Sort-key construction and grouping helpers used by built-in modules.
 
 Attributes:
 
@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Literal, TypeVar, cast
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
-from riko.coercion._dates import date_to_datetime, normalize_tzinfo
+from riko.coercion._dates import date_to_datetime, resolve_aware_datetime
 from riko.coercion.cast import CAST_SWITCH, cast_value
 from riko.types._enums import CastType
 from riko.types._scalars import PrimitiveValue, SortableValue
@@ -54,7 +54,7 @@ def _resolve_uncastable(
     A scalar (``str``/``int``/``struct_time``) is returned uncast since it is
     already orderable; a container is replaced with ``default``, which the caller
     supplies as an orderable filler. Every branch logs a warning rather than
-    raising, so a heterogeneous feed still sorts.
+    raising, so a heterogeneous stream still sorts.
 
     Args:
 
@@ -139,12 +139,12 @@ def def_itemgetter(
     fallback_tzinfo: tzinfo = UTC,
 ) -> Callable[[Mapping | PrimitiveValue], SortableValue]:
     """
-    Like operator.itemgetter but fills in missing keys with a typed default.
+    Like operator.itemgetter but fills in missing fields with a typed default.
 
     Args:
 
-        attr: The key read from each item.
-        default: The value used when the key is missing or uncastable.
+        attr: The field read from each item.
+        default: The value used when the field is missing or uncastable.
         type_: Optional cast type applied to the value.
         fallback_tzinfo: Timezone assigned to naive datetimes before they are
             reduced to sortable timestamps.
@@ -195,7 +195,7 @@ def def_itemgetter(
 
         if type_ in DATELIKE_TYPES and isinstance(casted, (date, dt)):
             if isinstance(casted, dt):
-                aware = normalize_tzinfo(casted, fallback_tzinfo=fallback_tzinfo)
+                aware = resolve_aware_datetime(casted, fallback_tzinfo=fallback_tzinfo)
             else:
                 aware = date_to_datetime(casted, fallback_tzinfo=fallback_tzinfo)
 
@@ -227,7 +227,7 @@ def build_sort_key(
 
     Args:
 
-        attr: The key read from each item.
+        attr: The field read from each item.
         default: The value an item lacking ``attr`` sorts by, if any.
         type_: Optional cast type applied to the value.
         fallback_tzinfo: Fallback timezone assigned to naive datetimes
@@ -266,17 +266,17 @@ def group_by[T: Mapping | PrimitiveValue](
     content: Iterable[T], attr: str, default: PrimitiveValue | None = None
 ) -> ItemsView[str, list[T]]:
     """
-    Groups items by the stringified value of a key.
+    Groups items by the stringified value of a field.
 
     Args:
 
         content: The items to group.
-        attr: The key read from each item.
+        attr: The field read from each item.
         default: The value used when an item lacks ``attr``.
 
     Returns:
 
-        A view of ``(key, items)`` pairs, one per distinct key.
+        A view of ``(group value, items)`` pairs, one per distinct value.
 
     Examples:
 

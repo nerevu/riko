@@ -86,3 +86,13 @@ def test_describe_module_reraises_nested_dependency_error(monkeypatch):
 
     with pytest.raises(ModuleNotFoundError, match="phantom_dep"):
         describe_module("hash")
+
+
+def test_describe_module_reraises_unnamed_import_error(monkeypatch):
+    def boom(target):
+        raise ModuleNotFoundError("broken import with no module name")
+
+    monkeypatch.setattr("riko.base._imports.import_module", boom)
+
+    with pytest.raises(ModuleNotFoundError, match="no module name"):
+        describe_module("hash")

@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-234",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-246",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-242",
                 "port": "out"
@@ -19,8 +20,7 @@
             "target": {
                 "node": "sw-234",
                 "port": "in:_1_URL"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -31,9 +31,9 @@
                     "type": "url"
                 }
             },
+            "family": "module",
             "id": "sw-234",
-            "name": "fetchsitefeed",
-            "type": "module"
+            "name": "fetchsitefeed"
         },
         "sw-242": {
             "conf": {
@@ -58,9 +58,9 @@
                     "value": "Enter a URL"
                 }
             },
+            "family": "module",
             "id": "sw-242",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-246": {
             "conf": {
@@ -69,9 +69,9 @@
                     "value": "5"
                 }
             },
+            "family": "module",
             "id": "sw-246",
-            "name": "truncate",
-            "type": "module"
+            "name": "truncate"
         }
     },
     "outputs": {

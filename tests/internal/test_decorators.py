@@ -30,6 +30,7 @@ from riko.ext import operator, processor, splitter
 from riko.modules.split import async_pipe as async_split
 from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.modules.truncate import async_pipe as async_truncate
+from riko.modules.union import async_pipe as async_union
 from riko.types._wrappers import (
     AsyncProcessorWrapper,
     AsyncSplitterWrapper,
@@ -137,7 +138,29 @@ class TestInvalidCombinations:
         name = decorator.__name__
 
         with pytest.raises(
-            TypeError, match=f"{name} pipes do not support the '{option}'"
+            TypeError, match=f"{name} modules do not support the '{option}'"
+        ):
+            decorator(**kwargs)
+
+    @pytest.mark.parametrize(
+        ("decorator", "option"),
+        [
+            pytest.param(processor, "count", id="processor+count"),
+            pytest.param(processor, "conf", id="processor+conf"),
+            pytest.param(processor, "bogus", id="processor+bogus"),
+            pytest.param(operator, "bogus", id="operator+bogus"),
+            pytest.param(operator, "resources", id="operator+resources"),
+            pytest.param(operator, "count", id="operator+count"),
+            pytest.param(operator, "embed", id="operator+embed"),
+            pytest.param(splitter, "bogus", id="splitter+bogus"),
+        ],
+    )
+    def test_unread_option_raises(self, decorator, option):
+        kwargs: dict[str, object] = {option: "first"}
+        name = decorator.__name__
+
+        with pytest.raises(
+            TypeError, match=f"{name} modules do not support the '{option}'"
         ):
             decorator(**kwargs)
 
@@ -248,6 +271,31 @@ class TestAsyncProcessorDualProtocol:
         assert not iscoroutinefunction(AsyncSubPipe.__call__)
 
 
+class TestProcessorListKeepsTestFlag:
+    """A processor called on a list runs each item with the caller's ``test`` flag."""
+
+    @staticmethod
+    def _record(seen: list[object]):
+        def record(item: Item, *args, **kwargs) -> str:
+            seen.append(kwargs.get("test"))
+            return "seen"
+
+        return record
+
+    def test_sync_list(self):
+        seen: list[object] = []
+        pipe = processor()(self._record(seen))
+        list(pipe([{"a": 1}, {"a": 2}], test=True))
+        assert seen == [True, True]
+
+    @async_test
+    async def test_async_list(self):
+        seen: list[object] = []
+        async_pipe = processor(isasync=True)(self._record(seen))
+        _ = [item async for item in async_pipe([{"a": 1}, {"a": 2}], test=True)]
+        assert seen == [True, True]
+
+
 @pytest.mark.parametrize("decorator", [processor, operator, splitter])
 def test_bare_decorator_raises_at_decoration(decorator) -> None:
     """
@@ -289,10 +337,10 @@ async def test_async_splitter_accepts_an_async_input_stream() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason="owned by the pending execution-owned split fan-out work: the splitter "
-    "wrapper does not resolve an execution context, so its parser receives the raw "
+    "wrapper does not resolve its context, so its parser receives the raw "
     "context object instead of the context's inputs",
 )
-def test_splitter_resolves_the_execution_context_for_its_parser() -> None:
+def test_splitter_resolves_the_context_for_its_parser() -> None:
     seen: dict[str, object] = {}
 
     @splitter(objectify=False)
@@ -331,3 +379,33 @@ async def test_async_truncate_stays_lazy_over_a_long_source() -> None:
     stream = async_truncate(as_async(source()), conf={"count": 3})
     assert await anext(stream) == {"i": 0}
     assert len(pulled) <= 3
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="async union reads its secondary input to the end before yielding its "
+    "first item, while the synchronous union reads it lazily",
+)
+@async_test
+async def test_async_union_yields_before_draining_a_secondary_input() -> None:
+    """
+    Union yields its first item without draining its secondary input.
+
+    Like the synchronous union, it may read ahead by at most one item. The
+    secondary input raises once it is pulled past a guard, so a draining union
+    fails instead of running forever.
+    """
+    pulled: list[int] = []
+
+    def secondary() -> Iterator[Item]:
+        for i in range(10_000):
+            if len(pulled) >= 100:
+                raise RuntimeError("the secondary input was read past its guard")
+
+            pulled.append(i)
+            yield {"o": i}
+
+    primary = as_async(iter([{"i": 0}, {"i": 1}]))
+    stream = async_union(primary, others=[as_async(secondary())])
+    assert await anext(stream) == {"i": 0}
+    assert len(pulled) <= 1

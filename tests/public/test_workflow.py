@@ -22,6 +22,7 @@ from riko.ext import (
     SubscribeNode,
     WriteNode,
 )
+from riko.types._collections import FrozenDict
 from riko.types._enums import Backends
 from riko.types._workflow import Endpoint, ParsedPort, parse_port
 
@@ -38,10 +39,7 @@ NODE_FAMILIES = (
 def _workflow():
     node = ModuleNode(id="fetch-1", name="fetch")
     return Workflow(
-        nodes={node.id: node},
-        edges=(),
-        outputs={"default": Endpoint(node.id, "out")},
-        inputs={},
+        nodes=[node], edges=(), outputs={"default": Endpoint(node.id, "out")}, inputs={}
     )
 
 
@@ -71,7 +69,7 @@ def test_node_is_frozen():
 
 def test_workflow_mappings_are_read_only():
     workflow = _workflow()
-    assert type(workflow.nodes).__name__ == "mappingproxy"
+    assert isinstance(workflow.nodes, FrozenDict)
     with pytest.raises(TypeError):
         workflow.outputs["extra"] = Endpoint("fetch-1", "out")  # type: ignore[index]
 

@@ -150,3 +150,9 @@ def test_read_document_reports_malformed_stdin(monkeypatch):
 def test_read_document_parses_a_committed_document():
     document, name = read_document(str(DAG_PATH))
     assert (document, name) == (DAG, "pipe_forever")
+
+
+@pytest.mark.parametrize(("document", "fmt", "loader"), DOCUMENTS)
+def test_normalize_document_is_idempotent(document, fmt, loader):
+    workflow = normalize_document(document)
+    assert normalize_document(workflow) == workflow

@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-502",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-583",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-561",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-569",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-569",
                 "port": "out"
@@ -30,8 +31,7 @@
             "target": {
                 "node": "sw-583",
                 "port": "in:count"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -42,9 +42,9 @@
                     "value": "file://riko/data/feeds.delicious.com_v2_rss_popular_count=15.xml"
                 }
             },
+            "family": "module",
             "id": "sw-502",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         },
         "sw-561": {
             "conf": {
@@ -53,17 +53,17 @@
                     "value": "file://riko/data/feeds.delicious.com_v2_rss_popular_count=3.xml"
                 }
             },
+            "family": "module",
             "id": "sw-561",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         },
         "sw-569": {
+            "family": "module",
             "id": "sw-569",
             "name": "count",
             "options": {
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-583": {
             "conf": {
@@ -72,9 +72,9 @@
                     "type": "float"
                 }
             },
+            "family": "module",
             "id": "sw-583",
-            "name": "truncate",
-            "type": "module"
+            "name": "truncate"
         }
     },
     "outputs": {

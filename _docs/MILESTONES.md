@@ -64,10 +64,10 @@ The shipped P8 separation remains structurally correct:
 ModuleRegistry
     leaf module implementations
 
-PipelineResolver
-    named composed pipelines
+WorkflowResolver
+    named composed workflows
 
-PipeResolver
+ResolverDispatcher
     compiler-free facade
 ```
 
@@ -124,9 +124,9 @@ These entries remain a map from phase names to implementation areas, not an alte
 
 | Area | P-track phase | Current interpretation |
 |---|---:|---|
-| `riko/ext/registry.py` | P8 | retained module implementation registry |
-| `riko/ext/_pipelines.py` | P8 | retained named-pipeline resolver |
-| `riko/ext/_resolver.py` | P8 | retained resolution facade |
+| `riko/runtime/_module_registry.py` (facade `riko/ext/registry.py`) | P8 | retained module implementation registry |
+| `riko/runtime/_workflows.py` | P8 | retained stored-workflow resolver |
+| `riko/runtime/_resolver.py` | P8 | retained resolution facade |
 | generated module names/stubs | P9 | discovery layer over final Pipeline surface |
 | bounded async map/concurrency helpers | P10 | mechanics migrate/reuse under R4B private executions |
 | pub/sub protocols | P11 | topology/runtime owned by fanout + execution owners |
@@ -176,6 +176,11 @@ Semantic owners for each cross-cutting piece are mapped in
 info" table; this section keeps only the release-gate file map and exit tests, which it owns.
 
 ### Target file map
+
+> **Superseded.** This pre-landing sketch names files that never existed after landing (the execution
+> package is `riko/execution/`, the `Pipeline` lives in `riko/definitions/_workflow.py` +
+> `riko/runtime/_pipeline.py`, and `Context`/`Resource` in `riko/definitions/`). The current source map
+> is [KEY_PATHS.md](KEY_PATHS.md); the table is kept as history only.
 
 The exact file split may evolve, but responsibilities must stay separated:
 

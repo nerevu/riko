@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
-"""Hand-written named-workflow fixture demonstrating a pipe loop."""
+"""Hand-written stored-workflow fixture that a ``loop`` embeds to shout each item."""
 
 from __future__ import annotations
 

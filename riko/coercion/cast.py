@@ -2,7 +2,7 @@
 """
 Provides type casting capabilities.
 
-Dispatch is by destination type; ``CAST_SWITCH`` maps each type to its caster
+Dispatch is by cast type; ``CAST_SWITCH`` maps each type to its caster
 and default.
 
 Examples:
@@ -18,14 +18,14 @@ Examples:
 
 Attributes:
 
-    CAST_SWITCH: Destination type to caster and default mapping.
+    CAST_SWITCH: Cast type to caster and default mapping.
 
 """
 
 from __future__ import annotations
 
 from ast import literal_eval
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
 from functools import partial
@@ -44,9 +44,9 @@ from riko.types._enums import BasicCastType, CastType, LocationType
 
 from ._dates import (
     date_to_tt,
-    get_date,
-    normalize_tzinfo,
+    get_relative_date,
     parse_date_string,
+    resolve_aware_datetime,
     tt_to_datedict,
     tt_to_datetime,
 )
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 
     from riko.base._locations import AnyLocation, IPAddress, Location
     from riko.types._collections import BasicArg
-    from riko.types._options import Opts
+    from riko.types._options import DecorationOptions
     from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
     from riko.types._wrappers import PreCaster
 
@@ -68,10 +68,10 @@ KWARG_TYPES = {CastType.DATE, CastType.DATETIME, CastType.LOCATION}
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
-SourceOpts: Opts = {"ftype": BasicCastType.NONE}
+SourceOpts: DecorationOptions = {"ftype": BasicCastType.NONE}
 
 
-def literal_parse(content: BasicValue | bool) -> BasicArg:
+def cast_literal(content: BasicValue | bool) -> BasicArg:
     """
     Parses a string into the Python literal it denotes.
 
@@ -90,11 +90,11 @@ def literal_parse(content: BasicValue | bool) -> BasicArg:
 
     Examples:
 
-        >>> literal_parse("true")
+        >>> cast_literal("true")
         True
-        >>> literal_parse("[1, 2]")
+        >>> cast_literal("[1, 2]")
         [1, 2]
-        >>> literal_parse("foo")
+        >>> cast_literal("foo")
         'foo'
 
     """
@@ -159,7 +159,7 @@ def cast_url(url: str | int) -> str:
     return parsed.geturl()
 
 
-def lookup_street_address(_: str) -> Location:
+def build_street_address(_: str) -> Location:
     """
     Builds a placeholder street-address location.
 
@@ -175,7 +175,7 @@ def lookup_street_address(_: str) -> Location:
 
     Examples:
 
-        >>> lookup_street_address("1600 Pennsylvania Ave")["postal"]
+        >>> build_street_address("1600 Pennsylvania Ave")["postal"]
         '61605'
 
     """
@@ -194,7 +194,7 @@ def lookup_street_address(_: str) -> Location:
     return location
 
 
-def lookup_ip_address(_: str) -> IPAddress:
+def build_ip_address(_: str) -> IPAddress:
     """
     Builds a placeholder IP-address location.
 
@@ -210,7 +210,7 @@ def lookup_ip_address(_: str) -> IPAddress:
 
     Examples:
 
-        >>> lookup_ip_address("8.8.8.8")["country"]
+        >>> build_ip_address("8.8.8.8")["country"]
         'United States'
 
     """
@@ -225,7 +225,7 @@ def lookup_ip_address(_: str) -> IPAddress:
     return location
 
 
-def lookup_coordinates(
+def build_location(
     latlon: str = "", lat: float | None = None, lon: float | None = None
 ) -> Location:
     """
@@ -246,9 +246,9 @@ def lookup_coordinates(
 
     Examples:
 
-        >>> lookup_coordinates("1.5, 2.5")["lat"]
+        >>> build_location("1.5, 2.5")["lat"]
         1.5
-        >>> lookup_coordinates(lat=1.0, lon=2.0)["lon"]
+        >>> build_location(lat=1.0, lon=2.0)["lon"]
         2.0
 
     """
@@ -277,9 +277,9 @@ def lookup_coordinates(
 
 
 GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
-    "coordinates": lookup_coordinates,  # noqa: PLW0108
-    "street_address": lookup_street_address,  # noqa: PLW0108
-    "ip_address": lookup_ip_address,  # noqa: PLW0108
+    "coordinates": build_location,  # noqa: PLW0108
+    "street_address": build_street_address,  # noqa: PLW0108
+    "ip_address": build_ip_address,  # noqa: PLW0108
     "currency": lambda x: CURRENCY_CODES.get(x, {}),
 }
 
@@ -413,10 +413,10 @@ def cast_datetime(  # noqa: E302
 
         if unit in MATH_WORDS and count.isdigit():
             op = sub if value.startswith("-") else add
-            _date = get_date(unit, int(count), op)
+            _date = get_relative_date(unit, int(count), op, dt.now(UTC))
         elif len(textish) == 2:
             op = sub if words[0] == "last" else add
-            _date = get_date(f"{words[1]}s", 1, op)
+            _date = get_relative_date(f"{words[1]}s", 1, op, dt.now(UTC))
         elif value in named:
             _date = named[value]
         else:
@@ -426,7 +426,7 @@ def cast_datetime(  # noqa: E302
             _date = _date.date()
 
     if isinstance(_date, dt):
-        _date = normalize_tzinfo(_date, try_local_tz=try_local_tz)
+        _date = resolve_aware_datetime(_date, try_local_tz=try_local_tz)
 
     if _date and as_datedict:
         tt = tt or date_to_tt(_date)
@@ -475,7 +475,7 @@ CAST_SWITCH: dict[str, PreCaster[PrimitiveValue | AnyLocation]] = {
     "date": {"default": None, "func": cast_date},
     "url": {"default": "", "func": cast_url},
     "location": {"default": {}, "func": cast_location},
-    "bool": {"default": False, "func": lambda i: bool(literal_parse(i))},
+    "bool": {"default": False, "func": lambda i: bool(cast_literal(i))},
     "pass": {"default": None, "func": lambda i: i},
     "none": {"default": None, "func": lambda _: None},
 }

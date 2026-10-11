@@ -17,7 +17,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -36,9 +36,9 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import SubstrObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
 
-OPTS: Opts = {
+OPTS: DecorationOptions = {
     "ftype": BasicCastType.TEXT,
     "ptype": BasicCastType.INT,
     "field": "content",
@@ -55,7 +55,7 @@ def parser(word: str, _: object, objconf: SubstrObjconf, **kwargs: object) -> st
 
         word: The string to slice.
         _: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `start` and `length`.
+        objconf: The module configuration, containing `start` and `length`.
 
     Returns:
 
@@ -88,7 +88,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration. Each value is cast to an int, so a
+        conf (dict): The module configuration. Each value is cast to an int, so a
             numeric string is accepted.
 
             start (int): Zero-based position to start at (default: 0).
@@ -96,11 +96,11 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
             length (int): Number of characters to return. 0 returns the
                 remainder, as does any length past the end (default: 0).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to slice. Its value is cast to text first,
+        field (str): Item field to slice. Its value is cast to text first,
             so a missing field yields ``""`` (default: "content").
 
         assign (str): Field the substring is assigned to. Ignored when ``emit``
@@ -144,7 +144,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration. Each value is cast to an int, so a
+        conf (dict): The module configuration. Each value is cast to an int, so a
             numeric string is accepted.
 
             start (int): Zero-based position to start at (default: 0).
@@ -152,11 +152,11 @@ def pipe(*args: Any, **kwargs: object) -> str:
             length (int): Number of characters to return. 0 returns the
                 remainder, as does any length past the end (default: 0).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to slice. Its value is cast to text first,
+        field (str): Item field to slice. Its value is cast to text first,
             so a missing field yields ``""`` (default: "content").
 
         assign (str): Field the substring is assigned to. Ignored when ``emit``

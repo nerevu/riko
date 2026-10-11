@@ -2,11 +2,14 @@
 """
 Generates a workflow module (``WorkflowModule``) from a ``Workflow``.
 
-A ``WorkflowModule`` is Python source that rebuilds the workflow from typed
-configuration classes and exposes a ``pipe``/``async_pipe`` callable that runs it
-through the standard execution. It is a readable, type-checkable rendering of the
-same graph. It may be edited by hand, imported like any module, and embedded in a
-loop as a sub-pipe.
+The generated ``WorkflowModule`` is Python source that rebuilds the workflow from
+typed configuration classes. The ``WorkflowModule`` also exposes a ``pipe``/
+``async_pipe`` callable that runs the workflow through the standard execution.
+
+It is a readable, type-checkable rendering of the ``Workflow`` graph that can be edited
+and imported like any Python source. Once saved as ``pipe_<id>.py`` in a package
+registered as a workflow store, it can also be embedded in a ``loop`` by its name.
+
 
 Examples:
 
@@ -16,11 +19,11 @@ Examples:
         >>> from riko.runtime._codegen import compile_workflow
         >>>
         >>> attrs = {"key": "title", "value": "riko"}
-        >>> pipeline = Pipeline.from_module("itembuilder", conf={"attrs": attrs})
-        >>> pipeline = pipeline.pipe("rename", conf={"rule": [{"field": "title"}]})
+        >>> itembuilder = Pipeline.from_module("itembuilder", conf={"attrs": attrs})
+        >>> pipeline = itembuilder.rename(conf={"rule": [{"field": "title"}]})
         >>> source = compile_workflow(pipeline.workflow, "pipe_demo")
-        >>> print(next(l for l in source.splitlines() if l.startswith("def pipe")))
-        def pipe(item=None, context: Context | None = None, **_):
+        >>> print(next(l for l in source.splitlines() if l.startswith("pipe")))
+        pipe = build_workflow_pipes(
         >>> print(next(l for l in source.splitlines() if l.startswith("DEPEND")))
         DEPENDENCIES: list[str] = ["itembuilder", "rename"]
 
@@ -37,6 +40,7 @@ from riko.base._strutils import pythonise
 from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._workflow import ModuleNode, Workflow
 from riko.types._guards import is_mapping
+from riko.types._workflow import WorkflowModule
 
 from ._normalize import normalize_workflow
 
@@ -45,8 +49,9 @@ if TYPE_CHECKING:
 
     from riko.definitions._workflow import WorkflowLike
     from riko.types._collections import FrozenConf
-    from riko.types._workflow import Edge, Endpoint, WorkflowModule
-    from riko.types.modules import Conf, Embed
+    from riko.types._compiler import Embed
+    from riko.types._workflow import Edge, Endpoint
+    from riko.types.modules import Conf
 
 RAW_CONFS = {
     "count": "CountRawConf",
@@ -133,7 +138,7 @@ def _render_embed(embed: Embed) -> str:
 
 
 def _render_node(node: ModuleNode) -> str:
-    """Renders one node as the keyed ``ModuleNode(...)`` entry that rebuilds it."""
+    """Renders one node as the ``ModuleNode(...)`` entry that rebuilds it."""
     parts = [f"id={node.id!r}", f"name={node.name!r}"]
 
     if len(node.conf):
@@ -151,7 +156,7 @@ def _render_node(node: ModuleNode) -> str:
     if node.label is not None:
         parts.append(f"label={node.label!r}")
 
-    return f"{node.id!r}: ModuleNode({', '.join(parts)})"
+    return f"ModuleNode({', '.join(parts)})"
 
 
 def _render_edges(edges: tuple[Edge, ...]) -> str:
@@ -167,13 +172,13 @@ def _render_outputs(outputs: Mapping[str, Endpoint]) -> str:
 
 
 def _gen_module_nodes(workflow: Workflow) -> Iterator[ModuleNode]:
-    """Emits every node, rejecting a family that has no generated form yet."""
+    """Walks every module node, rejecting any other node family."""
     for node in workflow.nodes.values():
         if isinstance(node, ModuleNode):
             yield node
         else:
             msg = f"cannot generate a pipe for a {node.family} node; "
-            msg += "only registered module nodes can be generated so far"
+            msg += "only module nodes can be generated so far"
             raise InvalidPipelineError(msg)
 
 
@@ -201,13 +206,13 @@ def compile_workflow(
     """
     Generates the ``WorkflowModule`` that rebuilds and runs ``workflow``.
 
-    A ``RawWorkflow`` is normalized into a ``Workflow`` first, so the module always
+    A ``RawWorkflow`` is normalized into a ``Workflow`` first. This way module always
     reflects the normalized graph rather than the shorthand it was written in. The
     module declares the workflow with typed configuration classes and exposes a
     single ``pipe`` (or ``async_pipe``) callable over it. That callable takes one
-    item, a stream, or nothing, reports the workflow's inputs and module
-    dependencies in the describing modes, and otherwise yields the items produced
-    at the workflow's default output.
+    item, a stream, or nothing; reports the workflow's input declarations and the
+    modules and stored workflows it uses in the describe modes; and otherwise yields
+    the items produced at the workflow's default output.
 
     Args:
 
@@ -231,8 +236,8 @@ def compile_workflow(
         >>> print(next(l for l in source.splitlines() if l.startswith("DEPEND")))
         DEPENDENCIES: list[str] = ["forever"]
         >>> source = compile_workflow(raw, "pipe_demo", is_async=True)
-        >>> print(next(l for l in source.splitlines() if l.startswith("async def a")))
-        async def async_pipe(item=None, context: Context | None = None, **_):
+        >>> print(next(l for l in source.splitlines() if l.startswith("async")))
+        async_pipe = build_workflow_pipes(
 
     """
     workflow = normalize_workflow(workflow)
@@ -258,7 +263,7 @@ def compile_workflow(
         subtype="transformer" if len(workflow.inputs) else "source",
     )
 
-    return ruff_format(rendered)
+    return WorkflowModule(ruff_format(rendered))
 
 
 __all__ = ["RAW_CONFS", "compile_workflow", "render_value"]

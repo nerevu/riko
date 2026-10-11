@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-1",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-2",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-fmt",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-3",
                 "port": "in:format"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-2",
                 "port": "out"
@@ -30,10 +31,10 @@
             "target": {
                 "node": "sw-3",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-3",
                 "port": "out"
@@ -41,8 +42,7 @@
             "target": {
                 "node": "sw-4",
                 "port": "in:attrs_1_value"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -61,17 +61,17 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-1",
-            "name": "itembuilder",
-            "type": "module"
+            "name": "itembuilder"
         },
         "sw-2": {
+            "family": "module",
             "id": "sw-2",
             "name": "datebuilder",
             "options": {
                 "assign": "date"
-            },
-            "type": "module"
+            }
         },
         "sw-3": {
             "conf": {
@@ -80,13 +80,13 @@
                     "type": "text"
                 }
             },
+            "family": "module",
             "id": "sw-3",
             "name": "dateformat",
             "options": {
                 "emit": true,
                 "field": "date"
-            },
-            "type": "module"
+            }
         },
         "sw-4": {
             "conf": {
@@ -103,9 +103,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-4",
-            "name": "itembuilder",
-            "type": "module"
+            "name": "itembuilder"
         },
         "sw-fmt": {
             "conf": {
@@ -130,9 +130,9 @@
                     "value": "text"
                 }
             },
+            "family": "module",
             "id": "sw-fmt",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         }
     },
     "outputs": {

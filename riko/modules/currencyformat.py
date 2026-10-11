@@ -16,7 +16,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -39,9 +39,9 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import CurrencyFormatObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
 
-OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}
+OPTS: DecorationOptions = {"ftype": BasicCastType.DECIMAL, "field": "content"}
 DEFAULTS: Defaults = {"currency": "USD", "clean": False}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -59,7 +59,7 @@ def parser(
 
         amount: The amount to format.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `currency`.
+        objconf: The module configuration, containing `currency`.
 
     Returns:
 
@@ -105,7 +105,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             currency (str): ISO code of the currency to format in (default: "USD").
 
@@ -115,11 +115,11 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
             clean (bool): Replace the non-breaking space with a space (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to format (default: "content").
+        field (str): Item field to format (default: "content").
 
         assign (str): Field the text is assigned to. Ignored when ``emit`` is
             True (default: "currencyformat").
@@ -168,7 +168,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             currency (str): ISO code of the currency to format in (default: "USD").
 
@@ -178,11 +178,11 @@ def pipe(*args: Any, **kwargs: object) -> str:
 
             clean (bool): Replace the non-breaking space with a space (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to format (default: "content").
+        field (str): Item field to format (default: "content").
 
         assign (str): Field the text is assigned to. Ignored when ``emit`` is
             True (default: "currencyformat").

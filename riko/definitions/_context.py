@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Immutable execution context passed through pipeline operations.
+The immutable environment a module runs in.
 
 Examples:
 
@@ -9,7 +9,7 @@ Examples:
         >>> from riko import Context, ExecutionMode
         >>>
         >>> base = Context(ExecutionMode.DESCRIBE, inputs={"count": 2})
-        >>> derived = base.augment(inputs={"limit": 5})
+        >>> derived = base.replace(inputs={"limit": 5})
         >>> base.inputs["count"]
         2
         >>> derived.describe_input
@@ -21,125 +21,91 @@ Examples:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, NamedTuple, Self, overload
+from functools import partial
+from typing import TYPE_CHECKING, Any, Literal, Self, overload
 
-from riko.types._collections import FrozenMap, freeze_mapping
+from attrs import define, evolve, field
+
+from riko.types._collections import (
+    FrozenDict,
+    def_from_require,
+    freeze,
+    instances_freezer,
+    mapping_converter,
+)
 from riko.types._enums import ExecutionMode
-from riko.types._guards import is_lifecycle_factory
+from riko.types._guards import is_lifecycle_factory, require_mapping
+from riko.types._targets import resolve_enum
 
 from ._resource_definition import Resource, ReusableResource
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Mapping
 
     from riko.types._collections import Inputs
     from riko.types._resource import LifecycleFactory
 
     from ._resource_types import ResourceDefinition, ReusableResources
 
+type ResourcesInput = Mapping[str, ReusableResource[Any]]
+
 INPUT_MODES = {ExecutionMode.DESCRIBE_INPUTS, ExecutionMode.DESCRIBE}
 DEPENDENCY_MODES = {ExecutionMode.DESCRIBE_DEPENDENCIES, ExecutionMode.DESCRIBE}
+EMPTY_RESOURCES: ReusableResources = FrozenDict()
+
+_normalize_mode = partial(
+    resolve_enum, ExecutionMode, default=ExecutionMode.RUN, error=ValueError
+)
+_input_converter = [
+    def_from_require(require_mapping, what="Context 'inputs'", error=TypeError),
+    freeze,
+]
+_freezer = instances_freezer(ReusableResource, "Context resource", error=TypeError)
+_resources_converter = mapping_converter(
+    _freezer, ResourcesInput, what="Context 'resources'", error=TypeError
+)
 
 
-class ContextTuple(NamedTuple):
-    mode: ExecutionMode
-    inputs: Inputs | None
-    verbose: bool
-    test: bool
-    submodule: bool
-    resources: ReusableResources
-
-
+@define(frozen=True, slots=True, eq=False, repr=False)
 class Context:
     """
-    An immutable pipeline execution context.
+    An immutable environment a module runs in.
 
     Attributes:
 
-        mode: Whether to run or describe the pipeline.
-        inputs: Read-only values that override input defaults, or ``None`` when
-            none were given (an ``input`` module then prompts unless ``test``).
+        mode: Whether a workflow module's pipe runs its workflow or only describes it
+            (a ``Pipeline`` always runs).
+
+        inputs: Read-only input values an ``input`` module reads in place of its
+            default, or ``None`` when none were given (an ``input`` module then
+            prompts unless ``test``).
+
         verbose: Whether to print debug output.
+
         test: Whether to use defaults instead of prompting.
-        submodule: Whether inputs come from a parent pipeline.
+
         resources: Read-only, keyed by name, and populated only via ``with_resource``.
 
     """
 
-    __slots__ = ("_inputs", "_mode", "_resources", "_submodule", "_test", "_verbose")
-
-    def __init__(
-        self,
-        mode: ExecutionMode | None = None,
-        inputs: Inputs | None = None,
-        verbose: bool | None = False,
-        test: bool | None = False,
-        submodule: bool | None = False,
-    ) -> None:
-        self._mode = mode or ExecutionMode.RUN
-        self._inputs = None if inputs is None else freeze_mapping(inputs)
-        self._verbose = bool(verbose)
-        self._test = bool(test)
-        self._submodule = bool(submodule)
-        self._resources: FrozenMap[ReusableResource] = freeze_mapping({})
-
-    def __reduce__(self) -> tuple[Callable[[ContextTuple], Context], ContextTuple]:
-        context_tuple = ContextTuple(
-            mode=self.mode,
-            inputs=None if self.inputs is None else dict(self.inputs),
-            verbose=self.verbose,
-            test=self.test,
-            submodule=self.submodule,
-            resources=freeze_mapping(self.resources),
-        )
-        return (_restore_context, context_tuple)
+    mode: ExecutionMode = field(default=ExecutionMode.RUN, converter=_normalize_mode)
+    inputs: Inputs | None = field(default=None, converter=_input_converter)
+    verbose: bool = field(default=False, converter=bool)
+    test: bool = field(default=False, converter=bool)
+    resources: ReusableResources = field(
+        default=EMPTY_RESOURCES,
+        converter=_resources_converter,
+        alias="_resources",
+        kw_only=True,
+    )
 
     def __repr__(self) -> str:
         content = f"mode={self.mode}, verbose={self.verbose}, test={self.test}, "
         inputs = None if self.inputs is None else dict(self.inputs)
-        content += f"inputs={inputs}, submodule={self.submodule}"
+        content += f"inputs={inputs}"
         return f"Context({content})"
 
-    @property
-    def mode(self) -> ExecutionMode:
-        return self._mode
-
-    @property
-    def inputs(self) -> Inputs | None:
-        return self._inputs
-
-    @property
-    def verbose(self) -> bool:
-        return self._verbose
-
-    @property
-    def test(self) -> bool:
-        return self._test
-
-    @property
-    def submodule(self) -> bool:
-        return self._submodule
-
-    @property
-    def resources(self) -> ReusableResources:
-        return self._resources
-
-    @classmethod
-    def _from_parts(cls, context_tuple: ContextTuple) -> Self:
-        resources = freeze_mapping(context_tuple.resources)
-        _inputs = context_tuple.inputs
-        inputs = None if _inputs is None else freeze_mapping(_inputs)
-
-        context = cls.__new__(cls)
-        context._mode = context_tuple.mode
-        context._inputs = inputs
-        context._verbose = context_tuple.verbose
-        context._test = context_tuple.test
-        context._submodule = context_tuple.submodule
-        context._resources = resources
-        return context
-
-    def _resolve_def[T](
+    def _normalize_definition[T](
         self,
         definition: ResourceDefinition[T],
         *,
@@ -167,14 +133,13 @@ class Context:
 
         return resource
 
-    def augment(
+    def replace(
         self,
         *,
         mode: ExecutionMode | None = None,
         inputs: Inputs | None = None,
         verbose: bool | None = None,
         test: bool | None = None,
-        submodule: bool | None = None,
     ) -> Self:
         """
         Derives a fresh Context snapshot with the given fields overridden.
@@ -189,22 +154,19 @@ class Context:
             inputs: Replacement input overrides, or ``None`` to keep the current ones.
             verbose: Replacement verbose flag, or ``None`` to keep the current one.
             test: Replacement test flag, or ``None`` to keep the current one.
-            submodule: Replacement submodule flag, or ``None`` to keep the current one.
 
         Returns:
 
             A new Context; the original is left unchanged.
 
         """
-        context_tuple = ContextTuple(
+        return evolve(
+            self,
             mode=self.mode if mode is None else mode,
             inputs=self.inputs if inputs is None else inputs,
             verbose=self.verbose if verbose is None else verbose,
             test=self.test if test is None else test,
-            submodule=self.submodule if submodule is None else submodule,
-            resources=self.resources,
         )
-        return type(self)._from_parts(context_tuple)
 
     @overload
     def with_resource[T](  # noqa: E704
@@ -224,6 +186,15 @@ class Context:
         credential: None = ...,
         lazy: Literal[False] = ...,
     ) -> Self: ...
+    @overload  # noqa: E301
+    def with_resource[T](  # noqa: E704
+        self,
+        name: str,
+        definition: ResourceDefinition[T],
+        *,
+        credential: str | None = ...,
+        lazy: bool = ...,
+    ) -> Self: ...
     def with_resource[T](  # noqa: E301
         self,
         name: str,
@@ -233,7 +204,7 @@ class Context:
         lazy: bool = False,
     ) -> Self:
         """
-        Binds a resource ``definition`` to ``name`` in a new Context snapshot.
+        Provides a resource ``definition`` under ``name`` in a new Context snapshot.
 
         The ``definition`` is either a ``ReusableResource`` or ``LifecycleFactory``. A
         factory is stored here, but only entered in the execution layer. So
@@ -241,10 +212,11 @@ class Context:
 
         Args:
 
-            name: The Context name the resource is bound to.
+            name: The Context name the resource is provided under.
             definition: A ``Resource``/``LifecycleFactory`` that wraps a resource value.
             credential: A credential reference for a factory.
-            lazy: Whether a factory defers entry until first use.
+            lazy: Whether entry should defer until first use. Not yet honored: a run
+                acquires every resource its nodes bind, whether or not it is used.
 
         Returns:
 
@@ -256,32 +228,20 @@ class Context:
                 belong on a ``LifecycleFactory``).
 
         """
-        resource = self._resolve_def(definition, credential=credential, lazy=lazy)
-        context_tuple = ContextTuple(
-            mode=self.mode,
-            inputs=self.inputs,
-            verbose=self.verbose,
-            test=self.test,
-            submodule=self.submodule,
-            resources=freeze_mapping({**self.resources, name: resource}),
+        resource = self._normalize_definition(
+            definition, credential=credential, lazy=lazy
         )
-        return type(self)._from_parts(context_tuple)
+        return evolve(self, _resources={**self.resources, name: resource})
 
     @property
     def describe_input(self) -> bool:
-        """Whether the run reports the pipeline's inputs."""
+        """Whether a workflow module's pipe reports its input declarations instead."""
         return self.mode in INPUT_MODES
 
     @property
     def describe_dependencies(self) -> bool:
-        """Whether the run reports the pipeline's module dependencies."""
+        """Whether a workflow module's pipe reports what its workflow uses instead."""
         return self.mode in DEPENDENCY_MODES
-
-
-def _restore_context(*args) -> Context:
-    """Rebuilds a pickled Context through the immutable derivation path."""
-    context_tuple = ContextTuple(*args)
-    return Context()._from_parts(context_tuple)
 
 
 __all__ = ["Context", "ExecutionMode"]

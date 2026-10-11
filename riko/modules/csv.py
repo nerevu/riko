@@ -18,7 +18,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -42,10 +42,10 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import CsvObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item, Stream
 
-OPTS: Opts = SourceOpts
+OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = {
     "delimiter": ",",
     "quotechar": '"',
@@ -70,7 +70,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url` and the csv options.
+        objconf: The module configuration, containing `url` and the csv options.
 
     Returns:
 
@@ -119,7 +119,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url` and the csv options.
+        objconf: The module configuration, containing `url` and the csv options.
 
     Returns:
 
@@ -164,7 +164,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The csv file to fetch, local or remote. Required.
             delimiter (str): Field delimiter (default: ",").
@@ -188,7 +188,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             col_names (list): Column names to use in place of the header row
                 (default: None).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -238,7 +238,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The csv file to fetch, local or remote. Required.
             delimiter (str): Field delimiter (default: ",").
@@ -262,7 +262,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             col_names (list): Column names to use in place of the header row
                 (default: None).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

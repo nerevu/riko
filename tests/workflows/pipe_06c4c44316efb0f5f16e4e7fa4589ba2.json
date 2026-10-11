@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-123",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-135",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-131",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-106",
                 "port": "in:count"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-135",
                 "port": "out"
@@ -30,8 +31,7 @@
             "target": {
                 "node": "sw-106",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -42,9 +42,9 @@
                     "type": "float"
                 }
             },
+            "family": "module",
             "id": "sw-106",
-            "name": "tail",
-            "type": "module"
+            "name": "tail"
         },
         "sw-123": {
             "conf": {
@@ -53,9 +53,9 @@
                     "value": "file://riko/data/news.yahoo.com_rss_topstories.xml"
                 }
             },
+            "family": "module",
             "id": "sw-123",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         },
         "sw-131": {
             "conf": {
@@ -80,9 +80,9 @@
                     "value": "How many items do you want in the feed?"
                 }
             },
+            "family": "module",
             "id": "sw-131",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-135": {
             "conf": {
@@ -99,9 +99,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-135",
-            "name": "sort",
-            "type": "module"
+            "name": "sort"
         }
     },
     "outputs": {

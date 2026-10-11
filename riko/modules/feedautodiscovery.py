@@ -15,7 +15,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any
 import pygogo as gogo
 
 from riko.coercion.cast import SourceOpts
-from riko.rss.discovery import async_get_rss, get_rss
+from riko.rss.discovery import aload_rss_links, load_rss_links
 
 from ._decorators import processor
 from ._prepare import require_conf
@@ -36,10 +36,10 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import FeedAutoDiscoveryObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item, Stream
 
-OPTS: Opts = SourceOpts
+OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = {"strict": True, "sort": False}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -54,7 +54,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `strict` and `sort`.
+        objconf: The module configuration, containing `url`, `strict` and `sort`.
 
     Returns:
 
@@ -80,7 +80,7 @@ async def async_parser(
     """
     url: str = require_conf(objconf, "url", "feedautodiscovery")
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = await async_get_rss(url, link_type=None, **rkwargs)
+    stream = await aload_rss_links(url, link_type=None, **rkwargs)
     return stream
 
 
@@ -94,7 +94,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `strict` and `sort`.
+        objconf: The module configuration, containing `url`, `strict` and `sort`.
 
     Returns:
 
@@ -123,7 +123,7 @@ def parser(
     """
     url: str = require_conf(objconf, "url", "feedautodiscovery")
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = get_rss(url, link_type=None, **rkwargs)
+    stream = load_rss_links(url, link_type=None, **rkwargs)
     return stream
 
 
@@ -136,7 +136,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The page to examine, local or remote. Required.
 
@@ -147,7 +147,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             sort (bool): Whether to order links by how likely each is to be a
                 feed, rather than document order (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -192,7 +192,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The page to examine, local or remote. Required.
 
@@ -203,7 +203,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             sort (bool): Whether to order links by how likely each is to be a
                 feed, rather than document order (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

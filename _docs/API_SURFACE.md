@@ -78,11 +78,11 @@ the `IO_` contract group.
 <!-- api-surface:root-exceptions -->
 ```python
 >>> sorted(ROOT_EXCEPTIONS)
-['EmptyPipelineError', 'InvalidPipelineError', 'PipelineError', 'PipelineStateError', 'RikoError', 'UnsupportedModuleError', 'UnsupportedPipelineError']
+['EmptyPipelineError', 'InvalidPipelineError', 'PipelineError', 'PipelineStateError', 'RikoError', 'UnsupportedModuleError', 'UnsupportedWorkflowError']
 ```
 <!-- /api-surface:root-exceptions -->
 
-**Other** — execution context and filesystem-path helpers:
+**Other** — `Context`, workflow, pipeline, and filesystem-path helpers:
 
 <!-- api-surface:other -->
 ```python
@@ -181,7 +181,7 @@ them. These are re-exports of the same objects, not separate implementations.
 For example:
 
 ```python
->>> riko.Context is riko.execution.context.Context
+>>> riko.ext.ModuleMetadata is riko.types.modules.ModuleMetadata
 True
 ```
 

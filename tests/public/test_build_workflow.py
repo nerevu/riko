@@ -12,6 +12,7 @@ from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._workflow import ModuleNode
 from riko.runtime._migrate import parse_dag
 from riko.runtime._pipeline import Pipeline
+from riko.types._compiler import Embed
 from riko.types._workflow import Endpoint
 from riko.types.modules import TruncateRawConf
 from tests import TESTS_DIR
@@ -25,18 +26,18 @@ if TYPE_CHECKING:
 DAG_DIR = TESTS_DIR / "dags"
 
 MODULES: list[DagModule] = [
-    {"id": "sw-1", "type": "forever"},
+    {"id": "sw-1", "name": "forever"},
     {
         "id": "sw-2",
-        "type": "truncate",
+        "name": "truncate",
         "conf": TruncateRawConf({"count": {"type": "int", "value": "3"}}),
     },
 ]
 
 FAN_IN_MODULES: list[DagModule] = [
-    {"id": "a", "type": "fetch"},
-    {"id": "b", "type": "fetch"},
-    {"id": "u", "type": "union"},
+    {"id": "a", "name": "fetch"},
+    {"id": "b", "name": "fetch"},
+    {"id": "u", "name": "union"},
 ]
 
 FAN_IN_WIRES: Sequence[Sequence[str]] = [["a", "u"], ["b", "u", "in:1"]]
@@ -109,6 +110,40 @@ def test_empty_modules_raise_invalid_pipeline():
 def test_bad_wire_length_raises_invalid_pipeline(wire: list[str]):
     with pytest.raises(InvalidPipelineError, match="wire"):
         parse_dag({"modules": FAN_IN_MODULES, "wires": [wire]})
+
+
+@pytest.mark.parametrize(
+    ("module", "message"),
+    [
+        pytest.param({"name": "forever", "bogus": 1}, "bogus", id="unknown-key"),
+        pytest.param(
+            {"type": "forever", "name": "sort"}, "conflicting", id="name-type-conflict"
+        ),
+        pytest.param({"id": "x"}, "needs a 'name'", id="missing-name"),
+        pytest.param(
+            {"name": "forever", "family": "module"}, "family", id="node-family-key"
+        ),
+    ],
+)
+def test_pipe_dag_reports_unknown_module_keys(module, message):
+    with pytest.raises(InvalidPipelineError, match=message):
+        parse_dag({"modules": [module]})
+
+
+def test_pipe_dag_accepts_the_older_type_spelling_of_name():
+    named = parse_dag({"modules": [{"name": "forever"}]})
+    typed = parse_dag({"modules": [{"type": "forever"}]})
+    agreeing = parse_dag({"modules": [{"name": "forever", "type": "forever"}]})
+    assert named == typed == agreeing
+    assert _module_node(typed, "sw-1").name == "forever"
+
+
+def test_pipe_dag_offers_known_node_fields_to_the_node():
+    embed = Embed({"name": "fetch", "conf": {}})
+    workflow = parse_dag({"modules": [{"name": "loop", "embed": embed}]})
+    module = _module_node(workflow, "sw-1")
+    assert module.embed is not None
+    assert module.embed["name"] == "fetch"
 
 
 def test_expanded_dag_runs():

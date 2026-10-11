@@ -17,14 +17,29 @@ import click
 from riko.base._paths import PACKAGE_DIR, ROOT_DIR
 
 from ._build import _twine_check
-from ._docs import _check_docs, _check_rst
+from ._docs import _lint_docs, _lint_rst
 from ._docstyle import format_issue, iter_summary_issues
 from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
+from ._lint_deps import (
+    format_dependency_issue,
+    gen_dependency_issues,
+    gen_hook_pin_issues,
+)
+from ._lint_literals import format_literal_issue, iter_literal_issues
+from ._lint_terms import format_term_issue, iter_term_issues
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
 _WORKFLOW_DIR = ROOT_DIR / ".github" / "workflows"
+_TEXT_ROOTS: tuple[str, ...] = (
+    "riko",
+    "tests",
+    "examples",
+    "docs",
+    "README.rst",
+    "CONTRIBUTING.rst",
+)
 
 _ruff: str | None = shutil.which("ruff")
 _pylint: str | None = shutil.which("pylint")
@@ -34,8 +49,8 @@ _shellcheck: str | None = shutil.which("shellcheck")
 _yamlfmt: str | None = shutil.which("yamlfmt")
 
 
-def _check_types(where: str | None = None) -> int:
-    """Check type annotations with pyright."""
+def _lint_types(where: str | None = None) -> int:
+    """Checks type annotations with pyright."""
     if not _pyright:
         raise RuntimeError("pyright not found")
 
@@ -44,7 +59,7 @@ def _check_types(where: str | None = None) -> int:
 
 
 def _verify_types(where: str | None = None) -> int:
-    """Verify type completeness with pyright."""
+    """Verifies type completeness with pyright."""
     if not _pyright:
         raise RuntimeError("pyright not found")
 
@@ -62,8 +77,8 @@ def _verify_types(where: str | None = None) -> int:
     )
 
 
-def _pylint_check(parallel: bool = False) -> int:
-    """Check style with pylint."""
+def _lint_python_strict(parallel: bool = False) -> int:
+    """Checks style with pylint."""
     if not _pylint:
         raise RuntimeError("pylint not found")
 
@@ -75,8 +90,8 @@ def _pylint_check(parallel: bool = False) -> int:
     return call(args)
 
 
-def _docstring_check(where: str | None = "") -> int:
-    """Check that no docstring summary leads with Returns or Yields."""
+def _lint_docstrings(where: str | None = "") -> int:
+    """Checks that no docstring summary leads with Returns or Yields."""
     roots = [Path(p) for p in where.split(" ")] if where else [Path("riko")]
     issues = list(iter_summary_issues(*roots))
 
@@ -86,8 +101,45 @@ def _docstring_check(where: str | None = "") -> int:
     return 1 if issues else 0
 
 
-def _ruff_check(where: str | None = "", unsafe_fixes: bool = False) -> int:
-    """Check style and formatting with ruff."""
+def _lint_terms(where: str | None = "") -> int:
+    """Checks shipped text for phrases the reserved-terms rules replace."""
+    names = where.split(" ") if where else _TEXT_ROOTS
+    issues = list(iter_term_issues(*(ROOT_DIR / name for name in names)))
+
+    for issue in issues:
+        print(format_term_issue(issue))
+
+    return 1 if issues else 0
+
+
+def _lint_literals(where: str | None = "") -> int:
+    """Checks shipped text for inline literals that break the quoting rules."""
+    names = where.split(" ") if where else _TEXT_ROOTS
+    issues = list(iter_literal_issues(*(ROOT_DIR / name for name in names)))
+
+    for issue in issues:
+        print(format_literal_issue(issue))
+
+    return 1 if issues else 0
+
+
+def _lint_deps() -> int:
+    """Checks riko's imports and hook pins against its declared and locked deps."""
+    pyproject = ROOT_DIR / "pyproject.toml"
+    hooks = ROOT_DIR / ".pre-commit-config.yaml"
+    issues = [
+        *gen_dependency_issues(PACKAGE_DIR, pyproject),
+        *gen_hook_pin_issues(hooks, ROOT_DIR / "uv.lock"),
+    ]
+
+    for issue in issues:
+        print(format_dependency_issue(issue))
+
+    return 1 if issues else 0
+
+
+def _lint_python(where: str | None = "", unsafe_fixes: bool = False) -> int:
+    """Checks style and formatting with ruff."""
     if not _ruff:
         raise RuntimeError("ruff not found")
 
@@ -101,13 +153,13 @@ def _ruff_check(where: str | None = "", unsafe_fixes: bool = False) -> int:
 
 
 def _gen_yaml_files() -> Iterable[str]:
-    """Collect tracked YAML files."""
+    """Collects tracked YAML files."""
     args = ["git", "ls-files", "*.yml", "*.yaml"]
     yield from check_output(args, text=True).splitlines()
 
 
-def _check_actions(*where: str) -> int:
-    """Validate GitHub Actions workflows with actionlint and shellcheck."""
+def _lint_actions(*where: str) -> int:
+    """Validates GitHub Actions workflows with actionlint and shellcheck."""
     if not _actionlint:
         raise RuntimeError("actionlint not found")
     elif not _shellcheck:
@@ -116,8 +168,8 @@ def _check_actions(*where: str) -> int:
     return call([_actionlint, *where])
 
 
-def _check_yaml(*where: str) -> int:
-    """Lint YAML files with yamlfmt."""
+def _lint_yaml(*where: str) -> int:
+    """Lints YAML files with yamlfmt."""
     if not _yamlfmt:
         raise RuntimeError("yamlfmt not found")
 
@@ -125,19 +177,19 @@ def _check_yaml(*where: str) -> int:
     return call([_yamlfmt, "-lint", *paths])
 
 
-def _get_staged() -> list[str]:
-    """List staged Python files that were added, copied, or modified."""
+def _load_staged() -> list[str]:
+    """Lists staged Python files that were added, copied, or modified."""
     args = ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"]
     staged = check_output(args, text=True).splitlines()
     return [name for name in staged if name.endswith(".py")]
 
 
-def _check_staged() -> int:
-    """Lint staged Python files with ruff."""
+def _lint_staged() -> int:
+    """Lints staged Python files with ruff."""
     if not _ruff:
         raise RuntimeError("ruff not found")
 
-    files = _get_staged()
+    files = _load_staged()
 
     if not files:
         return_code = 0
@@ -150,7 +202,7 @@ def _check_staged() -> int:
 
 
 def _format_yaml(*where: str) -> int:
-    """Format YAML files with yamlfmt."""
+    """Formats YAML files with yamlfmt."""
     if not _yamlfmt:
         raise RuntimeError("yamlfmt not found")
 
@@ -161,7 +213,7 @@ def _format_yaml(*where: str) -> int:
 @click.command(name="check")
 def _check_command() -> None:
     """Lint staged Python changes with ruff."""
-    exit(_check_staged())
+    exit(_lint_staged())
 
 
 @click.group(name="lint", invoke_without_command=True)
@@ -178,6 +230,13 @@ def _check_command() -> None:
 @click.option("-a", "--actions", help="Validate GitHub Actions workflows", is_flag=True)
 @click.option("-y", "--yaml", help="Validate YAML files", is_flag=True)
 @click.option("-D", "--docstrings", help="Check docstring summary style", is_flag=True)
+@click.option("--terms", help="Check shipped text for replaced terms", is_flag=True)
+@click.option(
+    "--literals", help="Check shipped text for misquoted literals", is_flag=True
+)
+@click.option(
+    "--deps", help="Check imports against declared dependencies", is_flag=True
+)
 @click.option("--all", "all_", help="Run every standard lint check", is_flag=True)
 @click.option(
     "-p",
@@ -199,6 +258,9 @@ def _lint_command(
     actions: bool = False,
     yaml: bool = False,
     docstrings: bool = False,
+    terms: bool = False,
+    literals: bool = False,
+    deps: bool = False,
     all_: bool = False,
     parallel: bool = False,
 ) -> None:
@@ -216,30 +278,42 @@ def _lint_command(
                 actions,
                 yaml,
                 docstrings,
+                terms,
+                literals,
+                deps,
                 all_,
             )
         )
         return_codes: list[int] = []
 
         if all_ or not has_selector:
-            return_codes.append(_ruff_check(_where, unsafe_fixes))
+            return_codes.append(_lint_python(_where, unsafe_fixes))
 
         if rst or all_:
-            return_codes.append(_check_rst(_where))
+            return_codes.append(_lint_rst(_where))
 
         if docs or all_:
-            return_codes.append(_check_docs())
+            return_codes.append(_lint_docs())
 
         if docstrings or all_:
-            return_codes.append(_docstring_check(_where))
+            return_codes.append(_lint_docstrings(_where))
+
+        if terms or all_:
+            return_codes.append(_lint_terms(_where))
+
+        if literals or all_:
+            return_codes.append(_lint_literals(_where))
+
+        if deps or all_:
+            return_codes.append(_lint_deps())
 
         if actions or all_:
             exts = ["yml", "yaml"]
             paths = (glob(str(_WORKFLOW_DIR / f"*.{ext}")) for ext in exts)
-            return_codes.append(_check_actions(*chain.from_iterable(paths)))
+            return_codes.append(_lint_actions(*chain.from_iterable(paths)))
 
         if yaml or all_:
-            return_codes.append(_check_yaml(*where))
+            return_codes.append(_lint_yaml(*where))
 
         if all_:
             return_codes.append(run_import_checks(PACKAGE_DIR, *_IMPORT_CHECKS))
@@ -248,13 +322,13 @@ def _lint_command(
             return_codes.append(_twine_check())
 
         if check_types:
-            return_codes.append(_check_types(_where))
+            return_codes.append(_lint_types(_where))
 
         if verify_types:
             return_codes.append(_verify_types(_where))
 
         if strict:
-            return_codes.append(_pylint_check(parallel))
+            return_codes.append(_lint_python_strict(parallel))
 
         exit(max(return_codes, default=0))
 

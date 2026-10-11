@@ -28,6 +28,7 @@ from riko.runtime._codegen import compile_workflow
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._normalize import normalize_workflow
 from riko.runtime._pipeline import Pipeline
+from riko.runtime._resolver import dispatcher
 from riko.runtime._serialize import parse_document
 from riko.types._enums import ExecutionMode
 from riko.types._workflow import Endpoint
@@ -50,7 +51,7 @@ EXAMPLES_DIR = TESTS_DIR.parent / "examples"
 FIXTURE_DIRS = (TESTS_DIR / "workflows", EXAMPLES_DIR / "workflows")
 
 # These documents cannot run on their own: two name modules riko does not
-# implement, and the third is a named workflow that is only meaningful when another
+# implement, and the third is a stored workflow that is only meaningful when another
 # workflow embeds it. Their workflow modules are held to the same failure.
 UNRUNNABLE = frozenset(
     {
@@ -121,7 +122,7 @@ def _run_workflow(workflow: Workflow) -> list[Item]:
     items: list[Item] = []
 
     with SyncExecution(context=Context(test=True)) as execution:
-        items = list(execution.run(build_execution_plan(workflow)))
+        items = list(execution.run(build_execution_plan(workflow, dispatcher)))
 
     return items
 
@@ -130,7 +131,7 @@ async def _arun_document(workflow: Workflow) -> list[Item]:
     items: list[Item] = []
 
     async with AsyncExecution(context=Context(test=True)) as execution:
-        stream = await execution.arun(build_execution_plan(workflow))
+        stream = await execution.arun(build_execution_plan(workflow, dispatcher))
         items = [item async for item in stream]
 
     return items
@@ -202,6 +203,31 @@ async def test_generated_async_pipe_accepts_an_async_stream(tmp_path: Path):
     assert [item async for item in module.async_pipe(source())] == expected
 
 
+@async_test
+async def test_abandoned_async_pipe_closes_its_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Closing an abandoned generated async stream exits its execution first."""
+    log: list[str] = []
+    aexit = AsyncExecution.__aexit__
+
+    async def spy(self, *args):
+        log.append("execution exit")
+        return await aexit(self, *args)
+
+    monkeypatch.setattr(AsyncExecution, "__aexit__", spy)
+    workflow = Pipeline.from_module("forever").workflow
+    module = _build(workflow, "pipe_aforever", tmp_path, is_async=True)
+    stream = module.async_pipe()
+
+    async for _ in stream:
+        break
+
+    await stream.aclose()
+    log.append("after close")
+    assert log == ["execution exit", "after close"]
+
+
 def test_generated_pipe_describes_dependencies(tmp_path: Path):
     """Describing dependencies reports the workflow's module names, sorted."""
     pipeline = Pipeline.from_module("itembuilder").pipe("rename", conf=RENAME_CONF)
@@ -215,23 +241,59 @@ def test_generated_pipe_describes_inputs(tmp_path: Path):
     node = ModuleNode(id="rename-1", name="rename", conf=RENAME_CONF)
     inputs = {"limit": {"type": "integer"}}
     workflow = Workflow(
-        nodes={node.id: node},
-        outputs={"default": Endpoint(node.id, "out")},
-        inputs=inputs,
+        nodes=[node], outputs={"default": Endpoint(node.id, "out")}, inputs=inputs
     )
     module = _build(workflow, "pipe_inputs", tmp_path)
     context = Context(mode=ExecutionMode.DESCRIBE_INPUTS)
     assert module.pipe(context=context) == inputs
 
 
+@async_test
+async def test_generated_async_pipe_describes_inputs(tmp_path: Path):
+    """The async interface yields the declared input schemas as one item."""
+    node = ModuleNode(id="rename-1", name="rename", conf=RENAME_CONF)
+    inputs = {"limit": {"type": "integer"}}
+    workflow = Workflow(
+        nodes=[node], outputs={"default": Endpoint(node.id, "out")}, inputs=inputs
+    )
+    module = _build(workflow, "pipe_ainputs", tmp_path, is_async=True)
+    context = Context(mode=ExecutionMode.DESCRIBE_INPUTS)
+    assert [item async for item in module.async_pipe(context=context)] == [inputs]
+
+
+def test_generated_pipe_describes_inputs_and_dependencies(tmp_path: Path):
+    """Describing everything reports the input declarations and dependencies."""
+    node = ModuleNode(id="rename-1", name="rename", conf=RENAME_CONF)
+    inputs = {"limit": {"type": "integer"}}
+    workflow = Workflow(
+        nodes=[node], outputs={"default": Endpoint(node.id, "out")}, inputs=inputs
+    )
+    module = _build(workflow, "pipe_everything", tmp_path)
+    context = Context(mode=ExecutionMode.DESCRIBE)
+    expected = {"inputs": inputs, "dependencies": ["rename"]}
+    assert module.pipe(context=context) == expected
+
+
+@async_test
+async def test_generated_async_pipe_describes_inputs_and_dependencies(tmp_path: Path):
+    """The async interface yields the full description as one item."""
+    node = ModuleNode(id="rename-1", name="rename", conf=RENAME_CONF)
+    inputs = {"limit": {"type": "integer"}}
+    workflow = Workflow(
+        nodes=[node], outputs={"default": Endpoint(node.id, "out")}, inputs=inputs
+    )
+    module = _build(workflow, "pipe_aeverything", tmp_path, is_async=True)
+    context = Context(mode=ExecutionMode.DESCRIBE)
+    expected = {"inputs": inputs, "dependencies": ["rename"]}
+    assert [item async for item in module.async_pipe(context=context)] == [expected]
+
+
 def test_write_node_is_refused():
     """A workflow with a node family that has no generated form is refused."""
     node = WriteNode(id="write-1", name="write", backend="file", dest="out.csv")
-    workflow = Workflow(
-        nodes={node.id: node}, outputs={"default": Endpoint(node.id, "out")}
-    )
+    workflow = Workflow(nodes=[node], outputs={"default": Endpoint(node.id, "out")})
 
-    with pytest.raises(InvalidPipelineError, match="only registered module nodes"):
+    with pytest.raises(InvalidPipelineError, match="only module nodes"):
         compile_workflow(workflow, "pipe_written")
 
 

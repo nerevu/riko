@@ -19,7 +19,7 @@ from riko.base._dateutils import (
     NaiveST,
     get_tzname,
     load_local_tz,
-    tzinfo_from_tt,
+    resolve_tt_tzinfo,
 )
 
 if TYPE_CHECKING:
@@ -126,7 +126,7 @@ def tt_to_datetime(  # noqa: E302
 ) -> date | dt | None:
     # convert and account for leapseconds
     if tt:
-        _tzinfo = tzinfo_from_tt(tt, def_tzinfo=def_tzinfo)
+        _tzinfo = resolve_tt_tzinfo(tt, def_tzinfo=def_tzinfo)
         result = dt(*tt[:5] + (min(tt[5], 59),), tzinfo=_tzinfo)
         _date = result.date() if as_date else result
     else:
@@ -176,7 +176,7 @@ def tt_to_datedict(  # noqa: E302
     if tt:
         day_of_w = 0 if tt[6] == 6 else tt[6] + 1
         isdst = None if tt[8] == -1 else bool(tt[8])
-        _tzinfo = tzinfo_from_tt(tt, def_tzinfo=def_tzinfo)
+        _tzinfo = resolve_tt_tzinfo(tt, def_tzinfo=def_tzinfo)
         tm_zone = _tzinfo.tzname(None) if _tzinfo else None
         aware = dt(*tt[:5], min(tt[5], 59), tzinfo=_tzinfo or UTC)
         result = {"utime": int(aware.timestamp()), "timezone": tm_zone, "date": normal}
@@ -189,32 +189,32 @@ def tt_to_datedict(  # noqa: E302
 
 
 @overload
-def normalize_tzinfo(  # noqa: E704
+def resolve_aware_datetime(  # noqa: E704
     _date: None, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo = ...
 ) -> None: ...
 @overload  # noqa: E302
-def normalize_tzinfo(  # noqa: E704
+def resolve_aware_datetime(  # noqa: E704
     _date: AwareDT | NaiveDT | str,
     try_local_tz: bool | None = ...,
     fallback_tzinfo: tzinfo = ...,
 ) -> AwareDT: ...
 @overload  # noqa: E302
-def normalize_tzinfo(  # noqa: E704
+def resolve_aware_datetime(  # noqa: E704
     _date: AwareST | NaiveST,
     try_local_tz: bool | None = ...,
     fallback_tzinfo: tzinfo = ...,
 ) -> AwareST: ...
 @overload  # noqa: E302
-def normalize_tzinfo(  # noqa: E704
+def resolve_aware_datetime(  # noqa: E704
     _date: date, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo = ...
 ) -> date: ...
-def normalize_tzinfo(  # noqa: E302
+def resolve_aware_datetime(  # noqa: E302
     _date: AwareDT | NaiveDT | AwareST | NaiveST | date | str | None,
     try_local_tz: bool | None = True,
     fallback_tzinfo: tzinfo = UTC,
 ) -> AwareDT | AwareST | date | None:
     """
-    Ensures that a datetime or struct_time object has timezone information.
+    Resolves a timezone-aware form of a datetime, struct_time, or date string.
 
     Examples:
 
@@ -222,10 +222,10 @@ def normalize_tzinfo(  # noqa: E302
         >>> from datetime import datetime
         >>>
         >>> st = time.struct_time((2020, 6, 15, 12, 0, 0, 0, 0, -1))
-        >>> normalize_tzinfo(st, try_local_tz=False).tm_gmtoff
+        >>> resolve_aware_datetime(st, try_local_tz=False).tm_gmtoff
         0
         >>> local = datetime(2020, 6, 15, 12).astimezone().utcoffset().total_seconds()
-        >>> normalize_tzinfo(st, try_local_tz=True).tm_gmtoff == local
+        >>> resolve_aware_datetime(st, try_local_tz=True).tm_gmtoff == local
         True
 
     """
@@ -253,28 +253,39 @@ def normalize_tzinfo(  # noqa: E302
     return new_date
 
 
-def get_date(unit: str, count: int, op: Callable) -> date | dt:
+def get_relative_date(unit: str, count: int, op: Callable, now: dt) -> date | dt:
     """
-    Converts a unit of time into a date or datetime object.
+    Offsets ``now`` (or its date) by ``count`` units of time.
+
+    Args:
+
+        unit: What to offset by: ``seconds``, ``minutes``, or ``hours`` offset ``now``.
+            ``days``, ``weeks``, ``months``, or ``years`` offset its date.
+
+        count: How many units to offset by.
+
+        op: ``operator.add`` to move forward or ``operator.sub`` to move back.
+
+        now: The moment to offset from.
+
+    Returns:
+
+        Datetime for sub-day units, and date otherwise.
 
     Examples:
 
         >>> from datetime import datetime
         >>> from operator import add, sub
-        >>> from dateutil.relativedelta import relativedelta
         >>>
-        >>> today = datetime.now(UTC).date()
-        >>> get_date('months', 1, add) == today + relativedelta(months=1)
-        True
-        >>> get_date('years', 1, sub) == today - relativedelta(years=1)
-        True
-        >>> isinstance(get_date('seconds', 30, add), datetime)
-        True
-        >>> get_date('seconds', 30, add) > datetime.now(UTC)
-        True
+        >>> now = datetime(2024, 1, 31, 12, tzinfo=UTC)
+        >>> get_relative_date('months', 1, add, now)
+        datetime.date(2024, 2, 29)
+        >>> get_relative_date('years', 1, sub, now)
+        datetime.date(2023, 1, 31)
+        >>> get_relative_date('seconds', 30, add, now)
+        datetime.datetime(2024, 1, 31, 12, 0, 30, tzinfo=datetime.timezone.utc)
 
     """
-    now = dt.now(UTC)
     today = now.date()
 
     dates: dict[str, date | dt] = {

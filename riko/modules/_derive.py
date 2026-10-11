@@ -13,7 +13,7 @@ from riko.types.modules import (
     OperatorReturnKind,
 )
 
-from ._inference import gen_operator_return_kinds
+from ._inference import gen_return_inferences
 
 if TYPE_CHECKING:
     from riko.types._wrappers import ModuleParser
@@ -26,8 +26,14 @@ def _get_operator_subtypes(
 ) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
     subtype: ModuleSubtype | None = None
     subtypes: ModuleSubtypes = set()
+    reasons: list[str] = []
 
-    for kind in gen_operator_return_kinds(pipe):
+    for inference in gen_return_inferences(pipe):
+        kind = inference.kind
+
+        if inference.reason:
+            reasons.append(inference.reason)
+
         if kind == OperatorReturnKind.NONSTREAM:
             subtype = subtype or "aggregator"
             subtypes.add(subtype)
@@ -42,6 +48,10 @@ def _get_operator_subtypes(
     if not subtypes:
         qualified_name = f"{pipe.__module__}.{pipe.__name__}"
         msg = f"{qualified_name} no supported subtypes found"
+
+        if reasons:
+            msg += f": {'; '.join(reasons)}"
+
         raise TypeError(msg)
 
     return subtype, subtypes

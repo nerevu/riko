@@ -1,13 +1,19 @@
 # vim: sw=4:ts=4:expandtab
 """Hand-written async Kazeeki workflow module (variant 2)."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from riko import Pipeline
 from riko.bado import as_async
 from riko.bado._backend import run
 from riko.definitions._context import Context
-from riko.execution._execution import AsyncExecution
-from riko.runtime._execution_plan import build_execution_plan
+from riko.types._enums import ExecutionMode
 from tests.pyworkflows._pipe_kazeeki import itembuilder_conf, regex_conf, rename_conf
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 def build() -> Pipeline:
@@ -16,22 +22,21 @@ def build() -> Pipeline:
     return source.rename(conf=rename_conf).regex(conf=regex_conf)
 
 
-async def async_pipe(context: Context | None = None, **_):
-    if context and context.describe_input:
-        async for item in as_async([]):
-            yield item
-    elif context and context.describe_dependencies:
-        async for item in as_async(["itembuilder", "rename", "regex"]):
-            yield item
+INPUTS: list = []
+DEPENDENCIES = ["itembuilder", "rename", "regex"]
+
+
+def async_pipe(context: Context | None = None, **_) -> AsyncIterator:
+    if context is None or context.mode is ExecutionMode.RUN:
+        stream = aiter(build().with_context(Context() if context is None else context))
+    elif context.mode is ExecutionMode.DESCRIBE:
+        stream = as_async([{"inputs": INPUTS, "dependencies": DEPENDENCIES}])
+    elif context.describe_input:
+        stream = as_async(INPUTS)
     else:
-        pipeline = build()
-        plan = build_execution_plan(pipeline.workflow)
+        stream = as_async(DEPENDENCIES)
 
-        async with AsyncExecution(context=context or Context()) as execution:
-            stream = await execution.arun(plan, source=pipeline.source)
-
-            async for item in stream:
-                yield item
+    return stream
 
 
 async def _main():

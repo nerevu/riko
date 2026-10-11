@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
-from riko.bado._util import maybe_deferred
+from riko.bado._util import maybe_async
 from riko.coercion._sequences import listize
 from riko.types._options import Defaults
 from riko.types._streams import Item, Items, Stream
@@ -69,12 +69,12 @@ async def async_parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so consuming
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
         objconf: the item independent configuration. Unused.
 
-        tuples: Iterable of (item, objconf). `item` is an element in the source stream.
+        tuples: Iterable of (item, objconf). `item` is an element in the input stream.
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
 
@@ -106,7 +106,7 @@ async def async_parser(
 
     """
     func = require_arg(func, "func", "aggregate", strict=True)
-    result = await maybe_deferred(func, stream)
+    result = await maybe_async(func, stream)
     return iter(listize(result))
 
 
@@ -126,12 +126,12 @@ def parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so consuming
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
         objconf: the item independent configuration. Unused.
 
-        tuples: Iterable of (item, objconf). `item` is an element in the source stream.
+        tuples: Iterable of (item, objconf). `item` is an element in the input stream.
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
 
@@ -171,9 +171,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream.
-        conf (dict): The pipe configuration. Unused.
-        context (Context): the execution context
+        items (Items): The input stream.
+        conf (dict): The module configuration. Unused.
+        context (Context): the run environment
 
     Kwargs:
 
@@ -223,9 +223,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream.
-        conf (dict): The pipe configuration. Unused.
-        context (Context): the execution context
+        items (Items): The input stream.
+        conf (dict): The module configuration. Unused.
+        context (Context): the run environment
 
     Kwargs:
 

@@ -18,7 +18,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -36,7 +36,7 @@ from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close
 from riko.parsing.documents import any2dict
-from riko.types._options import Defaults, Opts
+from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import processor
 from ._prepare import require_conf
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from riko.types._io import FileLike
     from riko.types._streams import Item, Stream
 
-OPTS: Opts = SourceOpts
+OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING})
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -66,7 +66,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `path` and `html5`.
+        objconf: The module configuration, containing `url`, `path` and `html5`.
 
     Returns:
 
@@ -114,7 +114,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `path` and `html5`.
+        objconf: The module configuration, containing `url`, `path` and `html5`.
 
     Returns:
 
@@ -156,20 +156,20 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The file to fetch, local or remote. Its extension selects
-                the parser. Required.
+                the document format. Required.
 
-            path (str | list[str]): Dot separated path to the records, e.g.
-                ``"value.items"``. The whole document is returned when empty
-                (default: None).
+            path (str | list[str]): Dotted path into the fetched document to the
+                records, e.g. ``"value.items"``. The whole document is returned when
+                empty (default: None).
 
             html5 (bool): Whether to use the HTML5 parser (default: False).
 
             encoding (str): File encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -216,20 +216,20 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The file to fetch, local or remote. Its extension selects
-                the parser. Required.
+                the document format. Required.
 
-            path (str | list[str]): Dot separated path to the records, e.g.
-                ``"value.items"``. The whole document is returned when empty
-                (default: None).
+            path (str | list[str]): Dotted path into the fetched document to the
+                records, e.g. ``"value.items"``. The whole document is returned when
+                empty (default: None).
 
             html5 (bool): Whether to use the HTML5 parser (default: False).
 
             encoding (str): File encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

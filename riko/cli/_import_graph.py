@@ -35,7 +35,7 @@ class _ImportRef:
     level: int
 
 
-def _get_modules(root: Path) -> tuple[ModuleInfo, ...]:
+def _load_modules(root: Path) -> tuple[ModuleInfo, ...]:
     modules: list[ModuleInfo] = []
     package = root.name
 

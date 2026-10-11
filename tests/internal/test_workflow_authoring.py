@@ -19,8 +19,8 @@ from riko.types._workflow import Edge as EdgeBase
 from riko.types._workflow import Endpoint, RawEdge, RawEndpoint, RawNode
 
 _NODES = (ModuleNode, ReadNode, WriteNode, ActionNode, CacheNode, SubscribeNode)
-_NODE_ALIASES = frozenset({"type", "family", "format"})
-_EDGE_ALIASES = frozenset({"type", "family"})
+_NODE_ALIASES = frozenset({"family", "format"})
+_EDGE_ALIASES = frozenset({"family"})
 
 
 def _attrs_fields(*classes) -> set[str]:

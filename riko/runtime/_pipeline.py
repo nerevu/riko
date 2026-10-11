@@ -27,13 +27,12 @@ from typing import TYPE_CHECKING, Any
 from attrs import define
 from typing_extensions import TypeVar
 
-from riko.bado._util import maybe_aclosing
 from riko.base.exceptions import EmptyPipelineError
 from riko.definitions._workflow import PipelineDefinition
-from riko.execution._execution import AsyncExecution, SyncExecution
 from riko.types._sentinels import MISSING, MissingType
 
-from ._execution_plan import build_execution_plan
+from ._execution_plan import arun_pipeline, run_pipeline
+from ._resolver import dispatcher
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
@@ -61,45 +60,29 @@ class Pipeline(PipelineDefinition[T]):
         """
         Synchronously runs the pipeline with its context and execution settings.
 
-        Each iteration creates a fresh one-shot execution that owns the run's
-        resources for the lifetime of the returned iterator.
+        Each iteration is a fresh run that owns its resources for the lifetime of
+        the returned iterator.
 
         Yields:
 
             The items produced at the pipeline's default output.
 
         """
-        plan = build_execution_plan(self.workflow)
+        return run_pipeline(self, dispatcher)
 
-        with SyncExecution(self.context, settings=self.settings) as execution:
-            yield from execution.run(plan, source=self.source)
-
-    def __aiter__(self) -> AsyncGenerator[T, None]:
+    def __aiter__(self) -> AsyncGenerator[T, None]:  # noqa: PYI058
         """
         Asynchronously runs the pipeline with its context and execution settings.
 
-        Each iteration creates a fresh one-shot execution that owns the run's
-        resources for the lifetime of the returned async iterator.
+        Each iteration is a fresh run that owns its resources for the lifetime of
+        the returned async iterator.
 
         Yields:
 
             The items produced at the pipeline's default output.
 
         """
-
-        async def _run() -> AsyncGenerator[T, None]:
-            plan = build_execution_plan(self.workflow)
-            execution = AsyncExecution(self.context, settings=self.settings)
-
-            async with execution:
-                stream = await execution.arun(plan, source=self.source)
-
-                # An abandoned stream must close before the execution exits.
-                async with maybe_aclosing(stream) as items:
-                    async for item in items:
-                        yield item
-
-        return _run()
+        return arun_pipeline(self, dispatcher)
 
     def first(self, default: T | MissingType = MISSING) -> T:
         """

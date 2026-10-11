@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Return-kind inference diagnostics tests (Phase 4).
+Return-kind inference diagnostics tests.
 
 gen_return_inferences yields a ReturnInference (kind + source + reason) per
 resolved return member. A successful classification names its source
@@ -18,6 +18,7 @@ from typing import Annotated, Any
 
 import pytest
 
+from riko.modules._decorators import operator
 from riko.modules._inference import gen_operator_return_kinds, gen_return_inferences
 from riko.types._sentinels import MISSING
 from riko.types.modules import InferenceSource, OperatorReturnKind
@@ -166,3 +167,11 @@ def test_every_unknown_is_actionable(pipe):
             assert inference.source is None
             assert inference.reason is not None
             assert "return annotation" in inference.reason
+
+
+def test_unclassifiable_operator_error_explains_why():
+    def pipe(items) -> Any:
+        return items
+
+    with pytest.raises(TypeError, match=r"no supported subtypes found: .*too broad"):
+        operator()(pipe)  # pyright: ignore[reportArgumentType, reportCallIssue]

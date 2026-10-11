@@ -16,7 +16,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -37,10 +37,10 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item
 
-OPTS: Opts = SourceOpts
+OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = {}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -49,13 +49,13 @@ def parser(
     _: Item, extraction: object, objconf: DynamicConf, **kwargs: object
 ) -> Iterator[dict[str, bool]]:
     """
-    Emits ``{"forever": True}`` endlessly.
+    Repeats ``{"forever": True}`` endlessly.
 
     Args:
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -82,8 +82,8 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     Args:
 
         item (Item | Items): The entry, or stream of entries. Unused.
-        conf (dict): The pipe configuration. Unused.
-        context (Context): the execution context
+        conf (dict): The module configuration. Unused.
+        context (Context): the run environment
 
     Kwargs:
 
@@ -124,7 +124,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     """
-    Emits a placeholder item endlessly.
+    Repeats a placeholder item endlessly.
 
     Takes no input and reads no configuration. The stream never ends, so bound it
     downstream with ``truncate`` or ``timeout``.
@@ -132,8 +132,8 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     Args:
 
         item (Item | Items): The entry, or stream of entries. Unused.
-        conf (dict): The pipe configuration. Unused.
-        context (Context): the execution context
+        conf (dict): The module configuration. Unused.
+        context (Context): the run environment
 
     Kwargs:
 

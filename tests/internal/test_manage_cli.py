@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tomllib
+from datetime import date, timedelta
 from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -10,7 +11,7 @@ from typing import TYPE_CHECKING
 import pytest
 from click.testing import CliRunner
 
-from riko.cli import _codegen, _import_commands, _lint
+from riko.cli import _codegen, _import_commands, _lint, _upgrade
 from riko.cli._docstyle import summary_leads_with_output
 from riko.cli.manage import manager
 
@@ -73,6 +74,88 @@ def test_codegen_mode_is_removed() -> None:
     assert result.exit_code == 2
 
 
+def _record_upgrade(
+    monkeypatch: pytest.MonkeyPatch, stamp: Path, lock_code: int = 0
+) -> list[list[str]]:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(_upgrade, "_UPGRADE_STAMP", stamp)
+
+    def call(args: list[str]) -> int:
+        calls.append(args)
+        return lock_code if args[1] == "lock" else 0
+
+    monkeypatch.setattr(_upgrade, "_uv", "uv")
+    monkeypatch.setattr(_upgrade, "call", call)
+    return calls
+
+
+SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        ([], [["uv", "lock", "--upgrade"], SYNC]),
+        (
+            ["-p", "ruff", "--package", "pyright"],
+            [
+                ["uv", "lock", "--upgrade-package=ruff", "--upgrade-package=pyright"],
+                SYNC,
+            ],
+        ),
+        (["--no-sync"], [["uv", "lock", "--upgrade"]]),
+    ],
+)
+def test_upgrade_locks_then_syncs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    args: list[str],
+    expected: list[list[str]],
+) -> None:
+    calls = _record_upgrade(monkeypatch, tmp_path / "stamp")
+    result = CliRunner().invoke(manager, ["upgrade", *args])
+    assert result.exit_code == 0
+    assert calls == expected
+
+
+def test_upgrade_skips_sync_when_lock_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    stamp = tmp_path / "stamp"
+    calls = _record_upgrade(monkeypatch, stamp, lock_code=1)
+    result = CliRunner().invoke(manager, ["upgrade"])
+    assert result.exit_code == 1
+    assert calls == [["uv", "lock", "--upgrade"]]
+    assert not stamp.exists()
+
+
+def test_upgrade_daily_runs_once_per_day(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    stamp = tmp_path / "cache" / "stamp"
+    stamp.parent.mkdir()
+    stamp.write_text((date.today() - timedelta(days=1)).isoformat())
+    calls = _record_upgrade(monkeypatch, stamp)
+
+    first = CliRunner().invoke(manager, ["upgrade", "--daily"])
+    second = CliRunner().invoke(manager, ["upgrade", "--daily"])
+
+    assert (first.exit_code, second.exit_code) == (0, 0)
+    assert calls == [["uv", "lock", "--upgrade"], SYNC]
+    assert "already upgraded today" in second.output
+
+
+@pytest.mark.parametrize("args", [["-p", "ruff"], ["--no-sync"]])
+def test_partial_upgrade_does_not_count_as_daily(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, args: list[str]
+) -> None:
+    stamp = tmp_path / "stamp"
+    _record_upgrade(monkeypatch, stamp)
+    result = CliRunner().invoke(manager, ["upgrade", *args])
+    assert result.exit_code == 0
+    assert not stamp.exists()
+
+
 @pytest.mark.parametrize(
     ("args", "expected"),
     [
@@ -116,26 +199,26 @@ def test_import_all_runs_every_check(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
     monkeypatch.setattr(
-        _lint, "_ruff_check", lambda *_, **_kw: calls.append("ruff") or 0
+        _lint, "_lint_python", lambda *_, **_kw: calls.append("ruff") or 0
     )
-    monkeypatch.setattr(_lint, "_check_rst", lambda *_: calls.append("rst") or 0)
-    monkeypatch.setattr(_lint, "_check_docs", lambda: calls.append("docs") or 0)
+    monkeypatch.setattr(_lint, "_lint_rst", lambda *_: calls.append("rst") or 0)
+    monkeypatch.setattr(_lint, "_lint_docs", lambda: calls.append("docs") or 0)
     monkeypatch.setattr(
-        _lint, "_docstring_check", lambda *_: calls.append("docstrings") or 0
+        _lint, "_lint_docstrings", lambda *_: calls.append("docstrings") or 0
     )
-    monkeypatch.setattr(
-        _lint, "_check_actions", lambda *_: calls.append("actions") or 0
-    )
-    monkeypatch.setattr(_lint, "_check_yaml", lambda *_: calls.append("yaml") or 0)
+    monkeypatch.setattr(_lint, "_lint_actions", lambda *_: calls.append("actions") or 0)
+    monkeypatch.setattr(_lint, "_lint_yaml", lambda *_: calls.append("yaml") or 0)
     monkeypatch.setattr(
         _lint, "run_import_checks", lambda *_: calls.append("imports") or 0
     )
-    monkeypatch.setattr(_lint, "_check_types", lambda *_: calls.append("types") or 0)
+    monkeypatch.setattr(_lint, "_lint_types", lambda *_: calls.append("types") or 0)
     monkeypatch.setattr(
         _lint, "_verify_types", lambda *_: calls.append("verify-types") or 0
     )
     monkeypatch.setattr(_lint, "_twine_check", lambda: calls.append("dist") or 0)
-    monkeypatch.setattr(_lint, "_pylint_check", lambda *_: calls.append("strict") or 0)
+    monkeypatch.setattr(
+        _lint, "_lint_python_strict", lambda *_: calls.append("strict") or 0
+    )
 
 
 @pytest.mark.parametrize(

@@ -18,7 +18,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -39,9 +39,9 @@ if TYPE_CHECKING:
 
     from riko.base._locations import AnyLocation
     from riko.coercion._configs import GeolocateObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
 
-OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
+OPTS: DecorationOptions = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {"type": "street_address"}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -58,7 +58,7 @@ def parser(
             address, or ``"lat,lon"`` pair.
 
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `type`.
+        objconf: The module configuration, containing `type`.
 
     Returns:
 
@@ -92,16 +92,16 @@ def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             type (str): The lookup to perform, one of "currency", "street_address",
                 "ip_address", "coordinates" (default: "street_address").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute holding the value to resolve
+        field (str): Item field holding the value to resolve
             (default: "content").
 
         assign (str): Field the location is assigned to. Ignored when ``emit``
@@ -151,16 +151,16 @@ def pipe(*args: Any, **kwargs: object) -> AnyLocation:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             type (str): The lookup to perform, one of "currency", "street_address",
                 "ip_address", "coordinates" (default: "street_address").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute holding the value to resolve
+        field (str): Item field holding the value to resolve
             (default: "content").
 
         assign (str): Field the location is assigned to. Ignored when ``emit``

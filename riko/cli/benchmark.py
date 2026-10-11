@@ -15,7 +15,7 @@ from riko.bado._backend import async_sleep, isasync
 from riko.bado._backend import run as async_run
 from riko.bado.itertools import async_map
 from riko.base._paths import get_path
-from riko.execution._pools import get_chunksize, get_worker_cnt
+from riko.execution._pools import get_worker_cnt
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
 from riko.runtime._normalize import normalize_workflow
@@ -88,6 +88,28 @@ def build_fanin() -> Workflow:
 fanin: Workflow = build_fanin()
 
 
+def get_chunksize(length: int, workers: int) -> int:
+    """
+    Computes items per worker task, targeting four batches per worker.
+
+    Args:
+
+        length: The number of items to spread across the pool.
+        workers: The pool size.
+
+    Returns:
+
+        The batch size, never less than one.
+
+    Examples:
+
+        >>> get_chunksize(80, 4), get_chunksize(3, 4)
+        (5, 1)
+
+    """
+    return (length // (workers * 4)) or 1
+
+
 def baseline_sync() -> list[None]:
     return list(map(sleep, iterable))
 
@@ -106,12 +128,12 @@ def baseline_procs() -> list[None]:
     return list(pool.imap_unordered(sleep, iterable, chunksize=chunksize))
 
 
-def sync_pipeline() -> ParserMaterializedOutput:
+def sync_module() -> ParserMaterializedOutput:
     pipes = (fetch(conf=conf) for conf in confs)
     return list(chain.from_iterable(pipes))
 
 
-def sync_pipe() -> Items:
+def sync_pipeline() -> Items:
     results: list[Item] = []
 
     for conf in confs:
@@ -133,11 +155,11 @@ async def delayed_fetch(conf: FetchConf) -> SyncProcessorWrapperOutput:
     return await async_fetch({}, conf)
 
 
-async def async_pipeline() -> list[SyncProcessorWrapperOutput]:
+async def async_module() -> list[SyncProcessorWrapperOutput]:
     return await async_map(delayed_fetch, confs)
 
 
-async def async_pipe() -> Items:
+async def async_pipeline() -> Items:
     results: list[Item] = []
 
     for conf in confs:
@@ -193,13 +215,13 @@ def main() -> None:
         "baseline_sync",
         "baseline_threads",
         "baseline_procs",
+        "sync_module",
         "sync_pipeline",
-        "sync_pipe",
         "sync_workflow",
     ]
 
     if isasync:
-        async_tests = [baseline_async, async_pipeline, async_pipe, async_workflow]
+        async_tests = [baseline_async, async_module, async_pipeline, async_workflow]
         combined_tests = sync_tests + [f.__name__ for f in async_tests]
     else:
         async_tests = []

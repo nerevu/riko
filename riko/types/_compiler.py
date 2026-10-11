@@ -11,27 +11,33 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Literal, NewType, NotRequired, Required, TypedDict
 
 if TYPE_CHECKING:
-    from ._module_ids import LoopableModuleId, ModuleId
-    from .modules import AnyModuleRawConf, Conf, ModuleOptions
+    from ._module_ids import ModuleId
+    from .modules import AnyModuleRawConf, CallOptions, Conf
 
 
 PipeId = NewType("PipeId", str)
 CountValues = Literal["first", "all"]
 
+type ModuleOptionValues = bool | str | CountValues
+type PipeDefLike = PipeDef | Mapping[str, object]
+
+
+class Embed(TypedDict):
+    """
+    A loop's embedded module: the module name run once per parent item.
+
+    ``conf`` is the configuration that module parses.
+
+    """
+
+    id: NotRequired[str]
+    conf: Conf
+    name: str
+
 
 class EmbedRef(TypedDict):
-    id: str
     type: ModuleId | PipeId | Literal["output"]
-
-
-class LoopableEmbedRef(TypedDict):
     id: str
-    type: LoopableModuleId | PipeId
-
-
-class LayoutItem(TypedDict):
-    id: str
-    xy: tuple[int, int]
 
 
 class PipeModule(EmbedRef, total=False):
@@ -40,10 +46,7 @@ class PipeModule(EmbedRef, total=False):
     assign: str
     field: str
     count: CountValues
-
-
-class LoopModule(PipeModule, total=False):
-    embed: Required[LoopableEmbedRef]
+    embed: EmbedRef
 
 
 class EmbedKwargs(TypedDict, total=False):
@@ -52,73 +55,6 @@ class EmbedKwargs(TypedDict, total=False):
     conf: Conf
     field: str
     emit: bool
-
-
-class TypeCount(TypedDict):
-    _count: str
-    _type: str
-
-
-class AttrGroup(TypedDict, total=False):
-    content: TypeCount
-    isPermaLink: TypeCount
-    height: TypeCount
-    type: TypeCount
-    url: TypeCount
-    width: TypeCount
-    role: TypeCount
-    day: TypeCount
-    day_of_week: TypeCount
-    hour: TypeCount
-    minute: TypeCount
-    month: TypeCount
-    second: TypeCount
-    timezone: TypeCount
-    utime: TypeCount
-    year: TypeCount
-    permalink: TypeCount
-    value: TypeCount
-
-
-class FieldWithAttr(TypedDict):
-    _type: str
-    _attr: NotRequired[AttrGroup]
-    _count: NotRequired[str]
-
-
-ItemAttr = TypedDict(
-    "ItemAttr",
-    {
-        "category": TypeCount,
-        "description": TypeCount | FieldWithAttr,
-        "guid": FieldWithAttr,
-        "link": TypeCount,
-        "lostattribute": TypeCount,
-        "media:content": FieldWithAttr,
-        "media:credits": FieldWithAttr,
-        "media:text": FieldWithAttr,
-        "media:thumbnail": FieldWithAttr,
-        "newtitle": TypeCount,
-        "pubDate": TypeCount,
-        "source": TypeCount,
-        "title": TypeCount,
-        "y:id": FieldWithAttr,
-        "y:published": FieldWithAttr,
-        "y:title": TypeCount,
-    },
-)
-
-
-class TerminalData(TypedDict):
-    _type: str
-    _attr: NotRequired[ItemAttr]
-    _count: NotRequired[str]
-
-
-class TerminalDataEntry(TypedDict):
-    id: str
-    moduleid: str
-    data: TerminalData
 
 
 class WireEndpoint(TypedDict):
@@ -141,44 +77,38 @@ class PipeDef(TypedDict):
 
     modules: list[PipeModule]
     wires: list[Wire]
-    layout: NotRequired[list[LayoutItem]]
-    terminaldata: NotRequired[list[TerminalDataEntry]]
+    layout: NotRequired[Sequence[Mapping[str, object]]]
+    terminaldata: NotRequired[Sequence[Mapping[str, object]]]
 
 
-type PipeDefLike = PipeDef | Mapping[str, object]
-type ModuleOptionValues = bool | str | CountValues
-
-
-class DagModule(TypedDict):
-    id: NotRequired[str]
+class DagModule(TypedDict, total=False):
+    name: ModuleId | PipeId
     type: ModuleId | PipeId
-    conf: NotRequired[Conf]
-    options: NotRequired[ModuleOptions]
+    id: str
+    conf: Conf
+    options: CallOptions
+    label: str
+    embed: Embed
+    resources: str | Sequence[str] | Mapping[str, str]
 
 
 class PipeDag(TypedDict):
     """
     A bare-bones DAG mapping that ``parse_dag`` expands into a ``Workflow``.
 
-    ``wires`` is optional (omit for a linear chain in module listing order) and
-    holds ``(source_id, target_id)`` entries, optionally followed by the port the
-    wire enters — so a fan-in operator such as ``union``/``join`` is expressible
-    as ``("b", "union-1", "in:1")``. A module ``id`` is also optional and defaults
-    to ``sw-{n}`` (1-based listing order) — practical for the concise wireless
-    form; supply ids when ``wires`` reference them. The expansion adds no terminal
-    output node: the workflow's default output is its single leaf.
+    ``wires`` is optional (omit for a linear chain in module listing order) and holds
+    ``(source_id, target_id)`` entries, optionally followed by the port the wire enters.
+    This makes a fan-in operator such as ``union``/``join`` expressible as
+    ``("b", "union-1", "in:1")``.
+
+    A module ``id`` is also optional and defaults to ``sw-{n}`` (1-based listing order).
+    This is practical for the concise wireless form. Supply ids when ``wires`` reference
+    them. The expansion adds no ``PipeDef``-style ``output`` node: the workflow's
+    default output is its single leaf.
     """
 
     modules: list[DagModule]
     wires: NotRequired[Sequence[Sequence[str]]]
 
 
-__all__ = [
-    "DagModule",
-    "LoopModule",
-    "PipeDag",
-    "PipeDef",
-    "PipeDefLike",
-    "PipeModule",
-    "Wire",
-]
+__all__ = ["DagModule", "PipeDag", "PipeDef", "PipeDefLike", "PipeModule", "Wire"]

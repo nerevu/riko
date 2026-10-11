@@ -32,7 +32,7 @@ def test_capability_flags_track_installed_libs():
 
 
 def test_finance_targets_track_csv2ofx():
-    """``ofx``/``qif`` export targets appear only when the finance extra is present."""
+    """``ofx``/``qif`` export formats appear only when the finance extra is present."""
     finance_targets = {"ofx", "qif"}
     targets = set(list_formats())
 

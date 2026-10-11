@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Builds a single RSS item from configured attributes.
+Builds a single RSS item from configured fields.
 
 Maps friendly conf names such as ``title`` and ``mediaThumbURL`` onto their
 Yahoo style RSS equivalents, nesting the dotted targets. Use it to create an
@@ -20,7 +20,7 @@ Examples:
 Attributes:
 
     RSS: Maps each conf key onto its RSS field, dots marking sub-levels.
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -43,10 +43,10 @@ if TYPE_CHECKING:
 
     from riko.coercion._configs import RssItemBuilderObjconf
     from riko.types._collections import RikoValue
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item
 
-OPTS: Opts = {"ftype": BasicCastType.NONE}
+OPTS: DecorationOptions = {"ftype": BasicCastType.NONE}
 DEFAULTS: Defaults = {}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -76,13 +76,13 @@ def parser(
     _: Item, extraction: object, objconf: RssItemBuilderObjconf, **kwargs: object
 ) -> DotDict[RikoValue]:
     """
-    Builds an RSS item from the configured attributes.
+    Builds an RSS item from the configured fields.
 
     Args:
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, supplying the RSS attributes.
+        objconf: The module configuration, supplying the RSS item fields.
 
     Returns:
 
@@ -110,7 +110,7 @@ def async_pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
     Args:
 
         item (Item | Items): The entry, or stream of entries, supplying values.
-        conf (dict): The pipe configuration. Every key is optional, and each
+        conf (dict): The module configuration. Every key is optional, and each
             value is either a literal or a ``{"subkey": ...}`` reference
             reading it from ``item``.
 
@@ -128,7 +128,7 @@ def async_pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
             pubDate (str): Maps to ``pubDate`` (default: the current time).
             title (str): Maps to ``y:title``.
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -173,7 +173,7 @@ def pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
     Args:
 
         item (Item | Items): The entry, or stream of entries, supplying values.
-        conf (dict): The pipe configuration. Every key is optional, and each
+        conf (dict): The module configuration. Every key is optional, and each
             value is either a literal or a ``{"subkey": ...}`` reference
             reading it from ``item``.
 
@@ -191,7 +191,7 @@ def pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
             pubDate (str): Maps to ``pubDate`` (default: the current time).
             title (str): Maps to ``y:title``.
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

@@ -2,7 +2,7 @@
 """
 Finance-extra export tests (``csv2ofx``).
 
-The ``ofx``/``qif`` export targets are registered only when the ``finance``
+The ``ofx``/``qif`` export formats are available only when the ``finance``
 extra is installed, so these carry ``@pytest.mark.finance`` and are auto-skipped
 when it is absent (see the collection hook in ``conftest.py``).
 """
@@ -35,7 +35,7 @@ TRANSACTIONS = [
 
 
 def test_export_ofx_serializes_transactions():
-    """``export(..., Formats.OFX)`` emits an OFX document, one txn per record."""
+    """``export(..., Formats.OFX)`` serializes to an OFX document, one txn per item."""
     ofx = "".join(export(TRANSACTIONS, Formats.OFX))
     assert "<OFX>" in ofx
     assert ofx.count("<STMTTRN>") == len(TRANSACTIONS)

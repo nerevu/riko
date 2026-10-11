@@ -12,21 +12,22 @@ from riko.base._paths import ROOT_DIR
 from riko.definitions._context import Context
 from riko.execution._execution import SyncExecution
 from riko.runtime._execution_plan import build_execution_plan
+from riko.runtime._resolver import dispatcher
 from riko.runtime._serialize import parse_document
 from tests import async_test
 
 
 class TestExamples:
-    def _get_pipeline(self, pipe_name):
+    def _run_example(self, pipe_name):
         module = import_module(f"examples.{pipe_name}")
-        pipeline = module.pipe(test=True)
-        return pipeline
+        items = module.pipe(test=True)
+        return items
 
     @pytest.mark.timeout(150)
     def test_kazeeki(self):
         """Tests the kazeeki pipeline."""
         pipe_name = "kazeeki"
-        pipeline = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         example = {
             "description": (
                 "We are looking for freelancers ( individuals and companies ) "
@@ -68,10 +69,10 @@ class TestExamples:
         }
 
         expected = 180
-        length = len(pipeline)
+        length = len(items)
         msg = f"Pipeline {pipe_name} has {length=}, but {expected=}"
         assert length == expected, msg
-        last = pipeline[-1]
+        last = items[-1]
 
         for k, v in example.items():
             got = last[k]
@@ -81,7 +82,7 @@ class TestExamples:
     def test_gigs(self):
         """Tests the gigs pipeline."""
         pipe_name = "gigs"
-        pipeline = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
 
         example = {
             "description": (
@@ -118,9 +119,9 @@ class TestExamples:
             "y:title": "Educational Android App",
         }
 
-        length = len(pipeline)
+        length = len(items)
         assert length == 49, f"Pipeline {pipe_name} has length {length}, not 49"
-        assert example == pipeline[-1]
+        assert example == items[-1]
 
     @pytest.mark.parametrize(
         ("pipe_name", "expected"),
@@ -138,11 +139,11 @@ class TestExamples:
         ],
     )
     def test_simple_pipeline(self, pipe_name, expected):
-        """Each single-item example pipeline yields exactly its expected record."""
-        pipeline = self._get_pipeline(pipe_name)
-        length = len(pipeline)
+        """Each single-item example pipeline yields exactly its expected item."""
+        items = self._run_example(pipe_name)
+        length = len(items)
         assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
-        assert pipeline[-1] == expected
+        assert items[-1] == expected
 
     @async_test
     @pytest.mark.parametrize(
@@ -176,7 +177,7 @@ class TestExamples:
         ],
     )
     async def test_async_matches_sync(self, pipe_name):
-        """Each example's async_pipe yields the same records as its sync pipe."""
+        """Each example's async_pipe yields the same items as its sync pipe."""
         module = import_module(f"examples.{pipe_name}")
         sync_result = list(module.pipe(test=True))
         async_stream = module.async_pipe(test=True)
@@ -198,14 +199,14 @@ class TestExamples:
             ("pipe_4f26297843f4952fad920af5990ddc50", [{"date": "December 03, 2014"}]),
         ],
     )
-    def test_compiled_pipe(self, pipe_name, expected):
+    def test_example_document_runs(self, pipe_name, expected):
         """Runs each example workflow document and checks the stream it produces."""
         document = ROOT_DIR / "examples" / "workflows" / f"{pipe_name}.json"
         workflow = parse_document(document.read_text())
         items = []
 
         with SyncExecution(context=Context(test=True)) as execution:
-            items = list(execution.run(build_execution_plan(workflow)))
+            items = list(execution.run(build_execution_plan(workflow, dispatcher)))
 
         assert items == expected
 

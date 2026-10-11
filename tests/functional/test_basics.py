@@ -96,7 +96,7 @@ def _assert_kazeeki(item: Mapping, example: Mapping, content: tuple[str, str]) -
 
 
 def _document(pipe_name: str) -> Path | None:
-    """Supplies the committed workflow document for a pipeline, when it has one."""
+    """Supplies the committed workflow document for a ``pipe_<id>`` name, if any."""
     path = TESTS_DIR / "workflows" / f"{pipe_name}.json"
     return path if path.exists() else None
 
@@ -138,7 +138,7 @@ def _declared_inputs(workflow: Workflow) -> list[tuple[str, str, str, str, str]]
 
 
 def _load_workflow(pipe_name: str) -> Workflow:
-    """Parses the workflow document committed for a pipeline."""
+    """Parses the workflow document committed for a ``pipe_<id>`` name."""
     document = _document(pipe_name)
     assert document is not None, f"{pipe_name} has no workflow document"
     return parse_document(document.read_text())
@@ -151,7 +151,7 @@ def _check_results(
     compared = Decimal(len(items)).compare(Decimal(value))
     assert pydeps, f"Expected to find dependencies for {pipe_name}, but got none."
     actual, desired = COMPARISONS[compared], COMPARISONS[_check]
-    msg = f"pipeline length {actual} {value}, but expected {desired} {value}. Got "
+    msg = f"output length {actual} {value}, but expected {desired} {value}. Got "
 
     try:
         first = items[0]
@@ -216,9 +216,9 @@ def test_fetchtable_reads_sqlite_fixture(tmp_path, db_conn):
 
 
 class TestBasics:
-    """Test a few sample pipelines."""
+    """Test a few sample workflows."""
 
-    def _get_pipeline(
+    def _run_example(
         self, pipe_name: str, file_path: Path | None = None
     ) -> ParserMaterializedOutput:
         # prefer the workflow document; fall back to the hand-written module
@@ -228,14 +228,14 @@ class TestBasics:
             stream = dispatcher.require(pipe_name)(context=self.context)
             items = cast("ParserMaterializedOutput", list(listize(stream)))
         else:
-            workflow = workflow_resolver.load_definition(pipe_name, directory=file_path)
+            workflow = workflow_resolver.load_workflow(pipe_name, directory=file_path)
 
             with SyncExecution(context=self.context) as execution:
-                items = list(execution.run(build_execution_plan(workflow)))
+                items = list(execution.run(build_execution_plan(workflow, dispatcher)))
 
         return items
 
-    def _aget_pipeline(self, pipe_name: str) -> AsyncStream:
+    def _async_run_example(self, pipe_name: str) -> AsyncStream:
         pipe = dispatcher.require(pipe_name, True)
         assert is_subpipe(pipe)
         return pipe(context=self.context)
@@ -259,22 +259,22 @@ class TestBasics:
         _check_results(pydeps, items, pipe_name, value=value, check=check)
 
     def setup_method(self):
-        """Compile common subpipe."""
+        """Creates the shared test ``Context``."""
         self.context = Context(test=True)
 
     def test_feeddiscovery(self):
         """Load feed discovery with fetch-feed inside an emit-all loop."""
         pipe_name = "pipe_HrX5bjkv3BGEp9eSy6ky6g"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 15, 0)
         item = items[0]
         assert is_mapping(item)
         assert item.get("link") == "http://sz.de/1.2104731"
 
     def test_fetchsitefeed(self):
-        """Loads a pipeline containing a fetchsitefeed module."""
+        """Loads a workflow containing a fetchsitefeed module."""
         pipe_name = "pipe_551507461cbcb19a828165daad5fe007"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 1, 1)
         item = items[0]
         assert is_mapping(item)
@@ -282,9 +282,9 @@ class TestBasics:
         assert item.get("summary")
 
     def test_loops_1(self):
-        """Loads a pipeline containing a loop."""
+        """Loads a workflow containing a loop."""
         pipe_name = "pipe_125e9fe8bb5f84526d21bebfec3ad116"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 1, 0)
 
         item = items[0]
@@ -297,35 +297,35 @@ class TestBasics:
         assert info.get("user_view_type") == "public"
 
     def test_urlbuilder(self):
-        """Loads the RTW URL Builder test pipeline."""
+        """Loads the RTW URL Builder test workflow."""
         pipe_name = "pipe_e519dd393f943315f7e4128d19db2eac"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 63, 0)
         item = items[0]
         assert is_mapping(item)
         assert "The 6 Best Enterprise Data Modeling Tools" in str(item.get("title"))
 
     def test_input_override(self):
-        """Overrides an offline input->itembuilder pipeline via Context.inputs."""
-        self.context = self.context.augment(inputs={"textinput1": "IBM"})
+        """Overrides an offline input->itembuilder workflow via Context.inputs."""
+        self.context = self.context.replace(inputs={"textinput1": "IBM"})
         pipe_name = "pipe_1LNyRuNS3BGdkTKaAsqenA"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 1, 0)
         assert items == [{"symbol": "IBM"}]
 
     def test_kazeeki1(self):
-        """Loads the kazeeki simple test fetchdata pipeline."""
+        """Loads the kazeeki simple test fetchdata workflow."""
         pipe_name = "pipe_kazeeki1"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 5, 0)
         item = items[0]
         assert is_mapping(item)
         _assert_kazeeki(item, KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT)
 
     def test_kazeeki2(self):
-        """Loads the kazeeki simple test itembuilder pipeline."""
+        """Loads the kazeeki simple test itembuilder workflow."""
         pipe_name = "pipe_kazeeki2"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 1, 0)
         item = items[0]
         assert is_mapping(item)
@@ -333,9 +333,9 @@ class TestBasics:
 
     @async_test
     async def test_async_kazeeki1(self):
-        """Loads the async kazeeki simple test fetchdata pipeline."""
+        """Loads the async kazeeki simple test fetchdata workflow."""
         pipe_name = "pipe_async_kazeeki1"
-        stream = self._aget_pipeline(pipe_name)
+        stream = self._async_run_example(pipe_name)
         items = [item async for item in stream]
         await self._aload(items, pipe_name, 5, 0)
         item = items[0]
@@ -344,9 +344,9 @@ class TestBasics:
 
     @async_test
     async def test_async_kazeeki2(self):
-        """Loads the async kazeeki simple test itembuilder pipeline."""
+        """Loads the async kazeeki simple test itembuilder workflow."""
         pipe_name = "pipe_async_kazeeki2"
-        stream = self._aget_pipeline(pipe_name)
+        stream = self._async_run_example(pipe_name)
         items = [item async for item in stream]
         await self._aload(items, pipe_name, 1, 0)
         item = items[0]
@@ -354,9 +354,9 @@ class TestBasics:
         _assert_kazeeki(item, KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
 
     def test_kazeeki_full(self):
-        """Loads the kazeeki simple test pipeline."""
+        """Loads the kazeeki simple test workflow."""
         pipe_name = "pipe_kazeeki_full"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 5, 0)
 
         example = {
@@ -431,16 +431,16 @@ class TestBasics:
     def test_wired_count_truncate_output(self):
         """Truncates a 15-item feed to a wired count."""
         pipe_name = "pipe_404411a8d22104920f3fc1f428f33642"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 3, 0)
         item = items[0]
         assert is_mapping(item)
         assert item.get("title") == "Markitekt - Architects of Marketing"
 
     def test_simplest(self):
-        """Loads the RTW simple test pipeline."""
+        """Loads the RTW simple test workflow."""
         pipe_name = "pipe_2de0e4517ed76082dcddf66f7b218057"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 17, 0)
         item = items[0]
         assert is_mapping(item)
@@ -450,9 +450,9 @@ class TestBasics:
 
     @pytest.mark.perf
     def test_feed(self):
-        """Loads a simple test pipeline."""
+        """Loads a simple test workflow."""
         pipe_name = "pipe_testpipe1"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 4, 0)
 
         for item in items:
@@ -462,9 +462,9 @@ class TestBasics:
             assert "the" in summary
 
     def test_forever(self):
-        """Loads a pipeline that uses forever driver source, bounded by truncate."""
+        """Loads a workflow that uses forever driver source, bounded by truncate."""
         pipe_name = "pipe_forever"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 3, 0)
 
         for item in items:
@@ -472,12 +472,12 @@ class TestBasics:
 
     def test_filtered_multiple_sources(self):
         """
-        Loads a pipeline that filters multiple sources pipelines.
+        Loads a workflow that filters multiple source workflows.
 
-        Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057.
+        Note: uses the stored workflow pipe_2de0e4517ed76082dcddf66f7b218057.
         """
         pipe_name = "pipe_c1cfa58f96243cea6ff50a12fc50c984"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 18, 0)
         item = items[0]
         assert is_mapping(item)
@@ -487,9 +487,9 @@ class TestBasics:
 
     @pytest.mark.perf
     def test_european_performance_cars(self):
-        """Loads a pipeline containing a sort."""
+        """Loads a workflow containing a sort."""
         pipe_name = "pipe_8NMkiTW32xGvMbDKruymrA"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 36, 0)
         first, last = items[0], items[-1]
         assert is_mapping(first)
@@ -522,9 +522,9 @@ class TestBasics:
 
     # todo: need tests with single and mult-part key
     def test_reverse_truncate(self):
-        """Loads a pipeline containing a reverse and truncate."""
+        """Loads a workflow containing a reverse and truncate."""
         pipe_name = "pipe_58a53262da5a095fe7a0d6d905cc4db6"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 3, 0)
         prev_title = None
 
@@ -536,9 +536,9 @@ class TestBasics:
             prev_title = title
 
     def test_tail(self):
-        """Loads a pipeline containing a tail."""
+        """Loads a workflow containing a tail."""
         pipe_name = "pipe_06c4c44316efb0f5f16e4e7fa4589ba2"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 5, 0)
         item = items[0]
         assert is_mapping(item)
@@ -547,9 +547,9 @@ class TestBasics:
         assert "American woman is being held hostage" in title
 
     def test_itembuilder(self):
-        """Loads a pipeline containing an itembuilder."""
+        """Loads a workflow containing an itembuilder."""
         pipe_name = "pipe_b96287458de001ad62a637095df33ad5"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 2, 0)
 
         expected = [
@@ -565,9 +565,9 @@ class TestBasics:
             assert item == expected[pos]
 
     def test_rssitembuilder(self):
-        """Loads a pipeline containing an rssitembuilder."""
+        """Loads a workflow containing an rssitembuilder."""
         pipe_name = "pipe_1166de33b0ea6936d96808717355beaa"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 3, 0)
 
         expected = [
@@ -606,9 +606,9 @@ class TestBasics:
                 assert item.get(k) == v, f"expected {v=} at {pos=}, {k=}. Got\n{item=}"
 
     def test_csv(self):
-        """Loads a pipeline containing a csv source."""
+        """Loads a workflow containing a csv source."""
         pipe_name = "pipe_UuvYtuMe3hGDsmRgPm7D0g"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 1, 0)
 
         description = (
@@ -659,11 +659,11 @@ class TestBasics:
 
     @pytest.mark.xfail(
         strict=True,
-        reason="the migrated pipeline declares no inputs, so describing what a "
-        "pipeline asks for is still pending",
+        reason="the migrated workflow declares no inputs, so describing what a "
+        "workflow asks for is still pending",
     )
     def test_describe_input(self):
-        """Reads a pipeline's input requirements from what it declares."""
+        """Reads a workflow's input declarations from what it declares."""
         workflow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
         expected = [
             ("", "dateinput1", "dateinput1", "datetime", "10/14/2010"),
@@ -683,18 +683,18 @@ class TestBasics:
         assert _declared_inputs(workflow) == expected
 
     def test_describe_dependencies(self):
-        """Reads a pipeline's module dependencies from its workflow document."""
+        """Reads a workflow's module dependencies from its workflow document."""
         workflow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
         assert _workflow_dependencies(workflow) == ["input", "rssitembuilder"]
 
     def test_union_just_other(self):
         """
-        Loads a pipeline containing a union with the first input unconnected.
+        Loads a workflow containing a union with the first input unconnected.
 
         Also tests for empty source string and reference to 'y:id.value'.
         """
         pipe_name = "pipe_6e30c269a69baf92cd420900b0645f88"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 24, 0)
 
         first, last = items[0], items[-1]
@@ -712,9 +712,9 @@ class TestBasics:
             assert ("210" in str(link)) or ("Poroschenko:" in str(title)), msg
 
     def test_stringtokenizer(self):
-        """Loads a pipeline containing a stringtokenizer."""
+        """Loads a workflow containing a stringtokenizer."""
         pipe_name = "pipe_975789b47f17690a21e89b10a702bcbd"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 2, 0)
         contains = [{"title": "#hashtags"}, {"title": "#with"}]
 
@@ -729,8 +729,8 @@ class TestBasics:
         ],
     )
     def test_fetchpage(self, pipe_name):
-        """Loads a pipeline containing a fetchpage module (plain and within a loop)."""
-        items = self._get_pipeline(pipe_name)
+        """Loads a workflow containing a fetchpage module (plain and within a loop)."""
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 8, 0)
         item = items[2]
         assert is_mapping(item)
@@ -741,9 +741,9 @@ class TestBasics:
         reason="the execution refuses split nodes until streaming fan-out lands",
     )
     def test_split(self):
-        """Loads an example pipeline containing a split module."""
+        """Loads an example workflow containing a split module."""
         pipe_name = "pipe_QMrlL_FS3BGlpwryODY80A"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 7, 0)
         item = items[0]
         assert is_mapping(item)
@@ -756,9 +756,9 @@ class TestBasics:
         reason="the execution refuses split nodes until streaming fan-out lands",
     )
     def test_simplemath_1(self):
-        """Loads a pipeline containing simplemath."""
+        """Loads a workflow containing simplemath."""
         pipe_name = "pipe_zKJifuNS3BGLRQK_GsevXg"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 6, 0)
         item = items[0]
         assert is_mapping(item)
@@ -767,18 +767,18 @@ class TestBasics:
         assert title == "Open researcher open course"
 
     def test_twitter_caption_search(self):
-        """Compile and run the Twitter Caption Search pipeline."""
+        """Runs the Twitter Caption Search workflow."""
         pipe_name = "pipe_eb3e27f8f1841835fdfd279cd96ff9d8"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 3, 0)
         item = items[0]
         assert is_mapping(item)
         assert item.get("ctime") == "&time=00:01:41&time="
 
     def test_loop_example(self):
-        """Loads the loop example pipeline."""
+        """Loads the loop example workflow."""
         pipe_name = "pipe_dAI_R_FS3BG6fTKsAsqenA"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 1, 0)
         expected = (
             "THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ "
@@ -791,13 +791,13 @@ class TestBasics:
         assert item.get("pubDate")
 
     def test_loop_subpipe_embed(self):
-        """Runs a named workflow embedded in a loop once per parent item."""
-        items = self._get_pipeline("pipe_loop_subpipe")
+        """Runs a stored workflow embedded in a loop once per parent item."""
+        items = self._run_example("pipe_loop_subpipe")
         assert items == [{"title": "hello", "strconcat": "hello!"}]
 
     def test_loop_count_all_assign(self):
         """Keeps one copy of the parent per embed result when assigning all."""
-        items = self._get_pipeline("pipe_loop_assign")
+        items = self._run_example("pipe_loop_assign")
         assert items == [
             {"title": "a b c", "tokens": {"content": "a"}},
             {"title": "a b c", "tokens": {"content": "b"}},
@@ -805,9 +805,9 @@ class TestBasics:
         ]
 
     def test_namespaceless_xml_input(self):
-        """Loads a pipeline containing deep xml source with no namespace."""
+        """Loads a workflow containing deep xml source with no namespace."""
         pipe_name = "pipe_402e244d09a4146cd80421c6628eb6d9"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 5, 1)
         contains = [
             "Gower to Anglesey",
@@ -822,9 +822,9 @@ class TestBasics:
             assert item.get("title") in contains
 
     def test_urlbuilder_loop(self):
-        """Loads a pipeline containing a URL builder in a loop (offline)."""
+        """Loads a workflow containing a URL builder in a loop (offline)."""
         pipe_name = "pipe_e65397e116d7754da0dd23425f1f0af1"
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 2, 0)
 
         chart_url = (
@@ -847,10 +847,10 @@ class TestBasics:
 
     @pytest.mark.perf
     def test_createrss(self):
-        """Loads a pipeline containing rssitembuilder."""
+        """Loads a workflow containing rssitembuilder."""
         pipe_name = "pipe_a08134746e30a6dd3a7cb3c0cf098692"
 
-        items = self._get_pipeline(pipe_name)
+        items = self._run_example(pipe_name)
         self._load(items, pipe_name, 94, 0)
         url = "i.cdn.turner.com/cnn/.e/img/3.0/global/header/intl/CNNi_Logo_new.png"
 
@@ -879,13 +879,13 @@ class TestBasics:
         """
         Exercise nested loops, inputs, assignments, and references.
 
-        The pipeline covers a location builder, submodule inputs, nested JSON
+        The workflow covers a location builder, embedded-module inputs, nested JSON
         lists, partial loop assignment, and multi-part-reference regexes.
         """
         pipe_name = "pipe_b3d43c00f9e1145ff522fb71ea743e99"
 
         with pytest.raises(UnsupportedModuleError, match=r"\blocationbuilder\b"):
-            self._get_pipeline(pipe_name)
+            self._run_example(pipe_name)
             # self._load(items, pipe_name, 63, 0)
             # contains = "Hywel Francis (University of Wales, Swansea (UWS))"
             #
@@ -898,4 +898,4 @@ class TestBasics:
         pipe_name = "pipe_93abb8500bd41d56a37e8885094c8d10"
 
         with pytest.raises(UnsupportedModuleError, match=r"\btermextractor\b"):
-            self._get_pipeline(pipe_name)
+            self._run_example(pipe_name)

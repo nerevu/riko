@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-94",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-169",
                 "port": "in:OTHER"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-169",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-232",
                 "port": "in:count"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-224",
                 "port": "out"
@@ -30,10 +31,10 @@
             "target": {
                 "node": "sw-250",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-242",
                 "port": "out"
@@ -41,10 +42,10 @@
             "target": {
                 "node": "sw-243",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-243",
                 "port": "out"
@@ -52,10 +53,10 @@
             "target": {
                 "node": "sw-169",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-243",
                 "port": "out"
@@ -63,10 +64,10 @@
             "target": {
                 "node": "sw-94",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-250",
                 "port": "out"
@@ -74,10 +75,10 @@
             "target": {
                 "node": "sw-232",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-250",
                 "port": "out:1"
@@ -85,8 +86,7 @@
             "target": {
                 "node": "sw-242",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -101,12 +101,12 @@
                     "type": "float"
                 }
             },
+            "family": "module",
             "id": "sw-169",
             "name": "simplemath",
             "options": {
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-224": {
             "conf": {
@@ -115,9 +115,9 @@
                     "value": "file://riko/data/TheEdTechie.xml"
                 }
             },
+            "family": "module",
             "id": "sw-224",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         },
         "sw-232": {
             "conf": {
@@ -126,27 +126,27 @@
                     "type": "float"
                 }
             },
+            "family": "module",
             "id": "sw-232",
-            "name": "truncate",
-            "type": "module"
+            "name": "truncate"
         },
         "sw-242": {
+            "family": "module",
             "id": "sw-242",
             "name": "count",
             "options": {
                 "assign": "content"
-            },
-            "type": "module"
+            }
         },
         "sw-243": {
+            "family": "module",
             "id": "sw-243",
-            "name": "split",
-            "type": "module"
+            "name": "split"
         },
         "sw-250": {
+            "family": "module",
             "id": "sw-250",
-            "name": "split",
-            "type": "module"
+            "name": "split"
         },
         "sw-94": {
             "conf": {
@@ -159,12 +159,12 @@
                     "value": "6"
                 }
             },
+            "family": "module",
             "id": "sw-94",
             "name": "simplemath",
             "options": {
                 "emit": true
-            },
-            "type": "module"
+            }
         }
     },
     "outputs": {

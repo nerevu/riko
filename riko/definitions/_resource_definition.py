@@ -2,11 +2,23 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Never, Self, cast, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    Never,
+    Self,
+    TypedDict,
+    Unpack,
+    cast,
+    overload,
+)
 from warnings import warn
 
+from attrs import define, field
+
 from riko.base.warnings import ResourceInterpretationWarning
-from riko.types._collections import freeze_mapping
+from riko.types._collections import FrozenDict, freeze
 from riko.types._guards import (
     is_async_context_manager,
     is_closeable,
@@ -23,7 +35,7 @@ from riko.types._resource import (
     ValueFactory,
 )
 
-from ._resources import VALUE_FACTORY_KINDS, classify_factory
+from ._resources import VALUE_FACTORY_KINDS, get_factory_kind
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -33,6 +45,23 @@ if TYPE_CHECKING:
     from ._resource_types import ResolvedValue
 
 
+type AnyFactory[T] = ResourceFactory[T] | AnyContextManager[T]
+
+
+class _ResourceFields(TypedDict, total=False):
+    """The optional fields an alternate constructor passes to the generated init."""
+
+    credential: str | None
+    lazy: bool
+    cleanup: Cleanup[Any] | Literal[False] | None
+    _kind: FactoryKind | None
+    _factory: AnyFactory[Any] | None
+    _args: tuple[object, ...]
+    _kwargs: Mapping[str, object]
+    _external: bool
+
+
+@define(frozen=True, slots=True, eq=False, repr=False)
 class Resource[T]:
     """
     An immutable execution-resource definition.
@@ -48,7 +77,12 @@ class Resource[T]:
         external: Whether the caller owns the lifecycle (Riko never closes it).
         credential: A credential reference resolved by the connector layer.
         cleanup: Overrides the value's ``aclose``/``close`` to close an owned handle.
-        lazy: Whether opening defers until first use (validated eagerly).
+        lazy: Whether entry should defer until first use. Not yet honored: a run
+            acquires every resource its nodes bind, whether or not it is used.
+        kind: How a factory produces its value, or ``None`` for a resolved value.
+        factory: The factory or lifecycle the execution layer enters, if any.
+        args: Frozen positional arguments for ``factory``.
+        kwargs: Frozen keyword arguments for ``factory``.
 
     Examples:
 
@@ -66,8 +100,7 @@ class Resource[T]:
         ...        self.opened = False
         >>>
         >>> resource = Resource.from_external(_Connection())
-        >>> value = resource.open()
-        >>> value
+        >>> resource.value
         <..._Connection object at ...>
         >>> resource.external
         True
@@ -76,17 +109,19 @@ class Resource[T]:
 
     """
 
-    __slots__ = (
-        "_args",
-        "_cleanup",
-        "_credential",
-        "_external",
-        "_factory",
-        "_kind",
-        "_kwargs",
-        "_lazy",
-        "_value",
+    value: ResolvedValue[T]
+    credential: str | None = field(default=None, kw_only=True)
+    lazy: bool = field(default=False, kw_only=True)
+    cleanup: Cleanup[T] | Literal[False] | None = field(default=None, kw_only=True)
+    kind: FactoryKind | None = field(default=None, kw_only=True, alias="_kind")
+    factory: AnyFactory[T] | None = field(default=None, kw_only=True, alias="_factory")
+    args: tuple[object, ...] = field(
+        factory=tuple, converter=freeze, kw_only=True, alias="_args"
     )
+    kwargs: FrozenDict[str, object] = field(
+        factory=FrozenDict, converter=FrozenDict, kw_only=True, alias="_kwargs"
+    )
+    external: bool = field(default=False, kw_only=True, alias="_external")
 
     @overload
     def __new__(  # noqa: E704
@@ -121,145 +156,51 @@ class Resource[T]:
         return cast("OneShotResource[T] | ReusableResource[T]", object.__new__(target))
 
     @staticmethod
-    def _reject_non_value(value: object) -> None:
+    def _validate_value(value: object) -> None:
         is_resource = isinstance(value, Resource)
 
         if is_resource or is_lifecycle_factory(value) or is_context_manager(value):
             msg = f"Expected a resolved resource value but got a: {type(value)}."
             raise TypeError(msg)
 
-    @overload  # noqa: E301
-    def __init__(  # noqa: E704
-        self,
-        value: Closeable,
-        *,
-        cleanup: Cleanup[T],
-        credential: str | None = ...,
-        lazy: bool = ...,
-    ) -> None: ...
-    @overload  # noqa: E301
-    def __init__(  # noqa: E704, F811
-        self,
-        value: Closeable,
-        *,
-        cleanup: None = ...,
-        credential: str | None = ...,
-        lazy: bool = ...,
-    ) -> None: ...
-    @overload  # noqa: E301
-    def __init__(  # noqa: E704, F811
-        self,
-        value: ResolvedValue[T],
-        *,
-        cleanup: Cleanup[T] | Literal[False],
-        credential: str | None = ...,
-        lazy: bool = ...,
-    ) -> None: ...
-    @overload  # noqa: E301
-    def __init__(self, value: Self) -> Never: ...  # noqa: E704
-    @overload  # noqa: E301
-    def __init__(self, value: LifecycleFactory[T]) -> Never: ...  # noqa: E704
-    @overload  # noqa: E301
-    def __init__(self, value: AnyContextManager[T]) -> Never: ...  # noqa: E704
-    @overload  # noqa: E301
-    def __init__(self, value: T) -> Never: ...  # noqa: E704
-    def __init__(  # noqa: E301 # pyright: ignore[reportInconsistentOverload]
-        self,
-        value: ResolvedValue[T],
-        *,
-        cleanup: Cleanup[T] | Literal[False] | None = None,
-        credential: str | None = None,
-        lazy: bool = False,
-    ) -> None:
-        self._value = value
-        self._credential = credential
-        self._lazy = lazy
-        self._kind: FactoryKind | None = None
-        self._cleanup: Cleanup[T] | Literal[False] | None = cleanup
-        self._factory: ResourceFactory[T] | AnyContextManager[T] | None = None
-        self._args: tuple[object, ...] = ()
-        self._kwargs: Mapping[str, object] = freeze_mapping({})
-        self._external = False
-
-        self._reject_non_value(value)
-
-        if cleanup is None and not is_closeable(value):
-            msg = "Must provide a Closeable value or cleanup function for riko owned "
-            msg += f"resources. Not a {type(value).__name__}. If this value's "
-            msg += "lifecycle is externally managed, use Resource.from_external(...) "
-            msg += "instead."
+    def _validate_fields(self) -> None:
+        if (self.factory is None) != (self.kind is None):
+            msg = "A resource factory and its kind must be given together. "
+            msg += "Use Resource.from_factory(...) or Resource.from_lifecycle(...)."
             raise TypeError(msg)
+        elif self.external and self.factory is not None:
+            msg = "An external resource cannot carry a factory. "
+            msg += "Use Resource.from_external(value)."
+            raise TypeError(msg)
+        elif self.external and not isinstance(self, ReusableResource):
+            msg = "An external resource must be reusable. "
+            msg += "Use Resource.from_external(value)."
+            raise TypeError(msg)
+
+    def __attrs_post_init__(self) -> None:
+        self._validate_fields()
+
+        if self.factory is None and not self.external:
+            self._validate_value(self.value)
+
+            if self.cleanup is None and not is_closeable(self.value):
+                msg = "Must provide a Closeable value or cleanup function for riko "
+                msg += f"owned resources. Not a {type(self.value).__name__}. If this "
+                msg += "value's lifecycle is externally managed, use "
+                msg += "Resource.from_external(...) instead."
+                raise TypeError(msg)
 
     @classmethod
     def _from_data[R: Resource[Any]](
-        cls,
-        target: type[R],
-        *,
-        value: object,
-        factory: ResourceFactory[Any] | AnyContextManager[Any] | None = None,
-        kind: FactoryKind | None = None,
-        args: tuple[object, ...] = (),
-        kwargs: Mapping[str, object] | None = None,
-        cleanup: Cleanup[Any] | Literal[False] | None = None,
-        credential: str | None = None,
-        lazy: bool = False,
-        external: bool = False,
+        cls, target: type[R], value: object, **fields: Unpack[_ResourceFields]
     ) -> R:
         resource = object.__new__(target)
-        resource._value = value
-        resource._factory = factory
-        resource._kind = kind
-        resource._args = args
-        resource._kwargs = freeze_mapping(dict(kwargs) if kwargs else {})
-        resource._cleanup = cleanup
-        resource._credential = credential
-        resource._lazy = lazy
-        resource._external = external
+        target.__init__(resource, value, **fields)
         return resource
-
-    @property
-    def value(self) -> ResolvedValue[T]:
-        return self._value
-
-    @property
-    def credential(self) -> str | None:
-        return self._credential
-
-    @property
-    def cleanup(self) -> Cleanup[T] | Literal[False] | None:
-        return self._cleanup
-
-    @property
-    def lazy(self) -> bool:
-        return self._lazy
-
-    @property
-    def kind(self) -> FactoryKind | None:
-        return self._kind
-
-    @property
-    def external(self) -> bool:
-        return self._external
 
     @property
     def reusable(self) -> bool:
         return isinstance(self, ReusableResource)
-
-    @property
-    def factory(self) -> ResourceFactory[T] | AnyContextManager[T] | None:
-        return self._factory
-
-    @property
-    def args(self) -> tuple[object, ...]:
-        return self._args
-
-    @property
-    def kwargs(self) -> Mapping[str, object]:
-        return self._kwargs
-
-    def _execution_error(self, action: str) -> str:
-        noun = "Factory" if self.reusable else "Lifecycle"
-        return f"{noun} resource {action} belongs to the execution layer"
 
     @overload
     @classmethod
@@ -294,7 +235,7 @@ class Resource[T]:
         **kwargs: object,
     ) -> ReusableResource[T]:
         """The alternate form of ``Context.with_resource(name, factory)``."""
-        kind = classify_factory(factory, lifecycle=False)
+        kind = get_factory_kind(factory, lifecycle=False)
 
         if kind in VALUE_FACTORY_KINDS:
             if cleanup is None:
@@ -317,11 +258,11 @@ class Resource[T]:
 
         return cls._from_data(
             ReusableResource,
-            value=factory,
-            factory=factory,
-            kind=kind,
-            args=args,
-            kwargs=kwargs,
+            factory,
+            _factory=factory,
+            _kind=kind,
+            _args=args,
+            _kwargs=kwargs,
             cleanup=cleanup,
             credential=credential,
             lazy=lazy,
@@ -373,14 +314,14 @@ class Resource[T]:
             >>>
             >>> value = Client()
             >>> resource = Resource.from_external(value)
-            >>> resource.open() is value
+            >>> resource.value is value
             True
             >>> resource.external
             True
 
         """
-        cls._reject_non_value(value)
-        return cls._from_data(ReusableResource, value=value, external=True)
+        cls._validate_value(value)
+        return cls._from_data(ReusableResource, value, _external=True)
 
     @classmethod
     def from_lifecycle[T](  # pyright: ignore[reportGeneralTypeIssues]
@@ -404,7 +345,8 @@ class Resource[T]:
 
             credential: A credential reference resolved by the connector layer.
 
-            lazy: Whether entry defers until first use (validated eagerly).
+            lazy: Whether entry should defer until first use. Not yet honored: a run
+                acquires every resource its nodes bind, whether or not it is used.
 
         Returns:
 
@@ -437,54 +379,16 @@ class Resource[T]:
         elif is_async_context_manager(factory):
             kind = FactoryKind.ASYNC_CONTEXTMANAGER
         else:
-            kind = classify_factory(factory)
+            kind = get_factory_kind(factory)
 
         return cls._from_data(
             OneShotResource,
-            value=factory,
-            factory=factory,
-            kind=kind,
+            factory,
+            _factory=factory,
+            _kind=kind,
             credential=credential,
             lazy=lazy,
         )
-
-    def open(self) -> ResolvedValue[T]:
-        """
-        Resolves this resource's value.
-
-        Returns:
-
-            The wrapped value.
-
-        Raises:
-
-            NotImplementedError: When the resource is a factory/lifecycle
-                declaration; the execution layer enters it instead.
-
-        """
-        if self._factory is not None:
-            raise NotImplementedError(self._execution_error("entry"))
-
-        return self.value
-
-    async def aopen(self) -> ResolvedValue[T]:
-        """
-        Resolves this resource's value for an async parser.
-
-        Returns:
-
-            The wrapped value.
-
-        Raises:
-
-            NotImplementedError: When the resource is a factory/lifecycle
-                declaration; the execution layer enters it instead.
-
-        """
-        if self._factory is not None:
-            raise NotImplementedError(self._execution_error("entry"))
-
-        return self.value
 
 
 class OneShotResource[T](Resource[T]):

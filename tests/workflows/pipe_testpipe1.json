@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-90",
                 "port": "out"
@@ -8,8 +9,7 @@
             "target": {
                 "node": "sw-102",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -40,9 +40,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-102",
-            "name": "filter",
-            "type": "module"
+            "name": "filter"
         },
         "sw-90": {
             "conf": {
@@ -51,9 +51,9 @@
                     "value": "file://riko/data/feed.xml"
                 }
             },
+            "family": "module",
             "id": "sw-90",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         }
     },
     "outputs": {

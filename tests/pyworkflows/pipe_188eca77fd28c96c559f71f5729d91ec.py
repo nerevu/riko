@@ -10,18 +10,19 @@ from riko.modules.fetchpage import pipe as fetchpage
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.truncate import pipe as truncate
 from riko.runtime._workflows import mark_subpipe
+from riko.types._enums import ExecutionMode
 from riko.types.modules import FetchPageRawConf, ItemBuilderRawConf, TruncateRawConf
 
 if TYPE_CHECKING:
     from riko import Context
 
 
+INPUTS = []
+DEPENDENCIES = ["fetchpage", "itembuilder", "truncate"]
+
+
 def pipe(item=None, context: Context | None = None, **_):
-    if context and context.describe_input:
-        _OUTPUT = []
-    elif context and context.describe_dependencies:
-        _OUTPUT = ["fetchpage", "itembuilder", "truncate"]
-    else:
+    if context is None or context.mode is ExecutionMode.RUN:
         sw_163 = itembuilder(
             item,
             conf=ItemBuilderRawConf(
@@ -61,6 +62,12 @@ def pipe(item=None, context: Context | None = None, **_):
             context=context,
         )
         _OUTPUT = sw_287
+    elif context.mode is ExecutionMode.DESCRIBE:
+        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        _OUTPUT = INPUTS
+    else:
+        _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
 

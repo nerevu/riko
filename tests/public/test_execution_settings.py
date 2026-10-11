@@ -57,7 +57,7 @@ def _reader_workflow() -> Workflow:
     """Builds a one-node workflow whose module declares a ``primary`` resource."""
     node = ModuleNode(id="n", name=READER, resources={"slot": "primary"})
     return Workflow(
-        nodes={node.id: node},
+        nodes=[node],
         edges=(),
         outputs={"default": Endpoint(node.id, "out")},
         inputs={},
@@ -130,12 +130,17 @@ class TestWithExecution:
         pipeline = Pipeline.from_module("fetch").with_execution(executor=executor)
         assert pipeline.settings.executor is expected
 
+    def test_concurrency_accepts_auto(self):
+        pipeline = Pipeline.from_module("fetch").with_execution(concurrency="auto")
+        assert pipeline.settings.concurrency == "auto"
+
     @pytest.mark.parametrize(
         ("kwargs", "error"),
         [
             ({"executor": "gpu"}, ValueError),
             ({"concurrency": 0}, ValueError),
             ({"concurrency": "4"}, TypeError),
+            ({"concurrency": "max"}, TypeError),
             ({"ordered": "yes"}, TypeError),
             ({"shutdown_timeout": -1}, ValueError),
             ({"shutdown_timeout": float("nan")}, ValueError),

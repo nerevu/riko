@@ -17,7 +17,7 @@ Examples:
 Attributes:
 
     SEPARATOR: The separator used when ``conf`` supplies none.
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -37,11 +37,11 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import SlugifyObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
 
 SEPARATOR = "-"
 
-OPTS: Opts = {
+OPTS: DecorationOptions = {
     "ftype": BasicCastType.TEXT,
     "extract": "separator",
     "field": "content",
@@ -61,7 +61,7 @@ def parser(
 
         word: The string to slugify.
         separator: The slug separator, or None to use the default.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -89,15 +89,15 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             separator (str): Joins the slug's words (default: "-").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to slugify (default: "content").
+        field (str): Item field to slugify (default: "content").
 
         assign (str): Field the slug is assigned to. Ignored when ``emit`` is
             True (default: "slugify").
@@ -142,15 +142,15 @@ def pipe(*args: Any, **kwargs: object) -> str:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             separator (str): Joins the slug's words (default: "-").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to slugify (default: "content").
+        field (str): Item field to slugify (default: "content").
 
         assign (str): Field the slug is assigned to. Ignored when ``emit`` is
             True (default: "slugify").

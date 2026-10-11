@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Resolves sync or async pipe interfaces from importable modules."""
+"""Resolves the sync or async pipe interfaces of modules and stored workflows."""
 
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ from types import ModuleType
 from typing import TYPE_CHECKING
 
 from riko.base._imports import import_or_else
-from riko.base.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.base.exceptions import UnsupportedModuleError, UnsupportedWorkflowError
 
 if TYPE_CHECKING:
-    from riko.types._wrappers import Interface, ModuleWrapper
+    from riko.types._wrappers import AnyModuleWrapper, Interface
 
 type Loader = Callable[[str], ModuleType | None]
 
@@ -22,8 +22,10 @@ def _load_module(
     import_name = f"riko.modules.{name}" if builtin else name
     loader = loader or import_or_else
 
-    if (module := loader(import_name)) is None:
+    if (module := loader(import_name)) is None and builtin:
         raise UnsupportedModuleError(name)
+    elif module is None:
+        raise UnsupportedWorkflowError(name, "no store supplies it")
 
     return module
 
@@ -33,12 +35,13 @@ def require_interface(
     is_async: bool = False,
     builtin: bool = True,
     loader: Loader | None = None,
-) -> ModuleWrapper:
+) -> AnyModuleWrapper:
     module = _load_module(name, builtin, loader)
     interface: Interface = "async_pipe" if is_async else "pipe"
 
     if (pipe := getattr(module, interface, None)) is None:
-        raise UnsupportedPipelineError(f"{name!r} has no {interface!r}")
+        error = UnsupportedModuleError if builtin else UnsupportedWorkflowError
+        raise error(name, f"it has no {interface!r}")
 
     return pipe
 
@@ -61,7 +64,9 @@ def load_interfaces(
 
     Raises:
 
-        UnsupportedModuleError: If ``name`` cannot be imported.
+        UnsupportedModuleError: If ``builtin`` and ``name`` cannot be imported.
+
+        UnsupportedWorkflowError: If not ``builtin`` and ``loader`` finds no ``name``.
 
     """
     module = _load_module(name, builtin, loader)

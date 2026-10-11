@@ -278,8 +278,9 @@ class TestLoopbackServer:
     PAYLOAD = BODY.encode()
 
     @pytest.fixture(scope="class")
-    def url(self):
-        with loopback_url(self.BODY) as served:
+    @classmethod
+    def url(cls):
+        with loopback_url(cls.BODY) as served:
             yield served
 
     def test_streamed_text_read_returns_full_body(self, url):

@@ -22,12 +22,11 @@ from riko.definitions._resource_definition import (
     OneShotResource,
     Resource,
     ReusableResource,
-    classify_factory,
+    get_factory_kind,
 )
-from riko.definitions._resources import bind_resources
-from riko.execution._plan import aclose_resource, close_resource
+from riko.execution._execution import AsyncExecution, SyncExecution
+from riko.execution._resource_view import ResourceView
 from riko.modules import operator
-from riko.types._collections import freeze_mapping
 from tests import async_test
 
 if TYPE_CHECKING:
@@ -119,7 +118,7 @@ scalar = pytest.fixture(lambda: _SCALAR)
 
 
 @pytest.fixture
-def one_shot_resource(connection: _Connection) -> OneShotResource[_Connection]:
+def one_shot_resource(connection: _Connection) -> Resource[_Connection]:
     return Resource(connection)
 
 
@@ -128,38 +127,40 @@ def external_resource(connection: _Connection):
     return Resource.from_external(connection)
 
 
-def _test_open_close(resource, value: object | None = None):
+def _check_opened(acquired: object, value: object | None) -> None:
     if value is None:
-        value = resource.open()
-        assert value
+        assert acquired
     else:
-        assert resource.open() is value
+        assert acquired is value
 
-    if isinstance(value, _Connection):
-        assert value.opened
+    if isinstance(acquired, _Connection):
+        assert acquired.opened
 
-    close_resource(resource, value)
 
-    if isinstance(value, _Connection):
-        assert value.closed is not resource.external
-        value.opened = True  # reset for next test
+def _check_closed(resource, acquired: object, value: object | None) -> None:
+    if value is not None and isinstance(acquired, _Connection):
+        assert acquired.closed is not resource.external
+        acquired.opened = True  # reset for next test
+
+
+def _test_open_close(resource, value: object | None = None):
+    acquired: object = None
+
+    with SyncExecution() as execution:
+        acquired = execution.acquire(resource)
+        _check_opened(acquired, value)
+
+    _check_closed(resource, acquired, value)
 
 
 async def _async_test_open_close(resource, value: object | None = None):
-    if value is None:
-        value = await resource.aopen()
-        assert value
-    else:
-        assert await resource.aopen() is value
+    acquired: object = None
 
-    if isinstance(value, _AsyncConnection):
-        assert value.opened
+    async with AsyncExecution() as execution:
+        acquired = await execution.aacquire(resource)
+        _check_opened(acquired, value)
 
-    await aclose_resource(resource, value)
-
-    if isinstance(value, _AsyncConnection):
-        assert value.closed is not resource.external
-        value.opened = True  # reset for next test
+    _check_closed(resource, acquired, value)
 
 
 def _test_credential_and_lazy(resource):
@@ -224,7 +225,7 @@ class TestLifecyleFactory:
     def test_resource_metadata[T](
         self, factory: LifecycleFactory[T], classification: FactoryKind
     ):
-        assert classify_factory(factory) is classification
+        assert get_factory_kind(factory) is classification
         test_metadata = partial(_test_metadata, classification=classification)
 
         context = Context().with_resource("factory", factory)
@@ -241,22 +242,12 @@ class TestLifecyleFactory:
         "factory",
         [sync_gen_factory, async_gen_factory, sync_cm_factory, async_cm_factory],
     )
-    def test_resource_opens_and_closes[T](self, factory: LifecycleFactory[T]):
+    @async_test
+    async def test_resource_opens_and_closes[T](self, factory: LifecycleFactory[T]):
         context = Context().with_resource("factory", factory)
-        resource = context.resources["factory"]
-
-        with pytest.raises(NotImplementedError, match=r"Factory resource.*execution"):
-            _test_open_close(resource)
-
-        resource = Resource.from_lifecycle(factory)
-
-        with pytest.raises(NotImplementedError, match=r"Lifecycle resource.*execution"):
-            _test_open_close(resource)
-
-        resource = Resource.from_factory(factory)
-
-        with pytest.raises(NotImplementedError, match=r"Factory resource.*execution"):
-            _test_open_close(resource)
+        await _async_test_open_close(context.resources["factory"])
+        await _async_test_open_close(Resource.from_lifecycle(factory))
+        await _async_test_open_close(Resource.from_factory(factory))
 
 
 class TestValueFactory:
@@ -307,7 +298,7 @@ class TestValueFactory:
     def test_resource_metadata[T](
         self, factory: ValueFactory[T], cleanup, classification: FactoryKind
     ):
-        assert classify_factory(factory, lifecycle=False) is classification
+        assert get_factory_kind(factory, lifecycle=False) is classification
         test_metadata = partial(_test_metadata, typ=ReusableResource, reusable=True)
 
         resource = Resource.from_external(factory)
@@ -323,11 +314,11 @@ class TestValueFactory:
             (async_callable_factory, close_async_connection),
         ],
     )
-    def test_resource_opens_and_closes[T](self, factory: ValueFactory[T], cleanup):
-        resource = Resource.from_factory(factory, cleanup=cleanup)
-
-        with pytest.raises(NotImplementedError, match="execution layer"):
-            _test_open_close(resource, factory)
+    @async_test
+    async def test_resource_opens_and_closes[T](
+        self, factory: ValueFactory[T], cleanup
+    ):
+        await _async_test_open_close(Resource.from_factory(factory, cleanup=cleanup))
 
 
 type ValueKind = Literal[
@@ -409,8 +400,7 @@ class TestValues:
             )
             _test_credential_and_lazy(configured)
 
-            with pytest.raises(NotImplementedError, match="execution layer"):
-                _test_open_close(lifecycle, value)
+            _test_open_close(lifecycle)
 
             with pytest.raises(TypeError, match=r"ValueFactory.*cleanup function"):
                 Resource.from_factory(value)
@@ -459,8 +449,7 @@ class TestValues:
 
         lifecycle = Resource.from_lifecycle(async_contextmanager)
 
-        with pytest.raises(NotImplementedError, match="execution layer"):
-            await _async_test_open_close(lifecycle, async_contextmanager)
+        await _async_test_open_close(lifecycle)
 
         with pytest.raises(TypeError, match=r"ValueFactory.*cleanup function"):
             Resource.from_factory(
@@ -479,68 +468,21 @@ class TestResourceEcosystem:
         assert derived.verbose
         assert derived is not base
 
-    def test_operator_missing_resource_binding_raises(self):
-        @operator(resources="connection")
-        def pipe(stream: Stream, objconf, tuples, **kwargs) -> Stream:
-            return stream
-
-        with pytest.raises(TypeError, match="is not bound"):
-            list(pipe([{"a": 1}], context=Context()))
-
     def test_classify_rejects_non_resource(self):
         with pytest.raises(TypeError, match="Invalid lifecycle factory"):
-            classify_factory(_SCALAR)  # pyright: ignore[reportArgumentType]
+            get_factory_kind(_SCALAR)  # pyright: ignore[reportArgumentType]
 
-    def test_bind_resources_missing_binding_raises(self):
-        with pytest.raises(TypeError, match="is not bound"):
-            bind_resources("connection", freeze_mapping({}))
-
-    def test_bind_resources_validates_all_names_before_opening(self):
-        """Name validation must complete before resource acquisition."""
-        opened: list[str] = []
-
-        class _Spy:
-            def open(self) -> object:
-                opened.append("present")
-                return object()
-
-        resources = {"present": _Spy()}
-
-        with pytest.raises(TypeError, match="is not bound"):
-            bind_resources(
-                {"a": "present", "b": "absent"},
-                resources,  # pyright: ignore[reportArgumentType]
-            )
-
-        assert opened == []
-
-    def test_bind_owned_resources_not_implemented(self, connection: _Connection):
-        external = Resource.from_external(connection)
-        owned = Resource.from_lifecycle(sync_gen_factory)
-
-        assert bind_resources("db", freeze_mapping({"db": external})).db is connection
-
-        with pytest.raises(NotImplementedError, match="execution layer"):
-            bind_resources("db", freeze_mapping({"db": owned}))  # pyright: ignore[reportArgumentType]
-
-        with pytest.raises(TypeError, match="Invalid resource factory"):
-            Context().with_resource(  # pyright: ignore[reportCallIssue]
-                "factory",
-                owned,  # pyright: ignore[reportArgumentType]
-            )
-
-    def test_operator_parser_receives_resource_view(self, connection: _Connection):
+    def test_operator_passes_the_supplied_view_through(self, connection: _Connection):
         captured = {}
 
-        @operator(resources="resource")
+        @operator()
         def pipe(stream: Stream, objconf, tuples, **kwargs) -> Stream:
             captured["view"] = kwargs.get("resources")
             return stream
 
-        resource = Resource.from_external(connection)
-        context = Context().with_resource("resource", resource)
-        list(pipe([{"a": 1}], context=context))
-        assert captured["view"].resource is connection
+        view = ResourceView({"resource": connection})
+        list(pipe([{"a": 1}], resources=view))
+        assert captured["view"] is view
 
 
 class TestResourceImmutability:

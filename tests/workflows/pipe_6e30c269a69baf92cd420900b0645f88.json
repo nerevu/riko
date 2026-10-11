@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-135",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-154",
                 "port": "in:1"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-154",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-173",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-173",
                 "port": "out"
@@ -30,10 +31,10 @@
             "target": {
                 "node": "sw-180",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-180",
                 "port": "out"
@@ -41,10 +42,10 @@
             "target": {
                 "node": "sw-210",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-195",
                 "port": "out"
@@ -52,10 +53,10 @@
             "target": {
                 "node": "sw-191",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-210",
                 "port": "out"
@@ -63,10 +64,10 @@
             "target": {
                 "node": "sw-195",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-233",
                 "port": "out"
@@ -74,8 +75,7 @@
             "target": {
                 "node": "sw-154",
                 "port": "in:3"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -86,14 +86,14 @@
                     "value": "file://riko/data/rss.sueddeutsche.de_rss_Topthemen.xml"
                 }
             },
+            "family": "module",
             "id": "sw-135",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         },
         "sw-154": {
+            "family": "module",
             "id": "sw-154",
-            "name": "union",
-            "type": "module"
+            "name": "union"
         },
         "sw-173": {
             "conf": {
@@ -102,9 +102,9 @@
                     "value": "title"
                 }
             },
+            "family": "module",
             "id": "sw-173",
-            "name": "uniq",
-            "type": "module"
+            "name": "uniq"
         },
         "sw-180": {
             "conf": {
@@ -147,9 +147,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-180",
-            "name": "filter",
-            "type": "module"
+            "name": "filter"
         },
         "sw-191": {
             "conf": {
@@ -166,9 +166,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-191",
-            "name": "sort",
-            "type": "module"
+            "name": "sort"
         },
         "sw-195": {
             "conf": {
@@ -211,14 +211,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-195",
             "name": "regex",
             "options": {
                 "assign": "loop:regex",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-210": {
             "conf": {
@@ -239,14 +239,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-210",
             "name": "rename",
             "options": {
                 "assign": "loop:rename",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-233": {
             "conf": {
@@ -255,9 +255,9 @@
                     "value": "file://riko/data/rss.sueddeutsche.de_rss_Politik.xml"
                 }
             },
+            "family": "module",
             "id": "sw-233",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         }
     },
     "outputs": {

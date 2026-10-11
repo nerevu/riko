@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import pytest
+
 from riko.ext import operator
 from riko.modules._metadata import get_module_metadata
 
@@ -88,3 +90,12 @@ def test_operator_metadata_is_derived():
 
     assert composition_key_pipe.subtype == "aggregator"
     assert composition_key_pipe.subtypes == {"aggregator", "composer"}
+
+
+def test_unknown_module_metadata_is_none():
+    assert get_module_metadata("not_a_builtin_module") is None
+
+
+def test_unknown_module_metadata_raises_when_strict():
+    with pytest.raises(ValueError, match="has no metadata"):
+        get_module_metadata("not_a_builtin_module", strict=True)

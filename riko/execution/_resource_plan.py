@@ -17,8 +17,9 @@ from typing import TYPE_CHECKING, Literal, cast
 
 from attrs import define, field
 
-from riko.bado._util import maybe_deferred
+from riko.bado._util import maybe_async
 from riko.definitions._resources import VALUE_FACTORY_KINDS
+from riko.types._collections import thaw
 from riko.types._guards import is_async_closeable
 from riko.types._resource import FactoryKind
 from riko.types._sentinels import MISSING
@@ -61,19 +62,18 @@ class _ResourcePlan[T]:
     Attributes:
 
         strategy: How the execution acquires and tears down the resource.
-        resource: The originating definition, retained for native teardown.
         native_async: Whether entry/teardown is async-native rather than sync.
         value: The already-resolved value for external/owned strategies.
         factory: The producer callable for the value-factory strategy.
         args: Positional arguments bound to the factory.
         kwargs: Keyword arguments bound to the factory.
-        cleanup: The teardown callable, ``False`` for none, for value factories.
+        cleanup: The teardown override: a callable, ``False`` for none, or ``None``
+            to close the value itself.
         context_manager: The lifecycle to enter for the lifecycle strategy.
 
     """
 
     strategy: _ResourceStrategy
-    resource: Resource[T]
     native_async: bool = False
     value: T | MissingType = MISSING
     factory: ValueFactory[T] | None = None
@@ -83,10 +83,18 @@ class _ResourcePlan[T]:
     context_manager: AnyContextManager[T] | None = None
 
 
-def _build_context_manager[T](resource: Resource[T]) -> AnyContextManager[T]:
+def _thaw_arguments[T](
+    resource: Resource[T],
+) -> tuple[tuple[object, ...], dict[str, object]]:
+    """Copies a factory's frozen arguments into mutable ones for a single call."""
+    kwargs = {key: thaw(item) for key, item in resource.kwargs.items()}
+    return tuple(map(thaw, resource.args)), kwargs
+
+
+def _build_context_manager[T](
+    resource: Resource[T], *args: object, **kwargs: object
+) -> AnyContextManager[T]:
     kind = resource.kind
-    args = resource.args
-    kwargs = resource.kwargs
     factory = resource.factory
 
     if kind is FactoryKind.ASYNC_GEN_FACTORY:
@@ -120,87 +128,88 @@ def build_resource_plan[T](resource: Resource[T]) -> _ResourcePlan[T]:
     """
     kind = resource.kind
     value = cast("T", resource.value)
+    args, kwargs = _thaw_arguments(resource)
 
     if resource.external:
-        plan = _ResourcePlan(_ResourceStrategy.EXTERNAL, resource, value=value)
+        plan = _ResourcePlan(_ResourceStrategy.EXTERNAL, value=value)
     elif kind is None:
-        plan = _ResourcePlan(_ResourceStrategy.OWNED, resource, value=value)
+        plan = _ResourcePlan(
+            _ResourceStrategy.OWNED, value=value, cleanup=resource.cleanup
+        )
     elif kind in VALUE_FACTORY_KINDS:
         plan = _ResourcePlan(
             _ResourceStrategy.VALUE_FACTORY,
-            resource,
             native_async=kind is FactoryKind.ASYNC_CALLABLE_FACTORY,
             factory=cast("ValueFactory[T]", resource.factory),
-            args=resource.args,
-            kwargs=resource.kwargs,
+            args=args,
+            kwargs=kwargs,
             cleanup=resource.cleanup,
         )
     else:
         plan = _ResourcePlan(
             _ResourceStrategy.LIFECYCLE,
-            resource,
             native_async=kind in _ASYNC_KINDS,
-            context_manager=_build_context_manager(resource),
+            cleanup=resource.cleanup,
+            context_manager=_build_context_manager(resource, *args, **kwargs),
         )
 
     return plan
 
 
-def close_resource[T](resource: Resource[T], value: T) -> None:
+def close_resource[T](cleanup: Cleanup[T] | Literal[False] | None, value: T) -> None:
     """
     Closes an owned resource's value.
 
-    A ``cleanup`` override is called with the value. Otherwise the value's own
-    ``close()`` is invoked. An external resource, or one declared with
-    ``cleanup=False``, is left open for its caller.
+    A ``cleanup`` override is called with the value, ``False`` leaves the value
+    open, and ``None`` invokes the value's own ``close()``.
 
     Args:
 
-        resource: The owned resource definition.
+        cleanup: The resource's teardown override.
         value: The resource value to close.
 
     Examples:
 
-        >>> from riko.definitions._resource_definition import Resource
-        >>>
         >>> class Client:
         ...     closed = False
         ...     def close(self):
         ...         self.closed = True
         >>>
-        >>> owned, external = Client(), Client()
-        >>> close_resource(Resource(owned), owned)
-        >>> close_resource(Resource.from_external(external), external)
-        >>> owned.closed, external.closed
+        >>> closed, kept = Client(), Client()
+        >>> close_resource(None, closed)
+        >>> close_resource(False, kept)
+        >>> closed.closed, kept.closed
         (True, False)
 
     """
-    if resource.external or resource.cleanup is False:
+    if cleanup is False:
         pass
-    elif resource.cleanup is None:
+    elif cleanup is None:
         cast("SyncCloseable", value).close()
     else:
-        resource.cleanup(value)
+        cleanup(value)
 
 
-async def aclose_resource[T](resource: Resource[T], value: T) -> None:
+async def aclose_resource[T](
+    cleanup: Cleanup[T] | Literal[False] | None, value: T
+) -> None:
     """
     Closes an owned resource's value with a preference of ``aclose()`` over ``close()``.
 
-    A ``cleanup`` override is called (and awaited when async) with the value.
-    Otherwise the value's own ``aclose()`` or ``close()`` is invoked. An external
-    resource, or one declared with ``cleanup=False``, is left open for its caller.
+    A ``cleanup`` override is called (and awaited when async) with the value,
+    ``False`` leaves the value open, and ``None`` invokes the value's own
+    ``aclose()`` or ``close()``.
 
     Args:
 
-        resource: The owned resource definition.
+        cleanup: The resource's teardown override.
         value: The resource value to close.
 
     """
-    if resource.external or resource.cleanup is False:
+    if cleanup is False:
         pass
-    elif resource.cleanup is not None:
-        await maybe_deferred(resource.cleanup, value)
+    elif cleanup is not None:
+        await maybe_async(cleanup, value)
     elif is_async_closeable(value):
         await value.aclose()
     else:

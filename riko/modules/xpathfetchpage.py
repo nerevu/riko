@@ -18,7 +18,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -62,7 +62,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `xpath` and `html5`.
+        objconf: The module configuration, containing `url`, `xpath` and `html5`.
 
     Returns:
 
@@ -125,7 +125,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `xpath` and `html5`.
+        objconf: The module configuration, containing `url`, `xpath` and `html5`.
 
     Returns:
 
@@ -172,10 +172,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The page to fetch, local or remote. Its extension selects
-                the parser, defaulting to ``html`` for an extension-less http
+                the document format, defaulting to ``html`` for an extension-less http
                 url. Required.
 
             xpath (str): The XPath to extract, e.g. ``"/rss/channel/item"``. The
@@ -186,7 +186,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
             encoding (str): Page encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -245,10 +245,10 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The page to fetch, local or remote. Its extension selects
-                the parser, defaulting to ``html`` for an extension-less http
+                the document format, defaulting to ``html`` for an extension-less http
                 url. Required.
 
             xpath (str): The XPath to extract, e.g. ``"/rss/channel/item"``. The
@@ -259,7 +259,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
             encoding (str): Page encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

@@ -58,7 +58,7 @@ def doc2entries(document: Node) -> Iterator[object]:
             yield entry
 
 
-async def async_get_rss(
+async def aload_rss_links(
     url: str,
     *,
     link_type: str | Iterable[str] | None = None,
@@ -86,7 +86,7 @@ async def async_get_rss(
     return entries
 
 
-def get_rss(
+def load_rss_links(
     url: str,
     *,
     link_type: str | Iterable[str] | None = None,

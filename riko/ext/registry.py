@@ -1,8 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides registration and resolution for named modules and workflows.
+Provides registration and resolution for modules, stored workflows, and targets.
 
-Resolution order is runtime registration, entry point, then built-in module.
+A module resolves by runtime registration, then entry point, then built-in module.
 
 Examples:
 
@@ -17,11 +17,6 @@ Examples:
         >>> registry.register(ModuleDefinition(name="double", sync_pipe=double))
         >>> list(registry.require("double")([{"x": 2}]))
         [{'x': 4}]
-
-Attributes:
-
-    module_registry: Process-global registry backing ``register_module`` and pipe
-        resolution.
 
 """
 

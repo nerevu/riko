@@ -2,8 +2,8 @@
 """
 Limits a stream by elapsed time.
 
-The sync pipe yields items as they arrive. The async pipe collects items until
-the deadline before yielding them, so both paths can bound an unbounded source.
+The sync pipe yields items as they arrive. The async pipe collects items until the
+deadline before yielding them, so either pipe can bound an unbounded input stream.
 
 Examples:
 
@@ -23,14 +23,14 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
 
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, AsyncIterator, Generator, Iterable, Iterator
+from collections.abc import AsyncIterator, Generator, Iterable, Iterator
 from datetime import timedelta
 from time import monotonic_ns
 from typing import TYPE_CHECKING, Any, Self, cast
@@ -46,11 +46,11 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import TimeoutObjconf
-    from riko.types._options import Defaults, Opts
-    from riko.types._streams import Feed, Stream
+    from riko.types._options import DecorationOptions, Defaults
+    from riko.types._streams import AnyIterable, Feed, Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = {"ptype": BasicCastType.INT}
+OPTS: DecorationOptions = {"ptype": BasicCastType.INT}
 DEFAULTS: Defaults = {}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -62,9 +62,7 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
     aiter: AsyncIterator[T]
     timeout_ns: int
 
-    def __init__(
-        self, elements: AsyncIterable[T] | Iterable[T], timeout_ms: int = 0
-    ) -> None:
+    def __init__(self, elements: AnyIterable[T], timeout_ms: int = 0) -> None:
         self.aiter = as_async(elements, cooperative=True)
         self.timeout_ns = max(timeout_ms, 0) * NS_PER_MS
         self.deadline: int | None = None
@@ -129,13 +127,13 @@ async def async_parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so consuming it
-            will consume `tuples` as well.
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
+            it will consume `tuples` as well.
 
-        objconf: The pipe configuration, containing any ``timedelta`` unit.
+        objconf: The module configuration, containing any ``timedelta`` unit.
 
         tuples: Iterable of tuples of (item, objconf) `item` is an element in the
-            source stream and `objconf` is the item configuration. Note: this shares
+            input stream and `objconf` is the item configuration. Note: this shares
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Returns:
@@ -154,7 +152,7 @@ async def async_parser(
         >>> objconf = Objectify({"milliseconds": 250})
         >>>
         >>> async def paginated_api():
-        ...     # Paginated API feed — collect records until timeout:
+        ...     # Paginated API — collect items until timeout:
         ...     for page in count():
         ...         await async_sleep(0.1)
         ...         yield {"page": page, "data": f"result_{page}"}
@@ -180,13 +178,13 @@ def parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so consuming
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
-        objconf: The pipe configuration, containing any ``timedelta`` unit.
+        objconf: The module configuration, containing any ``timedelta`` unit.
 
         tuples: Iterable of tuples of (item, objconf) `item` is an element in the
-            source stream and `objconf` is the item configuration. Note: this shares
+            input stream and `objconf` is the item configuration. Note: this shares
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Returns:
@@ -230,9 +228,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Feed): The source stream.
+        items (Feed): The input stream.
 
-        conf (dict): The pipe configuration. Each key is cast to an int, so a
+        conf (dict): The module configuration. Each key is cast to an int, so a
             numeric string is accepted. A total of 0 means no timeout and the
             whole source is returned.
 
@@ -244,7 +242,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             hours (int): Hours to wait (default: 0).
             weeks (int): Weeks to wait (default: 0).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -291,9 +289,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration. Each key is cast to an int, so a
+        conf (dict): The module configuration. Each key is cast to an int, so a
             numeric string is accepted. A total of 0 means no timeout and the
             whole source is returned.
 
@@ -305,7 +303,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             hours (int): Hours to wait (default: 0).
             weeks (int): Weeks to wait (default: 0).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

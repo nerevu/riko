@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from riko.cli._lint_canonical_imports import _iter_issues as canonical_issues
-from riko.cli._lint_import_architecture import generate_report, render_architecture
+from riko.cli._lint_import_architecture import (
+    load_architecture_report,
+    render_architecture,
+)
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
 
 if TYPE_CHECKING:
@@ -46,7 +49,7 @@ def test_architecture(tmp_path: Path) -> None:
     write(root, "types/a.py", "from riko.runtime.b import thing\n")
     write(root, "runtime/__init__.py", "")
     write(root, "runtime/b.py", "thing = 1\n")
-    report = generate_report(root)
+    report = load_architecture_report(root)
     assert not report.unclassified
     assert len(report.violations) == 1
     assert "types > {runtime}" in render_architecture(report)
@@ -67,7 +70,7 @@ def test_type_checking_is_exempt(tmp_path: Path) -> None:
     )
     write(root, "runtime/__init__.py", "")
     write(root, "runtime/b.py", "thing = 1\n")
-    assert not generate_report(root).violations
+    assert not load_architecture_report(root).violations
 
 
 def test_function_local_upward_import_fails(tmp_path: Path) -> None:
@@ -81,7 +84,7 @@ def test_function_local_upward_import_fails(tmp_path: Path) -> None:
     )
     write(root, "runtime/__init__.py", "")
     write(root, "runtime/b.py", "thing = 1\n")
-    report = generate_report(root)
+    report = load_architecture_report(root)
     assert len(report.violations) == 1
     assert report.violations[0].target_label == "runtime"
 
@@ -90,5 +93,5 @@ def test_unclassified_fails(tmp_path: Path) -> None:
     root = tmp_path / "riko"
     write(root, "__init__.py", "")
     write(root, "mystery/__init__.py", "")
-    report = generate_report(root)
+    report = load_architecture_report(root)
     assert report.unclassified[0].module == "riko.mystery"

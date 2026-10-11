@@ -20,15 +20,15 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 | Path | Role |
 |---|---|
 | `riko/__init__.py` | stable application facade; implementations live below it |
-| `riko/base/` | bottom-layer constants, paths, logging, strings/iterators/date helpers, exceptions, private API declarations |
+| `riko/base/` | bottom-layer constants, paths, logging, strings/iterators/date/graph helpers, exceptions, private API declarations |
 | `riko/types/` | static contracts: streams/items, configs, options, compiler/pipeline/resource/I/O types, enums/wrappers |
-| `riko/coercion/` | casts, `DynamicConf`, **generated** objconf classes, objectification, graph/freeze/normalization helpers |
+| `riko/coercion/` | casts, `DynamicConf`, **generated** objconf classes, objectification, canonical-identity helpers |
 | `riko/bado/` | stable async backend/iterator API; transport/file I/O is in `riko/io/` |
-| `riko/definitions/` | immutable/declarative module, resource, target, write, and Workflow v2 graph contracts |
+| `riko/definitions/` | immutable/declarative module, resource, target, write, and Workflow v2 graph contracts; the `Context` (`_context.py`) and `Resource` (`_resource_definition.py`) definitions live here |
 | `riko/io/` | sync/async URL/file I/O, serialization, re-encoding |
 | `riko/parsing/` | config parsing, `DotDict`, XML/HTML/document parsing |
 | `riko/rss/` | feed discovery, parsing, entry normalization |
-| `riko/execution/` | explicit execution layer: one-shot sync/async executions, lifetime primitives, execution-local resource acquisition, event sink, execution context; `context.py` + `_resources.py` live here |
+| `riko/execution/` | explicit execution layer: one-shot sync/async executions, lifetime primitives, execution-local resource acquisition and owned-resource teardown, event sink |
 | `riko/runtime/` | executable orchestration: collections, compiler, resolver/registry, pipelines, pub/sub, write sessions |
 | `riko/modules/` | built-in pipe implementations; private decorator/preparation/metadata/looping internals; generated discovery names |
 | `riko/ext/` | supported extension-author facade + extension codegen/name helpers; shares the `modules` architecture layer |
@@ -37,12 +37,13 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 Important concrete locations:
 
 - collections/export/write verbs: `riko/runtime/collections.py`
-- graph index for execution planning: `riko/runtime/_graph_index.py`
+- graph index for validation and execution planning: `GraphIndex` in `riko/types/_workflow.py`, built by `Workflow.index`
 - v2 code generator behind `compile_workflow`/`compile-workflow`: `riko/runtime/_codegen.py`
 - CLI workflow-document front door: `riko/cli/_workflow.py`
 - pub/sub: `riko/runtime/_pubsub/`
-- executions/preparation: `riko/execution/_execution.py` + `_prepared.py`; the frozen plan is `riko/runtime/_execution_plan.py`
-- execution context/resources: `riko/execution/context.py` + `_resources.py`
+- executions/preparation: `riko/execution/_execution.py` + `_prepared.py`; the frozen `ExecutionPlan` is in `_prepared.py` and its builder is `riko/runtime/_execution_plan.py`
+- pipelines: composition on `PipelineDefinition` in `riko/definitions/_workflow.py`; the runnable `Pipeline` subclass in `riko/runtime/_pipeline.py`
+- context/resource definitions: `riko/definitions/_context.py` + `_resource_definition.py`; their acquisition/teardown: `riko/execution/_resource_plan.py`
 - declarative write model: `riko/definitions/_write.py` + `_targets.py`
 - async I/O: `riko/io/_async.py`
 - exceptions/API declarations: `riko/base/exceptions.py` + `_api_surface.py`
@@ -60,15 +61,15 @@ base < types < {bado | coercion | definitions} < io < parsing < rss
         {rss | runtime} < modules < api < cli
 ```
 
-`riko.execution.context` and `riko.execution._resources` map to `execution`; the rest
-of `riko.runtime` maps to `runtime`. `riko.ext` and `riko.modules` share the
-`modules` layer. `riko.__init__` is `api`; `riko._package` is `base`.
+`Context` and `Resource` are definitions, so their modules map to `definitions`.
+`riko.ext` and `riko.modules` share the `modules` layer. `riko.__init__` is `api`;
+`riko._package` is `base`.
 
 Use `manage lint imports --architecture` to inspect the graph and
 `manage lint imports --all` for all import contracts. `manage lint --all` includes
-the import checks and is the standard CI lint path. Do not add an upward import or
-an ad-hoc architecture exception when a shared contract can move to the lower
-owning layer.
+the import checks and is the standard CI lint path. There are no upward imports,
+function-local ones included: move the shared contract to the lower owning layer or
+split the type so the higher layer extends it.
 
 ## Docs Map
 
@@ -125,9 +126,10 @@ new permanent bullet here.
 - **`is None` over truthiness** — `0`, `False`, and `""` are valid values. Missing
   data is not the same as a present falsy value.
 - **One canonical identity system** — durable identity (checkpoints, generation,
-  idempotency, fingerprints) uses the shared freezing/encoding layer in
-  `riko/coercion/_freeze.py` (`freeze`/`canonical_bytes`/`digest`), never Python's
-  randomized `hash()` or an ad-hoc encoder. It distinguishes types Python conflates and
+  idempotency, fingerprints) uses the shared canonical encoding layer in
+  `riko/coercion/_canonical.py` (`canonicalize`/`canonical_bytes`/`digest`), never
+  Python's randomized `hash()` or an ad-hoc encoder (`freeze*` names are reserved for
+  immutability, e.g. `freeze`/`freeze_json`). It distinguishes types Python conflates and
   raises on unsupported/cyclic values; process-local caches may bypass instead of raising.
 - **Immutable prepare** — `Module.prepare()` returns a frozen `PreparedModule` with
   no mutable call cache; call-site options cannot leak across items/concurrent
@@ -140,15 +142,15 @@ new permanent bullet here.
   execution/runtime layers.
 - **Foreign-option guard raises at decoration/import time** — handing one decorator
   another decorator's option is an author error, not a runtime data condition.
-- **Pool/pipe lifecycle** — `_owns_pool` decides who closes a pool; borrowed pools
-  stay open; pipes are one-shot; exceptional termination discards buffered/partial
+- **Pool/pipe lifecycle** — an execution owns and closes its one worker pool;
+  executions are one-shot; exceptional termination discards buffered/partial
   output rather than silently committing it.
 - **Lazy async I/O lifetime** — a lazy parser must retain its async URL/file handle
   through iteration. Do not shorten the lifetime with an `async with` that exits
   before the returned iterator is consumed.
 - **Architecture is enforced** — new modules must classify into the layer DAG.
-  Function-local/type-only edges may be visible in the report, but module-scope
-  runtime imports may not point upward.
+  Only `TYPE_CHECKING` edges are exempt; module-scope and function-local runtime
+  imports may not point upward.
 
 ## Coding Style
 
@@ -170,10 +172,11 @@ new permanent bullet here.
   pending capability is in plain English; keep phase cross-refs in `_docs/` and here.
   Full rule: `_docs/DOCUMENTATION_STANDARD.md` (No internal jargon in shipped text).
 - **A `Pipeline` variable is `pipeline`, never `flow`** — in code, tests, examples,
-  docs, gameplans, and drafts alike: `pipeline = Pipeline.from_module(...)`,
-  `pipeline = pipeline.with_execution(...)`, `stream = iter(pipeline)`. `flow` names
+  docs, gameplans, and drafts alike: `fetch = Pipeline.from_module("fetch")`,
+  `pipeline = fetch.with_execution(...)`, `stream = iter(pipeline)`. `flow` names
   only a bare `Workflow` (`flow = pipeline.workflow`). Don't copy `flow = ...` from
-  older text; rename it.
+  older text; rename it. Examples never rebind a name: each step gets its own. A
+  `PipelineDefinition` is `definition` (or a step name), never `pipeline`.
 - **Workflow forms go by their type names** — `Workflow`, `RawWorkflow`,
   `WorkflowDocument` ("workflow document" on first use), `PipeDef` ("pipe definition"
   on first use), `PipeDag`; old JSON is a "serialized `PipeDef`". Full rule and
@@ -194,16 +197,26 @@ new permanent bullet here.
   or is a fixed `ClassVar` tag. Non-string internal markers/states use a plain `Enum`.
   **Carve-out:** the metadata axes `ModuleType`/`ModuleCategory`/`ModuleSubtype` stay
   `Literal` even though they appear as `list_modules(...)` args — their canonical form is
-  the bare metadata string; the discovery *tree* is the enum layer.
+  the bare metadata string; the discovery *tree* is the enum layer. A lone sentinel
+  option beside another type (`concurrency: int | Literal["auto"]`) is also `Literal` —
+  a one-member enum buys no choice, only a public name; promote it to a `StrEnum` when a
+  second member arrives.
+- **Coroutine prefix marks a sync twin.** Give an `async def` an `a`/`_a` prefix only when it
+  has a sync counterpart of the same name (`run`/`arun`, `close`/`aclose`, `write`/`awrite`);
+  sibling sync/async classes never share a method name across colors. An async-only helper
+  keeps a plain name (`maybe_async`, `pull_stream`). An `async_` prefix only says the function
+  is async-flavored and may be a plain `def` (`async_pipe`, `async_get_temp_file`). Names that
+  mirror stdlib/AnyIO (`enter_async_context`, `run_sync`) are exempt.
 - **Function-verb vocabulary.** Name a function by what it does. The eight verbs a
   developer weighs are defined in the table below; each row's hard rule is the test.
   `require` is not "`resolve` but raising": it is the general narrow-or-raise /
   prerequisite-enforcement verb, and `require(resolve(...))` is one specialization of
   it, which is why the `require_str`/`require_mapping`/`require_options` guard family
   carries it. `build` absorbs the old `prepare`/`convert`/`make`. Specialized verbs are
-  not alternatives to weigh: `cast` (coercion), `compile` (compiler), `generate`/`gen_`
-  (codegen / Python-generator convention), `migrate` (version migration), `serialize`,
-  `register`, `read`/`write`/`open`/`close`, and `is`/`has` for predicates.
+  not alternatives to weigh: `cast` (coercion), `compile` (compiler), `generate`
+  (codegen: returns generated source), `gen_` (generator functions only: they yield),
+  `migrate` (version migration), `serialize`, `register`, `read`/`write`/`open`/`close`,
+  and `is`/`has` for predicates.
 
 | Verb | Meaning | Raising | Idempotency | Context / lookup | Hard rule |
 |---|---|---|---|---|---|
@@ -216,6 +229,11 @@ new permanent bullet here.
 | **`validate`** | Check a contract | Invalid value **MUST raise** | Observationally idempotent | May inspect explicit supporting information | **MUST NOT transform or return a replacement value** |
 | **`build`** | Assemble a new semantic artifact | Construction failure may raise | No requirement | Dependencies should be explicit | Creates a new artifact from semantic components |
 
+Defaults split `normalize` from `resolve`: filling an omitted field with the default its
+contract fixes (an embed without `conf` means `conf: {}`) rewrites a shorthand, so it is a
+`normalize`; substituting a default the caller supplies or chooses (`resolve_enum(default=)`)
+is a fallback, so it is a `resolve`.
+
 ## Project Quirks
 
 - **uv** — use the active environment form (`uv run --active ...`) when the current
@@ -225,8 +243,9 @@ new permanent bullet here.
 - **Doctests are tests** — configured pytest testpaths include source/docs/examples.
   Before deleting a doc example, confirm its behavior still has an executable owner;
   before adding a replacement pytest test, check function/class doctests first.
-  Async/Bado doctests are skipped automatically when async support is unavailable,
-  so do not add `issync` fallback branches solely for doctest collection.
+  When async support is unavailable, Async/Bado doctests are skipped whole and any
+  other doctest's `run(...)` examples are skipped individually, so do not add `issync`
+  fallback branches solely for doctest collection.
 - **`manage`** — `riko.cli.manage:manager` is the Click entry point. `manage.py`
   composes private command modules by reason to change. It collides with
   `mezmorize`'s console script in some install orders; use
@@ -239,8 +258,8 @@ new permanent bullet here.
   `workflows`/`pyworkflows` fixture trees are not generated; they are
   `WorkflowDocument`s plus hand-maintained typed probes. Details: `_docs/INTERNALS.md`.
 - **Lint selectors are additive** — bare `manage lint` is Ruff; `manage lint --all`
-  runs the whole standard suite (Ruff, RST, `--docs`, `--docstrings`, actionlint,
-  YAML, and all import contracts), so none of those need a separate run. Type
+  runs the whole standard suite (Ruff, RST, `--docs`, `--docstrings`, `--terms`, `--literals`,
+  `--deps`, actionlint, YAML, and all import contracts), so none of those need a separate run. Type
   verification (`--check-types`/`--verify-types`), pylint strict mode, and
   distribution checks remain explicit heavyweight checks.
 - **Docs stay consistent by lint** — `manage lint --docs` guards the authoritative
@@ -257,5 +276,5 @@ new permanent bullet here.
   linter; `SINK_NAMES`; `SUBPIPE_TYPE`; the legacy port/output tokens
   `INPUT_PORT`/`OUTPUT_PORT`/`OTHER_PORT`/`OUTPUT_MODULE` shared by `_normalize`/
   `_migrate`) plus a frozen `Settings` with `RIKO_*` env overrides (`load_settings`; a malformed value logs a warning and falls back
-  to the default). Existing names (`DEF_CONNECTION_COUNT`, `TIMEOUT`, `EXCHANGE_API`, …)
+  to the default). Existing names (`DEF_CONCURRENCY_LIMIT`, `TIMEOUT`, `EXCHANGE_API`, …)
   re-source from `settings`; add operator-tunable defaults here, not as scattered literals.

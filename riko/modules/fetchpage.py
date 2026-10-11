@@ -4,7 +4,7 @@ Fetches a web page as a string.
 
 Slices the page between ``start`` and ``end``, optionally strips its html tags,
 and optionally splits it on a ``token``. Yields bare strings rather than
-records, so the result is usually assigned to a field or fed to the regex
+items, so the result is usually assigned to a field or fed to the regex
 module.
 
 Examples:
@@ -21,7 +21,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -38,7 +38,7 @@ from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch
 from riko.parsing.documents import get_text
-from riko.types._options import Defaults, Opts
+from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import processor
 from ._prepare import require_conf
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from riko.coercion._configs import FetchPageObjconf
     from riko.types._streams import Item
 
-OPTS: Opts = SourceOpts
+OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING, "detag": False})
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -72,7 +72,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `start`, `end`, `token` and
+        objconf: The module configuration, containing `url`, `start`, `end`, `token` and
             `detag`.
 
     Returns:
@@ -119,7 +119,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `start`, `end`, `token` and
+        objconf: The module configuration, containing `url`, `start`, `end`, `token` and
             `detag`.
 
     Returns:
@@ -165,7 +165,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The page to fetch, local or remote. Required.
 
@@ -183,7 +183,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
             encoding (str): Page encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -230,7 +230,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The page to fetch, local or remote. Required.
 
@@ -248,7 +248,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
             encoding (str): Page encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

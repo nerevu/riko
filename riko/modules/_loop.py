@@ -2,7 +2,7 @@
 """
 Implements per-item loop execution for embedded modules.
 
-Each source item is processed independently by the embedded module, and its
+Each input item is processed independently by the embedded module, and its
 results are emitted or assigned back to that same parent item.
 """
 
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, cast
 
 import pygogo as gogo
 
-from riko.bado._util import maybe_aclosing, maybe_deferred
+from riko.bado._util import maybe_aclosing, maybe_async
 from riko.bado.itertools import as_async
 from riko.types._guards import is_subpipe
 
@@ -83,7 +83,7 @@ def _fold_parent(  # noqa: E302
     ``emit`` False yields a preserved parent copy per result with the result
     stored under ``assign``. Empty-child rule: when the child yields nothing, an
     ``emit=False`` loop still yields the untouched parent (assign-mode preserves
-    the record) while an ``emit=True`` loop drops it (emit-mode has nothing to
+    the parent item) while an ``emit=True`` loop drops it (emit-mode has nothing to
     emit). ``assign`` is guaranteed non-empty in ``emit=False`` mode: the module
     decorator (``Module.prepare``) resolves an unset ``assign`` to the module
     name (or ``"content"`` for sources) before the loop ever runs.
@@ -111,7 +111,7 @@ async def _afold_parent(  # noqa: E302
         yield parent
 
 
-def _run_loop_sync(
+def _run_loop(
     embed: SyncProcessorWrapper | SyncSubPipe,
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
@@ -129,7 +129,7 @@ def _run_loop_sync(
         yield from _fold_parent(parent, stream, assign, emit)
 
 
-async def _run_loop_async(
+async def _arun_loop(
     embed: AsyncProcessorWrapper | AsyncSubPipe,
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
@@ -143,7 +143,7 @@ async def _run_loop_async(
     embedder = bind_subpipe(embed, context, embedded_kwargs, field=field)
 
     async for parent in as_async(source):
-        items = await maybe_deferred(embedder, parent)
+        items = await maybe_async(embedder, parent)
         stream = _take(items, count)
 
         async for value in _afold_parent(parent, stream, assign, emit):
@@ -171,17 +171,17 @@ def loop_embed_sync(
     through (``looped`` False); no embed at all sets ``handled`` False so the
     caller runs the operator parser instead.
     """
-    embed_type = embed.type if embed else None
+    embed_type = getattr(embed, "type", None)
     handled = True
     looped = False
     stream = source
-    loop = partial(_run_loop_sync, field=field, assign=assign, emit=emit, count=count)
+    loop = partial(_run_loop, field=field, assign=assign, emit=emit, count=count)
 
     if embed is None:
         handled = False
     elif is_subpipe(embed):
-        # A named-workflow embed is self-contained, so it runs per parent with no
-        # embedded kwargs (its own modules carry their conf).
+        # A stored workflow is self-contained, so it runs per parent without the
+        # loop's embed kwargs (its own nodes carry their conf).
         stream = loop(embed, None, context, source)
         looped = True
     elif embed_type and embed.loopable:
@@ -190,9 +190,9 @@ def loop_embed_sync(
     elif embed_type:
         logger.error(f"{embed.name} is not loopable and can't be embedded.")
     elif callable(embed):
-        logger.error("Custom embedded pipes are not currently supported.")
+        logger.error("Custom embedded modules are not currently supported.")
     elif module_name == "loop":
-        logger.error("No embedded pipe provided!")
+        logger.error("No embedded module provided!")
     else:
         handled = False
 
@@ -219,17 +219,17 @@ def loop_embed_async(
     backpressure, and early exit on ``count="first"`` follow from sequential
     iteration.
     """
-    embed_type = embed.type if embed else None
+    embed_type = getattr(embed, "type", None)
     handled = True
     looped = False
     stream = source
-    loop = partial(_run_loop_async, field=field, assign=assign, emit=emit, count=count)
+    loop = partial(_arun_loop, field=field, assign=assign, emit=emit, count=count)
 
     if embed is None:
         handled = False
     elif is_subpipe(embed):
-        # A named-workflow embed is self-contained, so it runs per parent with no
-        # embedded kwargs (its own modules carry their conf).
+        # A stored workflow is self-contained, so it runs per parent without the
+        # loop's embed kwargs (its own nodes carry their conf).
         stream = loop(embed, None, context, source)
         looped = True
     elif embed_type and embed.loopable:
@@ -238,9 +238,9 @@ def loop_embed_async(
     elif embed_type:
         logger.error(f"{embed.name} is not loopable and can't be embedded.")
     elif callable(embed):
-        logger.error("Custom embedded pipes are not currently supported.")
+        logger.error("Custom embedded modules are not currently supported.")
     elif op_module_name == "loop":
-        logger.error("No embedded pipe provided!")
+        logger.error("No embedded module provided!")
     else:
         handled = False
 

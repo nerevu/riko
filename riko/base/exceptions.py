@@ -11,9 +11,11 @@ class ModuleError(RikoError):
 
 
 class UnsupportedModuleError(ModuleError):
-    def __init__(self, module_name: str):
-        super().__init__(f"Unsupported riko module: {module_name}")
+    def __init__(self, module_name: str, reason: str | None = None):
+        detail = "" if reason is None else f" ({reason})"
+        super().__init__(f"Unsupported riko module: {module_name}{detail}")
         self.module_name = module_name
+        self.reason = reason
 
 
 class TargetError(RikoError):
@@ -30,17 +32,20 @@ class PipelineError(RikoError):
     """Base class for pipeline-related errors."""
 
 
-class UnsupportedPipelineError(PipelineError):
-    def __init__(self, pipe_id: str):
-        super().__init__(f"Unsupported riko subpipeline: {pipe_id}")
+class UnsupportedWorkflowError(PipelineError):
+    def __init__(self, pipe_id: str, reason: str | None = None):
+        detail = "" if reason is None else f" ({reason})"
+        super().__init__(f"Unsupported riko stored workflow: {pipe_id}{detail}")
         self.pipe_id = pipe_id
+        self.reason = reason
 
 
 class PipelineStateError(PipelineError):
-    def __init__(self, state: str, action: str):
-        super().__init__(f"cannot {action} a pipe in state {state!r}")
+    def __init__(self, state: str, action: str, *, subject: str):
+        super().__init__(f"cannot {action} the {subject} in state {state!r}")
         self.state = state
         self.action = action
+        self.subject = subject
 
 
 class InvalidPipelineError(PipelineError):
@@ -118,6 +123,6 @@ __all__ = [
     "RikoError",
     "TargetError",
     "UnsupportedModuleError",
-    "UnsupportedPipelineError",
     "UnsupportedTargetError",
+    "UnsupportedWorkflowError",
 ]

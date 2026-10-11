@@ -208,7 +208,7 @@ def get_namespace(tree: AnyElementTree | AnyElement) -> str | None:
     return namespace
 
 
-def verify_pos(tree: AnyElementTree | AnyElement, pos: int, *tags: str) -> int:
+def get_xpath_pos(tree: AnyElementTree | AnyElement, pos: int, *tags: str) -> int:
     """
     Adjusts *pos* when *tree* IS the element at ``tags[pos]``.
 
@@ -234,15 +234,15 @@ def verify_pos(tree: AnyElementTree | AnyElement, pos: int, *tags: str) -> int:
         >>> from xml.etree.ElementTree import fromstring
         >>>
         >>> rss = fromstring('<rss/>')
-        >>> verify_pos(rss, 0, 'rss', 'channel', 'item')
+        >>> get_xpath_pos(rss, 0, 'rss', 'channel', 'item')
         1
-        >>> verify_pos(rss, 1, 'rss', 'channel', 'item')
+        >>> get_xpath_pos(rss, 1, 'rss', 'channel', 'item')
         1
         >>> channel = fromstring('<channel/>')
-        >>> verify_pos(channel, 1, 'rss', 'channel', 'item')
+        >>> get_xpath_pos(channel, 1, 'rss', 'channel', 'item')
         2
         >>> ns_rss = fromstring('<rss xmlns="http://purl.org/rss/1.0/"/>')
-        >>> verify_pos(ns_rss, 0, 'rss', 'channel')
+        >>> get_xpath_pos(ns_rss, 0, 'rss', 'channel')
         1
 
     """
@@ -275,7 +275,7 @@ def xpath(
     2. **ElementTree** — ``tree.findall(".//...")`` (stdlib fallback).
 
     When *pos* is ``None`` (the default) the function calls
-    :func:`verify_pos` to detect whether *tree* is already the element at
+    :func:`get_xpath_pos` to detect whether *tree* is already the element at
     the first level of *path*, incrementing *pos* automatically so
     descendant searches start at the correct level.
 
@@ -287,7 +287,7 @@ def xpath(
             path (sets initial *pos* to 1).
 
         pos: Starting index into the tag list. ``None`` triggers automatic
-            detection via :func:`verify_pos`.
+            detection via :func:`get_xpath_pos`.
 
         namespace: Namespace URI for prefixed searches. Auto-detected from
             *tree* when ``None``.
@@ -340,7 +340,7 @@ def xpath(
     tags = stripped.split("/") if stripped else []
 
     if auto_pos:
-        pos = verify_pos(tree, pos, *tags)
+        pos = get_xpath_pos(tree, pos, *tags)
 
     namespaces = {ns_prefix: namespace}
     ns_path = "/".join(f"{ns_prefix}:{tag}" for tag in tags[pos:]) if namespace else ""

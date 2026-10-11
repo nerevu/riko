@@ -18,9 +18,8 @@ from riko.types._workflow import Endpoint
 
 
 def _workflow(nodes, edges=(), outputs=None, inputs=None, resources=(), version="2"):
-    node_map = {node.id: node for node in nodes}
     return Workflow(
-        nodes=node_map,
+        nodes=nodes,
         edges=tuple(edges),
         outputs={} if outputs is None else outputs,
         inputs={} if inputs is None else inputs,
@@ -45,17 +44,6 @@ def test_unsupported_version_rejected():
 def test_empty_node_set_rejected():
     with pytest.raises(InvalidPipelineError, match="no nodes"):
         _workflow([]).validate()
-
-
-def test_node_id_key_mismatch_rejected():
-    workflow = Workflow(
-        nodes={"a": ModuleNode(id="b", name="fetch")},
-        edges=(),
-        outputs={"default": Endpoint("b", "out")},
-        inputs={},
-    )
-    with pytest.raises(InvalidPipelineError, match="does not match its key"):
-        workflow.validate()
 
 
 def test_missing_edge_reference_rejected():
@@ -153,7 +141,7 @@ def test_declared_resource_reference_passes():
 
 def test_non_empty_graph_without_output_rejected():
     node = ModuleNode(id="a", name="fetch")
-    with pytest.raises(InvalidPipelineError, match="exposes no output"):
+    with pytest.raises(InvalidPipelineError, match="exposes no workflow output"):
         _workflow([node]).validate()
 
 

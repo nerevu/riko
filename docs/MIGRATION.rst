@@ -19,7 +19,7 @@ Stable application API: ``riko``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The top-level application-facing facade is everything listed in ``riko.__all__``.
-It includes the pipe/collection API, compiler API, module-discovery API, public
+It includes the ``Pipeline``/collection API, compiler API, module-discovery API, public
 exceptions and context types, path/temp-file helpers, and the promoted async
 runtime helpers. Breaking changes to these names require the corresponding SemVer
 treatment. The current export list is intentionally not duplicated here.

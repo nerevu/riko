@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-580",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-595",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-595",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-636",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-636",
                 "port": "out"
@@ -30,10 +31,10 @@
             "target": {
                 "node": "sw-655",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-655",
                 "port": "out"
@@ -41,8 +42,7 @@
             "target": {
                 "node": "sw-666",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -57,9 +57,9 @@
                     "value": "file://riko/data/www.theguardian.com_politics_api_general_election_2010_results_json.json"
                 }
             },
+            "family": "module",
             "id": "sw-580",
-            "name": "fetchdata",
-            "type": "module"
+            "name": "fetchdata"
         },
         "sw-595": {
             "embed": {
@@ -71,14 +71,14 @@
                 },
                 "name": "pipe:bd0834cfe6cdacb0bea5569505d330b8"
             },
+            "family": "module",
             "id": "sw-595",
             "name": "loop",
             "options": {
                 "assign": "mpdetails",
                 "count": "first",
                 "emit": false
-            },
-            "type": "module"
+            }
         },
         "sw-619": {
             "conf": {
@@ -87,14 +87,14 @@
                     "type": "text"
                 }
             },
+            "family": "module",
             "id": "sw-619",
             "name": "locationbuilder",
             "options": {
                 "assign": "y:location",
                 "count": "first",
                 "emit": false
-            },
-            "type": "module"
+            }
         },
         "sw-636": {
             "conf": {
@@ -123,9 +123,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-636",
-            "name": "filter",
-            "type": "module"
+            "name": "filter"
         },
         "sw-655": {
             "conf": {
@@ -160,9 +160,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-655",
-            "name": "rename",
-            "type": "module"
+            "name": "rename"
         },
         "sw-666": {
             "conf": {
@@ -183,9 +183,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-666",
-            "name": "regex",
-            "type": "module"
+            "name": "regex"
         }
     },
     "outputs": {

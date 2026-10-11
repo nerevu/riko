@@ -22,7 +22,7 @@ Examples:
         from riko import Pipeline
 
         source = [{'content': 'hi'}]
-        print(next(iter(Pipeline(source=source).pipe('example.shout'))))
+        print(Pipeline(source=source).pipe('example.shout').first())
         EOF
 
 """

@@ -1,22 +1,27 @@
 # vim: sw=4:ts=4:expandtab
-"""Tests for the P8 module registry + pipe-resolution façade (slice 1)."""
+"""Tests for the module registry and the pipe-resolution façade."""
 
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from riko import Pipeline
 from riko.base._paths import ROOT_DIR
-from riko.base.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.base.exceptions import (
+    InvalidPipelineError,
+    UnsupportedModuleError,
+    UnsupportedWorkflowError,
+)
 from riko.definitions._workflow import Workflow
 from riko.definitions.modules import ModuleDefinition
 from riko.ext import register_module
 from riko.ext.codegen import list_modules
 from riko.ext.registry import reset_module_registry
 from riko.modules import regex, tokenizer
+from riko.runtime._importutils import require_interface
 from riko.runtime._module_registry import module_registry
-from riko.runtime._resolver import dispatcher
+from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflows import (
     CompositeStore,
     DirectoryStore,
@@ -25,6 +30,7 @@ from riko.runtime._workflows import (
     WorkflowResolver,
 )
 from riko.types._guards import is_mapping
+from tests import pyworkflows
 
 if TYPE_CHECKING:
     from riko.types._wrappers import SyncModuleWrapper
@@ -113,8 +119,15 @@ class TestModuleRegistry:
         assert not isinstance(e.value, UnsupportedModuleError)
 
     def test_runtime_registration_takes_precedence(self, fixed_registry):
-        fixed_registry.register(ModuleDefinition(name="tokenizer", sync_pipe=marker))
+        definition = ModuleDefinition(name="tokenizer", sync_pipe=marker)
+        fixed_registry.register(definition, replace=True)
         assert fixed_registry.require("tokenizer") is marker
+
+    def test_register_rejects_builtin_shadow_without_replace(self, fixed_registry):
+        with pytest.raises(ValueError, match="shadows a built-in module"):
+            fixed_registry.register(ModuleDefinition(name="count", sync_pipe=marker))
+
+        assert fixed_registry.registered_names() == ()
 
     def test_registered_names_are_sorted(self, fixed_registry):
         fixed_registry.register(ModuleDefinition(name="zeta", sync_pipe=marker))
@@ -182,35 +195,71 @@ class TestPublicRegister:
             dispatcher.require(_NAME)
 
 
-class TestPipeResolver:
+class TestResolverDispatcher:
     def test_module_resolves_via_registry(self, fixed_registry):
         assert dispatcher.require("tokenizer").__name__ == "pipe"
 
-    def test_non_pipeline_name_routes_to_module_registry(self, fixed_registry):
+    def test_non_stored_workflow_name_routes_to_module_registry(self, fixed_registry):
         # A plain (non ``pipe_*``) name resolves through the module registry, so a
-        # miss surfaces as UnsupportedModuleError, not UnsupportedPipelineError.
+        # miss surfaces as UnsupportedModuleError, not UnsupportedWorkflowError.
         with pytest.raises(UnsupportedModuleError):
             dispatcher.require(_MISSING_NAME)
 
-    def test_unresolved_pipeline_name_raises(self):
-        with pytest.raises(UnsupportedModuleError):
+    def test_missing_stored_workflow_raises(self):
+        with pytest.raises(UnsupportedWorkflowError, match="no store supplies") as err:
             dispatcher.require("pipe_missing")
+
+        assert err.value.pipe_id == "pipe_missing"
+
+    def test_missing_stored_workflow_interfaces_raise(self):
+        with pytest.raises(UnsupportedWorkflowError, match="no store supplies"):
+            WorkflowResolver().require_interfaces("pipe_missing")
+
+    def test_stored_workflow_without_interfaces_fails_validation_as_a_workflow(self):
+        store = MappingStore({"pipe_empty": ModuleType("pipe_empty")})
+        resolver = WorkflowResolver(module_store=store)
+        local = ResolverDispatcher(module_registry, resolver)
+
+        with pytest.raises(UnsupportedWorkflowError, match="no interfaces"):
+            local.validate("pipe_empty")
 
     @pytest.mark.xfail(
         strict=True,
-        reason="a runtime-registered pipe_* module is routed to the pipeline "
-        "resolver by name prefix and raises UnsupportedPipelineError.",
+        reason="a runtime-registered pipe_* module is routed to the workflow "
+        "resolver by name prefix and raises UnsupportedWorkflowError.",
     )
     def test_runtime_registered_pipe_prefixed_module_resolves(self, fixed_registry):
         """
         Prefer runtime registrations whose names start with ``pipe_``.
 
         These registrations must resolve to the registered callable rather than
-        pipeline-name routing.
+        stored-workflow (``pipe_<id>``) name routing.
         """
         name = "pipe_transform"
         fixed_registry.register(ModuleDefinition(name=name, sync_pipe=marker))
         assert dispatcher.require(name) is marker
+
+
+class TestRequireInterface:
+    """A missing interface names the right kind of thing and keeps the bare name."""
+
+    def test_builtin_module_without_interface_is_a_module_error(self):
+        def loader(name):
+            return ModuleType(name)
+
+        with pytest.raises(UnsupportedModuleError, match="has no 'async_pipe'") as err:
+            require_interface("bare", is_async=True, loader=loader)
+
+        assert err.value.module_name == "bare"
+
+    def test_stored_workflow_without_interface_is_a_workflow_error(self):
+        def loader(name):
+            return ModuleType(name)
+
+        with pytest.raises(UnsupportedWorkflowError, match="has no 'pipe'") as err:
+            require_interface("pipe_bare", builtin=False, loader=loader)
+
+        assert err.value.pipe_id == "pipe_bare"
 
 
 class TestEntryPointModules:
@@ -271,10 +320,19 @@ class TestEntryPointModules:
         ep_marker = cast("SyncModuleWrapper", lambda source, **_: source)
         ep_defn = ModuleDefinition(name=_NAME, sync_pipe=ep_marker)
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
-        fixed_registry.register(MOD_DEFN)
+        fixed_registry.register(MOD_DEFN, replace=True)
         resolved = fixed_registry.require(_NAME)
         assert resolved is marker
         assert resolved is not ep_marker
+
+    def test_register_rejects_entry_point_shadow_without_replace(
+        self, monkeypatch, fixed_registry
+    ):
+        ep_defn = ModuleDefinition(name=_NAME, sync_pipe=marker)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
+
+        with pytest.raises(ValueError, match="shadows an entry-point module"):
+            fixed_registry.register(MOD_DEFN)
 
     def test_entry_points_discovered_lazily_once(self, monkeypatch, fixed_registry):
         calls = {"n": 0}
@@ -296,29 +354,79 @@ class TestEntryPointModules:
 
 
 class TestWorkflowResolver:
-    def test_core_default_has_no_named_workflows(self):
-        """A bare (unconfigured) resolver finds no pipe_* module and no definition."""
+    def test_core_default_has_no_stored_workflows(self):
+        """A bare (unconfigured) resolver finds no pipe_* module and no workflow."""
         resolver = WorkflowResolver()
         assert resolver.load("pipe_x") is None
 
-        with pytest.raises(UnsupportedPipelineError):
-            resolver.load_definition("pipe_x")
+        with pytest.raises(UnsupportedWorkflowError, match="no document store"):
+            resolver.load_workflow("pipe_x")
 
-    def test_configured_resolver_imports_generated_module(self):
-        resolver = WorkflowResolver(store=PackageStore("tests.pyworkflows"))
+    def test_configured_resolver_loads_resolved_workflow(self):
+        resolver = WorkflowResolver(module_store=PackageStore("tests.pyworkflows"))
         assert resolver.load("pipe_kazeeki1") is not None
 
     def test_missing_module_returns_none(self):
-        resolver = WorkflowResolver(store=PackageStore("tests.pyworkflows"))
+        resolver = WorkflowResolver(module_store=PackageStore("tests.pyworkflows"))
         assert resolver.load("pipe_missing") is None
 
-    def test_directory_store_parses_definition(self):
-        directory = ROOT_DIR / "tests" / "workflows"
-        resolver = WorkflowResolver(documents=DirectoryStore(directory))
-        assert isinstance(resolver.load_definition("pipe_gigs"), Workflow)
+    def test_interfaces_accept_the_colon_alias(self):
+        module = ModuleType("pipe_demo")
+        setattr(module, "pipe", tokenizer.pipe)  # noqa: B010
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": module}))
+        assert resolver.require_interfaces("pipe:demo") == {"pipe"}
 
-        with pytest.raises(UnsupportedPipelineError):
-            resolver.load_definition("pipe_missing")
+    def test_second_document_store_requires_replace(self, tmp_path):
+        resolver = WorkflowResolver(document_store=DirectoryStore(tmp_path))
+
+        with pytest.raises(ValueError, match="document store already registered"):
+            resolver.register(document_store=DirectoryStore(tmp_path))
+
+    def test_load_accepts_the_colon_alias(self):
+        """``pipe:<id>`` finds the same stored workflow ``require`` does."""
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_mem": tokenizer}))
+        assert resolver.load("pipe:mem") is resolver.load("pipe_mem")
+        assert resolver.load("pipe:mem") is not None
+
+    def test_load_workflow_accepts_the_colon_alias(self):
+        directory = ROOT_DIR / "tests" / "workflows"
+        resolver = WorkflowResolver(document_store=DirectoryStore(directory))
+        assert resolver.load_workflow("pipe:gigs") == resolver.load_workflow(
+            "pipe_gigs"
+        )
+
+    def test_package_store_accepts_the_package_itself(self):
+        resolver = WorkflowResolver(module_store=PackageStore(pyworkflows))
+        assert resolver.load("pipe_kazeeki1") is not None
+
+    def test_mistyped_package_path_raises_when_built(self):
+        with pytest.raises(ModuleNotFoundError, match="no_such_package"):
+            PackageStore("tests.no_such_package")
+
+    def test_a_plain_module_is_not_a_package(self):
+        with pytest.raises(ValueError, match="is a module, not a package"):
+            PackageStore(tokenizer)
+
+    def test_directory_store_parses_workflow(self):
+        directory = ROOT_DIR / "tests" / "workflows"
+        resolver = WorkflowResolver(document_store=DirectoryStore(directory))
+        assert isinstance(resolver.load_workflow("pipe_gigs"), Workflow)
+
+        with pytest.raises(
+            UnsupportedWorkflowError, match="no WorkflowDocument"
+        ) as err:
+            resolver.load_workflow("pipe_missing")
+
+        assert err.value.pipe_id == "pipe_missing"
+
+    def test_directory_store_surfaces_unreadable_documents(self, tmp_path):
+        """Only a missing document is a miss; an unreadable one is an error."""
+        (tmp_path / "pipe_dir.json").mkdir()
+        store = DirectoryStore(tmp_path)
+        assert store.load("pipe_absent") is None
+
+        with pytest.raises(OSError, match=r"pipe_dir\.json"):
+            store.load("pipe_dir")
 
     def test_composite_store_first_hit_wins(self):
         store = CompositeStore(
@@ -330,8 +438,8 @@ class TestWorkflowResolver:
         assert store.load("pipe_x") is not regex
         assert store.load("absent") is None
 
-    def test_mapping_store_serves_in_memory_module(self):
-        resolver = WorkflowResolver(store=MappingStore({"pipe_mem": tokenizer}))
+    def test_mapping_store_returns_the_supplied_module(self):
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_mem": tokenizer}))
         assert resolver.load("pipe_mem") is tokenizer
 
 
@@ -348,3 +456,71 @@ class TestCatalog:
         fixed_registry.register(MOD_DEFN)
 
         assert _NAME not in list_modules()
+
+
+def _document_resolver(directory, **kwargs) -> WorkflowResolver:
+    """Builds a resolver whose document modules run through the global dispatcher."""
+    resolver = WorkflowResolver(document_store=DirectoryStore(directory), **kwargs)
+    resolver.register_dispatcher(dispatcher)
+    return resolver
+
+
+class TestResolvedDocuments:
+    workflows = ROOT_DIR / "tests" / "workflows"
+
+    def test_document_loads_once_with_both_interfaces(self):
+        resolver = _document_resolver(self.workflows)
+        module = resolver.load("pipe_gigs")
+
+        assert module is not None
+        assert callable(module.pipe)
+        assert callable(module.async_pipe)
+        assert resolver.load("pipe_gigs") is module
+        assert resolver.require_interfaces("pipe_gigs") == {"pipe", "async_pipe"}
+
+    def test_reset_forgets_resolved_documents(self):
+        resolver = _document_resolver(self.workflows)
+        assert resolver.load("pipe_gigs") is not None
+
+        resolver.reset()
+        assert resolver.load("pipe_gigs") is None
+
+    def test_replacing_documents_reloads_them(self, tmp_path):
+        source = self.workflows / "pipe_gigs.json"
+        (tmp_path / "pipe_gigs.json").write_bytes(source.read_bytes())
+        resolver = _document_resolver(self.workflows)
+        first = resolver.load("pipe_gigs")
+
+        resolver.register(document_store=DirectoryStore(tmp_path), replace=True)
+        second = resolver.load("pipe_gigs")
+
+        assert second is not None
+        assert second is not first
+
+    def test_module_store_wins_over_document(self):
+        store = MappingStore({"pipe_gigs": tokenizer})
+        resolver = _document_resolver(self.workflows, module_store=store)
+        assert resolver.load("pipe_gigs") is tokenizer
+
+    def test_malformed_document_raises_invalid_pipeline(self, tmp_path):
+        (tmp_path / "pipe_bad.json").write_text("{bad")
+        resolver = _document_resolver(tmp_path)
+
+        with pytest.raises(InvalidPipelineError, match="malformed"):
+            resolver.require("pipe_bad")
+
+    def test_document_without_dispatcher_raises(self):
+        resolver = WorkflowResolver(document_store=DirectoryStore(self.workflows))
+
+        with pytest.raises(UnsupportedWorkflowError, match="no dispatcher"):
+            resolver.load("pipe_gigs")
+
+    def test_registering_a_dispatcher_rebuilds_documents(self):
+        resolver = _document_resolver(self.workflows)
+        first = resolver.load("pipe_gigs")
+
+        resolver.register_dispatcher(dispatcher)
+        second = resolver.load("pipe_gigs")
+
+        assert second is not None
+        assert second is not first

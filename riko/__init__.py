@@ -17,7 +17,7 @@ from riko.base.exceptions import (
     PipelineStateError,
     RikoError,
     UnsupportedModuleError,
-    UnsupportedPipelineError,
+    UnsupportedWorkflowError,
 )
 from riko.definitions._context import Context
 from riko.definitions._workflow import Node, Workflow, WorkflowLike
@@ -65,7 +65,7 @@ __all__ = [
     "Sources",
     "Transforms",
     "UnsupportedModuleError",
-    "UnsupportedPipelineError",
+    "UnsupportedWorkflowError",
     "Workflow",
     "WorkflowDocument",
     "WorkflowLike",

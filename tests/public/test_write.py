@@ -9,19 +9,27 @@ sequence survives unchanged.
 
 from __future__ import annotations
 
-from typing import cast
+import os
+import subprocess
+import sys
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from riko.base._paths import ROOT_DIR
 from riko.modules.write import async_pipe, pipe
+from riko.parsing._dotdict import DotDict
 from riko.types.modules import WriteConf
 from tests import async_test, skipif_issync
+
+if TYPE_CHECKING:
+    from riko.types._streams import Items
 
 ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
 
 
 class TestWritePassthrough:
-    """``write`` yields every source item unchanged, in order."""
+    """``write`` yields every input item unchanged, in order."""
 
     def test_sync_preserves_sequence(self, tmp_path):
         conf = WriteConf({"dest": str(tmp_path / "out.json")})
@@ -61,6 +69,44 @@ class TestWriteParity:
         sync_bytes = self._read(sync_path)
         assert sync_bytes == self._read(async_path)
         assert sync_bytes.split() == [b"x", b"0", b"1", b"2"]
+
+
+class TestWriteNestedItems:
+    """Items holding nested mappings, as module output does, serialize to JSON."""
+
+    @pytest.mark.parametrize(
+        ("fmt", "expected"),
+        [
+            ("json", b'[{"a": {"b": [1, {"c": 2}]}}]'),
+            ("jsonl", b'{"a": {"b": [1, {"c": 2}]}}'),
+        ],
+    )
+    def test_nested_dotdict_items(self, tmp_path, fmt, expected):
+        items: Items = [DotDict({"a": {"b": [1, {"c": 2}]}})]
+        path = tmp_path / f"out.{fmt}"
+        list(pipe(items, conf=WriteConf({"dest": path, "fmt": fmt})))
+        assert path.read_bytes().strip() == expected
+
+
+_SEEDED_SET_WRITE = """
+import sys
+from riko.modules.write import pipe
+items = [{"tags": {"alpha", "beta", "gamma", "delta"}}]
+list(pipe(items, conf={"dest": sys.argv[1], "fmt": sys.argv[2]}))
+"""
+
+
+@pytest.mark.parametrize("fmt", ["json", "jsonl"])
+def test_set_values_are_written_sorted_under_any_hash_seed(tmp_path, fmt):
+    def write(seed: str) -> bytes:
+        path = tmp_path / f"{seed}.{fmt}"
+        args = [sys.executable, "-c", _SEEDED_SET_WRITE, str(path), fmt]
+        env = {**os.environ, "PYTHONHASHSEED": seed}
+        subprocess.run(args, check=True, cwd=ROOT_DIR, env=env)
+        return path.read_bytes()
+
+    expected = b'"tags": ["alpha", "beta", "delta", "gamma"]'
+    assert all(expected in write(seed) for seed in ("1", "2", "3"))
 
 
 class TestWriteSkips:

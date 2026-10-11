@@ -19,9 +19,11 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict
+from functools import partial
 from time import struct_time
 from typing import TYPE_CHECKING, cast
 
+from riko.base._iterutils import map_values
 from riko.coercion._canonical import repr_cache
 from riko.coercion._sequences import listize
 from riko.types._collections import RikoValue
@@ -115,10 +117,8 @@ def _parse_conf_uncached[T](
         elif is_sentinel(dd_conf, **kwargs) or is_type_value(dd_conf):
             parsed = cast("DotDict[T]", dd_conf).get()
         else:
-            _parsed = {
-                k: _parse_conf_uncached(item, v, **kwargs)
-                for k, v in dd_conf.asdict(key=None, **kwargs).items()
-            }
+            parse = partial(_parse_conf_uncached, item, **kwargs)
+            _parsed = map_values(parse, dd_conf.asdict(key=None, **kwargs))
             parsed = cast("T", _parsed)
     elif isinstance(dd_conf, (str, struct_time)):
         parsed = dd_conf

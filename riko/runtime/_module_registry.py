@@ -28,11 +28,14 @@ Attributes:
 
 from __future__ import annotations
 
-from dataclasses import replace as _replace
-from typing import TYPE_CHECKING, Literal, overload
+from typing import TYPE_CHECKING, Literal, get_args, overload
+
+from attrs import evolve
 
 from riko.base.exceptions import UnsupportedModuleError
 from riko.definitions.modules import ModuleDefinition
+from riko.types._guards import is_pipe_id
+from riko.types._module_ids import ModuleId
 
 from ._importutils import load_interfaces, require_interface
 from ._registry import Registry
@@ -47,10 +50,7 @@ if TYPE_CHECKING:
         SyncModuleWrapper,
     )
 
-
-def _module_summary(module: object) -> str | None:
-    lines = (getattr(module, "__doc__", "") or "").strip().splitlines()
-    return next((line.strip() for line in lines if line.strip()), None)
+BUILTIN_NAMES: frozenset[str] = frozenset(get_args(ModuleId))
 
 
 def _resolve_definition(obj: object) -> ModuleDefinition | None:
@@ -58,7 +58,7 @@ def _resolve_definition(obj: object) -> ModuleDefinition | None:
     if isinstance(obj, ModuleDefinition):
         definition = obj
     elif hasattr(obj, "pipe") or hasattr(obj, "async_pipe"):
-        definition = ModuleDefinition(module=obj, description=_module_summary(obj))
+        definition = ModuleDefinition(module=obj)
     else:
         definition = None
 
@@ -69,11 +69,15 @@ class ModuleRegistry(Registry[ModuleDefinition]):
     """
     Resolves module names to their sync/async interface callables.
 
-    Precedence is runtime registration, then entry point
-    (``[project.entry-points."riko.modules"]``), then built-in. Only module
-    implementations are resolved here. Named ``pipe_*`` workflows are the resolver
-    façade's concern and no JSON is loaded or compiled. Built-ins are imported lazily
-    on first use so heavy optional dependencies stay off the startup path.
+    Precedence is runtime registration, entry point
+    (``[project.entry-points."riko.modules"]``), built-in. A runtime registration
+    shadows an entry-point or built-in module only when registered with
+    ``replace=True``.
+
+    Only module implementations are resolved here. Stored workflows (looked up by their
+    ``pipe_<id>`` names) are the workflow resolver's concern, and no JSON is loaded or
+    compiled. Built-ins are imported lazily on first use so heavy optional dependencies
+    stay off the startup path.
 
     Examples:
 
@@ -95,7 +99,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
     label = "module"
 
     def _key(self, entry: ModuleDefinition) -> str:
-        return entry.resolved_name
+        return entry.name
 
     def _load(self, ep: EntryPoint) -> ModuleDefinition:
         loaded = ep.load()
@@ -107,21 +111,64 @@ class ModuleRegistry(Registry[ModuleDefinition]):
                 f"entry point {ep.name!r} returned {type(obj).__name__}, expected a"
                 " ModuleDefinition or a module exposing 'pipe'/'async_pipe'"
             )
-        elif not definition.name:
-            definition = _replace(definition, name=ep.name)
-        elif definition.name != ep.name:
+        elif not definition.declared_name:
+            definition = evolve(definition, name=ep.name)
+        elif definition.declared_name != ep.name:
             raise ValueError(
                 f"entry point {ep.name!r} declares a module named "
-                f"{definition.name!r}; the two must match"
+                f"{definition.declared_name!r}; the two must match"
             )
 
         return definition
+
+    def register(self, entry: ModuleDefinition, *, replace: bool = False) -> None:
+        """
+        Adds a runtime module definition without shadowing existing names.
+
+        Args:
+
+            entry: The named module definition to register.
+
+            replace: Whether the definition may replace an existing runtime
+                registration, or shadow an entry-point or built-in module.
+
+        Raises:
+
+            ValueError: If ``entry`` has no name, or its name is already registered
+                or names an entry-point or built-in module and ``replace`` is False.
+
+        Examples:
+
+            >>> registry = ModuleRegistry()
+            >>> registry.register(
+            ...     ModuleDefinition(name="count", sync_pipe=list), replace=True
+            ... )
+            >>> registry.registered_names()
+            ('count',)
+
+        """
+        name = self._key(entry)
+
+        if name and not replace:
+            if name in self._discover_entry_points():
+                tier = "an entry-point"
+            elif name in BUILTIN_NAMES:
+                tier = "a built-in"
+            else:
+                tier = None
+
+            if tier is not None:
+                msg = f"{self.label} {name!r} shadows {tier} module; "
+                msg += "pass replace=True to override it"
+                raise ValueError(msg)
+
+        super().register(entry, replace=replace)
 
     def _resolve_builtin(self, name: str, is_async: bool = False) -> ModuleWrapper:
         return require_interface(name, is_async=is_async)
 
     def is_compatible(self, name: str) -> bool:
-        return not name.startswith(("pipe_", "pipe:"))
+        return not is_pipe_id(name)
 
     @overload
     def require(  # noqa: E704
@@ -133,7 +180,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
     ) -> AsyncModuleWrapper: ...
     def require(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
         """
-        Resolves a module's sync or async callable, honoring tier precedence.
+        Finds a module's sync or async callable by tier precedence, or raises.
 
         Args:
 
@@ -165,13 +212,13 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             pipe = self._resolve_builtin(name, is_async)
         elif (pipe := definition.get_pipe(is_async)) is None:
             interface = "async_pipe" if is_async else "pipe"
-            raise UnsupportedModuleError(f"{name!r} has no {interface!r}")
+            raise UnsupportedModuleError(name, f"it has no {interface!r}")
 
         return pipe
 
     def require_interfaces(self, name: str) -> frozenset[Interface]:
         """
-        Resolves which of a module's sync and async interfaces are defined.
+        Finds which of a module's sync and async interfaces are defined.
 
         Args:
 
@@ -231,13 +278,14 @@ def register_module(definition: ModuleDefinition, *, replace: bool = False) -> N
     Args:
 
         definition: Named module definition to register.
-        replace: Whether an existing runtime definition with the same name may be
-            replaced.
+
+        replace: Whether the definition may replace an existing runtime
+            registration, or shadow an entry-point or built-in module.
 
     Raises:
 
-        ValueError: If ``definition`` has no name, or names an already registered
-            module and ``replace`` is False.
+        ValueError: If ``definition`` has no name, or names an already registered,
+            entry-point, or built-in module and ``replace`` is False.
 
     Examples:
 

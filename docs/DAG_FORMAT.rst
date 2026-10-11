@@ -3,7 +3,7 @@ Bare-bones DAG format
 
 A ``riko`` **workflow document** (``WorkflowDocument``) is a serialized ``Workflow``:
 explicit JSON in which every node is named and identified, every edge names the port it
-leaves and the port it enters, and the workflow's outputs are listed. The **bare-bones
+leaves and the port it enters, and the workflow outputs are listed. The **bare-bones
 DAG** (``PipeDag``) is a minimal format that captures only the essentials. ``parse_dag``
 expands it into a validated ``Workflow``, which ``serialize_workflow`` writes as a
 ``WorkflowDocument``. ``PipeDag`` and the older ``PipeDef`` are importable from
@@ -16,7 +16,7 @@ Schema
 
     {
         "modules": [
-            {"id": "sw-1", "type": "forever", "conf": {}},
+            {"id": "sw-1", "name": "forever", "conf": {}},
             {"id": "sw-2", "type": "truncate", "conf": {"count": {"type": "int", "value": "3"}}}
         ],
         "wires": [
@@ -24,13 +24,14 @@ Schema
         ]
     }
 
-- **``modules``**: each entry names the module ``type`` to run. ``conf`` is **opaque**:
-  it is copied through verbatim, so any module's native configuration is valid without
-  transformation. ``id`` is *optional* and defaults to ``sw-{n}`` (1-based listing
-  order); supply ids only when ``wires`` reference them. A module may also carry
-  ``options`` — the call options handed to the module itself (``emit``, ``assign``,
-  ``field``, ``count``) as opposed to the configuration it parses. Any other key is
-  offered to the workflow node as-is, so a typo is reported rather than dropped.
+- **``modules``**: each entry names the module to run in ``name`` (older DAGs spell it
+  ``type``). ``conf`` is **opaque**. It is copied through verbatim, so any module's
+  native configuration is valid without transformation. ``id`` is *optional* and
+  defaults to ``sw-{n}`` (1-based listing order). Supply ids only when ``wires``
+  reference them. A module may also carry ``options``: the call options handed to the
+  module (``emit``, ``assign``, ``field``, ``count``) as opposed to the configuration it
+  parses. Any other key is offered to the workflow node as-is, so a typo is reported
+  rather than dropped.
 - **``wires``**: *optional* list of ``[source_id, target_id]`` pairs, or
   ``[source_id, target_id, target_port]`` triples when the edge enters a port other
   than the default ``in``. When ``wires`` is omitted or empty, the modules are chained
@@ -41,7 +42,7 @@ Schema
 
     {
         "modules": [
-            {"type": "forever", "conf": {}},
+            {"name": "forever", "conf": {}},
             {"type": "truncate", "conf": {"count": {"type": "int", "value": "3"}}}
         ]
     }
@@ -55,7 +56,7 @@ e.g. the source is listed after the operator it feeds
     {
         "modules": [
             {"id": "trunc", "type": "truncate", "conf": {"count": {"type": "int", "value": "2"}}},
-            {"id": "gen", "type": "forever", "conf": {}}
+            {"id": "gen", "name": "forever", "conf": {}}
         ],
         "wires": [
             ["gen", "trunc"]
@@ -66,16 +67,16 @@ Fan-in
 ------
 
 A wire's optional third entry names the port it enters, so an operator that takes more
-than one stream — ``union``, ``join`` — is expressible directly. The first input is
+than one stream — ``union``, ``join`` — is expressible directly. The first input port is
 ``in``; the additional ones are ``in:1``, ``in:2``, and so on:
 
 .. code-block:: json
 
     {
         "modules": [
-            {"id": "a", "type": "fetch", "conf": {"url": "feed_a.xml"}},
-            {"id": "b", "type": "fetch", "conf": {"url": "feed_b.xml"}},
-            {"id": "u", "type": "union"}
+            {"id": "a", "name": "fetch", "conf": {"url": "feed_a.xml"}},
+            {"id": "b", "name": "fetch", "conf": {"url": "feed_b.xml"}},
+            {"id": "u", "name": "union"}
         ],
         "wires": [
             ["a", "u"],
@@ -86,18 +87,18 @@ than one stream — ``union``, ``join`` — is expressible directly. The first i
 Conf values from another node
 -----------------------------
 
-A ``conf`` entry written as ``{"terminal": "<name>", "type": ...}`` takes its value
-from the node wired into the port ``in:<name>``. A name that starts with a digit gets
-a leading underscore, so ``1_URL`` is wired into ``in:_1_URL``. Each time the module
-resolves its ``conf``, the entry receives the next item that node produces: a module
-with no stream wired into ``in`` (such as ``fetch`` below) resolves it once, while a
-``processor`` fed a ``stream`` resolves it once per input ``item``.
+A ``conf`` entry written as ``{"terminal": "<name>", "type": ...}`` (a *terminal
+reference*) takes its value from the node wired into the port ``in:<name>``. A name that
+starts with a digit gets a leading underscore, so ``1_URL`` is wired into ``in:_1_URL``.
+Each time the module resolves its ``conf``, the entry receives the next item that node
+produces. A module with no stream wired into ``in`` (such as ``fetch`` below) resolves
+it once, while a ``processor`` fed a ``stream`` resolves it once per input ``item``.
 
 .. code-block:: json
 
     {
         "modules": [
-            {"id": "url", "type": "urlbuilder", "conf": {"base": "https://example.com/feed.xml"}},
+            {"id": "url", "name": "urlbuilder", "conf": {"base": "https://example.com/feed.xml"}},
             {"id": "feed", "type": "fetch", "conf": {"url": {"terminal": "1_URL", "type": "url"}}}
         ],
         "wires": [
@@ -114,8 +115,8 @@ Expansion rules (``parse_dag``)
 2. When ``wires`` is omitted or empty, consecutive modules are wired in listing order.
 3. Each wire becomes an edge leaving the source's ``out`` port and entering the
    target's ``in`` port, or the port named by the wire's third entry.
-4. There is **no** terminal output module. The workflow's default output is its single
-   leaf — the one module that never appears as a wire source.
+4. Unlike a ``PipeDef``, there is **no** ``output`` node. The workflow's default output
+   is its single leaf: the one module that never appears as a wire source.
 5. The result is validated: an empty ``modules`` list, a wire referencing an unknown
    module, a cycle, a wire with the wrong number of entries, or more than one leaf all
    raise ``InvalidPipelineError``.
@@ -126,8 +127,8 @@ Expansion rules (``parse_dag``)
     >>>
     >>> dag = {
     ...     'modules': [
-    ...         {'type': 'forever'},
-    ...         {'type': 'truncate', 'conf': {'count': {'type': 'int', 'value': '3'}}},
+    ...         {'name': 'forever'},
+    ...         {'name': 'truncate', 'conf': {'count': {'type': 'int', 'value': '3'}}},
     ...     ]
     ... }
     >>> flow = parse_dag(dag)
@@ -145,7 +146,7 @@ it with ``Pipeline``, serialize it to a ``WorkflowDocument`` with
 ``riko.ext.serialize_workflow``, or hand it to ``compile_workflow``.
 
 A pipe definition (``PipeDef``) converts the same way through
-``riko.ext.migrate_v1_to_v2``. Convert a stored one once before registering its
+``riko.ext.migrate_v1_to_v2``. Convert a serialized one once before registering its
 directory with ``riko.ext.register_workflow_store``, which reads
 ``WorkflowDocument``\s only:
 

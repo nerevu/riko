@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Stream export and the catalog of serialization formats.
+Stream export and the serialization formats it supports.
 
 Examples:
 
@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Literal, TextIO, cast, overload
 
 from meza import io
 
-from riko.io._serialization import CONVERSION_FUNCS, serialize_records
+from riko.io._serialization import CONVERSION_FUNCS, serialize_items
 from riko.types._enums import Formats
 
 if TYPE_CHECKING:
@@ -113,7 +113,7 @@ def export(  # noqa: E302
 
         items: The stream to convert.
 
-        type_: An ``export`` target. ``list``/``tuple`` return the records
+        type_: The export type. ``list``/``tuple`` return the items
             themselves; a ``Formats`` value serializes.
 
         f: Destination path or file object. When given, the serialized output is
@@ -123,12 +123,12 @@ def export(  # noqa: E302
 
     Returns:
 
-        The records for ``list``/``tuple``, a ``StringIO`` for a serializing
-        target, or the number of bytes written when ``f`` is given.
+        The items for ``list``/``tuple``, a ``StringIO`` for a ``Formats`` value, or the
+        number of bytes written when ``f`` is given.
 
     Raises:
 
-        ValueError: If ``type_`` is not a known target.
+        ValueError: If ``type_`` is neither ``list``/``tuple`` nor a known format.
 
     Examples:
 
@@ -146,7 +146,7 @@ def export(  # noqa: E302
         result = tuple(items) if type_ == "tuple" else list(items)
     else:
         fmt = cast("Formats", type_)
-        serialized = serialize_records(items, fmt, **kwargs)
+        serialized = serialize_items(items, fmt, **kwargs)
         result = cast("int", io.write(f, serialized, **kwargs)) if f else serialized
 
     return result

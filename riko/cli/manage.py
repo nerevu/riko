@@ -15,6 +15,7 @@ from ._codegen import CODEGEN_COMMAND
 from ._lint import CHECK_COMMAND, LINT_COMMAND, PRETTIFY_COMMAND
 from ._release import BACKFILL_COMMAND, MISSING_COMMAND, RELEASE_NOTES_COMMAND
 from ._test import TEST_COMMAND
+from ._upgrade import UPGRADE_COMMAND
 
 sys.excepthook = partial(exception_hook, debug=False)
 
@@ -73,6 +74,7 @@ for _command in (
     RELEASE_COMMAND,
     RELEASE_NOTES_COMMAND,
     TEST_COMMAND,
+    UPGRADE_COMMAND,
 ):
     manager.add_command(_command)
 

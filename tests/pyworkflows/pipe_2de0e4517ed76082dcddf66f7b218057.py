@@ -8,18 +8,19 @@ from typing import TYPE_CHECKING
 
 from riko.modules.fetch import pipe as fetch
 from riko.runtime._workflows import mark_subpipe
+from riko.types._enums import ExecutionMode
 from riko.types.modules import FetchRawConf
 
 if TYPE_CHECKING:
     from riko import Context
 
 
+INPUTS = []
+DEPENDENCIES = ["fetch"]
+
+
 def pipe(item=None, context: Context | None = None, **_):
-    if context and context.describe_input:
-        _OUTPUT = []
-    elif context and context.describe_dependencies:
-        _OUTPUT = ["fetch"]
-    else:
+    if context is None or context.mode is ExecutionMode.RUN:
         sw_478 = fetch(
             item,
             conf=FetchRawConf(
@@ -33,6 +34,12 @@ def pipe(item=None, context: Context | None = None, **_):
             context=context,
         )
         _OUTPUT = sw_478
+    elif context.mode is ExecutionMode.DESCRIBE:
+        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        _OUTPUT = INPUTS
+    else:
+        _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
 

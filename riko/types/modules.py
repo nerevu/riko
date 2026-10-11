@@ -1,4 +1,4 @@
-"""Static config contracts for the built-in pipe modules."""
+"""Static config contracts for the built-in modules."""
 
 from __future__ import annotations
 
@@ -6,13 +6,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict
 
-from ._compiler import EmbedRef, PipeModule
+from ._collections import FrozenConf
+from ._compiler import Embed
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from re import Pattern, RegexFlag
-
-    from _typeshed import DataclassInstance
 
     from ._compiler import CountValues
     from ._enums import CastType, FmtLike, LocationType, SortableCastType
@@ -368,10 +367,6 @@ class SubelementRawConf(TypedDict):
     token_key: NotRequired[Value]
 
 
-class SubModuleRawConf(TypedDict):
-    gid: Value
-
-
 class SubstrRawConf(TypedDict, total=False):
     start: Value
     length: Value
@@ -463,7 +458,6 @@ type AnyModuleRawConf = (
     | StrReplaceRawConf
     | StrTransformRawConf
     | SubelementRawConf
-    | SubModuleRawConf
     | SubstrRawConf
     | SumRawConf
     | TailRawConf
@@ -477,21 +471,6 @@ type AnyModuleRawConf = (
     | UrlParseRawConf
     | XpathFetchPageRawConf
 )
-
-
-class EmbeddedModule(EmbedRef, total=False):
-    """
-    Describe a loop's embedded submodule for code generation.
-
-    The descriptor is ``{id, type, conf}`` and comes from
-    ``compile.gen_modules(embedded=True)`` using the loop's top-level ``embed`` and
-    ``conf``.
-    """
-
-    conf: Required[AnyModuleRawConf]
-    emit: ConfArg
-    assign: ConfArg
-    field: ConfArg
 
 
 # Parsed
@@ -828,7 +807,7 @@ class UrlParseConf(TypedDict, total=False):
 
 
 class WriteConf(TypedDict, total=False):
-    dest: Required[PathLike]
+    dest: PathLike
     fmt: FmtLike | None
     mode: str
 
@@ -841,20 +820,19 @@ class XpathFetchPageConf(TypedDict, total=False):
 
 
 # General
-type ConfDictValues = PipeModule | ParsedParam
-type RawConfValues = dict[str, str | int | bool]
 type OptionValues = bool | str | CountValues
 
 type ConfValues = (
     BasicValue
-    | ConfDictValues
+    | ParsedParam
     | bool
-    | DataclassInstance
+    | float
     | int
     | Literal["and", "or"]
     | list[ParsedParam]
     | list[str]
     | str
+    | None
 )
 
 type AnyConfRule = (
@@ -917,22 +895,10 @@ type AnyModuleConf = (
 )
 
 type Conf = AnyModuleConf | AnyModuleRawConf
+type MaybeFrozenConf = Conf | FrozenConf
 
 
-class Embed(TypedDict):
-    """
-    A loop's embedded module: the registered name run once per parent item.
-
-    ``conf`` is the configuration that module parses.
-
-    """
-
-    id: NotRequired[str]
-    conf: Conf
-    name: str
-
-
-class ModuleOptions(TypedDict, total=False):
+class CallOptions(TypedDict, total=False):
     """Call options forwarded to a module callable alongside its configuration."""
 
     emit: bool
@@ -945,6 +911,7 @@ __all__ = [
     "AggregateConf",
     "AnyConfRule",
     "AnyModuleConf",
+    "CallOptions",
     "CountConf",
     "CsvConf",
     "CurrencyFormatConf",
@@ -965,10 +932,10 @@ __all__ = [
     "InputConf",
     "ItemBuilderConf",
     "JoinConf",
+    "MaybeFrozenConf",
     "ModuleCategory",
     "ModuleClass",
     "ModuleMetadata",
-    "ModuleOptions",
     "ModuleSubtype",
     "ModuleSubtypes",
     "ModuleType",

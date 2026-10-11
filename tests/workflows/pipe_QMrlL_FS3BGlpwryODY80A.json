@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-108",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-148",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-108",
                 "port": "out:1"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-159",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-140",
                 "port": "out"
@@ -30,10 +31,10 @@
             "target": {
                 "node": "sw-108",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-148",
                 "port": "out"
@@ -41,10 +42,10 @@
             "target": {
                 "node": "sw-189",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-159",
                 "port": "out"
@@ -52,10 +53,10 @@
             "target": {
                 "node": "sw-204",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-189",
                 "port": "out"
@@ -63,10 +64,10 @@
             "target": {
                 "node": "sw-170",
                 "port": "in:1"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-204",
                 "port": "out"
@@ -74,15 +75,14 @@
             "target": {
                 "node": "sw-170",
                 "port": "in:3"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
         "sw-108": {
+            "family": "module",
             "id": "sw-108",
-            "name": "split",
-            "type": "module"
+            "name": "split"
         },
         "sw-140": {
             "conf": {
@@ -91,9 +91,9 @@
                     "value": "file://riko/data/news.yahoo.com_rss_health.xml"
                 }
             },
+            "family": "module",
             "id": "sw-140",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         },
         "sw-148": {
             "conf": {
@@ -120,9 +120,9 @@
                     }
                 }
             },
+            "family": "module",
             "id": "sw-148",
-            "name": "filter",
-            "type": "module"
+            "name": "filter"
         },
         "sw-159": {
             "conf": {
@@ -149,14 +149,14 @@
                     }
                 }
             },
+            "family": "module",
             "id": "sw-159",
-            "name": "filter",
-            "type": "module"
+            "name": "filter"
         },
         "sw-170": {
+            "family": "module",
             "id": "sw-170",
-            "name": "union",
-            "type": "module"
+            "name": "union"
         },
         "sw-189": {
             "conf": {
@@ -175,14 +175,14 @@
                     }
                 }
             },
+            "family": "module",
             "id": "sw-189",
             "name": "regex",
             "options": {
                 "assign": "loop:regex",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-204": {
             "conf": {
@@ -201,14 +201,14 @@
                     }
                 }
             },
+            "family": "module",
             "id": "sw-204",
             "name": "regex",
             "options": {
                 "assign": "loop:regex",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         }
     },
     "outputs": {

@@ -368,8 +368,8 @@ async def test_async_send_accepts_a_feed_source():
     """
     An async source reaches the parser as an ``AsyncIterator``, not a list.
 
-    ``operator.aparse``/``setup`` hand the parser an async ``orig_stream`` when the
-    caller passes a ``Feed``. So a sync ``for`` over it raises ``TypeError``.
+    ``operator.anormalize_input``/``setup`` hand the parser an async ``orig_stream``
+    when the caller passes a ``Feed``. So a sync ``for`` over it raises ``TypeError``.
     """
     consumed: list[int] = []
     received: list[Item] = []

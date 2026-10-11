@@ -1,6 +1,9 @@
 # vim: sw=4:ts=4:expandtab
 """Tests the canonical value encoder, golden digests, and repr cache."""
 
+import os
+import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, timezone
@@ -225,6 +228,48 @@ def test_cyclic_structure_is_rejected():
 def test_unsupported_value_raises():
     with pytest.raises(IdentityEncodingError):
         canonicalize(object())
+
+
+def test_lone_surrogate_string_raises_encoding_error():
+    with pytest.raises(IdentityEncodingError):
+        canonical_bytes("\ud800")
+
+
+def test_repr_cache_bypasses_lone_surrogate_strings():
+    calls: list[object] = []
+
+    @repr_cache
+    def tally(value):
+        calls.append(value)
+        return len(calls)
+
+    assert (tally("\ud800"), tally("\ud800")) == (1, 2)
+
+
+DIGEST_SCRIPT = """
+from riko.coercion._canonical import IdentityDomain, digest
+
+value = {
+    "text": ["a", "b", "c"],
+    "raw": (b"x", b"yz"),
+    "tags": {"red", "green", "blue", "cyan"},
+    "frozen": frozenset({"k1", "k2", "k3"}),
+    "nested": {"inner": {"s": {"p", "q"}, "b": b"\\x00"}},
+}
+print(digest(value, IdentityDomain.FINGERPRINT))
+"""
+
+
+def _get_subprocess_digest(hash_seed: str) -> str:
+    env = {**os.environ, "PYTHONHASHSEED": hash_seed}
+    args = [sys.executable, "-c", DIGEST_SCRIPT]
+    done = subprocess.run(args, env=env, capture_output=True, check=True, text=True)
+    return done.stdout.strip()
+
+
+def test_digest_is_stable_across_processes_with_different_hash_seeds():
+    digests = {_get_subprocess_digest(seed) for seed in ("0", "1", "4242")}
+    assert len(digests) == 1
 
 
 def test_repr_cache_memoizes_supported_arguments():

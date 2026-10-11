@@ -13,12 +13,17 @@ class FactoryKind(StrEnum):
 
     Attributes:
 
-        SYNC_GEN: A sync generator function (setup, ``yield`` value, teardown).
-        ASYNC_GEN: An async generator function.
-        SYNC_CM: A synchronous context-manager instance.
-        ASYNC_CM: An asynchronous context-manager instance.
-        CALLABLE: A callable whose sync/async lifecycle resolves at execution entry
-            (e.g. a ``@contextmanager`` function or a class factory).
+        SYNC_GEN_FACTORY: A sync generator function (setup, ``yield`` value,
+            teardown).
+        ASYNC_GEN_FACTORY: An async generator function.
+        SYNC_CM_FACTORY: A callable returning a sync context manager, such as a
+            ``@contextmanager`` function.
+        ASYNC_CM_FACTORY: A callable returning an async context manager, such as an
+            ``@asynccontextmanager`` function.
+        SYNC_CALLABLE_FACTORY: A plain sync callable that returns the value.
+        ASYNC_CALLABLE_FACTORY: A plain async function that returns the value.
+        SYNC_CONTEXTMANAGER: A sync context-manager instance, entered as is.
+        ASYNC_CONTEXTMANAGER: An async context-manager instance, entered as is.
 
     """
 

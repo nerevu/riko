@@ -86,13 +86,13 @@ type Feed = Items | AsyncItems
 ```
 
 `Stream` and `AsyncStream` differ by iteration mechanism, not by whether the source is finite or
-live. Boundedness is **not** a declared `Opts` field today — planned execution
+live. Boundedness is **not** a declared `DecorationOptions` field today — planned execution
 characteristics are documented in
 [execution-semantics.md §5](gameplans/execution-semantics.md#5-execution-characteristics).
 What ships is the behavioral bound in the §6 async primitives (bounded worker concurrency,
 no whole-source materialization). Each asynchronous execution resolves the source once and
 normalizes it to `AsyncIterator[Item]`. That bound governs the **item** stream, not the
-per-fetch **body**: on the async path a single source read buffers its whole response
+per-fetch **body**: under async iteration a single source read buffers its whole response
 (`async_url_open` → `response.content` / `Path.read_bytes`) before parsing, which then
 yields items lazily. Incremental `httpx.stream()` body reads are not implemented.
 
@@ -101,20 +101,20 @@ yields items lazily. Incremental `httpx.stream()` body reads are not implemented
 A `Pipeline` is a reusable definition; each `iter(pipeline)` / `aiter(pipeline)` creates a fresh
 **one-shot** private execution that owns the run's resources for the lifetime of the returned
 iterator. Iteration never restarts and never raises on exhaustion; a consumed iterator simply
-yields nothing. The sync path pulls lazily; the async path streams items as they are produced.
+yields nothing. Sync iteration pulls lazily; async iteration streams items as they are produced.
 `AsyncStream`s behave like ordinary async iterators — riko does not detect or recreate a consumed
 feed. (The one-shot `SyncPipe`/`AsyncPipe` instances this section used to describe were deleted
 at v1-cutover step 4, 2026-10-02.)
 
-This describes the shipped API only. Source objects seeded into a pipeline may themselves
+This describes the shipped API only. Items seeded into a pipeline may themselves
 still be one-shot; a second iteration of the same pipeline does not recreate them.
 
 ## 6. Async execution and backpressure
 
-Async mapping uses **bounded worker concurrency**: never one task per source item, never
+Async mapping uses **bounded worker concurrency**: never one task per input item, never
 whole-source materialization, never unbounded result buffering. Order-preserving streaming
 ships via `async_map_stream` / `async_map_ordered_stream` (`riko/bado/itertools.py`).
-`connections=0` means unlimited; legitimate `None` results are preserved.
+`limit=0` means unlimited; legitimate `None` results are preserved.
 
 ## 7. Timeout
 
@@ -140,7 +140,7 @@ as-built detail.
 
 ## 10. Delivery guarantee
 
-Today delivery is **best-effort, in-process**: a run streams items from source to sinks within
+Today delivery is **best-effort, in-process**: a run streams items from its source modules to its consumer within
 a single process, with per-item graceful error capture (§12). There is **no** durable
 checkpoint, source-position, acknowledgement, or replay machinery, so riko makes no cross-run
 durability guarantee yet.
@@ -158,8 +158,8 @@ claimed generically.
 
 Per-item processing is **graceful** today: errors are captured via `error_key` / `on_error`,
 not raised at call sites. Definition, configuration, and lifecycle boundaries may raise
-stable typed errors (`UnsupportedModuleError`, `UnsupportedPipelineError`,
-`PipelineStateError`). Planned richer disposition/retry semantics remain in their owning
+stable typed errors (`InvalidPipelineError`, `UnsupportedModuleError`,
+`UnsupportedWorkflowError`, `PipelineStateError`). Planned richer disposition/retry semantics remain in their owning
 gameplans.
 
 ## 13. Filter semantics

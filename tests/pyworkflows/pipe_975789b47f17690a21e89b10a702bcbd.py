@@ -13,6 +13,7 @@ from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
 from riko.modules.tokenizer import pipe as tokenizer
 from riko.runtime._workflows import mark_subpipe
+from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     FilterRawConf,
     InputRawConf,
@@ -26,14 +27,12 @@ if TYPE_CHECKING:
     from riko import Context
 
 
+INPUTS = [("", "q", "Status update", "text", "Here's #: some #hashtags to play #with")]
+DEPENDENCIES = ["filter", "input", "itembuilder", "regex", "rename", "tokenizer"]
+
+
 def pipe(item=None, context: Context | None = None, **_):
-    if context and context.describe_input:
-        _OUTPUT = [
-            ("", "q", "Status update", "text", "Here's #: some #hashtags to play #with")
-        ]
-    elif context and context.describe_dependencies:
-        _OUTPUT = ["filter", "input", "itembuilder", "regex", "rename", "tokenizer"]
-    else:
+    if context is None or context.mode is ExecutionMode.RUN:
         sw_417 = _input(
             item,
             conf=InputRawConf(
@@ -150,6 +149,12 @@ def pipe(item=None, context: Context | None = None, **_):
             context=context,
         )
         _OUTPUT = sw_501
+    elif context.mode is ExecutionMode.DESCRIBE:
+        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        _OUTPUT = INPUTS
+    else:
+        _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
 

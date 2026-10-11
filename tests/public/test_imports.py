@@ -23,6 +23,8 @@ import riko.modules
 import riko.modules._names
 import riko.runtime._codegen
 import riko.runtime._migrate
+import riko.runtime._resolver
+import riko.runtime._workflows
 import riko.runtime.collections
 import riko.types
 from riko.base._api_surface import (
@@ -133,21 +135,48 @@ def test_exception_reexports_are_same_object():
     assert not mismatches, f"Exception reexports differ from riko: {mismatches}"
 
 
-def test_no_accidental_internal_exports():
-    """Private resolution internals stay out of public namespace exports."""
-    violations = {
-        module.__name__: sorted(PRIVATE_RESOLUTION.intersection(module.__all__))
-        for module in SURFACE_MODULES
-        if PRIVATE_RESOLUTION.intersection(module.__all__)
-    }
-    assert not violations, f"Private resolution internals exported: {violations}"
+PUBLIC_EXTENSION_MODULES = (
+    "riko.ext.codegen",
+    "riko.ext.config",
+    "riko.ext.decorators",
+    "riko.ext.protocols",
+    "riko.ext.registry",
+)
+RESOLUTION_MODULES = (riko.runtime._resolver, riko.runtime._workflows)
 
 
-@pytest.mark.parametrize("path", ["riko.ext.resolver", "riko.ext.pipelines"])
-def test_resolution_internals_have_no_public_path(path):
-    """Resolution internals stay behind ``_``-prefixed modules (§3)."""
+def test_private_resolution_names_exist():
+    """Every declared private resolution name is defined by a resolution module."""
+    missing = sorted(
+        name
+        for name in PRIVATE_RESOLUTION
+        if not any(hasattr(module, name) for module in RESOLUTION_MODULES)
+    )
+    assert not missing, f"Declared resolution internals do not exist: {missing}"
+
+
+@pytest.mark.parametrize(
+    "module",
+    [*SURFACE_MODULES, *map(import_module, PUBLIC_EXTENSION_MODULES)],
+    ids=lambda module: module.__name__,
+)
+def test_no_accidental_internal_exports(module):
+    """Private resolution internals are neither exported nor reachable publicly."""
+    exported = PRIVATE_RESOLUTION.intersection(getattr(module, "__all__", ()))
+    reachable = {name for name in PRIVATE_RESOLUTION if hasattr(module, name)}
+    leaked = sorted(exported | reachable)
+    assert not leaked, f"Private resolution internals exposed: {leaked}"
+
+
+@pytest.mark.parametrize("module", RESOLUTION_MODULES, ids=lambda m: m.__name__)
+def test_resolution_internals_have_no_public_path(module):
+    """Resolution internals live only behind ``_``-prefixed modules."""
+    package, _, private_name = module.__name__.rpartition(".")
+    public_path = f"{package}.{private_name.lstrip('_')}"
+    assert private_name.startswith("_")
+
     with pytest.raises(ModuleNotFoundError):
-        import_module(path)
+        import_module(public_path)
 
 
 def test_no_leaked_public_functions():

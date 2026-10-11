@@ -9,8 +9,7 @@ from riko import Pipeline
 from riko.base._paths import get_path
 from riko.coercion._dataclass import build_regex_conf_rule
 from riko.definitions._context import Context
-from riko.execution._execution import SyncExecution
-from riko.runtime._execution_plan import build_execution_plan
+from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     CurrencyFormatConf,
     CurrencyFormatRawConf,
@@ -368,17 +367,20 @@ def print_content(output):
     print("count", len(pipe))
 
 
+INPUTS: list = []
+DEPENDENCIES = ["rename", "regex"]
+
+
 def pipe(context: Context | None = None, **_):
-    output: list = []
-
-    if context and context.describe_dependencies:
-        output = ["rename", "regex"]
-    elif not (context and context.describe_input):
-        pipeline = build()
-        plan = build_execution_plan(pipeline.workflow)
-
-        with SyncExecution(context=context or Context()) as execution:
-            output = list(execution.run(plan, source=pipeline.source))
+    if context is None or context.mode is ExecutionMode.RUN:
+        context = Context() if context is None else context
+        output: list | dict = list(build().with_context(context))
+    elif context.mode is ExecutionMode.DESCRIBE:
+        output = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        output = INPUTS
+    else:
+        output = DEPENDENCIES
 
     return output
 

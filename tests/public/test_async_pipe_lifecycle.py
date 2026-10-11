@@ -174,13 +174,6 @@ class TestAsyncClose:
         assert first["content"] == "0"
         assert len(consumed) < 20
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "an async iteration abandoned with a bare break is closed later from "
-            "another task, which cancels the caller's task and breaks its cancel scopes"
-        ),
-    )
     @async_test
     async def test_bare_break_leaves_the_callers_cancel_scope_intact(self):
         source = [{"content": str(index)} for index in range(5)]

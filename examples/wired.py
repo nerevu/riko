@@ -1,5 +1,5 @@
 """
-Wires one pipe's output into another's terminal.
+Wires one node's output stream into another node's terminal reference.
 
 A format ``input`` feeds a ``dateformat`` whose result is built into an item with
 ``itembuilder``.

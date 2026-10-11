@@ -53,10 +53,10 @@ def _gen_changelog_entries(path: Path = _CHANGELOG_PATH) -> Iterator[_Entry]:
         yield _Entry(match["version"], match["release_date"], match["body"].strip())
 
 
-def _get_changelog_entry(
+def _require_changelog_entry(
     version: str | None = None, path: Path = _CHANGELOG_PATH
 ) -> _Entry:
-    """Select a changelog version, release date, and RST body."""
+    """Selects a changelog version, release date, and RST body."""
     for entry in _gen_changelog_entries(path):
         if (version is None) or entry.version == version:
             return entry
@@ -135,7 +135,7 @@ def _backfill_github(
 ) -> None:
     """Dispatch GitHub release creation or release-note repair."""
     _validate_tag(version, *_gen_gh_tags())
-    entry = _get_changelog_entry(version)
+    entry = _require_changelog_entry(version)
 
     if entry.release_date == "Unreleased":
         raise RuntimeError(f"Changelog entry for {version} is unreleased")
@@ -169,7 +169,7 @@ def _backfill_pypi(version: str, dry_run: bool = False) -> None:
 @click.argument("version", required=False)
 def _release_notes_command(version: str | None = None) -> None:
     """Convert a changelog section to Markdown release notes."""
-    entry = _get_changelog_entry(version)
+    entry = _require_changelog_entry(version)
 
     if environ.get("GITHUB_REF_TYPE") == "tag":
         _validate_tag(entry.version, environ.get("GITHUB_REF_NAME", ""))

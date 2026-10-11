@@ -42,14 +42,14 @@ uv pip install -e .  # alongside riko
 ```python
 from riko import Pipeline
 
-next(iter(Pipeline(source=[{"content": "hi"}]).pipe("example.shout")))
+Pipeline(source=[{"content": "hi"}]).pipe("example.shout").first()
 # {"content": "HI"}
 ```
 
 ## No packaging? Register at runtime instead
 
-When you don't need a discoverable, installable plugin, skip the entry point and
-call `riko.ext.register` directly:
+When you don't need a discoverable, installable extension package, skip the entry
+point and call `riko.ext.register_module` directly:
 
 - [`../register_module.py`](../register_module.py): explicit `sync_pipe=`/`async_pipe=` callables.
 - [`../register_alias.py`](../register_alias.py): the `module=` convention.

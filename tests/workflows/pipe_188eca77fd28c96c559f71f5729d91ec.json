@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-111",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-287",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-163",
                 "port": "out"
@@ -19,8 +20,7 @@
             "target": {
                 "node": "sw-111",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -43,14 +43,14 @@
                     "type": "url"
                 }
             },
+            "family": "module",
             "id": "sw-111",
             "name": "fetchpage",
             "options": {
                 "assign": "loop:fetchpage",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-163": {
             "conf": {
@@ -65,9 +65,9 @@
                     }
                 }
             },
+            "family": "module",
             "id": "sw-163",
-            "name": "itembuilder",
-            "type": "module"
+            "name": "itembuilder"
         },
         "sw-287": {
             "conf": {
@@ -76,9 +76,9 @@
                     "value": "100"
                 }
             },
+            "family": "module",
             "id": "sw-287",
-            "name": "truncate",
-            "type": "module"
+            "name": "truncate"
         }
     },
     "outputs": {

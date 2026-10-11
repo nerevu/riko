@@ -214,6 +214,92 @@ def partition[T](
     return matching, non_matching
 
 
+def sort_stably[T](items: Iterable[T]) -> list[T]:
+    """
+    Sorts items in an order that does not depend on hash randomization.
+
+    Items that cannot be compared with each other, such as a mix of types, are
+    sorted by their ``repr`` instead.
+
+    Args:
+
+        items: The items to sort, such as a set.
+
+    Returns:
+
+        The items in a stable order.
+
+    Examples:
+
+        >>> sort_stably({"b", "a"})
+        ['a', 'b']
+        >>> sort_stably({1, "a"})
+        ['a', 1]
+
+    """
+    listed = list(items)
+
+    try:
+        result = sorted(listed)  # pyright: ignore[reportArgumentType]
+    except TypeError:
+        result = sorted(listed, key=repr)
+
+    return result
+
+
+def unzip[T, U](pairs: Iterable[tuple[T, U]]) -> tuple[list[T], list[U]]:
+    """
+    Splits pairs into a list of first elements and a list of second elements.
+
+    Args:
+
+        pairs: The pairs to split.
+
+    Returns:
+
+        The first elements and the second elements, each in input order.
+
+    Examples:
+
+        >>> unzip([("a", 1), ("b", 2)])
+        (['a', 'b'], [1, 2])
+        >>> unzip([])
+        ([], [])
+
+    """
+    left: list[T] = []
+    right: list[U] = []
+
+    for a, b in pairs:
+        left.append(a)
+        right.append(b)
+
+    return left, right
+
+
+def map_values[K, V, R](func: Callable[[V], R], items: Mapping[K, V]) -> dict[K, R]:
+    """
+    Applies a function to each value of a mapping.
+
+    Args:
+
+        func: The transform applied to each value.
+        items: The source mapping.
+
+    Returns:
+
+        A new dict with the same keys, in the same order, holding the
+        transformed values.
+
+    Examples:
+
+        >>> map_values(len, {"a": "xy", "b": ""})
+        {'a': 2, 'b': 0}
+
+    """
+    return {key: func(value) for key, value in items.items()}
+
+
 @overload
 def dispatch[T, U, X, Y](  # noqa: E704
     split: tuple[T, U],

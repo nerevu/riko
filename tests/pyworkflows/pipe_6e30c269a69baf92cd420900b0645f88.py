@@ -14,6 +14,7 @@ from riko.modules.sort import pipe as sort
 from riko.modules.union import pipe as union
 from riko.modules.uniq import pipe as uniq
 from riko.runtime._workflows import mark_subpipe
+from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     FetchRawConf,
     FilterRawConf,
@@ -27,12 +28,12 @@ if TYPE_CHECKING:
     from riko import Context
 
 
+INPUTS = []
+DEPENDENCIES = ["fetch", "filter", "regex", "rename", "sort", "union", "uniq"]
+
+
 def pipe(item=None, context: Context | None = None, **_):
-    if context and context.describe_input:
-        _OUTPUT = []
-    elif context and context.describe_dependencies:
-        _OUTPUT = ["fetch", "filter", "regex", "rename", "sort", "union", "uniq"]
-    else:
+    if context is None or context.mode is ExecutionMode.RUN:
         sw_233 = fetch(
             item,
             conf=FetchRawConf(
@@ -143,6 +144,12 @@ def pipe(item=None, context: Context | None = None, **_):
             context=context,
         )
         _OUTPUT = sw_191
+    elif context.mode is ExecutionMode.DESCRIBE:
+        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        _OUTPUT = INPUTS
+    else:
+        _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
 

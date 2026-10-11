@@ -10,7 +10,7 @@ Index
 - `What is riko's data model`_
 - `Which Python versions are supported`_
 - `Which imports are public`_
-- `What pipes are available`_
+- `What modules are available`_
 - `How do I discover installed modules`_
 - `What do processor, operator, and splitter mean`_
 - `How does a processor map over items`_
@@ -33,16 +33,17 @@ What is riko's data model?
 --------------------------
 
 An ``item`` is a dictionary-like record. A ``stream`` is an iterator of
-``item``. A ``pipe`` is a configured module that creates, transforms, combines,
-or consumes a ``stream``.
+``item``. A ``module`` is a named unit, such as ``fetch`` or ``filter``, that creates,
+transforms, combines, or consumes a ``stream``. A ``node`` is a ``module`` with its
+configuration, and a ``pipeline`` is a chain of ``nodes``.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, Transforms
+    >>> from riko import Pipeline
     >>>
     >>> items = [{'title': 'alpha'}, {'title': 'beta'}]
-    >>> pipeline = Pipeline(source=items).pipe(
-    ...     Transforms.HASH, options={'field': 'title', 'assign': 'title_hash'}
+    >>> pipeline = Pipeline(source=items).hash(
+    ...     options={'field': 'title', 'assign': 'title_hash'}
     ... )
     >>> pipeline.first()
     {'title': 'alpha', 'title_hash': 863334096}
@@ -79,7 +80,7 @@ Which imports are public?
   ``issync``, ``list_modules``, ``describe_module``, ``list_formats``, ``run``, the
   typed discovery surface (``Modules``/``Sources``/``Transforms``/``Sinks``/``Formats``
   bucket enums), and the pipeline exceptions.
-- **Extension**: ``riko.ext`` holds the symbols for authoring custom ``pipes``:
+- **Extension**: ``riko.ext`` holds the symbols for authoring custom ``modules``:
   the ``processor``/``operator``/``splitter`` decorators and the module-metadata types.
 - **Private**: all import paths outside ``riko``, ``riko.bado``, and ``riko.ext``,
   including individual ``riko.modules.*`` implementations and other implementation
@@ -116,137 +117,139 @@ Underscore-prefixed modules are private. Individual built-in implementations
 under ``riko.modules`` remain useful for direct functional composition, but they
 are not the stable application import layer.
 
-What pipes are available?
--------------------------
+.. _what-pipes-are-available:
+
+What modules are available?
+---------------------------
 
 Overview
 ^^^^^^^^
 
-``riko`` ships 52 built-in ``pipes``, outlined below [#]_. Runtime discovery is
-the authoritative source for a ``pipe``'s type, subtype, sync/async
+``riko`` ships 52 built-in ``modules``, outlined below [#]_. Runtime discovery is
+the authoritative source for a ``module``'s type, subtype, sync/async
 availability, and loopability.
 
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| Pipe name            | Pipe type | Primary sub-type | Pipe description                                                                             |
-+======================+===========+==================+==============================================================================================+
-| `aggregate`_         | operator  | composer         | performs an arbitrary (user-defined) function on a stream                                    |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `count`_             | operator  | aggregator       | counts the number of items in a feed                                                         |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `csv`_               | processor | source           | parses a CSV file to yield items                                                             |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `currencyformat`_    | processor | transformer      | formats a number to a given currency string                                                  |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `datebuilder`_       | processor | transformer      | converts a text string into a datetime                                                       |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `dateformat`_        | processor | transformer      | formats a date                                                                               |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `exchangerate`_      | processor | transformer      | retrieves the current exchange rate for a given currency pair                                |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `feedautodiscovery`_ | processor | source           | discovers RSS/Atom feed links on a page                                                      |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `fetch`_             | processor | source           | fetches and parses a feed to return the entries                                              |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `fetchdata`_         | processor | source           | fetches and parses an XML or JSON file to return the feed entries                            |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `fetchpage`_         | processor | source           | fetches the content of a given web site as a string                                          |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `fetchsitefeed`_     | processor | source           | fetches and parses the first feed found on a site                                            |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `fetchtable`_        | processor | source           | fetches and parses tabular data (CSV, XLS, JSON, etc.) to yield items                        |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `fetchtext`_         | processor | source           | fetches and parses a text file                                                               |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `filter`_            | operator  | composer         | extracts items matching the given rules                                                      |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `forever`_           | processor | source           | yields an endless stream of empty items (mocks an input source)                              |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `geolocate`_         | processor | transformer      | obtains the geo location of an IP or street address                                          |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `hash`_              | processor | transformer      | hashes the field of a feed item                                                              |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `input`_             | processor | source           | prompts for text and parses it into a variety of different types, e.g., int, bool, date, etc |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `itembuilder`_       | processor | source           | builds an item                                                                               |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `join`_              | operator  | composer         | perform a SQL like join on two feeds                                                         |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `loop`_              | operator  | composer         | runs a submodule (pipe) once per stream item                                                 |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `receive`_           | operator  | composer         | receives stream items from a named channel (pub/sub)                                         |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `refind`_            | processor | transformer      | finds text located before, after, or between substrings using regular expressions            |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `regex`_             | processor | transformer      | replaces text in fields of a feed item using regexes                                         |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `rename`_            | processor | transformer      | renames or copies fields in a feed item                                                      |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `reverse`_           | operator  | composer         | reverses the order of source items in a feed                                                 |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `rssitembuilder`_    | processor | source           | builds an rss item                                                                           |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `send`_              | operator  | composer         | pushes a copy of each stream item to named channels (pub/sub)                                |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `simplemath`_        | processor | transformer      | performs basic arithmetic, such as addition and subtraction                                  |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `slugify`_           | processor | transformer      | slugifies text                                                                               |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `sort`_              | operator  | composer         | sorts a feed according to a specified key                                                    |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `split`_             | splitter  | splitter         | splits a feed into identical copies                                                          |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `strconcat`_         | processor | transformer      | concatenates strings                                                                         |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `strfind`_           | processor | transformer      | finds text located before, after, or between substrings                                      |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `strreplace`_        | processor | transformer      | replaces the text of a field of a feed item                                                  |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `strtransform`_      | processor | transformer      | performs string transformations on the field of a feed item                                  |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `subelement`_        | processor | transformer      | extracts sub-elements for the item of a feed                                                 |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `substr`_            | processor | transformer      | returns a substring of a field of a feed item                                                |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `sum`_               | operator  | aggregator       | sums a field of items in a feed                                                              |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `tail`_              | operator  | composer         | truncates a feed to the last N items                                                         |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `timeout`_           | operator  | composer         | returns items from a stream until a certain amount of time has passed                        |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `tokenizer`_         | processor | transformer      | splits a string by a delimiter                                                               |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `truncate`_          | operator  | composer         | returns a specified number of items from a feed                                              |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `typecast`_          | processor | transformer      | casts a field into a specific type                                                           |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `udf`_               | processor | transformer      | performs an arbitrary (user-defined) function on an item                                     |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `union`_             | operator  | composer         | merges multiple feeds together                                                               |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `uniq`_              | operator  | composer         | filters out non-unique items according to a specified field                                  |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `urlbuilder`_        | processor | source           | builds a URL                                                                                 |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `urlparse`_          | processor | transformer      | parses a URL into its six components                                                         |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `write`_             | operator  | composer         | writes the stream to a file; passes items through unchanged (in-pipeline sink)               |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
-| `xpathfetchpage`_    | processor | source           | fetches the content of a given website as DOM nodes or a string                              |
-+----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| Module               | Module type | Primary subtype  | Description                                                                                  |
++======================+=============+==================+==============================================================================================+
+| `aggregate`_         | operator    | composer         | performs an arbitrary (user-defined) function on a stream                                    |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `count`_             | operator    | aggregator       | counts the number of items in a stream                                                       |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `csv`_               | processor   | source           | parses a CSV file to yield items                                                             |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `currencyformat`_    | processor   | transformer      | formats a number to a given currency string                                                  |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `datebuilder`_       | processor   | transformer      | converts a text string into a datetime                                                       |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `dateformat`_        | processor   | transformer      | formats a date                                                                               |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `exchangerate`_      | processor   | transformer      | retrieves the current exchange rate for a given currency pair                                |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `feedautodiscovery`_ | processor   | source           | discovers RSS/Atom feed links on a page                                                      |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `fetch`_             | processor   | source           | fetches and parses an RSS feed to return its entries                                         |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `fetchdata`_         | processor   | source           | fetches and parses an XML or JSON file to return its records                                 |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `fetchpage`_         | processor   | source           | fetches the content of a given web site as a string                                          |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `fetchsitefeed`_     | processor   | source           | fetches and parses the first RSS/Atom feed found on a site                                   |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `fetchtable`_        | processor   | source           | fetches and parses tabular data (CSV, XLS, JSON, etc.) to yield items                        |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `fetchtext`_         | processor   | source           | fetches and parses a text file                                                               |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `filter`_            | operator    | composer         | extracts items matching the given rules                                                      |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `forever`_           | processor   | source           | yields an endless stream of empty items (mocks an input source)                              |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `geolocate`_         | processor   | transformer      | obtains the geo location of an IP or street address                                          |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `hash`_              | processor   | transformer      | hashes the field of an item                                                                  |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `input`_             | processor   | source           | prompts for text and parses it into a variety of different types, e.g., int, bool, date, etc |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `itembuilder`_       | processor   | source           | builds an item                                                                               |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `join`_              | operator    | composer         | perform a SQL like join on two streams                                                       |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `loop`_              | operator    | composer         | runs an embedded module once per stream item                                                 |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `receive`_           | operator    | composer         | receives stream items from a named channel (pub/sub)                                         |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `refind`_            | processor   | transformer      | finds text located before, after, or between substrings using regular expressions            |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `regex`_             | processor   | transformer      | replaces text in fields of an item using regexes                                             |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `rename`_            | processor   | transformer      | renames or copies fields in an item                                                          |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `reverse`_           | operator    | composer         | reverses the order of items in a stream                                                      |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `rssitembuilder`_    | processor   | source           | builds an rss item                                                                           |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `send`_              | operator    | composer         | pushes a copy of each stream item to named channels (pub/sub)                                |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `simplemath`_        | processor   | transformer      | performs basic arithmetic, such as addition and subtraction                                  |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `slugify`_           | processor   | transformer      | slugifies text                                                                               |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `sort`_              | operator    | composer         | sorts a stream according to specified fields                                                 |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `split`_             | splitter    | splitter         | splits a stream into identical copies                                                        |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `strconcat`_         | processor   | transformer      | concatenates strings                                                                         |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `strfind`_           | processor   | transformer      | finds text located before, after, or between substrings                                      |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `strreplace`_        | processor   | transformer      | replaces the text of a field of an item                                                      |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `strtransform`_      | processor   | transformer      | performs string transformations on the field of an item                                      |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `subelement`_        | processor   | transformer      | extracts sub-elements of an item                                                             |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `substr`_            | processor   | transformer      | returns a substring of a field of an item                                                    |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `sum`_               | operator    | aggregator       | sums a field of items in a stream                                                            |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `tail`_              | operator    | composer         | truncates a stream to the last N items                                                       |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `timeout`_           | operator    | composer         | returns items from a stream until a certain amount of time has passed                        |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `tokenizer`_         | processor   | transformer      | splits a string by a delimiter                                                               |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `truncate`_          | operator    | composer         | returns a specified number of items from a stream                                            |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `typecast`_          | processor   | transformer      | casts a field into a specific type                                                           |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `udf`_               | processor   | transformer      | performs an arbitrary (user-defined) function on an item                                     |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `union`_             | operator    | composer         | merges multiple streams together                                                             |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `uniq`_              | operator    | composer         | filters out non-unique items according to a specified field                                  |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `urlbuilder`_        | processor   | source           | builds a URL                                                                                 |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `urlparse`_          | processor   | transformer      | parses a URL into its six components                                                         |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `write`_             | operator    | composer         | writes the stream to a file; passes items through unchanged (in-pipeline sink)               |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
+| `xpathfetchpage`_    | processor   | source           | fetches the content of a given website as DOM nodes or a string                              |
++----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
 
 Args
 ^^^^
 
-``riko`` ``pipes`` come in three types: ``processor``, ``operator``, and
+``riko`` ``modules`` come in three module types: ``processor``, ``operator``, and
 ``splitter`` [#]_. An ``operator`` operates on a ``stream``. Examples include
 ``count``, ``filter``, and ``reverse``.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, Transforms
+    >>> from riko import Pipeline
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(iter(Pipeline(source=stream).pipe(Transforms.REVERSE)))
+    >>> Pipeline(source=stream).reverse().first()
     {'title': 'riko pt. 2'}
 
 A ``processor`` processes individual ``items``. Examples include ``fetchsitefeed``,
@@ -255,10 +258,10 @@ as the ``options`` mapping.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, Transforms
+    >>> from riko import Pipeline
     >>>
     >>> items = [{'title': 'riko pt. 1'}]
-    >>> pipeline = Pipeline(source=items).pipe(Transforms.HASH, options={'field': 'title'})
+    >>> pipeline = Pipeline(source=items).hash(options={'field': 'title'})
     >>> result = pipeline.first()
     >>> sorted(result)
     ['hash', 'title']
@@ -268,34 +271,43 @@ as the ``options`` mapping.
 A ``splitter`` returns multiple ``streams`` from one ``stream``. The built-in
 example is ``split``.
 
-Kwargs
-^^^^^^
+Keyword arguments
+^^^^^^^^^^^^^^^^^
 
-The following table outlines the available kwargs.
+A module's ``pipe`` accepts the following keyword arguments. ``field``, ``assign``,
+``emit``, and ``count`` are its *call options*: in a ``Pipeline`` they go in the
+``options`` mapping beside ``conf``.
+
+=======  ====  ================================================  =======
+keyword  type  description                                       default
+=======  ====  ================================================  =======
+conf     dict  The module configuration                          varies
+field    str   The field whose value the module reads            None
+assign   str   Field the result is assigned to                   varies
+emit     bool  Yield the result as is (don't assign it)          varies
+count    str   How many results to keep                          all
+inputs   dict  Values to be used in place of prompting the user  None
+=======  ====  ================================================  =======
+
+A module author fixes its *decoration options* once, when decorating the module.
+A decoration option may also give a call option's default (``rename`` emits by
+default), and a call option passed for the same key overrides it.
 
 =========  ====  ==================================================  =======
-kwarg      type  description                                         default
+option     type  description                                         default
 =========  ====  ==================================================  =======
-conf       dict  The pipe configuration                              varies
-extract    str   The key with which to get a value from ``conf``     None
+extract    str   The ``conf`` key whose value the module reads       None
 listize    bool  Ensure that an ``extract`` value is list-like       False
-pdictize   bool  Convert ``conf``/``extract`` to a DotDict instance  varies
 objectify  bool  Convert ``conf`` to an Objectify instance           varies
-ptype      str   Used to convert ``conf`` items to a specific type.  pass
-dictize    bool  Convert the input ``item`` to a DotDict instance    True
-field      str   The key with which to get a value from the input    None
-ftype      str   Converts the input ``item`` to a specific type      pass
-count      str   The output count                                    all
-assign     str   Attribute used to assign output                     varies
-emit       bool  Return the output as is (don't assign)              varies
+ptype      str   Used to convert ``conf`` items to a specific type.  "pass"
+ftype      str   Converts the input ``item`` to a specific type      "pass"
 skip_if    func  Determines if processing should be skipped          None
-inputs     dict  Values to be used in place of prompting the user    None
 =========  ====  ==================================================  =======
 
 Notes
 
-.. [#] See `Design Principles`_ for explanation on `pipe` types and sub-types
-.. [#] See `Alternate pipeline creation`_ for pipe composition examples
+.. [#] See `Design Principles`_ for explanation on module types and sub-types
+.. [#] See `Alternate pipeline creation`_ for module composition examples
 
 How do I discover installed modules?
 ------------------------------------
@@ -340,7 +352,7 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
     >>> metadata = list_modules(show_metadata=True)[0]
     >>> metadata.name, metadata.type, metadata.subtype
     ('aggregate', 'operator', 'composer')
-    >>> # Available export targets ('ofx'/'qif' only available once installing the
+    >>> # Available export formats ('ofx'/'qif' only available once installing the
     >>> # ``finance`` extra.)
     >>> list_formats()[0]
     'csv'
@@ -382,7 +394,7 @@ Typed module discovery
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 For editor autocompletion and static checks, ``riko`` ships a generated, typed discovery
-surface. ``Modules`` is a flat namespace aliasing **every** built-in ``pipe`` (each
+surface. ``Modules`` is a flat namespace aliasing **every** built-in ``module`` (each
 member *is* the corresponding bucket member, so ``Modules.FILTER is Transforms.FILTER``),
 while ``Sources``/``Transforms``/``Sinks``/``Formats`` are ``StrEnum`` subclasses that
 group by data-flow role. Every bucket member is interchangeable with a module name.
@@ -404,18 +416,17 @@ group by data-flow role. Every bucket member is interchangeable with a module na
 
 Notes:
 
-- ``Sinks`` classifies *sink pipes* (data-flow role ``output``/``write``). The one
-  built-in is ``write``, which serializes the stream to a file and passes items through
-  the remaining pipeline.
+- ``Sinks`` classifies *sink modules*. The one built-in is ``write``, which serializes
+  the stream to a file and passes items through the remaining pipeline.
 - ``write`` takes a ``fmt`` option which can be a string or ``Formats`` enum and
-  defaults to the ``dest`` extension. See `exporting results`_ for examples.
+  defaults to the ``dest`` extension. See `exporting a stream`_ for examples.
 
 What do processor, operator, and splitter mean?
 -----------------------------------------------
 
 A ``processor`` works on individual ``items``. A ``processor`` whose input type
-is ``none`` is a ``source``; other ``processors`` are ``transformers``. Loopable
-``processors`` can be mapped over a ``source`` and are the ``pipes`` eligible for
+is ``"none"`` is a ``source``; other ``processors`` are ``transformers``. Loopable
+``processors`` can be mapped over a ``source`` and are the ``modules`` eligible for
 local sync pools or bounded async concurrency.
 
 An ``operator`` works on a whole ``stream``. A ``composer`` returns a
@@ -432,7 +443,7 @@ How does a processor map over items?
 A ``processor``'s first argument is normally one ``item``, but it may also be a
 ``stream`` of items. ``riko`` normalizes at the stream boundary the same way
 ``listize`` does: a ``list``, ``tuple``, ``range``, generator, or iterator maps
-over each element, while a mapping (one record), primitive, string, or ``None``
+over each element, while a mapping, primitive, string, or ``None``
 is a single ``item``. So the following all behave predictably:
 
 .. code-block:: python
@@ -464,20 +475,20 @@ seed the same ``stream``.
 
 .. code-block:: python
 
-    >>> from riko import Modules, Pipeline
+    >>> from riko import Pipeline
     >>>
     >>> source = [{"x": 0}, {"x": 1}]
     >>> options = {"field": "x"}
-    >>> next(iter(Pipeline(source=iter(source)).pipe(Modules.HASH, options=options)))
+    >>> Pipeline(source=iter(source)).hash(options=options).first()
     {'x': 0, 'hash': 2328942002}
-    >>> next(iter(Pipeline(source=source).pipe(Modules.HASH, options=options)))
+    >>> Pipeline(source=source).hash(options=options).first()
     {'x': 0, 'hash': 2328942002}
-    >>> next(iter(Pipeline(source=source[0]).pipe(Modules.HASH, options=options)))
+    >>> Pipeline(source=source[0]).hash(options=options).first()
     {'x': 0, 'hash': 2328942002}
 
 ``udf`` itself is not reachable this way, because a ``Pipeline``'s ``options`` must be
-JSON-native and a callable is not. Chaining a callable as its own node is what
-``map`` will be for.
+JSON-native and a callable is not. Chaining a callable as its own node is what ``map``
+will be for.
 
 .. note::
 
@@ -499,7 +510,7 @@ depend on the installed ``meza`` version and the underlying format, so test
 representative files before relying on a format in production.
 
 ===================  =======================  ===========================================
-File type            Recognized extension(s)  Supported pipes
+File type            Recognized extension(s)  Supported modules
 ===================  =======================  ===========================================
 HTML                 html                     feedautodiscovery, fetchpage, fetchsitefeed
 XML                  xml                      fetch, fetchdata
@@ -538,26 +549,26 @@ Which optional dependencies are available?
 Extra        Packages                      Capability
 ===========  ============================  ======================================
 ``async``    AnyIO, httpx                  Asynchronous execution and HTTP paths
-``perf``     fastfeedparser, ijson, lxml   Accelerated / streaming parser paths
-``finance``  csv2ofx                       OFX and QIF export targets
+``perf``     fastfeedparser, ijson, lxml   Faster, streaming XML and feed parsing
+``finance``  csv2ofx                       OFX and QIF export formats
 ===========  ============================  ======================================
 
 From a checkout, install an ``extra`` with a quoted, editable command such as
 ``python -m pip install -e ".[async]"``. Use ``list_formats()`` to discover the export
-targets available in the active environment.
+formats available in the active environment.
 
 How do synchronous and asynchronous pipelines differ?
 -----------------------------------------------------
 
 They are the same definition run two ways. A ``Pipeline`` implements ordinary
 iteration (``for item in pipeline``, ``list(pipeline)``) and, with the ``async`` extra, async
-iteration (``async for item in pipeline``). Each iteration starts a fresh execution in
+iteration (``async for item in pipeline``). Each iteration starts a fresh run in
 the style you asked for; nothing about the definition is sync- or async-specific.
 
 Fully consumed sync and async pipelines are tested for equivalent data output.
-Execution mechanics can differ under partial consumption: a loopable ``pipe``
+Scheduling can differ under partial consumption: a loopable ``module``
 mapped over its ``source`` may begin work for ``items`` that a downstream consumer
-never yields. Keep side effects out of such ``pipes`` when consuming partially, or
+never yields. Keep side effects out of such ``modules`` when consuming partially, or
 bound the work per ``item``.
 
 Fetching several configured sources at once is a fan-in graph rather than a separate
@@ -570,9 +581,9 @@ class. ``parse_dag`` turns a bare-bones DAG (``PipeDag``) that wires each source
     >>>
     >>> flow = parse_dag({
     ...     'modules': [
-    ...         {'id': 'f1', 'type': 'itembuilder', 'conf': {'attrs': {'key': 'x', 'value': '1'}}},
-    ...         {'id': 'f2', 'type': 'itembuilder', 'conf': {'attrs': {'key': 'x', 'value': '2'}}},
-    ...         {'id': 'u', 'type': 'union', 'conf': {}},
+    ...         {'id': 'f1', 'name': 'itembuilder', 'conf': {'attrs': {'key': 'x', 'value': '1'}}},
+    ...         {'id': 'f2', 'name': 'itembuilder', 'conf': {'attrs': {'key': 'x', 'value': '2'}}},
+    ...         {'id': 'u', 'name': 'union', 'conf': {}},
     ...     ],
     ...     'wires': [['f1', 'u'], ['f2', 'u', 'in:1']],
     ... })
@@ -613,17 +624,19 @@ There is no ``parallel`` flag on ``Pipeline``. By default, ``processors`` proces
 and shared by every ``processor`` step in the run. ``operators`` such as ``sort`` and
 ``count`` are not impacted.
 
-``executor`` picks where per-item work runs (``inline``, ``thread``, or ``process``).
-``concurrency`` caps how much work runs at once, and ``ordered`` says whether results
-keep their source order.
+``executor`` picks where per-item work runs (``"inline"``, ``"thread"``, or
+``"process"``). ``concurrency`` caps how much work runs at once, and ``ordered`` says
+whether items keep their source order.
 
-Under ``for``, the default ``auto`` executor uses a thread pool once ``concurrency``
-exceeds one. ``thread`` and ``process`` without a set ``concurrency`` size the pool
-from the machine's cores. ``inline`` never uses workers. A pool pulls the ``source``
-no further ahead than it has workers.
+Under ``for``, the default auto executor uses a thread pool once ``concurrency``
+exceeds one. The thread and process executors without a set ``concurrency`` run one
+item at a time, and ``concurrency="auto"`` sizes the pool from the machine's cores.
+The inline executor never uses workers. A pool pulls the ``source`` no further ahead
+than it has workers.
 
 Under ``async for``, native async work runs inline and synchronous work runs on worker
-threads (or on the event-loop thread with ``inline``). ``process`` raises there. The
+threads (or on the event-loop thread with the inline executor). ``concurrency="auto"``
+keeps the default concurrency limit in flight. The process executor raises there. The
 ``source`` advances only as workers free up. The branches feeding a fan-in such as
 ``union`` are still pulled one at a time.
 
@@ -661,9 +674,9 @@ it early tears the run down.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, Transforms
+    >>> from riko import Pipeline
     >>>
-    >>> pipeline = Pipeline(source=[{'content': 'a'}]).pipe(Transforms.HASH)
+    >>> pipeline = Pipeline(source=[{'content': 'a'}]).hash()
     >>> len(list(pipeline))
     1
     >>> len(list(pipeline))
@@ -674,20 +687,19 @@ it early tears the run down.
     >>> stream.close()
 
 If a ``pipeline`` seeded from an in-memory iterator (``Pipeline(source=iter(...))``)
-returns no ``items`` the second time, it is because the *source iterator* was
-exhausted by the first run; seed from a list, or build the ``source`` with a
-``source`` ``pipe`` such as ``fetch`` or ``itembuilder``, to make the ``pipeline``
-re-runnable.
+returns no ``items`` the second time, it is because the *seed iterator* was
+exhausted by the first run; seed from a list, or start from a ``source`` ``module``
+such as ``fetch`` or ``itembuilder``, to make the ``pipeline`` re-runnable.
 
 Which operations materialize or retain input?
 ---------------------------------------------
 
-Don't assume every ``pipe`` is fully streaming. Some read the whole ``stream`` in
+Don't assume every ``module`` is fully streaming. Some read the whole ``stream`` in
 memory, so they cannot be used on an unbounded source. The table below records what each
 retains.
 
 ===========  ================  =======================================================
-pipe         retains           why
+module       retains           why
 ===========  ================  =======================================================
 ``write``    whole ``stream``  Serializing needs every ``item``, so the source is
                                materialized before the write; the items it passes
@@ -704,16 +716,16 @@ pipe         retains           why
                                ``item``, so it must be finite. The left side streams and
                                may be unbounded.
 ``tail``     last N            Bounded by ``conf['count']``.
-``uniq``     last N keys       Bounded by ``conf['limit']``.
+``uniq``     last N values     Bounded by ``conf['limit']``.
 ===========  ================  =======================================================
 
 ``export()`` and serialized exports materialize by the same reasoning as ``write``.
 Iterating a ``Pipeline`` otherwise yields ``items`` from its default output as they
-are produced, under both ``for`` and ``async for``, subject only to what the ``pipes``
+are produced, under both ``for`` and ``async for``, subject only to what the ``modules``
 above retain.
 
 Execution-wide settings (``with_execution``) keep in-flight work bounded by
-``concurrency``, or by a default ceiling when ``concurrency`` is unset (see `What does
+``concurrency``, or to one item at a time when ``concurrency`` is unset (see `What does
 parallel=True do`_).
 
 See the `Cookbook`_'s performance and memory section for practical guidance.
@@ -757,12 +769,12 @@ first-class input, and ``riko`` ships three commands for working with these file
 - ``build-workflow`` converts a serialized bare-bones DAG (``PipeDag``), a serialized
   pipe definition (``PipeDef``), or a ``WorkflowDocument`` into a validated
   ``WorkflowDocument``.
-- ``compile-workflow`` translates a ``WorkflowDocument`` into a runnable workflow module
+- ``compile-workflow`` translates a ``WorkflowDocument`` into a workflow module
   (``WorkflowModule``).
 - ``run-pipe -p flow.json`` executes a ``WorkflowDocument`` directly (``-p`` also runs
   a ``WorkflowModule`` such as ``flow.py``, or a pipe script).
 
-The tersest workflow format is a ``PipeDag``: a list of ``modules`` (``type`` plus
+The tersest workflow format is a ``PipeDag``: a list of ``modules`` (``name`` plus
 optional ``id``/``conf``/``options``) and optional ``[source, target]`` wires. When
 ``wires`` are omitted, the modules are chained linearly, and a missing ``id`` defaults
 to ``sw-{n}``. The terse form is just:
@@ -771,8 +783,8 @@ to ``sw-{n}``. The terse form is just:
 
     {
         "modules": [
-            {"type": "fetchdata", "conf": {"url": "feed.json", "path": "value.items"}},
-            {"type": "truncate", "conf": {"count": 3}}
+            {"name": "fetchdata", "conf": {"url": "feed.json", "path": "value.items"}},
+            {"name": "truncate", "conf": {"count": 3}}
         ]
     }
 
@@ -782,10 +794,11 @@ from a string. E.g., ``{"count": {"type": "int", "value": "3"}}``. A **bare**
 ``{"value": "3"}`` is neither: it carries no ``type``, so it stays an ordinary
 nested mapping rather than being unwrapped to ``3``.
 
-A wire may carry a third entry naming the port it enters, so the secondary inputs of
-a fan-in operator such as ``join`` or ``union`` are expressible too — the first input
-is ``in``, the rest are ``in:1``, ``in:2``, and so on. The ``union`` example under
-`How do synchronous and asynchronous pipelines differ`_ wires its second source with
+A wire may carry a third entry naming the port it enters, so the secondary input
+streams of a fan-in operator such as ``join`` or ``union`` are expressible too — the
+first input port is ``in``, the rest are ``in:1``, ``in:2``, and so on. The ``union``
+example under `How do synchronous and asynchronous pipelines differ`_ wires its second
+input stream with
 ``["f2", "u", "in:1"]``.
 
 ``build-workflow`` detects which form it was handed—a serialized ``PipeDag``, a
@@ -817,15 +830,16 @@ What execution modes are available?
 =======================  =========================================================
 Mode                     Behavior
 =======================  =========================================================
-RUN                      Execute the normal pipeline (the default)
-DESCRIBE_INPUTS          Return declared input requirements instead of running
-DESCRIBE_DEPENDENCIES    Return the list of module names the pipeline uses
-DESCRIBE                 Return declared input requirements, the same as
+RUN                      Run normally (the default)
+DESCRIBE_INPUTS          Return the input declarations instead of running
+DESCRIBE_DEPENDENCIES    Return the module and stored-workflow names it uses
+DESCRIBE                 Return the input declarations, the same as
                          DESCRIBE_INPUTS
 =======================  =========================================================
 
-A workflow's node names also list the modules it uses without executing it. See
-`Inspecting a pipeline`_ in the cookbook for additional details.
+Only a workflow module's ``pipe`` honors the describe modes today; a ``Pipeline``
+always runs. A workflow's node names also list the modules it uses without executing
+it. See `Inspecting a pipeline`_ in the cookbook for additional details.
 
 Can I create custom modules?
 ----------------------------
@@ -835,10 +849,9 @@ decorators plus supported protocols and metadata types. Decorated functions can
 be called directly and composed with ordinary Python.
 
 To make a module resolvable by name (so ``Pipeline.from_module('your.module', ...)``,
-``.pipe('your.module')``, and the ``|`` operator can find it), register it with the
-module registry. Package your
-module so it exposes ``pipe`` and/or ``async_pipe`` functions, then either register
-it at runtime or declare an entry point.
+``.pipe('your.module')``, and the ``|`` operator can find it), package it so it
+exposes ``pipe`` and/or ``async_pipe`` functions, then either register it with the
+module registry at runtime or declare an entry point.
 
 For entry point discovery, point it straight at the module. riko reads ``pipe``/
 ``async_pipe`` off it and uses its docstring summary as the discovery
@@ -891,12 +904,10 @@ unknown module name raises ``UnsupportedModuleError`` before anything runs. A
 afterwards: iterate it again to rerun it.
 
 Each iterator owns its run's resources and releases them when it is exhausted or
-closed. A sync iterator is also released when it is garbage collected. Call ``close()``
-when you stop early and want that to happen deterministically. An async iterator must be
-exhausted or closed. If you stop early, wrap it in ``contextlib.aclosing`` (or ``await``
-its ``aclose()``) rather than ``break`` out of a bare ``async for``. Closing it later
-from garbage collection fails. External I/O can still raise the normal network, parser,
-and filesystem exceptions for the underlying operation.
+closed, or else when it is garbage collected. When you stop early and want the release
+to happen deterministically, call ``close()`` on a sync iterator, or wrap an async one in
+``contextlib.aclosing`` (or ``await`` its ``aclose()``). External I/O can still raise the
+normal network, parsing, and filesystem exceptions for the underlying operation.
 
 Where should I report problems or contribute?
 ---------------------------------------------
@@ -908,7 +919,7 @@ documentation workflow.
 .. _What is riko's data model: #what-is-rikos-data-model
 .. _Which Python versions are supported: #which-python-versions-are-supported
 .. _Which imports are public: #which-imports-are-public
-.. _What pipes are available: #what-pipes-are-available
+.. _What modules are available: #what-modules-are-available
 .. _How do I discover installed modules: #how-do-i-discover-installed-modules
 .. _What do processor, operator, and splitter mean: #what-do-processor-operator-and-splitter-mean
 .. _How does a processor map over items: #how-does-a-processor-map-over-items
@@ -930,7 +941,7 @@ documentation workflow.
 
 .. _README: ../README.rst
 .. _Cookbook: COOKBOOK.rst
-.. _exporting results: COOKBOOK.rst#exporting-results
+.. _exporting a stream: COOKBOOK.rst#exporting-a-stream
 .. _installation guide: INSTALLATION.rst
 .. _contributing guide: ../CONTRIBUTING.rst
 .. _issue tracker: https://github.com/nerevu/riko/issues

@@ -62,7 +62,7 @@ ROOT_EXCEPTIONS = frozenset(
         "PipelineStateError",
         "RikoError",
         "UnsupportedModuleError",
-        "UnsupportedPipelineError",
+        "UnsupportedWorkflowError",
     }
 )
 
@@ -72,12 +72,14 @@ PRIVATE_RESOLUTION = frozenset(
     {
         "CompositeStore",
         "DirectoryStore",
+        "DocumentStore",
         "MappingStore",
         "ModuleStore",
         "PackageStore",
-        "PipeResolver",
+        "ResolverDispatcher",
         "WorkflowResolver",
-        "pipe_resolver",
+        "WorkflowStore",
+        "dispatcher",
         "workflow_resolver",
     }
 )

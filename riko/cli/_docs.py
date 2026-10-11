@@ -156,8 +156,8 @@ def _render_errors(path: str, doctree: Any) -> list[str]:
         ]
 
 
-def _get_path_anchors(path: str, cache: dict[str, set[str]]) -> set[str]:
-    """Resolve cached anchors for a document, rendering it on first use."""
+def _load_path_anchors(path: str, cache: dict[str, set[str]]) -> set[str]:
+    """Loads a document's anchors, rendering and caching it on first use."""
     if path not in cache:
         try:
             cache[path] = _get_doc_anchors(_render_rst(path)[1])
@@ -167,8 +167,8 @@ def _get_path_anchors(path: str, cache: dict[str, set[str]]) -> set[str]:
     return cache[path]
 
 
-def _check_links(path: str, text: str, cache: dict[str, set[str]]) -> list[str]:
-    """Validate internal RST hyperlink targets resolve to files and anchors."""
+def _get_link_errors(path: str, text: str, cache: dict[str, set[str]]) -> list[str]:
+    """Collects internal RST hyperlinks whose target file or anchor is missing."""
     base_dir = dirname(path)
     errors: list[str] = []
 
@@ -185,14 +185,14 @@ def _check_links(path: str, text: str, cache: dict[str, set[str]]) -> list[str]:
         elif anchor and not _LINE_ANCHOR_RE.match(anchor) and target.endswith(".rst"):
             where = ref_path or basename(path)
 
-            if anchor not in _get_path_anchors(target, cache):
+            if anchor not in _load_path_anchors(target, cache):
                 errors.append(f"{path}: unknown anchor '#{anchor}' in {where}")
 
     return errors
 
 
-def _check_rst(where: str | None = None) -> int:
-    """Validate RST rendering and internal links."""
+def _lint_rst(where: str | None = None) -> int:
+    """Validates RST rendering and internal links."""
     if publish_doctree is None:
         raise RuntimeError("docutils not found")
 
@@ -203,7 +203,7 @@ def _check_rst(where: str | None = None) -> int:
         text, doctree = _render_rst(path)
         cache[path] = _get_doc_anchors(doctree)
         problems.extend(_render_errors(path, doctree))
-        problems.extend(_check_links(path, text, cache))
+        problems.extend(_get_link_errors(path, text, cache))
 
     for problem in problems:
         print(problem)
@@ -352,8 +352,8 @@ def _version_claim_offenders(current: tuple[int, int, int]) -> list[str]:
     ]
 
 
-def _check_docs() -> int:
-    """Validate static internal-document consistency and authority rules."""
+def _lint_docs() -> int:
+    """Validates static internal-document consistency and authority rules."""
     problems: list[str] = []
     roadmap = _read(_ROADMAP)
     counts = Counter(int(n) for n in _SECTION_ROW.findall(roadmap))

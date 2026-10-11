@@ -54,13 +54,14 @@ OUTPUT_MODULE = "output"
 SINK_NAMES: frozenset[str] = frozenset({OUTPUT_MODULE, "write"})
 
 SUBPIPE_TYPE = "pipe"
+PIPE_ID_PREFIXES: tuple[str, ...] = ("pipe_", "pipe:")
 
 
 @dataclass(frozen=True, slots=True)
 class Settings:
     """Operator-tunable runtime defaults, overridable via ``RIKO_*`` env vars."""
 
-    connection_count: int = 16
+    concurrency_limit: int = 16
     streaming_threshold: int = 1 * 1024 * 1024
     encoding: str = "utf-8"
     discovery_timeout: int = 10
@@ -93,8 +94,8 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     source = environ if env is None else env
     defaults = Settings()
     return Settings(
-        connection_count=_env_int(
-            source, "RIKO_CONNECTION_COUNT", defaults.connection_count
+        concurrency_limit=_env_int(
+            source, "RIKO_CONCURRENCY_LIMIT", defaults.concurrency_limit
         ),
         streaming_threshold=_env_int(
             source, "RIKO_STREAMING_THRESHOLD", defaults.streaming_threshold
