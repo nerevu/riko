@@ -19,12 +19,15 @@ jobs:
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
+      - name: Install ruff
+        # The locked ruff, so CI never formats with a newer release than local.
+        run: uv sync --locked --only-group lint
       - name: Sort imports
-        run: uvx --from "ruff~=0.16" ruff check --select I --fix
+        run: uv run --no-sync ruff check --select I --fix
       - name: Fix style issues
-        run: uvx --from "ruff~=0.16" ruff check --fix
+        run: uv run --no-sync ruff check --fix
       - name: Format
-        run: uvx --from "ruff~=0.16" ruff format
+        run: uv run --no-sync ruff format
   lint:
     name: lint (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -47,7 +50,7 @@ jobs:
         # imports (anyio, lxml, httpx, csv2ofx); editable so the checkout's
         # source is type-checked rather than a cached wheel.
         run: |
-          uv sync --group dev --all-extras
+          uv sync --locked --group dev --all-extras
           uv pip install --reinstall --no-deps --editable .
       - name: Install Go
         if: matrix.python-version == '3.12'
@@ -67,6 +70,10 @@ jobs:
       - name: Lint imports
         if: matrix.python-version == '3.12'
         run: uv run --no-sync manage lint imports --all
+      - name: Show tool versions
+        run: |
+          uv run --no-sync ruff --version
+          uv run --no-sync pyright --version
       - name: Check types
         run: uv run --no-sync manage lint --check-types
       - name: Verify types
@@ -103,9 +110,9 @@ jobs:
       - name: Install (optional=${{ matrix.optional }})
         run: |
           if [ "${{ matrix.optional }}" = "true" ]; then
-            uv sync --group dev --all-extras
+            uv sync --locked --group dev --all-extras
           else
-            uv sync --group dev
+            uv sync --locked --group dev
           fi
           # Force an editable install of riko so the run steps always use the
           # current checkout. `uv sync` otherwise installs a built wheel that uv

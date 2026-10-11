@@ -31,7 +31,6 @@ requires-python = ">=3.12"
 dependencies = [
     "attrs>=26.1.0",
     "babel>=2.8.0,<3.0.0",
-    "chardet>=3.0.4,<8.0.0",
     "click>=8.4.0",
     "feedparser>=5.2.1,<7.0.0",
     "html5lib>=1.0.1,<2.0.0",
@@ -44,6 +43,7 @@ dependencies = [
     "python-slugify>=1.2.5",
     "pytz>=2019.3",
     "requests>=2.22.0,<3.0.0",
+    "typing-extensions>=4.13.0",
 ]
 
 [project.optional-dependencies]
@@ -51,7 +51,6 @@ perf = [
     "fastfeedparser>=0.6.0",
     "ijson>=3.4.0,<4.0.0",
     "lxml>=4.5.0,<7.0.0",
-    "types-lxml>=2026.2.16",
 ]
 
 async = [
@@ -77,8 +76,10 @@ lint = [
     "docutils>=0.21",
     "pygments>=2.20.0",
     "pylint>=4.0.5,<5.0.0",
-    "pyright>=1.1.411",
+    "pyright>=1.1.414",
     "ruff>=0.16.10,<0.17.0",
+    "types-lxml>=2026.2.16",
+    "types-networkx>=3.4.2",
 ]
 
 dev = [
@@ -212,6 +213,7 @@ split-on-trailing-comma = false
 
 [tool.pyright]
 venv = "riko"
+pythonPlatform = "Linux"
 reportUnnecessaryCast = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
 exclude = [

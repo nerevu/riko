@@ -1,14 +1,22 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version.
-    rev: v0.16.6
+  # The locked ruff (see `manage upgrade`), so hooks match `manage lint` and CI.
+  - repo: local
     hooks:
+      - id: ruff-check-imports
+        name: ruff (sort imports)
+        entry: uv run --active --no-sync ruff check --select I --fix --config pyproject.toml
+        language: system
+        types_or: [python, pyi]
       - id: ruff-check
-        args: [--select, I, --fix, --config, pyproject.toml]
-      - id: ruff-check
-        args: [--fix, --config, pyproject.toml]
+        name: ruff (check)
+        entry: uv run --active --no-sync ruff check --fix --config pyproject.toml
+        language: system
+        types_or: [python, pyi]
       - id: ruff-format
-        args: [--config, pyproject.toml]
+        name: ruff (format)
+        entry: uv run --active --no-sync ruff format --config pyproject.toml
+        language: system
+        types_or: [python, pyi]
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:
