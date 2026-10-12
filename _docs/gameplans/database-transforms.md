@@ -60,7 +60,7 @@ Conceptually:
 ```python
 orders = Pipeline.read(
     Target(
-        Targets.POSTGRES,
+        Backends.POSTGRES,
         table="orders",
         resources={"connection": "warehouse/analytics"},
     ),
@@ -106,7 +106,7 @@ Database mutation uses the common `Pipeline.write()` effect over a configured wr
 ```python
 pipeline = pipeline.write(
     Target(
-        Targets.POSTGRES,
+        Backends.POSTGRES,
         table="processed_orders",
         resources={"connection": "warehouse/analytics"},
     ),

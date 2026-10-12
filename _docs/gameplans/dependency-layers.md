@@ -47,17 +47,17 @@ DAG is deliberately not flattened into one linear stack: `bado`, `coercion`, and
 
 | Source path | Layer | Role |
 |---|---|---|
-| `riko/base/` | `base` | low-level constants, paths, logging, string/iterator/date helpers, exceptions, API declarations |
+| `riko/base/` | `base` | low-level constants, paths, logging, string/iterator/date/graph helpers, exceptions, API declarations |
 | `riko/_package.py` | `base` | package metadata kept below the public facade |
 | `riko/types/` | `types` | type contracts, config TypedDicts, stream/resource/compiler types, enums |
-| `riko/coercion/` | `coercion` | casting, dynamic config/objectification, freezing, graph helpers |
+| `riko/coercion/` | `coercion` | casting, dynamic config/objectification, canonical identity |
 | `riko/bado/` | `bado` | async backend selection, async itertools, async utilities |
-| `riko/definitions/` | `definitions` | immutable/declarative module, resource, target, and write contracts |
+| `riko/definitions/` | `definitions` | immutable/declarative module, resource, target, and write contracts, including the `Context` (`_context.py`) and `Resource` (`_resource_definition.py`) definitions |
 | `riko/io/` | `io` | sync/async I/O, serialization, re-encoding |
 | `riko/parsing/` | `parsing` | config parsing, `DotDict`, HTML/XML/document parsing |
 | `riko/rss/` | `rss` | feed discovery, entry normalization, RSS/Atom parsing |
-| `riko/execution/` | `execution` | one-shot sync/async executions, lifetime primitives, execution-local resource acquisition, event sink, execution context (`context.py`) and resource lifecycle (`_resources.py`) |
-| `riko/runtime/` | `runtime` | collections, compiler, pipelines, resolver/registry, pub/sub, write sessions, the frozen `_execution_plan.py` |
+| `riko/execution/` | `execution` | one-shot sync/async executions, lifetime primitives, execution-local resource acquisition and owned-resource teardown (`_resource_plan.py`), the resolved-resource mapping handed to modules (`_resource_view.py`), event sink |
+| `riko/runtime/` | `runtime` | collections, compiler, pipelines, resolver/registry, pub/sub, write sessions, the plan builder `_execution_plan.py` |
 | `riko/modules/` | `modules` | built-in pipe implementations and module metadata/decorator internals |
 | `riko/ext/` | `modules` | supported extension-author facade and codegen helpers; same dependency layer as modules |
 | `riko/__init__.py` | `api` | stable application facade |
@@ -72,12 +72,12 @@ The folder split deliberately separates immutable declarations from mutable runt
 state:
 
 - `riko/definitions/` contains descriptions of what a module/resource/write is.
-- `riko/execution/` is the `execution` layer: `context.py` and `_resources.py`
-  own execution-facing resource/context behavior alongside the one-shot
-  executions and lifetime primitives.
+- `riko/execution/` is the `execution` layer: resource acquisition and teardown
+  (`_resource_plan.py`) and the resolved-resource view (`_resource_view.py`) live alongside the one-shot executions and lifetime primitives.
 - `riko/runtime/` orchestrates streams, compilation, resolution, pub/sub, and
-  write sessions around those contracts, and holds the frozen
-  `_execution_plan.py` that preparation produces.
+  write sessions around those contracts, and holds `build_execution_plan` and the shared
+  run loop (`_execution_plan.py`, which imports the resolver only for typing), which produces the frozen `ExecutionPlan` defined in
+  `riko/execution/_prepared.py`.
 
 The `execution` label maps to the `riko.execution` package by prefix, so no
 per-file exception is needed; `_EXACT_LAYERS` now covers only `riko` (api) and
@@ -87,13 +87,14 @@ per-file exception is needed; `_EXACT_LAYERS` now covers only `riko` (api) and
 
 The architecture scanner classifies static imports without importing the package:
 
-- **module-scope runtime imports** are recorded in `observed dependencies` and must
+- **module-scope runtime imports** are recorded in the `observed dependency frontier` and must
   point to an allowed layer in the DAG.
-- **`if TYPE_CHECKING:` imports** are recorded in `typing or local-only
-  dependencies` and do not fail the layer-direction rule.
-- **function-local imports** are also recorded in `typing or local-only
-  dependencies` and do not fail the layer-direction rule. They remain useful as
-  deliberate cycle breakers, but they still show up in the report for review.
+- **`if TYPE_CHECKING:` imports** are recorded in `typing-only dependencies`
+  and do not fail the layer-direction rule.
+- **function-local imports** are recorded in `local-only dependencies` and
+  must point to an allowed layer in the DAG, exactly like
+  module-scope imports. Deferring an import does not change which layer depends on
+  which, so a function-local import is never an exemption from the layer rule.
 
 The scanner is intentionally static. Imports assembled dynamically from strings or
 loaded through plugin/entry-point mechanisms are not represented by the observed
@@ -132,13 +133,14 @@ it.
 
 ## Reading the architecture report
 
-`manage lint imports --architecture` renders three distinct things:
+`manage lint imports --architecture` renders four distinct things:
 
 1. `layers` — the declared allowed DAG.
-2. `observed dependencies` — the reduced runtime module-scope dependency frontier
+2. `observed dependency frontier` — the reduced runtime module-scope dependency frontier
    found in the source tree.
-3. `typing or local-only dependencies` — type-only and deferred static edges that
-   are visible for review but exempt from the runtime-direction failure rule.
+3. `typing-only dependencies` — type-only edges, which are exempt from the
+   runtime-direction failure rule.
+4. `local-only dependencies` — function-local edges, which are not exempt.
 
 The observed rendering is a compact frontier, not an exhaustive list of every
 import edge. A higher dependency can subsume lower transitive dependencies in the
@@ -151,34 +153,26 @@ When moving or adding source files:
 1. A module may not import, at runtime and module scope, from a layer that the
    DAG above does not allow. `cli` is the top layer, so its module-scope imports of
    `runtime` and `modules` are ordinary downward edges, not exceptions.
-2. An upward edge is allowed only as a **function-local** import (`noqa: PLC0415`)
-   that is a recorded seam below. Before adding one, check whether the shared
-   contract can move down to the owning layer; add a new seam here only when it
-   cannot.
-3. Every upward local-only edge shown in the architecture report must be listed
-   here. If the report shows one that isn't, either remove the edge or record it.
+2. There are no upward edges, function-local or otherwise. When a lower layer seems
+   to need a higher one, move the shared contract down to the owning layer, or split
+   the type so the higher layer extends the lower one.
 
-## Recorded seam: `Pipeline` composition (`definitions -> execution | runtime | bado`)
+## Example: `PipelineDefinition` and `Pipeline`
 
-`Pipeline` in `riko/definitions/_workflow.py` is an immutable, reusable
-definition, but it is also the user's entry point for running that definition.
-Three of its methods reach upward through function-local imports:
+A pipeline is both an immutable definition and the user's entry point for running
+it. The type is split along that line rather than reaching upward:
 
-- `Pipeline.with_resource` builds a default `Context` from
-  `riko.execution.context` when the pipeline has none.
-- `Pipeline.__iter__` builds a fresh `ExecutionPlan`
-  (`riko.runtime._execution_plan.build_execution_plan`) and runs it in a one-shot
-  `SyncExecution` (`riko.execution._execution`).
-- `Pipeline.__aiter__` does the same with `AsyncExecution` and wraps the run in
-  `riko.bado._util.maybe_aclosing`.
+- `PipelineDefinition` (`riko/definitions/_workflow.py`) owns the fields and every
+  composition method (`from_module`, `pipe`, `|`, `write`, `with_*`, …). Each
+  returns the caller's own class, so composing a `Pipeline` yields a `Pipeline`.
+  Definitions that embed a pipeline depend on this class.
+- `Pipeline` (`riko/runtime/_pipeline.py`) subclasses it and adds only running:
+  `__iter__`, `__aiter__`, `first`, and `afirst` build an execution plan and run it
+  in a one-shot execution, all through ordinary downward imports.
 
-This is deliberate. The definition stays free of execution state: each call
-creates its own plan and execution, and nothing executes on import, so the seam
-creates no cycle. Moving these methods off `Pipeline` would break the
-`iter(pipeline)` / `async for item in pipeline` API, and moving `Pipeline` up to
-`runtime` would put a definition in the execution-owning layer. Keep the seam to
-these entry points. Any other execution behavior belongs in `execution` or
-`runtime` and should take a `Pipeline` or `Workflow` as input.
+New pipeline behavior that only composes the graph belongs on
+`PipelineDefinition`; behavior that runs it belongs on `Pipeline` or in
+`execution`/`runtime`.
 
 ## Folder regrouping
 

@@ -109,7 +109,9 @@ emit
 
 Those values currently live inside the decorator instance’s private _opts. The wrapper only exposes type, name, sub_type, and pollable.
 
-Do not have the generator inspect closure cells. Instead, attach a frozen normalized snapshot when the wrapper is created.
+Do not have the generator inspect closure cells. Instead, attach a frozen normalized snapshot when the wrapper is created. Name it
+`FrozenDecorationOptions`: it is the immutable form of the existing `DecorationOptions` TypedDict
+(`riko/types/_options.py`), and `CallOptions` already names the per-node call options.
 
 For example:
 
@@ -122,7 +124,7 @@ type EmitMode = Literal["auto", "true", "false"]
 
 
 @dataclass(frozen=True, slots=True)
-class ModuleOptions:
+class FrozenDecorationOptions:
     listize: bool
     extract: str | None
     field: str | None
@@ -132,7 +134,7 @@ class ModuleOptions:
 
 Inside the decorator:
 
-def _status_options(self) -> ModuleOptions:
+def _status_options(self) -> FrozenDecorationOptions:
     declared_emit = self._opts.get("emit")
 
     if declared_emit is True:
@@ -142,7 +144,7 @@ def _status_options(self) -> ModuleOptions:
     else:
         emit = "auto"
 
-    return ModuleOptions(
+    return FrozenDecorationOptions(
         listize=bool(self._opts.get("listize", False)),
         extract=self._opts.get("extract"),
         field=self._opts.get("field"),
@@ -445,7 +447,7 @@ def test_input_is_the_only_non_loopable_processor():
     assert modules == {"input"}
 Recommended implementation sequence
 Finalize ModuleMetadata and list_modules.
-Add immutable decorator-option metadata to wrappers.
+Add immutable decoration-option metadata to wrappers.
 Extract historical-only information from the current CSV into status_manifest.csv.
 Implement the merge and validation functions.
 Generate the first new status.csv.

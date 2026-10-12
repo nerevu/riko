@@ -95,7 +95,7 @@ pipeline resolver — the v2 execution's own subpipe path — loads them.
   gone. A covering set of `pypipelines/pipe_*.py` files stays as hand-maintained typed probes (they
   surface `*RawConf`/`*Conf`/`*ConfRule` contract errors under pyright) guarded by
   `tests/internal/test_workflow_fixtures.py`, which also enforces canonical form. To convert the
-  fixtures faithfully the model gained `ModuleNode.options` (`ModuleOptions`, formerly
+  fixtures faithfully the model gained `ModuleNode.options` (`CallOptions`, formerly
   `LoopOptions`; `LoopConf` is now only `embed`), both executions forward options for every node
   and pass a loop its embed's `conf`, positional-only inputs no longer receive the default seed,
   and `migrate_v1_to_v2` routes options, nests loop embeds, and pythonises non-identifier wire
@@ -166,7 +166,8 @@ Depends on steps 1–3. Deletes `SyncPipe`, `AsyncPipe`, `PyPipe`, `PyCollection
   replacement yet (recorded in `docs/CHANGES.rst` Removed). Step 5 landed 2026-10-03 (see its
   as-built note).
   Nothing was removed without a named successor: `Pipeline` carries the planned verbs as
-  placeholders that raise `NotImplementedError` (`subscribe`, `publish`, `split`, `map`;
+  placeholders that raise `NotImplementedError` (`subscribe`, `publish`, `split`, `map`, each taking
+  `*args, **kwargs` since 2026-10-05 so no unsettled signature is frozen ahead of its owner;
   `with_execution` shipped 2026-10-03 and replaces the `parallel`/`workers`/`threads`/`pool`
   arguments), and `write(dest, mode=, fmt=, keys=)` appends a `build_write`-validated
   `WriteNode` that plan build still refuses. The retired v1 behaviors live on as strict xfails
@@ -229,7 +230,7 @@ unaffected by everything below.
   `PipeDef` stays whole for `migrate_v1_to_v2`; `GraphEdge`/`OutputRef`/`GraphIndex` docstrings now
   describe the v2 port grammar. Tests: the `pythonise` R5 tripwire moved to
   `tests/internal/test_codegen.py`; the vacuous "imports no compiler" resolver test became
-  `test_resolver.py::TestPipeResolver::test_unresolved_pipeline_name_raises` (pins
+  `test_resolver.py::TestResolverDispatcher::test_missing_stored_workflow_raises` (pins
   `UnsupportedModuleError` for `pipe_missing`); `test_basics.py` gained `test_loop_subpipe_embed`
   and `test_loop_count_all_assign` pinning the exact outputs of the two loop fixtures that only the
   codegen parity test reached; `test_index_workflow_orders_and_indexes` now also asserts

@@ -1,6 +1,6 @@
 ---
 name: land
-description: Run riko's full pre-commit gate and get the working tree ready for the user to commit — prettify, codegen drift, lint --all (which covers docs and docstrings), tests, check-types — then report a ready/not-ready verdict with a suggested commit message. Use when the user says "land this", "get this ready to commit", "run the gates", "is this ready to commit?", or wants a change finished and validated. This skill NEVER commits; the user commits themselves.
+description: Run riko's full pre-commit gate and get the working tree ready for the user to commit — dependency upgrade, /tidy, prettify, codegen drift, lint --all (which covers docs and docstrings), tests, check-types — then report a ready/not-ready verdict with a suggested commit message. Use when the user says "land this", "get this ready to commit", "run the gates", "is this ready to commit?", or wants a change finished and validated. This skill NEVER commits; the user commits themselves.
 ---
 
 # Land (gate everything, commit nothing)
@@ -16,8 +16,9 @@ fixup rehearsal worktree described under "Commit plan".
 Landing may be invoked mid-session after some gates already ran — never redo
 work, and never trust that earlier work still holds:
 
-- Every gate is safe to rerun (prettify, codegen, lint, and tests are all
-  stateless checks), so rerunning is never wrong — only sometimes wasteful.
+- Every gate is safe to rerun (prettify, codegen, lint,
+  and tests are all stateless checks; `manage upgrade --daily` is a no-op after
+  today's upgrade), so rerunning is never wrong — only sometimes wasteful.
 - Skip a gate only when BOTH hold: it passed earlier **in this session**, and
   nothing in its scope has changed since that run (confirm against `git
   status`/`git diff`, not recollection). A gate that passed before subsequent
@@ -37,21 +38,33 @@ work, and never trust that earlier work still holds:
 Order matters. Run from the repo root with `uv run --active python -m
 riko.cli.manage` (the `manage` entry point can collide with mezmorize's).
 
-1. **Prettify first, always**: `manage prettify`. Never hand-fix
+0. **Upgrade dependencies**: `manage upgrade --daily`. It re-resolves `uv.lock` to the
+   newest allowed versions and syncs the active environment, so a new ruff,
+   pyright, or runtime release breaks here instead of in CI (CI installs the
+   lock with `--locked` and never upgrades). A `uv.lock` diff is part of the
+   change — keep it, and name upgraded packages in the report. If an upgrade
+   breaks a gate, fixing the code is the default; holding a package back is a
+   judgment call for the user. `--daily` makes it a no-op when a full upgrade
+   already succeeded today, so always run it; never skip it by recollection.
+1. **Tidy**: follow `.claude/skills/tidy/SKILL.md` over the change (it skips
+   itself when its marker says the tree is already tidy). Its mechanical fixes
+   join the change before the gates run; its judgment questions go to the user
+   now, and phase-owned findings go through `/triage`.
+2. **Prettify first, always**: `manage prettify`. Never hand-fix
    formatting-class lint errors — formatting is prettify's job, before any
    linter runs.
-2. **Codegen drift**: if the change touched anything with a generated artifact
+3. **Codegen drift**: if the change touched anything with a generated artifact
    (configs, module names/ids, API surface blocks, pipeline fixtures), run
    `manage codegen --all` and check `git diff` on the generated files. A diff
    there is part of the change, not noise — keep it. Never hand-edit generated
    files.
-3. **Lint**: `manage lint --all`. It already runs Ruff, the RST/docs/docstring
-   checks, actionlint, YAML, and every import contract, so do not rerun
-   `--docs` or `--docstrings` separately. It does **not** run the type gate.
-4. **Tests**: targeted tests for the touched area first while iterating, then
+4. **Lint**: `manage lint --all`. It already runs Ruff, the RST/docs/docstring/
+   terms/literals/deps checks, actionlint, YAML, and every import contract, so do not rerun
+   `--docs`, `--docstrings`, `--terms`, `--literals`, or `--deps` separately. It does **not** run the type gate.
+5. **Tests**: targeted tests for the touched area first while iterating, then
    the full suite `manage test --no-cov --quiet` before declaring ready.
    Doctests are tests here — doc examples run under pytest.
-5. **Types**: `manage lint --check-types` (never part of `--all`); add
+6. **Types**: `manage lint --check-types` (never part of `--all`); add
    `--verify-types` for changes to exported surfaces.
 
 Fix real failures properly (root cause, not suppression), rerun the affected

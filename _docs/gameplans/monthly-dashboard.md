@@ -170,7 +170,7 @@ Conceptually, a scenario may build a configured Airtable Target once and write d
 operation-specific configuration:
 
 ```python
-target = Target(Targets.AIRTABLE, base=base, table=table)
+target = Target(Backends.AIRTABLE, base=base, table=table)
 
 pipeline = pipeline.write(target, mode="merge", keys=("endpoint_id",))
 ```
@@ -179,7 +179,7 @@ For append-style history:
 
 ```python
 pipeline = pipeline.write(
-    Target(Targets.AIRTABLE, base=base, table=security_events),
+    Target(Backends.AIRTABLE, base=base, table=security_events),
     mode="append",
     # operation/domain identity participates in the common idempotency contract
 )

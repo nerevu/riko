@@ -457,7 +457,7 @@ Do not define an Airtable-specific batch pipeline hierarchy.
 
 ### 6. Selenium scraping
 
-Represent each scrape chunk as one source item and execute the blocking callable with bounded thread
+Represent each scrape chunk as one input item and execute the blocking callable with bounded thread
 execution. Browser ownership can remain inside the callable initially; if later promoted to a Riko
 resource, declare it through `Resource`/`resources=` and let the execution own cleanup.
 

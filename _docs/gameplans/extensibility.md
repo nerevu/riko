@@ -105,6 +105,15 @@ resource/topology requirements fail before source consumption (the config half i
 [implementation-sequence.md](implementation-sequence.md)); catalog generation does not import
 uninstalled optional dependencies unnecessarily.
 
+Open decision (triaged 2026-10-06): `ModuleDefinition(sync_pipe=…/async_pipe=…)` accepts plain
+undecorated callables (documented, and run by both executions), but its slots and
+`ResolvedModule`'s are typed `SyncModuleWrapper`/`AsyncModuleWrapper`, whose declared members
+(`name`, `type`, `subtype`, `subtypes`, `pollable`, `loopable`, `isasync`) a plain callable lacks.
+Readers cope with `getattr` defaults, and `gen_registry_catalog` skips such definitions by catching
+`AttributeError`. The module contract decides one of: normalize plain callables at the definition
+boundary (stamping declared metadata), reject them, or type the slots honestly. Do not stamp
+metadata or widen the slot types ahead of that decision.
+
 ## E2. Plugin ecosystem v1
 
 Use Python package metadata entry points:
@@ -121,7 +130,7 @@ ModuleRegistry
     module implementations
 
 WorkflowResolver
-    named workflows
+    stored workflows
 
 PipeResolver
     compiler-free resolution facade
@@ -492,33 +501,20 @@ compatibility, deployment, or drift semantics. Those stay in `operations-as-code
 
 ### E3.11 Reuse of the shipped graph index
 
-R4A does not reinterpret topology from scratch. The runtime already builds one immutable,
-runtime-neutral graph index (`GraphIndex` in `riko/types/_compiler.py`, constructed once by
-`index_workflow` in `riko/runtime/_graph_index.py`; its v1 builder `parse_pipe_def` was deleted at
-cutover step 5) that execution planning consumes: wire-level
-`edges`/`incoming`/`outgoing` carry full port identity, while node-level
-`order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs` carry scheduling facts. Topology is
-interpreted once, deterministically, and frozen. This is the structural substrate for
-`migrate_v1_to_v2()` / `normalize_workflow()` / `validate` (E3.1) and, downstream, R4B's
-`ExecutionPlan`.
+R4A does not reinterpret topology from scratch. One immutable, runtime-neutral graph index
+(`GraphIndex`/`GraphEdge` in `riko/types/_workflow.py`) is constructed once by `Workflow.index`
+(its v1 builder
+`parse_pipe_def` was deleted at cutover step 5): wire-level `edges`/`incoming`/`outgoing` carry full
+port identity, node-level `order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs`/`required` carry
+scheduling facts, and `cyclic` names the nodes a cycle passes through. Topology is interpreted
+once, deterministically, and frozen. It lives in the definitions layer so that `Workflow.validate()`
+and R4B's `ExecutionPlan` read the same index: validation rejects a non-empty `cyclic` rather than
+walking the edges itself (folded in 2026-10-05; the earlier separate `cyclic_nodes` pass is gone).
 
-Shipped: the index replaces the old `ParsedPipeDef` `graph`+`wires` fields; `_get_input_module`,
-`_gen_pykwargs`, and topological ordering read the index instead of rescanning wires; `order` uses a
-strict topological sort, so a cyclic v1 pipe is rejected up front rather than silently
-SCC-reordered.
-
-Current gap: the shipped index is deliberately behavior-preserving for v1, so it still carries three
-legacy artifacts that E3.1/E3.2/E3.4/E3.9 resolve **at the R4A boundary** rather than in the index
-itself:
-
-- `_OUTPUT` remains a real node in `order`/`leaves`; `migrate_v1_to_v2()` translates its producer
-  endpoint to top-level `outputs.default` and drops the pseudo-node (E3.2/E3.10);
-- ports are kept verbatim (`_INPUT`/`_OTHER`/`_OUTPUT` or a named kwarg) because v1 also carries
-  named target ports; the canonical `in`/`in:N`/`out`/`out:N` mapping (E3.4) is applied during
-  migration, not stored in the v1 index;
-- orphan nodes are dropped during construction (a v1 convenience); canonical construction instead
-  begins with every declared node and treats disconnection as a validation question (E3.9), never
-  silent erasure.
+The v1 legacy artifacts the index once carried (`_OUTPUT` as a real node, verbatim
+`_INPUT`/`_OTHER`/`_OUTPUT` ports, dropped orphan nodes) left with the v1 builder: the index now
+indexes only canonical `Workflow`s, keeps every declared node, and stores canonical ports, so
+disconnection stays a validation question (E3.9).
 
 R4B's `ExecutionPlan` consumes the same structural facts (`order`/`edges`/`dependencies`) and adds
 execution interpretation — resolved implementations, resource bindings, sync/async policy. The index
@@ -677,7 +673,7 @@ read/write/action/cache nodes
 loop scopes
 checkpoint boundaries
 resource/Target/Format/input references
-named workflow outputs
+stored workflow outputs
 ```
 
 It does not need private execution objects to render or validate a workflow.

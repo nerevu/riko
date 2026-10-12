@@ -67,9 +67,9 @@ ReadNode / WriteNode
 Examples:
 
 ```python
-Target(Targets.FILE, path="data.csv")
-Target(Targets.HTTP, url="https://example/api")
-Target(Targets.S3, bucket="reports", key="daily.jsonl")
+Target(Backends.FILE, path="data.csv")
+Target(Backends.HTTP, url="https://example/api")
+Target(Backends.S3, bucket="reports", key="daily.jsonl")
 ```
 
 Concrete optional packages register adapters for target names; Workflow v2 can still parse and

@@ -40,7 +40,7 @@ lifecycle contracts.
 **P8 registry/resolver separation** is structurally correct:
 
 - `ModuleRegistry` resolves module implementations;
-- `WorkflowResolver` resolves named workflows;
+- `WorkflowResolver` resolves stored workflows;
 - `PipeResolver` is the compiler-free facade;
 - entry-point registration remains the external-extension seam.
 
@@ -50,7 +50,7 @@ class lands.
 **P9A module-name/taxonomy mechanics** are also retained. Generated module identifiers remain a
 discovery layer over canonical string IDs. The shipped `Sinks` bucket is historical, not part of the
 final taxonomy: remaining installed-environment aggregate and `.pyi` work must target module
-`Sources` / `Transforms` plus the separate `Targets` / `Formats` discovery surfaces and must not
+`Sources` / `Transforms` plus the separate `Backends` / `Formats` discovery surfaces and must not
 encode removed `SyncPipe`/`AsyncPipe`, `write`, `output`, or `Sinks` APIs.
 
 **P10 bounded execution algorithms** are retained conceptually:
@@ -63,11 +63,11 @@ encode removed `SyncPipe`/`AsyncPipe`, `write`, `output`, or `Sinks` APIs.
 Their current home in `collections.py` is temporary. Move reusable mechanics into private execution
 modules rather than preserving `collections.py` as architecture.
 
-**Workflow graph index** is a retained foundation. `index_workflow` (`riko/runtime/_graph_index.py`;
+**Workflow graph index** is a retained foundation. `Workflow.index` (`GraphIndex` in `riko/types/_workflow.py`;
 formerly the v1 `parse_pipe_def`, deleted at cutover step 5) builds one immutable
-`GraphIndex` (`riko/types/_compiler.py`) that interprets a workflow's edges exactly once — wire-level
+`GraphIndex` (`riko/types/_workflow.py`) that interprets a workflow's edges exactly once — wire-level
 `edges`/`incoming`/`outgoing` (ports kept verbatim) plus node-level
-`order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs`. It replaces the old `ParsedPipeDef`
+`order`/`upstream`/`downstream`/`roots`/`leaves`/`outputs`. It replaces the old `ParsedPipeDef`
 `graph`+`wires` fields; R4A's `migrate_v1_to_v2()`/`normalize_workflow()`/`validate` build on it and
 R4B's `ExecutionPlan` reuses its structural facts. The v1-behavior-preserving deltas it still
 carries (`_OUTPUT` as a node, verbatim ports, dropped orphans) are resolved at the R4A boundary, not
@@ -75,8 +75,8 @@ in the index — see [extensibility § E3.11](extensibility.md#e311-reuse-of-the
 Keep execution concepts (resolved callables, portals, resource values, task groups) off it.
 
 The reuse seam runs *through* the compiler, not around it. Graph parsing/validation/ordering/resolution
-is kept and adapted; the legacy generator-construction tail is replaced. Concretely: `topological_sort`
-(strict for `Workflow`s), `ModuleRegistry`/`PipeResolver`/`WorkflowResolver`, the `GraphIndex`,
+is kept and adapted; the legacy generator-construction tail is replaced. Concretely: graph ordering
+(`topological_sort`, cycles reported by `GraphIndex.cyclic`), `ModuleRegistry`/`PipeResolver`/`WorkflowResolver`, the `GraphIndex`,
 and the argument-binding *concepts* in `_get_input_module`/`_gen_pykwargs` all survive into R4B
 preparation. What was replaced (and deleted at cutover step 5, 2026-10-03) is
 `_gen_steps`/`_build_pipeline`/`build_pipeline`, which resolved,
@@ -106,17 +106,13 @@ those mechanics does not retain either old public abstraction.
 
 ### Remove at the R5C clean-break
 
-Two shipped-but-interim surfaces exist only until the write effect can take their place, then are
+Shipped-but-interim surfaces exist only until the write effect can take their place, then are
 removed under the pre-1.0 clean-break policy with no deprecated wrapper, alias, compatibility
-enum/category, or legacy loader form:
+enum/category, or legacy loader form. The fluent **`sink()`** terminal verb that shipped alongside
+the R3 write-session seam was already deleted with the v1 pipe classes at the v1 cutover; there is no
+public `sink()` — terminality is a graph-position/consumption property, not a second verb — and no
+serialized `SinkNode` ever existed. What remains:
 
-- the fluent **`sink()`** terminal verb. It shipped alongside the R3 write-session seam to give
-  terminal consumption — drain the stream, return a `WriteResult` — before `Pipeline.write()` /
-  `WriteNode` existed. It shares `write()`'s session mechanism and carries identical write semantics
-  (both default to `replace`); its only difference is terminality. There is no *permanent* public
-  `sink()` — terminality is a graph-position/consumption property, not a second verb — so R5C removes
-  the interim verb once a `write()` at a graph leaf provides the same terminal consumption. It keeps
-  no persisted-workflow compatibility obligation because no serialized `SinkNode` ever existed;
 - the shipped Python **`riko.modules.write`** module, removed when `Pipeline.write()` / `WriteNode`
   lands. Serialized `PipeDef`s (pipe definitions) containing `write` are handled only by the bounded v1
   migration boundary in R4A/extensibility.
@@ -134,8 +130,8 @@ Do not implement these pending-plan shapes:
 - argparse-shaped CLI plugin contracts;
 - public `collect()` execution terminal (`first()`/`afirst()` are permitted one-item readers and
   `open()` a scoped run handle; see [execution-semantics.md](execution-semantics.md));
-- a *permanent* public `sink()` terminal parallel to `write()` (the interim fluent `sink()` shipped
-  with the R3 write-session seam and is removed at the R5C clean-break, see above);
+- a public `sink()` terminal parallel to `write()` (the interim fluent `sink()` that shipped with the
+  R3 write-session seam was deleted at the v1 cutover, see above);
 - execution knobs on `with_config()`;
 - RDP-owned generic `Checkpoint` or sequence/expansion-path identity;
 - duck-typed lifecycle discovery on arbitrary resolved resource values (`open`/`aopen`/`close`/
@@ -297,9 +293,23 @@ RikoError
 Do not force every current legacy call site through the new hierarchy in this PR. Establish the
 public types and use them in new code; migrate old call sites when touched.
 
+As built, the tree in `riko/base/exceptions.py` has `RikoError`, the `ModuleError`/`TargetError`/
+`PipelineError` (incl. `PipelineStateError`)/`PubSubError` families, and the `IdentityError`
+branch's `IdentityEncodingError`/`CyclicIdentityError`. The rest of the tree lands with its first consumer rather than as unused
+types:
+
+- `StateStoreError` (with its codec and `CheckpointConflictError` children) and `StateKeyError` → R6;
+- `InvalidIdentityError` → R2B;
+- `PublishError`/`SubscriptionError` → R7 (today's pub/sub errors sit under `PubSubError`);
+- `ConfigurationError` and `ModuleDefinitionError`/`ModuleRegistrationError` → R4E module
+  contracts (resolution failures already raise `UnsupportedModuleError`);
+- `ResourceError` → added when a resource failure contract is defined, most likely with R11
+  provider sessions.
+
 **Exit:**
 
-- **ADD:** the stable Riko-owned error families required by later R-phases exist.
+- **ADD:** the stable Riko-owned error families exist; the families listed above as deferred land
+  with their consuming phases.
 - **MIGRATE:** new foundations use those errors, and legacy call sites migrate when touched rather
   than introducing new builtin-exception contracts.
 - **DELETE:** none; untouched legacy call sites are intentionally not bulk-migrated in R1.
@@ -416,6 +426,17 @@ the type/normalization boundary, not the execution lifecycle:
 - `with_module()` / `with_resource()` immutable derivation;
 - no catch-all ignored kwargs.
 
+**Not built in R3 (re-homed).** These bullets did not land with R3 and now belong to:
+
+- factory-signature validation (`()`/`(ctx)`/`(ctx, resources)`) and eager validation of the
+  declared resource graph (dependencies, cycles, shadowing) → R11, beside the resource dependency
+  ordering it already owns;
+- `state_store` → R6;
+- identity-encoder selection and resource identity metadata → R2B;
+- Context-local module definitions, `with_module()`, and child-Context shadowing → unscheduled (the
+  target semantics stay in `execution-semantics.md` § Context and resources and
+  `module-registry.md`; no R-phase owns them yet).
+
 R3 classifies and normalizes what can be known from the definition. It must **not** inspect a
 not-yet-created factory result to guess its runtime lifecycle. Context construction also does not open,
 await, enter, close, or serialize execution-created resource values. Runtime factory-result
@@ -440,21 +461,18 @@ the right seams without pulling their runtimes forward:
   pub/sub channel onto a private write-session mechanism (`build_write` → a `WriteSession`
   lifecycle) shared by both verbs.
 
-This establishes the seam only. R4B moves ownership of the write-session lifecycle into the private
-execution exit stack, and R5C makes `WriteNode` invoke the same preparation/session — reuse, not
-replacement. Because `write()` no longer rides a hidden `send` channel, R7 can remove send/receive
-without a write-specific compatibility path.
-
-The fluent async `write()`/`sink()` surface also landed here (an async write session drives the
-passthrough/terminal verbs), earlier than the sequence originally deferred it. R4B still owns the
-final form: it re-hosts that same session lifetime on the execution `AsyncExitStack` rather than on
-the current one-shot pipe host. The session contract does not change — only its owner.
+This establishes the seam only. The fluent sync and async `write()`/`sink()` verbs that first drove
+the sessions were deleted with the v1 pipe classes at the v1 cutover, so the sessions currently have
+no production caller. R5C's `WriteNode` is their next caller, invoking the same preparation/session
+under the private execution exit stack — reuse, not replacement. Because writes no longer ride a
+hidden `send` channel, R7 can remove send/receive without a write-specific compatibility path.
 
 **Exit:**
 
 - **ADD:** immutable Context/Resource definitions and the private sync/async write-session seam exist.
-- **MIGRATE:** reusable resource declarations use the immutable definition model, while fluent
-  `write()`/`sink()` use `WriteSession` rather than hidden pub/sub callbacks.
+- **MIGRATE:** reusable resource declarations use the immutable definition model, and writes use
+  `WriteSession` rather than hidden pub/sub callbacks (the fluent verbs that did so were later deleted
+  at the v1 cutover; `WriteNode` in R5C is the future caller).
 - **DELETE:** mutable/catch-all Context definition behavior and the write path's hidden
   `send`/`on_receive` dependency are absent; the explicitly bounded one-shot Resource form remains.
 
@@ -543,8 +561,9 @@ Deliver:
 - resource references and declared resource slots;
 - configured immutable serializable `Target` and `Format` definitions/references;
 - `TargetRegistry` contract and sync/async target capability protocols;
-- canonical read/write/action/cache/subscription/checkpoint/loop structural fields even when runtime
-  execution lands in later phases;
+- canonical read/write/action/cache/subscription structural fields even when runtime execution lands
+  in later phases (checkpoint declarations and the loop `until`/`max_iterations` fields were not built
+  here; their structure lands with their runtimes in R6 and R9);
 - deterministic serialization;
 - during 0.x, serialized `PipeDef` input accepted only at the migration boundary, warning on migration and
   normalizing immediately to v2; v2 emitted only;
@@ -564,7 +583,7 @@ revisions.
 `id` is graph-node identity; `name` is the stable registered implementation identity; `label` is
 optional human text.
 
-R4A also locks `Targets` as endpoint/provider identities and `Formats` as serialization formats.
+R4A also locks `Backends` as endpoint/provider identities and `Formats` as serialization formats.
 Concrete provider/storage implementations remain R11 adapters. A `Workflow` can therefore
 validate `Target`/`Format` structure without importing every optional client library.
 
@@ -601,7 +620,7 @@ R4A.5  deterministic serialization + acceptance
   canonical (E3.1): omitted outputs→`outputs.default` (lone leaf only; ambiguity deferred to
   validate), omitted ids→`<name>-<occurrence>`, port aliases, family dispatch + `backend`/`fmt`/
   `mode` enum coercion, `src`/`tgt`/`from`/`to` rejection, string inputs→JSON Schema. The
-  **structural, contract-free** pass: it reuses `normalize_binding`/`normalize_resources` (so a
+  **structural, contract-free** pass: it reuses `require_binding` (so a
   bare-string `resources` self-binds, no contract needed), `normalize_strs`, `listize`, and the
   `is_mapping`/`is_listlike` guards; only format-from-locator inference and closed-schema rejection
   are deferred. Full `normalize∘serialize` idempotency is proven with the byte-stable serializer in
@@ -679,8 +698,9 @@ per-step drift guards, and the recorded keep-`migrate_v1_to_v2` divergence) is
 
 **Placement (supersedes the R4A.1 `riko/workflow/` package note).** The canonical model is not a new
 top-level package/layer. Pure contracts live in `riko/types/_workflow.py`; the immutable
-node/edge/`Workflow`/`Pipeline` model lives in `riko/definitions/_workflow.py` (the existing
-declarative-contract layer); the later `normalize`/`validate`/`migrate` logic lives in `riko/runtime/`
+node/edge/`Workflow`/`PipelineDefinition` model lives in `riko/definitions/_workflow.py` (the
+existing declarative-contract layer), and the runnable `Pipeline` subclass that adds iteration lives in
+`riko/runtime/_pipeline.py` so no definition imports upward (amended 2026-10-05); the later `normalize`/`validate`/`migrate` logic lives in `riko/runtime/`
 (`_normalize.py`/`_migrate.py`). No `riko/workflow/` package is added.
 
 **R4A.1 landed** (see `IMPLEMENTED.md`): the closed node/edge union, port grammar, `Workflow`
@@ -706,8 +726,7 @@ Deliver:
 - fresh `SyncExecution` from `iter(pipeline)`;
 - fresh `AsyncExecution` from `aiter(pipeline)`;
 - native-wins module resolution over P8 definitions;
-- execution-owned task group;
-- execution-owned exit stack;
+- execution-owned exit stack (the async task group moved to R7, the first phase that spawns tasks);
 - execution-owned worker/portal bridge;
 - one execution-local bridge/portal where adaptation is needed;
 - source normalization at one boundary;
@@ -719,7 +738,9 @@ Deliver:
 - runtime factory-result handling: await awaitables once, honor explicit cleanup first, otherwise
   prefer context-manager lifecycle over close/aclose capability and native execution mode over
   bridging;
-- lazy-resource single-flight acquisition and dependency-first/dependent-first lifetime ordering;
+- single-flight acquisition (lazy acquire-on-first-use and dependency-first/dependent-first
+  ordering moved to R11, whose provider sessions are their first consumer; R4B ships `lazy=` as a
+  recorded but not yet honored flag);
 - transactional partial-acquisition unwind and comprehensive cleanup-error grouping;
 - bounded cancellation-shielded resource teardown;
 - one R4B resource-model cleanup that normalizes user resource declarations into an executable
@@ -832,8 +853,8 @@ helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_
    by `PreparedNode.select(is_async=...)` (`riko/execution/_prepared.py`), which picks `NATIVE`/`ADAPTER`
    per the four native-wins quadrants, and a loop node's embed is resolved at build into a nested
    `PreparedNode.embed`. Both executions now re-select that embed against the **host pipe's actual mode**
-   (`_select_embed(embed, host_async=…)` on `SyncExecution` and `AsyncExecution`) and, on
-   `ExecMode.ADAPTER`, forward a synthesized host-mode wrapper instead of the raw other-mode one.
+   (`select_embed(embed, host_isasync=, run_sync=, drain=)` in `riko/execution/_adapt.py`, called
+   by both executions with their own adapters) and, when the embed is adapted, forward a synthesized host-mode wrapper instead of the raw other-mode one.
    `adapt_embed_for_sync(embed, drain)` and `adapt_embed_for_async(embed, run_sync)` copy the wrapper's
    discovery metadata (`name`, `type`, `subtype`, `subtypes`, `pollable`, `loopable`) and set `isasync`
    to the host mode — leaving `__wrapped__` unset — so `loop_embed_sync`/`loop_embed_async`,
@@ -864,14 +885,14 @@ executable, not guarded: `union` reads `others` as an ordered list and legacy `_
 `parse_port`; per-module arity stays with the module port contracts (R4A.3's deferred fan-in arity;
 tripwire `test_build_plan_rejects_undeclared_positional_input`). The R4B "source normalization at one boundary"
 item is also done: `SourceLike` (`Item | Feed | Awaitable[Item | Feed]`) is resolved once in
-`SyncExecution.run`/`AsyncExecution.run` (`_resolve_source`/`_aresolve_source`, sharing
+`SyncExecution.run`/`AsyncExecution.arun` (`_build_source_stream`/`_abuild_source_stream`, sharing
 `normalize_items` in `_adapt.py`); `Pipeline.source`, `__ror__`, and the generated module template
 hand the raw seed through, and the async `processor` wrapper maps an `AsyncIterable` input lazily
 (`_aprocess_stream`) instead of treating it as one item. Shutdown reporting now meets the
 cleanup-error contract: plain callbacks and task/budget failures are recorded and grouped
 beside the unsuppressed primary error, while a native `__exit__` keeps its replace/suppress
 semantics (`_report_shutdown`; regressions in `tests/internal/test_execution.py`).
-Splitter nodes are likewise refused at plan build — `PreparedNode` validates both pipe fields with
+Splitter nodes are likewise refused at plan build — `ResolvedModule` (formerly `PreparedNode`) validates both pipe fields with
 `require_single_output` (`riko/types/_guards.py`, keyed on the resolved pipe's declared `type`), so
 the invariant holds for every construction path — rather than by sniffing the first value a node
 yields: the old shape guard consumed the whole upstream before raising (split's parser
@@ -894,11 +915,12 @@ Concurrent pulling of fan-in branches is R7's (its deliverable list names it).
 
 **Exit:**
 
-- **ADD:** private sync/async executions own task groups, exit stacks, adaptation, resources, events,
-  and shutdown.
-- **MIGRATE:** P10 bounded/executor mechanics, R3 resource acquisition, and the write-session
-  lifecycle run under the common execution lifetime; resource declarations normalize once into the
-  executable lifecycle plan.
+- **ADD:** private sync/async executions own exit stacks, adaptation, resources, events, and
+  shutdown (the async task group arrives with R7's spawned tasks).
+- **MIGRATE:** P10 bounded/executor mechanics and R3 resource acquisition run under the common
+  execution lifetime; resource declarations normalize once into the executable lifecycle plan. The
+  write-session lifecycle part of this bullet is **carried to R5C**: no node drives a write session
+  until `WriteNode` executes (tripwire `TestPipelineWrite` in `tests/internal/test_targets.py`).
 - **DELETE:** `SyncPipe`/`AsyncPipe`/Collection runtime classes and superseded one-shot pipe lifecycle
   hosts are absent rather than wrapped; no parallel task-group/exit-stack/portal runtime remains; the
   private resource-variant subclass hierarchy is absent, replaced by lifecycle-plan data.
@@ -927,7 +949,12 @@ Deliver:
 - `Pipeline.open()`: a fresh single-use run handle per call that is a sync and async context manager
   (`closing(iter(pipeline))` / `aclosing(aiter(pipeline))`), the scoped early-exit form of iteration
   whose semantics [execution-semantics.md](execution-semantics.md) owns; it rides this slot as the
-  next Pipeline-surface PR, not as callable-node work.
+  next Pipeline-surface PR, not as callable-node work. It carries the adopted seed direction in
+  [execution-semantics.md](execution-semantics.md) § Canonical definition and execution model: an
+  open pipeline takes its seed per run (`pipeline(items)`, `open(items)`, `first(items)`) and
+  `PipelineDefinition.source` goes along with the `Pipeline(source=…)` parameter, and an unseeded
+  open pipeline raises; `pipeline(items)` returns a plain stream and `open(items)` the only
+  `PipelineRun` context manager, with no `first`/`afirst` on either (all decided there 2026-10-10).
 
 Out of scope here: `flat_map`/strict flat-map (needs R5A's derive/combine envelope), side effects and
 idempotency (R6), state/checkpoints (R6), and per-item gating (`skip_if`, callable-pipes § Per-item
@@ -946,6 +973,8 @@ gating, pending a decision).
   move onto `.map`; module preparation remains the single definition mechanism.
 - **DELETE:** none at the public surface; no parallel callable-wrapping path exists beside the
   decorator/preparation model.
+  `PipelineDefinition.source` is deleted: no stored seed coexists with per-run seeds
+  (`pipeline(items)`/`open(items)`), and a generator-seeded pipeline re-runs when handed a fresh seed.
 
 ### R4D — Workflow input declarations
 
@@ -960,13 +989,32 @@ Deliver:
 - validation of `Context.inputs` against the declarations at plan/preparation time, before resources
   open or sources are consumed;
 - serialization/normalization/migration round-trip coverage for the new top-level field.
+- a strict `Workflow.inputs` that holds only canonical schema mappings: today the field is
+  `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare type-name string or a
+  non-schema value (`{"q": 5}`) that re-normalization then rejects; strict xfails in
+  `tests/internal/test_definition_freezing.py` mark it for this phase. Narrow the field's
+  static input type (`inputs_converter`'s `accepted`, today `Mapping[str, object]`) to one
+  schema mapping per name in the same change: narrowing it alone fails pyright wherever a
+  stored `Workflow.inputs` is passed back to the constructor.
+- the `Context.inputs` value type: `Inputs` (`Mapping[str, str | int | bool]`) types the field
+  as scalar-valued, yet its converter list deep-freezes nested values (`{"tags": ["a"]}` is stored
+  as `('a',)`), so pyright rejects valid calls and `.inputs` misreports what it holds. Decide
+  scalar-only (reject nested values at runtime) or JSON-valued (widen `Inputs`) alongside the
+  declaration schema, and replace the converter list with a single typed converter in the same
+  change.
 
 **Exit:**
 
 - **ADD:** typed input declarations and `{"input": …}` references exist in the Workflow v2 IR and are
   validated against `Context.inputs` during preparation.
 - **MIGRATE:** the `input` module's default/prompt/`test` behavior and the generated module's
-  describe-inputs mode read the declared inputs instead of scanning node configuration.
+  describe-inputs mode read the declared inputs instead of scanning node configuration. `Pipeline`
+  iteration ignores the `Context.mode` describe modes today (only generated workflow modules honor
+  them); a strict xfail in `tests/public/test_context_modes.py` marks it for this phase. The
+  hand-maintained probes in `tests/pyworkflows`/`examples/pyworkflows` migrate with it: their
+  describe-inputs branches still return `[]` or the scanned `input`-node tuples while the generated
+  pipe returns the declared `Workflow.inputs` mapping (strict xfail
+  `tests/internal/test_workflow_fixtures.py::test_probe_describes_the_inputs_its_document_declares`).
 - **DELETE:** none at the public surface; no second input-declaration carrier exists beside the IR.
 
 ### M1 — v1-parity merge (`next` → `features`)
@@ -1008,9 +1056,24 @@ Deliver:
   no contract is not rejected;
 - the same check for built-in and entry-point modules.
 
+Open decision (triaged 2026-10-05): the released `riko.ext.get_conf_type` reads a parser's `objconf`
+annotation and returns the generated `<Name>Objconf`, but no runtime path consumes it, and parsers
+receive a plain `Objectify`, never the annotated class. R4E either derives the declared contract from
+that annotation (making `get_conf_type` the contract reader) or keeps the contract on
+`ModuleDefinition` alone and deprecates `get_conf_type`. Keeping both is the second carrier the exit
+forbids. Do not wire the runtime to instantiate `get_conf_type(parser)` ahead of this decision.
+
 Out of scope: action-params and target-config validation (R5C contracts), declared ports and fan-in
 arity (their own E3.9 rows), and `ModuleNode.options` validation beyond what the contract already
-types.
+types. Unknown keyword arguments on a direct module call (`hash.pipe(items, bogus=1)`) also stay
+out of scope: the low-level wrapper forwards every kwarg to the parser, where one may be a named
+input such as `other=`, so it accepts them silently. `Pipeline` is the supported front door, and
+`ModuleNode` already rejects unknown `options` keys (triaged 2026-10-11, won't fix).
+
+Naming (2026-10-10 naming triage): if `get_conf_type` survives as the contract reader, rename it
+`resolve_conf_type` in the same change — it looks up the parser's annotation and falls back to
+`DynamicConf`, which is resolve semantics. A deprecation retires the name instead. Either way it is a
+released `riko.ext` name, so the change carries a "Renamed"/"Deprecated" `CHANGES.rst` bullet.
 
 **Exit:**
 
@@ -1193,12 +1256,18 @@ Deliver:
 - failure propagation and cancellation obey the common execution contract;
 - remove the shipped `riko.modules.write` Python module/discovery entry, plus `SINK_NAMES` and the
   `Sinks` discovery bucket, when `Pipeline.write()` / `WriteNode` lands; do not keep a deprecated wrapper;
+- `PipelineDefinition.write()` gives up its second meaning in the same commit: today a call without a
+  destination chains the shipped `write` module (so attribute chaining keeps reaching it) while a call
+  with one appends a `WriteNode`. Once the module is gone, `dest` is required and a bare `write()` is a
+  `TypeError` (tripwire `tests/internal/test_targets.py::TestPipelineWriteDefinition::test_requires_a_destination`;
+  audit triage 2026-10-05);
 - preserve only the bounded persisted-v1 `write` migration owned by R4A/extensibility.
 
 `write()` is an effect operation, not a public module and not a terminal by definition. Its graph
-position determines whether the user continues chaining. There is no *permanent* public `sink()`
+position determines whether the user continues chaining. There is no public `sink()`
 counterpart in the target API; the interim fluent `sink()` that shipped with the R3 write-session
-seam is removed here once `write()` at a graph leaf provides the same terminal consumption.
+seam was already deleted with the v1 pipe classes, and `write()` at a graph leaf provides terminal
+consumption.
 
 `read()` owns acquisition plus interpretation/parsing through Target + Format. `write()` owns
 reconciliation/mutation. Provider commands that do not naturally mean data write are actions.
@@ -1210,8 +1279,8 @@ Concrete FILE/HTTP/S3/Postgres/Airtable/Intune/etc. adapters remain R11.
   `WriteResult`/`ActionResult` through `EventSink`.
 - **MIGRATE:** internal write execution uses the canonical `WriteNode` path and execution-owned
   write-session/lifetime machinery.
-- **DELETE:** `riko.modules.write`, its discovery entry, `SINK_NAMES`, the `Sinks` discovery bucket,
-  and the interim fluent `sink()` surface are absent. The only legacy `write` behavior retained is
+- **DELETE:** `riko.modules.write`, its discovery entry, `SINK_NAMES`, and the `Sinks` discovery
+  bucket are absent. The only legacy `write` behavior retained is
   bounded persisted-v1 migration at the R4A Workflow ingress boundary.
 
 ### R6 — StateStore, checkpoint, CAS, and idempotency
@@ -1242,8 +1311,8 @@ Central execution derives idempotency keys from
 `(node_id, fingerprint, item_key, generation, iteration)` and injects them into R5C side-effecting
 nodes that declare support.
 
-Checkpoint declarations already exist structurally in R4A. R6 adds owner resolution, restore,
-persistence, CAS, cleanup, and runtime validation.
+R6 adds checkpoint declarations to the canonical Workflow v2 structure (R4A did not build them)
+together with owner resolution, restore, persistence, CAS, cleanup, and runtime validation.
 
 **Exit:**
 
@@ -1269,7 +1338,13 @@ Deliver:
 - `pipeline.publish(subscription_or_publisher, isolate=True)`;
 - external `Subscription` accepted as `Pipeline(source=...)`;
 - execution-owned local branches and cleanup, with every subscriber/branch/merge task created under
-  R4B's task group;
+  one execution-owned task group, which R7 introduces (R4B removed its unused eager group because
+  entering it in the consumer's task made a bare `async for … break` cancel the consumer). The group
+  must not stay entered in the consumer's task across a `yield`: host it in a dedicated execution
+  task behind a bounded channel or scope it to `Pipeline.open()`; the bare-break regression in
+  `tests/public/test_async_pipe_lifecycle.py` guards this;
+- prove failure-induced cancellation of execution-spawned tasks (moved here from R4B's external-
+  resource proof along with the task group);
 - concurrent pulling of fan-in branches under the `with_execution(concurrency=)` ceiling, with
   bounded per-source buffers (execution-semantics § 8.2), restoring what `SyncCollection(parallel=True)`
   did for multi-source fetching; until then a fan-in pulls its branches one at a time while per-item
@@ -1288,10 +1363,37 @@ Deliver:
   references `out:N` beyond the configured count never reaches an undefined branch (today
   `Workflow.validate()` accepts `splits=2` with an `out:2` edge);
 - port-keyed execution steps replace the R4B refusal of splitter nodes (`require_single_output` in
-  `riko/types/_guards.py`, applied as a `PreparedNode` pipe validator and inside
+  `riko/types/_guards.py`, applied as a `ResolvedModule` pipe validator and inside
   `require_stream`/`require_async_stream`) and the `_require_default_output_port` guard; the async splitter wrapper accepts an async input stream (tripwire
-  `test_async_splitter_accepts_an_async_input_stream`);
+  `test_async_splitter_accepts_an_async_input_stream`), and the splitter wrapper resolves an
+  execution `context` into its parser's `inputs`/`test`/`resources` as processors and operators do
+  rather than forwarding the raw `Context` (tripwire
+  `test_splitter_resolves_the_context_for_its_parser`);
+- the splitter/stream distinction is typed by module type rather than carried as a union: today
+  `ModuleWrapper`/`SyncModuleWrapper`/`AsyncModuleWrapper.__call__` (`riko/types/_wrappers.py`)
+  return `WrapperOutput | SplitterWrapperOutput`, so every single-output call site in
+  `riko/execution/_execution.py` and `_adapt.py` casts twice (once to
+  `Iterator[T] | Iterator[Iterator[T]]` / `AsyncModuleWrapperOutput[T]`, again inside
+  `require_stream`/`require_async_stream`) because `is_splitter` narrows the pipe, not its
+  output. The port-keyed dispatch that replaces the refusal hands a cascade to the port router and
+  a stream to every other node through separately typed paths, retiring the union-only
+  `AsyncModuleWrapperOutput` alias. The async splitter's output is typed as async branches (today
+  `AsyncWrapperStream[Stream, Cascade]` yields sync streams); the unused `AsyncCascade` alias
+  (`riko/types/_streams.py`) is either that type or deleted (audit triage 2026-10-05);
 - branch/route port behavior from the R4A contract;
+- one input router: `SyncExecution._resolve_inputs` and `AsyncExecution._resolve_async_inputs`
+  (`riko/execution/_execution.py`) carry the same port routing today — each runs
+  `_require_default_output_port` per incoming edge, then sends `in` to the primary source, `in:N` to
+  the ordered `others` list, and named ports into the call kwargs, differing only in stream type and
+  empty/seed constructors. Port-keyed dispatch replaces both with one router both executions call,
+  keyed on the source port instead of guarding it (audit triage 2026-10-05: not extracted ahead of
+  this phase, since the router's input changes from node streams to port streams);
+- follow-on, not an exit gate: once port-keyed dispatch lands, `riko/execution/_execution.py` (~1,550 lines: shutdown/
+  error grouping, resources, portals, source resolution, input binding, adaptation,
+  mapping, and both executions) splits by responsibility — at minimum `SyncExecution`, `AsyncExecution`,
+  and their shared lifecycle/input-binding helpers in separate modules. The split waits for this phase
+  because port-keyed dispatch rewrites exactly the node-dispatch code it would move; it stays two
+  explicit execution classes, never a generic executor/strategy hierarchy (audit triage 2026-10-05).
 - no cleanup dependency on draining branch output;
 - remove legacy `send` / `receive` Python modules when the object-first surface lands rather than
   retain low-level compatibility modules.
@@ -1302,12 +1404,20 @@ part of subscription semantics and differs from ordinary downstream UDF evaluati
 Feed-native send/receive/split implementation migration belongs in this phase rather than being
 deferred to R10; only the useful mechanics survive behind the new API.
 
+Naming (2026-10-10 naming triage): the async hub's `publish`/`complete`/`_get_or_create`
+(`riko/runtime/_pubsub/_async.py`) are deleted with the hub lifecycle, so they were not renamed. The
+R7 protocols should use one vocabulary for both colors (today the sync hub says `send`/`notify_complete`
+where the async hub says `publish`/`complete`), give a coroutine an `a` prefix only when it has a sync
+twin, and avoid `get_` on a method that creates channel state.
+
 **Exit:**
 
 - **ADD:** publish/subscribe/split use execution-owned topology, buffering, task ownership, and
   lifetime.
 - **MIGRATE:** useful send/receive/split mechanics are Feed-native behind `PublishEdge`,
   `SubscribeNode`, and the object-first API.
+- **MIGRATE:** wrapper call types distinguish splitters from single-output pipes by module type;
+  single-output execution call sites carry no splitter union and no second narrowing cast.
 - **DELETE:** legacy `send`/`receive` modules, global/context-local hub lifecycle, and
   PENDING/DONE/sender-id stream bookkeeping are absent.
 
@@ -1352,8 +1462,8 @@ Batch-aware Feed-native representation optimization lands here; no separate R10 
 
 **Goal:** extend the existing `loop` module rather than add a LoopNode or agent execution engine.
 
-Current/default semantics stay unchanged: for each parent, run the embedded processor/named workflow
-once and fold its zero-to-many outputs according to the existing `count`/`emit`/`assign` behavior.
+Current/default semantics stay unchanged: for each parent, run the embedded processor/stored workflow
+once and fold its zero-to-many results according to the existing `count`/`emit`/`assign` behavior.
 
 Iterative behavior is opt-in by the presence of iterative controls:
 
@@ -1383,10 +1493,36 @@ Deliver iterative mode:
 - checkpoint payload `LoopState[T](value, iteration)` through R6;
 - explicit stable loop `id=` where cross-revision state identity is required;
 - resume counts total iterations across executions;
-- Pipeline DAG remains acyclic; feedback is internal loop execution semantics.
+- Pipeline DAG remains acyclic; feedback is internal loop execution semantics;
+- the canonical Workflow v2 structural fields for `until`/`max_iterations` (R4A did not build them).
+- the structural type of `ModuleNode.embed`, settled together with what an embed may reference
+  (registered module, processor, stored workflow, or embedded `Pipeline`): today the field is typed
+  as the `Embed` TypedDict but stores a `FrozenDict`, so `node.embed["conf"] = ...` type-checks yet
+  raises, and its converter list makes pyright reject a conf-less embed mapping that the runtime
+  accepts. Give it an honest immutable type with typed fields and a single typed converter in the
+  same change.
 
 Agent packages compose Pipeline + loop + Publisher/Subscription + StateStore rather than creating
 `AgentGraph`/`AgentNetwork` runtime primitives.
+
+Naming (2026-10-10 naming triage): the "subpipe" family names the tag that lets `loop` run a stored
+workflow's pipe without conf — `SubPipe`/`SyncSubPipe`/`AsyncSubPipe`/`SubPipes`, `mark_subpipe`,
+`is_subpipe`, `_as_subpipe`, `SUBPIPE_TYPE`, plus `bind_subpipe` (`riko/modules/_assignment.py`, which
+builds an embedder, not a resource binding) and `loop_embed_sync`/`loop_embed_async` (no verb; they
+resolve the loop stream). "Subpipe" sits next to the banned "sub-pipeline". Settle the names when the
+embed shape is settled: keep the tag or delete it, then rename what survives (e.g. `build_embedder`,
+`resolve_loop_stream`) in one pass, including the `examples/pyworkflows` and `tests/pyworkflows`
+imports of `mark_subpipe`. If the tag survives, it and `build_workflow_pipes` need a supported
+surface: hand-written and generated workflow modules import both from private
+`riko.runtime._workflows` today (2026-10-10 terminology audit).
+
+Type tag (2026-10-11 "type" triage): the tag lives in the wrapper's `.type` (`SUBPIPE_TYPE == "pipe"`),
+but `ModuleWrapper.type` is annotated `ModuleType` (`operator`/`processor`/`splitter`), which
+`SyncSubPipe`/`AsyncSubPipe` inherit, so the annotation excludes the value every
+`build_workflow_pipes` pipe carries; `is_subpipe` and `PreparedNode.module_type` only work through
+`getattr`. Target: `.type` keeps the real module type (a stored workflow's pipe is a processor) and
+the tag moves to its own marker read by its own guard, rather than a fourth `.type` value
+(`"workflow"` would repeat the problem). Decide it with the tag's keep/delete decision above.
 
 **Exit:**
 
@@ -1421,6 +1557,10 @@ R10 therefore owns:
 - proof that genuinely eager operators (`sort`, `reverse`, etc.) are the only intentional
   materialization points.
 
+Naming (2026-10-10 naming triage): `_materialize_terminal`/`_materialize_terminals`
+(`riko/modules/_decorators.py`) drain async terminal sub-sources for the sync conf parser; they are
+async-wrapper shims this phase deletes, so they keep their off-table `materialize` name until then.
+
 **Exit:**
 
 - **ADD:** no new public runtime abstraction; parity/laziness/memory proofs cover the final
@@ -1442,12 +1582,29 @@ AZ0/AZ2/AZ3), which depend only on R3 resources and may land right after M2:
 - orchestration uses `PipelineRunRequest(pipeline=PipelineRef(...))`;
 - REST/monitoring persist source state through R6 rather than SourceCheckpoint/CheckpointStore;
 - provider/MCP sessions are declared `Resource`s resolved once per execution;
+- a sync lifecycle resource under async execution is entered and exited on the same thread, so
+  thread-affine clients (e.g. `sqlite3` connections) work (strict-xfail tripwire in
+  `tests/internal/test_prepare_execution.py`);
+- lazy resources acquire on first use rather than at run start, and declared resource-to-resource
+  dependencies acquire dependency-first and tear down dependent-first (moved from R4B; tripwire
+  `tests/internal/test_prepare_execution.py::test_run_defers_an_unused_lazy_resource`);
+- factories declared `(ctx, resources)` receive a `ResourceView` (`execution-semantics.md` §
+  Execution-bound resource view). `ResourceView` lives in `riko/execution/_resource_view.py` today;
+  factory definitions sit in `definitions`, which cannot import `execution`, so move it to a layer
+  `definitions` can reach and, at the same time, export it on `riko.ext` so module authors can
+  annotate their `resources` argument (deliberately deferred from the 2026-10-08 audit so the
+  supported import path is fixed once);
 - provider side effects consume centrally derived idempotency keys;
 - provider resources/actions project into the shared `CapabilityCatalog` rather than a second
   provider catalog;
 - provider integrations establish the `OperationHandle` waiter contract before Operations as Code
   needs long-running provider steps;
 - RDP projects R5A/R6 identity/state rather than owning parallel checkpoint semantics.
+
+Naming (2026-10-10 naming triage): `run-pipe`'s internals wait for the CLI tree decision —
+`runner` (`riko/cli/runpipe.py`, overlaps `aemit_result`), `resolve_example` (exits on no match and
+executes the pipe script it finds: a `load`), `file2name` (no verb), and `get_example_dirs` (depends
+on the working directory). Rename them with the command.
 
 **Exit:**
 
@@ -1585,7 +1742,7 @@ Do **not** parallelize competing implementations of identity, workflow normaliza
 lifecycle, cache replay, state, pub/sub, effect dispatch, capability discovery/policy, operation
 planning, provider waiting, or compatibility ownership. Each has one authoritative implementation.
 In particular, no PR after R4B may introduce its own task group, exit stack, portal, event transport,
-or executor.
+or executor outside the execution; R7 adds the execution's async task group, not a parallel one.
 
 ## 6. Next implementation slice
 
@@ -1634,7 +1791,7 @@ The implementation reconciliation is complete when:
     `max_iterations`, while the default preserves current one-run semantics;
 14. Feed-native migration happens with its owning runtime phases and R10 leaves only genuinely eager
     materialization points;
-15. generated discovery contains module `Sources`/`Transforms` plus separate `Targets`/`Formats`,
+15. generated discovery contains module `Sources`/`Transforms` plus separate `Backends`/`Formats`,
     with no `Sinks` compatibility bucket;
 16. external packages can use resources/state/pubsub/targets/actions without core changes;
 17. Operations as Code scaffolding lives outside Core and composes provider/capability/orchestration

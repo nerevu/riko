@@ -30,7 +30,7 @@ P8/P11/P12); it appears here only as the fake in-repo example extension that pro
   `Sources`/`Transforms`/`Sinks` from existing metadata. The final target keeps only module
   `Sources` and `Transforms`; `Sinks`, `ModuleCategory = "sink"`, and `SINK_NAMES` disappear when
   `output`/`write` leave module space. Endpoint/provider and data-format discovery are separate
-  typed surfaces, `Targets` and `Formats`, backed by their own contracts/registries rather than
+  typed surfaces, `Backends` and `Formats`, backed by their own contracts/registries rather than
   pretending destinations are modules. The runtime execution-role `type`
   (`operator`/`processor`/`splitter`) remains a separate axis.
 - **No `.then()` — decision: Option C + `__or__`.** `.then()` is **rejected** (avoids a second
@@ -75,7 +75,7 @@ touched.
   env-stable);
 - align generated discovery with the final module set: `Sources` + `Transforms` only; do not carry
   `Sinks`, `write`, or fake `output` forward solely for compatibility;
-- expose `Targets` and `Formats` through their dedicated target/format discovery contracts rather
+- expose `Backends` and `Formats` through their dedicated target/format discovery contracts rather
   than module taxonomy;
 - `.pyi` fluent stubs;
 - Optional taxonomy enums (`ModuleType`, per-provider subtype enums) if `list_modules` filtering

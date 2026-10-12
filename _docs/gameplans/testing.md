@@ -111,7 +111,7 @@ empty DAG with `InvalidPipelineError`, the tripwire is retired, and
 | `functional/test_pipeline.py` | **Remove / relocate** | No pytest tests; generated pipeline implementation under a `test_*.py` filename. |
 | `functional/test_script.py` | **Keep, strengthen helper** | CLI/subprocess coverage is distinct. Fix/remove the boolean-comparison path: `fd.readlines()` consumes the stream before `bool(fd.read())`, so that branch always sees empty text. Replace the `SequenceMatcher(...).blocks[0].size == 7` benchmark check with explicit containment of stable benchmark labels. Keep `build-workflow → compile` (validates CLI wiring, not just library functions). |
 | `internal/test_codegen_names.py` | **Keep, consolidate** | Collapse three taxonomy partition tests into one golden mapping. Fold enum override into the existing parametrization. Remove `test_member_is_shared_object` (public discovery suite owns it). Keep byte drift, order independence, collisions, and provider behavior. **Execute** generated provider code rather than string-searching it. |
-| `internal/test_compile.py` | **Deleted at v1-cutover step 5 (2026-10-03)** | Its v1 compiler subjects went with the compiler. Owners now: codegen↔document parity, describe modes, and determinism in `internal/test_codegen.py`; `GraphIndex` structure in `internal/test_prepare_execution.py::test_index_workflow_orders_and_indexes`; loop/embed semantics in `internal/test_loop.py`, `internal/test_prepare_execution.py`, and `functional/test_basics.py` (`test_loop_subpipe_embed`, `test_loop_count_all_assign`); `pipe_missing` resolution in `internal/test_resolver.py`. The v1-only `MALFORMED` `KeyError`/`IndexError` cases have no v2 meaning. |
+| `internal/test_compile.py` | **Deleted at v1-cutover step 5 (2026-10-03)** | Its v1 compiler subjects went with the compiler. Owners now: codegen↔document parity, describe modes, and determinism in `internal/test_codegen.py`; `GraphIndex` structure in `internal/test_prepare_execution.py::test_workflow_index_orders_and_indexes`; loop/embed semantics in `internal/test_loop.py`, `internal/test_prepare_execution.py`, and `functional/test_basics.py` (`test_loop_subpipe_embed`, `test_loop_count_all_assign`); `pipe_missing` resolution in `internal/test_resolver.py`. The v1-only `MALFORMED` `KeyError`/`IndexError` cases have no v2 meaning. |
 | `internal/test_decorators.py` | **Keep, trim duplicate rows** | Main truth table is good. `test_lambda_infers_sync_without_isasync`/`test_lambda_needs_explicit_isasync` repeat rows already in `test_resolved_isasync`; retain only the end-to-end async execution test from that class. Keep diagnostics. |
 | `internal/test_dotdict.py` | **Keep, parametrize** | Not duplicated by the `DotDict` doctests (which cover retrieval/conversion). Nine deletion tests → a compact `(source, key, expected)` table covering root/nested/deep, case variation, missing paths. |
 | `internal/test_gen_config.py` | **Reduce 4 → 2** | Keep byte equality (`_CONFIGS.read_text() == render()`) and the `FetchTableObjconf → CsvObjconf` inheritance semantic. Delete `test_configs_structure_matches_generated` and `test_every_objconf_has_nonraw_source`: `render()` is built from `objconf_structure()`, so byte equality subsumes both. |
@@ -175,7 +175,8 @@ Different deletion rule from pytest, because doctests are executable documentati
   `list_modules`, and `describe_module` happy paths to the FAQ.
 - **`docs/INSTALLATION.rst`** doctest is worth keeping: a self-contained "imports + basic chaining"
   installation smoke test.
-- Async/Bado doctest items are skipped by `conftest.py` in sync-only environments. Do not add
+- In sync-only environments `conftest.py` skips Async/Bado doctest items whole and skips the
+  individual `run(...)` examples of every other doctest (`.rst` files included). Do not add
   `issync` branches solely as doctest fallbacks; write the real async example and let collection
   policy handle unavailable optional support.
 - `>>>` in `examples/**`, `_docs/**`, and `CLAUDE.md` are **not** collected today — which is exactly
@@ -257,7 +258,7 @@ to shrink the suite — they cover contracts hard to catch elsewhere.
   registry-level `test_runtime_register_requires_name` already owns the `"needs a name"`
   validation; the facade just forwards, and its delegation is covered by
   `test_register_resolves_via_facade`), and renamed the misleading
-  `test_pipeline_delegates_to_compiler` → `test_non_pipeline_name_routes_to_module_registry`
+  `test_pipeline_delegates_to_compiler` → `test_non_stored_workflow_name_routes_to_module_registry`
   (it proves a plain name routes to the module registry, surfacing `UnsupportedModuleError`).
 - `functional/test_basics.py`: the identical `fetchpage`/`fetchpage_loop` tests folded into one
   parametrized `test_fetchpage` (`plain`/`within-loop` ids) — they assert the same output.
@@ -315,7 +316,7 @@ the suite, forcing the marker's removal) the moment its owner lands:
   async-HTTP charset half (the `async_url_read`/`fetchpage` halves stay owned) (bado-anyio § 2c).
   `tests/internal/test_io.py::test_sync_and_async_decode_line_endings_alike` is the line-ending
   half: sync and async must decode `b"abc\rdef\n"` alike (bado-anyio § 2c).
-- **R18** — `tests/internal/test_resolver.py::TestPipeResolver::test_runtime_registered_pipe_prefixed_module_resolves`
+- **R18** — `tests/internal/test_resolver.py::TestResolverDispatcher::test_runtime_registered_pipe_prefixed_module_resolves`
   (extensibility § 24).
 - **R17** — `tests/internal/test_compile.py::test_convert_dag_empty_modules_raises` asserts that
   `parse_dag({"modules": []})` raises is **retired**. It does *not* today — the terminal `output` node is appended
@@ -325,7 +326,7 @@ the suite, forcing the marker's removal) the moment its owner lands:
   **Workflow v2 spec** ([extensibility § E3](extensibility.md#e3-canonical-workflow-v2-specification) —
   the E3.1 `normalize_workflow() -> validate` boundary; CLI surface: cli.md `riko pipeline validate`);
   recalibrate the tripwire from `IndexError` to the spec's error when it lands. The topology both paths
-  share is now the immutable `GraphIndex` built by `index_workflow` — the structural seam that
+  share is now the immutable `GraphIndex` built by `Workflow.index` — the structural seam that
   front-door validates over ([E3.11](extensibility.md#e311-reuse-of-the-shipped-graph-index)).
   **Resolved at cutover step 3 (2026-09-29):** the bare-bones DAG (`PipeDag`) reader is now `parse_dag`, which
   routes through that canonical `normalize_workflow` → `validate` front door, so an empty DAG raises
@@ -372,7 +373,7 @@ Both guards belong in `tests/internal/`, since they are drift guards rather than
 
 ## 5c. Write-session coverage (shipped)
 
-The write-session architecture (see [IMPLEMENTED.md § Write architecture](../IMPLEMENTED.md)) ships
+The write-session architecture (see [IMPLEMENTED.md § Write sessions](../IMPLEMENTED.md#write-sessions--private-seam-awaiting-writenode)) ships
 with its behavior proven across three files, laid out by the same ownership rule as § 1:
 
 - `tests/internal/test_targets.py` — the capability model: `appendable` derives from `modes`,

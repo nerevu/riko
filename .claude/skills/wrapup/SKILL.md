@@ -13,8 +13,8 @@ owner exactly once, respecting what each one is allowed to contain.
 
 Wrapup runs at the end of a session, when the context is already several
 hundred thousand tokens. Every tool round trip re-reads all of it, so the cost
-of this skill is the number of turns, not the size of the files. Budget: **six
-turns** — evidence, plan, edits, verify, memory, report. Structure the work so
+of this skill is the number of turns, not the size of the files. Budget: **seven
+turns** — tidy, evidence, plan, edits, verify, memory, report. Structure the work so
 each phase is one response:
 
 - **Never read a whole owner file.** IMPLEMENTED.md, CHANGES.rst,
@@ -22,10 +22,24 @@ each phase is one response:
   and `sed -n 'A,Bp'` for the section you will touch, inside the evidence batch.
 - **Batch, don't serialize.** Independent tool calls go in one response: all
   evidence in one Bash call, all Edit/Write calls together, one lint run.
-- **Docs and memory only.** Wrapup never edits code or tests and never runs
-  prettify, the test suite, `lint --all`, or `check-types` — that is `/land`
-  and `/go` work. A code change that seems necessary becomes an open item in
+- **Docs and memory only — except tidy.** Wrapup itself never edits code or
+  tests and never runs prettify, the test suite, `lint --all`, or
+  `check-types` — that is `/land` and `/go` work. The one exception is step 0:
+  the tidy subagent fixes code, docs, and tests and runs its own targeted
+  checks. Any other code change that seems necessary becomes an open item in
   the handoff, not an edit.
+
+## 0. Tidy (one subagent)
+
+Launch one fresh `general-purpose` agent (not a fork — it needs only the diff,
+not this session's context) with: "Follow
+`.claude/skills/tidy/SKILL.md` in the repo at the current working directory. You
+cannot ask the user: apply mechanical fixes, and return phase-owned findings
+and framed judgment questions instead of deciding them." Wait for its report
+before step 1, so the evidence batch sees the tidied tree. Its judgment
+questions join step 2's single AskUserQuestion call; its phase-owned findings
+and "tidy edits not yet through the full suite" (when it edited anything) go
+in the handoff for the next `/land`. If tidy reports nothing to tidy, move on.
 
 ## 1. Gather evidence (one Bash call)
 
@@ -61,8 +75,8 @@ current**. Writes are not safely repeatable, so the evidence decides:
 - Docs updated during the work count. If an owner was already updated as part
   of the session's work, it is done — verify it's accurate, don't re-sweep it.
 - A fully-current owner is a valid outcome — report it as "already current".
-- Skip the riko-skill snapshot bump if the basis is already at HEAD with
-  accurate contents.
+- Skip the riko-skill snapshot update if the basis is already at HEAD and the
+  sections describing what changed are accurate.
 
 Owner semantics — each concept has one owner, update it there and nowhere else:
 
@@ -86,9 +100,13 @@ Owner semantics — each concept has one owner, update it there and nowhere else
 - **`_docs/ROADMAP.md`** — only if routing/ownership itself changed.
 - **riko skill snapshot** (`~/.claude/skills/riko/references/`) — only if the
   session changed something the references describe (API surfaces, node/edge
-  families, module locations, invariants, validation commands); then also bump
-  the "Snapshot basis" commit/date line in `current-state.md` to HEAD. A stale
-  snapshot confidently misleads sessions without live repo access.
+  families, module locations, invariants, validation commands). Edit the section
+  that describes the changed fact in place — rewrite or delete the stale
+  statement — then set the "Snapshot basis" line to HEAD, the date, and the gate
+  results. The basis line holds only those three things: never append session
+  notes or "supersedes any conflicting statement below" text to it, since a
+  reader who jumps to one section then gets the stale version. A stale snapshot
+  confidently misleads sessions without live repo access.
 
 Hard rules:
 
@@ -141,6 +159,6 @@ not history:
 
 ## 6. Report
 
-End with a short manifest: each file updated and the one-line reason, anything
-deliberately not updated (and why), the number of turns used against the
-six-turn budget, and confirmation the session is safe to clear.
+End with a short manifest: tidy's fixes and open findings, each file updated
+and the one-line reason, anything deliberately not updated (and why), the
+number of turns used against the seven-turn budget, and confirmation the session is safe to clear.

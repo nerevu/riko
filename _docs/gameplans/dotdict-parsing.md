@@ -80,6 +80,10 @@ casting
 dynamic configuration
 configuration-specific sentinels
 
+Naming: the helpers that move here (`resolve_sentinel`, `is_sentinel`, the `Sentinel` TypedDict and
+`SentinelValue` key) implement *terminal references*, not sentinels; name them `resolve_terminal`,
+`is_terminal_ref`, and `TerminalRef` when they move, leaving "sentinel" to true sentinels such as `MISSING`.
+
 Conceptually:
 
 raw = DotDict(conf).get_raw("URL")

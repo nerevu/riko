@@ -169,7 +169,14 @@ Calling:
 list(events)
 ```
 
-independently creates a fresh execution. A subscription definition is not a replay buffer.
+independently creates a fresh execution. A subscription definition is not a replay buffer: items
+published in one execution are observed through the subscription's `func=` or an explicit effect
+inside the attached branch, never by draining the subscription afterwards (decided 2026-10-10; the
+`TestSubscriptions` tripwires and the Cookbook fan-out examples are written against this form).
+
+A possible future extension is an explicit, opt-in *retaining* subscription mode that buffers
+published items for a later drain. It is not the default, is not part of R7, and would need its own
+bounded-retention, ownership, and close semantics before it could ship.
 
 ### 4.2 External subscriptions and publishers
 
