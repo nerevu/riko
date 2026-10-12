@@ -86,9 +86,10 @@ from riko.base._imports import import_or_else
 from riko.base._strutils import pythonise
 from riko.base.exceptions import UnsupportedWorkflowError
 from riko.definitions._workflow import ModuleNode, PipelineDefinition, Workflow
+from riko.types._compiler import is_pipe_id
 from riko.types._enums import ExecutionMode
-from riko.types._guards import is_pipe_id, is_subpipe
 from riko.types._workflow import ResolvedWorkflow
+from riko.types._wrappers import is_subpipe
 
 from ._execution_plan import arun_pipeline, run_pipeline
 from ._importutils import load_interfaces, require_interface

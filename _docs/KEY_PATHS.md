@@ -53,11 +53,11 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/types/_streams.py` | core `Item`/`Items`/stream aliases and async stream contracts |
 | `riko/types/_workflow.py` | Workflow v2 structural contracts (endpoints, port grammar, node/edge discriminants) plus `GraphEdge` and `GraphIndex`, the one topology interpretation `Workflow.index` builds and `Workflow.validate()`/execution planning both read. `GraphIndex` takes only node ids, edges, and outputs (`Endpoint`s); every other field derives from them through `Factory(..., takes_self=True)` (the `ExecutionPlan` pattern) using `riko/base/_graph.py` helpers, so a hand-built index is consistent and frozen |
 | `riko/types/_compiler.py` | the `PipeDef`/`PipeDefLike`/`Wire` shapes (the pipe definition `migrate_v1_to_v2` reads), `PipeDag`/`DagModule` for `parse_dag`, and the loop `CountValues`/`EmbedKwargs` contracts; `PipeDag`/`PipeDef`/`PipeDefLike` are re-exported on `riko.types` (TYPES tier); `riko/types/_pipeline.py` was deleted with the v1 compiler at cutover step 5 (2026-10-03) |
-| `riko/types/_resource.py` | resource factory/kind type contracts used by definitions and execution |
+| `riko/types/_resource.py` | resource factory/kind type contracts, factory classification (`get_factory_kind`, `VALUE_FACTORY_KINDS`), and the lifecycle/context-manager guards, used by definitions and execution |
 | `riko/types/_enums.py` | shared enums and enum-like aliases, including serialization format typing |
 | `riko/types/_events.py` | the `EventSink` protocol a running execution reports to (exported from `riko.types`); `riko/execution/_events.py` keeps the no-op default sink |
-| `riko/types/_io.py` | path/closeable I/O contracts, not executable I/O |
-| `riko/types/_wrappers.py` | decorator wrapper typing; upward references needed only for typing stay behind `TYPE_CHECKING` |
+| `riko/types/_io.py` | path/closeable I/O contracts plus the closeable guards (`is_sync_closeable`/`is_async_closeable`/`is_closeable`), not executable I/O; the file-like aliases live in `riko/io/_filelike.py` |
+| `riko/types/_wrappers.py` | decorator wrapper typing plus the wrapper guards `is_subpipe`/`is_splitter`/`require_single_output`; upward references needed only for typing stay behind `TYPE_CHECKING` |
 | `riko/types/_targets.py` | base `Target` protocol (an endpoint keyed by `backend`) plus the `SupportsRead`/`SupportsWrite`/`SupportsActions` capability protocols concrete adapters implement; `SupportsWrite.capabilities` references `WriteCapabilities` behind `TYPE_CHECKING` |
 | `riko/coercion/_configs.py` | **generated** `<Name>Objconf` parse-time config classes; edit `riko/types/modules.py`, then run `gen-config` or `manage codegen --config` |
 | `riko/coercion/_dynamic_conf.py` | hand-maintained `DynamicConf` base used by generated objconf classes |
@@ -74,6 +74,7 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/io/_async.py` | async URL/file I/O (`async_url_open`, `async_write`, `async_get_temp_file`); owns the async-handle lifecycle details that previously lived under `bado` |
 | `riko/io/_sync.py` | synchronous URL/file open/read helpers |
 | `riko/io/_serialization.py` | stream serialization/export conversion helpers; records are `thaw`ed to plain dicts first, and `json`/`jsonl` use riko's `records2json` (meza's `CustomEncoder` subclassed so sets serialize as sorted arrays, the `_reencode.py` patching pattern) |
+| `riko/io/_filelike.py` | file-like/opener typing contracts (`FileLike`, `BinaryFileLike`, `StringFileLike`, `IOFileLike`, `IOFileLikeType`, `Opener`) for sync and async I/O |
 | `riko/io/_reencode.py` | byte/text re-encoding utilities |
 | `riko/io/__init__.py` | narrow I/O facade; stable async I/O names are promoted through `riko` |
 
@@ -98,11 +99,9 @@ iterator is consumed.
 | Path | Role |
 |---|---|
 | `riko/definitions/modules.py` | frozen attrs `ModuleDefinition` used by built-ins, registry entries, and discovery: derived `name` over `declared_name`, `description` defaulting to the module docstring summary |
-| `riko/definitions/_resource_types.py` | resource-definition aliases shared by declarative binding code; any runtime references here are type-only |
 | `riko/definitions/_execution.py` | frozen `ExecutionSettings` and `DEF_EXECUTION_SETTINGS`, the run settings `Pipeline.with_execution(...)` derives; field checks are local `require_*` guards attached with `validator_from_require` |
 | `riko/definitions/_context.py` | immutable `Context` definition (frozen attrs, identity equality, converters freeze `inputs`/`resources` into `FrozenDict`); resource bindings derive new contexts rather than mutating one in place |
-| `riko/definitions/_resource_definition.py` | the frozen attrs `Resource` definition (identity equality; private init aliases for factory data) with the owned/external/lifecycle/factory variant carried as data (not a subclass hierarchy) behind the `OneShotResource`/`ReusableResource` markers; it declares a resource and never tears one down |
-| `riko/definitions/_resources.py` | resource factory classification (node bindings are checked by `require_binding` in `riko/types/_collections.py`) |
+| `riko/definitions/_resource_definition.py` | the frozen attrs `Resource` definition (identity equality; private init aliases for factory data) with the owned/external/lifecycle/factory variant carried as data (not a subclass hierarchy) behind the `OneShotResource`/`ReusableResource` markers; it declares a resource and never tears one down (node bindings are checked by `require_binding` in `riko/types/_collections.py`) |
 | `riko/definitions/_targets.py` | the built-in `FileTarget` write adapter (carrying `backend = Backends.FILE`) and write preparation/validation (`normalize_target`/`resolve_format`/`build_write`); the base target protocols live in `riko/types/_targets.py` |
 | `riko/definitions/_write.py` | `WriteMode`, `WriteResult`, `WriteOperation`, `WriteCapabilities`, `PreparedWrite`, and sync/async write-session protocols |
 | `riko/execution/_execution.py` | private one-shot `SyncExecution`/`AsyncExecution` owning the execution lifetime primitives (exit stack, sync/async bridge; no async task group until R7 fan-out needs one), the shielded exit-stack unwind followed by one shutdown report (first close only), execution-local resource `acquire`/`aacquire` with single-flight memoization, and the node runners that build each output's stream; both subclass `_BaseExecution[S]` (generic over `ExitStack`/`AsyncExitStack`), which holds only what runs without awaiting — context/settings, the closed guard, sync `enter_context`, cleanup-error reporting, the resolved-resource cache, and `_require_bindings`; everything that awaits stays in each class, never a shared strategy/template hierarchy |

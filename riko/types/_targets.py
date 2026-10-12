@@ -15,17 +15,7 @@ Examples:
 
 from __future__ import annotations
 
-from enum import StrEnum
-from typing import (
-    TYPE_CHECKING,
-    ClassVar,
-    Literal,
-    Protocol,
-    overload,
-    runtime_checkable,
-)
-
-from riko.base.exceptions import InvalidPipelineError
+from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from riko.definitions._write import WriteCapabilities
@@ -82,59 +72,4 @@ class SupportsActions(Target, Protocol):
     """
 
 
-@overload
-def resolve_enum[E: StrEnum](  # noqa: E704
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = ...,
-    *,
-    default: E | None = ...,
-    strict: Literal[True] = ...,
-    error: type[Exception] = ...,
-) -> E: ...
-@overload  # noqa: E302
-def resolve_enum[E: StrEnum](  # noqa: E704
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = ...,
-    *,
-    default: E | None = ...,
-    strict: Literal[False],
-    error: type[Exception] = ...,
-) -> E | None: ...
-@overload  # noqa: E302
-def resolve_enum[E: StrEnum](  # noqa: E704
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = ...,
-    *,
-    default: E | None = ...,
-    strict: bool,
-    error: type[Exception] = ...,
-) -> E | None: ...
-def resolve_enum[E: StrEnum](  # noqa: E302
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = None,
-    *,
-    default: E | None = None,
-    strict: bool = True,
-    error: type[Exception] = InvalidPipelineError,
-) -> E | None:
-    """Resolves a name or member into the given string enum, or raises ``error``."""
-    what = enum.__name__ if what is None else what
-
-    if value is None and default is None and strict:
-        raise error(f"missing required {what}")
-    elif value is None:
-        result = default
-    else:
-        try:
-            result = value if isinstance(value, enum) else enum(value)
-        except ValueError as e:
-            raise error(f"Invalid {what}: {value!r}") from e
-
-    return result
-
-
-__all__ = ["SupportsActions", "SupportsRead", "SupportsWrite", "Target", "resolve_enum"]
+__all__ = ["SupportsActions", "SupportsRead", "SupportsWrite", "Target"]

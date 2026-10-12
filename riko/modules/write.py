@@ -37,8 +37,8 @@ from meza import io
 
 from riko.definitions._targets import resolve_format
 from riko.io._async import async_write
+from riko.io._filelike import IOFileLike, IOFileLikeType
 from riko.io._serialization import serialize_items
-from riko.types._io import IOFileLike, IOFileLikeType
 from riko.types._options import DecorationOptions, Defaults
 from riko.types._scalars import AnyStr, AnyStrType
 

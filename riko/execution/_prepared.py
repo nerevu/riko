@@ -36,7 +36,7 @@ from riko.types._collections import (
     require_str,
     validator_from_require,
 )
-from riko.types._guards import require_single_output
+from riko.types._wrappers import require_single_output
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

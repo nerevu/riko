@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from logging import Logger
     from xml.dom.minidom import Node
 
-    from riko.types._io import StringFileLike
+    from riko.io._filelike import StringFileLike
     from riko.types._streams import Stream
 
 TIMEOUT = settings.discovery_timeout

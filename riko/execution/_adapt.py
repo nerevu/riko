@@ -14,8 +14,9 @@ from collections.abc import AsyncIterable, AsyncIterator, Generator, Iterable, I
 from itertools import chain
 from typing import TYPE_CHECKING, Any, cast
 
-from riko.types._guards import is_listlike, require_single_output
+from riko.types._guards import is_listlike
 from riko.types._sentinels import MISSING
+from riko.types._wrappers import require_single_output
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

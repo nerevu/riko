@@ -79,7 +79,7 @@ from riko.types._collections import (
     validator_from_typed_dict,
 )
 from riko.types._compiler import DagModule, Embed, EmbedRef, PipeModule
-from riko.types._enums import Backends, Formats, ModuleNameLike
+from riko.types._enums import Backends, Formats, ModuleNameLike, resolve_enum
 from riko.types._guards import (
     is_mapping,
     is_streamlike,
@@ -87,7 +87,6 @@ from riko.types._guards import (
     require_sequence,
 )
 from riko.types._sentinels import MISSING, MissingType
-from riko.types._targets import resolve_enum
 from riko.types._workflow import (
     WORKFLOW_VERSION,
     Edge,
@@ -110,7 +109,7 @@ from riko.types.modules import (
 
 from ._context import Context
 from ._execution import DEF_EXECUTION_SETTINGS, ExecutionSettings
-from ._resource_types import ResourcesLike
+from ._resource_definition import ResourcesLike
 from ._targets import build_write
 from ._write import WriteMode
 
@@ -123,8 +122,7 @@ if TYPE_CHECKING:
     from riko.types._streams import SourceLike
     from riko.types._workflow import EdgeFamily, NodeFamily
 
-    from ._resource_definition import ReusableResource
-    from ._resource_types import ResourceDefinition
+    from ._resource_definition import ResourceDefinition, ReusableResource
     from ._write import Destination
 
 _FROZEN_OPTIONS: FrozenOptions = FrozenDict()

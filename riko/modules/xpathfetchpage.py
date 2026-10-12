@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import XpathFetchPageObjconf
-    from riko.types._io import FileLike
+    from riko.io._filelike import FileLike
     from riko.types._streams import Item, Stream
 
 OPTS = SourceOpts

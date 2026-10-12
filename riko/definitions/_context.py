@@ -33,9 +33,9 @@ from riko.types._collections import (
     instances_freezer,
     mapping_converter,
 )
-from riko.types._enums import ExecutionMode
-from riko.types._guards import is_lifecycle_factory, require_mapping
-from riko.types._targets import resolve_enum
+from riko.types._enums import ExecutionMode, resolve_enum
+from riko.types._guards import require_mapping
+from riko.types._resource import is_lifecycle_factory
 
 from ._resource_definition import Resource, ReusableResource
 
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from riko.types._collections import Inputs
     from riko.types._resource import LifecycleFactory
 
-    from ._resource_types import ResourceDefinition, ReusableResources
+    from ._resource_definition import ResourceDefinition, ReusableResources
 
 type ResourcesInput = Mapping[str, ReusableResource[Any]]
 

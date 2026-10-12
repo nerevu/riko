@@ -18,10 +18,9 @@ from typing import TYPE_CHECKING, Literal, cast
 from attrs import define, field
 
 from riko.bado._util import maybe_async
-from riko.definitions._resources import VALUE_FACTORY_KINDS
 from riko.types._collections import thaw
-from riko.types._guards import is_async_closeable
-from riko.types._resource import FactoryKind
+from riko.types._io import is_async_closeable
+from riko.types._resource import VALUE_FACTORY_KINDS, FactoryKind
 from riko.types._sentinels import MISSING
 
 if TYPE_CHECKING:

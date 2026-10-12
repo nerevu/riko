@@ -11,7 +11,7 @@ from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from riko.definitions._resource_types import Values
+    from riko.definitions._resource_definition import Values
     from riko.types._io import Closeable
 
 

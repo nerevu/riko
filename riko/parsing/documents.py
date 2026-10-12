@@ -34,8 +34,8 @@ if TYPE_CHECKING:
     from logging import Logger
     from types import ModuleType
 
+    from riko.io._filelike import FileLike
     from riko.types._collections import RikoDict, Stringy, StringyDict
-    from riko.types._io import FileLike
     from riko.types._streams import Item, Stream
 
 try:

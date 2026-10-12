@@ -41,8 +41,10 @@ if TYPE_CHECKING:
     from _typeshed import OpenBinaryMode, OpenTextMode
 
     from riko.bado._backend import NamedTemporaryFile
-    from riko.types._io import IOFileLike, PathLike
+    from riko.types._io import PathLike
     from riko.types._scalars import AnyStr
+
+    from ._filelike import IOFileLike
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 

@@ -19,8 +19,14 @@ from typing import (
     NamedTuple,
     Protocol,
     TypedDict,
+    TypeGuard,
     overload,
 )
+
+from typing_extensions import TypeIs
+
+from riko.base._config import SUBPIPE_TYPE
+from riko.base.exceptions import InvalidPipelineError
 
 from ._options import DecorationOptions, ItemDispatch
 from ._streams import (
@@ -323,6 +329,63 @@ type SplitterWrapperInput = SyncSplitterWrapperInput | AsyncSplitterWrapperInput
 type SubPipe = SyncSubPipe | AsyncSubPipe
 type AnyModuleWrapper = SyncModuleWrapper | AsyncModuleWrapper
 type ModuleParser = ProcessorParser | OperatorParser | SplitterParser
+
+
+def is_subpipe[T: SubPipe](val: T | ModuleWrapper) -> TypeGuard[T]:
+    return callable(val) and getattr(val, "type", None) == SUBPIPE_TYPE
+
+
+def is_splitter(pipe: ModuleWrapper) -> TypeIs[SplitterWrapper]:
+    """
+    Reports whether ``pipe`` was decorated as a multi-output splitter.
+
+    The check reads the module kind stamped on the wrapper at decoration, not
+    the shape of anything the pipe yields.
+
+    Args:
+
+        pipe: A resolved pipe wrapper.
+
+    Returns:
+
+        ``True`` when the pipe yields a stream of streams.
+
+    Examples:
+
+        >>> from riko.modules.count import pipe as count
+        >>> from riko.modules.split import pipe as split
+        >>> is_splitter(split), is_splitter(count)
+        (True, False)
+
+    """
+    return getattr(pipe, "type", None) == "splitter"
+
+
+def require_single_output(
+    value: ModuleWrapper, what: str | None = "pipe", **_
+) -> ModuleWrapper:
+    """
+    Rejects a multi-output splitter until port-keyed fan-out delivery is executable.
+
+    Args:
+
+        value: A resolved pipe wrapper.
+        what: How to name the pipe's holder in the error.
+
+    Returns:
+
+        ``value`` unchanged.
+
+    Raises:
+
+        InvalidPipelineError: If ``value`` is a splitter.
+
+    """
+    if is_splitter(value):
+        msg = f"{what} contains splitter: {value.name!r}. These are not yet executable."
+        raise InvalidPipelineError(msg)
+
+    return value
 
 
 class Resolver(Protocol):

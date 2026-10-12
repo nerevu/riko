@@ -289,7 +289,7 @@ parses each workflow document (`WorkflowDocument`) with `parse_document`, which 
 `UnsupportedWorkflowError` naming the reason; `DirectoryStore.load` treats only `FileNotFoundError` as a miss).
 Stores take only `pipe_<id>` names: every resolver entry point (`load`, `load_workflow`, `require`,
 `require_interfaces`) translates the `pipe:<id>` alias with `pythonise`, and both `is_compatible` checks use
-`is_pipe_id` (`riko/types/_guards.py`, prefixes `PIPE_ID_PREFIXES` in `riko/base/_config.py`). A stored-workflow
+`is_pipe_id` (`riko/types/_compiler.py`, prefixes `PIPE_ID_PREFIXES` in `riko/base/_config.py`). A stored-workflow
 miss raises `UnsupportedWorkflowError`, a built-in miss `UnsupportedModuleError`; both carry `reason`.
 `ResolvedWorkflow` and `WorkflowModule` (`riko/types/_workflow.py`) are `NewType`s so type checkers show
 their names. `WorkflowModule` is defined by shape (source defining `pipe`/`async_pipe` over an item, a

@@ -18,15 +18,14 @@ import pytest
 from riko.base.warnings import ResourceInterpretationWarning
 from riko.definitions._context import Context
 from riko.definitions._resource_definition import (
-    FactoryKind,
     OneShotResource,
     Resource,
     ReusableResource,
-    get_factory_kind,
 )
 from riko.execution._execution import AsyncExecution, SyncExecution
 from riko.execution._resource_view import ResourceView
 from riko.modules import operator
+from riko.types._resource import FactoryKind, get_factory_kind
 from tests import async_test
 
 if TYPE_CHECKING:

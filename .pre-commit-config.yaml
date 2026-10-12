@@ -6,13 +6,13 @@ repos:
     hooks:
       - id: ruff-check-imports
         name: ruff (sort imports)
-        entry: ruff check --select I --fix --config pyproject.toml
+        entry: ruff check --select I --fix --show-fixes --config pyproject.toml
         language: python
         additional_dependencies: [ruff==0.16.10]
         types_or: [python, pyi]
       - id: ruff-check
         name: ruff (check)
-        entry: ruff check --fix --config pyproject.toml
+        entry: ruff check --fix --show-fixes --config pyproject.toml
         language: python
         additional_dependencies: [ruff==0.16.10]
         types_or: [python, pyi]

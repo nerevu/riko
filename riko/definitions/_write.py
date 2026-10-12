@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING, Literal, Protocol
 from attrs import define, field
 
 from riko.types._collections import normalize_strs
-from riko.types._enums import FmtLike, Formats
+from riko.types._enums import FmtLike, Formats, resolve_enum
 from riko.types._io import PathLike
-from riko.types._targets import SupportsWrite, resolve_enum
+from riko.types._targets import SupportsWrite
 
 if TYPE_CHECKING:
     from riko.types._streams import Feed, Item, Items

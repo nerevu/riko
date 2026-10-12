@@ -43,7 +43,8 @@ from riko.base.exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._execution import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from riko.types._compiler import ModuleOptionValues
 from riko.types._enums import Executor
-from riko.types._guards import is_async_callable, is_async_closeable, is_sync_closeable
+from riko.types._guards import is_async_callable
+from riko.types._io import is_async_closeable, is_sync_closeable
 from riko.types._workflow import parse_port
 from riko.types._wrappers import AsyncModuleWrapperOutput, ModuleWrapper
 

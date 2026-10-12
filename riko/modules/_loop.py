@@ -16,7 +16,7 @@ import pygogo as gogo
 
 from riko.bado._util import maybe_aclosing, maybe_async
 from riko.bado.itertools import as_async
-from riko.types._guards import is_subpipe
+from riko.types._wrappers import is_subpipe
 
 from ._assignment import bind_subpipe
 

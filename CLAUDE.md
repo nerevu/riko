@@ -189,6 +189,10 @@ new permanent bullet here.
   and the overload layout conflict.
 - Keep package-local imports relative; canonical import and architecture rules are
   enforced by `manage lint imports`.
+- **Guards live beside the contract they narrow** — `riko/types/_guards.py` holds only
+  guards over generic shapes (mappings, sequences, callables, protocol checks); a guard
+  for a specific contract (`is_subpipe`, `is_closeable`, `is_lifecycle_factory`,
+  `is_pipe_id`) is defined in the module that defines that contract.
 - **`StrEnum` vs `Literal`.** Use a `StrEnum` when a caller **supplies the value at a
   Python call site** (a parameter, or a field callers construct) or for a runtime
   **state** — they get named members and one import instead of magic strings; `.value`

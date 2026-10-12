@@ -10,6 +10,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Literal, NewType, NotRequired, Required, TypedDict
 
+from typing_extensions import TypeIs
+
+from riko.base._config import PIPE_ID_PREFIXES
+
 if TYPE_CHECKING:
     from ._module_ids import ModuleId
     from .modules import AnyModuleRawConf, CallOptions, Conf
@@ -17,6 +21,22 @@ if TYPE_CHECKING:
 
 PipeId = NewType("PipeId", str)
 CountValues = Literal["first", "all"]
+
+
+def is_pipe_id(value: object) -> TypeIs[PipeId]:
+    """
+    Reports whether ``value`` is a stored workflow's ``pipe_<id>`` name.
+
+    ``pipe:<id>`` is accepted too, since lookups read it as ``pipe_<id>``.
+
+    Examples:
+
+        >>> is_pipe_id("pipe_demo"), is_pipe_id("pipe:demo"), is_pipe_id("fetch")
+        (True, True, False)
+
+    """
+    return isinstance(value, str) and value.startswith(PIPE_ID_PREFIXES)
+
 
 type ModuleOptionValues = bool | str | CountValues
 type PipeDefLike = PipeDef | Mapping[str, object]
@@ -111,4 +131,12 @@ class PipeDag(TypedDict):
     wires: NotRequired[Sequence[Sequence[str]]]
 
 
-__all__ = ["DagModule", "PipeDag", "PipeDef", "PipeDefLike", "PipeModule", "Wire"]
+__all__ = [
+    "DagModule",
+    "PipeDag",
+    "PipeDef",
+    "PipeDefLike",
+    "PipeModule",
+    "Wire",
+    "is_pipe_id",
+]

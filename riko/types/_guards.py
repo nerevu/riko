@@ -1,29 +1,17 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides type guard functions for riko types."""
+"""Provides type guard functions over generic shapes."""
 
 from __future__ import annotations
 
-from collections.abc import (
-    AsyncGenerator,
-    AsyncIterable,
-    Awaitable,
-    Callable,
-    Generator,
-    Iterable,
-    Mapping,
-)
-from contextlib import AbstractAsyncContextManager, AbstractContextManager
+from collections.abc import AsyncIterable, Awaitable, Callable, Iterable, Mapping
 from dataclasses import is_dataclass
 from inspect import (
     Parameter,
     Signature,
     getmembers_static,
-    isasyncgenfunction,
     iscoroutinefunction,
     isfunction,
-    isgeneratorfunction,
     signature,
-    unwrap,
 )
 from typing import TYPE_CHECKING, Any, TypeGuard, overload
 
@@ -31,11 +19,9 @@ import attrs
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs
 
-from riko.base._config import PIPE_ID_PREFIXES, SUBPIPE_TYPE
 from riko.base._strutils import replacer
 from riko.base.exceptions import InvalidPipelineError
 
-from ._io import AsyncCloseable, SyncCloseable
 from ._scalars import BasicValueType, PrimitiveValueType
 from ._sentinels import MISSING, SentinelValue, StreamState
 
@@ -43,19 +29,9 @@ if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
     from ._collections import BasicList
-    from ._compiler import PipeId
-    from ._io import Closeable
-    from ._resource import (
-        AnyContextManager,
-        ContextManagerFactory,
-        GeneratorFactory,
-        LifecycleFactory,
-        ValueFactory,
-    )
     from ._scalars import BasicValue
     from ._sentinels import MissingType, Sentinel
     from ._streams import AnyIterable, Item, StatefulItem
-    from ._wrappers import ModuleWrapper, SplitterWrapper, SubPipe
     from .modules import AnyConfRule, Conf, ConfArg
 
 
@@ -315,61 +291,6 @@ def is_type_value(val: Mapping[Any, Any]) -> TypeGuard[ConfArg]:
     return len(val) == 2 and "type" in val and "value" in val
 
 
-def is_pipe_id(value: object) -> TypeIs[PipeId]:
-    """
-    Reports whether ``value`` is a stored workflow's ``pipe_<id>`` name.
-
-    ``pipe:<id>`` is accepted too, since lookups read it as ``pipe_<id>``.
-
-    Examples:
-
-        >>> is_pipe_id("pipe_demo"), is_pipe_id("pipe:demo"), is_pipe_id("fetch")
-        (True, True, False)
-
-    """
-    return isinstance(value, str) and value.startswith(PIPE_ID_PREFIXES)
-
-
-def is_subpipe[T: SubPipe](val: T | ModuleWrapper) -> TypeGuard[T]:
-    return callable(val) and getattr(val, "type", None) == SUBPIPE_TYPE
-
-
-def is_sync_gen_factory(
-    val: object, candidate: object = None
-) -> TypeGuard[Callable[..., Generator]]:
-    if candidate is None:
-        candidate = unwrap(val) if callable(val) else val
-
-    return candidate is val and isgeneratorfunction(val)
-
-
-def is_async_gen_factory(
-    val: object, candidate: object = None
-) -> TypeGuard[Callable[..., AsyncGenerator]]:
-    if candidate is None:
-        candidate = unwrap(val) if callable(val) else val
-
-    return candidate is val and isasyncgenfunction(val)
-
-
-def is_sync_context_manager(
-    val: object, candidate: object = None
-) -> TypeIs[AbstractContextManager]:
-    if candidate is None:
-        candidate = unwrap(val) if callable(val) else val
-
-    return candidate is val and isinstance(val, AbstractContextManager)
-
-
-def is_async_context_manager(
-    val: object, candidate: object = None
-) -> TypeIs[AbstractAsyncContextManager]:
-    if candidate is None:
-        candidate = unwrap(val) if callable(val) else val
-
-    return candidate is val and isinstance(val, AbstractAsyncContextManager)
-
-
 @overload
 def is_async_callable[T](  # noqa: E704
     val: Callable[..., T | Awaitable[T]],
@@ -389,141 +310,3 @@ def is_async_callable(val: object) -> bool:  # noqa: E302
 
 def is_sync_callable[T](val: Callable[..., T] | object) -> TypeGuard[Callable[..., T]]:
     return callable(val) and not is_async_callable(val)
-
-
-def is_sync_cm_factory(
-    val: object, candidate: object = None
-) -> TypeGuard[Callable[..., AbstractContextManager]]:
-    if candidate is None:
-        candidate = unwrap(val) if callable(val) else val
-
-    return candidate is not val and isgeneratorfunction(candidate)
-
-
-def is_async_cm_factory(
-    val: object, candidate: object = None
-) -> TypeGuard[Callable[..., AbstractAsyncContextManager]]:
-    if candidate is None:
-        candidate = unwrap(val) if callable(val) else val
-
-    return candidate is not val and isasyncgenfunction(candidate)
-
-
-def is_gen_factory(
-    val: object, candidate: object = None
-) -> TypeGuard[GeneratorFactory]:
-    if candidate is None:
-        candidate = unwrap(val) if callable(val) else val
-
-    if candidate is val:
-        result = isasyncgenfunction(val) or isgeneratorfunction(val)
-    else:
-        result = False
-
-    return result
-
-
-def is_context_manager(
-    val: object, candidate: object = None
-) -> TypeIs[AnyContextManager]:
-    if candidate is None:
-        candidate = unwrap(val) if callable(val) else val
-
-    if candidate is val:
-        result = isinstance(val, (AbstractContextManager, AbstractAsyncContextManager))
-    else:
-        result = False
-
-    return result
-
-
-def is_cm_factory(
-    val: object, candidate: object = None
-) -> TypeGuard[ContextManagerFactory]:
-    if candidate is None:
-        candidate = unwrap(val) if callable(val) else val
-
-    if candidate is val:
-        result = False
-    else:
-        result = isgeneratorfunction(candidate) or isasyncgenfunction(candidate)
-
-    return result
-
-
-def is_lifecycle_factory(
-    val: object, candidate: object = None
-) -> TypeGuard[LifecycleFactory]:
-    if candidate is None:
-        candidate = unwrap(val) if callable(val) else val
-
-    return isasyncgenfunction(candidate) or isgeneratorfunction(candidate)
-
-
-def is_value_factory(val: object) -> TypeGuard[ValueFactory]:
-    return callable(val)
-
-
-def is_splitter(pipe: ModuleWrapper) -> TypeIs[SplitterWrapper]:
-    """
-    Reports whether ``pipe`` was decorated as a multi-output splitter.
-
-    The check reads the module type stamped on the wrapper at decoration, not
-    the shape of anything the pipe yields.
-
-    Args:
-
-        pipe: A resolved pipe wrapper.
-
-    Returns:
-
-        ``True`` when the pipe yields a stream of streams.
-
-    Examples:
-
-        >>> from riko.modules.count import pipe as count
-        >>> from riko.modules.split import pipe as split
-        >>> is_splitter(split), is_splitter(count)
-        (True, False)
-
-    """
-    return getattr(pipe, "type", None) == "splitter"
-
-
-def require_single_output(
-    value: ModuleWrapper, what: str | None = "pipe", **_
-) -> ModuleWrapper:
-    """
-    Rejects a multi-output splitter until port-keyed fan-out delivery is executable.
-
-    Args:
-
-        value: A resolved pipe wrapper.
-        what: How to name the pipe's holder in the error.
-
-    Returns:
-
-        ``value`` unchanged.
-
-    Raises:
-
-        InvalidPipelineError: If ``value`` is a splitter.
-
-    """
-    if is_splitter(value):
-        msg = f"{what} contains splitter: {value.name!r}. These are not yet executable."
-        raise InvalidPipelineError(msg)
-
-    return value
-
-
-def is_sync_closeable(val: object) -> TypeIs[SyncCloseable]:
-    return isinstance_strict(val, SyncCloseable)
-
-
-def is_async_closeable(val: object) -> TypeIs[AsyncCloseable]:
-    return isinstance_strict(val, AsyncCloseable)
-
-
-def is_closeable(val: object) -> TypeIs[Closeable]:
-    return is_sync_closeable(val) or is_async_closeable(val)

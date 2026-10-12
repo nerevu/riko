@@ -31,9 +31,9 @@ from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._resolver import dispatcher
 from riko.runtime._serialize import parse_document
 from riko.runtime._workflows import workflow_resolver
-from riko.types._guards import is_mapping, is_subpipe
+from riko.types._guards import is_mapping
 from riko.types._streams import AsyncStream, StatefulItem
-from riko.types._wrappers import ParserMaterializedOutput, ParserOutput
+from riko.types._wrappers import ParserMaterializedOutput, ParserOutput, is_subpipe
 from tests import TESTS_DIR, async_test
 
 if TYPE_CHECKING:

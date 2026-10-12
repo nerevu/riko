@@ -45,8 +45,9 @@ if TYPE_CHECKING:
     from urllib.response import addinfourl
 
     from riko.types._collections import BasicArg
-    from riko.types._io import BinaryFileLike, FileLike, Opener, StringFileLike
     from riko.types._scalars import AnyStr
+
+    from ._filelike import BinaryFileLike, FileLike, Opener, StringFileLike
 
 O_NONBLOCK: int = getattr(os, "O_NONBLOCK", 0)
 

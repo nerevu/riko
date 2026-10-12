@@ -18,9 +18,9 @@ from pathlib import Path
 from typing import ClassVar
 
 from riko.types._collections import normalize_strs
-from riko.types._enums import Backends, FmtLike, Formats, StrLike
+from riko.types._enums import Backends, FmtLike, Formats, StrLike, resolve_enum
 from riko.types._io import PathLike, PathLikeType
-from riko.types._targets import SupportsWrite, resolve_enum
+from riko.types._targets import SupportsWrite
 
 from ._write import (
     Destination,

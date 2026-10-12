@@ -12,7 +12,9 @@ Examples:
 
 from collections.abc import Iterable
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, overload
+
+from riko.base.exceptions import InvalidPipelineError
 
 
 class ModuleName(StrEnum):
@@ -191,6 +193,99 @@ class Executor(StrEnum):
     INLINE = "inline"
     THREAD = "thread"
     PROCESS = "process"
+
+
+@overload
+def resolve_enum[E: StrEnum](  # noqa: E704
+    enum: type[E],
+    value: E | str | None,
+    what: str | None = ...,
+    *,
+    default: E | None = ...,
+    strict: Literal[True] = ...,
+    error: type[Exception] = ...,
+) -> E: ...
+@overload  # noqa: E302
+def resolve_enum[E: StrEnum](  # noqa: E704
+    enum: type[E],
+    value: E | str | None,
+    what: str | None = ...,
+    *,
+    default: E | None = ...,
+    strict: Literal[False],
+    error: type[Exception] = ...,
+) -> E | None: ...
+@overload  # noqa: E302
+def resolve_enum[E: StrEnum](  # noqa: E704
+    enum: type[E],
+    value: E | str | None,
+    what: str | None = ...,
+    *,
+    default: E | None = ...,
+    strict: bool,
+    error: type[Exception] = ...,
+) -> E | None: ...
+def resolve_enum[E: StrEnum](  # noqa: E302
+    enum: type[E],
+    value: E | str | None,
+    what: str | None = None,
+    *,
+    default: E | None = None,
+    strict: bool = True,
+    error: type[Exception] = InvalidPipelineError,
+) -> E | None:
+    """
+    Resolves a member or member value into the given string enum.
+
+    A missing ``value`` resolves to ``default``; with no default, it is an error
+    unless ``strict`` is off, in which case it resolves to ``None``.
+
+    Args:
+
+        enum: The string enum to resolve into.
+        value: A member or member value, or ``None`` when absent.
+        what: How error messages name the value; defaults to the enum's name.
+        default: The member a missing ``value`` resolves to.
+        strict: Whether a missing ``value`` with no ``default`` raises.
+        error: The exception class raised for a missing or invalid ``value``.
+
+    Returns:
+
+        The resolved member, or ``None`` when ``value`` is missing, there is no
+        ``default``, and ``strict`` is off.
+
+    Raises:
+
+        error: ``value`` is not one of the enum's values, or is missing while
+            required. The invalid-value message lists every accepted value.
+
+    Examples:
+
+        >>> from riko import Executor
+        >>> from riko.types._enums import resolve_enum
+        >>>
+        >>> resolve_enum(Executor, "thread")
+        <Executor.THREAD: 'thread'>
+        >>> resolve_enum(Executor, "bogus", error=ValueError)
+        Traceback (most recent call last):
+        ...
+        ValueError: Invalid Executor: 'bogus'; expected one of auto, inline, thread, ...
+
+    """
+    what = enum.__name__ if what is None else what
+
+    if value is None and default is None and strict:
+        raise error(f"missing required {what}")
+    elif value is None:
+        result = default
+    else:
+        try:
+            result = value if isinstance(value, enum) else enum(value)
+        except ValueError as e:
+            accepted = ", ".join(member.value for member in enum)
+            raise error(f"Invalid {what}: {value!r}; expected one of {accepted}") from e
+
+    return result
 
 
 type ModuleNameLike = str | ModuleName

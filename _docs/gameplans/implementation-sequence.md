@@ -893,13 +893,13 @@ cleanup-error contract: plain callbacks and task/budget failures are recorded an
 beside the unsuppressed primary error, while a native `__exit__` keeps its replace/suppress
 semantics (`_report_shutdown`; regressions in `tests/internal/test_execution.py`).
 Splitter nodes are likewise refused at plan build — `ResolvedModule` (formerly `PreparedNode`) validates both pipe fields with
-`require_single_output` (`riko/types/_guards.py`, keyed on the resolved pipe's declared `type`), so
+`require_single_output` (`riko/types/_wrappers.py`, keyed on the resolved pipe's declared `type`), so
 the invariant holds for every construction path — rather than by sniffing the first value a node
 yields: the old shape guard consumed the whole upstream before raising (split's parser
 is eager), surfaced a bare `TypeError` under async execution, and let a splitter whose branches
 were lists through as items. `_adapt.py`'s `require_items`/`arequire_items` are now `require_stream`/
 `require_async_stream(value, pipe)`: the execution-side boundary earns its narrowing from the same
-`is_splitter` `TypeIs` guard (`riko/types/_guards.py`) on the pipe's declared type, consuming nothing.
+`is_splitter` `TypeIs` guard (`riko/types/_wrappers.py`) on the pipe's declared type, consuming nothing.
 Regressions: `test_build_plan_rejects_splitter_node_before_any_node_runs`,
 `test_build_plan_rejects_splitter_by_declared_type_not_output_shape`,
 `test_require_stream_refuses_a_splitter_pipe_without_consuming`, and the fluent
@@ -1363,7 +1363,7 @@ Deliver:
   references `out:N` beyond the configured count never reaches an undefined branch (today
   `Workflow.validate()` accepts `splits=2` with an `out:2` edge);
 - port-keyed execution steps replace the R4B refusal of splitter nodes (`require_single_output` in
-  `riko/types/_guards.py`, applied as a `ResolvedModule` pipe validator and inside
+  `riko/types/_wrappers.py`, applied as a `ResolvedModule` pipe validator and inside
   `require_stream`/`require_async_stream`) and the `_require_default_output_port` guard; the async splitter wrapper accepts an async input stream (tripwire
   `test_async_splitter_accepts_an_async_input_stream`), and the splitter wrapper resolves an
   execution `context` into its parser's `inputs`/`test`/`resources` as processors and operators do

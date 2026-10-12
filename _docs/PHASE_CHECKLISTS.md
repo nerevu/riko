@@ -260,7 +260,7 @@ equivalent to looping it:
   `tests/pyworkflows/*.py` tree was regenerated then; the v1 cutover later replaced it with
   `WorkflowDocument`s (workflow documents) plus hand-maintained probes). A loop embedding a `pipe:` sub-pipeline runs **per parent**
   through the same fold; sub-pipelines are detected by **declared** metadata (`SUBPIPE_TYPE` in `riko/base/_config.py`,
-  `mark_subpipe` in `riko/runtime/_workflows.py`, `is_subpipe` in `riko/types/_guards.py`) stamped at `resolve_module` + in the codegen templates.
+  `mark_subpipe` in `riko/runtime/_workflows.py`, `is_subpipe` in `riko/types/_wrappers.py`) stamped at `resolve_module` + in the codegen templates.
   `_resolve_leaf_modules` fail-fast-resolves every leaf (incl. graph-disconnected) so an unreached
   unsupported module raises at build. Per-parent fold contract:
 

@@ -18,8 +18,8 @@ from riko.types._collections import (
     require_str,
     require_strlike,
 )
+from riko.types._enums import resolve_enum
 from riko.types._guards import require_mapping, require_sequence
-from riko.types._targets import resolve_enum
 from riko.types._workflow import Endpoint
 
 if TYPE_CHECKING:

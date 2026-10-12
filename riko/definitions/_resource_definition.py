@@ -19,33 +19,32 @@ from attrs import define, field
 
 from riko.base.warnings import ResourceInterpretationWarning
 from riko.types._collections import FrozenDict, freeze
-from riko.types._guards import (
-    is_async_context_manager,
-    is_closeable,
-    is_context_manager,
-    is_lifecycle_factory,
-    is_sync_context_manager,
-)
+from riko.types._io import is_closeable
 from riko.types._resource import (
+    VALUE_FACTORY_KINDS,
     AnyContextManager,
     Cleanup,
     FactoryKind,
     LifecycleFactory,
     ResourceFactory,
     ValueFactory,
+    get_factory_kind,
+    is_async_context_manager,
+    is_context_manager,
+    is_lifecycle_factory,
+    is_sync_context_manager,
 )
 
-from ._resources import VALUE_FACTORY_KINDS, get_factory_kind
-
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from riko.types._io import Closeable
 
-    from ._resource_types import ResolvedValue
-
 
 type AnyFactory[T] = ResourceFactory[T] | AnyContextManager[T]
+type ResourcesLike = str | Iterable[str] | Mapping[str, str]
+type Values = Mapping[str, Any | Closeable]
+type ResolvedValue[T] = T | Closeable
 
 
 class _ResourceFields(TypedDict, total=False):
@@ -355,10 +354,10 @@ class Resource[T]:
         Examples:
 
             >>> from riko.definitions._resource_definition import (
-            ...     FactoryKind,
             ...     OneShotResource,
             ...     Resource,
             ... )
+            >>> from riko.types._resource import FactoryKind
             >>>
             >>> def db():
             ...     yield object()
@@ -402,5 +401,8 @@ class ReusableResource[T](Resource[T]):
 
     __slots__ = ()
 
+
+type ReusableResources = FrozenDict[str, ReusableResource[Any]]
+type ResourceDefinition[T] = ReusableResource[T] | LifecycleFactory[T]
 
 __all__ = ["OneShotResource", "Resource", "ReusableResource"]

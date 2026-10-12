@@ -23,7 +23,7 @@ from riko.base.exceptions import (
     PipelineStateError,
     UnsupportedTargetError,
 )
-from riko.definitions._resource_definition import FactoryKind, OneShotResource
+from riko.definitions._resource_definition import OneShotResource
 from riko.definitions._targets import (
     FileTarget,
     build_write,
@@ -47,6 +47,7 @@ from riko.runtime._write_session import (
 )
 from riko.types._collections import normalize_strs
 from riko.types._enums import Backends, Formats
+from riko.types._resource import FactoryKind
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
