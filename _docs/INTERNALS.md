@@ -182,6 +182,23 @@ sync when source is moved between package groups.
   raises `NotImplementedError` is not user-observable behavior and is not mentioned at
   all; the bullet is written against the capability that will actually ship. Deltas
   are written only against names that appear in a released version.
+- **Changelog order.** A release's sections run **New**, **Changes**, **Removed**,
+  **Fixes**, **Dev**, so everything that breaks an upgrade sits together. Every section
+  follows one subject order: core model (`Pipeline`, `Workflow`, `Context`); workflow
+  formats and CLI; module authoring (decorators, `ModuleDefinition`, registry,
+  `riko.ext`); types (`riko.types`); I/O and async (`riko.io`, `riko.bado`); individual
+  modules' behavior; settings. Within a subject the most user-impacting bullet leads,
+  and a bullet that depends on another comes after it.
+- **Define once, in reading order.** A term the release introduces gets its gloss (and
+  its `riko.` prefix) at its first mention anywhere in the release section, and the bare
+  ``name`` after that. The leading bullet is written so it needs no term defined later.
+- **A rename is a lookup, not a definition.** The rename bullet under **Changes** alone
+  maps old to new names. Other bullets, **New** included, use the new name bare, with no
+  "(formerly …)", so **New** preceding **Changes** needs no forward reference.
+- **No cross-section pointers.** Never write "see above/below". A bullet that only makes
+  sense alongside a rename or removal folds into that bullet instead (e.g., an attribute
+  added to a renamed exception, or the new behavior of a removed argument's
+  replacement).
 
 The source hierarchy itself is not a compatibility promise for private modules.
 It is an internal architecture promise: code belongs in the lowest package layer

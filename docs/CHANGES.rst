@@ -1,72 +1,149 @@
 Changelog
 =========
 
-v0.78.0 (2026-10-05)
+v0.78.0 (Unreleased)
 --------------------
 
 New
 ~~~
 
-- Added ``riko.PipelineError``, ``riko.InvalidPipelineError``,  and
-  ``riko.EmptyPipelineError``.
+- Added ``riko.Pipeline``, an immutable, runnable workflow. Start one with
+  ``Pipeline.from_module`` or ``Pipeline``, or seed one with ``items | pipeline``.
+  Run it with ``list(pipeline)``, ``async for``, or ``.first()``/``.afirst()``.
+  ``.with_context`` sets the run ``Context`` and ``.with_resource`` provides a resource.
+  ``.with_execution(...)`` configures concurrency.
 
-- Added the ``Workflow`` graph (``Node``, ``Edge``, and ``Endpoint``) and the immutable
-  ``Pipeline`` model. Iterate a ``Pipeline`` via ``for`` or ``async for``.
-  ``Pipeline.first()`` / ``afirst()`` return the first item. ``Node.options`` carries
-  the module's call options (``ModuleOptions``), and ``Node.embed`` carries a loop's
-  embedded module (``Embed``).
+- Added the ``Workflow`` graph (``Node``, ``Edge``, and ``Endpoint``) that a
+  ``Pipeline`` runs. ``Node.options`` carries the module's call options and
+  ``Node.embed`` carries a loop's embedded module. A node may declare ``resources``,
+  bound by name to the resources a ``Context`` provides via ``with_resource``. Its pipe
+  receives the resolved handles as a ``resources`` argument.
 
-- Added ``migrate_v1_to_v2`` (converts a pipe definition, ``PipeDef``, to a
-  ``Workflow``), ``serialize_workflow`` (writes a ``Workflow`` to a workflow document,
-  ``WorkflowDocument``), and ``parse_document`` (reads a ``WorkflowDocument`` to produce
-  a ``Workflow``) to ``riko.ext``.
-
-- Added ``riko.WorkflowModule`` which represents the Python module source ``str`` that
-  ``compile_workflow`` returns.
-
-- Extension authors can register directories that hold ``WorkflowDocument``\s via
-  ``register_workflow_store``, and ``Target``\s via ``register_target``.
+- Added ``riko.WorkflowLike`` to annotate anything accepted where a ``Workflow`` is
+  expected, ``riko.WorkflowDocument`` to annotate a workflow document (its ``bytes``
+  JSON form), and ``riko.WorkflowModule`` to annotate the Python module source ``str``
+  that ``riko.compile_workflow`` returns. ``RawWorkflow``, ``RawNode``, ``RawEdge``, and
+  ``RawEndpoint`` in ``riko.types`` annotate a workflow written as a mapping.
 
 - ``run-pipe`` can now run a ``WorkflowDocument`` directly (``run-pipe -p flow.json``,
   or an example id), sync or with ``-a``/``--async``, alongside the pipe scripts (Python
   files that define ``pipe``) it already ran.
 
-- A bare-bones DAG (``PipeDag``) wire can now name an entry port as the third list item,
-  e.g., ``["b", "u", "in:1"]``. This removes the need for hand-written ``Workflow``\s
-  for fan-in operators such as ``union`` and ``join``.
+- A ``PipeDag`` wire can now name an entry port as the third list item, e.g.,
+  ``["b", "u", "in:1"]``. This removes the need for hand-written ``Workflow``\s for
+  fan-in operators such as ``union`` and ``join``.
+
+- A ``PipeDag`` module can now (like workflow nodes) name its module with ``name``.
+  E.g., ``{"name": "fetch"}``. If providing both ``type`` and ``name``, they must agree.
+
+- Added ``riko.PipelineError``, ``riko.InvalidPipelineError``, and
+  ``riko.EmptyPipelineError``.
+
+- Added ``riko.Backends`` and ``riko.Executor`` enums, and the ``riko.types.EventSink``
+  protocol.
+
+- Added ``normalize_workflow`` (turns a ``WorkflowLike`` into a ``Workflow``), the
+  workflow node and edge classes (e.g., ``ModuleNode``), and the write-target classes
+  (e.g., ``FileTarget``) to ``riko.ext``.
+
+- Added ``migrate_v1_to_v2`` (converts a pipe definition, ``PipeDef``, to a
+  ``Workflow``), ``serialize_workflow`` (writes a ``Workflow`` to a
+  ``WorkflowDocument``), and ``parse_document`` (reads a ``WorkflowDocument`` to produce
+  a ``Workflow``) to ``riko.ext``.
+
+- Extension authors can register a workflow store, a package of ``pipe_<id>.py`` files
+  (saved ``WorkflowModule``\s) or a directory of ``pipe_<id>.json``
+  ``WorkflowDocument``\s, via ``register_workflow_store``. ``Target``\s register via
+  ``register_target``.
+
+- Module wrappers gained ``prepare`` (binds a call's configuration and call options
+  for reuse over many items) and ``isasync``. ``ModuleDefinition.interfaces`` lists the
+  sync and async interfaces it provides.
+
+- Added ``PipeDag``, ``PipeDef``, and ``PipeDefLike`` to ``riko.types`` for annotating
+  ``parse_dag`` and ``migrate_v1_to_v2`` input.
+
+- Added ``AsyncItems``, ``SyncPipeTuples``, and ``AsyncPipeTuples`` to ``riko.types``.
+
+- Added ``riko.async_chain`` to chain async iterables, and a ``cooperative`` option to
+  ``riko.as_async`` to yield control before each item of a sync source.
 
 - A ``sort`` rule accepts a ``default``: the value an item lacking the sort field sorts
   by, cast like any other value (``{"field": "n", "type": "int", "default": 0}``).
 
 - Added the ``jsonl`` export format (one JSON object per line), accepted anywhere a
-  ``Formats`` member is.
+  ``riko.Formats`` member is.
 
-- Added ``riko.Backends`` and ``riko.Executor`` enums, and the ``riko.types.EventSink``
-  protocol.
-
-- Added ``PipeDag``, ``PipeDef``, and ``PipeDefLike`` to ``riko.types`` for annotating
-  ``parse_dag`` and ``migrate_v1_to_v2`` input.
-
-- A pipe may now declare ``resources``. It receives the resolved handles as a
-  ``resources`` argument, bound by name with ``Context.with_resource``. riko closes only
-  the resources it owns.
+- Added environment variables to override runtime defaults: ``RIKO_CONCURRENCY_LIMIT``,
+  ``RIKO_STREAMING_THRESHOLD``, ``RIKO_ENCODING``, ``RIKO_DISCOVERY_TIMEOUT``, and
+  ``RIKO_EXCHANGE_API``. A malformed value logs a warning and keeps the default.
 
 Changes
 ~~~~~~~
+
+- ``Context`` is now a fully immutable snapshot, including nested ``inputs`` values.
+  Derive a changed context with ``replace`` instead of direct assignment.
+
+- ``Context().inputs`` is now ``None`` when no inputs are given, rather than an empty
+  mapping. An ``input`` module still prompts when no inputs are given, but an explicit
+  ``inputs={}`` now uses each input's default instead of prompting.
+
+- ``Context(mode=ExecutionMode.DESCRIBE)`` returns ``{"inputs": ..., "dependencies":
+  [...]}`` instead of a one-item list holding that mapping. ``async_pipe()`` yields the
+  mapping as its single item.
+
+- ``ModuleDefinition.name`` returns the module's effective name: the ``name`` passed,
+  or one derived from ``module`` or the pipe callable. The exact name as given is now
+  ``declared_name``. ``description`` defaults to the ``module``'s docstring first line.
+
+- ``ModuleDefinition`` is no longer a dataclass. Derive a changed copy with
+  ``attrs.evolve`` instead of ``dataclasses.replace``.
+
+- Registering a module under the name of a built-in or entry-point module raises
+  ``ValueError`` unless you pass ``replace=True``.
+
+- ``get_module_metadata(name)`` returns ``None`` for an unknown module instead of
+  raising ``ModuleNotFoundError``. With ``strict=True`` it raises ``ValueError``.
+
+- ``ModuleRegistry.resolve(name, interface)`` is now ``require(name, is_async=False)``.
+  It returns the module's wrapper. ``definition`` is now ``load_definition``.
+  ``require_interfaces`` reports which of a module's sync and async interfaces exist.
+
+- ``@processor``, ``@operator``, and ``@splitter`` raise ``TypeError`` at decoration
+  time for an invalid option, e.g., a typo or a call option like ``count``.
+
+- The decorators' ``parse`` method (and ``@operator``'s ``aparse``) is now
+  ``normalize_input`` (and ``anormalize_input``).
+
+- An async operator's ``async_pipe`` now returns an async iterator directly. Consume it
+  with ``async for``/``anext`` without awaiting the call first. Async processors and
+  splitters are unchanged.
 
 - The async transport helpers ``async_url_open`` and ``async_write`` are no longer
   re-exported from ``riko.bado``. Import them from ``riko`` (or ``riko.io``).
   ``riko.bado`` now covers only the async iteration and runtime helpers.
 
-- Renamed ``get_abspath`` to ``normalize_url``, ``riko.bado.get_async_temp_file`` to
-  ``riko.async_get_temp_file``, ``derive_category`` to ``get_module_category``, and
+- Renamed ``riko.get_async_temp_file`` to ``riko.async_get_temp_file`` (no longer
+  re-exported from ``riko.bado``), ``derive_category`` to ``get_module_category``, and
   ``riko.ext.register`` to ``riko.ext.register_module``.
 
-- Renamed ``riko.Targets`` to ``riko.Formats``, since its members name serialization
-  formats; ``export``/``write`` accept the same members under the new name.
+- Renamed ``riko.Targets`` to ``Formats`` (its members name serialization formats)
+  and ``riko.list_targets`` to ``riko.list_formats``. ``Formats`` drops the ``LIST`` and
+  ``TUPLE`` members (they aren't serialization formats). Use ``riko.export`` instead.
+
+- Renamed the ``urlparse`` module's ``parse_key`` configuration to ``normalize_key``.
+  ``parse_key`` is ignored and results will land under ``content``.
+
+- The ``write`` module's ``url`` and ``target`` configuration keys are now ``dest`` and
+  ``fmt``. A configuration that still uses ``url`` logs a warning and writes nothing.
+
+- Renamed ``riko.bado.itertools.async_map``'s ``connections`` parameter to ``limit``.
 
 - Renamed ``convert_dag`` to ``parse_dag``, which now emits a ``Workflow`` instead of a
   ``PipeDef``. It still takes a ``PipeDag``.
+
+- ``parse_dag`` now raises ``InvalidPipelineError`` for a ``PipeDag`` module with an
+  invalid key.
 
 - Renamed ``convert-dag`` to ``build-workflow``, which now emits a ``WorkflowDocument``
   instead of a serialized ``PipeDef``. It reads a path to a ``WorkflowDocument``, or a
@@ -76,50 +153,79 @@ Changes
 
 - Renamed ``compile-pipe`` to ``compile-workflow`` (which now takes a
   ``WorkflowDocument`` instead of a serialized ``PipeDef``) and ``riko.compile_pipe`` to
-  ``riko.compile_workflow`` (which now takes a ``WorkflowLike`` instead of a
-  ``PipeDef``). Passing a serialized ``PipeDef`` to ``compile-workflow`` exits with a
-  message naming ``build-workflow``.
+  ``compile_workflow``.
+
+- Convert a serialized ``PipeDef`` with ``build-workflow`` (or a ``PipeDef`` with
+  ``migrate_v1_to_v2``) before handing it to ``compile-workflow``, ``run-pipe``, or a
+  workflow store.
 
 - Moved ``examples/pipelines`` to ``examples/workflows`` and ``examples/pypipelines`` to
   ``examples/pyworkflows``. The JSON files are now ``WorkflowDocument``\s instead of
-  serialized ``PipeDef``\s. Convert a stored ``PipeDef`` with ``build-workflow`` (or
-  ``migrate_v1_to_v2`` in Python) before handing it to ``compile-workflow``,
-  ``run-pipe``, or a registered workflow store.
+  serialized ``PipeDef``\s.
 
-- ``Context`` is now a fully immutable snapshot and ``Resource`` definitions are
-  structurally immutable. Derive a changed context with ``augment``/``with_resource``
-  instead of assigning to its fields, inputs, or resources.
+- Renamed ``riko.UnsupportedPipelineError`` to ``riko.UnsupportedWorkflowError``, and
+  added a ``reason`` attribute to it and ``UnsupportedModuleError``.
 
-- ``Context().inputs`` is now ``None`` when no inputs are given, rather than an empty
-  mapping. An ``input`` module still prompts when no inputs are given, but an explicit
-  ``inputs={}`` now uses each input's default instead of prompting.
+- ``UnsupportedWorkflowError.pipe_id`` now holds the ``pipe_<id>`` form, even when the
+  name was given as ``pipe:<id>``.
 
-- An async operator's ``async_pipe`` now returns an async iterator directly. Consume it
-  with ``async for``/``anext`` without awaiting the call first. Async processors and
-  splitters are unchanged.
+- ``riko.PipelineStateError`` names the errant object (e.g., a write session) instead of
+  calling it a pipe, and its constructor requires the ``subject`` keyword argument.
+
+- An invalid ``Formats`` or ``ExecutionMode`` choice is rejected with an error that
+  lists the accepted values, e.g., ``Invalid ExecutionMode: 'bogus'; expected one of
+  run, describe_inputs, describe_dependencies, describe``.
 
 - Refined the supported ``riko.types`` stream aliases. ``Feed`` now represents either
   synchronous or asynchronous item input (``Items | AsyncItems``), and ``Item`` now
   reflects the full set of item shapes accepted by the runtime.
 
-- Added ``AsyncItems``, ``SyncPipeTuples``, and ``AsyncPipeTuples`` to the supported
-  ``riko.types`` surface. ``PipeTuples`` now represents either the synchronous or
-  asynchronous form.
+- ``PipeTuples`` now represents either the synchronous or asynchronous form
+  (``SyncPipeTuples`` or ``AsyncPipeTuples``).
 
 - ``DynamicConf`` is no longer exported from ``riko.types``. Extension authors should
   import it from ``riko.ext``.
-
-- A single ``write``/``sink`` destination now accepts one input shape only. Feeding it a
-  mix of individual items and whole streams, raises ``RuntimeError``.
 
 - ``sort`` now places items lacking the sort field together. Previously a missing field
   sorted using the type's default (``0`` for ``int``, ``-inf`` for ``float`` and dates,
   ``""`` for ``text``). Use the ``default`` option to restore this behavior.
 
-- Thread and process execution now streams instead of buffering.
+Removed
+~~~~~~~
+
+- Removed ``SyncPipe``, ``AsyncPipe``, ``SyncCollection``, ``AsyncCollection``, and
+  ``PipeState``. ``Pipeline`` replaces them: ``list(pipeline)`` replaces ``.list``,
+  ``export(pipeline, …)`` replaces ``.export()``, and multi-source fetching is a
+  ``union`` fan-in built with ``parse_dag``. ``subscribe``/``publish``, ``split``, and
+  ``udf(func=…)`` through a pipeline have no replacement.
+
+- Removed ``parallel``/``workers``/``threads``/``pool`` arguments. To run items in
+  parallel use ``pipeline.with_execution`` with ``concurrency`` set to either
+  ``"auto"`` or an ``int`` > 1. ``executor`` is optional, but if set, must not be
+  ``"inline"``. Thread and process execution now streams instead of buffering.
+
+- Removed ``build_pipeline``, ``parse_pipe_def``, and ``extract_dependencies``. Convert
+  a ``PipeDef`` with ``migrate_v1_to_v2`` (or ``build-workflow``) to create a
+  ``Workflow``, then run it with ``Pipeline`` or read its modules from ``nodes``.
+
+- Removed unused ``Context.submodule`` and the ``submodule`` keyword argument.
+
+- Removed the ``autorss``, ``cast``, ``collections``, ``compile``, ``context``,
+  ``currencies``, ``dates``, ``dotdict``, ``exceptions``, ``locations``, ``parsers``,
+  ``paths``, ``pprint2``, and ``topsort`` modules from ``riko``. Also removed
+  ``riko.bado.io``, ``riko.ext.names``, and ``riko.types.compile`` modules.
+
+- Import ``CastType``, ``Context``, ``ExecutionMode``, ``Executor``, ``get_temp_file``,
+  ``async_get_temp_file``, ``async_url_open``, ``async_write``, ``compile_workflow``,
+  ``get_path``, and the exception classes from ``riko``; ``get_module_category`` and
+  ``normalize_module_name`` from ``riko.ext``; and ``PipeDef``/``PipeDag`` from
+  ``riko.types``. The remaining are now private, with no public replacement.
 
 Fixes
 ~~~~~
+
+- ``@operator`` now gives the reason it can't classify a parser's return type. E.g.,
+  return annotation of ``Any`` is too broad.
 
 - Applying ``@processor``/``@operator``/``@splitter`` without calling it now raises
   ``TypeError`` at decoration time. Previously the decorated function was silently taken
@@ -129,12 +235,17 @@ Fixes
   and async-iterable to match runtime behavior. ``async for item in async_pipe(...)`` no
   longer fails type checking.
 
+- ``key in conf`` on a parsed module configuration now reports False for missing keys.
+
+- An unsupported object nested inside a container argument no longer collides in the
+  conf memoization cache. Distinct instances stay distinct.
+
 - ``aclose()``ing an ``async_map_stream`` after a partial read now stops its workers and
   closes its source instead of raising a cancel-scope error or leaving the source open.
 
-- An ``AsyncPipe`` passed as a terminal sub-source (``format``, ``formatted``, or
-  ``union``'s ``others``) is now drained before parsing, so an async pipe yields the
-  same records as its sync counterpart instead of raising a not-iterable error.
+- A module's ``async_pipe`` now drains an async secondary input stream (e.g., one of
+  ``union``'s ``others``) before parsing. It yields the same items as ``pipe`` instead
+  of raising a not-iterable error.
 
 - Concurrent async fetches no longer drop a legitimate ``None`` result, so results stay
   aligned with the requests that produced them.
@@ -155,12 +266,18 @@ Fixes
 - A decoded response now treats ``read(n)`` as a count of characters rather than of
   lines, and ``readlines`` accepts ``keepends`` instead of raising ``TypeError``.
 
+- The ``write`` module can now write nested objects using the ``json`` export format
+  instead of raising "Object of type DotDict is not JSON serializable".
+
+- ``json`` output writes sets as deterministic sorted arrays.
+
 - ``skip_if`` now treats a missing ``text`` as a presence check on ``field`` instead of
   matching against the string ``"None"``. An absent field skips and a ``text`` of
   ``None`` or ``0`` no longer misfires.
 
 - ``listize`` now wraps falsy extracted values, e.g., ``0`` or ``""``, instead of
   passing them through unwrapped.
+
 - ``sort`` now orders numeric strings numerically instead of lexicographically.
 
 - A ``sort`` rule without a ``type`` no longer raises ``TypeError`` when some items lack
@@ -173,45 +290,44 @@ Fixes
   longer raises ``TypeError``. If the internal parsers fail to parse, the value is
   skipped with a warning.
 
+- Casting, sorting by, or reading RSS dates from a timezone-aware datetime whose
+  ``tzinfo.tzname()`` returns ``None`` now keeps its zone instead of treating the
+  datetime as naive.
+
 - Date fields built from a timezone-aware time now report the correct Unix
   timestamp (``utime``); the zone offset was previously ignored.
 
 - Time-zone lookup now captures both the standard and daylight names regardless of the
   current date and resolves ambiguous abbreviations (e.g., ``CST``) toward US zones.
 
-- An unsupported object nested inside a container argument no longer collides in the
-  conf memoization cache. Distinct instances stay distinct.
+- The order nodes run in is now stable between runs.
 
 - ``compile-workflow --help`` and its usage errors now show the command's installed name
   instead of ``compile``.
 
-Removed
-~~~~~~~
-
-- Removed ``SyncPipe``, ``AsyncPipe``, ``SyncCollection``, ``AsyncCollection``, and
-  ``PipeState``. ``Pipeline`` replaces them: ``list(pipeline)`` replaces ``.list``,
-  ``riko.export(pipeline, …)`` replaces ``.export()``, and multi-source fetching is a
-  ``union`` fan-in built with ``parse_dag``. ``subscribe``/``publish``, ``split``, and
-  ``udf(func=…)`` through a pipeline have no replacement.
-
-- Replaced ``parallel``/``workers``/``threads``/``pool`` arguments with
-  ``pipeline.with_execution(executor=, concurrency=, ordered=)``.
-
-- Removed ``build_pipeline``, ``parse_pipe_def``, and ``extract_dependencies``. Convert
-  a ``PipeDef`` with ``migrate_v1_to_v2`` (or ``build-workflow``) to create a
-  ``Workflow``, then run it with ``Pipeline`` or read its modules from ``nodes``.
-
 Dev
 ~~~
 
-- Removed the ``gen-pipelines`` console script and the ``manage codegen --pipes``
-  option. ``manage codegen --all`` covers the config, name, and API-surface generators.
+- Added ``--docstrings``, ``--docs``, ``--terms``, ``--deps``, ``--literals``, and
+  ``--all`` to ``manage lint``. ``manage lint`` no longer takes paths to check.
+
+- Added ``manage lint imports`` to check the internal import contracts.
+
+- ``manage prettify --yaml`` now formats only tracked YAML files (like ``manage
+  lint --yaml``) instead of everything under the repository root.
+
+- Added ``manage upgrade`` to upgrade ``uv.lock``, sync the environment, and rewrite
+  the pre-commit Ruff pin to the locked version.
+
+- Replaced ``manage codegen --mode`` with the additive ``--config``, ``--names``,
+  ``--api``, and ``--all`` selectors, and removed the ``pipes`` generator along with the
+  ``gen-pipelines`` console script.
 
 - Added the ``gen-api-surface`` script and ``manage codegen --api`` to generate the
   API-surface document, with a drift guard.
 
-- Added ``manage lint --docstrings`` to flag summaries that lead with
-  ``Returns``/``Yields``.
+- ``manage release-notes`` takes an optional version to convert instead of always using
+  the latest changelog section.
 
 - Added ``manage backfill`` to dispatch the release or publish workflow for an
   existing tag, with ``--dry-run`` and a ``--notes-only`` mode that replaces a
@@ -222,13 +338,10 @@ Dev
 - ``manage publish``/``release --dry-run`` now run a real ``uv publish --dry-run``
   upload rehearsal instead of an import smoke test.
 
-- ``manage lint --yaml`` and ``manage prettify --yaml`` now target tracked YAML
-  files via ``git ls-files`` instead of a fixed path.
+- Pinned GitHub Actions steps to commit SHAs.
 
 - The ``benchmark`` script now times building a ``Pipeline`` and running it instead of
-  the ``PyPipe``/``PyCollection`` classes.
-
-- Pinned GitHub Actions steps to commit SHAs.
+  the ``SyncPipe``/``AsyncPipe`` and ``SyncCollection``/``AsyncCollection`` classes.
 
 - Cleared the outstanding type-checker errors in the I/O and re-encoding paths, and
   dropped the ``cast`` calls that masked them.
@@ -282,6 +395,10 @@ New
 - Promoted ``RikoError``, ``as_async``, ``async_map``, and ``async_map_stream`` to the
   top-level ``riko`` surface.
 
+- Added the supported ``riko.types`` surface for annotating code that uses riko:
+  ``AsyncStream``, ``Conf``, ``DynamicConf``, ``Feed``, ``Item``, ``Items``,
+  ``PipeTuples``, and ``Stream``.
+
 - Promoted ``async_url_open`` onto the top-level ``riko`` surface; it works both as an
   awaitable and as an async context manager (``async with``).
 
@@ -313,6 +430,10 @@ Dev
 
 - Included the ``examples`` directory in the test suite (doctests and compiled example
   pipes).
+
+- Added the ``gen-pipelines`` script (and ``manage codegen --mode pipes``) to recompile
+  each ``pipelines/pipe_*.json`` into its ``pypipelines/pipe_*.py`` module, in both
+  ``examples`` and ``tests``.
 
 - Added CI smoke tests, ``perf``/``finance``/``slow`` test markers, and standardized
   the async test helpers.
@@ -352,7 +473,10 @@ New
 
 - Added ``describe_module`` to view built-in's fully populated ``ModuleDefinition``.
 
-- Added the ``gen-names`` script (and ``manage codegen``) to regenerate
+- Added ``riko.ext.derive_category`` to get a module's discovery category (``source``,
+  ``transform``, or ``sink``).
+
+- Added the ``gen-names`` script (and ``manage codegen --mode names``) to regenerate
   ``riko/modules/_names.py`` from the built-in catalog.
 
 - Added a ``write`` sink pipe that serializes a stream to ``conf['url']`` (a ``str`` or
@@ -560,11 +684,10 @@ New
     ``pipe | SyncPipe("sort", conf=...)``, and ``items | SyncPipe(...)``
   - ``pipe.pipe(name, conf=...)`` / ``pipe.async_pipe(name, ...)``
 
-- Added a **module registry and entry-point plugin seam**. An external package can
-  register modules through ``riko.ext.register`` or
-  ``[project.entry-points."riko.modules"]``. Registered modules resolve like built-ins
-  and appear in ``list_modules()``. See ``examples/riko-example-ext``,
-  ``examples/register_module.py``, and ``examples/register_alias.py``.
+- Added a **module registry and entry-point plugin seam**. Plugin authors can register
+  modules with ``riko.ext.register`` or ``[project.entry-points."riko.modules"]``.
+  Registered modules resolve like built-ins and appear in ``list_modules()``.
+  Registering an existing name raises ``ValueError`` unless you pass ``replace=True``.
 
 - ``processor``/``operator``/``splitter`` now infer ``isasync`` so an async pipe won't
   silently build a sync wrapper if the author forgets ``isasync=True``. An explicit
@@ -645,8 +768,8 @@ New
 ~~~
 
 - Added ``run-pipe --path`` for executing a ``pipeline`` from an arbitrary file.
-- Promoted the async-backend and JSON ``pipeline`` compilation helpers to the
-  stable top-level API, and expose ``get_module_metadata``.
+- Added ``pipeline`` compilation helpers: ``parse_pipe_def``, ``build_pipeline``,
+  ``extract_dependencies``, ``compile_pipe``, and ``get_module_metadata``.
 
 Changes
 ~~~~~~~
@@ -857,6 +980,11 @@ New
 - Added ``riko.convert_dag`` as the programmatic API for expanding ``PipeDag``
   into a full ``PipeDef`` pipeline definitions.
 
+- Added ``riko.list_targets`` to list the available ``export`` formats.
+
+- Added ``riko.UnsupportedModuleError`` (unknown module name, kept in ``module_name``)
+  and ``riko.UnsupportedPipelineError`` (unknown sub-pipeline, kept in ``pipe_id``).
+
 Changes
 ~~~~~~~
 
@@ -948,6 +1076,14 @@ New
 - Added pub/sub, ``fetchtable``, the ``aggregate`` pipe, pipe exporting, and
   async URL encoding/decoding.
 
+- Added ``riko.Context`` to configure a pipeline run.  It specifies ``inputs``,
+  ``test``, ``describe_input``, ``describe_dependencies``, ``verbose``, and
+  ``submodule`` keyword arguments.
+
+- Added ``riko.compile.parse_pipe_def``, ``build_pipeline``, and
+  ``extract_dependencies`` to parse a pipe definition (``PipeDef``), build a runnable
+  pipeline from it, and list its sub-pipelines.
+
 Changes
 ~~~~~~~
 
@@ -961,6 +1097,12 @@ Fixes
 
 - Returned ``unique_everseen`` elements; improve RSS pub/upd and field/value
   parsing.
+
+Dev
+~~~
+
+- Added ``--dry-run`` to ``manage publish`` and ``manage release`` to check that the
+  package installs and imports without uploading it.
 
 v0.67.0 (2026-07-13)
 --------------------
