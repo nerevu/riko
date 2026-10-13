@@ -10,7 +10,7 @@
 > commit `5c33e05` (pytest then collected `tests`, `riko`, `README.rst`, and `docs`, with both
 > Python-module and `*.rst` doctests enabled). One item is **already done**: the standalone
 > `tests/public/test_fluent_discovery.py` was dropped as part of P9A and its coverage folded into
-> `public/test_collections.py` (`TestModuleNameEnum`) and `public/test_modules.py` — where that
+> `public/test_collections.py` (since removed; `TestModuleNameEnum`) and `public/test_modules.py` — where that
 > file is named below, read it as "the discovery coverage that now lives in those two files."
 > Everything else in the audit still maps onto the current tree.
 
@@ -41,12 +41,12 @@ These are real test bugs — coverage that looks stronger than it is. Fix them f
    So `self._load(items, pipe_name, 25, 0)` never verifies `< 25`/`== 25` — it always verifies the
    default `> 0`. Same bug in `_aload()`. A large part of the legacy functional suite is weaker than
    it looks. **Fix this before pruning any pipeline tests.**
-2. **`tests/functional/test_pipeline.py` is not a test module.** It contains a generated
+2. **`tests/functional/test_pipeline.py` was not a test module** (since removed). It contains a generated
    `pipe_testpipe1()` implementation and no `test_*` functions. **Remove or relocate** it to the
    generated-pipeline fixture area.
 3. **Typed module-name behavior is tested in three places** — the (now-removed)
    `test_fluent_discovery.py`, `internal/test_codegen.py`, and `TestModuleNameEnum` in
-   `public/test_collections.py`. `TestModuleNameEnum` already owns normalization, constructor
+   `public/test_collections.py` (since removed). `TestModuleNameEnum` already owns normalization, constructor
    normalization, enum/string equivalence, `|`, and `.pipe()`. Discovery tests should own
    **discovery**, not generic enum acceptance.
 4. **`internal/test_modules.py` has an exact behavioral duplicate.**
@@ -79,14 +79,14 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | ~~keyed `join(count(), finite_other)` yields a first result~~ — **landed** as `tests/public/test_modules.py` (keyed **and** natural; asserts bounded consumption, since the operator wrapper reads one item ahead) | public | R3 |
 | `async_pipe` (`send`) yields its first item before the source is exhausted | public | R4 |
 | `compile_workflow` handles ids `"class"`, `"foo bar"`, `"foo.bar"`, `"1st"`, `"café"` | internal | R5 |
-| ~~an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged~~ — **landed** as `tests/internal/test_serialize.py`; fixed by propagating `_UNSUPPORTED` in `_to_hashable` (correctness-audit R6) | internal | R6 |
+| ~~an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged~~ — **landed** as `tests/internal/test_values.py::TestReprCache`; fixed by propagating `_UNSUPPORTED` in `_to_hashable` (correctness-audit R6) | internal | R6 |
 | ~~`gather_results([none(), one(), none()])` preserves all three positions~~ — **landed** as `tests/internal/test_io.py::TestGatherResults::test_gather_results_preserves_none_positions`; the defect was fixed with the `MISSING` sentinel (correctness-audit R7) | internal | R7 |
 | ~~`Reencoder.read(1)` returns one character and the remainder survives the next `read`~~ — **landed** as `tests/internal/test_io.py::TestReencode::test_char_count_preserves_remainder`; fixed with a char/byte remainder buffer (correctness-audit R8) | internal | R8 |
 | `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
 | `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
 | ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_values.py::TestDates`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
-| ~~`get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics~~ — **landed** in `tests/internal/test_parsers.py`; absent `text` no longer coerced to `"None"` (correctness-audit R12) | internal | R12 |
-| ~~`listize=True` turns `0`/`False`/`""` into one-element lists~~ — **landed** as `tests/internal/test_prepare.py`; `build_conf` branches on the option, not truthiness (correctness-audit R13) | internal | R13 |
+| ~~`get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics~~ — **landed** in `tests/internal/test_values.py::TestParsers`; absent `text` no longer coerced to `"None"` (correctness-audit R12) | internal | R12 |
+| ~~`listize=True` turns `0`/`False`/`""` into one-element lists~~ — **landed** as `tests/internal/test_modules.py::TestPrepare`; `build_conf` branches on the option, not truthiness (correctness-audit R13) | internal | R13 |
 | a stalled async iterator is actually interrupted by `timeout` | internal | R14 |
 | the same bytes decode identically across sync HTTP, async HTTP and async local file | functional | R15 |
 | ~~`has_header=False` closes the original source as well as the spool~~ — **landed** as `tests/internal/test_io.py::TestFetch::test_csv_headerless_closes_original_source` (spies the original's `close`, cross-version); fix predated this via the variadic `auto_close` (correctness-audit R16) | internal | R16 |
@@ -125,6 +125,10 @@ Enforcement:
   its row, a private name imported in `public/`, a history-named file (`test_regressions`), a helper
   module inside a tier, or a stray folder; it prints size advice without failing.
 - Ruff `ERA` (commented-out code) is enforced for `tests/` (generated `pyworkflows` excepted).
+- `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py` citation in a tracked
+  `_docs/` root doc, a gameplan, `CONTRIBUTING.rst`, `CLAUDE.md`, or `docs/*.rst` that names no
+  current file; a line saying the file was deleted, retired, removed, dropped, merged, or
+  superseded records history and is exempt. Repoint a moved test's citations when moving it.
 - `manage test --ratchet` fails when the full suite leaves more statements uncovered than
   `[tool.riko.coverage] uncovered` in `pyproject.toml`, and lowers that ceiling on a gain. The
   ceiling counts uncovered lines rather than a percentage, so losing coverage of existing code and
@@ -188,7 +192,8 @@ Different deletion rule from pytest, because doctests are executable documentati
   `issync` branches solely as doctest fallbacks; write the real async example and let collection
   policy handle unavailable optional support.
 - `>>>` in `examples/**`, `_docs/**`, and `CLAUDE.md` are **not** collected today — which is exactly
-  why `functional/test_examples.py` matters: it is what actually executes the example pipelines.
+  why `functional/test_script.py`'s `TestExamplePipelines` matters: it is what actually executes the
+  example pipelines.
 
 ## 5. First-pass patch (conservative, mostly indisputable)
 
@@ -258,7 +263,7 @@ to shrink the suite — they cover contracts hard to catch elsewhere.
   `internal/test_modules.py`; the public file now owns only discovery-filtering combinations,
   API errors, and input test-flag scoping. (Internal tests import from defining modules per the
   established convention — not the `riko` facade.)
-- `public/test_collections.py` deduped: the sync/async copies of
+- `public/test_collections.py` (since removed) deduped: the sync/async copies of
   `test_pipes_use_loopability_for_mapping` folded into one `_ENGINES`-parametrized parity test,
   and the redundant `test_enum_and_string_resolve_identically` dropped (equivalence is already
   proven by `test_resolve_module_name` + `test_constructor_stores_plain_string`).
@@ -277,7 +282,7 @@ to shrink the suite — they cover contracts hard to catch elsewhere.
   decorator-unwrap, `infer_from_source`, and `gen_operator_return_kinds` cases kept as distinct
   owners.
 - `functional/` layering: the three direct `augment_entries` unit tests moved to the new
-  `internal/test_rssutils.py` (parametrized fallback matrix), the mocked `_io` backend test moved
+  `internal/test_rssutils.py` (since merged; parametrized fallback matrix), the mocked `_io` backend test moved
   to `internal/test_io.py` (whose loopback-server tests are now grouped under a
   `simulated_network`-marked class so the mock test isn't mislabeled), the sync/async Kazeeki
   expected payloads shared via module constants + a `_assert_kazeeki` helper, and the four
@@ -298,7 +303,7 @@ to shrink the suite — they cover contracts hard to catch elsewhere.
   covers `.hash()` and `| Transforms.HASH` (the **enum** form) only — it does **not** exercise the
   **string** forms (`| "hash"`, `.pipe("hash")`) or their source-binding semantics, which those
   chaining tests specifically own. Trimming them would drop real coverage, so they stay.
-- *Trim `test_examples.py` `gigs`/`kazeeki` exact records to smoke contracts.* The full-record
+- *Trim the `TestExamplePipelines` `gigs`/`kazeeki` exact records to smoke contracts.* The full-record
   assertions are the only exact check of the example entry-point output; smoke-trimming loses that.
 
 The deeper `test_collections.py` split into focused files is not warranted either — the audit
@@ -326,7 +331,7 @@ the suite, forcing the marker's removal) the moment its owner lands:
   half: sync and async must decode `b"abc\rdef\n"` alike (bado-anyio § 2c).
 - **R18** — `tests/internal/test_modules.py::TestResolverDispatcher::test_runtime_registered_pipe_prefixed_module_resolves`
   (extensibility § 24).
-- **R17** — `tests/internal/test_compile.py::test_convert_dag_empty_modules_raises` asserts that
+- **R17** — `tests/internal/test_compile.py::test_convert_dag_empty_modules_raises` (since retired) asserts that
   `parse_dag({"modules": []})` raises is **retired**. It does *not* today — the terminal `output` node is appended
   unconditionally, so an empty DAG silently yields `{_OUTPUT}` (the reported `module_ids[-1]` crash is
   *not reproduced* on this path; only the full-pipe-def path raises, via `MALFORMED["empty"]`). A clean
@@ -352,23 +357,10 @@ a regression once the contract was decided (type-aware comparison):
 **Remaining.** None — the § 2b regression batch is complete (local repairs fixed, owned rows guarded
 by strict-xfail tripwires).
 
-**Shipped (second pass, 2026-10-13).** A full test-cruft audit (55 files, ~1,680 collected tests)
-landed in four slices:
-
-1. Broken tests repaired: the R9 sqlite tripwire never ran its body (missing fixture) and now pins
-   both live failure modes; a replay-style pub/sub tripwire contradicted the `func=` contract and
-   moved under `PUBSUB_PENDING`; an assertion-free resource test; lint-selector stubs that let
-   `--all` scan the real repo; `lint --strict`'s missing rc file.
-2. Consolidated 55 files into 14 indexed subject files with `Test<Subject>` classes and shared
-   `tests/_*.py` helpers; the collected test-id set was unchanged.
-3. Removed ~62 duplicate cases (pytest copies of public doctests, cross-file repeats, private doctest
-   repeats trimmed on the side the module had more of) and parametrized copy-paste families; every
-   deletion names its covering owner.
-4. Added the § 3 enforcement (`lint --tests`, `ERA`, the uncovered-line ratchet, `/tidy` § 3.9).
-
-Uncovered lines were checked commit by commit: slices 1–2 lost 14 executed lines (lint wrappers
-stubbed out; an evaluated-`ClassVar` branch only a non-postponed module reached), restored by direct
-tests before the ratchet's first ceiling was recorded.
+**Shipped (second pass, 2026-10-13).** The suite is 13 indexed subject files (3 public, 8 internal,
+2 functional) with `Test<Subject>` classes and shared `tests/_*.py` helpers; duplicate cases and
+copy-paste families are gone (each deletion names its covering owner); the § 3 enforcement is in
+place, with the uncovered-line ceiling recorded at 584.
 
 ## 5b. Execution lifetime proofs (R4)
 

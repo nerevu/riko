@@ -40,7 +40,7 @@ phase decisions/carryovers live in `PHASE_CHECKLISTS.md`.
 The M1 exit-test tree includes:
 
 - `tests/public/test_modules.py` (P1 tiers), `test_config_public.py` (P2);
-- `tests/internal/test_config_dynamic.py` / `test_preparation.py` (P2/P3), `test_inference.py` (P4),
+- `tests/internal/test_config_dynamic.py` (since merged) / `test_preparation.py` (P2/P3), `test_inference.py` (P4),
   `test_assignment.py` (P3);
 - `tests/public/test_pipeline.py` (P5), `test_context_modes.py` (P6),
   `test_sync_async_parity.py` (P7);

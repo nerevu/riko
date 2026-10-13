@@ -87,6 +87,14 @@ _VERSION = re.compile(r"v?(\d+)\.(\d+)\.(\d+)")
 _COMPLETION = re.compile(
     r"\b(complete|completed|delivered|shipped|landed|done)\b", re.IGNORECASE
 )
+_TESTS_DIR = ROOT_DIR / "tests"
+_TEST_CITATION = re.compile(
+    r"`((?:tests/)?(?:public|internal|functional)/test_\w+\.py)"
+)
+_HISTORY_WORDS = re.compile(
+    r"\b(?:deleted|retired|removed|dropped|merged|superseded)\b", re.IGNORECASE
+)
+_CITING_DOCS = (ROOT_DIR / "CONTRIBUTING.rst", ROOT_DIR / "CLAUDE.md")
 _TARGET = re.compile(
     r"\b(target|targeted|planned|plan|next|prerequisite|prereq|future)\b", re.IGNORECASE
 )
@@ -319,6 +327,63 @@ def _phase_closure_offenders() -> list[str]:
     return offenders
 
 
+def get_stale_test_citations(text: str, known: frozenset[str]) -> list[tuple[int, str]]:
+    """
+    Gets the test-file citations in ``text`` that name no current test file.
+
+    A line that says the file was deleted, retired, removed, dropped, merged, or
+    superseded records history, so its citations are not checked.
+
+    Args:
+
+        text: The document text.
+        known: The current test files, as ``tests/<tier>/test_<name>.py`` paths.
+
+    Returns:
+
+        Each stale citation's line number and cited path.
+
+    Examples:
+
+        >>> from riko.cli._docs import get_stale_test_citations
+        >>>
+        >>> known = frozenset({"tests/public/test_pipeline.py"})
+        >>> text = "See `public/test_pipeline.py` and `public/test_gone.py`."
+        >>> get_stale_test_citations(text, known)
+        [(1, 'public/test_gone.py')]
+        >>> get_stale_test_citations("`public/test_gone.py` was deleted.", known)
+        []
+
+    """
+    return [
+        (lineno, cited)
+        for lineno, line in enumerate(text.splitlines(), 1)
+        if not _HISTORY_WORDS.search(line)
+        for cited in _TEST_CITATION.findall(line)
+        if (cited if cited.startswith("tests/") else f"tests/{cited}") not in known
+    ]
+
+
+def _stale_test_citation_offenders() -> list[str]:
+    """Find tracked docs citing test files that no longer exist."""
+    known = frozenset(
+        path.relative_to(ROOT_DIR).as_posix() for path in _TESTS_DIR.glob("*/test_*.py")
+    )
+    tracked = _tracked_docs()
+    internal = (path for path in _INTERNAL_DOCS.glob("*.md") if path in tracked)
+    docs = [
+        *internal,
+        *_gameplan_paths(),
+        *_CITING_DOCS,
+        *sorted(_DOCS_DIR.glob("*.rst")),
+    ]
+    return [
+        f"{path.relative_to(ROOT_DIR)}:{lineno}: {cited}"
+        for path in docs
+        for lineno, cited in get_stale_test_citations(_read(path), known)
+    ]
+
+
 def _api_surface_offenders() -> list[str]:
     """Find API-surface blocks that drift from the contract declaration."""
     text = _read(_DOC)
@@ -418,6 +483,9 @@ def _lint_docs() -> int:
 
     if offenders := _api_surface_offenders():
         problems.append(f"{_DOC}: {'; '.join(offenders)}")
+
+    if offenders := _stale_test_citation_offenders():
+        problems.append(f"cited test files no longer exist: {'; '.join(offenders)}")
 
     for problem in problems:
         print(problem)

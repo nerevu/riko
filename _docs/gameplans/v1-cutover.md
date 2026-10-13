@@ -27,7 +27,7 @@ the cutover session does not rediscover them:
 - **Offline `migrate_v1_to_v2` is kept.** It is the rescue path for serialized `PipeDef`s and may
   survive 1.0 per the R4A exit.
 - **`split` is not executable between the cutover and R7 — accepted, not bridged.**
-  `SyncPipe.split`/`AsyncPipe.split`, `tests/public/test_collections.py::test_split`, and the two
+  `SyncPipe.split`/`AsyncPipe.split`, `tests/public/test_collections.py::test_split` (since removed), and the two
   split fixtures (`pipe_QMrlL_FS3BGlpwryODY80A`, `pipe_zKJifuNS3BGLRQK_GsevXg`) are the only
   executable split paths, and they go with the v1 surface. The v2 execution refuses a splitter node
   when its plan is built (by the module's declared type, before any upstream runs). Do not bridge
@@ -51,7 +51,7 @@ Prerequisites that must be true before any deletion commit:
 - The v2 execution runs linear and fan-in module graphs (covered by
   `tests/internal/test_execution_plan.py`).
 - Coverage ownership is transferred, not dropped: the string-form/template chaining behavior
-  historically owned by `tests/public/test_collections.py` is owned by
+  historically owned by `tests/public/test_collections.py` (since removed) is owned by
   `tests/public/test_pipeline.py` going forward. Snapshot any remaining v1-only coverage
   worth porting before its file is deleted.
 
@@ -71,7 +71,7 @@ Prerequisites that must be true before any deletion commit:
   `SyncCollection` consume it, `PoolScope` chain sharing stays with them and goes at step 4, and
   `listpipe` stays because it depends on `riko.coercion`, which the `execution` layer cannot import.
   Handle-level tests: `tests/internal/test_execution.py`; the pipe-level `TestPoolLifecycle` in
-  `tests/public/test_collections.py` goes with the classes at step 4.
+  `tests/public/test_collections.py` goes with the classes at step 4 (since removed).
 
 ## Step 2 — Flip the generated-pipeline mechanism off v1
 
@@ -114,7 +114,7 @@ Blocks step 4.
   (emit `serialize_workflow` output) or delete the commands, updating `docs/DAG_FORMAT.rst`.
 - Audit `runpipe` (loads `examples/*.py`, which are still v1 `SyncPipe` scripts; the surviving
   `pypipelines` probes are hand-maintained and need no runner change).
-- The strict-xfail tripwire `tests/internal/test_compile.py::test_convert_dag_empty_modules_raises`
+- The strict-xfail tripwire `tests/internal/test_compile.py::test_convert_dag_empty_modules_raises` (since retired)
   is **retired** (maybe in the same commit that changes `build_workflow`), per
   [testing.md](testing.md).
 - As-built (2026-09-29, landed in the working tree, commit pending): the decision was **keep every
@@ -184,7 +184,7 @@ Depends on steps 1–3. Deletes `SyncPipe`, `AsyncPipe`, `PyPipe`, `PyCollection
 - Same commit: remove the class names and collection verbs from `riko/__init__.py` and the
   `COLLECTIONS` set in `riko/base/_api_surface.py` (STABLE surface change) → `manage codegen
   --api` regenerates the `_docs/API_SURFACE.md` blocks; update `tests/public/test_modules.py`.
-- Delete/port `tests/public/test_collections.py` (chaining coverage already re-homed, step 0).
+- Delete/port `tests/public/test_collections.py` (since removed; chaining coverage already re-homed, step 0).
 - Scrub docstring/doc references: `riko/modules/__init__.py`, `riko/modules/receive.py`,
   `README.rst`, `docs/FAQ.rst`, `docs/COOKBOOK.rst`, `tests/functional/test_script.py` example
   flows → v2 `Pipeline`.
@@ -217,13 +217,13 @@ unaffected by everything below.
   `riko/definitions/_migrate.py` with no `_compile` import (its `_lower_keys` helper is private
   to that module). Delete the then-orphaned v1 wire/pipe-def
   types from `riko/types/_compiler.py` except those migrate and `Workflow.parse` retain.
-- Delete/port the v1 halves of `tests/internal/test_compile.py`. The `pythonise` regression test
+- Delete/port the v1 halves of `tests/internal/test_compile.py` (since deleted). The `pythonise` regression test
   there is re-homed, not dropped — `pythonise` survives in `riko/base/_strutils.py` with live
   consumers. `tests/internal/test_codegen.py` is the v2 replacement and stays.
 - **As-built (2026-10-03; built via `/architect`, gated green — `lint --all` 0, pyright 0, 1572
   passed / 60 xfailed; uncommitted at wrapup).** Deleted `riko/runtime/_compile.py`,
   `_compile_repr.py`, `templates/pypipe.txt`/`pypipe_async.txt`, `riko/types/_pipeline.py`, and
-  `tests/internal/test_compile.py`. `COMPILE` = `{compile_pipe, parse_dag}` (`manage codegen --api`
+  `tests/internal/test_compile.py` (since deleted). `COMPILE` = `{compile_pipe, parse_dag}` (`manage codegen --api`
   regenerated). `resolve_module` was **not** relocated — its two test callers use
   `dispatcher.require(name, is_async)` directly (`tests/functional/test_basics.py`, narrowed with
   `is_subpipe`). `riko/types/_compiler.py` lost only `XY` and the compiler-internal TypedDicts
