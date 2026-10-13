@@ -51,7 +51,7 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/types/modules.py` | hand-maintained module configuration contracts; source input for config code generation |
 | `riko/types/_module_ids.py` | **generated** `ModuleId`/`LoopableModuleId` literals; regenerate with `gen-names` or `manage codegen --names` |
 | `riko/types/_streams.py` | core `Item`/`Items`/stream aliases and async stream contracts |
-| `riko/types/_workflow.py` | Workflow v2 structural contracts (endpoints, port grammar, node/edge discriminants) plus `GraphEdge` and `GraphIndex`, the one topology interpretation `Workflow.index` builds and `Workflow.validate()`/execution planning both read. `GraphIndex` takes only node ids, edges, and outputs (`Endpoint`s); every other field derives from them through `Factory(..., takes_self=True)` (the `ExecutionPlan` pattern) using `riko/base/_graph.py` helpers, so a hand-built index is consistent and frozen |
+| `riko/types/_workflow.py` | Workflow v2 structural contracts (endpoints, port grammar, node/edge discriminants) plus `GraphEdge` and `GraphIndex`, the one topology interpretation `Workflow.index` builds and `Workflow.validate()`/execution planning both read. `GraphIndex` takes only node ids, edges, and outputs (`Endpoint`s); every other attribute is derived from them on first use, as a cached property using `riko/base/_graph.py` helpers, so a hand-built index is consistent and frozen |
 | `riko/types/_compiler.py` | the `PipeDef`/`PipeDefLike`/`Wire` shapes (the pipe definition `migrate_v1_to_v2` reads), `PipeDag`/`DagModule` for `parse_dag`, and the loop `CountValues`/`EmbedKwargs` contracts; `PipeDag`/`PipeDef`/`PipeDefLike` are re-exported on `riko.types` (TYPES tier); `riko/types/_pipeline.py` was deleted with the v1 compiler at cutover step 5 (2026-10-03) |
 | `riko/types/_resource.py` | resource factory/kind type contracts, factory classification (`get_factory_kind`, `VALUE_FACTORY_KINDS`), and the lifecycle/context-manager guards, used by definitions and execution |
 | `riko/types/_enums.py` | shared enums and enum-like aliases, including serialization format typing |
@@ -173,7 +173,7 @@ write/session contracts.
 | `riko/cli/_gen_api_surface.py` | regenerates marked name blocks in `_docs/API_SURFACE.md` from `riko/base/_api_surface.py` |
 | `riko/cli/_workflow.py` | shared JSON document front door for the console scripts: `DocumentFormat`, `read_document`, `get_document_format`, the lenient `normalize_document`, and the `WorkflowDocument`-only `require_workflow` |
 | `riko/cli/{compile,build_workflow,runpipe,benchmark}.py` | standalone console-script implementations, all on canonical Workflow v2: `build-workflow` is the one lenient converter, `compile-workflow` generates from `WorkflowDocument`s only, `run-pipe` runs a script or a `WorkflowDocument`, `benchmark` times `Pipeline` and workflow execution |
-| `riko/cli/{_build,_docs,_docstyle,_lint_deps,_lint_literals,_lint_terms,_shipped_text,_release,_test,_upgrade}.py` | private `manage` command helpers grouped by reason to change |
+| `riko/cli/{_build,_docs,_docstyle,_lint_deps,_lint_literals,_lint_terms,_release,_shipped_text,_test,_upgrade}.py` | private `manage` command helpers grouped by reason to change |
 
 Use `_docs/gameplans/dependency-layers.md` when deciding **which package** should own
 new code. Use this file when deciding **which existing module** is the closest home.

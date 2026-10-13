@@ -21,9 +21,7 @@ if TYPE_CHECKING:
 
 # Keep this module independent of riko.ext. It is imported while riko.modules is still
 # initializing.
-def _get_operator_subtypes(
-    pipe: ModuleParser,
-) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
+def _get_operator_subtypes(pipe: ModuleParser) -> tuple[ModuleSubtype, ModuleSubtypes]:
     subtype: ModuleSubtype | None = None
     subtypes: ModuleSubtypes = set()
     reasons: list[str] = []
@@ -45,7 +43,7 @@ def _get_operator_subtypes(
         if subtype and subtypes == {"aggregator", "composer"}:
             break
 
-    if not subtypes:
+    if subtype is None:
         qualified_name = f"{pipe.__module__}.{pipe.__name__}"
         msg = f"{qualified_name} no supported subtypes found"
 
@@ -66,11 +64,11 @@ def get_module_subtypes(
     module_type: ModuleType | str,
     ftype: BasicCastType | None = None,
     **kwargs: object,
-) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
+) -> tuple[ModuleSubtype, ModuleSubtypes]:
     if module_type == "processor":
         none_ftype = ftype == BasicCastType.NONE
         subtype = "source" if none_ftype else "transformer"
-        result: tuple[ModuleSubtype | None, ModuleSubtypes] = subtype, {subtype}
+        result: tuple[ModuleSubtype, ModuleSubtypes] = subtype, {subtype}
     elif module_type == "splitter":
         result = "splitter", {"splitter"}
     else:

@@ -76,7 +76,7 @@ class PreCaster[T](TypedDict):
     func: Caster[T]
 
 
-type Dispatcher[T, E] = Callable[[Item, DecorationOptions], ItemDispatch[T, E]]
+type ItemDispatcher[T, E] = Callable[[Item, DecorationOptions], ItemDispatch[T, E]]
 type ConversionOutput = Iterable[str] | StringIO
 type ConversionFunc = Callable[..., ConversionOutput]
 
@@ -122,6 +122,18 @@ class CastFuncs[T, E](NamedTuple):
     conf_caster: SyncConfCastFunc
 
 
+class PreparedCall(Protocol):
+    """A module call with everything but the item bound; called once per item."""
+
+    def __call__(  # noqa: E704
+        self,
+        item: Item | None = None,
+        *,
+        context: Context | None = None,
+        **options: object,
+    ) -> WrapperOutput: ...
+
+
 class ModuleWrapper(Protocol):
     __name__: str
     __qualname__: str
@@ -137,6 +149,92 @@ class ModuleWrapper(Protocol):
     pollable: bool
     loopable: bool
     isasync: bool
+
+    def prepare(
+        self, conf: Conf | DynamicConf | None = None, **options: object
+    ) -> PreparedCall:
+        """
+        Binds a call's configuration and call options once for reuse over many items.
+
+        The ``context`` is supplied with each item call rather than bound here.
+
+        Args:
+
+            conf: The module configuration.
+            options: Call options to bind.
+
+        Returns:
+
+            A call that takes one item at a time.
+
+        """
+        ...
+
+
+WRAPPER_META: tuple[str, ...] = (
+    "name",
+    "type",
+    "subtype",
+    "subtypes",
+    "pollable",
+    "loopable",
+    "isasync",
+)
+
+
+def stamp_wrapper_meta(
+    target: Callable[..., object],
+    *,
+    name: str,
+    module_type: ModuleType | str,
+    subtype: ModuleSubtype,
+    subtypes: ModuleSubtypes,
+    pollable: bool,
+    loopable: bool,
+    isasync: bool,
+) -> None:
+    """
+    Stamps the discovery metadata every module wrapper carries onto ``target``.
+
+    Afterwards ``target`` carries every attribute named in ``WRAPPER_META``.
+
+    Args:
+
+        target: The callable to annotate in place.
+        name: The module name.
+        module_type: The module kind, e.g., "processor" (stored as ``type``).
+        subtype: The primary module subtype.
+        subtypes: Every subtype the module supports.
+        pollable: Whether the module can be polled.
+        loopable: Whether ``loop`` can embed the module.
+        isasync: Whether ``target`` is the async interface.
+
+    Examples:
+
+        >>> def pipe(item=None, **kwargs):
+        ...     return iter([])
+        >>>
+        >>> stamp_wrapper_meta(
+        ...     pipe,
+        ...     name="mine",
+        ...     module_type="processor",
+        ...     subtype="transformer",
+        ...     subtypes={"transformer"},
+        ...     pollable=False,
+        ...     loopable=True,
+        ...     isasync=False,
+        ... )
+        >>> pipe.type, pipe.isasync
+        ('processor', False)
+
+    """
+    setattr(target, "name", name)  # noqa: B010
+    setattr(target, "type", module_type)  # noqa: B010
+    setattr(target, "subtype", subtype)  # noqa: B010
+    setattr(target, "subtypes", subtypes)  # noqa: B010
+    setattr(target, "pollable", pollable)  # noqa: B010
+    setattr(target, "loopable", loopable)  # noqa: B010
+    setattr(target, "isasync", isasync)  # noqa: B010
 
 
 class SyncModuleWrapper(ModuleWrapper, Protocol):
@@ -411,3 +509,26 @@ class Resolver(Protocol):
 
     def is_compatible(self, name: str) -> bool: ...  # noqa: E704
     def require_interfaces(self, name: str) -> frozenset[Interface]: ...  # noqa: E704
+
+
+class Dispatcher(Protocol):
+    """
+    Finds a module's or stored workflow's pipe by name for execution planning.
+
+    Names are module names such as ``fetch`` or stored workflows' ``pipe_<id>``
+    names.
+    """
+
+    def validate(self, name: str) -> None: ...  # noqa: E704
+
+    @overload
+    def resolve(  # noqa: E704
+        self, name: str, is_async: Literal[False] = ...
+    ) -> SyncModuleWrapper | None: ...
+    @overload  # noqa: E301
+    def resolve(  # noqa: E704
+        self, name: str, is_async: Literal[True]
+    ) -> AsyncModuleWrapper | None: ...
+    def resolve(  # noqa: E301, E704
+        self, name: str, is_async: bool = False
+    ) -> ModuleWrapper | None: ...

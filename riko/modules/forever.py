@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 import pygogo as gogo
 
+from riko.base._constants import FOREVER_ITEM
 from riko.coercion.cast import SourceOpts
 
 from ._decorators import processor
@@ -68,7 +69,7 @@ def parser(
         {'forever': True}
 
     """
-    return takewhile(bool, repeat({"forever": True}))
+    return takewhile(bool, repeat(dict(FOREVER_ITEM)))
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

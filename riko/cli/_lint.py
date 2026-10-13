@@ -18,15 +18,15 @@ from riko.base._paths import PACKAGE_DIR, ROOT_DIR
 
 from ._build import _twine_check
 from ._docs import _lint_docs, _lint_rst
-from ._docstyle import format_issue, iter_summary_issues
+from ._docstyle import format_issue, gen_summary_issues
 from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
 from ._lint_deps import (
     format_dependency_issue,
     gen_dependency_issues,
     gen_hook_pin_issues,
 )
-from ._lint_literals import format_literal_issue, iter_literal_issues
-from ._lint_terms import format_term_issue, iter_term_issues
+from ._lint_literals import format_literal_issue, gen_literal_issues
+from ._lint_terms import format_term_issue, gen_term_issues
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -93,7 +93,7 @@ def _lint_python_strict(parallel: bool = False) -> int:
 def _lint_docstrings(where: str | None = "") -> int:
     """Checks that no docstring summary leads with Returns or Yields."""
     roots = [Path(p) for p in where.split(" ")] if where else [Path("riko")]
-    issues = list(iter_summary_issues(*roots))
+    issues = list(gen_summary_issues(*roots))
 
     for issue in issues:
         print(format_issue(issue))
@@ -104,7 +104,7 @@ def _lint_docstrings(where: str | None = "") -> int:
 def _lint_terms(where: str | None = "") -> int:
     """Checks shipped text for phrases the reserved-terms rules replace."""
     names = where.split(" ") if where else _TEXT_ROOTS
-    issues = list(iter_term_issues(*(ROOT_DIR / name for name in names)))
+    issues = list(gen_term_issues(*(ROOT_DIR / name for name in names)))
 
     for issue in issues:
         print(format_term_issue(issue))
@@ -115,7 +115,7 @@ def _lint_terms(where: str | None = "") -> int:
 def _lint_literals(where: str | None = "") -> int:
     """Checks shipped text for inline literals that break the quoting rules."""
     names = where.split(" ") if where else _TEXT_ROOTS
-    issues = list(iter_literal_issues(*(ROOT_DIR / name for name in names)))
+    issues = list(gen_literal_issues(*(ROOT_DIR / name for name in names)))
 
     for issue in issues:
         print(format_literal_issue(issue))

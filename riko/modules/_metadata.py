@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 from riko.base._imports import import_or_else
 from riko.definitions.modules import ModuleDefinition, normalize_module_name
 from riko.runtime._module_registry import module_registry
+from riko.types._wrappers import WRAPPER_META
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
 if TYPE_CHECKING:
@@ -44,7 +45,7 @@ SUBTYPES: dict[ModuleSubtype, ModuleType] = {
 def _metadata_from_targets(
     name: str, targets: tuple[ModuleWrapper, ...], *, label: str, strict_naming: bool
 ) -> ModuleMetadata | None:
-    attrs = ("name", "type", "subtype", "subtypes", "pollable", "loopable")
+    attrs = tuple(attr for attr in WRAPPER_META if attr != "isasync")
 
     if len(targets) == 2:
         for attr in attrs:

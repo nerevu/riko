@@ -11,11 +11,15 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from riko.ext import operator
+from riko.ext import operator, processor
 from riko.modules._metadata import get_module_metadata
+from riko.runtime._workflows import mark_subpipe
+from riko.types._wrappers import WRAPPER_META, stamp_wrapper_meta
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from riko.types._streams import Item
 
 
 def test_operator_metadata():
@@ -99,3 +103,56 @@ def test_unknown_module_metadata_is_none():
 def test_unknown_module_metadata_raises_when_strict():
     with pytest.raises(ValueError, match="has no metadata"):
         get_module_metadata("not_a_builtin_module", strict=True)
+
+
+def _carries_wrapper_meta(func: object) -> bool:
+    return all(hasattr(func, attr) for attr in WRAPPER_META)
+
+
+def test_stamped_function_carries_wrapper_meta():
+    def pipe(item=None, **kwargs):
+        return iter([])
+
+    stamp_wrapper_meta(
+        pipe,
+        name="mine",
+        module_type="processor",
+        subtype="transformer",
+        subtypes={"transformer"},
+        pollable=False,
+        loopable=True,
+        isasync=False,
+    )
+    assert _carries_wrapper_meta(pipe)
+
+
+def test_marked_subpipe_carries_wrapper_meta():
+    def pipe(item=None, **kwargs):
+        return iter([])
+
+    async def async_pipe(item=None, **kwargs):
+        yield {}
+
+    def other(item=None, **kwargs):
+        return iter([])
+
+    sync_subpipe = mark_subpipe(pipe)
+    async_subpipe = mark_subpipe(async_pipe)
+
+    assert _carries_wrapper_meta(sync_subpipe)
+    assert _carries_wrapper_meta(async_subpipe)
+    assert not sync_subpipe.isasync
+    assert async_subpipe.isasync
+    assert mark_subpipe(other, isasync=True).isasync
+
+
+def test_decorated_wrappers_carry_wrapper_meta():
+    def shout(item: Item, *args, **kwargs) -> str:
+        return str(item.get("content", "")).upper()
+
+    def total(*args: Any, **kwargs: object) -> int:
+        return 1
+
+    assert _carries_wrapper_meta(processor()(shout))
+    assert _carries_wrapper_meta(processor(isasync=True)(shout))
+    assert _carries_wrapper_meta(operator()(total))

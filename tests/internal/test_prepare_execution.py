@@ -11,6 +11,7 @@ import pytest
 from riko.bado._backend import async_sleep, asyncify, create_task_group, fail_after
 from riko.bado._util import maybe_async
 from riko.bado.itertools import as_async
+from riko.base._graph import descendants
 from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
 from riko.definitions import _workflow as workflow_definitions
 from riko.definitions._context import Context
@@ -41,13 +42,16 @@ from riko.runtime._module_registry import (
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflows import mark_subpipe, workflow_resolver
+from riko.types import _workflow as workflow_types
 from riko.types._enums import BasicCastType
 from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
+from riko.types._wrappers import stamp_wrapper_meta
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+    from riko.types._collections import FrozenSetMapping
     from riko.types._streams import AsyncItemGenerator, Cascade
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
     from riko.types.modules import CallOptions
@@ -88,6 +92,26 @@ def test_graph_index_derives_and_freezes_from_its_inputs() -> None:
 
     with pytest.raises(TypeError):
         index.outputs["extra"] = Endpoint("a", "out")  # type: ignore[index]
+
+
+def test_graph_index_derives_on_first_use(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def counting(source: str, graph: FrozenSetMapping) -> frozenset[str]:
+        calls.append(source)
+        return descendants(source, graph)
+
+    monkeypatch.setattr(workflow_types, "descendants", counting)
+    edge = GraphEdge("a", "b", "out", "in")
+    outputs = {"default": Endpoint("b", "out")}
+    index = GraphIndex(["a", "b"], [edge], outputs)
+
+    assert index.cyclic == ()
+    assert index.order == ("a", "b")
+    assert calls == []
+    assert index.required["default"] == frozenset({"a", "b"})
+    assert len(calls) == 1
+    assert index == GraphIndex(["a", "b"], [edge], outputs)
 
 
 def test_workflow_index_orders_and_indexes() -> None:
@@ -331,6 +355,19 @@ def _tagged_source(tag):
         yield {"t": tag}
 
     return cast("SyncModuleWrapper", src)
+
+
+def _stamp_embed(up, *, isasync: bool) -> None:
+    stamp_wrapper_meta(
+        up,
+        name="up",
+        module_type="processor",
+        subtype="transformer",
+        subtypes={"transformer"},
+        pollable=False,
+        loopable=True,
+        isasync=isasync,
+    )
 
 
 def test_run_wires_others_ordered_by_port_index() -> None:
@@ -1058,6 +1095,7 @@ def test_run_adapts_async_only_embed_under_sync() -> None:
         for row in items:
             yield from embed(row)
 
+    _stamp_embed(up, isasync=True)
     dispatcher = _dispatcher(
         ModuleDefinition(name="src", sync_pipe=_tagged_source("x")),
         ModuleDefinition(
@@ -1628,6 +1666,7 @@ async def test_arun_runs_sync_only_embed_off_the_event_loop() -> None:
             for value in await maybe_async(embed, row):
                 yield value
 
+    _stamp_embed(up, isasync=False)
     dispatcher = _dispatcher(
         ModuleDefinition(name="src", sync_pipe=_tagged_source("x")),
         ModuleDefinition(
@@ -1659,6 +1698,7 @@ async def test_arun_adapts_async_only_embed_for_a_sync_loop_on_a_worker() -> Non
         for row in items:
             yield from embed(row)
 
+    _stamp_embed(up, isasync=True)
     dispatcher = _dispatcher(
         ModuleDefinition(name="src", sync_pipe=_tagged_source("x")),
         ModuleDefinition(

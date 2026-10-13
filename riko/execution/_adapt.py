@@ -11,12 +11,11 @@ private to the runtime and belong to no supported surface.
 from __future__ import annotations
 
 from collections.abc import AsyncIterable, AsyncIterator, Generator, Iterable, Iterator
-from itertools import chain
 from typing import TYPE_CHECKING, Any, cast
 
 from riko.types._guards import is_listlike
 from riko.types._sentinels import MISSING
-from riko.types._wrappers import require_single_output
+from riko.types._wrappers import require_single_output, stamp_wrapper_meta
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -36,7 +35,6 @@ type LoopCall = Callable[[Callable[[], Any]], Any]
 type WorkerCall = Callable[..., Awaitable[Any]]
 type Drain[T] = Callable[[AsyncIterable[T]], Iterator[T]]
 
-_WRAPPER_META = ("name", "type", "subtype", "subtypes", "pollable", "loopable")
 _FUNC_META = ("__name__", "__qualname__", "__doc__")
 
 
@@ -181,14 +179,14 @@ async def pull_stream[T](
 
 
 def _copy_wrapper_meta(
-    target: Callable[..., object], source: object, *, isasync: bool
+    target: Callable[..., object], source: ModuleWrapper, *, isasync: bool
 ) -> None:
     """
     Stamps ``source``'s discovery metadata onto ``target`` as sync or async.
 
-    Attributes ``source`` does not carry are skipped, and ``__wrapped__`` is left
-    unset so an ``unwrap``-based guard cannot see past the adapter to a callable
-    of the other kind (sync or async).
+    ``target`` also takes whichever of ``source``'s name, qualified name, and
+    docstring it carries. ``__wrapped__`` is left unset so an ``unwrap``-based guard
+    cannot see past the adapter to a callable of the other kind (sync or async).
 
     Args:
 
@@ -197,11 +195,20 @@ def _copy_wrapper_meta(
         isasync: Whether the adapter presents the asynchronous interface.
 
     """
-    for attr in chain(_WRAPPER_META, _FUNC_META):
+    stamp_wrapper_meta(
+        target,
+        name=source.name,
+        module_type=source.type,
+        subtype=source.subtype,
+        subtypes=source.subtypes,
+        pollable=source.pollable,
+        loopable=source.loopable,
+        isasync=isasync,
+    )
+
+    for attr in _FUNC_META:
         if hasattr(source, attr):
             setattr(target, attr, getattr(source, attr))
-
-    setattr(target, "isasync", isasync)  # noqa: B010
 
 
 def _materialize(

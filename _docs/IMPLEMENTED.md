@@ -363,8 +363,8 @@ derived from `downstream`; `outputs` are the workflow's named outputs; `required
 its node plus everything upstream; `cyclic` names the nodes a
 cycle passes through). The index derives and freezes itself: `GraphIndex` takes only node ids, `GraphEdge`s
 (`Workflow.graph_edges`), and the named-output `Endpoint`s (converted with `tuple`/`FrozenDict`, the
-`Workflow` converter pattern); every other field is `field(init=False, default=Factory(..., takes_self=True))`,
-the `ExecutionPlan` pattern, so even a hand-built index is internally consistent. `OutputRef` is gone —
+`Workflow` converter pattern); every other attribute is a `functools.cached_property`
+derived on first use, so even a hand-built index is internally consistent. `OutputRef` is gone —
 outputs are plain `Endpoint`s. `order` comes
 from `topological_sort` (`riko/base/_graph.py`): one-node groups in `graphlib` order for an acyclic
 graph, strongly connected components for a cyclic one; `cyclic` is `cyclic_nodes` over those groups
@@ -851,7 +851,9 @@ run:
   other side's callable (`AnyModuleWrapper`), touching no registry. `ResolvedModule.is_async_pipe(pipe)` is a
   `TypeIs[AsyncModuleWrapper]` guard keyed on slot identity (`pipe is self.async_pipe`), so it narrows the
   callable with no cast and works for undecorated callables (documented `ModuleDefinition(sync_pipe=plain)`
-  and `WorkflowResolver` subpipes carry no `isasync`). A callable filling both slots is rejected at
+  carries no `isasync`). `WorkflowResolver.require` tags a stored workflow's interface with the `isasync` of the
+  slot it loaded rather than guessing from the callable; `mark_subpipe` alone defaults it from
+  `is_async_callable`/`isasyncgenfunction`. A callable filling both slots is rejected at
   construction, since slot identity could not tell its mode.
 - `SyncExecution.run(plan, output="default")` runs only the selected output's dependency subgraph in
   topological order and returns that output's stream, seeding source nodes at one normalization

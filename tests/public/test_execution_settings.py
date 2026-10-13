@@ -216,11 +216,11 @@ class TestExecutionSettings:
         assert _by_content(executed) == _by_content(pipeline)
 
     def test_no_settings_preserve_source_order(self):
-        pipeline = Pipeline(source=SRC).hash(options={"assign": "h"})
+        pipeline = Pipeline[dict[str, object]](source=SRC).hash(options={"assign": "h"})
         assert [item["content"] for item in pipeline] == ["a", "b", "c"]
 
     def test_inline_executor_preserves_source_order(self):
-        pipeline = Pipeline(source=SRC).hash(options={"assign": "h"})
+        pipeline = Pipeline[dict[str, object]](source=SRC).hash(options={"assign": "h"})
         inline = pipeline.with_execution(executor="inline", concurrency=4)
         assert [item["content"] for item in inline] == ["a", "b", "c"]
 

@@ -307,10 +307,6 @@ def reduce_find(word: str, rule: FindConfRule, literal: bool = False) -> str:
     return result.strip()
 
 
-def slugify(text: str) -> str:
-    return text.lower().strip().replace(" ", "-")
-
-
 def get_doc_summary(obj: object) -> str | None:
     """
     Gets the first non-blank line of an object's docstring.

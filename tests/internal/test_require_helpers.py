@@ -18,7 +18,7 @@ from riko.types._collections import (
     require_str,
     require_strlike,
 )
-from riko.types._enums import resolve_enum
+from riko.types._enums import Executor, resolve_enum
 from riko.types._guards import require_mapping, require_sequence
 from riko.types._workflow import Endpoint
 
@@ -50,6 +50,13 @@ def test_caller_can_pick_the_error(require, value):
 def test_resolve_enum_defaults_to_the_document_error(value):
     with pytest.raises(InvalidPipelineError, match="WriteMode"):
         resolve_enum(WriteMode, value)
+
+
+def test_resolve_enum_lists_the_accepted_values():
+    with pytest.raises(ValueError, match="'bogus'") as excinfo:
+        resolve_enum(Executor, "bogus", error=ValueError)
+
+    assert all(name in str(excinfo.value) for name in Executor)
 
 
 @pytest.mark.parametrize(

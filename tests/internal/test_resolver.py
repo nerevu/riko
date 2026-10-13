@@ -376,6 +376,19 @@ class TestWorkflowResolver:
         resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": module}))
         assert resolver.require_interfaces("pipe:demo") == {"pipe"}
 
+    def test_async_interface_is_tagged_async_whatever_its_name(self):
+        """An async interface not named ``async_pipe`` is still tagged async."""
+
+        async def gen_items(item=None, **kwargs):
+            yield {"x": 1}
+
+        module = ModuleType("pipe_demo")
+        setattr(module, "pipe", lambda item=None, **kwargs: iter([]))  # noqa: B010
+        setattr(module, "async_pipe", gen_items)  # noqa: B010
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": module}))
+        assert resolver.require("pipe:demo", is_async=True).isasync
+        assert not resolver.require("pipe:demo").isasync
+
     def test_second_document_store_requires_replace(self, tmp_path):
         resolver = WorkflowResolver(document_store=DirectoryStore(tmp_path))
 

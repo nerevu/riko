@@ -24,12 +24,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from functools import partial
+from functools import cached_property, partial
 from itertools import chain
+from operator import attrgetter
 from types import ModuleType
 from typing import TYPE_CHECKING, ClassVar, Literal, NewType, Required, TypedDict, cast
 
-from attrs import Factory, define, field
+from attrs import define, field
 
 from riko.base._graph import (
     cyclic_nodes,
@@ -50,7 +51,7 @@ from ._collections import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from ._collections import FrozenSetMapping, FrozenTupleMapping
     from ._compiler import Embed
@@ -243,51 +244,6 @@ class GraphEdge:
         return parse_port(self.target_port).is_positional
 
 
-_order = Factory(lambda self: tuple(chain.from_iterable(self._groups)), takes_self=True)
-_leaves = Factory(lambda self: tuple(leaves(self.downstream)), takes_self=True)
-_upstream = Factory(
-    lambda self: freeze(reverse_graph(self.downstream)), takes_self=True
-)
-_comps = Factory(lambda self: tuple(topological_sort(self.downstream)), takes_self=True)
-
-
-def _incoming(self: GraphIndex) -> FrozenTupleMapping:
-    grouped: dict[str, list[GraphEdge]] = defaultdict(list)
-
-    for edge in self.edges:
-        grouped[edge.target].append(edge)
-
-    return FrozenDict.from_frozen(map_values(tuple, grouped))
-
-
-def _outgoing(self: GraphIndex) -> FrozenTupleMapping:
-    grouped: dict[str, list[GraphEdge]] = defaultdict(list)
-
-    for edge in self.edges:
-        grouped[edge.source].append(edge)
-
-    return freeze(grouped)
-
-
-def _downstream(self: GraphIndex) -> FrozenSetMapping:
-    pairs = ((edge.source, edge.target) for edge in self.edges)
-    return freeze(edges_to_graph(pairs, *self.nodes))
-
-
-def _cyclic(self: GraphIndex) -> tuple[str, ...]:
-    return tuple(sorted(cyclic_nodes(self.downstream, list(self._groups))))
-
-
-def _roots(self: GraphIndex) -> tuple[str, ...]:
-    return tuple(node for node in self.order if not self.upstream[node])
-
-
-def _required(self: GraphIndex) -> FrozenSetMapping:
-    reach = partial(descendants, graph=self.upstream)
-    items = self.outputs.items()
-    return FrozenDict({name: reach(ref.node) | {ref.node} for name, ref in items})
-
-
 @define(frozen=True, slots=True)
 class GraphIndex:
     """
@@ -331,28 +287,57 @@ class GraphIndex:
     nodes: tuple[str, ...] = field(converter=tuple)
     edges: tuple[GraphEdge, ...] = field(converter=tuple)
     outputs: FrozenDict[str, Endpoint] = field(converter=FrozenDict)
-    incoming: FrozenTupleMapping = field(
-        init=False, default=Factory(_incoming, takes_self=True)
-    )
-    outgoing: FrozenTupleMapping = field(
-        init=False, default=Factory(_outgoing, takes_self=True)
-    )
-    downstream: FrozenSetMapping = field(
-        init=False, default=Factory(_downstream, takes_self=True)
-    )
-    upstream: FrozenSetMapping = field(init=False, default=_upstream)
-    _groups: tuple[tuple[str, ...], ...] = field(
-        init=False, default=_comps, repr=False, eq=False
-    )
-    order: tuple[str, ...] = field(init=False, default=_order)
-    cyclic: tuple[str, ...] = field(
-        init=False, default=Factory(_cyclic, takes_self=True)
-    )
-    roots: tuple[str, ...] = field(init=False, default=Factory(_roots, takes_self=True))
-    leaves: tuple[str, ...] = field(init=False, default=_leaves)
-    required: FrozenSetMapping = field(
-        init=False, default=Factory(_required, takes_self=True)
-    )
+
+    def _group_edges(self, key: Callable[[GraphEdge], str]) -> FrozenTupleMapping:
+        grouped: dict[str, list[GraphEdge]] = defaultdict(list)
+
+        for edge in self.edges:
+            grouped[key(edge)].append(edge)
+
+        return FrozenDict.from_frozen(map_values(tuple, grouped))
+
+    @cached_property
+    def incoming(self) -> FrozenTupleMapping:
+        return self._group_edges(attrgetter("target"))
+
+    @cached_property
+    def outgoing(self) -> FrozenTupleMapping:
+        return self._group_edges(attrgetter("source"))
+
+    @cached_property
+    def downstream(self) -> FrozenSetMapping:
+        pairs = ((edge.source, edge.target) for edge in self.edges)
+        return freeze(edges_to_graph(pairs, *self.nodes))
+
+    @cached_property
+    def upstream(self) -> FrozenSetMapping:
+        return freeze(reverse_graph(self.downstream))
+
+    @cached_property
+    def _groups(self) -> tuple[tuple[str, ...], ...]:
+        return tuple(topological_sort(self.downstream))
+
+    @cached_property
+    def order(self) -> tuple[str, ...]:
+        return tuple(chain.from_iterable(self._groups))
+
+    @cached_property
+    def cyclic(self) -> tuple[str, ...]:
+        return tuple(sorted(cyclic_nodes(self.downstream, list(self._groups))))
+
+    @cached_property
+    def roots(self) -> tuple[str, ...]:
+        return tuple(node for node in self.order if not self.upstream[node])
+
+    @cached_property
+    def leaves(self) -> tuple[str, ...]:
+        return tuple(leaves(self.downstream))
+
+    @cached_property
+    def required(self) -> FrozenSetMapping:
+        reach = partial(descendants, graph=self.upstream)
+        items = self.outputs.items()
+        return FrozenDict({name: reach(ref.node) | {ref.node} for name, ref in items})
 
     def is_open(self, node: str) -> bool:
         """Reports whether ``node``'s default input port is free for a seed to feed."""

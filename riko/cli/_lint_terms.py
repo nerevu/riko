@@ -94,7 +94,7 @@ class TermIssue(NamedTuple):
     term: BannedTerm
 
 
-def iter_term_issues(*roots: Path) -> Iterator[TermIssue]:
+def gen_term_issues(*roots: Path) -> Iterator[TermIssue]:
     """
     Walks ``roots`` for banned phrases in Python strings/comments and prose files.
 
@@ -128,5 +128,5 @@ __all__ = [
     "BannedTerm",
     "TermIssue",
     "format_term_issue",
-    "iter_term_issues",
+    "gen_term_issues",
 ]

@@ -20,6 +20,7 @@ from riko.base._dateutils import (
     get_tzname,
     load_local_tz,
     resolve_tt_tzinfo,
+    resolve_tzinfo,
 )
 
 if TYPE_CHECKING:
@@ -237,7 +238,7 @@ def resolve_aware_datetime(  # noqa: E302
         except (ValueError, TypeError):
             _date = parse_date_string(_date)
 
-    if get_tzname(_date):
+    if _date is not None and resolve_tzinfo(_date) is not None:
         new_date = _date
     else:
         _tzinfo = load_local_tz(try_local_tz, fallback_tzinfo)

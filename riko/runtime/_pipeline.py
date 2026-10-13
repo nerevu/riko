@@ -22,7 +22,7 @@ Examples:
 from __future__ import annotations
 
 from contextlib import aclosing, closing
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, overload
 
 from attrs import define
 from typing_extensions import TypeVar
@@ -30,6 +30,7 @@ from typing_extensions import TypeVar
 from riko.base.exceptions import EmptyPipelineError
 from riko.definitions._workflow import PipelineDefinition
 from riko.types._sentinels import MISSING, MissingType
+from riko.types._streams import Item
 
 from ._execution_plan import arun_pipeline, run_pipeline
 from ._resolver import dispatcher
@@ -37,7 +38,7 @@ from ._resolver import dispatcher
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 
-T = TypeVar("T", default=Any)
+T = TypeVar("T", default=Item)
 
 
 @define(frozen=True, slots=True)
@@ -84,7 +85,13 @@ class Pipeline(PipelineDefinition[T]):
         """
         return arun_pipeline(self, dispatcher)
 
-    def first(self, default: T | MissingType = MISSING) -> T:
+    @overload
+    def first(self) -> T: ...  # noqa: E704
+    @overload  # noqa: E301
+    def first[D](self, default: D) -> T | D: ...  # noqa: E704
+    def first[D](  # noqa: E301
+        self, default: D | MissingType = MISSING
+    ) -> T | D:
         """
         Runs the pipeline just long enough to read its first item.
 
@@ -119,7 +126,13 @@ class Pipeline(PipelineDefinition[T]):
 
         return item
 
-    async def afirst(self, default: T | MissingType = MISSING) -> T:
+    @overload
+    async def afirst(self) -> T: ...  # noqa: E704
+    @overload  # noqa: E301
+    async def afirst[D](self, default: D) -> T | D: ...  # noqa: E704
+    async def afirst[D](  # noqa: E301
+        self, default: D | MissingType = MISSING
+    ) -> T | D:
         """
         Asynchronously runs the pipeline just long enough to read its first item.
 

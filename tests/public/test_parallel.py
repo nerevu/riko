@@ -52,7 +52,7 @@ def _tokenized() -> Pipeline:
     return source.tokenizer(options={"emit": True}).hash(options={"assign": "h"})
 
 
-def _fanned_in(names: tuple[str, ...]) -> Pipeline:
+def _fanned_in(names: tuple[str, ...]) -> Pipeline[dict[str, str]]:
     """Builds a pipeline whose single union node merges one branch per name."""
     branches = [
         ModuleNode(id=f"b{index}", name=name) for index, name in enumerate(names)
@@ -69,7 +69,7 @@ def _fanned_in(names: tuple[str, ...]) -> Pipeline:
         outputs={"default": Endpoint(union.id, "out")},
         inputs={},
     )
-    return Pipeline(workflow)
+    return Pipeline[dict[str, str]](workflow)
 
 
 @pytest.fixture

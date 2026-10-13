@@ -40,7 +40,6 @@ from inspect import isawaitable
 from itertools import chain
 from typing import (
     TYPE_CHECKING,
-    Any,
     ClassVar,
     Generic,
     Literal,
@@ -87,6 +86,7 @@ from riko.types._guards import (
     require_sequence,
 )
 from riko.types._sentinels import MISSING, MissingType
+from riko.types._streams import Item
 from riko.types._workflow import (
     WORKFLOW_VERSION,
     Edge,
@@ -136,7 +136,7 @@ _EMPTY_RESOURCES: tuple[str, ...] = ()
 EMPTY_BINDINGS: FrozenDict[str, str] = FrozenDict()
 FROZEN_CONF: FrozenConf = FrozenDict()
 
-T = TypeVar("T", default=Any)
+T = TypeVar("T", default=Item)
 type WorkflowLike = Workflow | RawWorkflow | Mapping[str, object]
 type ConfInput = MaybeFrozenConf | Mapping[str, ConfValues]
 type OptionsInput = CallOptions | FrozenOptions | Mapping[str, OptionValues]
@@ -949,18 +949,20 @@ class PipelineDefinition(Generic[T]):
         Args:
 
             executor: Picks where per-item work runs: ``"auto"``, ``"inline"``,
-                ``"thread"``, or ``"process"``. ``None`` selects ``"auto"``.
+                ``"thread"``, or ``"process"`` (default: "auto").
 
             concurrency: Max number of items that item-wise modules can work on at once
                 across the whole run. ``"auto"`` selects a size based on the machine.
-                ``None`` selects sequential processing.
+                (default: None, sequential processing).
 
-            ordered: Restores result source order. ``None`` selects completion order.
+            ordered: Whether results keep source order (default: False, completion
+                order).
 
-            event_sink: The sink that receives the run's events; ``None`` discards them.
+            event_sink: The sink that receives the run's events (default: None, events
+                are discarded).
 
-            shutdown_timeout: The bound, in seconds, on teardown under
-                asynchronous iteration; ``None`` removes the bound.
+            shutdown_timeout: The bound, in seconds, on teardown under asynchronous
+                iteration (default: None, no bound).
 
         Returns:
 

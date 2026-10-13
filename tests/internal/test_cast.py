@@ -2,11 +2,12 @@
 """Tests documented date coercion forms and timezone normalization."""
 
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta, tzinfo
 
 import pytest
 from dateutil.relativedelta import relativedelta
 
+from riko.coercion._dates import resolve_aware_datetime
 from riko.coercion.cast import cast_datetime
 
 
@@ -47,6 +48,26 @@ def test_documented_epoch_value():
     result = cast_datetime(1181230100)
     assert result is not None
     assert int(result.timestamp()) == 1181230100
+
+
+class NamelessZone(tzinfo):
+    def tzname(self, dt: datetime | None) -> None:
+        return None
+
+    def utcoffset(self, dt: datetime | None) -> timedelta:
+        return timedelta(0)
+
+    def dst(self, dt: datetime | None) -> timedelta:
+        return timedelta(0)
+
+
+def test_resolve_aware_datetime_keeps_a_nameless_zone():
+    zone = NamelessZone()
+    result = resolve_aware_datetime(
+        datetime(2020, 1, 1, tzinfo=zone), try_local_tz=False
+    )
+    assert isinstance(result, datetime)
+    assert result.tzinfo is zone
 
 
 class TestTryLocalTz:

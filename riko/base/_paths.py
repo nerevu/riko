@@ -13,7 +13,6 @@ Examples:
 
 """
 
-from functools import partial
 from os import path
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -39,7 +38,22 @@ def normalize_url(url: str, absolute: bool = True, offline: bool = False) -> str
     return url
 
 
-get_path: partial[str] = partial(normalize_url, absolute=False, offline=True)
+def get_path(name: str) -> str:
+    """
+    Builds the ``file://`` URL for a bundled data file name.
+
+    A name that is already an ``http`` or ``file:`` URL passes through unchanged.
+
+    Args:
+
+        name: A file name in riko's bundled ``data`` directory, or a URL.
+
+    Returns:
+
+        The URL to read.
+
+    """
+    return normalize_url(name, absolute=False, offline=True)
 
 
 @overload

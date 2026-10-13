@@ -50,10 +50,8 @@ INPUT_PORT = "_INPUT"
 OUTPUT_PORT = "_OUTPUT"
 OTHER_PORT = "_OTHER"
 OUTPUT_MODULE = "output"
-
-SINK_NAMES: frozenset[str] = frozenset({OUTPUT_MODULE, "write"})
-
 SUBPIPE_TYPE = "pipe"
+SINK_NAMES: frozenset[str] = frozenset({OUTPUT_MODULE, "write"})
 PIPE_ID_PREFIXES: tuple[str, ...] = ("pipe_", "pipe:")
 
 

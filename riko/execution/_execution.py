@@ -39,8 +39,10 @@ from riko.bado._backend import (
 )
 from riko.bado._util import as_awaitable
 from riko.bado.itertools import as_async, async_map_ordered_stream, async_map_stream
+from riko.base._constants import FOREVER_ITEM
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._execution import DEF_EXECUTION_SETTINGS, ExecutionSettings
+from riko.types._collections import FrozenDict
 from riko.types._compiler import ModuleOptionValues
 from riko.types._enums import Executor
 from riko.types._guards import is_async_callable
@@ -90,7 +92,7 @@ if TYPE_CHECKING:
     from riko.types._events import EventSink
     from riko.types._resource import Cleanup
     from riko.types._sentinels import MissingType
-    from riko.types._streams import AnyIterable, Item
+    from riko.types._streams import AnyIterable
     from riko.types._workflow import Endpoint, GraphEdge
     from riko.types._wrappers import AnyModuleWrapper, AsyncFunc, SyncModuleWrapper
 
@@ -109,7 +111,7 @@ type ExtraOutput[T] = dict[str, ExtraValues[T]]
 type Acquisition = _Acquired | _FailedAcquisition
 type Acquisitions = dict[Resource[Any], Acquisition]
 
-DEFAULT_SEED: list[Item] = [{"forever": True}]
+DEFAULT_SEED: tuple[FrozenDict[str, bool], ...] = (FrozenDict(FOREVER_ITEM),)
 
 
 @overload
@@ -687,7 +689,8 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             extra["others"] = [stream for _, stream in ordered]
 
         if source is None:
-            seed_items = [] if indexed else cast("list[T]", DEFAULT_SEED)
+            seed_items: Iterable[T]
+            seed_items = () if indexed else cast("tuple[T, ...]", DEFAULT_SEED)
             source = iter(seed_items)
 
         return source, extra
@@ -1244,7 +1247,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             extra["others"] = [stream for _, stream in ordered]
 
         if source is None:
-            seed_items = [] if indexed else cast("list[T]", DEFAULT_SEED)
+            seed_items: Iterable[T]
+            seed_items = () if indexed else cast("tuple[T, ...]", DEFAULT_SEED)
             source = as_async(seed_items)
 
         return source, extra

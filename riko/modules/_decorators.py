@@ -58,6 +58,7 @@ from riko.types._streams import (
     Stream,
     StreamOrValueStream,
 )
+from riko.types._wrappers import stamp_wrapper_meta
 
 from ._assignment import build_assignment, gen_assignments
 from ._derive import get_module_subtypes, is_loopable
@@ -93,7 +94,7 @@ if TYPE_CHECKING:
         AwaitableProcessorParser,
         AwaitableSplitterParser,
         CastFuncs,
-        Dispatcher,
+        ItemDispatcher,
         ModuleParser,
         OperatorParser,
         OperatorParserOutput,
@@ -295,13 +296,16 @@ class Module[B: (Literal[True], Literal[False])]:
         name = pipe.__module__.rsplit(".", 1)[-1]
         loopable = is_loopable(name, module_type)
 
-        setattr(wrapper, "name", name)  # noqa: B010
-        setattr(wrapper, "type", module_type)  # noqa: B010
-        setattr(wrapper, "subtype", subtype)  # noqa: B010
-        setattr(wrapper, "subtypes", subtypes)  # noqa: B010
-        setattr(wrapper, "pollable", self.pollable)  # noqa: B010
-        setattr(wrapper, "isasync", isasync)  # noqa: B010
-        setattr(wrapper, "loopable", loopable)  # noqa: B010
+        stamp_wrapper_meta(
+            wrapper,
+            name=name,
+            module_type=module_type,
+            subtype=subtype,
+            subtypes=subtypes,
+            pollable=self.pollable,
+            loopable=loopable,
+            isasync=isasync,
+        )
 
     def prepare(
         self,
@@ -1238,7 +1242,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 module=prepared.name,
             )
             # Parses conf that can vary per item. Can't handle secondary input streams
-            dispatcher = cast("Dispatcher[T, E]", _disp)
+            dispatcher = cast("ItemDispatcher[T, E]", _disp)
 
             # - operators can't skip items
             # - purposely setting both tuples and orig_stream to maps of the same
@@ -1693,7 +1697,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             defaults=self.defaults,
             field=field,
         )
-        dispatcher = cast("Dispatcher[T, E]", _dispatcher)
+        dispatcher = cast("ItemDispatcher[T, E]", _dispatcher)
         dispatches = (dispatcher(item, prepared.opts) for item in input_)
         tuples = ((d.item, d.casted.conf) for d in dispatches)
         orig_stream = (d.item for d in dispatches)

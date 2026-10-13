@@ -25,6 +25,7 @@ Examples:
 
 from __future__ import annotations
 
+from functools import partial
 from math import isnan
 from typing import TYPE_CHECKING, Literal
 
@@ -35,7 +36,7 @@ from riko.types._collections import (
     require_instance,
     validator_from_require,
 )
-from riko.types._enums import Executor
+from riko.types._enums import Executor, resolve_enum
 
 if TYPE_CHECKING:
     from riko.types._events import EventSink
@@ -70,6 +71,9 @@ def _require_timeout(value: object, what: str | None = "value", **_) -> float:
 _concurrency = def_from_require(
     _require_concurrency, what="ExecutionSettings 'concurrency'"
 )
+_executor = partial(
+    resolve_enum, Executor, what="ExecutionSettings 'executor'", error=ValueError
+)
 _is_bool = validator_from_require(require_instance, bool, error=TypeError)
 _is_timeout = validator_from_require(_require_timeout, optional=True)
 
@@ -82,7 +86,8 @@ class ExecutionSettings:
     Attributes:
 
         executor: Where per-item work runs; a string such as ``"thread"`` is
-            accepted and an unknown one raises ``ValueError``.
+            accepted and an unknown one raises ``ValueError`` listing the known
+            executors.
 
         concurrency: The per-run ceiling on items in flight, ``"auto"`` to size
             it for the machine, or ``None`` to run items sequentially.
@@ -115,7 +120,7 @@ class ExecutionSettings:
 
     """
 
-    executor: Executor = field(default=Executor.AUTO, converter=Executor)
+    executor: Executor = field(default=Executor.AUTO, converter=_executor)
     concurrency: int | Literal["auto"] | None = field(
         default=None, converter=_concurrency
     )

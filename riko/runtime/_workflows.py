@@ -77,6 +77,7 @@ from __future__ import annotations
 
 from functools import partial, update_wrapper
 from importlib import import_module
+from inspect import isasyncgenfunction
 from types import ModuleType
 from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, cast, overload
 
@@ -88,8 +89,9 @@ from riko.base.exceptions import UnsupportedWorkflowError
 from riko.definitions._workflow import ModuleNode, PipelineDefinition, Workflow
 from riko.types._compiler import is_pipe_id
 from riko.types._enums import ExecutionMode
+from riko.types._guards import is_async_callable
 from riko.types._workflow import ResolvedWorkflow
-from riko.types._wrappers import is_subpipe
+from riko.types._wrappers import is_subpipe, stamp_wrapper_meta
 
 from ._execution_plan import arun_pipeline, run_pipeline
 from ._importutils import load_interfaces, require_interface
@@ -144,14 +146,26 @@ class SubPipes(NamedTuple):
 
 @overload
 def mark_subpipe(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
-    pipe: AsyncFunc, *, subtype: ModuleSubtype = ..., loopable: bool = ...
+    pipe: AsyncFunc,
+    *,
+    subtype: ModuleSubtype = ...,
+    loopable: bool = ...,
+    isasync: bool | None = ...,
 ) -> AsyncSubPipe: ...
 @overload  # noqa: E302
 def mark_subpipe(  # noqa: E704
-    pipe: Func, *, subtype: ModuleSubtype = ..., loopable: bool = ...
+    pipe: Func,
+    *,
+    subtype: ModuleSubtype = ...,
+    loopable: bool = ...,
+    isasync: bool | None = ...,
 ) -> SyncSubPipe: ...
 def mark_subpipe(  # noqa: E302
-    pipe: Func, *, subtype: ModuleSubtype = "transformer", loopable: bool = True
+    pipe: Func,
+    *,
+    subtype: ModuleSubtype = "transformer",
+    loopable: bool = True,
+    isasync: bool | None = None,
 ) -> SubPipe:
     """
     Tags ``pipe`` as a stored workflow's pipe.
@@ -171,9 +185,12 @@ def mark_subpipe(  # noqa: E302
         loopable: The pipe's ``loopable`` discovery flag. ``loop`` embeds a tagged pipe
             either way.
 
+        isasync: Whether ``pipe`` is the async interface. Defaults to ``True`` for an
+            async function or an async generator function.
+
     Returns:
 
-        A tagged ``pipe``.
+        A tagged ``pipe``. The tags are set on ``pipe`` without copying.
 
     Examples:
 
@@ -185,22 +202,37 @@ def mark_subpipe(  # noqa: E302
         (True, 'pipe', 'source')
 
     """
-    setattr(pipe, "name", getattr(pipe, "__name__", SUBPIPE_TYPE))  # noqa: B010
-    setattr(pipe, "type", SUBPIPE_TYPE)  # noqa: B010
-    setattr(pipe, "subtype", subtype)  # noqa: B010
-    setattr(pipe, "subtypes", {subtype})  # noqa: B010
-    setattr(pipe, "loopable", loopable)  # noqa: B010
-    setattr(pipe, "pollable", False)  # noqa: B010
+    name: str = getattr(pipe, "__name__", SUBPIPE_TYPE)
+
+    if isasync is None:
+        isasync = is_async_callable(pipe) or isasyncgenfunction(pipe)
+
+    stamp_wrapper_meta(
+        pipe,
+        name=name,
+        module_type=SUBPIPE_TYPE,
+        subtype=subtype,
+        subtypes={subtype},
+        pollable=False,
+        loopable=loopable,
+        isasync=isasync,
+    )
+
     return cast("SubPipe", pipe)
 
 
-def _as_subpipe(pipe: ModuleWrapper) -> SubPipe:
+def _as_subpipe(pipe: ModuleWrapper, *, isasync: bool) -> SubPipe:
     """
     Tags ``pipe`` as a stored workflow's pipe so that ``loop`` runs it as is.
 
     A stored workflow's nodes carry their own conf, so when ``loop`` finds a pipe whose
     ``type`` is ``"pipe"``, it runs it without the ``conf`` and ``emit`` it passes other
     embeds.
+
+    Args:
+
+        pipe: The stored workflow's interface.
+        isasync: Whether ``pipe`` is the async interface.
 
     Returns:
 
@@ -215,7 +247,7 @@ def _as_subpipe(pipe: ModuleWrapper) -> SubPipe:
         update_wrapper(subpipe, pipe)
         subtype = cast("ModuleSubtype", getattr(pipe, "subtype", "source"))
         loopable = cast("bool", getattr(pipe, "loopable", True))
-        mark_subpipe(subpipe, subtype=subtype, loopable=loopable)
+        mark_subpipe(subpipe, subtype=subtype, loopable=loopable, isasync=isasync)
 
     return subpipe
 
@@ -308,7 +340,7 @@ def build_workflow_pipes(
         return result
 
     sync_pipe = mark_subpipe(pipe, subtype=subtype)
-    _async_pipe = mark_subpipe(async_pipe, subtype=subtype)
+    _async_pipe = mark_subpipe(async_pipe, subtype=subtype, isasync=True)
     return SubPipes(sync_pipe, cast("AsyncSubPipe", _async_pipe))
 
 
@@ -878,7 +910,7 @@ class WorkflowResolver:
         """
         kwargs = {"is_async": is_async, "builtin": False}
         pipe = require_interface(pythonise(name), loader=self.load, **kwargs)
-        return _as_subpipe(pipe)
+        return _as_subpipe(pipe, isasync=is_async)
 
     def require_interfaces(self, name: str) -> frozenset[Interface]:
         """

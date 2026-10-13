@@ -55,7 +55,7 @@ def _iter_python_files(root: Path) -> Iterator[Path]:
     yield from files
 
 
-def iter_summary_issues(*roots: Path) -> Iterator[SummaryIssue]:
+def gen_summary_issues(*roots: Path) -> Iterator[SummaryIssue]:
     """
     Walks ``roots`` for function docstrings whose summary leads with the output.
 
@@ -92,6 +92,6 @@ __all__ = [
     "BANNED_LEADS",
     "SummaryIssue",
     "format_issue",
-    "iter_summary_issues",
+    "gen_summary_issues",
     "summary_leads_with_output",
 ]

@@ -7,13 +7,10 @@ Attributes:
     XML_PARSER: Hardened lxml parser (entity, DTD, and network access
         disabled), or ``None`` when lxml is unavailable.
 
-    ESCAPE: XML/HTML special-character to entity-reference map.
-
 """
 
 from __future__ import annotations
 
-from html.entities import name2codepoint
 from html.parser import HTMLParser
 from io import BytesIO, RawIOBase, StringIO
 from itertools import chain
@@ -97,8 +94,6 @@ type AnyElement = nativeElement | lxmlElement
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 logger.debug(f"{IS_LXML=}")
 logger.debug(f"{IS_FASTFEEDPARSER=}")
-
-ESCAPE = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"}
 
 
 class LinkParser(HTMLParser):
@@ -523,27 +518,3 @@ def any2dict(
     else:
         print(f"{content=}, {ext=}, {html5=}, {path=}")
         raise TypeError("No file type provided!")
-
-
-def text2entity(text: str) -> str:
-    """Converts HTML/XML special chars to entity references."""
-    return ESCAPE.get(text, text)
-
-
-def entity2text(entitydef: str) -> str:
-    """
-    Converts an HTML entity reference into unicode.
-
-    http://stackoverflow.com/a/58125/408556
-    """
-    if entitydef.startswith("&#x"):
-        cp = int(entitydef[3:-1], 16)
-    elif entitydef.startswith("&#"):
-        cp = int(entitydef[2:-1])
-    elif entitydef.startswith("&"):
-        cp = name2codepoint[entitydef[1:-1]]
-    else:
-        logger.debug(entitydef)
-        cp = None
-
-    return chr(cp) if cp else entitydef

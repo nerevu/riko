@@ -167,7 +167,8 @@ class TestAsyncClose:
                 yield {"content": str(index)}
 
         with fail_after(5):
-            first = await (source() | Pipeline.from_module("hash")).afirst()
+            hashed = Pipeline[dict[str, object]].from_module("hash")
+            first = await (source() | hashed).afirst()
             gc.collect()
             await checkpoint()
 

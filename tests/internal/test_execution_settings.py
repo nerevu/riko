@@ -175,6 +175,13 @@ def test_async_policy_refuses_the_process_executor() -> None:
         resolve_async_policy(settings)
 
 
+def test_unknown_executor_lists_the_known_executors() -> None:
+    message = "ExecutionSettings 'executor': 'bogus'; expected one of auto, inline"
+
+    with pytest.raises(ValueError, match=message):
+        ExecutionSettings(executor="bogus")
+
+
 def test_prepared_node_reports_loopable() -> None:
     plan = _hash_plan("hash", "count")
     assert plan.nodes["n0"].loopable is True

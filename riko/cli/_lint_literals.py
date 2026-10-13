@@ -58,7 +58,7 @@ class LiteralIssue(NamedTuple):
     rule: LiteralRule
 
 
-def iter_literal_issues(*roots: Path) -> Iterator[LiteralIssue]:
+def gen_literal_issues(*roots: Path) -> Iterator[LiteralIssue]:
     """
     Walks ``roots`` for inline literals in Python strings/comments and prose files.
 
@@ -94,5 +94,5 @@ __all__ = [
     "LiteralIssue",
     "LiteralRule",
     "format_literal_issue",
-    "iter_literal_issues",
+    "gen_literal_issues",
 ]
