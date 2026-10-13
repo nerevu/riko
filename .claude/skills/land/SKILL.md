@@ -46,7 +46,8 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's).
    breaks a gate, fixing the code is the default; holding a package back is a
    judgment call for the user. `--daily` makes it a no-op when a full upgrade
    already succeeded today, so always run it; never skip it by recollection.
-1. **Tidy**: follow `.claude/skills/tidy/SKILL.md` over the change (it skips
+1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh
+   subagent given the skill text, never as an in-loop grep pass (it skips
    itself when its marker says the tree is already tidy). Its mechanical fixes
    join the change before the gates run; its judgment questions go to the user
    now, and phase-owned findings go through `/triage`.
@@ -96,12 +97,35 @@ unpushed commits it amends, plus at most one new commit for the rest.
 1. **Unpushed range**: `git log --oneline HEAD --not --remotes`. Only these
    commits can be fixup targets; a pushed commit never is. If the range is
    empty, skip to the single new-commit suggestion.
-2. **Map hunks to targets**: for each hunk in `git diff -U3 HEAD`, run
-   `git blame -l -L <start>,<end> HEAD -- <file>` over the lines it removes or
-   modifies (for a pure addition, over its context lines). The hunk's target is
-   the commit blame names, when every blamed line comes from the **same
-   unpushed** commit. If that commit is itself a `fixup! X`, target `X`. Hunks
-   with mixed, pushed, or uncommitted blame belong to the new commit.
+2. **Map hunks to targets**: run the mapper instead of blaming by hand; it
+   prints a short table however large the diff is:
+
+   ```bash
+   python .claude/skills/land/fixup_map.py --patches "$(mktemp -d)"
+   ```
+
+   (`--cached` maps only the staged diff.) It blames each hunk of
+   `git diff -U3 HEAD`, follows `fixup!` chains, and keeps in the new commit
+   every new or deleted file, every untracked file, and every hunk whose added
+   lines name something absent from its target's tree (an import of a module
+   the change adds, a call to a name it introduces): squashed into an older
+   commit, those would leave it unable to build. A hunk whose blame is pushed
+   or spread over several commits falls back to its file's **latest touch**,
+   the newest unpushed commit editing that file, and is marked `*`. Blame
+   doesn't vouch for a `*` hunk, so offer it only when the target's subject
+   fits the hunk (a follow-up to that commit's work); otherwise drop it to the
+   new commit. What remains are **fixup candidates**, listed per target with
+   `file:line`, and one `<sha>.patch` per target in the patches folder.
+
+   The check is by name only, so read each candidate hunk (and only those)
+   before offering it: drop one whose meaning still depends on the change,
+   such as an import used only by code the change adds, or a doc line
+   describing the new behavior. Decide per hunk, never per target or for the
+   change as a whole; offer every self-contained one, even inside a large
+   structural change. Edit a target's patch to drop a hunk you rejected.
+   The mapper always sends new and untracked files to the new commit; move
+   one into a fixup when that fixup's hunks reference it (a script a skill
+   edit tells the reader to run), so the target never names a missing file.
 3. **Rehearse each target**: confirm the grouped hunks rebase cleanly in a
    throwaway detached worktree in a fresh temp folder — never on the user's
    branch:
@@ -110,7 +134,7 @@ unpushed commits it amends, plus at most one new commit for the rest.
    wt="$(mktemp -d)/fixup"                       # new folder every run; never reused
    git worktree add --detach "$wt" HEAD
    cd "$wt"
-   git apply --index <hunks-for-target>.patch   # split `git diff` at @@ headers
+   git apply --index <patches>/<sha>.patch       # from fixup_map.py --patches
    git commit -q --no-verify --fixup=<target>   # hooks already ran as gates
    GIT_SEQUENCE_EDITOR=: git rebase -q -i --autosquash <oldest-target>~1
    cd -
@@ -125,10 +149,41 @@ unpushed commits it amends, plus at most one new commit for the rest.
    remaining targets. Leave the worktree where it is: never delete it; the OS clears
    its temp folder (git prunes the stale entry once the folder is gone). Afterwards
    `git status` on the user's tree must be unchanged.
-4. **Hand over the commands**: for each target that rehearsed cleanly, give the
-   user `git add -p <files>` (naming the hunks to stage), `git commit
-   --fixup=<sha>`, and finally `git rebase -i --autosquash <oldest-target>~1`.
-   Then give the new commit, if any, with its suggested message.
+4. **Hand over the commands**: check `git diff --cached --name-status` first.
+   The user often stages the change before landing, and the fixup patches
+   apply to an index at `HEAD`, so when anything is staged the first line
+   starts with `git reset -q` (index only; the working tree keeps every edit).
+   Copy the rehearsed patches from the temp folder into the scratchpad so the
+   lines name files that outlive the run. Give the commands in this order:
+   - **Each fixup first.** Stage exactly its rehearsed hunks from the patch,
+     never by `git add -p`, and commit it as a fixup of its target:
+
+     ```bash
+     git apply --cached <scratchpad>/fixup-<sha>.patch && git commit --fixup=<sha>
+     ```
+
+     One line per target, oldest target first.
+   - **Then the new commit.** With only its hunks left, stage everything
+     except the untracked scratch docs in one `git add`, using long-form
+     exclude pathspecs on one line (the short `:!` form misreads a path
+     starting with `_` or `.` as magic), and commit from the message file:
+
+     ```bash
+     git add -A -- . ':(exclude)_docs/<scratch>.md' && git commit -F <scratchpad>/commit-new.txt
+     ```
+
+   - **Last,** `git rebase -i --autosquash <oldest-target>~1`, where the
+     oldest target counts any `fixup!` commits already pending on the branch.
+
+   Before each commit, say what `git status --short` should show. A commit
+   subject is at most 50 characters, house tag included; the body is at most
+   five `-` bullets, one concept each (not one per file or helper), under 72
+   characters, never prose.
+   The terminal indents and wraps reply text, so never make the user copy
+   commands from the reply: write each commit message to a scratchpad file,
+   join the step's commands with `&&` into one line using `git commit -F
+   <file>`, put that line on the clipboard with `pbcopy`, and show it in the
+   reply only for reference. No heredocs, no scripts to run.
 
 ## Report
 
@@ -140,6 +195,6 @@ End with:
 - **Commit plan**: each rehearsed `fixup!` target (sha, subject, and the
   hunks it takes) with its commands, then any remaining hunks under one
   suggested commit message using the house tags seen in `git log` (`[NEW]`,
-  `[DEV]`, `[DOCS]`, …). Mention any hunks dropped from a fixup because the
-  rehearsal conflicted. These are commands for the user to run, never executed
+  `[DEV]`, `[DOCS]`, …), its subject at most 50 characters. Mention any hunks
+  dropped from a fixup because the rehearsal conflicted. These are commands for the user to run, never executed
   on their branch.

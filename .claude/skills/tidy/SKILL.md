@@ -71,6 +71,20 @@ neighborhood it affects:
    `maybe_aclosing`, `ROOT_DIR`/`PACKAGE_DIR`); a field, parameter default, or
    type nothing reads; a helper defined below its first caller; a module or
    import in the wrong layer; a parameter narrowed to its one caller's shape.
+   **House record shapes:** a field whose only constructor computes it from
+   other data (store the input, derive it as a `cached_property`); a private
+   init alias or `Factory` carrying a derived value rather than state callers
+   may supply; a free function over one record, called only by its owner (make
+   it a method or property); a free function that builds `X` (make it an
+   `X.from_*` classmethod); a closure factory branching on a union its callers
+   already know; an attrs class whose only behavior is a forwarding `__call__`
+   (use `functools.partial`); the same filter or narrowing written in two or
+   more places (one cached view on the type that owns the data); a check that
+   compares a view against its own source (the precondition belongs on the
+   source); the same validation run in a classmethod and the constructor;
+   `Callable[..., X]` for a fixed signature (a callback `Protocol`); a role
+   type spelled out three or more times (a `type` alias); a bool property
+   restating `x.attr is None` that callers cannot narrow through.
 4. **Idioms** — truthiness where `is None` is required, `cast` where narrowing
    works, more than one `return`, comments that restate code, a new `noqa` or
    type ignore with no reason.
