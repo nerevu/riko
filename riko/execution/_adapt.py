@@ -291,8 +291,8 @@ def select_embed[T](
 
     Returns:
 
-        The embed's native callable for the host's side (sync or async), or a
-        wrapper adapting its callable from the other side.
+        The embed's native callable for the host (sync or async), or a wrapper
+        adapting its callable from the sync or async counterpart.
 
     """
     if host_isasync:

@@ -439,7 +439,7 @@ which R7 must replace when distinct ports begin resolving to distinct streams.
 
 For the same reason the R4B plan build also refuses one source port feeding more than
 one stream edge (`Workflow.require_executable()` in `riko/definitions/_workflow.py`, called from
-`build_execution_plan` and pinned by `test_build_plan_rejects_fan_out_from_one_source_port`):
+`ExecutionPlan.from_workflow` and pinned by `test_build_plan_rejects_fan_out_from_one_source_port`):
 with node-keyed streams both consumers would share a single one-shot iterator. Multiple
 outgoing edges per source port remain valid canonical topology (§2), so
 `Workflow.validate()` does not reject them; this phase's bounded branch delivery removes

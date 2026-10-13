@@ -118,6 +118,16 @@ class TestWorkflow:
         )
         assert repr(flow) == "Workflow(nodes: 2, edges: 2)"
 
+    def test_embeds_list_only_the_loop_nodes(self):
+        embed = Embed(name="hash", conf={})
+        nodes = [
+            ModuleNode(id="loop-1", name="loop", embed=embed),
+            ModuleNode(id="hash-1", name="hash"),
+            WriteNode(id="write-1", name="write", backend=Backends.FILE),
+        ]
+        flow = Workflow(nodes=nodes)
+        assert dict(flow.embeds) == {"loop-1": embed}
+
 
 NODE_FAMILIES = (
     (ModuleNode(id="fetch-1", name="fetch"), "module"),
@@ -165,6 +175,19 @@ class TestParsePort:
     )
     def test_parse_port_grammar(self, port, expected):
         assert parse_port(port) == expected
+
+    @pytest.mark.parametrize(
+        ("port", "expected"),
+        [
+            pytest.param("in", (True, False), id="default"),
+            pytest.param("in:1", (False, True), id="positional"),
+            pytest.param("in:count", (False, False), id="named"),
+        ],
+    )
+    def test_parse_port_kind_predicates(self, port, expected):
+        parsed = parse_port(port)
+
+        assert (parsed.is_default, parsed.is_positional) == expected
 
     @pytest.mark.parametrize("port", ["sideways", "up:1", ""])
     def test_parse_port_rejects_bad_direction(self, port):
@@ -1000,6 +1023,22 @@ def _counted_source(consumed):
 
 _A = ModuleNode(id="a", name="fetch")
 _B = ModuleNode(id="b", name="sort")
+
+
+class TestRequireModuleOnly:
+    def test_a_module_only_workflow_passes(self):
+        workflow = Workflow(nodes=[_A], outputs={"default": Endpoint("a", "out")})
+
+        assert workflow.require_module_only("execution") is None
+
+    def test_other_families_are_named_with_the_activity(self):
+        write = WriteNode(id="w", name="write", backend="file", dest="out.csv")
+        cache = CacheNode(id="c", name="cache")
+        nodes = [_A, write, cache]
+        workflow = Workflow(nodes=nodes, outputs={"default": Endpoint("a", "out")})
+
+        with pytest.raises(InvalidPipelineError, match="cache, write node execution"):
+            workflow.require_module_only("execution")
 
 
 class TestValidate:

@@ -38,7 +38,6 @@ def is_pipe_id(value: object) -> TypeIs[PipeId]:
     return isinstance(value, str) and value.startswith(PIPE_ID_PREFIXES)
 
 
-type ModuleOptionValues = bool | str | CountValues
 type PipeDefLike = PipeDef | Mapping[str, object]
 
 

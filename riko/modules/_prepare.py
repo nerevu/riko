@@ -4,17 +4,17 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass
-from functools import partial
+from functools import cached_property, partial
 from typing import TYPE_CHECKING, cast, overload
 
 import pygogo as gogo
+from attrs import Factory, define
 
 from riko.base._iterutils import broadcast, dispatch
 from riko.coercion._objectify import objectify
 from riko.coercion._sequences import listize
 from riko.coercion.cast import CAST_SWITCH, cast_none, cast_pass, cast_value
-from riko.parsing.config import conf_is_dynamic, get_field, resolve_conf
+from riko.parsing.config import get_field, resolve_conf
 from riko.types._enums import BasicCastType, CastType
 from riko.types._guards import is_mapping
 from riko.types._options import (
@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import Item, ItemOrValue
+    from riko.types._wrappers import Terminals
     from riko.types.modules import AnyModuleConf, Conf
 
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -216,40 +217,211 @@ def build_conf(
     return pieces_or_conf, merged_conf
 
 
-@dataclass(frozen=True)
+def build_parsers(
+    opts: DecorationOptions,
+    conf: Conf,
+    *,
+    is_dynamic: bool = False,
+    static: AnyModuleConf | None = None,
+) -> ParseFuncs:
+    """
+    Builds the field and conf parsers for a module.
+
+    A ``"none"`` ``ftype``/``ptype`` yields a null parser. A conf that varies per item
+    is parsed per call. Otherwise every call gets the already parsed ``static`` conf.
+
+    Args:
+
+        opts: The decoration options (``ftype``/``ptype``).
+        conf: The merged module configuration.
+        is_dynamic: Whether the configuration varies per item.
+        static: The parsed configuration when it does not vary per item.
+
+    Returns:
+
+        The field and conf parsers.
+
+    """
+    if opts.get("ftype") == BasicCastType.NONE:
+        field_parser = cast_none
+    else:
+        field_parser = partial(get_field)
+
+    if opts.get("ptype") == BasicCastType.NONE:
+        conf_parser = cast_none
+    elif is_dynamic:
+        conf_parser = partial(resolve_conf, conf=conf, memoize=False)
+    else:
+        conf_parser = lambda _, **__: static
+
+    return ParseFuncs(field_parser, conf_parser)
+
+
+@overload
+def _build_caster[T](type_: None) -> ArgCaster[T]: ...  # noqa: E704
+@overload
+def _build_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
+@overload  # noqa: E302
+def _build_caster(type_: CastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
+def _build_caster[T](  # noqa: E302
+    type_: BasicCastType | CastType | None,
+) -> ArgCaster[T | PrimitiveValue | ItemOrValue]:
+    """
+    Builds a caster for a cast type, degrading on an unknown one.
+
+    An unrecognized ``type_`` logs a warning and falls back to ``cast_pass``
+    (pass-through) rather than raising.
+
+    Args:
+
+        type_: The cast type, or ``None`` for pass-through.
+
+    Returns:
+
+        A caster callable taking content and optional kwargs.
+
+    """
+    if type_ in CAST_SWITCH:
+        cast_type = CastType(type_)
+
+        def caster(content: T, **kwargs: object) -> T | PrimitiveValue | AnyLocation:
+            return cast_value(content, cast_type, **kwargs)
+    else:
+        if type_:
+            logger.warning(f"Invalid cast {type_=}. Ignoring.")
+
+        caster = cast_pass
+
+    return caster
+
+
+def build_casters(opts: DecorationOptions) -> CastFuncs[ItemOrValue, object]:
+    """
+    Builds the field, extract, and conf casters from a module's options.
+
+    Honors ``ftype``/``ptype`` for the field and extract casters and combines
+    ``objectify``/``listize`` to decide how extract and conf are cast; a ``"none"``
+    ``ptype`` disables casting for both.
+
+    Args:
+
+        opts: The decoration options (``ftype``/``ptype``/``extract``/
+            ``listize``/``objectify``).
+
+    Returns:
+
+        The field, extract, and conf casters.
+
+    """
+    ftype = opts.get("ftype")
+    ptype = opts.get("ptype")
+    extract = opts.get("extract")
+
+    field_caster = _build_caster(ftype)
+    value_caster = _build_caster(ptype)
+
+    if ptype == BasicCastType.NONE:
+        extract_caster: ArgCaster[object] = cast_none
+        _conf_caster = cast_pass
+    elif opts.get("listize") and opts.get("objectify"):
+        extract_caster = lambda pieces: [
+            objectify(piece, value_caster) for piece in pieces
+        ]
+        _conf_caster = objectify
+    elif opts.get("objectify"):
+        extract_caster = partial(objectify, func=value_caster)
+        _conf_caster = objectify if extract else partial(objectify, func=value_caster)
+    else:
+        extract_caster = value_caster
+        _conf_caster = cast_pass
+
+    conf_caster = cast("SyncConfCastFunc", _conf_caster)
+    return CastFuncs(field_caster, extract_caster, conf_caster)
+
+
+@define(frozen=True, slots=True)
 class PreparedModule[T, E]:
     """
-    Immutable per-call invocation state for a module.
-
-    Built once per pipe call by ``Module.prepare`` and shared across the
-    ``setup``/``process`` steps. Frozen so concurrent invocations and differing
-    call-site options never overwrite one another.
+    Immutable call-time module state that is prepared once and reused across items.
 
     Attributes:
 
         name: The module name.
+
         conf: The merged module configuration.
-        opts: The resolved decoration/call options.
-        parsers: The field and conf parsers.
-        casters: The field, extract, and conf casters.
+
+        opts: The decoration options plus the resolved call options.
+
         assign: The field results are assigned to.
-        emit: Whether — or a predicate deciding whether — to emit rather than
-            assign.
+
+        emit: Whether (or a predicate deciding whether) to emit rather than assign.
+
         is_source: Whether the module is a source (``ftype`` is ``"none"``).
-        static_casted: Precomputed cast for conf that does not vary per item, or
-            ``None`` when the conf is dynamic.
+
+        is_dynamic: Whether the configuration varies per item.
+
+        terminals: The names of the extra inputs delivered with each item. A
+            configuration value naming one is resolved per item.
+
+        static_conf: The parsed configuration when it does not vary per item, else
+            ``None``.
+
+        defaults: The module's default configuration.
+
+        parsers: The field and conf parsers.
+
+        casters: The field, extract, and conf casters.
+
+        static_casted: The cast field caster, extraction, and conf when the
+            configuration does not vary per item, else ``None``.
+
+    Examples:
+
+        >>> prepared = PreparedModule(
+        ...     name="pipe", conf={"times": 2}, opts={}, assign="pipe", emit=False,
+        ...     is_source=False, static_conf={"times": 2},
+        ... )
+        >>> prepared.static_casted[1]
+        {'times': 2}
 
     """
 
     name: str
     conf: Conf
     opts: DecorationOptions
-    parsers: ParseFuncs
-    casters: CastFuncs[ItemOrValue, E]
     assign: str
     emit: bool | Callable[[ParserOutput], bool] | None
     is_source: bool
-    static_casted: tuple[ArgCaster[T], E, DynamicConf] | None
+    is_dynamic: bool = False
+    terminals: Terminals = ()
+    static_conf: AnyModuleConf | None = None
+    defaults: Defaults = Factory(Defaults)
+
+    @cached_property
+    def parsers(self) -> ParseFuncs:
+        """The field and conf parsers."""
+        args = (self.opts, self.conf)
+        return build_parsers(*args, is_dynamic=self.is_dynamic, static=self.static_conf)
+
+    @cached_property
+    def casters(self) -> CastFuncs[ItemOrValue, E]:
+        """The field, extract, and conf casters."""
+        return cast("CastFuncs[ItemOrValue, E]", build_casters(self.opts))
+
+    @cached_property
+    def static_casted(self) -> tuple[ArgCaster[T], E, DynamicConf] | None:
+        """The cast field caster, extraction, and conf of a static configuration."""
+        if self.is_dynamic:
+            static_casted = None
+        else:
+            casters = self.casters
+            parsed_conf = self.parsers.conf_parser({})
+            args = (parsed_conf, self.defaults, self.opts, self.name)
+            casted = dispatch(build_conf(*args), casters[1], casters[2])
+            field_caster = cast("ArgCaster[T]", casters[0])
+            static_casted = (field_caster, casted[0], casted[1])
+
+        return static_casted
 
     def resolve_emit(self, output: ParserOutput[ItemOrValue]) -> bool:
         """
@@ -271,9 +443,8 @@ class PreparedModule[T, E]:
 
             >>> from riko.types._guards import is_mapping
             >>> prepared = PreparedModule(
-            ...     name="pipe", conf={}, opts={}, parsers=None, casters=None,
-            ...     assign="content", emit=is_mapping, is_source=False,
-            ...     static_casted=None,
+            ...     name="pipe", conf={}, opts={}, assign="content", emit=is_mapping,
+            ...     is_source=False,
             ... )
             >>> prepared.resolve_emit({"x": 1})
             True
@@ -371,124 +542,3 @@ def resolve_and_cast[T, E](  # noqa: E302
         dispatched = ValueDispatch(item, Casted(*casted))
 
     return dispatched
-
-
-def build_parsers(
-    opts: DecorationOptions, conf: Conf, **kwargs: object
-) -> tuple[ParseFuncs, bool]:
-    """
-    Builds the field and conf parsers for a module, detecting dynamic conf.
-
-    A ``"none"`` ``ftype``/``ptype`` yields a null parser. A conf that varies per item
-    is parsed lazily per call (dynamic); otherwise it is parsed once and memoized.
-
-    Args:
-
-        opts: The decoration options (``ftype``/``ptype``).
-        conf: The merged module configuration.
-        **kwargs: Extra keyword arguments forwarded to dynamic-conf detection.
-
-    Returns:
-
-        The field/conf parsers, and whether the conf is dynamic (per-item).
-
-    """
-    is_dynamic = False
-
-    if opts.get("ftype") == BasicCastType.NONE:
-        field_parser = cast_none
-    else:
-        field_parser = partial(get_field)
-
-    if opts.get("ptype") == BasicCastType.NONE:
-        conf_parser = cast_none
-    elif conf_is_dynamic(conf, memoize=False, **kwargs):
-        conf_parser = partial(resolve_conf, conf=conf, memoize=False)
-        is_dynamic = True
-    else:
-        pre_parsed = resolve_conf(None, conf=conf, memoize=True)
-        conf_parser = lambda _, **__: pre_parsed
-
-    return ParseFuncs(field_parser, conf_parser), is_dynamic
-
-
-@overload
-def _build_caster[T](type_: None) -> ArgCaster[T]: ...  # noqa: E704
-@overload
-def _build_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
-@overload  # noqa: E302
-def _build_caster(type_: CastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
-def _build_caster[T](  # noqa: E302
-    type_: BasicCastType | CastType | None,
-) -> ArgCaster[T | PrimitiveValue | ItemOrValue]:
-    """
-    Builds a caster for a cast type, degrading on an unknown one.
-
-    An unrecognized ``type_`` logs a warning and falls back to ``cast_pass``
-    (pass-through) rather than raising.
-
-    Args:
-
-        type_: The cast type, or ``None`` for pass-through.
-
-    Returns:
-
-        A caster callable taking content and optional kwargs.
-
-    """
-    if type_ in CAST_SWITCH:
-        cast_type = CastType(type_)
-
-        def caster(content: T, **kwargs: object) -> T | PrimitiveValue | AnyLocation:
-            return cast_value(content, cast_type, **kwargs)
-    else:
-        if type_:
-            logger.warning(f"Invalid cast {type_=}. Ignoring.")
-
-        caster = cast_pass
-
-    return caster
-
-
-def build_casters(opts: DecorationOptions) -> CastFuncs[ItemOrValue, object]:
-    """
-    Builds the field, extract, and conf casters from a module's options.
-
-    Honors ``ftype``/``ptype`` for the field and extract casters and combines
-    ``objectify``/``listize`` to decide how extract and conf are cast; a ``"none"``
-    ``ptype`` disables casting for both.
-
-    Args:
-
-        opts: The decoration options (``ftype``/``ptype``/``extract``/
-            ``listize``/``objectify``).
-
-    Returns:
-
-        The field, extract, and conf casters.
-
-    """
-    ftype = opts.get("ftype")
-    ptype = opts.get("ptype")
-    extract = opts.get("extract")
-
-    field_caster = _build_caster(ftype)
-    value_caster = _build_caster(ptype)
-
-    if ptype == BasicCastType.NONE:
-        extract_caster: ArgCaster[object] = cast_none
-        _conf_caster = cast_pass
-    elif opts.get("listize") and opts.get("objectify"):
-        extract_caster = lambda pieces: [
-            objectify(piece, value_caster) for piece in pieces
-        ]
-        _conf_caster = objectify
-    elif opts.get("objectify"):
-        extract_caster = partial(objectify, func=value_caster)
-        _conf_caster = objectify if extract else partial(objectify, func=value_caster)
-    else:
-        extract_caster = value_caster
-        _conf_caster = cast_pass
-
-    conf_caster = cast("SyncConfCastFunc", _conf_caster)
-    return CastFuncs(field_caster, extract_caster, conf_caster)

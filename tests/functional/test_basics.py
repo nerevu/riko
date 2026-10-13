@@ -22,9 +22,10 @@ from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode
 from riko.definitions._resource_definition import Resource
 from riko.definitions._workflow import Workflow
-from riko.execution._execution import AsyncExecution, SyncExecution
+from riko.execution._async_execution import AsyncExecution
+from riko.execution._prepared import ExecutionPlan
+from riko.execution._sync_execution import SyncExecution
 from riko.io import async_url_open
-from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflows import workflow_resolver
@@ -192,7 +193,9 @@ class TestStoredWorkflows:
             workflow = workflow_resolver.load_workflow(pipe_name, directory=file_path)
 
             with SyncExecution(context=self.context) as execution:
-                items = list(execution.run(build_execution_plan(workflow, dispatcher)))
+                items = list(
+                    execution.run(ExecutionPlan.from_workflow(workflow, dispatcher))
+                )
 
         return items
 

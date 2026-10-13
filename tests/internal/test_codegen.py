@@ -19,7 +19,8 @@ from riko.cli._gen_config import objconf_structure, render
 from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode, WriteNode
 from riko.definitions._workflow import Workflow, normalize_workflow
-from riko.execution._execution import AsyncExecution
+from riko.execution._async_execution import AsyncExecution
+from riko.execution._prepared import ExecutionPlan
 from riko.ext._names import get_module_category
 from riko.ext.codegen import (
     NameEntry,
@@ -30,7 +31,6 @@ from riko.ext.codegen import (
 )
 from riko.modules._metadata import gen_module_catalog
 from riko.runtime._codegen import compile_workflow
-from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflows import _build_resolved_workflow
@@ -122,7 +122,7 @@ async def _arun_document(workflow: Workflow) -> list[Item]:
     items: list[Item] = []
 
     async with AsyncExecution(context=Context(test=True)) as execution:
-        stream = await execution.arun(build_execution_plan(workflow, dispatcher))
+        stream = await execution.arun(ExecutionPlan.from_workflow(workflow, dispatcher))
         items = [item async for item in stream]
 
     return items
@@ -332,7 +332,7 @@ class TestCompileWorkflow:
         node = WriteNode(id="write-1", name="write", backend="file", dest="out.csv")
         workflow = Workflow(nodes=[node], outputs={"default": Endpoint(node.id, "out")})
 
-        with pytest.raises(InvalidPipelineError, match="only module nodes"):
+        with pytest.raises(InvalidPipelineError, match="write node code generation"):
             compile_workflow(workflow, "pipe_written")
 
 

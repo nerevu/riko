@@ -37,16 +37,15 @@ from jinja2 import Environment, PackageLoader
 
 from riko.base._source_format import ruff_format
 from riko.base._strutils import pythonise
-from riko.base.exceptions import InvalidPipelineError
-from riko.definitions._nodes import ModuleNode
 from riko.definitions._workflow import normalize_workflow
 from riko.types._guards import is_mapping
 from riko.types._workflow import WorkflowModule
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Mapping
 
-    from riko.definitions._workflow import Workflow, WorkflowLike
+    from riko.definitions._nodes import ModuleNode
+    from riko.definitions._workflow import WorkflowLike
     from riko.types._collections import FrozenConf
     from riko.types._compiler import Embed
     from riko.types._workflow import Edge, Endpoint
@@ -170,17 +169,6 @@ def _render_outputs(outputs: Mapping[str, Endpoint]) -> str:
     return "{" + ", ".join(pairs) + "}"
 
 
-def _gen_module_nodes(workflow: Workflow) -> Iterator[ModuleNode]:
-    """Walks every module node, rejecting any other node family."""
-    for node in workflow.nodes.values():
-        if isinstance(node, ModuleNode):
-            yield node
-        else:
-            msg = f"cannot generate a pipe for a {node.family} node; "
-            msg += "only module nodes can be generated so far"
-            raise InvalidPipelineError(msg)
-
-
 def _collect_raw_confs(nodes: list[ModuleNode]) -> list[str]:
     """Collects the raw config classes the workflow module has to import."""
     used: set[str] = set()
@@ -241,7 +229,8 @@ def compile_workflow(
     """
     workflow = normalize_workflow(workflow)
     workflow.validate()
-    nodes = list(_gen_module_nodes(workflow))
+    workflow.require_module_only("code generation")
+    nodes = list(workflow.module_nodes.values())
     edge_names = sorted({type(edge).__name__ for edge in workflow.edges})
     loader = PackageLoader("riko.runtime")
     env = Environment(loader=loader, autoescape=False)  # noqa: S701

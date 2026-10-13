@@ -60,14 +60,14 @@ from riko.types._workflow import (
 )
 
 from ._migrate import migrate_pipe_def
-from ._nodes import Node, SubscribeNode, get_family_edges
+from ._nodes import ModuleNode, Node, SubscribeNode, get_family_edges
 from ._normalize import build_raw_graph, build_workflow_fields
 from ._serialize import parse_graph, serialize_graph
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from riko.types._compiler import PipeDag, PipeDefLike
+    from riko.types._compiler import Embed, PipeDag, PipeDefLike
     from riko.types._enums import DocumentShapeLike
     from riko.types._io import PathLike
     from riko.types._workflow import EdgeFamily, WorkflowDocument
@@ -131,6 +131,9 @@ class Workflow:
     Attributes:
 
         nodes: The graph nodes (given as an iterable and stored keyed by node id).
+        module_nodes: The nodes that run a module, keyed by node id.
+        embeds: The module name and conf each loop node runs per item, keyed by node id.
+        index: The graph index derived from the nodes, edges, and outputs.
         edges: The stream and publish edges, in listing order.
         outputs: The workflow outputs: named endpoints the workflow exposes.
         inputs: The declared JSON Schemas.
@@ -382,6 +385,19 @@ class Workflow:
         )
 
     @cached_property
+    def module_nodes(self) -> FrozenDict[NodeId, ModuleNode]:
+        """The nodes that run a module, keyed by node id."""
+        nodes = {k: n for k, n in self.nodes.items() if isinstance(n, ModuleNode)}
+        return FrozenDict.from_frozen(nodes)
+
+    @cached_property
+    def embeds(self) -> FrozenDict[NodeId, Embed]:
+        """The embed (module name and conf) each loop node runs per item, by node id."""
+        nodes = self.module_nodes.items()
+        embeds = {k: n.embed for k, n in nodes if n.embed is not None}
+        return FrozenDict.from_frozen(embeds)
+
+    @cached_property
     def index(self) -> GraphIndex:
         """Interprets the topology once; edges and outputs name declared nodes."""
         return GraphIndex(self.nodes, self.graph_edges, self.outputs)
@@ -459,6 +475,39 @@ class Workflow:
 
         if fan_out := sorted(source for source, count in family_sources if count > 1):
             msg = f"un-supported fan-out from source(s): {fan_out}"
+            raise InvalidPipelineError(msg)
+
+    def require_module_only(self, what: str) -> None:
+        """
+        Requires every node to run a module, for activities that support only modules.
+
+        Args:
+
+            what: The activity that needs module nodes, e.g. ``"execution"``.
+
+        Raises:
+
+            InvalidPipelineError: If a node belongs to another family.
+
+        Examples:
+
+            >>> from riko.ext import ModuleNode, WriteNode
+            >>>
+            >>> write = WriteNode(id="w", name="write", backend="file", dest="out.csv")
+            >>> flow = Workflow(
+            ...     nodes=[ModuleNode(id="a", name="hash"), write],
+            ...     outputs={"default": Endpoint("a", "out")},
+            ... )
+            >>> flow.require_module_only("execution")
+            Traceback (most recent call last):
+                ...
+            riko.base.exceptions.InvalidPipelineError: ...execution is not yet supported
+
+        """
+        nodes = self.nodes.values()
+
+        if stray := sorted({n.family for n in nodes if not isinstance(n, ModuleNode)}):
+            msg = f"{', '.join(stray)} node {what} is not yet supported"
             raise InvalidPipelineError(msg)
 
     @property

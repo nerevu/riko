@@ -17,9 +17,9 @@ import pytest
 from riko.base._paths import ROOT_DIR
 from riko.definitions._context import Context
 from riko.definitions._workflow import Workflow
-from riko.execution._execution import SyncExecution
+from riko.execution._prepared import ExecutionPlan
+from riko.execution._sync_execution import SyncExecution
 from riko.parsing.documents import IJSON_IS_NATIVE, IS_FASTFEEDPARSER, IS_LXML
-from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._resolver import dispatcher
 from riko.runtime.collections import list_formats
 from tests import TESTS_DIR, async_test, skipif_issync
@@ -490,7 +490,9 @@ class TestExamplePipelines:
         items = []
 
         with SyncExecution(context=Context(test=True)) as execution:
-            items = list(execution.run(build_execution_plan(workflow, dispatcher)))
+            items = list(
+                execution.run(ExecutionPlan.from_workflow(workflow, dispatcher))
+            )
 
         assert items == expected
 

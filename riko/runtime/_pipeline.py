@@ -32,8 +32,8 @@ from riko.definitions._composition import PipelineDefinition
 from riko.types._sentinels import MISSING, MissingType
 from riko.types._streams import Item
 
-from ._execution_plan import arun_pipeline, run_pipeline
 from ._resolver import dispatcher
+from ._run import arun_pipeline, run_pipeline
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator

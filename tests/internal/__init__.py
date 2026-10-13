@@ -8,7 +8,7 @@ Index (file, then the subjects it owns, in file order):
                               ResourceImmutability, WorkerCnt, PoolHandle, OpenPool,
                               ExecutionSettings, MappingPolicy, SyncConcurrency
     test_execution_plan.py    ExecutionPlan, ResolvedModule, CrossModeAdaptation,
-                              PlanRun, Embed
+                              PlanRun, Embed, PreparedCall
     test_definitions.py       FrozenDict, Context, ResourceFreezing, ResourceView,
                               ResourceBinding, Nodes, WorkflowFields,
                               NormalizeInternals, RawWorkflowFields,

@@ -813,21 +813,21 @@ manager-vs-instance syntax.
 
 #### R4B cross-mode adaptation — resolved audit tripwires
 
-Preparation is now a resolution snapshot: `build_execution_plan` (`riko/runtime/_execution_plan.py`)
+Preparation is now a resolution snapshot: `ExecutionPlan.from_workflow` (`riko/execution/_prepared.py`)
 resolves each node's sync/async callables once into a `PreparedNode` and the returned `ExecutionPlan`
-holds no dispatcher, so `PreparedNode.select(is_async=...)` picks native-vs-adapter at run time without
+holds no dispatcher, so `ResolvedModule.select_sync()`/`select_async()` (and `PreparedNode.select_call`) pick native-vs-adapter at run time without
 re-inspecting the registry (regression: `test_execution_plan_snapshots_resolution`). The two cross-mode
 defects this section tracked behind strict-xfail tripwires are now closed; the shared adaptation
 helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_execution_plan.py`).
 
 1. **Lazy sync-under-async bridge.** A sync-only node under `AsyncExecution` materializes neither its
-   async source nor its own output. `AsyncExecution._run_sync_node` (`riko/execution/_execution.py`)
+   async source nor its own output. `AsyncExecution._run_sync_node` (`riko/execution/_async_execution.py`)
    starts the sync pipe on a worker thread through the existing `run_sync` (asyncer's `asyncify`) and
    pulls its output one item per `__anext__` as the consumer demands it, while the pipe reads its async
    primary source and every async secondary input (`others`, named ports — `_bridge_inputs`) lazily from
    the worker through `anyio.from_thread.run` (re-exposed by `riko/bado/_backend.py` as
    `run_from_thread`). `_adapt.py` owns the pieces: `require_stream`/`require_async_stream` (the
-   node-output boundary, moved out of `_execution.py`), `drain_async(source, call)` — one
+   node-output boundary, moved out of `_execution.py`), `async_drain(source, call)` — one
    async-stream-as-lazy-sync-iterator function that the sync execution's portal drain and the worker-side
    upstream reader share with a different `call` — and `pull_stream(...)`, its
    sync-iterator-as-lazy-async-stream counterpart. `_adapt_worker_inputs` and `_drain_sync` are gone.
@@ -852,12 +852,12 @@ helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_
    `test_arun_sync_worker_node_reads_secondary_inputs_lazily`, and
    `test_arun_sync_worker_node_runs_off_the_event_loop`.
 2. **Native-wins for loop embeds — execution-time adaptation.** Each node's mode is chosen at run time
-   by `PreparedNode.select(is_async=...)` (`riko/execution/_prepared.py`), which picks `NATIVE`/`ADAPTER`
+   by `ResolvedModule.select_sync()`/`select_async()` (`riko/execution/_prepared.py`), which pick the native callable, else the other one to adapt,
    per the four native-wins quadrants, and a loop node's embed is resolved at build into a nested
    `PreparedNode.embed`. Both executions now re-select that embed against the **host pipe's actual mode**
    (`select_embed(embed, host_isasync=, run_sync=, drain=)` in `riko/execution/_adapt.py`, called
    by both executions with their own adapters) and, when the embed is adapted, forward a synthesized host-mode wrapper instead of the raw other-mode one.
-   `adapt_embed_for_sync(embed, drain)` and `adapt_embed_for_async(embed, run_sync)` copy the wrapper's
+   `adapt_embed(embed, drain)` and `async_adapt_embed(embed, run_sync)` copy the wrapper's
    discovery metadata (`name`, `type`, `subtype`, `subtypes`, `pollable`, `loopable`) and set `isasync`
    to the host mode — leaving `__wrapped__` unset — so `loop_embed_sync`/`loop_embed_async`,
    `is_subpipe`, and `bind_subpipe` treat the adapter as a native embed. An async-only embed under a sync
@@ -878,7 +878,7 @@ reachable `StreamEdge.source_port` other than `out`, or a selected output whose 
 raises `InvalidPipelineError` instead of silently aliasing the node's `out` stream; executable
 port-keyed fan-out/split delivery remains R7, which removes the guard. Regressions:
 `test_run_rejects_nondefault_source_output_port` / `test_run_rejects_nondefault_selected_output_port`.
-One more fail-closed guard sits beside it, `Workflow.require_executable()` (called from `build_execution_plan`):
+One more fail-closed guard sits beside it, `Workflow.require_executable()` (called from `ExecutionPlan.validate()`):
 a source port feeding more than one stream edge (the executor keys streams by node, so both consumers
 would share one iterator). R7's port-keyed delivery removes it. Regression:
 `test_build_plan_rejects_fan_out_from_one_source_port`. Sparse positional inputs (`in` + `in:2`) are
@@ -1055,7 +1055,8 @@ Deliver:
 - plan-build validation of every module node's `conf` against its registered contract: unknown keys,
   wrong types, invalid enum/operator values, and missing required keys raise `InvalidPipelineError`
   naming the node and key, before resources open or the source is read; a node whose module declares
-  no contract is not rejected;
+  no contract is not rejected. The check lands inside `ModuleWrapper.prepare`, which the plan already
+  calls once per node (`PreparedNode.sync_call`/`async_call`), so no second preparation path is needed;
 - the same check for built-in and entry-point modules.
 
 Open decision (triaged 2026-10-05): the released `riko.ext.get_conf_type` reads a parser's `objconf`
@@ -1374,7 +1375,7 @@ Deliver:
 - the splitter/stream distinction is typed by module type rather than carried as a union: today
   `ModuleWrapper`/`SyncModuleWrapper`/`AsyncModuleWrapper.__call__` (`riko/types/_wrappers.py`)
   return `WrapperOutput | SplitterWrapperOutput`, so every single-output call site in
-  `riko/execution/_execution.py` and `_adapt.py` casts twice (once to
+  `riko/execution/_sync_execution.py`, `_async_execution.py`, and `_adapt.py` casts twice (once to
   `Iterator[T] | Iterator[Iterator[T]]` / `AsyncModuleWrapperOutput[T]`, again inside
   `require_stream`/`require_async_stream`) because `is_splitter` narrows the pipe, not its
   output. The port-keyed dispatch that replaces the refusal hands a cascade to the port router and
@@ -1383,19 +1384,16 @@ Deliver:
   `AsyncWrapperStream[Stream, Cascade]` yields sync streams); the unused `AsyncCascade` alias
   (`riko/types/_streams.py`) is either that type or deleted (audit triage 2026-10-05);
 - branch/route port behavior from the R4A contract;
-- one input router: `SyncExecution._resolve_inputs` and `AsyncExecution._resolve_async_inputs`
-  (`riko/execution/_execution.py`) carry the same port routing today — each runs
-  `_require_default_output_port` per incoming edge, then sends `in` to the primary source, `in:N` to
-  the ordered `others` list, and named ports into the call kwargs, differing only in stream type and
-  empty/seed constructors. Port-keyed dispatch replaces both with one router both executions call,
-  keyed on the source port instead of guarding it (audit triage 2026-10-05: not extracted ahead of
-  this phase, since the router's input changes from node streams to port streams);
-- follow-on, not an exit gate: once port-keyed dispatch lands, `riko/execution/_execution.py` (~1,550 lines: shutdown/
-  error grouping, resources, portals, source resolution, input binding, adaptation,
-  mapping, and both executions) splits by responsibility — at minimum `SyncExecution`, `AsyncExecution`,
-  and their shared lifecycle/input-binding helpers in separate modules. The split waits for this phase
-  because port-keyed dispatch rewrites exactly the node-dispatch code it would move; it stays two
-  explicit execution classes, never a generic executor/strategy hierarchy (audit triage 2026-10-05).
+- one input router: both executions already share `_BaseExecution._resolve_node_inputs`
+  (`riko/execution/_execution.py`, extracted 2026-10-13), which runs `_require_default_output_port`
+  per incoming edge, then sends `in` to the primary source, `in:N` to the ordered `others` list, and
+  named ports into the call kwargs, differing per execution only in its `as_stream` adapter.
+  Port-keyed dispatch rekeys that router on the source port instead of guarding it (its input changes
+  from node streams to port streams);
+- port-keyed dispatch rewrites the node-dispatch code in place across `riko/execution/_execution.py`
+  (the shared base and input-binding/build-order cores), `_sync_execution.py` (`SyncExecution`), and
+  `_async_execution.py` (`AsyncExecution`). It stays two explicit execution classes, never a generic
+  executor/strategy hierarchy (audit triage 2026-10-05).
 - no cleanup dependency on draining branch output;
 - remove legacy `send` / `receive` Python modules when the object-first surface lands rather than
   retain low-level compatibility modules.

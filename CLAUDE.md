@@ -28,7 +28,7 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 | `riko/io/` | sync/async URL/file I/O, serialization, re-encoding |
 | `riko/parsing/` | config parsing, `DotDict`, XML/HTML/document parsing |
 | `riko/rss/` | feed discovery, parsing, entry normalization |
-| `riko/execution/` | explicit execution layer: one-shot sync/async executions, lifetime primitives, execution-local resource acquisition and owned-resource teardown, event sink |
+| `riko/execution/` | explicit execution layer: execution planning, one-shot sync/async executions, lifetime primitives, execution-local resource acquisition and owned-resource teardown, event sink |
 | `riko/runtime/` | executable orchestration: collections, resolver/registry, pipelines, pub/sub, write sessions, codegen |
 | `riko/modules/` | built-in pipe implementations; private decorator/preparation/metadata/looping internals; generated discovery names |
 | `riko/ext/` | supported extension-author facade + extension codegen/name helpers; shares the `modules` architecture layer |
@@ -41,7 +41,7 @@ Important concrete locations:
 - v2 code generator behind `compile_workflow`/`compile-workflow`: `riko/runtime/_codegen.py`
 - workflow loading/saving: `Workflow.parse`/`load`/`serialize` in `riko/definitions/_workflow.py`, over the data-returning `_normalize.py`/`_migrate.py`/`_serialize.py`; the CLI front door `riko/cli/_workflow.py` keeps only `read_document`/`require_workflow`
 - pub/sub: `riko/runtime/_pubsub/`
-- executions/preparation: `riko/execution/_execution.py` + `_prepared.py`; the frozen `ExecutionPlan` is in `_prepared.py` and its builder is `riko/runtime/_execution_plan.py`
+- executions: `riko/execution/_execution.py` (base) + `_sync_execution.py`/`_async_execution.py`; the frozen `ExecutionPlan` and its `from_workflow` constructor are in `riko/execution/_prepared.py`; the pipeline runners are `riko/runtime/_run.py`
 - pipelines: composition on `PipelineDefinition` in `riko/definitions/_composition.py`; the node/edge families in `riko/definitions/_nodes.py`; the runnable `Pipeline` subclass in `riko/runtime/_pipeline.py`
 - context/resource definitions: `riko/definitions/_context.py` + `_resource_definition.py`; their acquisition/teardown: `riko/execution/_resource_plan.py`
 - declarative write model: `riko/definitions/_write.py` + `_targets.py`
@@ -133,7 +133,9 @@ new permanent bullet here.
   raises on unsupported/cyclic values; process-local caches may bypass instead of raising.
 - **Immutable prepare** — `Module.prepare()` returns a frozen `PreparedModule` with
   no mutable call cache; call-site options cannot leak across items/concurrent
-  invocations.
+  invocations. A node is prepared once per execution plan
+  (`PreparedNode.sync_call`/`async_call`), and the prepared state is plain data so
+  the process executor can ship it.
 - **Immutable definitions, mutable execution** — `Context`, resource definitions,
   module definitions, and write intent are structural snapshots. Derive changed
   definitions; never smuggle execution-owned mutable state back onto them.
@@ -183,6 +185,17 @@ new permanent bullet here.
   exemptions: `_docs/DOCUMENTATION_STANDARD.md` (No internal jargon in shipped text).
 - New code is fully typed and documented. Prefer type narrowing over `cast`; narrow
   untyped values once at the boundary and carry the tightened type forward.
+- **attrs record shape** — store what a record is built from and derive the rest as
+  a `cached_property`; a `Factory`/private init alias is only for state a caller may
+  legitimately supply, never to inject a derived value. A function that builds `X`
+  is an `X.from_*` classmethod; a function over one record is its method or
+  property; a filter needed in two places is one cached view on the owning type.
+- A predicate property restating `x.attr is None` does not narrow `x.attr`, and a
+  `TypeIs` method cannot narrow `self` (type guards narrow their first argument and
+  need a distinct type to narrow to). When callers need the narrowed value, let them
+  test the optional attribute itself; add a predicate only for readers that need just
+  the boolean. Where the variants genuinely differ, model them as a tagged union so
+  `isinstance`/`match` narrow.
 - Guard optional imports with `try/except` and set the backend/feature flag in the
   exception path.
 - Use the established `noqa: E302` / `noqa: E704` overload exceptions where Ruff

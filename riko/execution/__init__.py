@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from riko.types._events import EventSink
 
-from ._execution import AsyncExecution, SyncExecution
+from ._async_execution import AsyncExecution
+from ._sync_execution import SyncExecution
 
 __all__ = ["AsyncExecution", "EventSink", "SyncExecution"]

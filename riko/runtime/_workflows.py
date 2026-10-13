@@ -87,7 +87,6 @@ from riko.base._imports import import_or_else
 from riko.base._strutils import pythonise
 from riko.base.exceptions import UnsupportedWorkflowError
 from riko.definitions._composition import PipelineDefinition
-from riko.definitions._nodes import ModuleNode
 from riko.definitions._workflow import Workflow
 from riko.types._compiler import is_pipe_id
 from riko.types._enums import DocumentShape, ExecutionMode
@@ -95,8 +94,8 @@ from riko.types._guards import is_async_callable
 from riko.types._workflow import ResolvedWorkflow
 from riko.types._wrappers import is_subpipe, stamp_wrapper_meta
 
-from ._execution_plan import arun_pipeline, run_pipeline
 from ._importutils import load_interfaces, require_interface
+from ._run import arun_pipeline, run_pipeline
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator, Mapping
@@ -382,8 +381,7 @@ def _build_resolved_workflow(
 
     """
     inputs: dict[str, object] = dict(workflow.inputs)
-    nodes = workflow.nodes.values()
-    dependencies = sorted({node.name for node in nodes if isinstance(node, ModuleNode)})
+    dependencies = sorted({node.name for node in workflow.module_nodes.values()})
     subtype: ModuleSubtype = "transformer" if inputs else "source"
     args = (workflow, dispatcher)
     pipes = build_workflow_pipes(*args, *dependencies, inputs=inputs, subtype=subtype)

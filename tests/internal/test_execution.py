@@ -41,8 +41,8 @@ from riko.definitions._resource_definition import (
 )
 from riko.definitions._workflow import Workflow
 from riko.definitions.modules import ModuleDefinition
-from riko.execution import _execution
-from riko.execution._execution import AsyncExecution, SyncExecution
+from riko.execution import _sync_execution
+from riko.execution._async_execution import AsyncExecution
 from riko.execution._mapping import (
     AsyncPolicy,
     SyncPolicy,
@@ -51,9 +51,10 @@ from riko.execution._mapping import (
     resolve_sync_policy,
 )
 from riko.execution._pools import PoolHandle, get_worker_cnt, open_pool
+from riko.execution._prepared import ExecutionPlan
 from riko.execution._resource_view import ResourceView
+from riko.execution._sync_execution import SyncExecution
 from riko.modules import operator
-from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._resolver import dispatcher
 from riko.types._enums import Executor
 from riko.types._resource import FactoryKind, get_factory_kind
@@ -258,7 +259,7 @@ def _loopable(func) -> Any:
 
 def _hash_plan(*names):
     nodes = [ModuleNode(id=f"n{i}", name=name) for i, name in enumerate(names)]
-    return build_execution_plan(_chain(*nodes), dispatcher)
+    return ExecutionPlan.from_workflow(_chain(*nodes), dispatcher)
 
 
 def _key(item):
@@ -1459,13 +1460,13 @@ def _run_sync(plan, settings=None, source=ITEMS):
 @pytest.fixture
 def opened(monkeypatch):
     calls: list[tuple[Executor, int]] = []
-    original = _execution.open_pool
+    original = _sync_execution.open_pool
 
     def record(executor, workers):
         calls.append((executor, workers))
         return original(executor, workers)
 
-    monkeypatch.setattr(_execution, "open_pool", record)
+    monkeypatch.setattr(_sync_execution, "open_pool", record)
     return calls
 
 
@@ -1556,7 +1557,7 @@ class TestSyncConcurrency:
         joined = ModuleNode(id="j", name="joiner")
         edge = StreamEdge(Endpoint("s", "out"), Endpoint("j", "in:side"))
         workflow = _workflow([side, joined], edges=(edge,))
-        plan = build_execution_plan(workflow, dispatcher=dispatcher)
+        plan = ExecutionPlan.from_workflow(workflow, dispatcher=dispatcher)
         settings = ExecutionSettings(concurrency=4)
 
         expected = [{"forever": True}, {"t": "side"}]
@@ -1575,7 +1576,7 @@ class TestSyncConcurrency:
             ModuleDefinition(name="explode", sync_pipe=_loopable(explode))
         )
         workflow = _workflow([ModuleNode(id="n", name="explode")])
-        plan = build_execution_plan(workflow, dispatcher=dispatcher)
+        plan = ExecutionPlan.from_workflow(workflow, dispatcher=dispatcher)
 
         with pytest.raises(ValueError, match="boom"):
             _run_sync(plan, ExecutionSettings(concurrency=2))
@@ -1635,7 +1636,7 @@ class TestSyncConcurrency:
     def test_process_executor_refuses_a_resource_node(self, opened) -> None:
         node = ModuleNode(id="h", name="hash", resources={"slot": "primary"})
         workflow = _workflow([node], resources=("primary",))
-        plan = build_execution_plan(workflow, dispatcher)
+        plan = ExecutionPlan.from_workflow(workflow, dispatcher)
         context = Context().with_resource("primary", Resource.from_external(object()))
         settings = ExecutionSettings(executor="process", concurrency=2)
         execution = SyncExecution(context, settings=settings)
@@ -1650,7 +1651,9 @@ class TestSyncConcurrency:
 
     def test_process_executor_refuses_a_cross_mode_embed(self, opened) -> None:
         node = ModuleNode(id="loop", name="fakeloop", embed={"name": "up", "conf": {}})
-        plan = build_execution_plan(_workflow([node]), dispatcher=_loop_dispatcher())
+        plan = ExecutionPlan.from_workflow(
+            _workflow([node]), dispatcher=_loop_dispatcher()
+        )
         settings = ExecutionSettings(executor="process", concurrency=2)
         execution = SyncExecution(settings=settings)
 
@@ -1670,7 +1673,7 @@ class TestSyncConcurrency:
             ModuleDefinition(name="local", sync_pipe=_loopable(local))
         )
         workflow = _workflow([ModuleNode(id="n", name="local")])
-        plan = build_execution_plan(workflow, dispatcher=dispatcher)
+        plan = ExecutionPlan.from_workflow(workflow, dispatcher=dispatcher)
         settings = ExecutionSettings(executor="process", concurrency=2)
         execution = SyncExecution(settings=settings)
 
@@ -1711,7 +1714,7 @@ def _thread_probe():
 
     definition = ModuleDefinition(name="probe", sync_pipe=_loopable(probe))
     workflow = _workflow([ModuleNode(id="n", name="probe")])
-    return threads, build_execution_plan(
+    return threads, ExecutionPlan.from_workflow(
         workflow, dispatcher=build_dispatcher(definition)
     )
 
@@ -1724,7 +1727,7 @@ class TestAsyncConcurrency:
         pipe = cast("SyncModuleWrapper", _passthru)
         definition = ModuleDefinition(name="passthru", sync_pipe=pipe)
         nodes = [ModuleNode(id=f"n{i}", name="passthru") for i in range(45)]
-        plan = build_execution_plan(
+        plan = ExecutionPlan.from_workflow(
             _chain(*nodes), dispatcher=build_dispatcher(definition)
         )
         result: list = []
@@ -1750,7 +1753,7 @@ class TestAsyncConcurrency:
 
         definition = ModuleDefinition(name="slow", async_pipe=_loopable(slow))
         nodes = [ModuleNode(id="a", name="slow"), ModuleNode(id="b", name="slow")]
-        plan = build_execution_plan(
+        plan = ExecutionPlan.from_workflow(
             _chain(*nodes), dispatcher=build_dispatcher(definition)
         )
         result = await _arun(plan, ExecutionSettings(concurrency=3))

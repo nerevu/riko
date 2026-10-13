@@ -10,8 +10,8 @@ import pytest
 
 from riko.definitions._context import Context
 from riko.definitions._workflow import Workflow
-from riko.execution._execution import SyncExecution
-from riko.runtime._execution_plan import build_execution_plan
+from riko.execution._prepared import ExecutionPlan
+from riko.execution._sync_execution import SyncExecution
 from riko.runtime._resolver import dispatcher
 from tests import TESTS_DIR
 
@@ -57,7 +57,7 @@ def run_workflow(workflow: Workflow) -> list[Item]:
     items: list[Item] = []
 
     with SyncExecution(context=Context(test=True)) as execution:
-        items = list(execution.run(build_execution_plan(workflow, dispatcher)))
+        items = list(execution.run(ExecutionPlan.from_workflow(workflow, dispatcher)))
 
     return items
 

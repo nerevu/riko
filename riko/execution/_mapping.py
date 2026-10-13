@@ -234,7 +234,7 @@ def is_mappable(node: PreparedNode, extra: Mapping[str, object]) -> bool:
         >>> from riko.definitions._nodes import ModuleNode
         >>> from riko.definitions._workflow import Workflow
         >>> from riko.execution._mapping import is_mappable
-        >>> from riko.runtime._execution_plan import build_execution_plan
+        >>> from riko.execution._prepared import ExecutionPlan
         >>> from riko.runtime._resolver import dispatcher
         >>> from riko.types._workflow import Endpoint
         >>>
@@ -242,7 +242,7 @@ def is_mappable(node: PreparedNode, extra: Mapping[str, object]) -> bool:
         ...     nodes=[ModuleNode(id="h", name="hash")],
         ...     outputs={"default": Endpoint("h", "out")},
         ... )
-        >>> node = build_execution_plan(workflow, dispatcher).nodes["h"]
+        >>> node = ExecutionPlan.from_workflow(workflow, dispatcher).nodes["h"]
         >>> is_mappable(node, {"emit": True}), is_mappable(node, {"other": iter([])})
         (True, False)
 
@@ -257,9 +257,7 @@ def _get_process_unsafe_reason(
     node: PreparedNode, context: Context | None
 ) -> tuple[str | None, BaseException | None]:
     embed = node.embed
-    pipe = node.module.select_sync()
     embed_pipe = None if embed is None else embed.select_sync()
-    conf, options = node.embed_or_self_conf, dict(node.options)
     reason: str | None = None
     cause: BaseException | None = None
 
@@ -268,8 +266,10 @@ def _get_process_unsafe_reason(
     elif embed is not None and embed.is_async_pipe(embed_pipe):
         reason = "its embedded module has no synchronous implementation"
     else:
+        prepared_call = node.select_call(node.module.select_sync())
+
         try:
-            pickle.dumps((pipe, conf, options, context, embed_pipe))
+            pickle.dumps((prepared_call, context, embed_pipe))
         except (pickle.PicklingError, TypeError, AttributeError) as error:
             reason, cause = f"it cannot be pickled ({error})", error
 
@@ -303,7 +303,7 @@ def require_process_safe(
         >>> from riko.definitions._nodes import ModuleNode
         >>> from riko.definitions._workflow import Workflow
         >>> from riko.execution._mapping import require_process_safe
-        >>> from riko.runtime._execution_plan import build_execution_plan
+        >>> from riko.execution._prepared import ExecutionPlan
         >>> from riko.runtime._resolver import dispatcher
         >>> from riko.types._workflow import Endpoint
         >>>
@@ -311,7 +311,7 @@ def require_process_safe(
         ...     nodes=[ModuleNode(id="h", name="hash")],
         ...     outputs={"default": Endpoint("h", "out")},
         ... )
-        >>> plan = build_execution_plan(workflow, dispatcher)
+        >>> plan = ExecutionPlan.from_workflow(workflow, dispatcher)
         >>> require_process_safe(plan, {"h"}, None) is None
         True
 

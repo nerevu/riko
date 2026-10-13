@@ -638,10 +638,11 @@ class PipelineDefinition(Generic[T]):
 
     def _or_template(self, other: PipelineDefinition) -> Self:
         """Chains a single-module, source-less pipeline used as a reusable template."""
-        nodes = other.workflow.nodes.values()
-        node = next(iter(nodes)) if len(nodes) == 1 else None
+        flow = other.workflow
+        single = len(flow.nodes) == len(flow.module_nodes) == 1
+        node = next(iter(flow.module_nodes.values())) if single else None
 
-        if other.source is None and isinstance(node, ModuleNode):
+        if other.source is None and node is not None:
             chained = self.pipe(
                 node.name, conf=node.conf, options=node.options, embed=node.embed
             )

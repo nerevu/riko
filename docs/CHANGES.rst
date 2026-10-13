@@ -54,9 +54,11 @@ New
   ``WorkflowDocument``\s, via ``register_workflow_store``. ``Target``\s register via
   ``register_target``.
 
-- Module wrappers gained ``prepare`` (binds a call's configuration and call options
-  for reuse over many items) and ``isasync``. ``ModuleDefinition.interfaces`` lists the
-  sync and async interfaces it provides.
+- Module wrappers gained ``prepare`` and ``isasync``. ``prepare`` binds a call's
+  configuration and call options once for reuse over many items: a ``Pipeline`` run
+  prepares each node's module once, so static configuration is merged and cast a
+  single time, and a direct ``pipe(stream, conf=...)`` call prepares once per call.
+  ``ModuleDefinition.interfaces`` lists the sync and async interfaces it provides.
 
 - Added ``PipeDag``, ``PipeDef``, and ``PipeDefLike`` to ``riko.types`` for annotating
   ``Workflow.parse`` and ``migrate_v1_to_v2`` input.

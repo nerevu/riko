@@ -372,7 +372,7 @@ graph, strongly connected components for a cyclic one; `cyclic` is `cyclic_nodes
 `normalize_workflow`'s lone-leaf default output (both build the graph with `edges_to_graph`, keeping
 edge-less nodes; normalization counts stream edges only). It
 is the one topology interpretation: `Workflow.validate()` rejects a non-empty `cyclic`, and
-`build_execution_plan` (`riko/runtime/_execution_plan.py`) and the sync/async executions read the same
+`ExecutionPlan.from_workflow` (`riko/execution/_prepared.py`) and the sync/async executions read the same
 index instead of rescanning edges. Structure pinned by
 `tests/internal/test_values.py::TestGraphIndex::test_workflow_index_orders_and_indexes` and
 `test_graph_index_derives_and_freezes_from_its_inputs`.
@@ -712,7 +712,7 @@ serializes the same `Formats` at a destination. Meza owns conversion work. The B
 ## Private execution runtime — `SyncExecution` / `AsyncExecution` (R4B, shipped)
 
 > **Shipped.** The private execution package, its lifetime primitives, execution-local resource
-> acquisition, the `EventSink` transport, canonical-workflow preparation (`build_execution_plan` resolves
+> acquisition, the `EventSink` transport, canonical-workflow preparation (`ExecutionPlan.from_workflow` resolves
 > each node's callables once into a `PreparedNode`), and both the **sync** `iter(pipeline)` and **async**
 > `aiter(pipeline)` runners — with multi-input port wiring, execution-owned resource injection, and
 > node-level sync/async adaptation (async-only under sync via the portal, sync-only under async on a
@@ -722,7 +722,7 @@ serializes the same `Formats` at a destination. Meza owns conversion work. The B
 > non-`out` output raises), and a multi-output splitter node is refused when the plan is built, by
 > its declared module type, before any node runs. Cross-mode work is lazy in both directions: a sync-only node under async
 > execution runs on a worker thread, reads its async inputs from there, and hands back one item per
-> `__anext__`; and a loop `embed` that exists only on the other side (sync or async) is adapted at execution time into a
+> `__anext__`; and a loop `embed` that exists only as sync or only as async is adapted at execution time into a
 > metadata-preserving wrapper matching the host.
 > The fluent authoring surface (`Pipeline.from_module(name, conf=…)`, `.pipe()`, attribute chaining,
 > `|`, and `items | Pipeline(…)` source seeding) ships now too.
@@ -821,8 +821,7 @@ async-native teardown is rejected before any value is produced. Deferred to R11
 (provider sessions): true lazy-open-on-first-use — `lazy=` is recorded but every bound resource is
 acquired, used or not — and resource-to-resource dependency ordering.
 
-**EventSink transport.** Each execution owns an `EventSink` (`riko/execution/_events.py`) with a no-op
-default; `execution.emit(event)` dispatches opaque event values. R4B owns dispatch and lifetime only;
+**EventSink transport.** Each execution owns an `EventSink` with a no-op default (`riko/execution/_execution.py`); `execution.emit(event)` dispatches opaque event values. R4B owns dispatch and lifetime only;
 later phases define the semantic events they carry (e.g. R5C `WriteResult` / `ActionResult`).
 
 **Preparation and the sync runner.** A `Workflow` is built into an `ExecutionPlan`, then
@@ -843,12 +842,12 @@ run:
   `__attrs_post_init__` and rejects inconsistent private fields (a factory without its kind or vice
   versa, an external resource with a factory or that is not reusable); `Context` accepts only
   `ReusableResource` values in `_resources`; `_from_data` builds the subclass through the generated `__init__`.
-- One run loop: `run_pipeline`/`arun_pipeline` (`riko/runtime/_execution_plan.py`) back
+- One run loop: `run_pipeline`/`arun_pipeline` (`riko/runtime/_run.py`) back
   `Pipeline` iteration, and `build_workflow_pipes` (`riko/runtime/_workflows.py`) builds on them
   for both generated workflow modules and named `WorkflowDocument`s, which the resolver binds to
   the dispatcher that loaded them.
-- `build_execution_plan(workflow, dispatcher)` (runtime layer; the dispatcher is required) validates the `Workflow`, builds the shared
-  index, and resolves each node's synchronous and asynchronous callables once; the plan pairs each with its
+- `ExecutionPlan.from_workflow(workflow, dispatcher)` (`riko/execution/_prepared.py`; the dispatcher is required — any `Dispatcher`, which runtime's `ResolverDispatcher` satisfies) resolves each node's synchronous and asynchronous callables once,
+  then the constructor's `ExecutionPlan.validate()` validates the `Workflow` and shares its index; the plan pairs each with its
   graph node into a `PreparedNode` — the graph `ModuleNode` plus a `ResolvedModule` (`name`, `conf`, `sync_pipe`/`async_pipe`, either
   `None` when that interface is absent) and, for a loop node, a second `ResolvedModule` for its embed
   (the embed is an implementation, not a graph node, so it carries no id/options/resources) — and reads each output's required
@@ -861,7 +860,7 @@ run:
   available `pipe` / `async_pipe` interfaces (`ModuleDefinition.interfaces` for registered modules,
   `load_interfaces` for built-ins), and the chosen callables come from `resolve`. At run time
   `ResolvedModule.select_sync()`/`select_async()` return the native callable when present, else the
-  other side's callable (`AnyModuleWrapper`), touching no registry. `ResolvedModule.is_async_pipe(pipe)` is a
+  sync or async counterpart's callable (`AnyModuleWrapper`), touching no registry. `ResolvedModule.is_async_pipe(pipe)` is a
   `TypeIs[AsyncModuleWrapper]` guard keyed on slot identity (`pipe is self.async_pipe`), so it narrows the
   callable with no cast and works for undecorated callables (documented `ModuleDefinition(sync_pipe=plain)`
   carries no `isasync`). `WorkflowResolver.require` tags a stored workflow's interface with the `isasync` of the
@@ -873,7 +872,7 @@ run:
   boundary: a node with no default (`in`) edge receives the `{"forever": True}` seed unless it has a
   positional (`in:N`) edge, in which case its default input is empty (so `union` with only secondary
   inputs wired never sees the seed as data); named value ports alone do not suppress the seed. Every
-  module node's `options` are forwarded as call kwargs, and a loop node's pipe receives its embed's
+  module node's `options` are bound as call options when the node is prepared, and a loop node's pipe receives its embed's
   `conf` (`PreparedNode.embed_or_self_conf`). An adapted node (async-only pipe under sync execution) runs through the execution's
   blocking portal: `_async_drain` pulls the async stream one `__anext__` at a time on the portal loop and
   re-exposes it as a lazy sync `Stream`. A reachable non-`out` source port or a selected non-`out` output
@@ -904,7 +903,7 @@ run:
   `emit`/`count`/`assign`/`field` live in `ModuleNode.options`
   (`CallOptions`, a closed key set validated at construction; serialized only when non-empty). The
   build resolves the embed into `PreparedNode.embed` (a `ResolvedModule`) and mode-selects it
-  the same way; the runner forwards `embed=<callable>` plus the node's `options` to the loop wrapper. The embed is re-selected
+  the same way; the loop wrapper is prepared with the node's `options` and the runner forwards `embed=<callable>` with each call. The embed is re-selected
   against **whether the host pipe actually runs sync or async** (`select_embed(embed, host_isasync=, run_sync=, drain=)` in `_adapt.py`, which each
   execution calls with its own adapters), so an adapted loop node gets an embed matching how it really runs. On
   adaptation the runner forwards a synthesized wrapper matching the host:
@@ -930,7 +929,7 @@ run:
   (`with SyncExecution() as e: yield from e.run(plan)` / the `async with AsyncExecution()` analogue), so
   early close, exhaustion, or failure unwinds upstream feeds and the exit stack.
 - **Source-only pipelines stream their source** (2026-10-04; one execution model since 2026-10-05). A
-  `Pipeline` with a `source` and no module nodes runs the **identity plan**: `build_execution_plan`
+  `Pipeline` with a `source` and no module nodes runs the **identity plan**: `ExecutionPlan.from_workflow`
   accepts a completely empty workflow (no nodes, edges, or outputs — `Workflow.is_empty`) without
   `Workflow.validate()`, and `SyncExecution.run(plan, source=…)` / `AsyncExecution.arun(plan, source=…)`
   stream the seeded source unchanged as the plan's `default` output, through the same
@@ -939,8 +938,8 @@ run:
   `_require_source` raises `InvalidPipelineError` for any other output name, and for an empty plan
   without a source, so `Pipeline()` still fails `workflow has no nodes`; a node-less workflow that
   declares outputs or edges is not empty and still fails validation.
-- **One index per workflow** (2026-10-05). `Workflow.index` is a `cached_property`, so the up-front
-  `validate()` in `build_execution_plan`, the `ExecutionPlan` field validator, and the plan's `index`
+- **One index per workflow** (2026-10-05). `Workflow.index` is a `cached_property`, so
+  `ExecutionPlan.validate()` (which runs `Workflow.validate()`) and the plan's `index`
   share one `GraphIndex` (`test_execution_plan_indexes_the_workflow_once`); `evolve` yields a fresh
   workflow with its own cache.
 - **`first(default=MISSING)` / `afirst(default=MISSING)`** read one item and close the run before
@@ -974,7 +973,7 @@ run:
   the raw value through and the helpers below `run` keep their wide `Items`/`Feed` parameters. An
   async `processor` node fed an async stream maps it lazily and in order (`_aprocess_stream` in
   `riko/modules/_decorators.py`, a bounded ordered window) instead of treating the stream object as
-  one item. `build_execution_plan` also refuses, before any node runs, a source port feeding more
+  one item. `ExecutionPlan.from_workflow` also refuses, before any node runs, a source port feeding more
   than one stream edge (`Workflow.require_executable()`), the fail-closed companion of the non-`out` port guard
   until R7's port-keyed delivery; the shape stays valid canonical structure under `validate()`.
   Sparse positional inputs (`in` + `in:2`, legacy `_OTHER2`) execute as an ordered `others` list,
@@ -983,6 +982,30 @@ run:
   callable-pipes owns them; a strict-xfail tripwire in `tests/public/test_pipeline.py` flips
   when they land. Tests: `tests/public/test_pipeline.py` plus seeded-run and end-to-end
   coverage in `tests/internal/test_execution_plan.py`.
+
+**Prepare once per plan** (2026-10-13). A node's module is prepared once per execution plan, not
+once per item: `PreparedNode.sync_call`/`async_call` (cached) call
+`ModuleWrapper.prepare(*terminals, conf=, **options)` — implemented for every wrapper kind — and the
+executions call `node.select_call(pipe)(item, context=..., **extra)`, supplying only the per-item
+context and the secondary input streams, `resources`, or `embed`. The decorators' call records
+`_PreparedProcessor`/`_PreparedOperator`/`_PreparedSplitter` share the generic attrs base
+`_PreparedCall[M]` (the decorator, wrapper, prepared module, and bound options, plus derived
+`field`/`count`/`parser`), which subclasses the `PreparedCall` protocol; a
+plain wrapper (a stored-workflow pipe, a cross-mode adapter) is bound by `bind_call`/`build_call`
+(`riko/types/_wrappers.py`), and `stamp_wrapper_meta` attaches a default `prepare`. `PreparedModule`
+(`riko/modules/_prepare.py`) is a frozen attrs record of plain values (merged conf, options, assign,
+emit, `is_source`, `is_dynamic`, terminals, static conf, defaults) whose `parsers`/`casters`/
+`static_casted` are cached derivations, so it pickles and the process executor ships it. Dynamic-conf
+detection sees the node's terminals, which `PreparedNode.terminals` derives from its incoming edges
+(named ports, `others`, `resources`, `embed`). Call
+options are typed: `CallOptions` (emit/assign/field/count) and `ContextOverrides` (mode/inputs/
+verbose/test, mirroring `Context.replace`; `_resolve_context` is `base.replace(**overrides)`) live in
+`riko/types/modules.py`, and the decorators derive their option-name sets from them with
+`typed_dict_keys`. One precedence nuance: when a node both binds a call option and receives a
+secondary input stream under the same name (e.g. `count`), the stream wins, as it already did on a
+direct call. Measured: `Module.prepare` ran 50 times for 50 items before and once per plan after; a
+2,000-item inline `strtransform` run takes ~46 ms. Regressions:
+`tests/internal/test_execution_plan.py::TestPreparedCall` and `tests/internal/test_modules.py::TestPrepare`.
 
 ## Write sessions — private seam awaiting `WriteNode`
 

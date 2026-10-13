@@ -40,6 +40,7 @@ from riko.definitions._nodes import (
     StreamEdge,
     SubscribeNode,
     WriteNode,
+    require_module_node,
 )
 from riko.definitions._normalize import _NODE_BUILDERS, _normalize_port
 from riko.definitions._resource_definition import Resource, ReusableResource
@@ -57,9 +58,9 @@ from riko.definitions._write import (
     WriteOperation,
     WriteResult,
 )
-from riko.execution._execution import SyncExecution
 from riko.execution._prepared import ExecutionPlan, PreparedNode, ResolvedModule
 from riko.execution._resource_view import ResourceView
+from riko.execution._sync_execution import SyncExecution
 from riko.modules.hash import pipe as hash_pipe
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail
@@ -674,6 +675,19 @@ class TestExecutionPlanFields:
     def test_prepared_module_must_be_resolved(self):
         with pytest.raises(InvalidPipelineError, match="PreparedNode 'module'"):
             PreparedNode(ModuleNode(id="a", name="hash"), "hash")  # pyright: ignore[reportArgumentType]
+
+    def test_prepared_node_must_wrap_a_module_node(self):
+        node = WriteNode(id="a", name="write", backend="file", dest="out.csv")
+
+        with pytest.raises(InvalidPipelineError, match="write node execution"):
+            PreparedNode(node, _HASH)
+
+    def test_module_node_label_prefixes_the_family(self):
+        node = WriteNode(id="a", name="write", backend="file", dest="out.csv")
+        match = ": PreparedNode 'node': write node execution"
+
+        with pytest.raises(InvalidPipelineError, match=match):
+            require_module_node(node, "PreparedNode 'node'")
 
 
 class TestPipelineDefinitionFields:

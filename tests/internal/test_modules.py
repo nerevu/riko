@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import pickle  # noqa: S403
 from collections.abc import AsyncIterator, Awaitable, Iterator
 from functools import wraps
 from inspect import isawaitable, iscoroutinefunction
 from types import ModuleType, SimpleNamespace
 from typing import TYPE_CHECKING, Annotated, Any, cast
 
+import attrs
 import pytest
 
 from riko.bado.itertools import as_async
@@ -1567,3 +1569,45 @@ class TestPrepare:
         conf = cast("Conf", {"n": value})
         pieces, _ = build_conf(conf, {}, {"extract": "n", "listize": True})
         assert pieces == expected
+
+    def test_prepared_module_is_frozen(self):
+        conf = cast("Conf", {"x": {"subkey": "y"}})
+        prepared = processor(ftype="text").prepare("m", conf=conf)
+
+        with pytest.raises(attrs.exceptions.FrozenInstanceError):
+            prepared.name = "other"  # pyright: ignore[reportAttributeAccessIssue]
+
+    @pytest.mark.parametrize(
+        "conf",
+        [
+            pytest.param({"times": {"type": "int", "value": "2"}}, id="static"),
+            pytest.param({"times": {"subkey": "n"}}, id="dynamic"),
+        ],
+    )
+    def test_a_pickled_prepared_module_rebuilds_its_callables(self, conf):
+        prepared = processor(ftype="text").prepare("m", conf=cast("Conf", conf))
+        restored = pickle.loads(pickle.dumps(prepared))  # noqa: S301
+        item = {"n": "3", "content": 4}
+
+        assert restored == prepared
+        assert restored.parsers.conf_parser(item) == prepared.parsers.conf_parser(item)
+        assert restored.casters.field_caster(4) == prepared.casters.field_caster(4)
+        assert restored.static_conf == prepared.static_conf
+
+    @pytest.mark.parametrize("extra", ["resources", "embed", "others", "label"])
+    def test_prepare_rejects_a_per_item_argument(self, extra):
+        kwargs: dict[str, Any] = {extra: None}
+
+        with pytest.raises(TypeError, match=f"'strconcat' module takes '{extra}'"):
+            strconcat.prepare(extra, conf={}, **kwargs)
+
+    @pytest.mark.parametrize(
+        ("terminals", "is_dynamic"), [(("label",), True), ((), False)]
+    )
+    def test_terminals_decide_whether_the_conf_is_dynamic(self, terminals, is_dynamic):
+        conf = cast("Conf", {"part": {"terminal": "label", "type": "text"}})
+        prepared = processor().prepare("m", *terminals, conf=conf)
+
+        assert prepared.is_dynamic is is_dynamic
+        assert prepared.terminals == terminals
+        assert (prepared.static_casted is None) is is_dynamic

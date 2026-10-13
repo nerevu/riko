@@ -56,8 +56,8 @@ DAG is deliberately not flattened into one linear stack: `bado`, `coercion`, and
 | `riko/io/` | `io` | sync/async I/O, serialization, re-encoding |
 | `riko/parsing/` | `parsing` | config parsing, `DotDict`, HTML/XML/document parsing |
 | `riko/rss/` | `rss` | feed discovery, entry normalization, RSS/Atom parsing |
-| `riko/execution/` | `execution` | one-shot sync/async executions, lifetime primitives, execution-local resource acquisition and owned-resource teardown (`_resource_plan.py`), the resolved-resource mapping handed to modules (`_resource_view.py`), event sink |
-| `riko/runtime/` | `runtime` | collections, compiler, pipelines, resolver/registry, pub/sub, write sessions, the plan builder `_execution_plan.py` |
+| `riko/execution/` | `execution` | execution planning (`_prepared.py`), one-shot sync/async executions, lifetime primitives, execution-local resource acquisition and owned-resource teardown (`_resource_plan.py`), the resolved-resource mapping handed to modules (`_resource_view.py`), event sink |
+| `riko/runtime/` | `runtime` | collections, compiler, pipelines, the pipeline runners (`_run.py`), resolver/registry, pub/sub, write sessions |
 | `riko/modules/` | `modules` | built-in pipe implementations and module metadata/decorator internals |
 | `riko/ext/` | `modules` | supported extension-author facade and codegen helpers; same dependency layer as modules |
 | `riko/__init__.py` | `api` | stable application facade |
@@ -75,9 +75,10 @@ state:
 - `riko/execution/` is the `execution` layer: resource acquisition and teardown
   (`_resource_plan.py`) and the resolved-resource view (`_resource_view.py`) live alongside the one-shot executions and lifetime primitives.
 - `riko/runtime/` orchestrates streams, compilation, resolution, pub/sub, and
-  write sessions around those contracts, and holds `build_execution_plan` and the shared
-  run loop (`_execution_plan.py`, which imports the resolver only for typing), which produces the frozen `ExecutionPlan` defined in
-  `riko/execution/_prepared.py`.
+  write sessions around those contracts, and holds the pipeline runners (`_run.py`), which
+  build the frozen `ExecutionPlan` through `ExecutionPlan.from_workflow` in
+  `riko/execution/_prepared.py` (typed against the `Dispatcher` protocol, so the
+  execution layer never imports the resolver).
 
 The `execution` label maps to the `riko.execution` package by prefix, so no
 per-file exception is needed; `_EXACT_LAYERS` now covers only `riko` (api) and

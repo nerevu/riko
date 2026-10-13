@@ -530,7 +530,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         self, other: SupportsKeysAndGetItem[str, T]
     ) -> Self | DotDict[VT | T]:
         """
-        Merge another mapping, widening the value type to cover both sides.
+        Merge another mapping, widening the value type to cover both mappings.
 
         Examples:
 

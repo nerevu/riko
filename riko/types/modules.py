@@ -13,8 +13,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from re import Pattern, RegexFlag
 
+    from ._collections import Inputs
     from ._compiler import CountValues
-    from ._enums import CastType, FmtLike, LocationType, SortableCastType
+    from ._enums import CastType, ExecutionMode, FmtLike, LocationType, SortableCastType
     from ._io import PathLike
     from ._scalars import BasicValue
 
@@ -907,11 +908,21 @@ class CallOptions(TypedDict, total=False):
     count: CountValues
 
 
+class ContextOverrides(TypedDict, total=False):
+    """The per-call overrides a pipe call applies to its ``Context``."""
+
+    mode: ExecutionMode
+    inputs: Inputs
+    verbose: bool
+    test: bool
+
+
 __all__ = [
     "AggregateConf",
     "AnyConfRule",
     "AnyModuleConf",
     "CallOptions",
+    "ContextOverrides",
     "CountConf",
     "CsvConf",
     "CurrencyFormatConf",

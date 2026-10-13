@@ -11,6 +11,7 @@ from collections.abc import (
     Iterable,
     Iterator,
 )
+from functools import partial
 from io import StringIO
 from typing import (
     TYPE_CHECKING,
@@ -20,6 +21,7 @@ from typing import (
     Protocol,
     TypedDict,
     TypeGuard,
+    Unpack,
     overload,
 )
 
@@ -44,7 +46,15 @@ if TYPE_CHECKING:
 
     from ._scalars import NumLike, PrimitiveValue
     from ._streams import Cascade, Feed, Item, Items
-    from .modules import AnyModuleConf, Conf, ModuleSubtype, ModuleSubtypes, ModuleType
+    from .modules import (
+        AnyModuleConf,
+        CallOptions,
+        Conf,
+        MaybeFrozenConf,
+        ModuleSubtype,
+        ModuleSubtypes,
+        ModuleType,
+    )
 
 # per-item pipe values
 type PipeTuple = tuple[Item, DynamicConf]
@@ -122,16 +132,42 @@ class CastFuncs[T, E](NamedTuple):
     conf_caster: SyncConfCastFunc
 
 
+# A keyword argument name each item call supplies, which a configuration's
+# ``terminal`` reference may name.
+type TerminalName = str
+type Terminals = tuple[TerminalName, ...]
+type PrepareConf = MaybeFrozenConf | DynamicConf
+
+
 class PreparedCall(Protocol):
-    """A module call with everything but the item bound; called once per item."""
+    """
+    A module call with its configuration and call options bound.
+
+    It is called once per item, or once per stream for a module that takes a
+    whole stream. Each call supplies the ``context`` and any secondary input
+    streams, resources, or embed.
+    """
+
+    def __call__(  # noqa: E704
+        self, item: Any = None, *, context: Context | None = None, **extra: object
+    ) -> WrapperOutput | SplitterWrapperOutput: ...
+
+
+class Preparer(Protocol):
+    """
+    Binds a call's configuration and call options once for reuse over many items.
+
+    Every module wrapper carries one as its ``prepare``. The ``context`` and any
+    secondary input streams, resources, or embed are supplied with each item call
+    rather than bound here.
+    """
 
     def __call__(  # noqa: E704
         self,
-        item: Item | None = None,
-        *,
-        context: Context | None = None,
-        **options: object,
-    ) -> WrapperOutput: ...
+        *terminals: TerminalName,
+        conf: PrepareConf | None = None,
+        **options: Unpack[CallOptions],
+    ) -> PreparedCall: ...
 
 
 class ModuleWrapper(Protocol):
@@ -149,26 +185,119 @@ class ModuleWrapper(Protocol):
     pollable: bool
     loopable: bool
     isasync: bool
+    prepare: Preparer
 
-    def prepare(
-        self, conf: Conf | DynamicConf | None = None, **options: object
-    ) -> PreparedCall:
-        """
-        Binds a call's configuration and call options once for reuse over many items.
 
-        The ``context`` is supplied with each item call rather than bound here.
+def bind_call(
+    wrapper: ModuleWrapper,
+    *_: TerminalName,
+    conf: PrepareConf | None = None,
+    **options: Unpack[CallOptions],
+) -> PreparedCall:
+    """
+    Binds a pipe's configuration and call options for reuse over many items.
 
-        Args:
+    Calling the return value calls ``wrapper`` with its configuration, call options,
+    ``context``, and keyword arguments bound. Can be pickled whenever ``wrapper`` can.
 
-            conf: The module configuration.
-            options: Call options to bind.
+    Args:
 
-        Returns:
+        wrapper: The pipe to call.
 
-            A call that takes one item at a time.
+        _: The names of the extra inputs delivered with each item. Unused, since
+            ``wrapper`` sees each call's keyword arguments itself.
 
-        """
-        ...
+    Kwargs:
+
+        conf: The module configuration.
+
+        assign (str): The field results are assigned to. Defaults to the module
+            name (or ``"content"`` for a source). Ignored when ``emit`` is true.
+
+        emit (bool): Whether to emit results rather than assign them. Defaults to
+            the parser's contract.
+
+        field (str): The field whose value is passed to the pipe in place of the
+            item.
+
+        count (str): ``"first"`` stops after the first result. ``"all"`` keeps
+            every result.
+
+    Returns:
+
+        A call that takes one item at a time.
+
+    Examples:
+
+        >>> def pipe(item=None, conf=None, context=None, **kwargs):
+        ...     return iter([{**item, **conf, **kwargs}])
+        >>>
+        >>> call = bind_call(pipe, conf={"x": 1}, emit=True)
+        >>> list(call({"y": 2}, other="z"))
+        [{'y': 2, 'x': 1, 'emit': True, 'other': 'z'}]
+
+    """
+    return partial(wrapper, conf=conf, **options)
+
+
+def build_call(
+    pipe: ModuleWrapper,
+    *terminals: TerminalName,
+    conf: PrepareConf | None = None,
+    **options: Unpack[CallOptions],
+) -> PreparedCall:
+    """
+    Binds ``pipe``'s configuration and call options once for reuse over many items.
+
+    A module wrapper prepares its own call. A plain callable registered as a module
+    carries no ``prepare``, so its configuration and call options are bound with
+    ``bind_call``.
+
+    Args:
+
+        pipe: The pipe to call.
+
+        terminals: The names of the extra inputs delivered with each item: a named
+            input stream under its port name, positional streams as ``others``, bound
+            resources as ``resources``, and a loop's embed as ``embed``.
+
+    Kwargs:
+
+        conf: The module configuration.
+
+        assign (str): The field results are assigned to. Defaults to the module
+            name (or ``"content"`` for a source). Ignored when ``emit`` is true.
+
+        emit (bool): Whether to emit results rather than assign them. Defaults to
+            the parser's contract.
+
+        field (str): The field whose value is passed to the pipe in place of the
+            item.
+
+        count (str): ``"first"`` stops after the first result. ``"all"`` keeps
+            every result.
+
+    Returns:
+
+        A call that takes one item at a time.
+
+    Examples:
+
+        >>> def pipe(item=None, conf=None, context=None, **kwargs):
+        ...     return iter([{**item, **conf}])
+        >>>
+        >>> list(build_call(pipe, conf={"x": 1})({"y": 2}))
+        [{'y': 2, 'x': 1}]
+
+    """
+    prepare: Preparer | None = getattr(pipe, "prepare", None)
+
+    if prepare is None:
+        call = bind_call(pipe, *terminals, conf=conf, **options)
+    else:
+        call = prepare(*terminals, conf=conf, **options)
+
+    return call
 
 
 WRAPPER_META: tuple[str, ...] = (
@@ -182,6 +311,29 @@ WRAPPER_META: tuple[str, ...] = (
 )
 
 
+def is_module_wrapper(value: object) -> TypeIs[ModuleWrapper]:
+    """
+    Reports whether ``value`` is callable and carries every ``WRAPPER_META`` attribute.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        Whether ``value`` is a module wrapper.
+
+    Examples:
+
+        >>> from riko.modules.hash import pipe
+        >>>
+        >>> is_module_wrapper(pipe), is_module_wrapper(len)
+        (True, False)
+
+    """
+    return callable(value) and all(hasattr(value, attr) for attr in WRAPPER_META)
+
+
 def stamp_wrapper_meta(
     target: Callable[..., object],
     *,
@@ -192,11 +344,13 @@ def stamp_wrapper_meta(
     pollable: bool,
     loopable: bool,
     isasync: bool,
+    prepare: Preparer | None = None,
 ) -> None:
     """
     Stamps the discovery metadata every module wrapper carries onto ``target``.
 
-    Afterwards ``target`` carries every attribute named in ``WRAPPER_META``.
+    Afterwards ``target`` carries every attribute named in ``WRAPPER_META``, and a
+    ``prepare`` that binds configuration and call options for reuse.
 
     Args:
 
@@ -208,6 +362,9 @@ def stamp_wrapper_meta(
         pollable: Whether the module can be polled.
         loopable: Whether ``loop`` can embed the module.
         isasync: Whether ``target`` is the async interface.
+
+        prepare: Binds a call for reuse over many items. Defaults to binding ``target``
+            with its configuration and call options.
 
     Examples:
 
@@ -226,6 +383,8 @@ def stamp_wrapper_meta(
         ... )
         >>> pipe.type, pipe.isasync
         ('processor', False)
+        >>> list(pipe.prepare(conf={"x": 1})({"y": 2}))
+        []
 
     """
     setattr(target, "name", name)  # noqa: B010
@@ -235,6 +394,12 @@ def stamp_wrapper_meta(
     setattr(target, "pollable", pollable)  # noqa: B010
     setattr(target, "loopable", loopable)  # noqa: B010
     setattr(target, "isasync", isasync)  # noqa: B010
+    bound = prepare
+
+    if bound is None and is_module_wrapper(target):
+        bound = partial(bind_call, target)
+
+    setattr(target, "prepare", bound)  # noqa: B010
 
 
 class SyncModuleWrapper(ModuleWrapper, Protocol):
