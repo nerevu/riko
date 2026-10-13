@@ -36,6 +36,7 @@ from riko.definitions._write import WriteCapabilities, WriteMode, WriteResult
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail
 from riko.runtime import _write_session
+from riko.runtime._target_registry import register_target, reset_target_registry
 from riko.runtime._write_session import (
     _SessionState,
     _SyncFileWriteSession,
@@ -111,6 +112,19 @@ class TestResolveTarget:
     def test_non_target_raises(self):
         with pytest.raises(TypeError, match="cannot resolve"):
             normalize_target(42)  # pyright: ignore[reportArgumentType]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="owned by the pending riko.ext extension-point layout work: "
+    "register_target returns None, so using it as a class decorator binds the "
+    "target's name to None instead of the registered class",
+)
+def test_register_target_returns_the_class_for_decorator_use() -> None:
+    try:
+        assert register_target(_RecordStore) is _RecordStore
+    finally:
+        reset_target_registry()
 
 
 class TestResolveFormat:

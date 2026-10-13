@@ -8,6 +8,8 @@ detection, omitted-outputs materialization, input shorthand, resource sugar, and
 idempotency over an already-normalized ``Workflow``.
 """
 
+from typing import get_args
+
 import pytest
 
 from riko.base.exceptions import InvalidPipelineError
@@ -19,13 +21,13 @@ from riko.definitions._nodes import (
     SubscribeNode,
     WriteNode,
 )
-from riko.definitions._normalize import _normalize_port
+from riko.definitions._normalize import _NODE_BUILDERS, _normalize_port
 from riko.definitions._workflow import Workflow
 from riko.definitions._write import WriteMode
 from riko.ext import normalize_workflow
 from riko.types._collections import FrozenDict
 from riko.types._enums import Backends, Formats
-from riko.types._workflow import Endpoint
+from riko.types._workflow import Endpoint, NodeFamily
 
 
 @pytest.mark.parametrize(
@@ -133,6 +135,12 @@ def test_malformed_node_values_raise_invalid_pipeline(node, match):
 def test_unknown_node_family_raises():
     with pytest.raises(InvalidPipelineError, match="unknown node family"):
         normalize_workflow({"nodes": [{"name": "x", "family": "sink"}]})
+
+
+def test_every_node_family_has_a_builder():
+    families = set(get_args(NodeFamily.__value__))
+    assert set(_NODE_BUILDERS) == families
+    assert {builder.family for builder in _NODE_BUILDERS.values()} == families
 
 
 def test_missing_node_name_raises():

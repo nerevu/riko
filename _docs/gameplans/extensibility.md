@@ -278,6 +278,18 @@ params  registered action parameters; ActionNode only
 
 Other node families use their own typed structural fields rather than `conf`.
 
+**Closed means hand-written (decided 2026-10-12).** The family→class table in
+`riko/definitions/_normalize.py` stays an explicit dict guarded by a completeness test against the
+`NodeFamily` literal; it is not derived from subclass registration. A subclass hook
+(`__attrs_init_subclass__` or `__init_subclass__` on `Node`) earns its place only if this union is
+deliberately opened to extensions. If that decision is ever taken, the table becomes a registry by
+design and the hook is the right mechanism, with two constraints: use `__attrs_init_subclass__`,
+because plain `__init_subclass__` fires twice for a `slots=True` attrs subclass (once on the
+discarded pre-slots class), and give the registry a `replace`-tolerant policy so that double fire or
+a redefinition cannot raise at import. The `NodeFamily` literal cannot be derived at runtime, so the
+completeness test stays even then. Until that decision, no hook: it would silently admit any `Node`
+subclass defined anywhere, tests included, into a set this section declares closed.
+
 **Landed 2026-09-29:** a loop's embedded module is the node field `ModuleNode.embed: Embed | None`
 rather than a `conf.embed` entry, so `conf` means registered module configuration and nothing else.
 `WorkflowDocument`s (workflow documents) carry a node-level `embed` key; `LoopConf` is deleted; loop stays a registered
@@ -794,6 +806,12 @@ register(ModuleDefinition(name="example.lookup", async_pipe=pipe))
 
 Supplying both sync and async implementations is an optimization when they genuinely differ, not a
 parity requirement.
+
+**For the `riko.ext` extension-point layout slice (queued 2026-10-12):** `register_target` returns
+`None`, so it cannot decorate a target class. When that slice moves it to `riko.ext.targets`, have it
+return the registered class so `@register_target` is the one-line registration form; explicit opt-in
+per class is the supported alternative to subclass-hook auto-registration (see E3.3). Tripwire:
+`tests/internal/test_targets.py::test_register_target_returns_the_class_for_decorator_use`.
 
 ## 25. Operation packs and extension registration
 

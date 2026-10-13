@@ -52,11 +52,17 @@ handle each part under its own rule.
 
 ### Present the dispositions before producing anything
 
-Before writing any fix, test, or tripwire, lay out the proposed disposition
-for every finding in one short table or list: the finding, the disposition,
-the gameplan line that decides it, and the artifact you intend to produce.
+Before writing any fix, test, or tripwire, write the proposed disposition
+for every finding as a list (not a table), one line per finding: finding →
+disposition → the gameplan line that decides it → the artifact you intend to
+produce. Write it as visible text in the same message as the question; a
+paraphrase or summary sentence does not count.
+
 Then ask the user to confirm with AskUserQuestion — "Proceed as dispositioned
 (Recommended)", "Revise", or "Stop here" — and do nothing until they choose.
+The question must stand on its own, because the dialog can hide earlier
+output: put the same per-finding list in the "Proceed" option's `preview`,
+and never word the question as "above" or "as laid out".
 
 Some findings need more than a confirmation. Ask a dedicated question, with
 options that state what each buys, costs, and forecloses and a recommendation
