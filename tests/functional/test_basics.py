@@ -8,12 +8,12 @@ strongly by module doctests or focused test suites.
 
 from __future__ import annotations
 
+import gc
 import sqlite3
 from datetime import date, datetime
 from decimal import Decimal
 from importlib import import_module
 from itertools import chain, islice
-from pathlib import Path
 from time import struct_time
 from typing import TYPE_CHECKING, cast
 
@@ -38,9 +38,9 @@ from tests import TESTS_DIR, async_test
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+    from pathlib import Path
 
     from riko.definitions._nodes import Node
-    from riko.types._io import PathLike
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
@@ -178,39 +178,45 @@ def _check_dates[T: datetime | struct_time | date](*dates: T | object) -> tuple[
     return cast("tuple[T, ...]", dates)
 
 
-def db_conn(dest: PathLike | None = None):
-    connection = sqlite3.connect(dest or ":memory:")
-    connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
-    connection.execute("INSERT INTO t VALUES ('ford', 7213)")
-    connection.commit()
+@pytest.fixture
+def sqlite_path(tmp_path: Path) -> Path:
+    path = tmp_path / "cars.sqlite"
+    connection = sqlite3.connect(path)
 
     try:
-        yield connection
+        connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
+        connection.execute("INSERT INTO t VALUES ('ford', 7213)")
+        connection.commit()
     finally:
         connection.close()
+
+    return path
 
 
 @pytest.mark.xfail(
     strict=True,
-    reason="fetchtable opens the binary source as text via Fetch(url, encoding=...),"
-    " so a sqlite (or xlsx) fixture raises UnicodeDecodeError",
+    raises=(TypeError, UnicodeDecodeError),
+    reason="owned by the connectors work: fetchtable forwards the csv-only"
+    " delimiter option to the sqlite reader (TypeError) and opens the binary"
+    " source as text (UnicodeDecodeError); xlsx follows the same path",
 )
-def test_fetchtable_reads_sqlite_fixture(tmp_path, db_conn):
-    """
-    Ensure binary tabular sources open in binary mode and yield rows.
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
+def test_fetchtable_reads_sqlite_fixture(sqlite_path: Path):
+    """Ensure binary tabular sources open in binary mode and yield rows."""
+    pipeline = Pipeline.from_module("fetchtable", conf={"url": str(sqlite_path)})
+    item, failure = None, None
 
-    SQLite covers the defect here; XLSX follows the same path.
-    """
-    dbpath = tmp_path / "cars.sqlite"
-    db_conn(dbpath)
-
-    pipeline = Pipeline.from_module("fetchtable", conf={"url": str(dbpath)})
-    item = {}
-
-    with pytest.raises(RuntimeError):
+    try:
         item = pipeline.first()
+    except (TypeError, UnicodeDecodeError) as error:
+        failure = type(error)(*error.args)
 
-    Path(dbpath).unlink(missing_ok=True)
+    # The failed read leaks its file handle; drop the traceback that pins it and
+    # collect here so the warning fires under this test's filter, not at teardown.
+    if failure is not None:
+        gc.collect()
+        raise failure
+
     assert is_mapping(item)
     assert item.get("make") == "ford"
 

@@ -112,6 +112,15 @@ class TestSubscriptions:
         assert len(list(two)) == 1
         assert len(seen) == 2
 
+    def test_closing_the_publisher_keeps_what_it_delivered(self):
+        seen: list[object] = []
+        events = Pipeline.subscribe("abandoned", func=seen.append)
+        stream = iter(Pipeline(source=[{"x": 0}, {"x": 1}]).publish(events))
+        first = next(stream)
+        stream.close()
+
+        assert seen == [first]
+
     def test_an_undrained_subscription_does_not_block_the_publisher(self):
         events = Pipeline.subscribe("undrained")
         assert list(_tokenized().publish(events)) == EXPECTED

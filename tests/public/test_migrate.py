@@ -5,8 +5,7 @@ Tests for the ``migrate_v1_to_v2`` one-shot pipe definition migration boundary.
 These cover the ``PipeDef``-specific translation before the shared normalization
 pass: older port mapping, ``src``/``tgt`` wire translation, the ``write`` module
 becoming a ``WriteNode``, terminal ``_OUTPUT`` pseudo-node consumption into
-``outputs``, orphan retention, the migration warning, and that migrated output
-carries no ``PipeDef``-only structure.
+``outputs``, orphan retention, and the migration warning.
 """
 
 import pytest
@@ -40,6 +39,7 @@ def test_terminal_output_becomes_default_output():
     assert list(workflow.nodes) == ["sw-1"]
     assert workflow.outputs["default"] == Endpoint("sw-1", "out")
     assert workflow.edges == ()
+    assert workflow.version == "2"
 
 
 def test_legacy_ports_map_to_canonical_grammar():
@@ -362,23 +362,6 @@ def test_omitted_output_node_defaults_to_lone_leaf():
 def test_migration_warns(caplog):
     migrate_v1_to_v2({"modules": [{"id": "a", "type": "fetch", "conf": {}}]})
     assert any("pipe definition" in record.message for record in caplog.records)
-
-
-def test_migrated_workflow_carries_no_pipe_def_structure():
-    workflow = migrate_v1_to_v2(
-        {
-            "modules": [
-                {"id": "sw-1", "type": "fetch", "conf": {}},
-                {"id": "_OUTPUT", "type": "output", "conf": {}},
-            ],
-            "wires": [_wire("_w1", "sw-1", "_OUTPUT")],
-        }
-    )
-    assert "_OUTPUT" not in workflow.nodes
-    assert workflow.version == "2"
-    ports = {edge.source.port for edge in workflow.edges}
-    ports |= {edge.target.port for edge in workflow.edges}
-    assert not any(port.startswith("_") for port in ports)
 
 
 def test_malformed_module_raises():

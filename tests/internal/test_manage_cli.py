@@ -206,6 +206,11 @@ def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
     monkeypatch.setattr(
         _lint, "_lint_docstrings", lambda *_: calls.append("docstrings") or 0
     )
+    monkeypatch.setattr(_lint, "_lint_terms", lambda *_: calls.append("terms") or 0)
+    monkeypatch.setattr(
+        _lint, "_lint_literals", lambda *_: calls.append("literals") or 0
+    )
+    monkeypatch.setattr(_lint, "_lint_deps", lambda: calls.append("deps") or 0)
     monkeypatch.setattr(_lint, "_lint_actions", lambda *_: calls.append("actions") or 0)
     monkeypatch.setattr(_lint, "_lint_yaml", lambda *_: calls.append("yaml") or 0)
     monkeypatch.setattr(
@@ -228,8 +233,20 @@ def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
         (["--rst", "--yaml"], ["rst", "yaml"]),
         (
             ["--all"],
-            ["ruff", "rst", "docs", "docstrings", "actions", "yaml", "imports"],
+            [
+                "ruff",
+                "rst",
+                "docs",
+                "docstrings",
+                "terms",
+                "literals",
+                "deps",
+                "actions",
+                "yaml",
+                "imports",
+            ],
         ),
+        (["--terms", "--literals", "--deps"], ["terms", "literals", "deps"]),
         (["--check-types", "--strict"], ["types", "strict"]),
     ],
 )

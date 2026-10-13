@@ -261,12 +261,8 @@ max-line-length=88
 
 [tool.pylint.messages_control]
 disable = [
-    # handled by black/ruff
-    "C0330",           # bad-continuation
-    "C0326",           # bad-whitespace
+    # handled by ruff
     "format",
-    "bad-continuation",
-    "bad-whitespace",
     # external dependencies graph report
     "RP0401",
 ]

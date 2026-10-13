@@ -82,7 +82,7 @@ def _lint_python_strict(parallel: bool = False) -> int:
     if not _pylint:
         raise RuntimeError("pylint not found")
 
-    args = [_pylint, "--rcfile=tests/standard.rc", "-rn", "-fparseable", "riko"]
+    args = [_pylint, "-rn", "-fparseable", "riko"]
 
     if parallel:
         args.extend(["-j", "0"])

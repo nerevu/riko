@@ -275,9 +275,10 @@ class TestValueFactory:
         ],
     )
     def test_credential_and_lazy_carried[T](self, factory: ValueFactory[T], cleanup):
-        Resource.from_factory(
+        resource = Resource.from_factory(
             factory, cleanup=cleanup, credential=_CREDENTIAL, lazy=True
         )
+        _test_credential_and_lazy(resource)
 
     @pytest.mark.parametrize(
         ("factory", "cleanup", "classification"),
