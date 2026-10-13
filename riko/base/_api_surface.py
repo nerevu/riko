@@ -21,7 +21,7 @@ IO_ = frozenset({"async_url_open", "async_write", "async_get_temp_file"})
 
 COLLECTIONS = frozenset({"Formats", "export", "list_formats"})
 
-COMPILE = frozenset({"compile_workflow", "parse_dag"})
+COMPILE = frozenset({"compile_workflow"})
 
 MODULES = frozenset(
     {
@@ -37,7 +37,9 @@ MODULES = frozenset(
 OTHER = frozenset(
     {
         "Backends",
+        "CastType",
         "Context",
+        "DocumentShape",
         "Edge",
         "Endpoint",
         "ExecutionMode",
@@ -122,12 +124,10 @@ EXTENSION = frozenset(
         "normalize_module_name",
         "normalize_workflow",
         "operator",
-        "parse_document",
         "processor",
         "register_module",
         "register_workflow_store",
         "register_target",
-        "serialize_workflow",
         "splitter",
     }
 )

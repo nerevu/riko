@@ -13,8 +13,9 @@ import pytest
 
 from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._context import Context
+from riko.definitions._nodes import ModuleNode
 from riko.definitions._resource_definition import Resource, ReusableResource
-from riko.definitions._workflow import ModuleNode, Workflow
+from riko.definitions._workflow import Workflow
 from riko.definitions._write import WriteMode, WriteOperation
 from riko.execution._execution import SyncExecution
 from riko.execution._prepared import ExecutionPlan

@@ -9,13 +9,9 @@ from types import MappingProxyType
 import pytest
 
 from riko.base.exceptions import InvalidPipelineError
-from riko.definitions._workflow import WriteNode
-from riko.ext import (
-    migrate_v1_to_v2,
-    normalize_workflow,
-    parse_document,
-    serialize_workflow,
-)
+from riko.definitions._nodes import WriteNode
+from riko.definitions._workflow import Workflow
+from riko.ext import migrate_v1_to_v2, normalize_workflow
 
 RICH_RAW = {
     "version": "2",
@@ -168,42 +164,42 @@ PIPE_DEF = {
 @pytest.mark.parametrize("document", ["{bad", b"\xff", "[]"])
 def test_unparseable_documents_are_invalid_pipelines(document):
     with pytest.raises(InvalidPipelineError):
-        parse_document(document)
+        Workflow.parse(document)
 
 
 def test_golden_bytes():
     workflow = normalize_workflow(RICH_RAW)
-    assert serialize_workflow(workflow, indent=None) == RICH_GOLDEN
+    assert workflow.serialize(indent=None) == RICH_GOLDEN
 
 
 def test_default_form_is_indented():
     workflow = normalize_workflow(RICH_RAW)
-    assert serialize_workflow(workflow) == serialize_workflow(workflow, indent=4)
-    assert serialize_workflow(workflow) != serialize_workflow(workflow, indent=None)
+    assert workflow.serialize() == workflow.serialize(indent=4)
+    assert workflow.serialize() != workflow.serialize(indent=None)
 
 
 @pytest.mark.parametrize("raw", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
 def test_topologies_round_trip(raw):
     workflow = normalize_workflow(raw)
-    assert parse_document(serialize_workflow(workflow)) == workflow
+    assert Workflow.parse(workflow.serialize()) == workflow
 
 
 @pytest.mark.parametrize("raw", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
 def test_serialization_is_idempotent(raw):
     workflow = normalize_workflow(raw)
-    once = serialize_workflow(workflow)
-    assert serialize_workflow(parse_document(once)) == once
+    once = workflow.serialize()
+    assert Workflow.parse(once).serialize() == once
 
 
 @pytest.mark.parametrize("raw", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
 def test_indented_output_round_trips(raw):
     workflow = normalize_workflow(raw)
-    assert parse_document(serialize_workflow(workflow, indent=4)) == workflow
+    assert Workflow.parse(workflow.serialize(indent=4)) == workflow
 
 
 def test_indented_output_is_readable_and_sorted():
     workflow = normalize_workflow(RICH_RAW)
-    document = serialize_workflow(workflow, indent=2).decode("utf-8")
+    document = workflow.serialize(indent=2).decode("utf-8")
     top_level = [line[2:] for line in document.splitlines() if line.startswith('  "')]
     keys = [line.split('"')[1] for line in top_level]
 
@@ -223,14 +219,14 @@ def test_serialization_is_order_independent():
         "edges": [{"source": {"node": "fetch-1"}, "target": {"node": "filter-1"}}],
         "outputs": {"default": {"node": "filter-1", "port": "out"}},
     }
-    first = serialize_workflow(normalize_workflow(reordered))
-    second = serialize_workflow(normalize_workflow(forward))
+    first = normalize_workflow(reordered).serialize()
+    second = normalize_workflow(forward).serialize()
     assert first == second
 
 
 def test_write_node_keys_and_mode_survive():
     workflow = normalize_workflow(TOPOLOGIES["read-write"])
-    restored = parse_document(serialize_workflow(workflow)).nodes["w"]
+    restored = Workflow.parse(workflow.serialize()).nodes["w"]
     assert isinstance(restored, WriteNode)
     assert restored.keys == ("k",)
     assert restored.mode.value == "replace"
@@ -251,13 +247,13 @@ def test_write_node_destination_survives():
             ]
         }
     )
-    restored = parse_document(serialize_workflow(workflow)).nodes["w"]
+    restored = Workflow.parse(workflow.serialize()).nodes["w"]
     assert isinstance(restored, WriteNode)
     assert restored.dest == "out.jsonl"
 
 
 def test_migration_then_serialization_emits_no_pipe_def_structure():
-    data = serialize_workflow(migrate_v1_to_v2(PIPE_DEF), indent=None)
+    data = migrate_v1_to_v2(PIPE_DEF).serialize(indent=None)
     text = data.decode("utf-8")
     assert b'"version":"2"' in data
 
@@ -267,7 +263,7 @@ def test_migration_then_serialization_emits_no_pipe_def_structure():
 
 def test_call_options_are_serialized_apart_from_conf():
     workflow = normalize_workflow(TOPOLOGIES["call-options"])
-    data = serialize_workflow(workflow, indent=None)
+    data = workflow.serialize(indent=None)
     assert b'"options":{"count":"first","emit":true}' in data
     assert b'"conf":{"delimiter":{"value":","}}' in data
 
@@ -290,7 +286,7 @@ def test_json_native_conf_round_trips_by_equality():
         ]
     }
     workflow = normalize_workflow(raw)
-    assert parse_document(serialize_workflow(workflow)) == workflow
+    assert Workflow.parse(workflow.serialize()) == workflow
 
 
 @pytest.mark.parametrize(
@@ -366,9 +362,9 @@ def test_loop_embed_serializes_as_a_node_field():
         ]
     }
     workflow = normalize_workflow(raw)
-    document = json.loads(serialize_workflow(workflow))
+    document = json.loads(workflow.serialize())
     node = document["nodes"]["loop-1"]
 
     assert node["embed"] == {"name": "tokenizer", "conf": {"delimiter": {"value": " "}}}
     assert "conf" not in node
-    assert parse_document(serialize_workflow(workflow)) == workflow
+    assert Workflow.parse(workflow.serialize()) == workflow

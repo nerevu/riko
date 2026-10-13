@@ -98,9 +98,9 @@ R17 (`parse_dag` on an empty module list, not reproduced) landed as a **strict-x
 the divergent empty-input handling (full-def `IndexError` vs DAG silent output-only) was a gap
 deferred to the Workflow v2 normalization boundary
 ([extensibility § E3](extensibility.md#e3-canonical-workflow-v2-specification)), not accepted
-behaviour to pin. That boundary landed at cutover step 3 (2026-09-29): `parse_dag` rejects an
-empty DAG with `InvalidPipelineError`, the tripwire is retired, and
-`tests/public/test_parse_dag.py::test_empty_modules_raise_invalid_pipeline` guards it.
+behaviour to pin. That boundary landed at cutover step 3 (2026-09-29): the `PipeDag` reader (now `Workflow.parse`)
+rejects an empty DAG with `InvalidPipelineError`, the tripwire is retired, and
+`tests/public/test_build_workflow.py::test_empty_modules_raise_invalid_pipeline` guards it.
 
 ## 3. File-by-file audit
 
@@ -328,11 +328,11 @@ the suite, forcing the marker's removal) the moment its owner lands:
   recalibrate the tripwire from `IndexError` to the spec's error when it lands. The topology both paths
   share is now the immutable `GraphIndex` built by `Workflow.index` — the structural seam that
   front-door validates over ([E3.11](extensibility.md#e311-reuse-of-the-shipped-graph-index)).
-  **Resolved at cutover step 3 (2026-09-29):** the bare-bones DAG (`PipeDag`) reader is now `parse_dag`, which
+  **Resolved at cutover step 3 (2026-09-29):** the bare-bones DAG (`PipeDag`) reader is now `Workflow.parse`, which
   routes through that canonical `normalize_workflow` → `validate` front door, so an empty DAG raises
   `InvalidPipelineError("workflow has no nodes")` — the same rejection the full-document path gives.
   The tripwire is **retired**; the behavior is guarded by the regular test
-  `tests/public/test_parse_dag.py::test_empty_modules_raise_invalid_pipeline`.
+  `tests/public/test_build_workflow.py::test_empty_modules_raise_invalid_pipeline`.
 
 **Shipped (§ 2b open-question rows).** R19's characterization test was **updated, not deleted**, into
 a regression once the contract was decided (type-aware comparison):

@@ -28,7 +28,7 @@ from attrs import define
 from typing_extensions import TypeVar
 
 from riko.base.exceptions import EmptyPipelineError
-from riko.definitions._workflow import PipelineDefinition
+from riko.definitions._composition import PipelineDefinition
 from riko.types._sentinels import MISSING, MissingType
 from riko.types._streams import Item
 
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 T = TypeVar("T", default=Item)
 
 
-@define(frozen=True, slots=True)
+@define(frozen=True, slots=True, repr=False)
 class Pipeline(PipelineDefinition[T]):
     """
     A runnable ``PipelineDefinition``: iterating it yields its default output.

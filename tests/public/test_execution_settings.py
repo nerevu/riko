@@ -17,7 +17,8 @@ import pytest
 
 from riko import Context, Executor, Pipeline
 from riko.definitions._execution import DEF_EXECUTION_SETTINGS
-from riko.definitions._workflow import ModuleNode, Workflow
+from riko.definitions._nodes import ModuleNode
+from riko.definitions._workflow import Workflow
 from riko.execution._execution import AsyncExecution, SyncExecution
 from riko.ext.registry import ModuleDefinition, register_module, reset_module_registry
 from riko.types._workflow import Endpoint

@@ -190,7 +190,7 @@ dictionaries, aka ``items``.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, Sources, parse_dag, get_path
+    >>> from riko import Pipeline, Sources, Workflow, get_path
     >>>
     >>> # Note: `get_path` looks up a cached copy of a URL in the `data`
     >>> # directory, so these examples run offline
@@ -222,7 +222,7 @@ dictionaries, aka ``items``.
     >>> ### Alternatively, fetch every discovered feed in one workflow ###
     >>> #
     >>> # A `union` node merges any number of `fetch` nodes wired into it, so
-    >>> # several sources become a single stream (wires, ports, and `parse_dag`
+    >>> # several sources become a single stream (wires, ports, and `Workflow.parse`
     >>> # are explained under "Fetch several sources" below)
     >>> modules = [
     ...     {'id': f'feed-{n}', 'name': 'fetch', 'conf': {'url': url}}
@@ -233,7 +233,7 @@ dictionaries, aka ``items``.
     ...     for n in range(len(urls))
     ... ]
     >>> modules.append({'id': 'merged', 'name': 'union', 'conf': {}})
-    >>> pipeline = Pipeline(parse_dag({'modules': modules, 'wires': wires}))
+    >>> pipeline = Pipeline(Workflow.parse({'modules': modules, 'wires': wires}))
     >>>
     >>> ### View the fetched RSS feed(s) ###
     >>> #
@@ -266,12 +266,13 @@ the terminal with an ``in:`` prefix (a name starting with a digit gets a leading
 so ``1_URL`` becomes ``in:_1_URL``).
 
 Here ``urlbuilder`` produces the URL that ``fetch`` reads. `Fetch several sources`_
-introduces wires and ports, and `Compiling workflow documents`_ covers ``parse_dag``.
-The `DAG format doc`_ has the full rules for conf values filled from another node.
+introduces wires and ports, and `Compiling workflow documents`_ covers
+``Workflow.parse``. The `DAG format doc`_ has the full rules for conf values filled from
+another node.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, parse_dag, get_path
+    >>> from riko import Pipeline, Workflow, get_path
     >>>
     >>> base = get_path('feed.xml')
     >>> fetch_conf = {'url': {'terminal': '1_URL', 'type': 'url'}}
@@ -283,7 +284,7 @@ The `DAG format doc`_ has the full rules for conf values filled from another nod
     ...     ],
     ...     'wires': [['url', 'feed', 'in:_1_URL']],
     ... }
-    >>> Pipeline(parse_dag(dag)).first()['title']
+    >>> Pipeline(Workflow.parse(dag)).first()['title']
     'Donations'
 
 Alternate pipeline creation
@@ -378,13 +379,13 @@ Fetch several sources
 ^^^^^^^^^^^^^^^^^^^^^
 
 A ``union`` node merges ``items`` from multiple ``source`` nodes. Build the fan-in
-with ``parse_dag``: each wire names the ``union`` port it enters, so the first
+with ``Workflow.parse``: each wire names the ``union`` port it enters, so the first
 source goes to ``in`` and the rest to ``in:1``, ``in:2``, and so on (see the
 `DAG format doc`_).
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, parse_dag, get_path
+    >>> from riko import Pipeline, Workflow, get_path
     >>>
     >>> dag = {
     ...     'modules': [
@@ -394,7 +395,7 @@ source goes to ``in`` and the rest to ``in:1``, ``in:2``, and so on (see the
     ...     ],
     ...     'wires': [['first', 'merged'], ['second', 'merged', 'in:1']],
     ... }
-    >>> feeds = Pipeline(parse_dag(dag))
+    >>> feeds = Pipeline(Workflow.parse(dag))
     >>> len(list(feeds))
     32
 
@@ -595,7 +596,7 @@ time. Pulling them concurrently is not available yet.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, parse_dag, get_path, run
+    >>> from riko import Pipeline, Workflow, get_path, run
     >>>
     >>> async def main():
     ...     dag = {
@@ -606,7 +607,7 @@ time. Pulling them concurrently is not available yet.
     ...         ],
     ...         'wires': [['first', 'merged'], ['second', 'merged', 'in:1']],
     ...     }
-    ...     feeds = Pipeline(parse_dag(dag))
+    ...     feeds = Pipeline(Workflow.parse(dag))
     ...     print(len([item async for item in feeds]))
     >>>
     >>> run(main)
@@ -919,15 +920,15 @@ Compiling workflow documents
 
 In addition to running Python pipe scripts and workflow modules, ``riko`` can run
 JSON workflow documents (``WorkflowDocument``\s). The simplest way to author a
-``Workflow`` is a *bare-bones DAG* (``PipeDag``), which ``parse_dag`` expands. It is a
-list of ``modules`` plus optional wires. When ``wires`` are omitted the modules are
+``Workflow`` is a *bare-bones DAG* (``PipeDag``), which ``Workflow.parse`` expands. It
+is a list of ``modules`` plus optional wires. When ``wires`` are omitted the modules are
 chained linearly and blank ``id``\s default to ``sw-{n}``. Each wire is a
 ``[source, target]`` pair, optionally followed by the port it enters. This makes fan-in
 operators such as ``union``/``join`` expressible too.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, parse_dag
+    >>> from riko import Pipeline, Workflow
     >>>
     >>> ### Author a terse, linear DAG (no wires, no ids) ###
     >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
@@ -940,7 +941,7 @@ operators such as ``union``/``join`` expressible too.
     ... }
     >>>
     >>> ### Expand it into a validated Workflow and run it ###
-    >>> flow = parse_dag(dag)
+    >>> flow = Workflow.parse(dag)
     >>> list(Pipeline(flow))
     [{'salutation': 'hello'}]
 
@@ -1002,14 +1003,14 @@ You can also use ``pipe:<id>`` as an alias for ``pipe_<id>``.
     >>> from pathlib import Path
     >>> from tempfile import TemporaryDirectory
     >>> from riko import Pipeline
-    >>> from riko.ext import register_workflow_store, serialize_workflow
+    >>> from riko.ext import register_workflow_store
     >>>
     >>> conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
     >>> greet = Pipeline.from_module('itembuilder', conf=conf)
     >>>
     >>> with TemporaryDirectory() as tmp:
     ...     document = Path(tmp) / 'pipe_greet.json'
-    ...     _ = document.write_bytes(serialize_workflow(greet.workflow))
+    ...     _ = document.write_bytes(greet.workflow.serialize())
     ...     register_workflow_store(directory=Path(tmp), replace=True)
     ...     list(Pipeline.from_module('pipe:greet'))
     [{'greeting': 'hello'}]
@@ -1036,7 +1037,7 @@ installed before execution.
 
 .. code-block:: python
 
-    >>> from riko import parse_dag
+    >>> from riko import Workflow
     >>>
     >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hi'}}
     >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
@@ -1046,7 +1047,7 @@ installed before execution.
     ...         {'name': 'rename', 'conf': rename_conf},
     ...     ]
     ... }
-    >>> flow = parse_dag(dag)
+    >>> flow = Workflow.parse(dag)
     >>> sorted(node.name for node in flow.nodes.values())
     ['itembuilder', 'rename']
 

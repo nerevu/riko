@@ -28,7 +28,7 @@ Planned** (nothing ships yet). Find any `§N` via the [ROADMAP §-index](ROADMAP
 - [Subscription lifecycle — `subscribe` / `publish` (F5a, partial)](#subscription-lifecycle--subscribe--publish-f5a-partial)
 - [Compiler graph index (shipped)](#compiler-graph-index-shipped)
 - [Canonical value encoder (R2A, shipped)](#canonical-value-encoder-r2a-shipped)
-- [Workflow v2 serialization — `serialize_workflow` / `parse_document` (R4A.5, shipped)](#workflow-v2-serialization--serialize_workflow--parse_document-r4a5-shipped)
+- [Workflow v2 serialization — `Workflow.serialize` / `Workflow.parse` (R4A.5, shipped)](#workflow-v2-serialization--workflowserialize--workflowparse-r4a5-shipped)
 - [25. Conversion — export converters (shipped)](#25-conversion--export-converters-shipped)
 - [Private execution runtime — `SyncExecution` / `AsyncExecution` (R4B, shipped)](#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)
 - [Write sessions — private seam awaiting `WriteNode`](#write-sessions--private-seam-awaiting-writenode)
@@ -285,7 +285,7 @@ points under `[project.entry-points."riko.modules"]`; precedence runtime → ent
 `WorkflowResolver` + injectable workflow stores (`riko/runtime/_workflows.py`): every store is a
 `WorkflowStore[T]` protocol (`load(name) -> T | None`); `ModuleStore = WorkflowStore[ResolvedWorkflow]`
 (`PackageStore`, `MappingStore`, `CompositeStore`) and `DirectoryStore` is a `DocumentStore` (`WorkflowStore[Workflow]`) that
-parses each workflow document (`WorkflowDocument`) with `parse_document`, which `load_workflow` returns (a miss raises
+parses each workflow document (`WorkflowDocument`) with `Workflow.parse(text, shape="v2")`, which `load_workflow` returns (a miss raises
 `UnsupportedWorkflowError` naming the reason; `DirectoryStore.load` treats only `FileNotFoundError` as a miss).
 Stores take only `pipe_<id>` names: every resolver entry point (`load`, `load_workflow`, `require`,
 `require_interfaces`) translates the `pipe:<id>` alias with `pythonise`, and both `is_compatible` checks use
@@ -421,10 +421,11 @@ The structural v2 vocabulary (no execution runtime yet — R4B executes it). Pur
 `riko/types/_workflow.py` (`Endpoint`, the frozen `Edge` base with its `(node, port)` `port`
 property, the `NodeFamily`/`EdgeFamily`/`PortDirection` discriminant literals, `InputRef`, the
 `parse_port` grammar helper, and the `Raw*` TypedDicts); the immutable model lives in
-`riko/definitions/_workflow.py` — the closed node union
-`ModuleNode`/`ReadNode`/`WriteNode`/`CacheNode`/`ActionNode`/`SubscribeNode`, the edge families
-`StreamEdge`/`PublishEdge`, the `Workflow` envelope, and the generic `PipelineDefinition[T]`, which owns
-every pipeline field and composition method (each returns `Self`). The runnable STABLE `Pipeline` is its
+`riko/definitions/` — the closed node union
+`ModuleNode`/`ReadNode`/`WriteNode`/`CacheNode`/`ActionNode`/`SubscribeNode` and the edge families
+`StreamEdge`/`PublishEdge` in `_nodes.py`, the `Workflow` envelope in `_workflow.py`, and the generic
+`PipelineDefinition[T]` in `_composition.py`, which owns every pipeline field and composition method
+(each returns `Self`). The runnable STABLE `Pipeline` is its
 subclass in `riko/runtime/_pipeline.py`, adding only `__iter__`/`__aiter__`/`first`/`afirst`, so no
 definition imports upward (the architecture lint fails function-local upward imports too).
 
@@ -470,12 +471,21 @@ field normalizing `None`/omitted to the empty `Workflow` through the shared `_op
 `tests/public/test_workflow.py` plus module doctests. Forward order and the clean-break deletion
 ledger: [implementation-sequence.md](gameplans/implementation-sequence.md) R4A.
 
+`Workflow` loads and saves itself: `Workflow.parse(document, *, shape=None)` reads a
+`WorkflowDocument`, a `PipeDag`, or a `PipeDef` (bytes, text, or a mapping; the shape is detected
+unless `shape` pins a `DocumentShape`) and validates the result, `Workflow.load(path)` reads a file
+and parses it the same way, and `flow.serialize()` emits the byte-stable `WorkflowDocument`, so
+`Workflow.parse(flow.serialize()) == flow`. `Workflow` and `Pipeline` print a compact repr (`Workflow(fetch-1 -> sort-1; outputs:
+default)` for a chain, `Workflow(nodes: 3, edges: 2; outputs: default)` otherwise,
+`Workflow(empty)`; `Pipeline(...)` appends `seed`/`context` when present).
+
 ## Workflow v2 normalization — `normalize_workflow` (R4A.2, shipped)
 
 The single authoring-sugar normalization boundary: `RawWorkflow` in, one `Workflow` out,
-so no other subsystem reinterprets shorthand. Lives in `riko/runtime/_normalize.py`
-(the runtime home the clean-break placement note assigns, superseding the original
-`riko/workflow/normalize.py` sketch); exported EXTENSION as `riko.ext.normalize_workflow`.
+so no other subsystem reinterprets shorthand. Lives in `riko/definitions/_normalize.py`
+(`build_workflow_fields`, which returns the field values; the clean-break placement note supersedes the
+original `riko/workflow/normalize.py` sketch); the `normalize_workflow` delegate in
+`riko/definitions/_workflow.py` is exported EXTENSION as `riko.ext.normalize_workflow`.
 
 It is the **structural, contract-free** pass — no `ModuleRegistry`/`TargetRegistry` lookup. It
 assigns node ids, dispatches each `RawNode` to its node family, maps legacy ports to the
@@ -527,13 +537,14 @@ the module and target contracts declare no ports or configuration schemas yet; t
 metadata. Tests: `tests/public/test_validate.py` (builds `Workflow` graphs directly and asserts
 `workflow.validate()`/`isvalid`) plus module doctests.
 
-## Workflow v2 serialization — `serialize_workflow` / `parse_document` (R4A.5, shipped)
+## Workflow v2 serialization — `Workflow.serialize` / `Workflow.parse` (R4A.5, shipped)
 
 Deterministic byte-stable canonical serialization of a `Workflow` and its
-round-tripping parser. Lives in `riko/runtime/_serialize.py`; exported EXTENSION as
-`riko.ext.serialize_workflow` / `riko.ext.parse_document`.
+round-tripping parser. Lives in `riko/definitions/_serialize.py` (`serialize_graph`/`parse_graph`);
+the STABLE entry points are the `Workflow.serialize`/`Workflow.parse` methods in
+`riko/definitions/_workflow.py` (no separate `riko.ext` function forms).
 
-`serialize_workflow(workflow, *, indent=4)` is a thin `json.dumps(workflow, cls=WorkflowEncoder,
+`flow.serialize(*, indent=4)` is a thin `json.dumps(workflow, cls=WorkflowEncoder,
 sort_keys=True, indent=indent, ensure_ascii=False)` (plus a trailing newline; `indent=None` gives the
 compact `separators=(",", ":")` form) — with `sort_keys` ordering map keys at every level, the
 same `Workflow` always yields identical bytes for golden-fixture comparison; edge order follows the `Workflow`
@@ -542,7 +553,8 @@ while the semantic wiring lives in the endpoints, not the array order. `Workflow
 and each `Node`/`Edge` via **reflection** — `serialize_attrs` (`riko/types/_collections.py`) uses `attrs.asdict(recurse=False)`
 for the attrs `Workflow`, nodes, and edges, dropping empties (`_has_value`) while keeping required
 keys — and it coerces the remaining
-structural leaves (`Mapping`/`FrozenDict`→dict, `tuple`→list, `Enum`→`.value`). Because node
+structural leaf, `Mapping`/`FrozenDict`→dict (`json` already writes tuples as arrays and `StrEnum`
+members as strings). Because node
 serialization is field-reflection rather than a per-family branch, a new node field (e.g.
 `WriteNode.dest`) serializes automatically with no serializer edit. A node's or edge's kind
 serializes as `family`; `RawNode`/`RawEdge` have no `type` key, and a node that gives one is
@@ -557,9 +569,9 @@ any other object as is; `thaw` reverses it. `FrozenDict`
 is the one frozen-mapping type for definitions, workflows, plans, and `Context`/`Resource`; as a frozen
 slotted attrs class it pickles natively, so process-pool workers receive conf with no `copyreg` hook.
 Because it is also an attrs class, structural dispatch tests `Mapping` before `attrs.has`. The
-encoder therefore needs no Python-only value branches and `serialize_workflow` uses `allow_nan=False`.
-`parse_document(data)` reconstructs the `Workflow` by reusing `normalize_workflow` on the loaded JSON (a
-`WorkflowDocument` is itself a valid `RawWorkflow`), so `parse_document(serialize_workflow(workflow)) == workflow` holds
+encoder therefore needs no Python-only value branches and `serialize` uses `allow_nan=False`.
+`Workflow.parse(data)` reconstructs (and validates) the `Workflow` by reusing the shared normalization on the loaded JSON
+(a `WorkflowDocument` is itself a valid `RawWorkflow`), so `Workflow.parse(flow.serialize()) == flow` holds
 by value equality and serialization is idempotent. A migrated pipe definition (`PipeDef`) serializes with no v1-only structure: no
 `_INPUT`/`_OUTPUT`/`wires`/`src`/`tgt` tokens and no `type:"output"` node — the terminal `_OUTPUT`
 pseudo-node lives only in top-level `outputs`. Tests: `tests/public/test_serialize.py` (golden bytes,
@@ -569,32 +581,33 @@ non-JSON-native value rejection, migrate-emits-no-v1) plus module doctests.
 The **CLI v1→v2 cutover** was deferred out of this slice to R4B and has since shipped there
 (cutover step 3; see [v1-cutover.md](gameplans/v1-cutover.md)). Every console script was kept
 and re-pointed at canonical v2 rather than deleted. `riko/cli/_workflow.py` is the shared
-document front door (`DocumentFormat`, `read_document`, `get_document_format`, `normalize_document`,
-`require_workflow`); `build-workflow` is the one lenient reader, taking a serialized `PipeDag`, a
+document front door (`read_document`, `require_workflow`); `build-workflow` is the one lenient reader
+(through `Workflow.parse`), taking a serialized `PipeDag`, a
 serialized `PipeDef`, or a `WorkflowDocument` and always emitting a validated `WorkflowDocument`
 (detection picks the reader; a `--format` pin is read as given, never re-detected, and a non-list
 `wires`/`modules` falls through to the `PipeDag` reader's `InvalidPipelineError`);
 `compile-workflow` and `run-pipe` go through `require_workflow` and refuse anything older. `run-pipe <id>` searches `./examples` and then the checkout's `ROOT_DIR / "examples"` (`get_example_dirs` in `riko/cli/runpipe.py`; listed once when they are the same directory), trying `<id>.py` then `workflows/<id>.json` in each, so example ids resolve from any directory in a checkout or editable install (the wheel ships no `examples`).
 `riko/runtime/_codegen.py` is the v2 generator behind STABLE `compile_workflow`, and
-`riko/runtime/_migrate.py::parse_dag` replaces `build_pipe_def` as the bare-bones DAG
-entry point. A `PipeDag` module names its module in `name` or the older `type`
-(`require_dag_name` in `riko/definitions/_workflow.py` rejects a missing or disagreeing pair). `migrate_v1_to_v2` remains the one-shot offline conversion path, now reachable
+`Workflow.parse` replaces `build_pipe_def` as the bare-bones DAG entry point (its interim
+STABLE alias `parse_dag` was removed 2026-10-12 as a clean break). A `PipeDag` module names its module in `name` or the older `type`
+(`_require_dag_name` in `riko/definitions/_migrate.py` rejects a missing or disagreeing pair). `migrate_v1_to_v2` remains the one-shot offline conversion path, now reachable
 from the command line through `build-workflow`. The v1 `PipeDef`/`wires` compiler itself
 (`compile_pipe_def`, `parse_pipe_def`, `build_pipeline`, `pypipe*.txt`, `_compile_repr.py`,
 `riko/types/_pipeline.py`, `tests/internal/test_compile.py`) was deleted at cutover step 5
-(2026-10-03); STABLE `COMPILE` is now `compile_workflow` + `parse_dag`, and `extract_dependencies`
+(2026-10-03); STABLE `COMPILE` is now `compile_workflow` alone, and `extract_dependencies`
 (released name) has no replacement beyond reading `Workflow` node names.
 
 ## Workflow v1→v2 migration — `migrate_v1_to_v2` (R4A.4, shipped)
 
 A one-shot offline conversion of a `PipeDef` (`modules` plus `src`/`tgt`
-`wires`) into `Workflow`. Lives in `riko/runtime/_migrate.py` (the runtime
-home the clean-break placement note assigns, superseding the original `riko/workflow/migrate.py`
-sketch); exported EXTENSION as `riko.ext.migrate_v1_to_v2`. It is **not** a live loader — v1 is not a
+`wires`) into `Workflow`. Lives in `riko/definitions/_migrate.py`
+(`migrate_pipe_def`, which returns a `RawWorkflow`; the clean-break placement note supersedes the
+original `riko/workflow/migrate.py` sketch); the `migrate_v1_to_v2` delegate in
+`riko/definitions/_workflow.py` is exported EXTENSION as `riko.ext.migrate_v1_to_v2`. It is **not** a live loader — v1 is not a
 maintained runtime ingress, so it `logger.warning`s that a `PipeDef` was migrated, then emits v2
 only.
 
-It reuses `normalize_workflow` for the shared structural pass (port grammar, node families, id
+It reuses `build_workflow_fields` for the shared structural pass (port grammar, node families, id
 handling, lone-leaf outputs) so only the v1-specific translation lives here: each module's `type`
 becomes the node `name`; a v1 `write` module becomes a `WriteNode` (`backend=file`, `fmt` from
 `conf.fmt`, mode defaulting to `replace`) rather than executing the legacy Python module; `src`/`tgt`
@@ -613,7 +626,7 @@ from each annotation's source text with `ast`, because CPython 3.12 ignores stri
 under postponed annotations; it never evaluates the annotated types, so it needs no namespaces; a wire target
 port that is not an identifier is pythonised (`1_URL` → `_1_URL`) to match how module terminals are
 looked up; fully-uppercase v1 `conf` keys (e.g. `URL`) are
-lowercased through `riko.coercion._sequences.lower_keys` so they keep v1's canonical casing. Orphan modules
+lowercased through the private `_lower_keys` in `riko/definitions/_migrate.py` so they keep v1's canonical casing. Orphan modules
 are **retained** as nodes rather than silently erased — arity/reachability is validation's call.
 Malformed structure raises `InvalidPipelineError`; an empty node set is left to
 `Workflow.validate()` (the `migrate → normalize → validate` flow of E3.1).
@@ -731,7 +744,7 @@ serializes the same `Formats` at a destination. Meza owns conversion work. The B
 > Cutover steps 2–5 are done (ordered checklist: [v1-cutover.md](gameplans/v1-cutover.md); step 5
 > deleted the v1 compiler on 2026-10-03): the fixture trees hold `WorkflowDocument`s,
 > the console scripts run, convert, and generate from canonical v2 through
-> `riko/cli/_workflow.py` and `riko/runtime/_codegen.py`, and the v1 pipe/collection classes were
+> `Workflow.parse`, `riko/cli/_workflow.py`, and `riko/runtime/_codegen.py`, and the v1 pipe/collection classes were
 > deleted on 2026-10-02 (`54b53c29`), leaving `riko/runtime/collections.py` with `Formats`, `export`, and
 > `list_formats`.
 

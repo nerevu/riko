@@ -1,36 +1,11 @@
 # vim: sw=4:ts=4:expandtab
 """
-Construction of Workflows from terser module listings.
+Translation of terser module listings into shorthand workflow mappings.
 
-``parse_dag`` expands a ``PipeDag`` (``modules`` plus optional ``wires``) into a
-validated ``Workflow``. ``migrate_v1_to_v2`` converts a pipe definition (``PipeDef``)
-into a ``Workflow`` too; it is a rescue/conversion tool, not a live loader, so
-migration warns and only ever returns a ``Workflow``.
-
-Examples:
-
-    Basic usage::
-
-        >>> from riko.runtime._migrate import migrate_v1_to_v2
-        >>>
-        >>> pipe_def = {
-        ...     "modules": [
-        ...         {"id": "sw-1", "type": "fetch", "conf": {}},
-        ...         {"id": "_OUTPUT", "type": "output", "conf": {}},
-        ...     ],
-        ...     "wires": [
-        ...         {
-        ...             "id": "_w1",
-        ...             "src": {"id": "_OUTPUT", "moduleid": "sw-1"},
-        ...             "tgt": {"id": "_INPUT", "moduleid": "_OUTPUT"},
-        ...         }
-        ...     ],
-        ... }
-        >>> workflow = migrate_v1_to_v2(pipe_def)
-        >>> list(workflow.nodes)
-        ['sw-1']
-        >>> workflow.outputs["default"]
-        Endpoint(node='sw-1', port='out')
+A ``PipeDag`` (``modules`` plus optional ``wires``) and a pipe definition
+(``PipeDef``) are each expanded into the ``RawWorkflow`` the normalization boundary
+reads. Migrating a ``PipeDef`` is a rescue/conversion step, not a live loader, so it
+warns.
 
 """
 
@@ -45,17 +20,13 @@ from riko.base._config import INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
 from riko.base._iterutils import partition, unzip
 from riko.base._strutils import pythonise
 from riko.base.exceptions import InvalidPipelineError
-from riko.coercion._sequences import lower_keys
-from riko.definitions._workflow import (
-    require_dag_fields,
-    require_dag_name,
-    require_v1_loop_fields,
-    require_v1_pipe_fields,
-    resolve_write_mode,
+from riko.types._collections import (
+    def_from_require,
+    require_from_typed_dict,
+    require_str,
 )
-from riko.types._collections import require_from_typed_dict, require_str
 from riko.types._compiler import DagModule, Embed, EmbedRef, PipeModule
-from riko.types._guards import require_mapping, require_sequence
+from riko.types._guards import is_mapping, require_mapping, require_sequence
 from riko.types._workflow import (
     WORKFLOW_VERSION,
     RawEdge,
@@ -65,12 +36,13 @@ from riko.types._workflow import (
 )
 from riko.types.modules import AnyModuleConf, CallOptions, Conf, WriteConf
 
-from ._normalize import normalize_workflow, resolve_port
+from ._nodes import optional_str
+from ._normalize import resolve_port
+from ._write import WriteMode
 
 if TYPE_CHECKING:
     from logging import Logger
 
-    from riko.definitions._workflow import Workflow
     from riko.types._compiler import PipeDag, PipeDefLike
 
 _OPTIONS = frozenset(CallOptions.__annotations__)
@@ -87,6 +59,92 @@ require_base_pipe = require_from_typed_dict(
 )
 require_write_conf = require_from_typed_dict(WriteConf, extra={"keys"})
 
+_WRITE_MODES = {"w": WriteMode.REPLACE, "a": WriteMode.APPEND}
+_optional_mapping = def_from_require(require_mapping)
+_require_embed_ref = require_from_typed_dict(EmbedRef)
+
+
+def _lower_keys[T](obj: T) -> T:
+    """Lowercases every all-uppercase string key, at any depth."""
+    if is_mapping(obj):
+        result = {
+            (k.lower() if isinstance(k, str) and k.isupper() else k): _lower_keys(v)
+            for k, v in obj.items()
+        }
+    elif isinstance(obj, list):
+        result = [_lower_keys(v) for v in obj]
+    else:
+        result = obj
+
+    return cast("T", result)
+
+
+def _parse_write_mode(mode: str) -> WriteMode:
+    """Translates a ``PipeDef`` file-open write mode into a ``WriteMode``."""
+    head = mode[:1].lower()
+
+    if (write_mode := _WRITE_MODES.get(head)) is None:
+        msg = f"cannot migrate pipe definition write mode: {mode!r}"
+        raise InvalidPipelineError(msg)
+
+    return write_mode
+
+
+def _require_embed_ref_fields(value: EmbedRef, what: str = "embed") -> EmbedRef:
+    """Validates an EmbedRef's keys."""
+    require_str(value["type"], f"{what} 'type'")
+    require_str(value["id"], f"{what} 'id'")
+    return value
+
+
+def _require_dag_name(value: DagModule, what: str = "dag module") -> str:
+    """
+    Requires a ``DagModule``'s module name, read from ``name`` or its older ``type``.
+
+    Raises:
+
+        InvalidPipelineError: If neither key is present, or both are and disagree.
+
+    """
+    name, type_ = value.get("name"), value.get("type")
+
+    if name is None and type_ is None:
+        raise InvalidPipelineError(f"{what} needs a 'name'")
+    elif name is not None and type_ is not None and name != type_:
+        msg = f"conflicting {what} 'name'/'type': {name!r} and {type_!r}"
+        raise InvalidPipelineError(msg)
+
+    return require_str(type_ if name is None else name, f"{what} 'name'")
+
+
+def _require_dag_fields(value: DagModule, what: str = "dag module") -> DagModule:
+    """Validates a ``DagModule``'s keys."""
+    optional_str(value.get("id"))
+    _require_dag_name(value, what)
+    _optional_mapping(value.get("conf"))
+    return value
+
+
+def _get_write_mode(value: WriteConf) -> WriteMode | None:
+    """Translates a ``WriteConf``'s mode into a ``WriteMode`` (``None`` when absent)."""
+    mode = optional_str(value.get("mode"))
+    return None if mode is None else _parse_write_mode(mode)
+
+
+def _require_v1_pipe_fields(value: PipeModule, what: str = "module") -> PipeModule:
+    """Validates a ``PipeModule``'s keys."""
+    require_str(value["id"], f"{what} 'id'")
+    require_str(value["type"], f"{what} 'type'")
+    require_mapping(value["conf"], f"{what} 'conf'")
+    return value
+
+
+def _require_v1_loop_fields(value: PipeModule, what: str = "loop module") -> PipeModule:
+    """Validates a ``loop`` ``PipeModule``'s embed."""
+    embed = require_mapping(value.get("embed"), f"{what} 'embed'")
+    _require_embed_ref_fields(_require_embed_ref(embed))
+    return value
+
 
 def _build_embed(embed: EmbedRef, conf: Conf | None = None) -> Embed:
     return Embed({"name": embed["type"], "conf": conf or {}})
@@ -94,9 +152,9 @@ def _build_embed(embed: EmbedRef, conf: Conf | None = None) -> Embed:
 
 def _migrate_pipe_module(module: PipeModule) -> RawNode:
     """Translates a ``PipeModule`` into a ``RawNode``."""
-    require_v1_pipe_fields(module, "module")
+    _require_v1_pipe_fields(module, "module")
     module_id = module["id"]
-    conf = lower_keys(module["conf"])
+    conf = _lower_keys(module["conf"])
 
     if (name := module["type"]) == _WRITE:
         write_conf = require_write_conf(cast("AnyModuleConf", conf))
@@ -111,11 +169,11 @@ def _migrate_pipe_module(module: PipeModule) -> RawNode:
             }
         )
 
-        if mode := resolve_write_mode(write_conf):
+        if mode := _get_write_mode(write_conf):
             node["mode"] = mode
 
     elif name == _LOOP:
-        loop = require_v1_loop_fields(module, "module")
+        loop = _require_v1_loop_fields(module, "module")
         _embed = cast("EmbedRef", loop.get("embed", {}))
         embed = _build_embed(_embed, conf)
         node = RawNode({"id": loop["id"], "name": name, "embed": embed})
@@ -130,9 +188,9 @@ def _migrate_pipe_module(module: PipeModule) -> RawNode:
 
 def _migrate_dag_module(index: int, module: DagModule) -> tuple[str, RawNode]:
     """Translates a ``DagModule`` into a RawNode."""
-    require_dag_fields(module, "module")
+    _require_dag_fields(module, "module")
     raw_id = module.get("id")
-    name = require_dag_name(module, "module")
+    name = _require_dag_name(module, "module")
     node_id = f"sw-{index}" if raw_id is None else require_str(raw_id, "module 'id'")
     fields = DagModule(module)
     fields.pop("type", None)
@@ -172,58 +230,34 @@ def _migrate_wires(
     return edges, endpoints
 
 
-def migrate_v1_to_v2(pipe_def: PipeDefLike) -> Workflow:
+def migrate_pipe_def(pipe_def: PipeDefLike) -> RawWorkflow:
     """
-    Migrates a ``PipeDef`` into a ``Workflow``.
+    Migrates a ``PipeDef`` into the shorthand workflow mapping it describes.
 
-    Warns that a ``PipeDef`` was migrated, then returns the ``Workflow``. Legacy
-    ports, the ``write`` module, and the ``PipeDef`` ``output`` node (``_OUTPUT``) are
-    translated to their ``Workflow`` equivalents. Orphan and empty-graph rejection is
-    left to validation.
-
-    A module's call options become the node's ``options``, a loop's embedded module and
-    its configuration become the node's ``embed``, and a ``write`` module's file-open
-    mode maps to a reconcile mode. A module key with no ``Workflow`` equivalent is
-    rejected rather than silently dropped.
+    Warns that a ``PipeDef`` was migrated. Legacy ports, the ``write`` module, and the
+    ``PipeDef`` ``output`` node (``_OUTPUT``) are translated to their ``Workflow``
+    equivalents.
 
     Args:
 
-        pipe_def: A ``PipeDef`` with ``modules`` and ``src``/``tgt`` ``wires``;
-            editor ``layout``/``terminaldata`` are ignored.
+        pipe_def: A ``PipeDef`` with ``modules`` and ``src``/``tgt`` ``wires``.
 
     Returns:
 
-        The :class:`~riko.definitions._workflow.Workflow`.
+        The ``RawWorkflow`` for the normalization boundary.
 
-    Examples:
+    Raises:
 
-        >>> pipe_def = {
-        ...     "modules": [
-        ...         {"id": "sw-1", "type": "fetch", "conf": {}},
-        ...         {"id": "sw-2", "type": "write", "conf": {"fmt": "json"}},
-        ...     ],
-        ...     "wires": [
-        ...         {
-        ...             "id": "_w1",
-        ...             "src": {"id": "_OUTPUT", "moduleid": "sw-1"},
-        ...             "tgt": {"id": "_INPUT", "moduleid": "sw-2"},
-        ...         }
-        ...     ],
-        ... }
-        >>> workflow = migrate_v1_to_v2(pipe_def)
-        >>> node = workflow.nodes["sw-2"]
-        >>> node.backend.value, node.fmt.value
-        ('file', 'json')
-        >>> workflow.outputs["default"]
-        Endpoint(node='sw-2', port='out')
+        InvalidPipelineError: If a module or wire is malformed, or a module key has
+            no ``Workflow`` equivalent.
 
     """
     mapping = require_mapping(pipe_def, "pipe definition")
     raw_modules = require_sequence(mapping.get("modules", ()), "modules")
     modules = [require_mapping(m, "module") for m in raw_modules]
-    ouputs, inputs = partition(modules, lambda m: m.get("type") == OUTPUT_MODULE)
+    outputs, inputs = partition(modules, lambda m: m.get("type") == OUTPUT_MODULE)
 
-    output_ids = frozenset(require_str(m.get("id"), "module 'id'") for m in ouputs)
+    output_ids = frozenset(require_str(m.get("id"), "module 'id'") for m in outputs)
     nodes = [_migrate_pipe_module(require_pipe(m)) for m in inputs]
     edges, endpoints = _migrate_wires(mapping.get("wires", ()), output_ids)
     logger.warning(_WARNING)
@@ -234,7 +268,7 @@ def migrate_v1_to_v2(pipe_def: PipeDefLike) -> Workflow:
     if endpoints:
         raw_workflow["outputs"] = endpoints
 
-    return normalize_workflow(raw_workflow)
+    return raw_workflow
 
 
 def _raw_edge(*wire: object) -> RawEdge:
@@ -252,63 +286,24 @@ def _raw_edge(*wire: object) -> RawEdge:
     return RawEdge({"source": source_endpoint, "target": target_endpoint})
 
 
-def parse_dag(dag: PipeDag) -> Workflow:
+def parse_dag_graph(dag: PipeDag) -> RawWorkflow:
     """
-    Builds a validated ``Workflow`` from a ``PipeDag``.
+    Expands a ``PipeDag`` into the shorthand workflow mapping it describes.
 
-    A DAG lists ``modules`` and, optionally, ``wires``. Each module carries its module
-    ``name`` (older DAGs spell it ``type``), an optional ``id`` defaulting to ``sw-{n}``
-    in listing order, an optional opaque ``conf``, and optional call ``options``.
-    Anything else it carries is offered to the workflow node as-is. An unknown key is
-    reported rather than dropped.
-
-    When ``wires`` is omitted or empty the modules are chained in listing order, and the
-    single leaf becomes the workflow's default output. A wire's optional third entry
-    names the port it enters, so a fan-in operator such as ``union`` is expressible.
+    When ``wires`` is omitted or empty the modules are chained in listing order.
 
     Args:
 
-        dag: A ``PipeDag`` with ``modules`` and optional ``wires``, each wire a
-            ``[source_id, target_id]`` or ``[source_id, target_id, target_port]``
-            sequence.
+        dag: A ``PipeDag`` with ``modules`` and optional ``wires``.
 
     Returns:
 
-        The :class:`~riko.definitions._workflow.Workflow`.
+        The ``RawWorkflow`` for the normalization boundary.
 
     Raises:
 
-        InvalidPipelineError: If ``modules`` is empty, a module carries a key its
-            workflow node does not accept, a wire has the wrong number of entries, or
-            the resulting workflow does not validate.
-
-    Examples:
-
-        >>> count = {"count": {"type": "int", "value": "3"}}
-        >>> dag = {
-        ...     "modules": [
-        ...         {"name": "forever"},
-        ...         {"name": "truncate", "conf": count},
-        ...     ]
-        ... }
-        >>> workflow = parse_dag(dag)
-        >>> list(workflow.nodes)
-        ['sw-1', 'sw-2']
-        >>> workflow.outputs["default"]
-        Endpoint(node='sw-2', port='out')
-        >>>
-        >>> # A fan-in wire naming the port it enters:
-        >>>
-        >>> dag = {
-        ...     "modules": [
-        ...         {"id": "a", "name": "fetch"},
-        ...         {"id": "b", "name": "fetch"},
-        ...         {"id": "u", "name": "union"},
-        ...     ],
-        ...     "wires": [["a", "u"], ["b", "u", "in:1"]],
-        ... }
-        >>> [edge.target.port for edge in parse_dag(dag).edges]
-        ['in', 'in:1']
+        InvalidPipelineError: If a module carries a key its workflow node does not
+            accept, or a wire has the wrong number of entries.
 
     """
     mapping = require_mapping(dag, "dag")
@@ -319,9 +314,7 @@ def parse_dag(dag: PipeDag) -> Workflow:
     linear = list(pairwise(node_ids))
     wires = require_sequence(mapping.get("wires") or linear, "wires")
     edges = [_raw_edge(*require_sequence(wire, "wire")) for wire in wires]
-    workflow = normalize_workflow({"nodes": nodes, "edges": edges})
-    workflow.validate()
-    return workflow
+    return RawWorkflow({"nodes": nodes, "edges": edges})
 
 
-__all__ = ["migrate_v1_to_v2", "parse_dag"]
+__all__ = ["migrate_pipe_def", "parse_dag_graph"]

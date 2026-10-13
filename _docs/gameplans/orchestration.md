@@ -43,7 +43,7 @@ environment/resource definition; private `SyncExecution` / `AsyncExecution` obje
 resources and runtime state.
 
 The definition crosses a process or scheduler boundary as a `WorkflowDocument` (a workflow
-document, from `serialize_workflow`) plus a `PipelineRef`. An `ExecutionPlan` holds resolved callables and is
+document, from `Workflow.serialize`) plus a `PipelineRef`. An `ExecutionPlan` holds resolved callables and is
 process-local; it is never the portable artifact an external executor consumes.
 
 Do not map every streaming module to an orchestrator task. A stream crosses a process or

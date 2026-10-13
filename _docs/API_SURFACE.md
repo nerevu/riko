@@ -40,12 +40,12 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 <!-- /api-surface:collections -->
 
 **Compilation** — `PipeDag`/`Workflow` compilation entry points implemented in
-`riko.runtime._codegen` (`compile_workflow`) and `riko.runtime._migrate` (`parse_dag`):
+`riko.runtime._codegen` (`compile_workflow`):
 
 <!-- api-surface:compile -->
 ```python
 >>> sorted(COMPILE)
-['compile_workflow', 'parse_dag']
+['compile_workflow']
 ```
 <!-- /api-surface:compile -->
 
@@ -87,7 +87,7 @@ the `IO_` contract group.
 <!-- api-surface:other -->
 ```python
 >>> sorted(OTHER)
-['Backends', 'Context', 'Edge', 'Endpoint', 'ExecutionMode', 'Executor', 'Node', 'Pipeline', 'Workflow', 'WorkflowDocument', 'WorkflowLike', 'WorkflowModule', 'get_path', 'get_temp_file', 'list_modules']
+['Backends', 'CastType', 'Context', 'DocumentShape', 'Edge', 'Endpoint', 'ExecutionMode', 'Executor', 'Node', 'Pipeline', 'Workflow', 'WorkflowDocument', 'WorkflowLike', 'WorkflowModule', 'get_path', 'get_temp_file', 'list_modules']
 ```
 <!-- /api-surface:other -->
 
@@ -149,7 +149,7 @@ authors rather than ordinary application code.
 <!-- api-surface:extension -->
 ```python
 >>> sorted(EXTENSION)
-['ActionNode', 'AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'CacheNode', 'DynamicConf', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleNode', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WriteCapabilities', 'WriteNode', 'get_conf_type', 'get_module_category', 'migrate_v1_to_v2', 'normalize_module_name', 'normalize_workflow', 'operator', 'parse_document', 'processor', 'register_module', 'register_target', 'register_workflow_store', 'serialize_workflow', 'splitter']
+['ActionNode', 'AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'CacheNode', 'DynamicConf', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleNode', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WriteCapabilities', 'WriteNode', 'get_conf_type', 'get_module_category', 'migrate_v1_to_v2', 'normalize_module_name', 'normalize_workflow', 'operator', 'processor', 'register_module', 'register_target', 'register_workflow_store', 'splitter']
 ```
 <!-- /api-surface:extension -->
 

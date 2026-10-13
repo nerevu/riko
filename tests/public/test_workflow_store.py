@@ -12,7 +12,6 @@ from riko.base.exceptions import UnsupportedWorkflowError
 from riko.definitions._context import Context
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
-from riko.runtime._serialize import serialize_workflow
 from riko.runtime._workflows import register_workflow_store
 from riko.types._enums import ExecutionMode
 from riko.types.modules import ItemBuilderConf, StrconcatRawConf
@@ -36,7 +35,7 @@ def write_document(directory: Path, name: str, suffix: str) -> None:
     )
     pipeline = Pipeline.from_module("strconcat", conf=conf)
     path = directory / f"{name}.json"
-    path.write_bytes(serialize_workflow(pipeline.workflow))
+    path.write_bytes(pipeline.workflow.serialize())
 
 
 @pytest.fixture

@@ -14,7 +14,7 @@ import gc
 
 import pytest
 
-from riko import Pipeline, parse_dag
+from riko import Pipeline, Workflow
 from riko.bado._backend import checkpoint, fail_after
 from riko.bado.itertools import async_iter
 from riko.base._paths import get_path
@@ -70,7 +70,7 @@ def _fanned_in(*urls: str) -> Pipeline:
     wires = [[f"f{index}", "u", port] for index, port in enumerate(ports)]
     union = DagModule(id="u", type="union")
     dag = PipeDag(modules=[*fetches, union], wires=wires)
-    return Pipeline(parse_dag(dag))
+    return Pipeline(Workflow.parse(dag))
 
 
 class TestAsyncSourceAdapter:

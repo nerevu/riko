@@ -10,17 +10,17 @@ from typing import Any
 import pytest
 
 from riko.base.exceptions import InvalidPipelineError
+from riko.definitions._composition import PipelineDefinition
 from riko.definitions._context import Context
-from riko.definitions._workflow import (
+from riko.definitions._nodes import (
     ActionNode,
     CacheNode,
     ModuleNode,
-    PipelineDefinition,
     StreamEdge,
     SubscribeNode,
-    Workflow,
     WriteNode,
 )
+from riko.definitions._workflow import Workflow
 from riko.definitions._write import WriteMode, WriteOperation
 from riko.execution._prepared import ExecutionPlan, PreparedNode, ResolvedModule
 from riko.execution._resource_view import ResourceView

@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko import ExecutionMode
 from riko.modules.dateformat import pipe as dateformat
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.runtime._workflows import mark_subpipe
-from riko.types._enums import ExecutionMode
 from riko.types.modules import DateFormatRawConf, ItemBuilderRawConf
 
 if TYPE_CHECKING:

@@ -310,8 +310,8 @@ below, each row's rule is the test:
 =============  =====================================  ===========================================================  ===========================
 Verb           Meaning                                Rule                                                         Example
 =============  =====================================  ===========================================================  ===========================
-``get``        Query or compute a value               No ambient state; doesn't canonicalize or construct          ``get_document_format``
-``parse``      Representation → semantic structure    Malformed input raises; forbids reference/context/fallback   ``parse_document``
+``get``        Query or compute a value               No ambient state; doesn't canonicalize or construct          ``get_document_shape``
+``parse``      Representation → semantic structure    Malformed input raises; forbids reference/context/fallback   ``Workflow.parse``
 ``normalize``  Accepted form → canonical form         Idempotent/no default=; output is itself an accepted form    ``normalize_url``
 ``resolve``    Pick the effective value               Uses reference/context/fallback; "no match" is not an error  ``resolve_format``
 ``require``    Enforce a required value or condition  Raises on failure; never defaults or substitutes             ``require_str``

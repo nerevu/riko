@@ -130,6 +130,8 @@ class CastType(StrEnum):
 
     Examples:
 
+        >>> from riko import CastType
+        >>>
         >>> CastType.LOCATION.value
         'location'
 
@@ -193,6 +195,28 @@ class Executor(StrEnum):
     INLINE = "inline"
     THREAD = "thread"
     PROCESS = "process"
+
+
+class DocumentShape(StrEnum):
+    """
+    The three JSON shapes a workflow input may take.
+
+    ``DAG`` is a bare-bones DAG (``PipeDag``), ``V1`` a serialized pipe definition
+    (``PipeDef``), and ``V2`` a workflow document (``WorkflowDocument``, a serialized
+    ``Workflow``).
+
+    Examples:
+
+        >>> from riko import DocumentShape
+        >>>
+        >>> DocumentShape.DAG.value
+        'dag'
+
+    """
+
+    DAG = "dag"
+    V1 = "v1"
+    V2 = "v2"
 
 
 @overload
@@ -293,4 +317,5 @@ type StrLike = str | Iterable[str]
 type FmtLike = Formats | str
 type BackendLike = Backends | str
 type ExecutorLike = Executor | str
+type DocumentShapeLike = DocumentShape | str
 type ConcurrencyLike = int | Literal["auto"]

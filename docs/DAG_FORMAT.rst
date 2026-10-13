@@ -4,10 +4,10 @@ Bare-bones DAG format
 A ``riko`` **workflow document** (``WorkflowDocument``) is a serialized ``Workflow``:
 explicit JSON in which every node is named and identified, every edge names the port it
 leaves and the port it enters, and the workflow outputs are listed. The **bare-bones
-DAG** (``PipeDag``) is a minimal format that captures only the essentials. ``parse_dag``
-expands it into a validated ``Workflow``, which ``serialize_workflow`` writes as a
-``WorkflowDocument``. ``PipeDag`` and the older ``PipeDef`` are importable from
-``riko.types`` for annotating input.
+DAG** (``PipeDag``) is a minimal format that captures only the essentials.
+``Workflow.parse`` expands it into a validated ``Workflow``, which ``flow.serialize()``
+writes as a ``WorkflowDocument``. ``PipeDag`` and the older ``PipeDef`` are importable
+from ``riko.types`` for annotating input.
 
 Schema
 ------
@@ -17,7 +17,7 @@ Schema
     {
         "modules": [
             {"id": "sw-1", "name": "forever", "conf": {}},
-            {"id": "sw-2", "type": "truncate", "conf": {"count": {"type": "int", "value": "3"}}}
+            {"id": "sw-2", "name": "truncate", "conf": {"count": {"type": "int", "value": "3"}}}
         ],
         "wires": [
             ["sw-1", "sw-2"]
@@ -43,7 +43,7 @@ Schema
     {
         "modules": [
             {"name": "forever", "conf": {}},
-            {"type": "truncate", "conf": {"count": {"type": "int", "value": "3"}}}
+            {"name": "truncate", "conf": {"count": {"type": "int", "value": "3"}}}
         ]
     }
 
@@ -55,13 +55,45 @@ e.g. the source is listed after the operator it feeds
 
     {
         "modules": [
-            {"id": "trunc", "type": "truncate", "conf": {"count": {"type": "int", "value": "2"}}},
+            {"id": "trunc", "name": "truncate", "conf": {"count": {"type": "int", "value": "2"}}},
             {"id": "gen", "name": "forever", "conf": {}}
         ],
         "wires": [
             ["gen", "trunc"]
         ]
     }
+
+Loading and saving
+------------------
+
+``Workflow.parse`` reads all three shapes: a ``PipeDag``, a ``PipeDef``, or a
+``WorkflowDocument``. It takes a mapping or JSON text (``str`` or ``bytes``), detects
+which shape it holds, and returns a validated ``Workflow``. Pass ``shape="dag"``,
+``"v1"`` (a ``PipeDef``), or ``"v2"`` (a ``WorkflowDocument``) to pin the reading
+instead. ``flow.serialize()`` writes the ``WorkflowDocument``, which parses back to an
+equal ``Workflow``, and ``Workflow.load(path)`` reads and parses a file:
+
+.. code-block:: python
+
+    >>> from pathlib import Path
+    >>> from tempfile import TemporaryDirectory
+    >>> from riko import Workflow
+    >>>
+    >>> dag = {'modules': [{'name': 'forever'}, {'name': 'truncate'}]}
+    >>> flow = Workflow.parse(dag)
+    >>> flow
+    Workflow(sw-1 -> sw-2; outputs: default)
+    >>> text = '{"modules": [{"name": "forever"}, {"name": "truncate"}]}'
+    >>> Workflow.parse(text, shape='dag') == flow
+    True
+    >>> document = flow.serialize()
+    >>> Workflow.parse(document) == flow
+    True
+    >>> with TemporaryDirectory() as tmp:
+    ...     path = Path(tmp) / 'flow.json'
+    ...     _ = path.write_bytes(document)
+    ...     Workflow.load(path) == flow
+    True
 
 Fan-in
 ------
@@ -99,17 +131,17 @@ it once, while a ``processor`` fed a ``stream`` resolves it once per input ``ite
     {
         "modules": [
             {"id": "url", "name": "urlbuilder", "conf": {"base": "https://example.com/feed.xml"}},
-            {"id": "feed", "type": "fetch", "conf": {"url": {"terminal": "1_URL", "type": "url"}}}
+            {"id": "feed", "name": "fetch", "conf": {"url": {"terminal": "1_URL", "type": "url"}}}
         ],
         "wires": [
             ["url", "feed", "in:_1_URL"]
         ]
     }
 
-Expansion rules (``parse_dag``)
+Expansion rules (``Workflow.parse``)
 ------------------------------------
 
-``riko.parse_dag(dag)`` returns a validated ``Workflow``:
+``Workflow.parse(dag)`` expands a ``PipeDag`` into a validated ``Workflow``:
 
 1. Modules missing an ``id`` are assigned ``sw-{n}`` in 1-based listing order.
 2. When ``wires`` is omitted or empty, consecutive modules are wired in listing order.
@@ -123,7 +155,7 @@ Expansion rules (``parse_dag``)
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, parse_dag
+    >>> from riko import Pipeline, Workflow
     >>>
     >>> dag = {
     ...     'modules': [
@@ -131,7 +163,7 @@ Expansion rules (``parse_dag``)
     ...         {'name': 'truncate', 'conf': {'count': {'type': 'int', 'value': '3'}}},
     ...     ]
     ... }
-    >>> flow = parse_dag(dag)
+    >>> flow = Workflow.parse(dag)
     >>> list(flow.nodes)
     ['sw-1', 'sw-2']
     >>> flow.outputs['default']
@@ -143,18 +175,18 @@ Expansion rules (``parse_dag``)
 
 The result is an ordinary ``Workflow``: list the modules it uses from its ``nodes``, run
 it with ``Pipeline``, serialize it to a ``WorkflowDocument`` with
-``riko.ext.serialize_workflow``, or hand it to ``compile_workflow``.
+``flow.serialize()``, or hand it to ``compile_workflow``.
 
-A pipe definition (``PipeDef``) converts the same way through
-``riko.ext.migrate_v1_to_v2``. Convert a serialized one once before registering its
-directory with ``riko.ext.register_workflow_store``, which reads
-``WorkflowDocument``\s only:
+A pipe definition (``PipeDef``) converts the same way: ``Workflow.parse`` detects one,
+and ``riko.ext.migrate_v1_to_v2`` converts one explicitly. Convert a serialized one
+once before registering its directory with ``riko.ext.register_workflow_store``, which
+reads ``WorkflowDocument``\s only:
 
 .. code-block:: python
 
-    from riko.ext import migrate_v1_to_v2, serialize_workflow
+    from riko.ext import migrate_v1_to_v2
 
-    document = serialize_workflow(migrate_v1_to_v2(pipe_def))
+    document = migrate_v1_to_v2(pipe_def).serialize()
 
 Commands
 --------

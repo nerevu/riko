@@ -4,67 +4,36 @@ Shared JSON input front door for the riko console scripts.
 
 The console scripts read three JSON shapes: a workflow document (``WorkflowDocument``
 aka a serialized ``Workflow``), a serialized pipe definition (``PipeDef``), and a
-serialized ``PipeDag``. Every command reads its input from here. This module decides
-which shape the input is written in, which loader turns it into a validated
-``Workflow``, and which commands accept a ``PipeDef`` or ``PipeDag`` at all.
-
-``build-workflow`` is the most lenient. The commands that run or generate code take a
-``WorkflowDocument`` only.
-
-Examples:
-
-    Basic usage::
-
-        >>> from riko.cli._workflow import get_document_format, normalize_document
-        >>>
-        >>> dag = {"modules": [{"name": "forever"}, {"name": "truncate"}]}
-        >>> get_document_format(dag).value
-        'dag'
-        >>> list(normalize_document(dag).nodes)
-        ['sw-1', 'sw-2']
+serialized ``PipeDag``. Every command reads its input from here. ``build-workflow``
+is the most lenient and reads all three. The commands that run or generate code take
+a ``WorkflowDocument`` only.
 
 """
 
 from __future__ import annotations
 
 import sys
-from enum import StrEnum
 from json import loads
 from pathlib import Path
-from typing import TYPE_CHECKING, TypeGuard
+from typing import TYPE_CHECKING
 
-from riko.base._config import OUTPUT_MODULE
 from riko.base._logging import logger
 from riko.base.exceptions import InvalidPipelineError
+from riko.definitions._serialize import get_document_shape
 from riko.definitions._workflow import Workflow
-from riko.runtime._migrate import migrate_v1_to_v2, parse_dag
-from riko.runtime._normalize import normalize_workflow
-from riko.types._guards import is_listlike, is_mapping
+from riko.types._enums import DocumentShape
+from riko.types._guards import require_mapping
 
 if TYPE_CHECKING:
-    from riko.definitions._workflow import WorkflowLike
-    from riko.types._compiler import PipeDag, PipeDefLike
     from riko.types._io import PathLike
 
-_SHAPE_ERROR = "the input needs 'nodes' or 'modules'"
-_WIRE_KEYS = frozenset({"src", "tgt"})
-_OTHER_FORMS = {
-    "dag": "a serialized bare-bones DAG",
-    "v1": "a serialized pipe definition",
+_OTHER_SHAPES = {
+    DocumentShape.DAG: "a serialized bare-bones DAG",
+    DocumentShape.V1: "a serialized pipe definition",
 }
 
-type DocumentMapping = WorkflowLike | PipeDefLike | PipeDag
 
-
-class DocumentFormat(StrEnum):
-    """The JSON input shapes the console scripts read."""
-
-    DAG = "dag"
-    V1 = "v1"
-    V2 = "v2"
-
-
-def read_document(path: PathLike) -> tuple[DocumentMapping | None, str]:
+def read_document(path: PathLike) -> tuple[object | None, str]:
     """
     Reads a JSON input from ``path``, or from stdin when it is ``-``.
 
@@ -77,9 +46,8 @@ def read_document(path: PathLike) -> tuple[DocumentMapping | None, str]:
 
     Returns:
 
-        The parsed ``WorkflowLike``, ``PipeDef``, or ``PipeDag`` mapping, or ``None``
-        when it could not be read; and the name it is known by: the file stem, or
-        ``anonymous`` for standard input.
+        The parsed JSON input, or ``None`` when it could not be read; and the name it
+        is known by: the file stem, or ``anonymous`` for standard input.
 
     Examples:
 
@@ -113,139 +81,9 @@ def read_document(path: PathLike) -> tuple[DocumentMapping | None, str]:
     return document, name
 
 
-def is_workflowlike(value: object) -> TypeGuard[WorkflowLike]:
-    """Reports whether ``value`` is a ``Workflow`` or a ``WorkflowLike`` mapping."""
-    is_raw = is_mapping(value) and bool({"nodes", "version"}.intersection(value))
-    return is_raw or isinstance(value, Workflow)
-
-
-def is_pipedeflike(value: object) -> TypeGuard[PipeDefLike]:
-    """Reports whether ``value`` is a ``PipeDef``."""
-    if is_mapping(value) and not is_workflowlike(value) and "modules" in value:
-        wires = value.get("wires")
-        modules = value.get("modules")
-
-        wired = is_listlike(wires) and any(
-            is_mapping(wire) and not _WIRE_KEYS.isdisjoint(wire) for wire in wires
-        )
-        terminal = is_listlike(modules) and any(
-            is_mapping(module) and module.get("type") == OUTPUT_MODULE
-            for module in modules
-        )
-        result = wired or terminal
-    else:
-        result = False
-
-    return result
-
-
-def is_pipedag(value: object) -> TypeGuard[PipeDag]:
-    """Reports whether ``value`` is a ``PipeDag``."""
-    possible = is_mapping(value) and not is_workflowlike(value) and "modules" in value
-    return possible and not is_pipedeflike(value)
-
-
-def get_document_format(document: DocumentMapping) -> DocumentFormat:
+def require_workflow(document: object) -> Workflow:
     """
-    Detects which of the readable shapes ``document`` is written in.
-
-    A ``Workflow``, or a mapping listing ``nodes`` or declaring the workflow format
-    version it targets, is a ``WorkflowLike``. One listing ``modules`` is either a
-    ``PipeDef``, recognised by its wire mappings and its ``output`` node, or a
-    ``PipeDag``.
-
-    Args:
-
-        document: The parsed JSON input.
-
-    Returns:
-
-        The detected :class:`DocumentFormat`.
-
-    Raises:
-
-        InvalidPipelineError: If the input is not a mapping, or lists neither
-            ``nodes`` nor ``modules``.
-
-    Examples:
-
-        >>> get_document_format({"nodes": [{"name": "forever"}]}).value
-        'v2'
-        >>> modules = [{"id": "_OUTPUT", "type": "output"}]
-        >>> get_document_format({"modules": modules}).value
-        'v1'
-
-    """
-    if is_workflowlike(document):
-        fmt = DocumentFormat.V2
-    elif is_pipedeflike(document):
-        fmt = DocumentFormat.V1
-    elif is_pipedag(document):
-        fmt = DocumentFormat.DAG
-    else:
-        raise InvalidPipelineError(_SHAPE_ERROR)
-
-    return fmt
-
-
-def normalize_document(
-    document: DocumentMapping, fmt: DocumentFormat | None = None
-) -> Workflow:
-    """
-    Converts parsed input of any readable shape into a validated ``Workflow``.
-
-    A ``Workflow`` is itself a readable shape, so normalizing a result again returns
-    an equal ``Workflow``.
-
-    Args:
-
-        document: The parsed JSON input.
-        fmt: The shape to read it as. Omit it to detect the shape from the input.
-
-    Returns:
-
-        The validated :class:`~riko.definitions._workflow.Workflow`.
-
-    Raises:
-
-        InvalidPipelineError: If the shape cannot be detected, the input does not
-            hold the shape it is read as, or the resulting workflow is invalid.
-
-    Examples:
-
-        >>> pipe_def = {
-        ...     "modules": [
-        ...         {"id": "sw-1", "type": "forever", "conf": {}},
-        ...         {"id": "_OUTPUT", "type": "output", "conf": {}},
-        ...     ],
-        ...     "wires": [
-        ...         {
-        ...             "id": "_w1",
-        ...             "src": {"id": "_OUTPUT", "moduleid": "sw-1"},
-        ...             "tgt": {"id": "_INPUT", "moduleid": "_OUTPUT"},
-        ...         }
-        ...     ],
-        ... }
-        >>> normalize_document(pipe_def).outputs["default"]
-        Endpoint(node='sw-1', port='out')
-
-    """
-    resolved = get_document_format(document) if fmt is None else fmt
-
-    if resolved is DocumentFormat.V2:
-        workflow = normalize_workflow(document)
-    elif resolved is DocumentFormat.V1:
-        workflow = migrate_v1_to_v2(document)  # pyright: ignore[reportArgumentType]
-    else:
-        workflow = parse_dag(document)  # pyright: ignore[reportArgumentType]
-
-    workflow.validate()
-    return workflow
-
-
-def require_workflow(document: DocumentMapping) -> Workflow:
-    """
-    Loads parsed input that must already be a ``WorkflowLike``.
+    Loads parsed input that must already be a workflow document.
 
     Args:
 
@@ -257,29 +95,24 @@ def require_workflow(document: DocumentMapping) -> Workflow:
 
     Raises:
 
-        InvalidPipelineError: If the input is a ``PipeDef`` or ``PipeDag``, or is not
-            a valid ``WorkflowLike``.
+        InvalidPipelineError: If the input is not a mapping, is a ``PipeDef`` or
+            ``PipeDag``, or is not a valid workflow document.
 
     Examples:
 
-        >>> workflow = require_workflow({"nodes": [{"name": "forever"}]})
-        >>> list(workflow.nodes)
+        >>> flow = require_workflow({"nodes": [{"name": "forever"}]})
+        >>> list(flow.nodes)
         ['forever-1']
 
     """
-    if (fmt := get_document_format(document)) is not DocumentFormat.V2:
-        msg = f"this input is {_OTHER_FORMS[fmt.value]}, not a workflow document; run "
+    mapping = require_mapping(document, "workflow")
+
+    if (shape := get_document_shape(mapping)) is not DocumentShape.V2:
+        msg = f"this input is {_OTHER_SHAPES[shape]}, not a workflow document; run "
         msg += "it through build-workflow first to get one"
         raise InvalidPipelineError(msg)
 
-    return normalize_document(document, DocumentFormat.V2)
+    return Workflow.parse(mapping, shape=DocumentShape.V2)
 
 
-__all__ = [
-    "DocumentFormat",
-    "DocumentMapping",
-    "get_document_format",
-    "normalize_document",
-    "read_document",
-    "require_workflow",
-]
+__all__ = ["read_document", "require_workflow"]

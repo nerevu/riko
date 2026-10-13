@@ -23,6 +23,7 @@ from riko.base.exceptions import (
     PipelineStateError,
     UnsupportedTargetError,
 )
+from riko.definitions._nodes import WriteNode
 from riko.definitions._resource_definition import OneShotResource
 from riko.definitions._targets import (
     FileTarget,
@@ -31,7 +32,6 @@ from riko.definitions._targets import (
     resolve_format,
     validate_target_mode,
 )
-from riko.definitions._workflow import WriteNode
 from riko.definitions._write import WriteCapabilities, WriteMode, WriteResult
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail

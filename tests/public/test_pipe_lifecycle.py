@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from riko import Pipeline, parse_dag
+from riko import Pipeline, Workflow
 from riko.base._paths import get_path
 from riko.types._compiler import DagModule, PipeDag
 from riko.types.modules import ConfArg, FetchRawConf, ItemBuilderConf
@@ -39,7 +39,7 @@ def _fanned_in(*urls: str) -> Pipeline:
     wires = [[f"f{index}", "u", port] for index, port in enumerate(ports)]
     union = DagModule(id="u", type="union")
     dag = PipeDag(modules=[*fetches, union], wires=wires)
-    return Pipeline(parse_dag(dag))
+    return Pipeline(Workflow.parse(dag))
 
 
 def _boom():

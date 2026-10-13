@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko import ExecutionMode
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.strreplace import pipe as strreplace
 from riko.runtime._workflows import mark_subpipe
-from riko.types._enums import ExecutionMode
 from riko.types.modules import ItemBuilderRawConf, StrReplaceRawConf
 
 if TYPE_CHECKING:

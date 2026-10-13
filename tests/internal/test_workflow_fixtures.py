@@ -16,10 +16,10 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from riko.definitions._context import Context
+from riko.definitions._workflow import Workflow
 from riko.execution._execution import SyncExecution
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._resolver import dispatcher
-from riko.runtime._serialize import parse_document, serialize_workflow
 from riko.runtime._workflows import _build_resolved_workflow
 from riko.types._enums import ExecutionMode
 from tests import TESTS_DIR, async_test
@@ -27,7 +27,6 @@ from tests import TESTS_DIR, async_test
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from riko.definitions._workflow import Workflow
     from riko.types._streams import Item
 
 EXAMPLES_DIR = TESTS_DIR.parent / "examples"
@@ -50,7 +49,7 @@ PROBE_MARKS = {"pipe_zKJifuNS3BGLRQK_GsevXg": (SPLIT_PENDING,)}
 
 def _render(workflow: Workflow) -> str:
     """Renders a workflow as the indented document the fixtures are stored in."""
-    return serialize_workflow(workflow).decode("utf-8")
+    return workflow.serialize().decode("utf-8")
 
 
 def _fixtures() -> list[Any]:
@@ -88,7 +87,7 @@ def _describing_probes(attr: str) -> list[Any]:
 
 
 def _run_document(path: Path) -> list[Item]:
-    workflow = parse_document(path.read_text())
+    workflow = Workflow.parse(path.read_text())
     items: list[Item] = []
 
     with SyncExecution(context=Context(test=True)) as execution:
@@ -111,7 +110,7 @@ def _run_probe(package: str, name: str) -> list[object]:
 @pytest.mark.parametrize("path", _fixtures())
 def test_fixture_round_trips(path: Path):
     """Every committed fixture parses, validates, and is stored in serialized form."""
-    workflow = parse_document(path.read_text())
+    workflow = Workflow.parse(path.read_text())
     workflow.validate()
     assert path.read_text() == _render(workflow)
 
@@ -132,7 +131,7 @@ def test_probe_matches_document(package: str, path: Path):
 def test_probe_describes_the_inputs_its_document_declares():
     """A probe's describe-inputs output matches the pipe built from its document."""
     name = "pipe_975789b47f17690a21e89b10a702bcbd"
-    workflow = parse_document((TESTS_DIR / "workflows" / f"{name}.json").read_text())
+    workflow = Workflow.parse((TESTS_DIR / "workflows" / f"{name}.json").read_text())
     generated = _build_resolved_workflow(name, workflow, dispatcher)
     probe = import_module(f"tests.pyworkflows.{name}")
     context = Context(mode=ExecutionMode.DESCRIBE_INPUTS)

@@ -19,7 +19,8 @@ import pytest
 
 from riko import Pipeline
 from riko.bado._backend import async_sleep
-from riko.definitions._workflow import ModuleNode, StreamEdge, Workflow
+from riko.definitions._nodes import ModuleNode, StreamEdge
+from riko.definitions._workflow import Workflow
 from riko.ext.registry import ModuleDefinition, register_module, reset_module_registry
 from riko.types._guards import is_mapping
 from riko.types._workflow import Endpoint

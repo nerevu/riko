@@ -14,7 +14,8 @@ import pytest
 
 from riko import Pipeline
 from riko.base.exceptions import EmptyPipelineError, InvalidPipelineError, PipelineError
-from riko.definitions._workflow import ModuleNode, StreamEdge, Workflow
+from riko.definitions._nodes import ModuleNode, StreamEdge
+from riko.definitions._workflow import Workflow
 from riko.definitions.modules import normalize_module_name
 from riko.types._enums import ModuleName
 from riko.types._guards import is_mapping

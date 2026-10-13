@@ -11,18 +11,18 @@ idempotency over an already-normalized ``Workflow``.
 import pytest
 
 from riko.base.exceptions import InvalidPipelineError
-from riko.definitions._workflow import (
+from riko.definitions._nodes import (
     ModuleNode,
     PublishEdge,
     ReadNode,
     StreamEdge,
     SubscribeNode,
-    Workflow,
     WriteNode,
 )
+from riko.definitions._normalize import _normalize_port
+from riko.definitions._workflow import Workflow
 from riko.definitions._write import WriteMode
 from riko.ext import normalize_workflow
-from riko.runtime._normalize import _normalize_port
 from riko.types._collections import FrozenDict
 from riko.types._enums import Backends, Formats
 from riko.types._workflow import Endpoint

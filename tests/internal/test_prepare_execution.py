@@ -15,8 +15,9 @@ from riko.base._graph import descendants
 from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
 from riko.definitions import _workflow as workflow_definitions
 from riko.definitions._context import Context
+from riko.definitions._nodes import CacheNode, ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
-from riko.definitions._workflow import CacheNode, ModuleNode, StreamEdge, Workflow
+from riko.definitions._workflow import Workflow
 from riko.definitions.modules import ModuleDefinition
 from riko.execution._adapt import (
     adapt_embed,

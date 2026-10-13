@@ -231,7 +231,8 @@ def is_mappable(node: PreparedNode, extra: Mapping[str, object]) -> bool:
 
     Examples:
 
-        >>> from riko.definitions._workflow import ModuleNode, Workflow
+        >>> from riko.definitions._nodes import ModuleNode
+        >>> from riko.definitions._workflow import Workflow
         >>> from riko.execution._mapping import is_mappable
         >>> from riko.runtime._execution_plan import build_execution_plan
         >>> from riko.runtime._resolver import dispatcher
@@ -299,7 +300,8 @@ def require_process_safe(
 
     Examples:
 
-        >>> from riko.definitions._workflow import ModuleNode, Workflow
+        >>> from riko.definitions._nodes import ModuleNode
+        >>> from riko.definitions._workflow import Workflow
         >>> from riko.execution._mapping import require_process_safe
         >>> from riko.runtime._execution_plan import build_execution_plan
         >>> from riko.runtime._resolver import dispatcher

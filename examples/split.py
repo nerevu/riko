@@ -17,8 +17,7 @@ from __future__ import annotations
 from pprint import pprint
 from typing import TYPE_CHECKING, cast
 
-from riko import Pipeline
-from riko.types._enums import CastType
+from riko import CastType, Pipeline
 from riko.types.modules import DateFormatConf, InputConf
 
 if TYPE_CHECKING:

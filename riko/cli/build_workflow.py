@@ -9,7 +9,7 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import parse_dag
+        >>> from riko import Workflow
         >>>
         >>> count = {"count": {"type": "int", "value": "3"}}
         >>> dag = {
@@ -18,7 +18,7 @@ Examples:
         ...         {"name": "truncate", "conf": count},
         ...     ]
         ... }
-        >>> workflow = parse_dag(dag)
+        >>> workflow = Workflow.parse(dag)
         >>> list(workflow.nodes)
         ['sw-1', 'sw-2']
         >>> workflow.outputs["default"]
@@ -37,9 +37,11 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from pathlib import Path
 
 from riko.base.exceptions import InvalidPipelineError
-from riko.runtime._serialize import serialize_workflow
+from riko.definitions._workflow import Workflow
+from riko.types._enums import DocumentShape
+from riko.types._guards import require_mapping
 
-from ._workflow import DocumentFormat, normalize_document, read_document
+from ._workflow import read_document
 
 
 def run() -> None:
@@ -65,7 +67,7 @@ def run() -> None:
         "-f",
         "--format",
         dest="fmt",
-        choices=[member.value for member in DocumentFormat],
+        choices=[member.value for member in DocumentShape],
         default=None,
         help="Read the input in this form (default: detect it).\n\n",
     )
@@ -89,20 +91,20 @@ def run() -> None:
 
     args = parser.parse_args()
     document = read_document(args.path)[0]
-    fmt = None if args.fmt is None else DocumentFormat(args.fmt)
 
     if document is None:
         print(f"Unable to convert {args.path}", file=sys.stderr)
         return_code = 1
     else:
         try:
-            workflow = normalize_document(document, fmt)
+            mapping = require_mapping(document, "workflow")
+            workflow = Workflow.parse(mapping, shape=args.fmt)
         except InvalidPipelineError as e:
             print(e, file=sys.stderr)
             return_code = 1
         else:
             options = {"indent": None} if args.compact else {}
-            text = serialize_workflow(workflow, **options).decode("utf-8")
+            text = workflow.serialize(**options).decode("utf-8")
 
             if args.output is None:
                 sys.stdout.write(text)

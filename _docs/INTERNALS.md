@@ -50,7 +50,7 @@ generated artifacts cannot drift silently.
 ## Pipeline fixtures
 
 `tests/workflows/*.json` and `examples/workflows/*.json` are workflow documents
-(`WorkflowDocument`s) — exactly what `serialize_workflow` emits by default: indented, with sorted
+(`WorkflowDocument`s) — exactly what `Workflow.serialize` emits by default: indented, with sorted
 keys and a trailing newline — and the v2 runtime executes them directly. They are hand-maintained
 sources, not generated output. `tests/internal/test_workflow_fixtures.py` reparses
 and reserializes each file, so a committed fixture that drifts from canonical form
@@ -63,19 +63,21 @@ surfaces a config-contract error; the same test asserts each probe yields the it
 its JSON sibling does. There is no generator behind them — edit them by hand, and add
 one only for a config shape the surviving probes do not already reach.
 
-The compiler implementation lives under `riko/runtime/`:
+The compiler implementation lives under `riko/runtime/`; workflow loading lives under
+`riko/definitions/`:
 
 - `riko/runtime/_codegen.py` — the Workflow v2 generator behind `compile_workflow`.
-- `riko/runtime/_migrate.py` — `parse_dag` (`PipeDag`) and `migrate_v1_to_v2` (`PipeDef`, a pipe definition).
+- `riko/definitions/_workflow.py` — `Workflow.parse`/`load`/`serialize`, plus `migrate_v1_to_v2` (`PipeDef`, a pipe definition), over the data-returning `_normalize.py`/`_migrate.py`/`_serialize.py`.
 - `GraphIndex` (`riko/types/_workflow.py`) — derives the topology from node ids, edges, and outputs; `Workflow.index` builds it, and validation and execution planning both read it.
 - `riko/runtime/templates/` — `pyworkflow.txt`, the v2 generator template.
 - `riko/types/_compiler.py` — `PipeDef`/`PipeDefLike` and `PipeDag` type contracts;
   all three are exported on `riko.types`.
 
 The console scripts are v2-native. `riko/cli/_workflow.py` is their one document front
-door: it detects whether a document is a serialized `PipeDag`, a serialized `PipeDef`, or
-a `WorkflowDocument`, and hands it to `parse_dag`, `migrate_v1_to_v2`, or
-`normalize_workflow`. `build-workflow` is the only lenient reader — it accepts all three
+door (`read_document`, `require_workflow`). `build-workflow` reads through `Workflow.parse`,
+which detects whether a document is a serialized `PipeDag`, a serialized `PipeDef`, or a
+`WorkflowDocument` (`get_document_shape`) unless `--format` pins the `DocumentShape`.
+`build-workflow` is the only lenient reader — it accepts all three
 and always emits a `WorkflowDocument`; `compile-workflow` and `run-pipe` go through
 `require_workflow`, which refuses anything older. The v1 compiler was deleted at
 cutover step 5 (2026-10-03).

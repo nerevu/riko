@@ -241,7 +241,7 @@ unambiguous leaf exists; normalization materializes `outputs.default`.
 
 A `Workflow` must contain at least one executable node. Top-level `outputs` describe how a
 non-empty graph is exposed; they do not make an empty graph meaningful. The bare-bones DAG (`PipeDag`) reader is
-`parse_dag`, which routes through this normalization boundary, so `parse_dag({"modules":
+`Workflow.parse`, which routes through this normalization boundary, so `Workflow.parse({"modules":
 []})` is a definition error rather than an output-only pseudo-graph — shipped behaviour as of the
 CLI cutover, raising `InvalidPipelineError("workflow has no nodes")`.
 
@@ -462,7 +462,7 @@ invalid registered target configuration when the target contract is available
 
 Invalid graph/workflow structure raises `InvalidPipelineError`, a `PipelineError` subtype, rather
 than leaking traversal accidents such as `IndexError`/`KeyError`. At the `PipeDag` reader boundary
-this now holds: `parse_dag({"modules": []})` fails immediately with that domain-error family,
+this now holds: `Workflow.parse({"modules": []})` fails immediately with that domain-error family,
 stating that the workflow has no nodes.
 
 Forward compatibility comes from explicit `format_version`, not from an older runtime silently

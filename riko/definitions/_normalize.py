@@ -2,23 +2,9 @@
 """
 The single shorthand normalization boundary for ``Workflow`` graphs.
 
-``normalize_workflow`` turns a flexible ``WorkflowLike`` into one strict ``Workflow``
-so no other subsystem has to reinterpret shorthand. It
-is the structural, contract-free pass. Malformed structure raises
-``InvalidPipelineError``.
-
-Examples:
-
-    Basic usage::
-
-        >>> from riko.runtime._normalize import normalize_workflow
-        >>>
-        >>> workflow = normalize_workflow({"nodes": [{"name": "fetch"}]})
-        >>> workflow.validate()
-        >>> list(workflow.nodes)
-        ['fetch-1']
-        >>> workflow.outputs["default"]
-        Endpoint(node='fetch-1', port='out')
+Flexible workflow mappings are turned into the strict field values a ``Workflow`` is
+built from, so no other subsystem has to reinterpret shorthand. This is the
+structural, contract-free pass. Malformed structure raises ``InvalidPipelineError``.
 
 """
 
@@ -27,7 +13,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping
 from itertools import count, starmap
-from typing import TYPE_CHECKING, Any, cast, get_args
+from typing import TYPE_CHECKING, Any, TypedDict, cast, get_args
 
 from attrs import AttrsInstance
 
@@ -35,24 +21,12 @@ from riko.base._config import INPUT_PORT, OTHER_PORT, OUTPUT_PORT
 from riko.base._graph import edges_to_graph, leaves
 from riko.base._iterutils import map_values, unzip
 from riko.base.exceptions import InvalidPipelineError
-from riko.definitions._workflow import (
-    ActionNode,
-    CacheNode,
-    ModuleNode,
-    Node,
-    PublishEdge,
-    ReadNode,
-    StreamEdge,
-    SubscribeNode,
-    Workflow,
-    WriteNode,
-    get_family_edges,
-)
 from riko.types._collections import (
     FrozenDict,
     FrozenJSON,
     freeze_json,
     require_from_attrs,
+    require_from_typed_dict,
     require_str,
     require_strlike,
     serialize_attrs,
@@ -70,8 +44,32 @@ from riko.types._workflow import (
     parse_port,
 )
 
+from ._nodes import (
+    ActionNode,
+    CacheNode,
+    ModuleNode,
+    Node,
+    PublishEdge,
+    ReadNode,
+    StreamEdge,
+    SubscribeNode,
+    WriteNode,
+    get_family_edges,
+)
+
 if TYPE_CHECKING:
-    from riko.definitions._workflow import WorkflowLike
+    from ._workflow import Workflow
+
+
+class WorkflowFields(TypedDict):
+    """The normalized field values a ``Workflow`` is built from."""
+
+    nodes: tuple[Node, ...]
+    edges: list[Edge]
+    outputs: dict[str, Endpoint]
+    inputs: dict[str, FrozenDict[str, FrozenJSON]]
+    resources: str | tuple[str, ...]
+    version: str
 
 
 _ALIASES: Mapping[str, Mapping[str, str]] = {"node": {"format": "fmt"}, "edge": {}}
@@ -79,7 +77,7 @@ _REJECTED_EDGE_KEYS = frozenset({"src", "tgt", "from", "to"})
 
 require_endpoint = require_from_attrs(Endpoint, exclude={"port"})
 require_edge = require_from_attrs(Edge)
-require_workflow = require_from_attrs(Workflow, exclude={"nodes", "outputs"})
+require_raw_workflow = require_from_typed_dict(RawWorkflow, "Workflow")
 
 
 def _get_legacy_index(port: str, prefix: str, default: int) -> int:
@@ -305,14 +303,26 @@ def _normalize_inputs(raw: object) -> dict[str, FrozenDict[str, FrozenJSON]]:
 def _gen_raw[K, V: AttrsInstance, R](
     values: Mapping[K, V], raw: type[R]
 ) -> Iterator[tuple[K, R]]:
-    extra = lambda value: {"family": value.family} if isinstance(value, Node) else {}
+    def extra(value: V) -> dict[str, str]:
+        return {"family": value.family} if isinstance(value, (Node, Edge)) else {}
 
     for key, _value in values.items():
         yield key, raw(**serialize_attrs(_value, recurse=True), **extra(_value))
 
 
-def _raw_workflow(workflow: Workflow) -> RawWorkflow:
-    """Converts a workflow back into a RawWorkflow for re-normalization."""
+def build_raw_graph(workflow: Workflow) -> RawWorkflow:
+    """
+    Builds the shorthand mapping a built workflow normalizes from.
+
+    Args:
+
+        workflow: The ``Workflow`` to convert.
+
+    Returns:
+
+        The ``RawWorkflow`` describing the same graph.
+
+    """
     edges = dict(zip(count(), workflow.edges, strict=False))
 
     return RawWorkflow(
@@ -327,57 +337,39 @@ def _raw_workflow(workflow: Workflow) -> RawWorkflow:
     )
 
 
-def normalize_workflow(raw: WorkflowLike) -> Workflow:
+def build_workflow_fields(raw: RawWorkflow | Mapping[str, object]) -> WorkflowFields:
     """
-    Normalizes a flexible ``WorkflowLike`` into a strict ``Workflow``.
-
-    A :class:`~riko.definitions._workflow.Workflow` is re-normalized through the
-    same pipeline rather than trusted, so a hand-built workflow is re-canonicalized and
-    normalization is idempotent on its own output.
+    Builds strict ``Workflow`` field values from a flexible workflow mapping.
 
     This is the one structural normalization boundary: no compiler, runtime, or CLI
-    subsystem independently reinterprets shorthand, legacy port names, or
-    omitted outputs. It stays contract-free; closed-schema rejection and contract-aware
-    sugar belong to the later validation phase.
+    subsystem independently reinterprets shorthand, legacy port names, or omitted
+    outputs. It stays contract-free; closed-schema rejection and contract-aware sugar
+    belong to the later validation phase.
 
     Args:
 
-        raw: A ``WorkflowLike`` with ``nodes`` and optional
-            ``edges``, ``outputs``, ``inputs``, ``resources``, and ``version``.
+        raw: A mapping with ``nodes`` and optional ``edges``, ``outputs``,
+            ``inputs``, ``resources``, and ``version``.
 
     Returns:
 
-        The normalized :class:`~riko.definitions._workflow.Workflow`.
+        The keyword arguments that build the normalized ``Workflow``.
 
-    Examples:
+    Raises:
 
-        >>> workflow = normalize_workflow(
-        ...     {
-        ...         "nodes": [
-        ...             {"id": "fetch-1", "name": "fetch"},
-        ...             {"name": "write", "family": "write", "backend": "file"},
-        ...         ],
-        ...         "edges": [
-        ...             {"source": {"node": "fetch-1"}, "target": {"node": "write-1"}}
-        ...         ],
-        ...     }
-        ... )
-        >>> workflow.nodes["write-1"].backend.value
-        'file'
-        >>> workflow.outputs["default"]
-        Endpoint(node='write-1', port='out')
+        InvalidPipelineError: If ``raw`` is not a mapping or its structure is
+            malformed.
 
     """
-    source = _raw_workflow(raw) if isinstance(raw, Workflow) else raw
-    workflow = require_workflow(require_mapping(source, "workflow"))
+    workflow = require_raw_workflow(require_mapping(raw, "workflow"))
     _resources = workflow.get("resources")
     version = workflow.get("version", WORKFLOW_VERSION)
     nodes = _build_nodes(workflow.get("nodes", ()))
     _edges = require_sequence(workflow.get("edges", ()), "edges")
     edges = [_normalize_edge(edge, **nodes) for edge in _edges]
 
-    return Workflow(
-        nodes=nodes.values(),
+    return WorkflowFields(
+        nodes=tuple(nodes.values()),
         outputs=_normalize_outputs(workflow.get("outputs"), *edges, **nodes),
         inputs=_normalize_inputs(workflow.get("inputs")),
         edges=edges,
@@ -386,4 +378,4 @@ def normalize_workflow(raw: WorkflowLike) -> Workflow:
     )
 
 
-__all__ = ["normalize_workflow", "resolve_port"]
+__all__ = ["WorkflowFields", "build_raw_graph", "build_workflow_fields", "resolve_port"]

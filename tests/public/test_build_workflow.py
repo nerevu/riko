@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from riko.base.exceptions import InvalidPipelineError
-from riko.definitions._workflow import ModuleNode
-from riko.runtime._migrate import parse_dag
+from riko.definitions._nodes import ModuleNode
+from riko.definitions._workflow import Workflow
 from riko.runtime._pipeline import Pipeline
 from riko.types._compiler import Embed
 from riko.types._workflow import Endpoint
@@ -20,7 +20,6 @@ from tests import TESTS_DIR
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from riko.definitions._workflow import Workflow
     from riko.types._compiler import DagModule, PipeDag
 
 DAG_DIR = TESTS_DIR / "dags"
@@ -61,33 +60,33 @@ def _module_node(workflow: Workflow, node_id: str) -> ModuleNode:
 
 
 def test_omitted_wires_chain_in_listing_order():
-    linear = parse_dag({"modules": MODULES})
-    wired = parse_dag({"modules": MODULES, "wires": [["sw-1", "sw-2"]]})
+    linear = Workflow.parse({"modules": MODULES})
+    wired = Workflow.parse({"modules": MODULES, "wires": [["sw-1", "sw-2"]]})
     assert linear == wired
     assert _edges(linear) == [("sw-1", "sw-2")]
 
 
 def test_ids_are_minted_when_omitted():
     modules: list[DagModule] = [{"type": "forever"}, {"type": "truncate"}]
-    workflow = parse_dag({"modules": modules})
+    workflow = Workflow.parse({"modules": modules})
     assert list(workflow.nodes) == ["sw-1", "sw-2"]
 
 
 def test_wires_override_listing_order():
-    workflow = parse_dag(_dag("pipe_reordered"))
+    workflow = Workflow.parse(_dag("pipe_reordered"))
     assert _edges(workflow) == [("gen", "trunc")]
     assert workflow.outputs["default"] == Endpoint("trunc", "out")
 
 
 def test_third_wire_entry_sets_the_target_port():
-    workflow = parse_dag({"modules": FAN_IN_MODULES, "wires": FAN_IN_WIRES})
+    workflow = Workflow.parse({"modules": FAN_IN_MODULES, "wires": FAN_IN_WIRES})
     ports = [(edge.source.port, edge.target.port) for edge in workflow.edges]
     assert ports == [("out", "in"), ("out", "in:1")]
     assert workflow.outputs["default"] == Endpoint("u", "out")
 
 
 def test_conf_survives_verbatim():
-    workflow = parse_dag({"modules": MODULES})
+    workflow = Workflow.parse({"modules": MODULES})
     assert dict(_module_node(workflow, "sw-2").conf) == {
         "count": {"type": "int", "value": "3"}
     }
@@ -97,19 +96,19 @@ def test_options_pass_through():
     modules: list[DagModule] = [
         {"id": "t", "type": "tokenizer", "options": {"emit": True}}
     ]
-    workflow = parse_dag({"modules": modules})
+    workflow = Workflow.parse({"modules": modules})
     assert dict(_module_node(workflow, "t").options) == {"emit": True}
 
 
 def test_empty_modules_raise_invalid_pipeline():
     with pytest.raises(InvalidPipelineError, match="no nodes"):
-        parse_dag({"modules": []})
+        Workflow.parse({"modules": []})
 
 
 @pytest.mark.parametrize("wire", [["a"], ["a", "u", "in:1", "extra"]])
 def test_bad_wire_length_raises_invalid_pipeline(wire: list[str]):
     with pytest.raises(InvalidPipelineError, match="wire"):
-        parse_dag({"modules": FAN_IN_MODULES, "wires": [wire]})
+        Workflow.parse({"modules": FAN_IN_MODULES, "wires": [wire]})
 
 
 @pytest.mark.parametrize(
@@ -127,30 +126,30 @@ def test_bad_wire_length_raises_invalid_pipeline(wire: list[str]):
 )
 def test_pipe_dag_reports_unknown_module_keys(module, message):
     with pytest.raises(InvalidPipelineError, match=message):
-        parse_dag({"modules": [module]})
+        Workflow.parse({"modules": [module]})
 
 
 def test_pipe_dag_accepts_the_older_type_spelling_of_name():
-    named = parse_dag({"modules": [{"name": "forever"}]})
-    typed = parse_dag({"modules": [{"type": "forever"}]})
-    agreeing = parse_dag({"modules": [{"name": "forever", "type": "forever"}]})
+    named = Workflow.parse({"modules": [{"name": "forever"}]})
+    typed = Workflow.parse({"modules": [{"type": "forever"}]})
+    agreeing = Workflow.parse({"modules": [{"name": "forever", "type": "forever"}]})
     assert named == typed == agreeing
     assert _module_node(typed, "sw-1").name == "forever"
 
 
 def test_pipe_dag_offers_known_node_fields_to_the_node():
     embed = Embed({"name": "fetch", "conf": {}})
-    workflow = parse_dag({"modules": [{"name": "loop", "embed": embed}]})
+    workflow = Workflow.parse({"modules": [{"name": "loop", "embed": embed}]})
     module = _module_node(workflow, "sw-1")
     assert module.embed is not None
     assert module.embed["name"] == "fetch"
 
 
 def test_expanded_dag_runs():
-    workflow = parse_dag(_dag("pipe_forever"))
+    workflow = Workflow.parse(_dag("pipe_forever"))
     assert list(Pipeline(workflow)) == [{"forever": True}] * 3
 
 
 def test_reordered_dag_runs_in_wired_order():
-    workflow = parse_dag(_dag("pipe_reordered"))
+    workflow = Workflow.parse(_dag("pipe_reordered"))
     assert list(Pipeline(workflow)) == [{"forever": True}] * 2

@@ -24,12 +24,12 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 | `riko/types/` | static contracts: streams/items, configs, options, compiler/pipeline/resource/I/O types, enums/wrappers |
 | `riko/coercion/` | casts, `DynamicConf`, **generated** objconf classes, objectification, canonical-identity helpers |
 | `riko/bado/` | stable async backend/iterator API; transport/file I/O is in `riko/io/` |
-| `riko/definitions/` | immutable/declarative module, resource, target, write, and Workflow v2 graph contracts; the `Context` (`_context.py`) and `Resource` (`_resource_definition.py`) definitions live here |
+| `riko/definitions/` | immutable/declarative module, resource, target, write, and Workflow v2 graph contracts, plus workflow loading/saving (normalize, migrate, serialize); the `Context` (`_context.py`) and `Resource` (`_resource_definition.py`) definitions live here |
 | `riko/io/` | sync/async URL/file I/O, serialization, re-encoding |
 | `riko/parsing/` | config parsing, `DotDict`, XML/HTML/document parsing |
 | `riko/rss/` | feed discovery, parsing, entry normalization |
 | `riko/execution/` | explicit execution layer: one-shot sync/async executions, lifetime primitives, execution-local resource acquisition and owned-resource teardown, event sink |
-| `riko/runtime/` | executable orchestration: collections, compiler, resolver/registry, pipelines, pub/sub, write sessions |
+| `riko/runtime/` | executable orchestration: collections, resolver/registry, pipelines, pub/sub, write sessions, codegen |
 | `riko/modules/` | built-in pipe implementations; private decorator/preparation/metadata/looping internals; generated discovery names |
 | `riko/ext/` | supported extension-author facade + extension codegen/name helpers; shares the `modules` architecture layer |
 | `riko/cli/` | CLI commands, private generators, docs checks, and import-contract linters; `manage.py` stays a thin composer |
@@ -39,10 +39,10 @@ Important concrete locations:
 - collections/export/write verbs: `riko/runtime/collections.py`
 - graph index for validation and execution planning: `GraphIndex` in `riko/types/_workflow.py`, built by `Workflow.index`
 - v2 code generator behind `compile_workflow`/`compile-workflow`: `riko/runtime/_codegen.py`
-- CLI workflow-document front door: `riko/cli/_workflow.py`
+- workflow loading/saving: `Workflow.parse`/`load`/`serialize` in `riko/definitions/_workflow.py`, over the data-returning `_normalize.py`/`_migrate.py`/`_serialize.py`; the CLI front door `riko/cli/_workflow.py` keeps only `read_document`/`require_workflow`
 - pub/sub: `riko/runtime/_pubsub/`
 - executions/preparation: `riko/execution/_execution.py` + `_prepared.py`; the frozen `ExecutionPlan` is in `_prepared.py` and its builder is `riko/runtime/_execution_plan.py`
-- pipelines: composition on `PipelineDefinition` in `riko/definitions/_workflow.py`; the runnable `Pipeline` subclass in `riko/runtime/_pipeline.py`
+- pipelines: composition on `PipelineDefinition` in `riko/definitions/_composition.py`; the node/edge families in `riko/definitions/_nodes.py`; the runnable `Pipeline` subclass in `riko/runtime/_pipeline.py`
 - context/resource definitions: `riko/definitions/_context.py` + `_resource_definition.py`; their acquisition/teardown: `riko/execution/_resource_plan.py`
 - declarative write model: `riko/definitions/_write.py` + `_targets.py`
 - async I/O: `riko/io/_async.py`

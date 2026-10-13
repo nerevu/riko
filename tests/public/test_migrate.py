@@ -12,7 +12,7 @@ carries no ``PipeDef``-only structure.
 import pytest
 
 from riko.base.exceptions import InvalidPipelineError
-from riko.definitions._workflow import ModuleNode, WriteNode
+from riko.definitions._nodes import ModuleNode, WriteNode
 from riko.definitions._write import WriteMode
 from riko.ext import migrate_v1_to_v2
 from riko.types._enums import Backends, Formats

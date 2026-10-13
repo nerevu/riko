@@ -15,14 +15,15 @@ from typing import TYPE_CHECKING
 
 from riko.bado._util import maybe_aclosing
 from riko.base._iterutils import map_values
-from riko.definitions._workflow import ModuleNode, require_module_node
+from riko.definitions._nodes import ModuleNode, require_module_node
 from riko.execution._execution import AsyncExecution, SyncExecution
 from riko.execution._prepared import ExecutionPlan, ResolvedModule
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Generator
 
-    from riko.definitions._workflow import PipelineDefinition, Workflow
+    from riko.definitions._composition import PipelineDefinition
+    from riko.definitions._workflow import Workflow
     from riko.types._compiler import Embed
 
     from ._resolver import ResolverDispatcher
@@ -76,7 +77,8 @@ def build_execution_plan(
 
     Examples:
 
-        >>> from riko.definitions._workflow import ModuleNode, Workflow
+        >>> from riko.definitions._nodes import ModuleNode
+        >>> from riko.definitions._workflow import Workflow
         >>> from riko.runtime._resolver import dispatcher
         >>> from riko.types._workflow import Endpoint
         >>>
@@ -125,7 +127,7 @@ def run_pipeline[T](
 
     Examples:
 
-        >>> from riko.definitions._workflow import PipelineDefinition
+        >>> from riko.definitions._composition import PipelineDefinition
         >>> from riko.runtime._resolver import dispatcher
         >>>
         >>> definition = PipelineDefinition(source=[{"x": 1}]).count()
@@ -167,7 +169,7 @@ async def arun_pipeline[T](
     Examples:
 
         >>> from riko import run
-        >>> from riko.definitions._workflow import PipelineDefinition
+        >>> from riko.definitions._composition import PipelineDefinition
         >>> from riko.runtime._resolver import dispatcher
         >>>
         >>> definition = PipelineDefinition(source=[{"x": 1}]).count()

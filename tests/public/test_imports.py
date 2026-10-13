@@ -18,11 +18,11 @@ import pytest
 import riko
 import riko.bado
 import riko.base.exceptions
+import riko.definitions._workflow
 import riko.ext
 import riko.modules
 import riko.modules._names
 import riko.runtime._codegen
-import riko.runtime._migrate
 import riko.runtime._resolver
 import riko.runtime._workflows
 import riko.runtime.collections
@@ -43,7 +43,7 @@ SURFACE_MODULES = (
     riko.bado,
     riko.runtime.collections,
     riko.runtime._codegen,
-    riko.runtime._migrate,
+    riko.definitions._workflow,
     riko.ext,
     riko.modules,
     riko.base.exceptions,
@@ -63,7 +63,10 @@ EQUAL_SURFACES = (
     (riko.bado, BADO),
     (riko.runtime.collections, COLLECTIONS),
     (riko.runtime._codegen, CODEGEN),
-    (riko.runtime._migrate, {"parse_dag", "migrate_v1_to_v2"}),
+    (
+        riko.definitions._workflow,
+        {"Workflow", "migrate_v1_to_v2", "normalize_workflow"},
+    ),
     (riko.ext, EXTENSION),
     (riko, STABLE),
     (riko.types, TYPES),

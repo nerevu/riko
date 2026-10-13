@@ -38,16 +38,15 @@ from jinja2 import Environment, PackageLoader
 from riko.base._source_format import ruff_format
 from riko.base._strutils import pythonise
 from riko.base.exceptions import InvalidPipelineError
-from riko.definitions._workflow import ModuleNode, Workflow
+from riko.definitions._nodes import ModuleNode
+from riko.definitions._workflow import normalize_workflow
 from riko.types._guards import is_mapping
 from riko.types._workflow import WorkflowModule
-
-from ._normalize import normalize_workflow
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
-    from riko.definitions._workflow import WorkflowLike
+    from riko.definitions._workflow import Workflow, WorkflowLike
     from riko.types._collections import FrozenConf
     from riko.types._compiler import Embed
     from riko.types._workflow import Edge, Endpoint
@@ -251,7 +250,7 @@ def compile_workflow(
     rendered = template.render(
         pipe_name=pythonise(name),
         is_async=is_async,
-        definition_names=sorted({"ModuleNode", "Workflow", *edge_names}),
+        ext_names=sorted({"ModuleNode", *edge_names}),
         raw_confs=_collect_raw_confs(nodes),
         nodes=[_render_node(node) for node in nodes],
         edges=_render_edges(workflow.edges),

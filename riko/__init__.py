@@ -20,16 +20,23 @@ from riko.base.exceptions import (
     UnsupportedWorkflowError,
 )
 from riko.definitions._context import Context
-from riko.definitions._workflow import Node, Workflow, WorkflowLike
+from riko.definitions._nodes import Node
+from riko.definitions._workflow import Workflow, WorkflowLike
 from riko.ext.codegen import list_modules
 from riko.io._async import async_get_temp_file, async_url_open, async_write
 from riko.modules._metadata import describe_module, get_module_metadata
 from riko.modules._names import Modules, Sinks, Sources, Transforms
 from riko.runtime._codegen import compile_workflow
-from riko.runtime._migrate import parse_dag
 from riko.runtime._pipeline import Pipeline
 from riko.runtime.collections import export, list_formats
-from riko.types._enums import Backends, ExecutionMode, Executor, Formats
+from riko.types._enums import (
+    Backends,
+    CastType,
+    DocumentShape,
+    ExecutionMode,
+    Executor,
+    Formats,
+)
 from riko.types._workflow import Edge, Endpoint, WorkflowDocument, WorkflowModule
 
 from ._package import PACKAGE_INFO
@@ -47,7 +54,9 @@ __copyright__ = "Copyright 2015 Reuben Cummings"
 
 __all__ = [
     "Backends",
+    "CastType",
     "Context",
+    "DocumentShape",
     "Edge",
     "EmptyPipelineError",
     "Endpoint",
@@ -91,6 +100,5 @@ __all__ = [
     "issync",
     "list_formats",
     "list_modules",
-    "parse_dag",
     "run",
 ]

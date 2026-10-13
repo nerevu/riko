@@ -114,7 +114,7 @@ class DagModule(TypedDict, total=False):
 
 class PipeDag(TypedDict):
     """
-    A bare-bones DAG mapping that ``parse_dag`` expands into a ``Workflow``.
+    A bare-bones DAG mapping that ``Workflow.parse`` expands into a ``Workflow``.
 
     ``wires`` is optional (omit for a linear chain in module listing order) and holds
     ``(source_id, target_id)`` entries, optionally followed by the port the wire enters.

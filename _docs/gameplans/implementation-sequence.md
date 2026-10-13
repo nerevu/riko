@@ -83,7 +83,7 @@ preparation. What was replaced (and deleted at cutover step 5, 2026-10-03) is
 wire, invoke, and construct a running generator in one pass keyed off "the last topologically-sorted
 module." R4B splits that boundary one step later — preparation produces an immutable `ExecutionPlan`
 of prepared nodes (no invocation), and a separate run step executes it against explicit `outputs`
-rather than a terminal-module assumption. `parse_dag` and `gen_parented_graph`'s orphan-dropping stay
+rather than a terminal-module assumption. The `PipeDag` reader and `gen_parented_graph`'s orphan-dropping stay
 on the v1 authoring/migration side and do not feed canonical v2 preparation.
 
 ### Retain but reshape
@@ -614,7 +614,7 @@ R4A.5  deterministic serialization + acceptance
 - **R4A.1 — canonical v2 model.** The closed discriminated node union and edge families (E3.3/E3.4),
   full `{node, port}` endpoints and port grammar, the `nodes`/`edges`/`outputs`/`inputs` envelope
   (E3.2/E3.6), inputs-as-JSON-Schema, and the public immutable `Pipeline[T]`. Structural only, no
-  runtime. Files: `riko/types/_workflow.py`, `riko/definitions/_workflow.py` (placement supersedes
+  runtime. Files: `riko/types/_workflow.py`, `riko/definitions/{_nodes,_workflow,_composition}.py` (placement supersedes
   the original `riko/workflow/` package note — see the clean-break policy below).
 - **R4A.2 — `normalize_workflow()`. Landed** (see `IMPLEMENTED.md`). Authoring sugar → strict
   canonical (E3.1): omitted outputs→`outputs.default` (lone leaf only; ambiguity deferred to
@@ -624,7 +624,7 @@ R4A.5  deterministic serialization + acceptance
   bare-string `resources` self-binds, no contract needed), `normalize_strs`, `listize`, and the
   `is_mapping`/`is_listlike` guards; only format-from-locator inference and closed-schema rejection
   are deferred. Full `normalize∘serialize` idempotency is proven with the byte-stable serializer in
-  R4A.5. File: `riko/runtime/_normalize.py` (the clean-break placement note below supersedes the
+  R4A.5. File: `riko/definitions/_normalize.py` (the clean-break placement note below supersedes the
   original `riko/workflow/normalize.py` sketch).
 - **R4A.3 — `validate()`. Landed** (see `IMPLEMENTED.md`). Structural closed-schema rejection (E3.9):
   unsupported version, empty node set, node-id/key mismatch, missing edge/output refs, >1 StreamEdge
@@ -641,20 +641,20 @@ R4A.5  deterministic serialization + acceptance
   validation rather than silent erasure. It reuses `normalize_workflow` for the shared structural
   pass; non-structural v1 module fields fold into `conf` for lossless migration. Warns during 0.x,
   emits v2 only; the interim fluent `sink()` had no serialized node form, so there is no legacy `sink`
-  grammar. File: `riko/runtime/_migrate.py` (the clean-break placement note below supersedes the
+  grammar. File: `riko/definitions/_migrate.py` (the clean-break placement note below supersedes the
   original `riko/workflow/migrate.py` sketch).
 - **R4A.5 — deterministic serialization + acceptance. Landed** (see `IMPLEMENTED.md` § Workflow v2
-  serialization). Byte-stable `serialize_workflow`/`parse_document` in `riko/runtime/_serialize.py`
-  (`riko.ext`), full round-trip of every supported topology, golden fixtures, and `serialize ∘ migrate`
+  serialization). Byte-stable `Workflow.serialize`/`Workflow.parse` in
+  `riko/definitions/_workflow.py` over `_serialize.py`, full round-trip of every supported topology, golden fixtures, and `serialize ∘ migrate`
   never emitting v1-only structure. The **CLI v2-emission** bullet (`compile-pipe`/`build-workflow`) and
   the v1 compiler/fixture deletions are **deferred to R4B**: the E3.10 CLI-emission acceptance is
   superseded by the clean-break policy, which completes the v1→v2 CLI/compiler cutover at R4B (the
-  first phase v2 executes). Files: `riko/runtime/_serialize.py`, `tests/public/test_serialize.py`.
+  first phase v2 executes). Files: `riko/definitions/_serialize.py`, `tests/public/test_serialize.py`.
   **The deferred CLI v2-emission has since landed** at cutover step 3 ([v1-cutover.md § Step
   3](v1-cutover.md#step-3--retire-remaining-v1-cli-consumers)): `build-workflow` emits a `WorkflowDocument` from
   any supported form, `compile-pipe` generates from a `WorkflowDocument` through the new
   `riko/runtime/_codegen.py`, `run-pipe` executes `WorkflowDocument`s, and `build_pipe_def` gave way
-  to `parse_dag`. The `SyncPipe`/`AsyncPipe`/Collection class deletion (step 4) landed on
+  to `parse_dag` (since folded into `Workflow.parse`). The `SyncPipe`/`AsyncPipe`/Collection class deletion (step 4) landed on
   2026-10-02 (`54b53c29`), and the v1 compiler deletion (step 5) on 2026-10-03 (`59a51274`)
   completed the CLI/compiler cutover.
 
@@ -697,11 +697,13 @@ per-step drift guards, and the recorded keep-`migrate_v1_to_v2` divergence) is
 [v1-cutover.md](v1-cutover.md); this table remains the authority for *what* pairs with *what*.
 
 **Placement (supersedes the R4A.1 `riko/workflow/` package note).** The canonical model is not a new
-top-level package/layer. Pure contracts live in `riko/types/_workflow.py`; the immutable
-node/edge/`Workflow`/`PipelineDefinition` model lives in `riko/definitions/_workflow.py` (the
-existing declarative-contract layer), and the runnable `Pipeline` subclass that adds iteration lives in
-`riko/runtime/_pipeline.py` so no definition imports upward (amended 2026-10-05); the later `normalize`/`validate`/`migrate` logic lives in `riko/runtime/`
-(`_normalize.py`/`_migrate.py`). No `riko/workflow/` package is added.
+top-level package/layer; it lives in the existing declarative-contract layer. Pure contracts live in
+`riko/types/_workflow.py`; the node/edge model in `riko/definitions/_nodes.py`; the `Workflow` model,
+with `Workflow.parse`/`load`/`serialize`, in `riko/definitions/_workflow.py`, over the data-returning
+`_normalize.py`/`_migrate.py`/`_serialize.py` beside it (amended 2026-10-12, superseding the
+2026-10-05 amendment that put `normalize`/`migrate` in `riko/runtime/`); `PipelineDefinition` in
+`riko/definitions/_composition.py`; and the runnable `Pipeline` subclass that adds iteration in
+`riko/runtime/_pipeline.py`, so no definition imports upward. No `riko/workflow/` package is added.
 
 **R4A.1 landed** (see `IMPLEMENTED.md`): the closed node/edge union, port grammar, `Workflow`
 envelope, and public `Pipeline[T]`. `Pipeline` is STABLE (`riko`); the

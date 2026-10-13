@@ -1,11 +1,11 @@
 {
     "modules": [
         {
-            "type": "forever",
+            "name": "forever",
             "conf": {}
         },
         {
-            "type": "truncate",
+            "name": "truncate",
             "conf": {
                 "count": {
                     "type": "int",

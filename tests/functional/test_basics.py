@@ -25,11 +25,11 @@ from riko.base._strutils import truncate_content
 from riko.base.exceptions import UnsupportedModuleError
 from riko.coercion._sequences import listize
 from riko.definitions._context import Context
-from riko.definitions._workflow import ModuleNode
+from riko.definitions._nodes import ModuleNode
+from riko.definitions._workflow import Workflow
 from riko.execution._execution import SyncExecution
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._resolver import dispatcher
-from riko.runtime._serialize import parse_document
 from riko.runtime._workflows import workflow_resolver
 from riko.types._guards import is_mapping
 from riko.types._streams import AsyncStream, StatefulItem
@@ -39,7 +39,7 @@ from tests import TESTS_DIR, async_test
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from riko.definitions._workflow import Node, Workflow
+    from riko.definitions._nodes import Node
     from riko.types._io import PathLike
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
@@ -141,7 +141,7 @@ def _load_workflow(pipe_name: str) -> Workflow:
     """Parses the workflow document committed for a ``pipe_<id>`` name."""
     document = _document(pipe_name)
     assert document is not None, f"{pipe_name} has no workflow document"
-    return parse_document(document.read_text())
+    return Workflow.parse(document.read_text())
 
 
 def _check_results(

@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from attrs import fields_dict
 
-from riko.definitions._workflow import (
+from riko.definitions._nodes import (
     ActionNode,
     CacheNode,
     ModuleNode,

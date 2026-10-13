@@ -12,8 +12,7 @@ from os.path import isfile
 
 import pytest
 
-from riko.runtime._migrate import parse_dag
-from riko.runtime._serialize import serialize_workflow
+from riko.definitions._workflow import Workflow
 from tests import TESTS_DIR, skipif_issync
 
 _BASEDIR = TESTS_DIR.parent
@@ -149,7 +148,7 @@ def test_build_workflow_and_compile(tmp_path):
 def test_build_workflow_compact_matches_the_serializer():
     """The compact form is the same byte-stable document the serializer emits."""
     dag = json.loads(DAG_PATH.read_text(encoding="utf-8"))
-    expected = serialize_workflow(parse_dag(dag), indent=None).decode("utf-8")
+    expected = Workflow.parse(dag).serialize(indent=None).decode("utf-8")
     convert = run_module("build_workflow", str(DAG_PATH), "-c")
     assert convert.stdout == expected
 

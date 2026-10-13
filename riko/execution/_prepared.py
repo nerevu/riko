@@ -18,13 +18,13 @@ from typing_extensions import TypeIs
 
 from riko.base._iterutils import map_values
 from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
-from riko.definitions._workflow import (
+from riko.definitions._nodes import (
     FROZEN_CONF,
     ModuleNode,
-    Workflow,
     conf_converter,
     require_module_node,
 )
+from riko.definitions._workflow import Workflow
 from riko.types._collections import (
     FrozenConf,
     FrozenDict,

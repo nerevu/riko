@@ -22,14 +22,13 @@ import pytest
 from riko.base._strutils import pythonise
 from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._context import Context
-from riko.definitions._workflow import ModuleNode, Workflow, WriteNode
+from riko.definitions._nodes import ModuleNode, WriteNode
+from riko.definitions._workflow import Workflow, normalize_workflow
 from riko.execution._execution import AsyncExecution, SyncExecution
 from riko.runtime._codegen import compile_workflow
 from riko.runtime._execution_plan import build_execution_plan
-from riko.runtime._normalize import normalize_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
-from riko.runtime._serialize import parse_document
 from riko.types._enums import ExecutionMode
 from riko.types._workflow import Endpoint
 from riko.types.modules import (
@@ -148,7 +147,7 @@ def _failure(call) -> tuple[str, str]:
 @pytest.mark.parametrize("path", _fixtures())
 def test_generated_matches_document(path: Path, tmp_path: Path):
     """Each workflow module yields the items its workflow document yields."""
-    workflow = parse_document(path.read_text())
+    workflow = Workflow.parse(path.read_text())
     module = _build(workflow, path.stem, tmp_path)
     assert list(module.pipe(context=Context(test=True))) == _run_workflow(workflow)
 
@@ -156,7 +155,7 @@ def test_generated_matches_document(path: Path, tmp_path: Path):
 @pytest.mark.parametrize("path", _fixtures(unrunnable=True))
 def test_generated_matches_document_failure(path: Path, tmp_path: Path):
     """A document that cannot run standalone fails the same way once generated."""
-    workflow = parse_document(path.read_text())
+    workflow = Workflow.parse(path.read_text())
     module = _build(workflow, path.stem, tmp_path)
     generated = _failure(lambda: list(module.pipe(context=Context(test=True))))
     assert generated == _failure(lambda: _run_workflow(workflow))
@@ -167,7 +166,7 @@ def test_generated_matches_document_failure(path: Path, tmp_path: Path):
 async def test_async_generated_matches_document(stem: str, tmp_path: Path):
     """Each generated async module yields the items its document yields."""
     path = TESTS_DIR / "workflows" / f"{stem}.json"
-    workflow = parse_document(path.read_text())
+    workflow = Workflow.parse(path.read_text())
     module = _build(workflow, stem, tmp_path, is_async=True)
     stream = module.async_pipe(context=Context(test=True))
     assert [item async for item in stream] == await _arun_document(workflow)
@@ -350,7 +349,7 @@ def test_generated_source_parses(tmp_path: Path):
 def _loop_workflow() -> Workflow:
     """Parses the committed loop fixture whose embed carries a typed config."""
     data = (TESTS_DIR / "workflows" / "pipe_loop_assign.json").read_text()
-    return parse_document(data)
+    return Workflow.parse(data)
 
 
 def test_loop_embed_is_rendered_as_a_node_field():

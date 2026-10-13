@@ -13,27 +13,13 @@ from typing import TYPE_CHECKING, Any, Self, cast, overload
 from requests.structures import CaseInsensitiveDict
 
 from riko.base._iterutils import multi_try
-from riko.types._guards import is_listlike, is_mapping
+from riko.types._guards import is_listlike
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
     from riko.types._collections import BasicDict, RikoValue, StringyDict
     from riko.types._streams import Item, Stream, StreamOrValueStream, ValueStream
-
-
-def lower_keys[T](obj: T) -> T:
-    if is_mapping(obj):
-        result = {
-            (k.lower() if isinstance(k, str) and k.isupper() else k): lower_keys(v)
-            for k, v in obj.items()
-        }
-    elif isinstance(obj, list):
-        result = [lower_keys(v) for v in obj]
-    else:
-        result = obj
-
-    return cast("T", result)
 
 
 @overload

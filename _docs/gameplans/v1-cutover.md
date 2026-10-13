@@ -119,8 +119,9 @@ Blocks step 4.
   [testing.md](testing.md).
 - As-built (2026-09-29, landed in the working tree, commit pending): the decision was **keep every
   CLI, make it v2-native** — nothing was deleted. `riko/cli/_workflow.py` is the shared front door
-  (`DocumentFormat` `dag`/`v1`/`v2`, `read_document`, `get_document_format`, `normalize_document`,
-  `require_workflow`); detection is `nodes`/`version` → v2, `modules` with `src`/`tgt` wires or an
+  (`read_document`, `require_workflow`), and `Workflow.parse` reads the three shapes
+  (`get_document_shape` in `riko/definitions/_serialize.py` returns a `DocumentShape`
+  `dag`/`v1`/`v2`); detection is `nodes`/`version` → v2, `modules` with `src`/`tgt` wires or an
   `output` module → v1, `modules` otherwise → DAG. `build-workflow [path] [-f/--format] [-c/--compact]
   [-o]` is the **one lenient converter**: it reads any of the three (path, `-`, or stdin) and emits a
   validated `WorkflowDocument`, pretty by default and byte-stable under `-c`, with errors on stderr
@@ -136,13 +137,13 @@ Blocks step 4.
   `async_pipe` (one `Pipeline` run per feed) and `sync_workflow`/`async_workflow` (one fan-in graph of
   every feed into `union`) replace `sync_collection`/`par_sync_collection`/`async_collection`/
   `async_pipe2`, with the parallel row dropped until the execution takes a concurrency option.
-  `build_pipe_def` is **deleted** in favour of `riko/runtime/_migrate.py::parse_dag` (STABLE
-  `riko.parse_dag`), which expands the same `PipeDag` straight to a validated
+  `build_pipe_def` is **deleted** in favour of `Workflow.parse` (its interim STABLE alias
+  `parse_dag` was removed 2026-10-12), which expands the same `PipeDag` straight to a validated
   `Workflow`: no terminal output node, ids default `sw-{n}`, omitted wires chain in listing order,
   and a wire's optional third entry names the target port — so fan-in (`["b", "u", "in:1"]`) is now
   expressible and the old "Limitation" section of `docs/DAG_FORMAT.rst` is gone. The R17 tripwire
   `test_convert_dag_empty_modules_raises` is **retired**, replaced by the regular test
-  `tests/public/test_parse_dag.py::test_empty_modules_raise_invalid_pipeline` (empty `modules` →
+  `tests/public/test_build_workflow.py::test_empty_modules_raise_invalid_pipeline` (empty `modules` →
   `InvalidPipelineError("workflow has no nodes")`). `tests/dags/*.json` stay as `build-workflow`
   fixtures; `tests/internal/test_codegen.py` compiles every committed fixture and proves the generated
   module item-for-item equivalent to running the document (the two split fixtures strict-xfail), and
@@ -161,8 +162,7 @@ Depends on steps 1–3. Deletes `SyncPipe`, `AsyncPipe`, `PyPipe`, `PyCollection
   `examples/*.py` run on `Pipeline`. The same commit settled the workflow vocabulary (two tiers:
   the `RawWorkflow`/`RawNode`/`RawEdge`/`RawEndpoint` TypedDicts beneath the bare `Workflow`/`Node`/
   `Edge`/`Endpoint` attrs classes, with `WorkflowLike` accepting either and `WorkflowDocument` naming
-  the serialized form; graph names on STABLE) and the eight-verb table now in `CLAUDE.md` (`parse_dag`, `parse_document`,
-  `normalize_document`, `build-workflow`, …). `subscribe`/`publish`/`split`/`parallel` have no
+  the serialized form; graph names on STABLE) and the eight-verb table now in `CLAUDE.md` (`Workflow.parse`, `build-workflow`, …). `subscribe`/`publish`/`split`/`parallel` have no
   replacement yet (recorded in `docs/CHANGES.rst` Removed). Step 5 landed 2026-10-03 (see its
   as-built note).
   Nothing was removed without a named successor: `Pipeline` carries the planned verbs as
@@ -207,15 +207,16 @@ unaffected by everything below.
   step 4's commit). `compile_pipe` stays STABLE, now sourced from `_codegen.py`.
 - Check what genuinely survives before deleting: only what `_codegen.py` and `_migrate.py` still
   need. That is the `GraphIndex`/`GraphEdge`/`OutputRef` types in `riko/types/_compiler.py` (the v2
-  indexer builds on them), the `PipeDag`/`PipeDefLike` shapes `parse_dag` and
+  indexer builds on them), the `PipeDag`/`PipeDefLike` shapes `Workflow.parse` and
   `migrate_v1_to_v2` read. `_compile_repr.py` goes entirely: `repr_arg`/`repr_args` were deleted on
   2026-09-29 (the v1 compiler now renders through `_codegen.render_value`), leaving only the `Id`
   placeholder and `PyKwargValue`, whose sole importer is `_compile.py`. Nothing in `_codegen.py`
   depends on the v1 compiler.
   `write_file` went at step 4 with its last consumer.
-- **Keep `migrate_v1_to_v2`**: it already lives in `riko/runtime/_migrate.py` with no `_compile`
-  import (`lower_keys` is in `riko/coercion/_sequences.py`). Delete the then-orphaned v1 wire/pipe-def
-  types from `riko/types/_compiler.py` except those migrate and `parse_dag` retain.
+- **Keep `migrate_v1_to_v2`**: its v1 translation (`migrate_pipe_def`) lives in
+  `riko/definitions/_migrate.py` with no `_compile` import (its `_lower_keys` helper is private
+  to that module). Delete the then-orphaned v1 wire/pipe-def
+  types from `riko/types/_compiler.py` except those migrate and `Workflow.parse` retain.
 - Delete/port the v1 halves of `tests/internal/test_compile.py`. The `pythonise` regression test
   there is re-homed, not dropped — `pythonise` survives in `riko/base/_strutils.py` with live
   consumers. `tests/internal/test_codegen.py` is the v2 replacement and stays.

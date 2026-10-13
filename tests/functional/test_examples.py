@@ -10,10 +10,10 @@ import pytest
 
 from riko.base._paths import ROOT_DIR
 from riko.definitions._context import Context
+from riko.definitions._workflow import Workflow
 from riko.execution._execution import SyncExecution
 from riko.runtime._execution_plan import build_execution_plan
 from riko.runtime._resolver import dispatcher
-from riko.runtime._serialize import parse_document
 from tests import async_test
 
 
@@ -202,7 +202,7 @@ class TestExamples:
     def test_example_document_runs(self, pipe_name, expected):
         """Runs each example workflow document and checks the stream it produces."""
         document = ROOT_DIR / "examples" / "workflows" / f"{pipe_name}.json"
-        workflow = parse_document(document.read_text())
+        workflow = Workflow.parse(document.read_text())
         items = []
 
         with SyncExecution(context=Context(test=True)) as execution:

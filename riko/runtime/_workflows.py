@@ -86,16 +86,17 @@ from riko.base._config import SUBPIPE_TYPE
 from riko.base._imports import import_or_else
 from riko.base._strutils import pythonise
 from riko.base.exceptions import UnsupportedWorkflowError
-from riko.definitions._workflow import ModuleNode, PipelineDefinition, Workflow
+from riko.definitions._composition import PipelineDefinition
+from riko.definitions._nodes import ModuleNode
+from riko.definitions._workflow import Workflow
 from riko.types._compiler import is_pipe_id
-from riko.types._enums import ExecutionMode
+from riko.types._enums import DocumentShape, ExecutionMode
 from riko.types._guards import is_async_callable
 from riko.types._workflow import ResolvedWorkflow
 from riko.types._wrappers import is_subpipe, stamp_wrapper_meta
 
 from ._execution_plan import arun_pipeline, run_pipeline
 from ._importutils import load_interfaces, require_interface
-from ._serialize import parse_document
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator, Mapping
@@ -370,9 +371,9 @@ def _build_resolved_workflow(
     Examples:
 
         >>> from riko.runtime._resolver import dispatcher
-        >>> from riko.runtime._serialize import parse_document
+        >>> from riko import Workflow
         >>>
-        >>> workflow = parse_document('{"nodes": [{"name": "forever"}]}')
+        >>> workflow = Workflow.parse('{"nodes": [{"name": "forever"}]}')
         >>> resolved = _build_resolved_workflow("pipe_demo", workflow, dispatcher)
         >>> resolved.DEPENDENCIES
         ['forever']
@@ -639,7 +640,7 @@ class DirectoryStore:
         except FileNotFoundError:
             parsed = None
         else:
-            parsed = parse_document(text)
+            parsed = Workflow.parse(text, shape=DocumentShape.V2)
 
         return parsed
 

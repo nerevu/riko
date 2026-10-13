@@ -13,8 +13,9 @@ from riko.base._config import settings as config
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._context import Context
 from riko.definitions._execution import ExecutionSettings
+from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
-from riko.definitions._workflow import ModuleNode, StreamEdge, Workflow
+from riko.definitions._workflow import Workflow
 from riko.definitions.modules import ModuleDefinition
 from riko.execution import _execution
 from riko.execution._execution import AsyncExecution, SyncExecution

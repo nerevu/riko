@@ -11,13 +11,15 @@ New
   ``Pipeline.from_module`` or ``Pipeline``, or seed one with ``items | pipeline``.
   Run it with ``list(pipeline)``, ``async for``, or ``.first()``/``.afirst()``.
   ``.with_context`` sets the run ``Context`` and ``.with_resource`` provides a resource.
-  ``.with_execution(...)`` configures concurrency.
+  ``.with_execution(...)`` configures concurrency. A ``Pipeline`` prints a compact
+  summary of its workflow.
 
 - Added the ``Workflow`` graph (``Node``, ``Edge``, and ``Endpoint``) that a
-  ``Pipeline`` runs. ``Node.options`` carries the module's call options and
-  ``Node.embed`` carries a loop's embedded module. A node may declare ``resources``,
-  bound by name to the resources a ``Context`` provides via ``with_resource``. Its pipe
-  receives the resolved handles as a ``resources`` argument.
+  ``Pipeline`` runs. ``Workflow.parse`` reads a workflow document
+  (``WorkflowDocument``), a bare-bones DAG (``PipeDag``), or a pipe definition
+  (``PipeDef``), and ``riko.DocumentShape`` pins a specific shape. ``Workflow.load``
+  reads any of those shapes from a file; ``flow.serialize()`` writes a
+  ``WorkflowDocument``.
 
 - Added ``riko.WorkflowLike`` to annotate anything accepted where a ``Workflow`` is
   expected, ``riko.WorkflowDocument`` to annotate a workflow document (its ``bytes``
@@ -42,14 +44,10 @@ New
 - Added ``riko.Backends`` and ``riko.Executor`` enums, and the ``riko.types.EventSink``
   protocol.
 
-- Added ``normalize_workflow`` (turns a ``WorkflowLike`` into a ``Workflow``), the
-  workflow node and edge classes (e.g., ``ModuleNode``), and the write-target classes
-  (e.g., ``FileTarget``) to ``riko.ext``.
-
-- Added ``migrate_v1_to_v2`` (converts a pipe definition, ``PipeDef``, to a
-  ``Workflow``), ``serialize_workflow`` (writes a ``Workflow`` to a
-  ``WorkflowDocument``), and ``parse_document`` (reads a ``WorkflowDocument`` to produce
-  a ``Workflow``) to ``riko.ext``.
+- Added ``normalize_workflow`` (turns a ``WorkflowLike`` into a ``Workflow``),
+  ``migrate_v1_to_v2`` (converts a ``PipeDef`` to a ``Workflow``), the workflow node and
+  edge classes (e.g., ``ModuleNode``), and the write-target classes (e.g.,
+  ``FileTarget``) to ``riko.ext``.
 
 - Extension authors can register a workflow store, a package of ``pipe_<id>.py`` files
   (saved ``WorkflowModule``\s) or a directory of ``pipe_<id>.json``
@@ -61,7 +59,7 @@ New
   sync and async interfaces it provides.
 
 - Added ``PipeDag``, ``PipeDef``, and ``PipeDefLike`` to ``riko.types`` for annotating
-  ``parse_dag`` and ``migrate_v1_to_v2`` input.
+  ``Workflow.parse`` and ``migrate_v1_to_v2`` input.
 
 - Added ``AsyncItems``, ``SyncPipeTuples``, and ``AsyncPipeTuples`` to ``riko.types``.
 
@@ -139,12 +137,6 @@ Changes
 
 - Renamed ``riko.bado.itertools.async_map``'s ``connections`` parameter to ``limit``.
 
-- Renamed ``convert_dag`` to ``parse_dag``, which now emits a ``Workflow`` instead of a
-  ``PipeDef``. It still takes a ``PipeDag``.
-
-- ``parse_dag`` now raises ``InvalidPipelineError`` for a ``PipeDag`` module with an
-  invalid key.
-
 - Renamed ``convert-dag`` to ``build-workflow``, which now emits a ``WorkflowDocument``
   instead of a serialized ``PipeDef``. It reads a path to a ``WorkflowDocument``, or a
   serialized ``PipeDag`` or ``PipeDef`` with auto detection. Use ``--format
@@ -196,7 +188,7 @@ Removed
 - Removed ``SyncPipe``, ``AsyncPipe``, ``SyncCollection``, ``AsyncCollection``, and
   ``PipeState``. ``Pipeline`` replaces them: ``list(pipeline)`` replaces ``.list``,
   ``export(pipeline, …)`` replaces ``.export()``, and multi-source fetching is a
-  ``union`` fan-in built with ``parse_dag``. ``subscribe``/``publish``, ``split``, and
+  ``union`` fan-in in a ``Workflow``. ``subscribe``/``publish``, ``split``, and
   ``udf(func=…)`` through a pipeline have no replacement.
 
 - Removed ``parallel``/``workers``/``threads``/``pool`` arguments. To run items in
@@ -207,6 +199,9 @@ Removed
 - Removed ``build_pipeline``, ``parse_pipe_def``, and ``extract_dependencies``. Convert
   a ``PipeDef`` with ``migrate_v1_to_v2`` (or ``build-workflow``) to create a
   ``Workflow``, then run it with ``Pipeline`` or read its modules from ``nodes``.
+
+- Removed ``convert_dag``. ``Workflow.parse`` reads the same ``PipeDag`` into a
+  ``Workflow`` rather than a ``PipeDef``.
 
 - Removed unused ``Context.submodule`` and the ``submodule`` keyword argument.
 

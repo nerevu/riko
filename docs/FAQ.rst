@@ -75,11 +75,12 @@ Which imports are public?
 ``riko`` organizes its public interface into three import tiers:
 
 - **Stable**: the top-level ``riko`` package holds the SemVer-guaranteed API: the
-  ``Pipeline`` class, ``Context``, ``ExecutionMode``, ``backend``, ``compile_workflow``,
-  ``parse_dag``, ``export``, ``get_module_metadata``, ``get_path``, ``isasync``,
-  ``issync``, ``list_modules``, ``describe_module``, ``list_formats``, ``run``, the
-  typed discovery surface (``Modules``/``Sources``/``Transforms``/``Sinks``/``Formats``
-  bucket enums), and the pipeline exceptions.
+  ``Pipeline`` and ``Workflow`` classes, ``Context``, ``ExecutionMode``, ``backend``,
+  ``compile_workflow``, ``export``, ``get_module_metadata``,
+  ``get_path``, ``isasync``, ``issync``, ``list_modules``, ``describe_module``,
+  ``list_formats``, ``run``, the typed discovery surface
+  (``Modules``/``Sources``/``Transforms``/``Sinks``/``Formats`` bucket enums), and the
+  pipeline exceptions.
 - **Extension**: ``riko.ext`` holds the symbols for authoring custom ``modules``:
   the ``processor``/``operator``/``splitter`` decorators and the module-metadata types.
 - **Private**: all import paths outside ``riko``, ``riko.bado``, and ``riko.ext``,
@@ -99,7 +100,7 @@ Application code should import from ``riko``.
     ...     Sinks,
     ...     Sources,
     ...     Transforms,
-    ...     parse_dag,
+    ...     Workflow,
     ...     describe_module,
     ...     export,
     ...     get_path,
@@ -572,14 +573,14 @@ never yields. Keep side effects out of such ``modules`` when consuming partially
 bound the work per ``item``.
 
 Fetching several configured sources at once is a fan-in graph rather than a separate
-class. ``parse_dag`` turns a bare-bones DAG (``PipeDag``) that wires each source into a
-``union`` into a ``Workflow``, and ``Pipeline(flow)`` runs it under either style:
+class. ``Workflow.parse`` turns a bare-bones DAG (``PipeDag``) that wires each source
+into a ``union`` into a ``Workflow``, and ``Pipeline(flow)`` runs it under either style:
 
 .. code-block:: python
 
-    >>> from riko import parse_dag, Pipeline
+    >>> from riko import Pipeline, Workflow
     >>>
-    >>> flow = parse_dag({
+    >>> flow = Workflow.parse({
     ...     'modules': [
     ...         {'id': 'f1', 'name': 'itembuilder', 'conf': {'attrs': {'key': 'x', 'value': '1'}}},
     ...         {'id': 'f2', 'name': 'itembuilder', 'conf': {'attrs': {'key': 'x', 'value': '2'}}},
