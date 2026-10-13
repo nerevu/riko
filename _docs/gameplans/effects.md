@@ -282,7 +282,7 @@ failed/cancelled publication -> no successful result; clean partial artifact bes
 Current gap: the shipped file write session opens incremental (CSV/JSONL) `replace` destinations
 for writing when the session is acquired, truncating the file before any record arrives, so an
 aborted replace write destroys the prior file instead of leaving it intact. A strict xfail in
-`tests/internal/test_targets.py` marks it; the fix stages the replacement and publishes it only on
+`tests/internal/test_definitions.py` marks it; the fix stages the replacement and publishes it only on
 `finalize`.
 
 Detailed codecs remain owned by `artifact-conversion.md`; concrete FILE adapter mechanics belong to

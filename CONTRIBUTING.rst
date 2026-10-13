@@ -167,7 +167,7 @@ for the behavior you are changing:
 
 .. code-block:: bash
 
-    uv run manage test --no-cov tests/public/test_collections.py
+    uv run manage test --no-cov tests/public/test_pipeline.py
 
 Run documentation doctests directly when changing user-facing examples:
 
@@ -368,7 +368,10 @@ A built-in module change commonly requires work in several places:
 
        uv run manage codegen --config --names
 
-5. Add or update sync and async tests where both execution paths exist. An
+5. Add or update sync and async tests where both execution paths exist. Place
+   each test by the index in ``tests/__init__.py``: pick the tier, then the file
+   whose row names the test's subject, and put the test in that subject's
+   ``Test<Subject>`` class. An
    asynchronous test is a native ``async def`` decorated with ``async_test``
    from ``tests/__init__.py``. Never wrap a coroutine in a synchronous test
    body. A test stays a plain ``def`` under ``skipif_issync`` only when the
@@ -384,7 +387,7 @@ A built-in module change commonly requires work in several places:
    built-in module.
 9. Run the preferred validation sequence above.
 
-The configuration drift guard (``tests/internal/test_gen_config.py``) fails when
+The configuration drift guard (``tests/internal/test_codegen.py``) fails when
 the ``<Name>Conf`` contracts and ``riko/coercion/_configs.py`` fall out of sync.
 Generated discovery names and ids have their own drift guards under
 ``tests/internal/``.

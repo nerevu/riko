@@ -167,7 +167,7 @@ One zone must govern every form. Today the opt-in `try_local_tz=True` resolves n
 non-UTC host `"now"` and `"+1 seconds"` disagree by the host offset (the default
 `try_local_tz=False` is consistent: everything is UTC). The settable zone replaces both
 `now` computations with one. Tripwire (2026-10-10 naming triage):
-`tests/internal/test_cast.py::TestTryLocalTz::test_relative_offsets_share_the_named_day_zone`.
+`tests/internal/test_values.py::TestTryLocalTz::test_relative_offsets_share_the_named_day_zone`.
 
 The same setting covers `typecast`'s date/datetime casts (it has no timezone option today)
 and the pending `dateformat` timezone setting (strict xfail in `tests/functional/test_examples.py`).

@@ -68,8 +68,7 @@ jobs:
             --with pytest \
             --with pytest-timeout \
             pytest -p no:cacheprovider -o addopts="" -m smoke \
-            tests/public/test_imports.py tests/public/test_sync_async_parity.py \
-            tests/public/test_pipe_lifecycle.py tests/public/test_async_pipe_lifecycle.py
+            tests/public/test_modules.py tests/public/test_pipeline.py
       - name: Smoke test (source distribution)
         run: |
           tmp="$(mktemp -d)"
@@ -81,8 +80,7 @@ jobs:
             --with pytest \
             --with pytest-timeout \
             pytest -p no:cacheprovider -o addopts="" -m smoke \
-            tests/public/test_imports.py tests/public/test_sync_async_parity.py \
-            tests/public/test_pipe_lifecycle.py tests/public/test_async_pipe_lifecycle.py
+            tests/public/test_modules.py tests/public/test_pipeline.py
       - name: Store the distribution packages
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

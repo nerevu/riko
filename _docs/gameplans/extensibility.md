@@ -811,7 +811,7 @@ parity requirement.
 `None`, so it cannot decorate a target class. When that slice moves it to `riko.ext.targets`, have it
 return the registered class so `@register_target` is the one-line registration form; explicit opt-in
 per class is the supported alternative to subclass-hook auto-registration (see E3.3). Tripwire:
-`tests/internal/test_targets.py::test_register_target_returns_the_class_for_decorator_use`.
+`tests/internal/test_definitions.py::TestRegisterTarget::test_register_target_returns_the_class_for_decorator_use`.
 
 ## 25. Operation packs and extension registration
 

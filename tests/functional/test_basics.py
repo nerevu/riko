@@ -1,10 +1,4 @@
-"""
-Tests basic workflow module usage.
-
-These are integration tests for workflow modules. Keep cases that exercise
-composition, wiring, runtime context, or historical workflow behavior not owned more
-strongly by module doctests or focused test suites.
-"""
+"""Provides functional tests that run stored workflows and fixtures end to end."""
 
 from __future__ import annotations
 
@@ -16,25 +10,29 @@ from importlib import import_module
 from itertools import chain, islice
 from time import struct_time
 from typing import TYPE_CHECKING, cast
+from urllib.request import urlopen
 
 import pytest
 
-from riko import Pipeline
 from riko.base._dateutils import get_tzname
 from riko.base._strutils import truncate_content
-from riko.base.exceptions import UnsupportedModuleError
+from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
 from riko.coercion._sequences import listize
 from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode
+from riko.definitions._resource_definition import Resource
 from riko.definitions._workflow import Workflow
-from riko.execution._execution import SyncExecution
+from riko.execution._execution import AsyncExecution, SyncExecution
+from riko.io import async_url_open
 from riko.runtime._execution_plan import build_execution_plan
+from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflows import workflow_resolver
 from riko.types._guards import is_mapping
 from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput, is_subpipe
 from tests import TESTS_DIR, async_test
+from tests._loopback import loopback_url
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -178,50 +176,7 @@ def _check_dates[T: datetime | struct_time | date](*dates: T | object) -> tuple[
     return cast("tuple[T, ...]", dates)
 
 
-@pytest.fixture
-def sqlite_path(tmp_path: Path) -> Path:
-    path = tmp_path / "cars.sqlite"
-    connection = sqlite3.connect(path)
-
-    try:
-        connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
-        connection.execute("INSERT INTO t VALUES ('ford', 7213)")
-        connection.commit()
-    finally:
-        connection.close()
-
-    return path
-
-
-@pytest.mark.xfail(
-    strict=True,
-    raises=(TypeError, UnicodeDecodeError),
-    reason="owned by the connectors work: fetchtable forwards the csv-only"
-    " delimiter option to the sqlite reader (TypeError) and opens the binary"
-    " source as text (UnicodeDecodeError); xlsx follows the same path",
-)
-@pytest.mark.filterwarnings("ignore::ResourceWarning")
-def test_fetchtable_reads_sqlite_fixture(sqlite_path: Path):
-    """Ensure binary tabular sources open in binary mode and yield rows."""
-    pipeline = Pipeline.from_module("fetchtable", conf={"url": str(sqlite_path)})
-    item, failure = None, None
-
-    try:
-        item = pipeline.first()
-    except (TypeError, UnicodeDecodeError) as error:
-        failure = type(error)(*error.args)
-
-    # The failed read leaks its file handle; drop the traceback that pins it and
-    # collect here so the warning fires under this test's filter, not at teardown.
-    if failure is not None:
-        gc.collect()
-        raise failure
-
-    assert is_mapping(item)
-    assert item.get("make") == "ford"
-
-
-class TestBasics:
+class TestStoredWorkflows:
     """Test a few sample workflows."""
 
     def _run_example(
@@ -905,3 +860,171 @@ class TestBasics:
 
         with pytest.raises(UnsupportedModuleError, match=r"\btermextractor\b"):
             self._run_example(pipe_name)
+
+
+@pytest.fixture
+def sqlite_path(tmp_path: Path) -> Path:
+    path = tmp_path / "cars.sqlite"
+    connection = sqlite3.connect(path)
+
+    try:
+        connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
+        connection.execute("INSERT INTO t VALUES ('ford', 7213)")
+        connection.commit()
+    finally:
+        connection.close()
+
+    return path
+
+
+class TestFetchtable:
+    @pytest.mark.xfail(
+        strict=True,
+        raises=(TypeError, UnicodeDecodeError),
+        reason="owned by the connectors work: fetchtable forwards the csv-only"
+        " delimiter option to the sqlite reader (TypeError) and opens the binary"
+        " source as text (UnicodeDecodeError); xlsx follows the same path",
+    )
+    @pytest.mark.filterwarnings("ignore::ResourceWarning")
+    def test_fetchtable_reads_sqlite_fixture(self, sqlite_path: Path):
+        """Ensure binary tabular sources open in binary mode and yield rows."""
+        pipeline = Pipeline.from_module("fetchtable", conf={"url": str(sqlite_path)})
+        item, failure = None, None
+
+        try:
+            item = pipeline.first()
+        except (TypeError, UnicodeDecodeError) as error:
+            failure = type(error)(*error.args)
+
+        # The failed read leaks its file handle; drop the traceback that pins it and
+        # collect here so the warning fires under this test's filter, not at teardown.
+        if failure is not None:
+            gc.collect()
+            raise failure
+
+        assert is_mapping(item)
+        assert item.get("make") == "ford"
+
+
+_BODY = "<rss><channel><item><title>hi</title></item></channel></rss>"
+
+
+_CONTENT_TYPE = "application/xml"
+
+
+def _sync_http_client(url: str, events: list[str]):
+    def connect():
+        response = urlopen(url)  # noqa: S310
+        try:
+            yield response
+        finally:
+            response.close()
+            events.append("closed")
+
+    return connect
+
+
+def _async_http_client(url: str, events: list[str]):
+    async def connect():
+        try:
+            async with async_url_open(url) as stream:
+                yield stream
+        finally:
+            events.append("closed")
+
+    return connect
+
+
+class TestResourceLifecycle:
+    @pytest.mark.simulated_network
+    def test_sync_external_http_client_under_sync_execution(self) -> None:
+        events: list[str] = []
+
+        with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
+            with SyncExecution() as execution:
+                response = execution.acquire(
+                    Resource.from_lifecycle(_sync_http_client(url, events))
+                )
+                assert b"<item>" in response.read()
+                assert events == []
+
+            assert events == ["closed"]
+
+    @pytest.mark.simulated_network
+    @async_test
+    async def test_sync_external_http_client_under_async_execution(self) -> None:
+        events: list[str] = []
+
+        with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
+            async with AsyncExecution() as execution:
+                response = await execution.aacquire(
+                    Resource.from_lifecycle(_sync_http_client(url, events))
+                )
+                assert b"<item>" in response.read()
+                assert events == []
+
+            assert events == ["closed"]
+
+    @pytest.mark.simulated_network
+    @async_test
+    async def test_async_external_http_client_under_async_execution(self) -> None:
+        events: list[str] = []
+
+        with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
+            async with AsyncExecution() as execution:
+                stream = await execution.aacquire(
+                    Resource.from_lifecycle(_async_http_client(url, events))
+                )
+                assert "<item>" in stream.read()
+                assert events == []
+
+            assert events == ["closed"]
+
+    @pytest.mark.simulated_network
+    def test_sync_external_async_http_client_rejected(self) -> None:
+        with (
+            loopback_url(_BODY, content_type=_CONTENT_TYPE) as url,
+            SyncExecution() as execution,
+            pytest.raises(InvalidPipelineError, match="async-native"),
+        ):
+            execution.acquire(Resource.from_lifecycle(_async_http_client(url, [])))
+
+    @pytest.mark.simulated_network
+    def test_sync_external_http_client_torn_down_on_failure(self) -> None:
+        events: list[str] = []
+
+        def failing() -> object:
+            raise RuntimeError("boom")
+
+        def run() -> None:
+            with (
+                loopback_url(_BODY, content_type=_CONTENT_TYPE) as url,
+                SyncExecution() as execution,
+            ):
+                execution.acquire(
+                    Resource.from_lifecycle(_sync_http_client(url, events))
+                )
+                execution.acquire(Resource.from_factory(failing, cleanup=False))
+
+        with pytest.raises(RuntimeError, match="boom"):
+            run()
+
+        assert events == ["closed"]
+
+    @pytest.mark.simulated_network
+    @async_test
+    async def test_async_external_http_client_torn_down_on_failure(self) -> None:
+        events: list[str] = []
+
+        async def fail() -> None:
+            with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
+                async with AsyncExecution() as execution:
+                    await execution.aacquire(
+                        Resource.from_lifecycle(_async_http_client(url, events))
+                    )
+                    raise ValueError("boom")
+
+        with pytest.raises(ValueError, match="boom"):
+            await fail()
+
+        assert events == ["closed"]

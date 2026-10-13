@@ -36,7 +36,7 @@ LITERAL_RULES: tuple[LiteralRule, ...] = (
     LiteralRule(re.compile(r"``'[^`]*'``"), 'a double-quoted value, e.g. ``"x"``'),
 )
 
-_EXCLUDED_NAMES = frozenset({"_lint_literals.py", "test_lint_literals.py"})
+_EXCLUDED_NAMES = frozenset({"_lint_literals.py", "test_cli.py"})
 
 
 class LiteralIssue(NamedTuple):

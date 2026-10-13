@@ -11,7 +11,7 @@ implementation-accessible but carry no compatibility guarantee.
 
 The examples in this document mirror the declarations in
 `riko.base._api_surface`. They are illustrative; the enforced public-boundary
-coverage lives in `tests/public/test_imports.py`.
+coverage lives in `tests/public/test_modules.py`.
 
 ## Contract declarations
 
@@ -191,7 +191,7 @@ True
 `__all__` describes what the implementation exports.
 
 This document illustrates the key relationships between those declarations.
-`tests/public/test_imports.py` provides the complete black-box coverage for
+`tests/public/test_modules.py` provides the complete black-box coverage for
 importability, private-name leakage, duplicate exports, compatibility aliases, and
 other public-boundary invariants. `manage lint imports --canonical` independently
 checks internal code for imports through re-export facades rather than canonical

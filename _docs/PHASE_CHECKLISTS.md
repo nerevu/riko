@@ -94,11 +94,11 @@ ADD/MIGRATE/DELETE exit (§ 3 closure rule); "open" names what is still owed.
 | **R2B** semantic identity + `version=` | ⏳ pending | no node/resource `version=` plumbing yet; owner `gameplans/execution-semantics.md` |
 | **R3** immutable Context/Resource (+ write-session seam) | ✅ done | `1c72a7a5` (2026-09-24); [IMPLEMENTED § Write sessions](IMPLEMENTED.md#write-sessions--private-seam-awaiting-writenode). Not built and re-homed (implementation-sequence R3): factory-signature and eager resource-graph validation → R11; `state_store` → R6; identity-encoder selection and resource identity metadata → R2B; Context-local module definitions/`with_module()` unscheduled |
 | **R4A** `Pipeline` + canonical Workflow v2 IR | ✅ done | `19eea428`→`f54f1183` (2026-09-18→23), fluent chaining `2838e7aa`, clean-break cutover steps 2–5 (`1d021824`, `ccb2575e`, `54b53c29`, `59a51274`); only the `SINK_NAMES`/`Sinks` deletion rides R5C by design; checkpoint and loop `until`/`max_iterations` structural fields land with their runtimes (R6, R9) |
-| **R4B** private `SyncExecution`/`AsyncExecution` | ✅ done | scaffold, lifetime primitives, resource lifecycle, cross-mode adaptation, the pipe/collection deletion, `Pipeline.with_execution(...)` (executor/concurrency/order, event sink, shutdown budget), and `with_context`/`with_resource` ([IMPLEMENTED § Private execution runtime](IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)); concurrent fan-in branch pulling and the async task group are deferred to R7, lazy acquire-on-first-use and resource dependency ordering to R11; the write-session MIGRATE bullet carries to R5C (`WriteNode` execution, tripwired by `TestPipelineWrite` in `tests/internal/test_targets.py`) |
+| **R4B** private `SyncExecution`/`AsyncExecution` | ✅ done | scaffold, lifetime primitives, resource lifecycle, cross-mode adaptation, the pipe/collection deletion, `Pipeline.with_execution(...)` (executor/concurrency/order, event sink, shutdown budget), and `with_context`/`with_resource` ([IMPLEMENTED § Private execution runtime](IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)); concurrent fan-in branch pulling and the async task group are deferred to R7, lazy acquire-on-first-use and resource dependency ordering to R11; the write-session MIGRATE bullet carries to R5C (`WriteNode` execution, tripwired by `TestPipelineWrite` in `tests/internal/test_definitions.py`) |
 | **R4C** callable nodes (pure 1→1 `map`) + bare decorator form + `Pipeline.open()` | ⏳ pending | slot added 2026-10-03, extended 2026-10-04 to cover bare `@processor`/`@operator`/`@splitter` and `Pipeline.open()` (none built yet); owner `gameplans/callable-pipes.md`; flips `TestCallableNodes` and replaces `test_bare_decorator_raises_at_decoration` |
 | **R4D** workflow input declarations | ⏳ pending | slot added 2026-10-03; owner `gameplans/extensibility.md` § E3.6 |
 | **M1** v1-parity merge (`next` → `features`) | 🎯 milestone | order: close R4B → R4C → R4D → R5A → R7 → merge; R5B/R5C/R6+ follow (implementation-sequence § 4 "M1") |
-| **R4E** module config contracts + strict conf validation | ⏳ pending | slot added 2026-10-04, after M1; owner `gameplans/extensibility.md` E1/E3.9; flips the two conf tripwires in `tests/public/test_validate.py` |
+| **R4E** module config contracts + strict conf validation | ⏳ pending | slot added 2026-10-04, after M1; owner `gameplans/extensibility.md` E1/E3.9; flips the two conf tripwires in `tests/public/test_workflow.py` |
 | **M2** announcement release (`features` → `main`, 0.x) | 🎯 milestone | M1 → R4E → merge → publish; acceptance = every announcement-post sample runs on the released wheel; not the 1.0 gate (implementation-sequence § 4 "M2") |
 | **M3** monthly-invoicing release | 🎯 milestone | M2 → read-only R11 slices (credential contract, rest-incremental R0–R4 incl. GraphQL, provider P0–P1, azure AZ0/AZ2/AZ3) → `riko-msp` invoicing; per-client billable users (enabled + licensed) and devices (SuperOps managed assets) exported as CSV; no R2B/R5B/R5C/R6 (implementation-sequence § 4 "M3") |
 | **M4** monthly-reports release | 🎯 milestone | M3 → R2B → R5B → R5C → R6 → remaining R11 slices (connectors C4 Airtable, provider P2/P4) → `riko-msp` dashboard MVP; excludes destructive plan/apply (MD11) and the HTTP surface (implementation-sequence § 4 "M4") |
@@ -112,7 +112,7 @@ EXT (`riko.ext`), PRIVATE (`_*`). P1 added a stable hub module, a `Context` home
 `riko/__init__.py` itself and `Context` lives in `riko/definitions/_context.py`.
 
 **Decisions.** DoD: stability tier inferable from import path (gated by
-`tests/public/test_imports.py`). No carryover.
+`tests/public/test_modules.py`). No carryover.
 
 ## P2 — Objconf → DynamicConf (`ParsedConf` collapsed away)
 
@@ -128,7 +128,7 @@ never `DynamicConf` or the annotated `<Name>Objconf` (whether that changes is an
   parsers → **`ParsedConf` was collapsed away**; `DynamicConf` is the base and `get_conf_type` tests it.
 - `riko/coercion/_configs.py` is **generated** by `gen-config` (`riko/cli/_gen_config.py`) from the
   nonraw `<Name>Conf` TypedDict contracts in `types/modules.py`; drift-guarded by
-  `tests/internal/test_gen_config.py`. Edit the contracts, never `_configs.py`.
+  `tests/internal/test_codegen.py`. Edit the contracts, never `_configs.py`.
 - `Objconf` survived one release as a deprecated factory → `DynamicConf`, then was **removed entirely**
   in the post-v0.72.0 legacy removal. Import `DynamicConf` from `riko.ext.config`. See MIGRATION.rst /
   CHANGES.rst.
@@ -149,7 +149,7 @@ module-dev surface only.
 
 **Delivered.** `ReturnInference(kind, source, reason)` wraps the existing AST/annotation/generator
 inference; failures carry an actionable `reason`. No override that can drift from the function.
-Tested in `tests/internal/test_inference.py`.
+Tested in `tests/internal/test_modules.py`.
 
 **Carryover:** none.
 
@@ -169,7 +169,7 @@ now owned by `SyncExecution`/`AsyncExecution`, one per `Pipeline` iteration.
   semantics), it does not restart. `PipelineStateError` was reserved for chaining/reconfiguring a
   `CLOSED`/`FAILED` pipe; since the v1 cutover it names the execution, write session, or worker
   pool that refused an action in its current state.
-**Carryover:** none. Sync/async identical — parametrized `tests/public/test_pipe_lifecycle.py`.
+**Carryover:** none. Sync/async identical — parametrized `tests/public/test_pipeline.py`.
 
 ## P6 — ExecutionMode
 
@@ -196,7 +196,7 @@ vocabulary (`AsyncStream`/`AsyncItems`/`Feed`, now in `riko/types/_streams.py`, 
 `riko.ext.protocols`); at the time, the v1 async pipe accepted async-iterable / awaitable /
 sync-iterable sources, streamed incrementally through one shared execution, and gained chaining
 parity, async lifecycle, and async `split`/`export`; the AnyIO runtime migration
-(`async_map_stream`); the parity matrix (`tests/public/test_sync_async_parity.py`). The v1 pipe
+(`async_map_stream`); the parity matrix (`tests/public/test_pipeline.py`). The v1 pipe
 classes were deleted at v1-cutover step 4; `AsyncExecution` now owns async iteration.
 
 **Runtime decision (settled).** The core runtime is **AnyIO**; **Twisted is dropped as the runtime**
@@ -333,11 +333,11 @@ explicit `isasync=True` remains only for the cases the name signal can't type �
 callable not named `async_pipe` (a lambda), or a sync `def async_pipe` handed to
 `ModuleDefinition(async_pipe=…)`. A `pipe`-named async function raises `TypeError`; typed `__call__`
 overloads make `@operator()` on a coroutine statically async. Also on this branch: `pool_scope`'s
-`"stage"` value renamed to `"pipe"` (vs `"pipeline"`). Tests: `tests/internal/test_decorators.py`.
+`"stage"` value renamed to `"pipe"` (vs `"pipeline"`). Tests: `tests/internal/test_modules.py`.
 
 **Carryover:** none. Unblocks **P9A** (the generated flat `Modules` namespace +
 `Sources`/`Transforms`/`Sinks` bucket tree reads the registry/catalog). Tests:
-`tests/internal/test_resolver.py`.
+`tests/internal/test_modules.py`.
 
 ## P9A — enum + taxonomy discoverability
 
@@ -375,11 +375,11 @@ canonical everywhere (JSON, entry points, resolver); every enum member's `.value
 **Surface note:** the `Module` name collision is why the discovery tree is re-exported from the
 stable surface rather than from `riko.modules`.
 
-**Tests:** `tests/internal/test_codegen_names.py` (taxonomy golden, member normalization, collision
+**Tests:** `tests/internal/test_codegen.py` (taxonomy golden, member normalization, collision
 diagnostic, byte-stability, drift guard); `TestModuleNameEnum`
-(`tests/public/test_pipeline_fluent.py`, enum≡string resolution via ctor/`|`/`.pipe()`);
+(`tests/public/test_pipeline.py`, enum≡string resolution via ctor/`|`/`.pipe()`);
 `list_modules` filtering in `tests/public/test_modules.py`; surface-export presence
-(`Modules`/`Sources`/`Transforms`/`Sinks`/`describe_module`) in `tests/public/test_imports.py`. (The
+(`Modules`/`Sources`/`Transforms`/`Sinks`/`describe_module`) in `tests/public/test_modules.py`. (The
 separate `test_fluent_discovery.py` was dropped as redundant — its coverage lives in those homes.)
 **Carryover:** the non-P9A P9 work — installed-env aggregate `riko.generated.Modules` + `.pyi` stubs.
 

@@ -32,7 +32,7 @@ the same way `@processor()` does, for sync and async implementations alike. It i
 R4C ([implementation-sequence.md](implementation-sequence.md)), ahead of the M1 merge. Until then
 the bare form is rejected at decoration time with `TypeError` (the function would otherwise be
 taken as the positional `defaults`), pinned by
-`tests/internal/test_decorators.py::test_bare_decorator_raises_at_decoration`, which R4C replaces
+`tests/internal/test_modules.py::TestBareDecorator::test_bare_decorator_raises_at_decoration`, which R4C replaces
 with a test that the bare form wraps.
 
 Do not add a parallel `PipeTraits`, `TraitOverrides`, `@riko.pipe`, signature-injection, or
@@ -315,7 +315,7 @@ predicate matches. It is a callable, so it is not JSON-native and cannot be a `M
 since v1-cutover step 4 (2026-10-02) no `Pipeline` form expresses it, and `examples/kazeeki.py` /
 `tests/pyworkflows/pipe_kazeeki_full.py` dropped their guards (the kazeeki async-parity row is a
 strict xfail because the ungated budget math yields `NaN`). The strict-xfail tripwire is
-`tests/public/test_pending_pipeline_api.py::TestConditionalNodes`, written against
+`tests/public/test_pipeline.py::TestConditionalNodes`, written against
 `.strconcat(..., skip_if=…)`. This phase decides the successor: a predicate argument on the callable
 node, or conditional routing from the fan-out plan; either way the tripwire is rewritten to the
 chosen form and un-xfailed here.

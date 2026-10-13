@@ -75,7 +75,7 @@ Today it does not yield `[]`: a node with no input receives the internal one-ite
 `[{"forever": True}]`, which lets a `Sources` module fire once but leaks into the output of any other
 first module (`Pipeline.from_module("reverse")` yields `[{'forever': True}]`); the placeholder stays
 internal to source-first pipelines (strict-xfail tripwire in
-`tests/public/test_pending_pipeline_api.py`). (3) `Pipeline(source=…)` is removed outright
+`tests/public/test_pipeline.py`). (3) `Pipeline(source=…)` is removed outright
 (`Pipeline` is unreleased, so no deprecation): R4C's DELETE of `PipelineDefinition.source` leaves no
 stored seed for it to set. (2) Call and `open` get distinct roles, mirroring `iter(f)` vs
 `with open(f)` ("call to iterate, `open` to scope"): `pipeline(items)` / `items | pipeline` is the
@@ -134,7 +134,7 @@ potentially blocking sync acquisition or cleanup
 Worker adaptation must enter and exit a sync lifecycle resource on the same thread, so thread-affine
 clients such as `sqlite3` connections work under async execution. Today entry and exit may land on
 different worker threads; R11 (provider sessions) owns the fix, and a strict xfail in
-`tests/internal/test_prepare_execution.py` marks it.
+`tests/internal/test_execution_plan.py` marks it.
 
 The reverse direction under `SyncExecution` is asymmetric. Async value *production* — an async factory that yields a resolved value — is bridged through the execution portal and the produced value is owned on the sync `ExitStack`. Async-native *teardown* is not bridged: an async cleanup callable, an async-native context-manager lifecycle, or an owned value that only supports `aclose()` cannot be honored by a synchronous unwind and is permanently rejected with `InvalidPipelineError` before the resource is acquired, so the rejection never leaves a produced value or entered lifecycle behind. Run the pipeline under async execution to use async teardown.
 
@@ -920,7 +920,7 @@ A future explicit cancellation policy may distinguish draining from cancelling p
 
 When downstream execution stops early, active feeds are closed with `aclose()` when available. This applies to truncation, timeout, failure, cancellation, and consumer abandonment.
 
-**Resolved: abandoned async iteration (2026-10-05).** A bare `break` out of `async for item in pipeline` used to leave `Pipeline.__aiter__`'s async generator suspended inside an eagerly entered `AsyncExecution` task group whose cancel scope lived in the consumer's task; garbage collection then finalized it from another task and cancelled the consumer (the PEP 789 async-generator/structured-concurrency conflict). Nothing on the R4B run path spawned into that group, so it was removed rather than replaced by dedicated-task hosting: the abandoned generator now holds only the exit stack, and its finalizer unwinds resources without touching the consumer's scopes. A bare `break` is therefore safe but releases the run only at garbage collection; `async with pipeline.open() as stream` (R4C; until then `contextlib.aclosing(aiter(pipeline))`) remains the prompt-release spelling. Regression: `tests/public/test_async_pipe_lifecycle.py::TestAsyncClose::test_bare_break_leaves_the_callers_cancel_scope_intact`. **R7 constraint:** when fan-out introduces execution-spawned tasks, their task group must not be entered in the consumer's task across a `yield` — host it in a dedicated execution task feeding a bounded channel, or scope it to `Pipeline.open()` — or this regression trips.
+**Resolved: abandoned async iteration (2026-10-05).** A bare `break` out of `async for item in pipeline` used to leave `Pipeline.__aiter__`'s async generator suspended inside an eagerly entered `AsyncExecution` task group whose cancel scope lived in the consumer's task; garbage collection then finalized it from another task and cancelled the consumer (the PEP 789 async-generator/structured-concurrency conflict). Nothing on the R4B run path spawned into that group, so it was removed rather than replaced by dedicated-task hosting: the abandoned generator now holds only the exit stack, and its finalizer unwinds resources without touching the consumer's scopes. A bare `break` is therefore safe but releases the run only at garbage collection; `async with pipeline.open() as stream` (R4C; until then `contextlib.aclosing(aiter(pipeline))`) remains the prompt-release spelling. Regression: `tests/public/test_pipeline.py::TestAsyncClose::test_bare_break_leaves_the_callers_cancel_scope_intact`. **R7 constraint:** when fan-out introduces execution-spawned tasks, their task group must not be entered in the consumer's task across a `yield` — host it in a dedicated execution task feeding a bounded channel, or scope it to `Pipeline.open()` — or this regression trips.
 
 Execution resource cleanup follows the resource rules above. If both execution and cleanup fail, cleanup is still attempted comprehensively; multiple independent failures use `ExceptionGroup`. The resource unwind shares the execution-level shutdown/cleanup budget; no per-resource timeout exists initially.
 

@@ -38,7 +38,7 @@ the cutover session does not rediscover them:
   first title `[Weight] More parents think their overweight…`; 6 items / first title `Open
   researcher open course`) are strict-xfail acceptance tests in `tests/functional/test_basics.py`
   (`test_split`, `test_simplemath_1`) plus the strict-xfail probe-equivalence case in
-  `tests/internal/test_workflow_fixtures.py`; R7 un-xfails them. GitHub issue #61 (v1 split routing by traversal order) is
+  `tests/internal/test_codegen.py`; R7 un-xfails them. GitHub issue #61 (v1 split routing by traversal order) is
   closed as superseded by this cutover plus R7.
 
 ## Step 0 — Gate
@@ -49,10 +49,10 @@ Prerequisites that must be true before any deletion commit:
   attribute chaining, `|`/`__ror__` source seeding, and end-to-end `iter`/`aiter` execution with a
   seeded source.
 - The v2 execution runs linear and fan-in module graphs (covered by
-  `tests/internal/test_prepare_execution.py`).
+  `tests/internal/test_execution_plan.py`).
 - Coverage ownership is transferred, not dropped: the string-form/template chaining behavior
   historically owned by `tests/public/test_collections.py` is owned by
-  `tests/public/test_pipeline_fluent.py` going forward. Snapshot any remaining v1-only coverage
+  `tests/public/test_pipeline.py` going forward. Snapshot any remaining v1-only coverage
   worth porting before its file is deleted.
 
 ## Step 1 — Migrate P10 executor/bounded mechanics out of `collections.py`
@@ -70,7 +70,7 @@ Prerequisites that must be true before any deletion commit:
   `get_chunksize`, `PoolHandle` with `open_pool`/`borrow_pool`/`map(ordered)`); `SyncPipe`/
   `SyncCollection` consume it, `PoolScope` chain sharing stays with them and goes at step 4, and
   `listpipe` stays because it depends on `riko.coercion`, which the `execution` layer cannot import.
-  Handle-level tests: `tests/internal/test_pools.py`; the pipe-level `TestPoolLifecycle` in
+  Handle-level tests: `tests/internal/test_execution.py`; the pipe-level `TestPoolLifecycle` in
   `tests/public/test_collections.py` goes with the classes at step 4.
 
 ## Step 2 — Flip the generated-pipeline mechanism off v1
@@ -94,7 +94,7 @@ pipeline resolver — the v2 execution's own subpipe path — loads them.
   The generator, `codegen --pipes`, `gen-pipelines`, `PIPELINE_DIRS`, and both drift guards are
   gone. A covering set of `pypipelines/pipe_*.py` files stays as hand-maintained typed probes (they
   surface `*RawConf`/`*Conf`/`*ConfRule` contract errors under pyright) guarded by
-  `tests/internal/test_workflow_fixtures.py`, which also enforces canonical form. To convert the
+  `tests/internal/test_codegen.py`, which also enforces canonical form. To convert the
   fixtures faithfully the model gained `ModuleNode.options` (`CallOptions`, formerly
   `LoopOptions`; `LoopConf` is now only `embed`), both executions forward options for every node
   and pass a loop its embed's `conf`, positional-only inputs no longer receive the default seed,
@@ -143,7 +143,7 @@ Blocks step 4.
   and a wire's optional third entry names the target port — so fan-in (`["b", "u", "in:1"]`) is now
   expressible and the old "Limitation" section of `docs/DAG_FORMAT.rst` is gone. The R17 tripwire
   `test_convert_dag_empty_modules_raises` is **retired**, replaced by the regular test
-  `tests/public/test_build_workflow.py::test_empty_modules_raise_invalid_pipeline` (empty `modules` →
+  `tests/public/test_workflow.py::TestPipeDag::test_empty_modules_raise_invalid_pipeline` (empty `modules` →
   `InvalidPipelineError("workflow has no nodes")`). `tests/dags/*.json` stay as `build-workflow`
   fixtures; `tests/internal/test_codegen.py` compiles every committed fixture and proves the generated
   module item-for-item equivalent to running the document (the two split fixtures strict-xfail), and
@@ -171,10 +171,10 @@ Depends on steps 1–3. Deletes `SyncPipe`, `AsyncPipe`, `PyPipe`, `PyCollection
   `with_execution` shipped 2026-10-03 and replaces the `parallel`/`workers`/`threads`/`pool`
   arguments), and `write(dest, mode=, fmt=, keys=)` appends a `build_write`-validated
   `WriteNode` that plan build still refuses. The retired v1 behaviors live on as strict xfails
-  written against those forms — `tests/public/test_pending_pipeline_api.py` (subscriptions,
+  written against those forms — `tests/public/test_pipeline.py` (subscriptions,
   split, callable nodes, per-item gating), the fan-in branch-pulling cases in `test_parallel.py`
   (R7), and `TestPipelineWrite` in
-  `tests/internal/test_targets.py` — so each flips to a pass when its owner lands. User docs keep the
+  `tests/internal/test_definitions.py` — so each flips to a pass when its owner lands. User docs keep the
   same sections as `Pending.` code blocks. The one capability with no designed successor is the
   `skip_if` per-item callable guard (not JSON-native, so not a node option); `examples/kazeeki.py` and
   `pipe_kazeeki_full.py` dropped it, and `callable-pipes.md` owns the gap.
@@ -183,7 +183,7 @@ Depends on steps 1–3. Deletes `SyncPipe`, `AsyncPipe`, `PyPipe`, `PyCollection
   `SyncPipe.subscribe`/`publish` conveniences die (their replacement is orchestration-owned).
 - Same commit: remove the class names and collection verbs from `riko/__init__.py` and the
   `COLLECTIONS` set in `riko/base/_api_surface.py` (STABLE surface change) → `manage codegen
-  --api` regenerates the `_docs/API_SURFACE.md` blocks; update `tests/public/test_imports.py`.
+  --api` regenerates the `_docs/API_SURFACE.md` blocks; update `tests/public/test_modules.py`.
 - Delete/port `tests/public/test_collections.py` (chaining coverage already re-homed, step 0).
 - Scrub docstring/doc references: `riko/modules/__init__.py`, `riko/modules/receive.py`,
   `README.rst`, `docs/FAQ.rst`, `docs/COOKBOOK.rst`, `tests/functional/test_examples.py` example
@@ -249,7 +249,7 @@ commit; since `write` survives until `WriteNode` executes (R5C), `SINK_NAMES`
   `riko/modules/_names.py`, `riko/types/_module_ids.py`);
 - remove `Sinks` from `riko/__init__.py` + the `MODULES` set in `_api_surface.py`
   (`manage codegen --api`);
-- update `tests/internal/test_codegen_names.py`, `tests/public/test_imports.py`, README/docs
+- update `tests/internal/test_codegen.py`, `tests/public/test_modules.py`, README/docs
   mentions, `docs/MIGRATION.rst`.
 
 The cutover session's only step-6 action is keeping this deferral recorded so the deletion table

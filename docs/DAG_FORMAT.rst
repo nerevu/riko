@@ -225,7 +225,7 @@ Both read stdin when given ``-`` or no path at all, so they compose:
 
     build-workflow dag.json | compile-workflow - -o flow.py
 
-See `pipe_forever`_ for a runnable example, and `test_build_workflow`_ and
+See `pipe_forever`_ for a runnable example, and `test_workflow`_ and
 `test_script`_ for the expansion and command guarantees.
 
 For fuller worked examples, see the `example workflow documents`_
@@ -235,6 +235,6 @@ For fuller worked examples, see the `example workflow documents`_
 
 .. _pipe_forever: ../tests/dags/pipe_forever.json
 .. _pipe_reordered: ../tests/dags/pipe_reordered.json
-.. _test_build_workflow: ../tests/public/test_build_workflow.py
+.. _test_workflow: ../tests/public/test_workflow.py
 .. _test_script: ../tests/functional/test_script.py
 .. _example workflow documents: ../examples/workflows

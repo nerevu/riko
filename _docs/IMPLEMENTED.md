@@ -339,7 +339,7 @@ name signal can't reach the type checker: a sync async-interface callable not na
 (e.g. a lambda), or a sync `def async_pipe` handed to a typed API such as
 `ModuleDefinition(async_pipe=…)`. A function named `pipe` that resolves async raises `TypeError`.
 The typed `__call__` overloads track the `async def` case (`@operator()` on a coroutine is statically
-async). Tests: `tests/internal/test_decorators.py`. The decorators must be called before
+async). Tests: `tests/internal/test_modules.py`. The decorators must be called before
 decorating: a bare `@processor` (no parentheses) would land the function in the positional
 `defaults`, so `Module.__init__` rejects a callable `defaults` with `TypeError` at decoration.
 Bare-form support (bare = configured with no options) is specified by
@@ -374,7 +374,7 @@ edge-less nodes; normalization counts stream edges only). It
 is the one topology interpretation: `Workflow.validate()` rejects a non-empty `cyclic`, and
 `build_execution_plan` (`riko/runtime/_execution_plan.py`) and the sync/async executions read the same
 index instead of rescanning edges. Structure pinned by
-`tests/internal/test_prepare_execution.py::test_workflow_index_orders_and_indexes` and
+`tests/internal/test_values.py::TestGraphIndex::test_workflow_index_orders_and_indexes` and
 `test_graph_index_derives_and_freezes_from_its_inputs`.
 
 > The index's v1 indexer (`parse_pipe_def`/`_index_pipe_def`, with `_OUTPUT` as a node, verbatim
@@ -412,7 +412,7 @@ memoization on `canonical_bytes`, bypassing values that cannot be encoded, so th
 `_from_hashable` reconstruction machinery is gone. `NonNullHashable`/`Hashable`
 (`riko/types/_scalars.py`) are the aligned static contracts. `Context(identity_encoder=...)`
 backend selection is deferred (R3-adjacent); the stdlib encoder is the reference. Tests:
-`tests/internal/test_canonical.py` (golden canonical bytes + golden digests + rule matrix) plus
+`tests/internal/test_values.py` (golden canonical bytes + golden digests + rule matrix) plus
 module doctests.
 
 ## Canonical Workflow v2 model (R4A.1, shipped)
@@ -507,10 +507,10 @@ The input is typed `WorkflowLike` (`riko.types`) — the `*Like` union of the pr
 `RawWorkflow` `TypedDict` (with `RawNode`/`RawEdge`/`RawEndpoint`) and a loose
 `Mapping[str, object]`, so a literal gets editor key-completion while any dict still passes. The
 `Raw*` TypedDicts are the one hand-written parallel to the canonical dataclasses; a drift guard
-(`tests/internal/test_workflow_authoring.py`) derives the expected key set from each node/edge/
+(`tests/internal/test_definitions.py`) derives the expected key set from each node/edge/
 endpoint's `fields()` and fails if authoring omits a field (modulo the `family` key and the `format`
 alias), so a new node field cannot silently drop out of the authoring surface. Tests:
-`tests/public/test_normalize.py` plus module doctests.
+`tests/public/test_workflow.py` plus module doctests.
 
 ## Workflow v2 validation — `Workflow.validate()` (R4A.3, shipped)
 
@@ -534,7 +534,7 @@ references resolving to declared top-level `resources`; and a non-empty graph ex
 output (closing `normalize_workflow`'s deferred ambiguous-leaf case). The contract-aware E3.9 rules — undeclared
 ports, fan-in arity, registered module/action/target schema validation — are **deferred** because
 the module and target contracts declare no ports or configuration schemas yet; they land with that
-metadata. Tests: `tests/public/test_validate.py` (builds `Workflow` graphs directly and asserts
+metadata. Tests: `tests/public/test_workflow.py` (builds `Workflow` graphs directly and asserts
 `workflow.validate()`/`isvalid`) plus module doctests.
 
 ## Workflow v2 serialization — `Workflow.serialize` / `Workflow.parse` (R4A.5, shipped)
@@ -574,7 +574,7 @@ encoder therefore needs no Python-only value branches and `serialize` uses `allo
 (a `WorkflowDocument` is itself a valid `RawWorkflow`), so `Workflow.parse(flow.serialize()) == flow` holds
 by value equality and serialization is idempotent. A migrated pipe definition (`PipeDef`) serializes with no v1-only structure: no
 `_INPUT`/`_OUTPUT`/`wires`/`src`/`tgt` tokens and no `type:"output"` node — the terminal `_OUTPUT`
-pseudo-node lives only in top-level `outputs`. Tests: `tests/public/test_serialize.py` (golden bytes,
+pseudo-node lives only in top-level `outputs`. Tests: `tests/public/test_workflow.py` (golden bytes,
 per-topology round-trip/idempotency, order-independence, JSON-native nested round-trip by equality,
 non-JSON-native value rejection, migrate-emits-no-v1) plus module doctests.
 
@@ -633,7 +633,7 @@ Malformed structure raises `InvalidPipelineError`; an empty node set is left to
 
 Shared plumbing is reused, not reinvented: the legacy `_INPUT`/`_OUTPUT`/`_OTHER`/`output` tokens are
 `riko/base/_config` constants (`INPUT_PORT`/`OUTPUT_PORT`/`OTHER_PORT`/`OUTPUT_MODULE`) also consumed
-by `_normalize`; the module and edge splits use `partition` from `riko/base/_iterutils`. Tests: `tests/public/test_migrate.py` plus module doctests.
+by `_normalize`; the module and edge splits use `partition` from `riko/base/_iterutils`. Tests: `tests/public/test_workflow.py` plus module doctests.
 
 ## Subscription lifecycle — `subscribe` / `publish` (F5a, partial)
 
@@ -690,7 +690,7 @@ intentionally **not** repaired by extending the old DONE/`ids` mechanism. The co
 MVP fixes Feed-native incremental async `send`/`receive`; final F5 replaces lifecycle ownership
 with execution-owned `Publisher`/`Subscription` handles so cleanup no longer depends on a user
 drain. The strict xfail `TestSubscriptions::test_idle_drain_returns_promptly` in
-`tests/public/test_pending_pipeline_api.py` marks the gap for the replacement.
+`tests/public/test_pipeline.py` marks the gap for the replacement.
 
 ## 25. Conversion — export converters (shipped)
 
@@ -980,9 +980,9 @@ run:
   Sparse positional inputs (`in` + `in:2`, legacy `_OTHER2`) execute as an ordered `others` list,
   `in:0`/`out:0` are grammar errors in `parse_port`, and per-module fan-in arity waits on the
   module port contracts. Callable `.map`/`.flat_map` are deliberately not shipped —
-  callable-pipes owns them; a strict-xfail tripwire in `tests/public/test_pipeline_fluent.py` flips
-  when they land. Tests: `tests/public/test_pipeline_fluent.py` plus seeded-run and end-to-end
-  coverage in `tests/internal/test_prepare_execution.py`.
+  callable-pipes owns them; a strict-xfail tripwire in `tests/public/test_pipeline.py` flips
+  when they land. Tests: `tests/public/test_pipeline.py` plus seeded-run and end-to-end
+  coverage in `tests/internal/test_execution_plan.py`.
 
 ## Write sessions — private seam awaiting `WriteNode`
 

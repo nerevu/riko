@@ -434,7 +434,7 @@ modules normalize to `out`; split/branch/route produce their declared ports).
 Because branch delivery must carry the final `_FeedItem` provenance envelope, the
 port-keyed production mechanism lands here (after R5A), not as an R4B interim. The
 current fail-closed guard is pinned by
-`tests/internal/test_prepare_execution.py::test_run_rejects_nondefault_source_output_port`,
+`tests/internal/test_execution_plan.py::TestPlanRun::test_run_rejects_nondefault_source_output_port`,
 which R7 must replace when distinct ports begin resolving to distinct streams.
 
 For the same reason the R4B plan build also refuses one source port feeding more than

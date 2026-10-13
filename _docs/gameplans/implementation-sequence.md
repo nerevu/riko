@@ -649,7 +649,7 @@ R4A.5  deterministic serialization + acceptance
   never emitting v1-only structure. The **CLI v2-emission** bullet (`compile-pipe`/`build-workflow`) and
   the v1 compiler/fixture deletions are **deferred to R4B**: the E3.10 CLI-emission acceptance is
   superseded by the clean-break policy, which completes the v1→v2 CLI/compiler cutover at R4B (the
-  first phase v2 executes). Files: `riko/definitions/_serialize.py`, `tests/public/test_serialize.py`.
+  first phase v2 executes). Files: `riko/definitions/_serialize.py`, `tests/public/test_workflow.py`.
   **The deferred CLI v2-emission has since landed** at cutover step 3 ([v1-cutover.md § Step
   3](v1-cutover.md#step-3--retire-remaining-v1-cli-consumers)): `build-workflow` emits a `WorkflowDocument` from
   any supported form, `compile-pipe` generates from a `WorkflowDocument` through the new
@@ -661,7 +661,7 @@ R4A.5  deterministic serialization + acceptance
 R4A.5 is the only slice gated on R2A (the canonical value encoder): the structural slices R4A.0–R4A.4
 proceed without it, and the byte-stable serialization/golden-fixture work waits on it. R4A.0 is both
 the true unblocked head and the highest-risk decision — the `Targets`→`Formats` rename touches the
-STABLE `riko` surface (`_api_surface.py`, `tests/public/test_imports.py`) — so it is front-loaded to
+STABLE `riko` surface (`_api_surface.py`, `tests/public/test_modules.py`) — so it is front-loaded to
 force that decision early.
 
 #### R4A clean-break policy (supersedes the staged 0.x v1 loader)
@@ -818,7 +818,7 @@ resolves each node's sync/async callables once into a `PreparedNode` and the ret
 holds no dispatcher, so `PreparedNode.select(is_async=...)` picks native-vs-adapter at run time without
 re-inspecting the registry (regression: `test_execution_plan_snapshots_resolution`). The two cross-mode
 defects this section tracked behind strict-xfail tripwires are now closed; the shared adaptation
-helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_prepare_execution.py`).
+helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_execution_plan.py`).
 
 1. **Lazy sync-under-async bridge.** A sync-only node under `AsyncExecution` materializes neither its
    async source nor its own output. `AsyncExecution._run_sync_node` (`riko/execution/_execution.py`)
@@ -839,7 +839,7 @@ helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_
    `resolve_executor`, `get_worker_cnt`/`get_chunksize`, `PoolHandle` via `open_pool`/`borrow_pool`
    with `map(ordered)`), consumed by the surviving `SyncPipe`/`SyncCollection` until their deletion
    and by `with_execution(...)` after; the async bounded mapping already lived in
-   `riko/bado/itertools.py`. Handle-level characterization tests are `tests/internal/test_pools.py`.
+   `riko/bado/itertools.py`. Handle-level characterization tests are `tests/internal/test_execution.py`.
    Cutover step 2 followed (`b4850983`): the pipeline fixtures are `WorkflowDocument`s run by the
    v2 execution, `ModuleNode.options` carries per-node call options for every module node, and the
    positional-input seed rule and `migrate_v1_to_v2` were corrected so the fixtures convert
@@ -922,7 +922,7 @@ Concurrent pulling of fan-in branches is R7's (its deliverable list names it).
 - **MIGRATE:** P10 bounded/executor mechanics and R3 resource acquisition run under the common
   execution lifetime; resource declarations normalize once into the executable lifecycle plan. The
   write-session lifecycle part of this bullet is **carried to R5C**: no node drives a write session
-  until `WriteNode` executes (tripwire `TestPipelineWrite` in `tests/internal/test_targets.py`).
+  until `WriteNode` executes (tripwire `TestPipelineWrite` in `tests/internal/test_definitions.py`).
 - **DELETE:** `SyncPipe`/`AsyncPipe`/Collection runtime classes and superseded one-shot pipe lifecycle
   hosts are absent rather than wrapped; no parallel task-group/exit-stack/portal runtime remains; the
   private resource-variant subclass hierarchy is absent, replaced by lifecycle-plan data.
@@ -965,8 +965,8 @@ gating, pending a decision).
 **Exit:**
 
 - **ADD:** `Pipeline.map` exists as a mode-neutral callable node; the callable-node tripwires in
-  `tests/public/test_pending_pipeline_api.py` flip to passes. The bare decorator form wraps, and
-  `tests/internal/test_decorators.py::test_bare_decorator_raises_at_decoration` (which pins today's
+  `tests/public/test_pipeline.py` flip to passes. The bare decorator form wraps, and
+  `tests/internal/test_modules.py::TestBareDecorator::test_bare_decorator_raises_at_decoration` (which pins today's
   decoration-time `TypeError`) is replaced by a test that the bare and called forms wrap identically.
   `Pipeline.open()` exists, with sync and async tests that a `break` inside the block closes the run
   in the opening task and that concurrent `open()` calls on one pipeline run independently; README,
@@ -994,7 +994,7 @@ Deliver:
 - a strict `Workflow.inputs` that holds only canonical schema mappings: today the field is
   `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare type-name string or a
   non-schema value (`{"q": 5}`) that re-normalization then rejects; strict xfails in
-  `tests/internal/test_definition_freezing.py` mark it for this phase. Narrow the field's
+  `tests/internal/test_definitions.py` mark it for this phase. Narrow the field's
   static input type (`inputs_converter`'s `accepted`, today `Mapping[str, object]`) to one
   schema mapping per name in the same change: narrowing it alone fails pyright wherever a
   stored `Workflow.inputs` is passed back to the constructor.
@@ -1012,11 +1012,11 @@ Deliver:
 - **MIGRATE:** the `input` module's default/prompt/`test` behavior and the generated module's
   describe-inputs mode read the declared inputs instead of scanning node configuration. `Pipeline`
   iteration ignores the `Context.mode` describe modes today (only generated workflow modules honor
-  them); a strict xfail in `tests/public/test_context_modes.py` marks it for this phase. The
+  them); a strict xfail in `tests/public/test_pipeline.py` marks it for this phase. The
   hand-maintained probes in `tests/pyworkflows`/`examples/pyworkflows` migrate with it: their
   describe-inputs branches still return `[]` or the scanned `input`-node tuples while the generated
   pipe returns the declared `Workflow.inputs` mapping (strict xfail
-  `tests/internal/test_workflow_fixtures.py::test_probe_describes_the_inputs_its_document_declares`).
+  `tests/internal/test_codegen.py::TestWorkflowProbes::test_probe_describes_the_inputs_its_document_declares`).
 - **DELETE:** none at the public surface; no second input-declaration carrier exists beside the IR.
 
 ### M1 — v1-parity merge (`next` → `features`)
@@ -1080,7 +1080,7 @@ released `riko.ext` name, so the change carries a "Renamed"/"Deprecated" `CHANGE
 **Exit:**
 
 - **ADD:** registered module conf is validated at plan build; the strict-xfail tripwires
-  `tests/public/test_validate.py::test_unknown_conf_key_rejected_before_the_source_is_read` and
+  `tests/public/test_workflow.py::TestValidate::test_unknown_conf_key_rejected_before_the_source_is_read` and
   `::test_wrongly_typed_conf_value_rejected_before_the_source_is_read` flip to passes.
 - **MIGRATE:** module parsers stop defensively re-checking conf shapes the contract now guarantees.
 - **DELETE:** none at the public surface; no second conf-schema carrier exists beside the typed
@@ -1261,7 +1261,7 @@ Deliver:
 - `PipelineDefinition.write()` gives up its second meaning in the same commit: today a call without a
   destination chains the shipped `write` module (so attribute chaining keeps reaching it) while a call
   with one appends a `WriteNode`. Once the module is gone, `dest` is required and a bare `write()` is a
-  `TypeError` (tripwire `tests/internal/test_targets.py::TestPipelineWriteDefinition::test_requires_a_destination`;
+  `TypeError` (tripwire `tests/public/test_pipeline.py::TestPipelineWriteDefinition::test_requires_a_destination`;
   audit triage 2026-10-05);
 - preserve only the bounded persisted-v1 `write` migration owned by R4A/extensibility.
 
@@ -1344,7 +1344,7 @@ Deliver:
   entering it in the consumer's task made a bare `async for … break` cancel the consumer). The group
   must not stay entered in the consumer's task across a `yield`: host it in a dedicated execution
   task behind a bounded channel or scope it to `Pipeline.open()`; the bare-break regression in
-  `tests/public/test_async_pipe_lifecycle.py` guards this;
+  `tests/public/test_pipeline.py` guards this;
 - prove failure-induced cancellation of execution-spawned tasks (moved here from R4B's external-
   resource proof along with the task group);
 - concurrent pulling of fan-in branches under the `with_execution(concurrency=)` ceiling, with
@@ -1586,10 +1586,10 @@ AZ0/AZ2/AZ3), which depend only on R3 resources and may land right after M2:
 - provider/MCP sessions are declared `Resource`s resolved once per execution;
 - a sync lifecycle resource under async execution is entered and exited on the same thread, so
   thread-affine clients (e.g. `sqlite3` connections) work (strict-xfail tripwire in
-  `tests/internal/test_prepare_execution.py`);
+  `tests/internal/test_execution_plan.py`);
 - lazy resources acquire on first use rather than at run start, and declared resource-to-resource
   dependencies acquire dependency-first and tear down dependent-first (moved from R4B; tripwire
-  `tests/internal/test_prepare_execution.py::test_run_defers_an_unused_lazy_resource`);
+  `tests/internal/test_execution_plan.py::TestPlanRun::test_run_defers_an_unused_lazy_resource`);
 - factories declared `(ctx, resources)` receive a `ResourceView` (`execution-semantics.md` §
   Execution-bound resource view). `ResourceView` lives in `riko/execution/_resource_view.py` today;
   factory definitions sit in `definitions`, which cannot import `execution`, so move it to a layer

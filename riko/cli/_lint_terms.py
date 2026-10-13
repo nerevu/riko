@@ -61,7 +61,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
 )
 
 _EXCLUDED_NAMES = frozenset(
-    {"CHANGES.rst", "MIGRATION.rst", "_lint_terms.py", "test_lint_terms.py"}
+    {"CHANGES.rst", "MIGRATION.rst", "_lint_terms.py", "test_cli.py"}
 )
 
 

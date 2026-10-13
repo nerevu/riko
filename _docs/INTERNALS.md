@@ -52,7 +52,7 @@ generated artifacts cannot drift silently.
 `tests/workflows/*.json` and `examples/workflows/*.json` are workflow documents
 (`WorkflowDocument`s) — exactly what `Workflow.serialize` emits by default: indented, with sorted
 keys and a trailing newline — and the v2 runtime executes them directly. They are hand-maintained
-sources, not generated output. `tests/internal/test_workflow_fixtures.py` reparses
+sources, not generated output. `tests/internal/test_codegen.py` reparses
 and reserializes each file, so a committed fixture that drifts from canonical form
 fails there.
 
