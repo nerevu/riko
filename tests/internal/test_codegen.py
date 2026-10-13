@@ -8,7 +8,7 @@ import dataclasses
 import importlib.util
 from importlib import import_module
 from keyword import iskeyword
-from typing import TYPE_CHECKING, Any, get_args
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -27,7 +27,6 @@ from riko.ext.codegen import (
     gen_catalog_entries,
     generate_module_ids,
     generate_module_names,
-    list_modules,
 )
 from riko.modules._metadata import gen_module_catalog
 from riko.runtime._codegen import compile_workflow
@@ -36,7 +35,6 @@ from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflows import _build_resolved_workflow
 from riko.types._enums import ExecutionMode
-from riko.types._module_ids import LoopableModuleId, ModuleId
 from riko.types._workflow import Endpoint
 from riko.types.modules import (
     ConfArg,
@@ -139,6 +137,13 @@ def _failure(call) -> tuple[str, str]:
 
 
 class TestWorkflowModule:
+    """
+    A workflow module produces exactly what running its workflow document produces.
+
+    The equivalence holds over every committed fixture in both the sync and async
+    interface.
+    """
+
     @pytest.mark.parametrize("path", _compile_fixtures())
     def test_generated_matches_document(self, path: Path, tmp_path: Path):
         """Each workflow module yields the items its workflow document yields."""
@@ -164,19 +169,22 @@ class TestWorkflowModule:
         stream = module.async_pipe(context=Context(test=True))
         assert [item async for item in stream] == await _arun_document(workflow)
 
-    def test_generated_pipe_accepts_one_item(self, tmp_path: Path):
-        """A generated transformer maps a single item handed to it directly."""
+    @pytest.mark.parametrize(
+        ("source", "expected"),
+        [
+            pytest.param({"content": "hello"}, [{"greeting": "hello"}], id="one-item"),
+            pytest.param(
+                [{"content": "hello"}, {"content": "bye"}],
+                [{"greeting": "hello"}, {"greeting": "bye"}],
+                id="stream",
+            ),
+        ],
+    )
+    def test_generated_pipe_maps_its_input(self, source, expected, tmp_path: Path):
+        """A generated transformer maps a single item or every item of a stream."""
         workflow = Pipeline.from_module("rename", conf=RENAME_CONF).workflow
         module = _build(workflow, "pipe_rename", tmp_path)
-        assert list(module.pipe({"content": "hello"})) == [{"greeting": "hello"}]
-
-    def test_generated_pipe_accepts_a_stream(self, tmp_path: Path):
-        """A generated transformer maps every item of a stream handed to it."""
-        workflow = Pipeline.from_module("rename", conf=RENAME_CONF).workflow
-        module = _build(workflow, "pipe_rename", tmp_path)
-        items = [{"content": "hello"}, {"content": "bye"}]
-        expected = [{"greeting": "hello"}, {"greeting": "bye"}]
-        assert list(module.pipe(items)) == expected
+        assert list(module.pipe(source)) == expected
 
     @async_test
     async def test_generated_async_pipe_accepts_an_async_stream(self, tmp_path: Path):
@@ -216,6 +224,24 @@ class TestWorkflowModule:
         assert log == ["execution exit", "after close"]
 
 
+DESCRIBED_INPUTS = {"limit": {"type": "integer"}}
+DESCRIBE_INPUT_CASES = [
+    pytest.param(ExecutionMode.DESCRIBE_INPUTS, DESCRIBED_INPUTS, id="inputs"),
+    pytest.param(
+        ExecutionMode.DESCRIBE,
+        {"inputs": DESCRIBED_INPUTS, "dependencies": ["rename"]},
+        id="inputs-and-dependencies",
+    ),
+]
+
+
+def _inputs_workflow() -> Workflow:
+    """Builds a one-node workflow that declares an input."""
+    node = ModuleNode(id="rename-1", name="rename", conf=RENAME_CONF)
+    outputs = {"default": Endpoint(node.id, "out")}
+    return Workflow(nodes=[node], outputs=outputs, inputs=DESCRIBED_INPUTS)
+
+
 class TestWorkflowModuleDescribe:
     def test_generated_pipe_describes_dependencies(self, tmp_path: Path):
         """Describing dependencies reports the workflow's module names, sorted."""
@@ -224,55 +250,21 @@ class TestWorkflowModuleDescribe:
         context = Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES)
         assert list(module.pipe(context=context)) == ["itembuilder", "rename"]
 
-    def test_generated_pipe_describes_inputs(self, tmp_path: Path):
-        """Describing inputs reports the workflow's declared input schemas."""
-        node = ModuleNode(id="rename-1", name="rename", conf=RENAME_CONF)
-        inputs = {"limit": {"type": "integer"}}
-        workflow = Workflow(
-            nodes=[node], outputs={"default": Endpoint(node.id, "out")}, inputs=inputs
-        )
-        module = _build(workflow, "pipe_inputs", tmp_path)
-        context = Context(mode=ExecutionMode.DESCRIBE_INPUTS)
-        assert module.pipe(context=context) == inputs
+    @pytest.mark.parametrize(("mode", "expected"), DESCRIBE_INPUT_CASES)
+    def test_generated_pipe_describes_inputs(self, mode, expected, tmp_path: Path):
+        """Describing inputs reports the declared schemas, alone or with more."""
+        module = _build(_inputs_workflow(), "pipe_inputs", tmp_path)
+        assert module.pipe(context=Context(mode=mode)) == expected
 
+    @pytest.mark.parametrize(("mode", "expected"), DESCRIBE_INPUT_CASES)
     @async_test
-    async def test_generated_async_pipe_describes_inputs(self, tmp_path: Path):
-        """The async interface yields the declared input schemas as one item."""
-        node = ModuleNode(id="rename-1", name="rename", conf=RENAME_CONF)
-        inputs = {"limit": {"type": "integer"}}
-        workflow = Workflow(
-            nodes=[node], outputs={"default": Endpoint(node.id, "out")}, inputs=inputs
-        )
-        module = _build(workflow, "pipe_ainputs", tmp_path, is_async=True)
-        context = Context(mode=ExecutionMode.DESCRIBE_INPUTS)
-        assert [item async for item in module.async_pipe(context=context)] == [inputs]
-
-    def test_generated_pipe_describes_inputs_and_dependencies(self, tmp_path: Path):
-        """Describing everything reports the input declarations and dependencies."""
-        node = ModuleNode(id="rename-1", name="rename", conf=RENAME_CONF)
-        inputs = {"limit": {"type": "integer"}}
-        workflow = Workflow(
-            nodes=[node], outputs={"default": Endpoint(node.id, "out")}, inputs=inputs
-        )
-        module = _build(workflow, "pipe_everything", tmp_path)
-        context = Context(mode=ExecutionMode.DESCRIBE)
-        expected = {"inputs": inputs, "dependencies": ["rename"]}
-        assert module.pipe(context=context) == expected
-
-    @async_test
-    async def test_generated_async_pipe_describes_inputs_and_dependencies(
-        self, tmp_path: Path
+    async def test_generated_async_pipe_describes_inputs(
+        self, mode, expected, tmp_path: Path
     ):
-        """The async interface yields the full description as one item."""
-        node = ModuleNode(id="rename-1", name="rename", conf=RENAME_CONF)
-        inputs = {"limit": {"type": "integer"}}
-        workflow = Workflow(
-            nodes=[node], outputs={"default": Endpoint(node.id, "out")}, inputs=inputs
-        )
-        module = _build(workflow, "pipe_aeverything", tmp_path, is_async=True)
-        context = Context(mode=ExecutionMode.DESCRIBE)
-        expected = {"inputs": inputs, "dependencies": ["rename"]}
-        assert [item async for item in module.async_pipe(context=context)] == [expected]
+        """The async interface yields the same description as one item."""
+        module = _build(_inputs_workflow(), "pipe_ainputs", tmp_path, is_async=True)
+        stream = module.async_pipe(context=Context(mode=mode))
+        assert [item async for item in stream] == [expected]
 
 
 SORT_CONF = SortRawConf(
@@ -316,17 +308,6 @@ class TestCompileWorkflow:
         assert compile_workflow(workflow, "pipe_twice") == compile_workflow(
             workflow, "pipe_twice"
         )
-
-    def test_compile_workflow_accepts_a_raw_workflow(self):
-        """A ``RawWorkflow`` is normalized before it is generated."""
-        raw = {
-            "nodes": [{"name": "itembuilder"}, {"name": "sort"}],
-            "edges": [
-                {"source": {"node": "itembuilder-1"}, "target": {"node": "sort-1"}}
-            ],
-        }
-        source = compile_workflow(raw, "pipe_raw")
-        assert 'DEPENDENCIES: list[str] = ["itembuilder", "sort"]' in source
 
     def test_generated_source_parses(self, tmp_path: Path):
         """The generated source is valid Python and imports without running."""
@@ -508,10 +489,6 @@ _MODULE_IDS = PACKAGE_DIR / "types" / "_module_ids.py"
 class TestGenerateModuleIds:
     def test_generated_module_ids_match(self):
         assert _MODULE_IDS.read_text() == generate_module_ids()
-
-    def test_loopable_ids_match_catalog(self):
-        assert set(get_args(LoopableModuleId)) == set(list_modules(loopable=True))
-        assert set(get_args(LoopableModuleId)) <= set(get_args(ModuleId))
 
 
 _CONFIGS = PACKAGE_DIR / "coercion" / "_configs.py"

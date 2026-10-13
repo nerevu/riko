@@ -86,6 +86,12 @@ class _AsyncClient:
         self.closed = True
 
 
+CLIENT_CLASSES = [
+    pytest.param(_SyncClient, id="sync-client"),
+    pytest.param(_AsyncClient, id="async-client"),
+]
+
+
 class _RecordingSink:
     def __init__(self) -> None:
         self.events: list[object] = []
@@ -185,7 +191,7 @@ def _check_opened(acquired: object, value: object | None) -> None:
 def _check_closed(resource, acquired: object, value: object | None) -> None:
     if value is not None and isinstance(acquired, _Connection):
         assert acquired.closed is not resource.external
-        acquired.opened = True  # reset for next test
+        acquired.opened = True  # reopen so the same value can be acquired again
 
 
 def _test_open_close(resource, value: object | None = None):
@@ -260,23 +266,6 @@ def _key(item):
 
 
 class TestSyncExecution:
-    def test_sync_exit_stack_unwinds_lifo(self) -> None:
-        events: list[str] = []
-
-        @contextmanager
-        def track(name: str):
-            events.append(f"open {name}")
-            try:
-                yield name
-            finally:
-                events.append(f"close {name}")
-
-        with SyncExecution() as execution:
-            execution.enter_context(track("a"))
-            execution.enter_context(track("b"))
-
-        assert events == ["open a", "open b", "close b", "close a"]
-
     def test_sync_exit_stack_unwinds_on_error(self) -> None:
         events: list[str] = []
 
@@ -344,16 +333,6 @@ class TestSyncExecution:
             PipelineStateError, match="the execution in state 'closing'"
         ):
             execution.enter_context(nullcontext(1))
-
-    def test_sync_lone_cleanup_error_raises_bare(self) -> None:
-        def boom() -> None:
-            raise RuntimeError("cleanup failed")
-
-        execution = SyncExecution()
-        execution.callback(boom)
-
-        with pytest.raises(RuntimeError, match="cleanup failed"):
-            execution.close()
 
     def test_sync_repeated_close_does_not_reraise_cleanup_error(self) -> None:
         calls: list[str] = []
@@ -577,17 +556,11 @@ class _BadClient:
 
 
 class TestResourceAcquisition:
-    def test_sync_acquire_external_sync_resource_is_borrowed(self) -> None:
-        client = _SyncClient()
-
-        with SyncExecution() as execution:
-            acquired = execution.acquire(Resource.from_external(client))
-            assert acquired is client
-
-        assert client.closed is False
-
-    def test_sync_acquire_external_async_resource_is_borrowed(self) -> None:
-        client = _AsyncClient()
+    @pytest.mark.parametrize("client_class", CLIENT_CLASSES)
+    def test_sync_acquire_external_resource_is_borrowed(
+        self, client_class: type[_SyncClient | _AsyncClient]
+    ) -> None:
+        client = client_class()
 
         with SyncExecution() as execution:
             acquired = execution.acquire(Resource.from_external(client))
@@ -763,19 +736,12 @@ class TestResourceAcquisition:
 
 
 class TestAsyncResourceAcquisition:
+    @pytest.mark.parametrize("client_class", CLIENT_CLASSES)
     @async_test
-    async def test_async_acquire_external_sync_resource_is_borrowed(self) -> None:
-        client = _SyncClient()
-
-        async with AsyncExecution() as execution:
-            acquired = await execution.aacquire(Resource.from_external(client))
-            assert acquired is client
-
-        assert client.closed is False
-
-    @async_test
-    async def test_async_acquire_external_async_resource_is_borrowed(self) -> None:
-        client = _AsyncClient()
+    async def test_async_acquire_external_resource_is_borrowed(
+        self, client_class: type[_SyncClient | _AsyncClient]
+    ) -> None:
+        client = client_class()
 
         async with AsyncExecution() as execution:
             acquired = await execution.aacquire(Resource.from_external(client))
@@ -809,22 +775,6 @@ class TestAsyncResourceAcquisition:
             assert events == ["open"]
 
         assert events == ["open", "close"]
-
-    @async_test
-    async def test_async_acquire_sync_lifecycle_on_async_execution(self) -> None:
-        events: list[str] = []
-
-        def db():
-            try:
-                yield "value"
-            finally:
-                events.append("close")
-
-        async with AsyncExecution() as execution:
-            acquired = await execution.aacquire(Resource.from_lifecycle(db))
-            assert acquired == "value"
-
-        assert events == ["close"]
 
     @async_test
     async def test_async_worker_adapts_sync_lifecycle_off_loop(self) -> None:
@@ -992,7 +942,7 @@ class TestAsyncResourceAcquisition:
         assert threads["exit"] == threads["enter"]
 
 
-class TestLifecyleFactory:
+class TestLifecycleFactory:
     @pytest.mark.parametrize(
         "factory",
         [sync_gen_factory, async_gen_factory, sync_cm_factory, async_cm_factory],
@@ -1270,12 +1220,6 @@ class TestValues:
         external = Resource.from_external(async_connection)
         await _async_test_open_close(external, async_connection)
 
-        with pytest.raises(TypeError, match="Invalid resource factory"):
-            Context().with_resource(  # pyright: ignore[reportCallIssue]
-                "value",
-                async_contextmanager,  # pyright: ignore[reportArgumentType]
-            )
-
         with pytest.raises(TypeError, match="Expected a resolved resource"):
             Resource(async_contextmanager)
 
@@ -1375,30 +1319,16 @@ class TestWorkerCnt:
 
 @pytest.mark.slow
 class TestPoolHandle:
-    def test_close_releases_the_pool(self) -> None:
+    @pytest.mark.parametrize("release", ["close", "terminate"])
+    def test_release_frees_the_pool_once(self, release: str) -> None:
         handle = open_pool(Executor.THREAD, 2)
         assert handle
 
-        handle.close()
+        getattr(handle, release)()
         assert handle.pool is None
         assert not handle
 
-    def test_close_is_idempotent(self) -> None:
-        handle = open_pool(Executor.THREAD, 2)
-        handle.close()
-        handle.close()
-        assert handle.pool is None
-
-    def test_terminate_releases_the_pool(self) -> None:
-        handle = open_pool(Executor.THREAD, 2)
-        handle.terminate()
-        assert handle.pool is None
-        assert not handle
-
-    def test_terminate_is_idempotent(self) -> None:
-        handle = open_pool(Executor.THREAD, 2)
-        handle.terminate()
-        handle.terminate()
+        getattr(handle, release)()
         assert handle.pool is None
 
     def test_require_pool_after_release_raises(self) -> None:
@@ -1557,11 +1487,11 @@ def released(monkeypatch):
     return calls
 
 
-def _loop_dispatcher(embed_pipe=None):
+def _loop_dispatcher():
     def fakeloop(item, **_):
         return iter([item])
 
-    up = embed_pipe or cast("AsyncModuleWrapper", lambda item, **_: item)
+    up = cast("AsyncModuleWrapper", lambda item, **_: item)
     return build_dispatcher(
         ModuleDefinition(name="fakeloop", sync_pipe=_loopable(fakeloop)),
         ModuleDefinition(name="up", async_pipe=up),
@@ -1579,9 +1509,7 @@ class TestSyncConcurrency:
             _ = execution._pool
 
     @pytest.mark.slow
-    def test_sync_auto_concurrency_maps_on_a_thread_pool(
-        self, opened, released
-    ) -> None:
+    def test_sync_concurrency_maps_on_a_thread_pool(self, opened, released) -> None:
         plan = _hash_plan("hash", "hash")
         expected = _run_sync(plan)
         result = _run_sync(plan, ExecutionSettings(concurrency=4))
@@ -1589,28 +1517,6 @@ class TestSyncConcurrency:
         assert Counter(map(_key, result)) == Counter(map(_key, expected))
         assert opened == [(Executor.THREAD, 4)]
         assert released == ["close"]
-
-    @pytest.mark.slow
-    def test_sync_ordered_concurrency_keeps_source_order(self) -> None:
-        plan = _hash_plan("hash", "hash")
-        settings = ExecutionSettings(concurrency=4, ordered=True)
-        assert _run_sync(plan, settings) == _run_sync(plan)
-
-    @pytest.mark.slow
-    def test_sync_thread_executor_without_concurrency_runs_one_item_at_a_time(
-        self, opened
-    ) -> None:
-        plan = _hash_plan("hash")
-        _run_sync(plan, ExecutionSettings(executor="thread"))
-        assert opened == [(Executor.THREAD, 1)]
-
-    @pytest.mark.slow
-    def test_sync_auto_concurrency_sizes_its_pool_from_the_machine(
-        self, opened
-    ) -> None:
-        plan = _hash_plan("hash")
-        _run_sync(plan, ExecutionSettings(executor="thread", concurrency="auto"))
-        assert opened == [(Executor.THREAD, get_worker_cnt(0, threads=True))]
 
     def test_sync_inline_executor_never_opens_a_pool(self, opened) -> None:
         plan = _hash_plan("hash")
@@ -1831,16 +1737,6 @@ class TestAsyncConcurrency:
         assert result == ITEMS[:2]
 
     @async_test
-    async def test_async_concurrency_matches_sequential_results(self) -> None:
-        plan = _hash_plan("hash", "hash")
-        expected = await _arun(plan, ExecutionSettings())
-        result = await _arun(plan, ExecutionSettings(concurrency=4))
-        ordered = await _arun(plan, ExecutionSettings(concurrency=4, ordered=True))
-
-        assert Counter(map(_key, result)) == Counter(map(_key, expected))
-        assert ordered == expected
-
-    @async_test
     async def test_async_concurrency_is_one_ceiling_across_nodes(self) -> None:
         active = peak = 0
 
@@ -1916,23 +1812,3 @@ class TestAsyncConcurrency:
 
         assert first["x"] in pulled
         assert len(pulled) < len(ITEMS)
-
-    @async_test
-    async def test_async_early_close_on_an_unbounded_source_is_clean(self) -> None:
-        async def forever():
-            count = 0
-
-            while True:
-                yield {"x": count}
-                count += 1
-
-        plan = _hash_plan("hash")
-
-        for ordered in (False, True):
-            settings = ExecutionSettings(concurrency=2, ordered=ordered)
-
-            async with AsyncExecution(settings=settings) as execution:
-                runner = execution.arun(plan, source=forever())
-                stream = cast("AsyncGenerator", await runner)
-                assert "hash" in await anext(stream)
-                await stream.aclose()

@@ -190,43 +190,43 @@ class TestImportsCommand:
     """The ``manage lint imports`` selectors."""
 
     @pytest.mark.parametrize(
-        ("args", "expected"),
+        ("args", "failing", "expected", "exit_code"),
         [
-            ([], ["canonical"]),
-            (["--relative", "--architecture"], ["relative", "architecture"]),
-            (["--all"], ["canonical", "relative", "architecture"]),
+            pytest.param([], (), ["canonical"], 0, id="default"),
+            pytest.param(
+                ["--relative", "--architecture"],
+                (),
+                ["relative", "architecture"],
+                0,
+                id="additive",
+            ),
+            pytest.param(
+                ["--all"],
+                ("canonical",),
+                ["canonical", "relative", "architecture"],
+                1,
+                id="all-continues-past-a-failure",
+            ),
         ],
     )
     def test_import_selectors(
-        self, monkeypatch: pytest.MonkeyPatch, args: list[str], expected: list[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        args: list[str],
+        failing: tuple[str, ...],
+        expected: list[str],
+        exit_code: int,
     ) -> None:
         calls: list[str] = []
         names = ("canonical", "relative", "architecture")
-        monkeypatch.setattr(
-            _import_commands,
-            "_IMPORT_CHECKS",
-            {name: _record_path(calls, name) for name in names},
-        )
+        checks = {
+            name: _record_path(calls, name, int(name in failing)) for name in names
+        }
+        monkeypatch.setattr(_import_commands, "_IMPORT_CHECKS", checks)
 
         result = CliRunner().invoke(_import_commands.IMPORTS_COMMAND, args)
-        assert result.exit_code == 0
+        assert result.exit_code == exit_code
         assert calls == expected
-
-    def test_import_all_runs_every_check(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        calls: list[str] = []
-        monkeypatch.setattr(
-            _import_commands,
-            "_IMPORT_CHECKS",
-            {
-                "canonical": _record_path(calls, "canonical", 1),
-                "relative": _record_path(calls, "relative"),
-                "architecture": _record_path(calls, "architecture"),
-            },
-        )
-
-        result = CliRunner().invoke(_import_commands.IMPORTS_COMMAND, ["--all"])
-        assert result.exit_code == 1
-        assert calls == ["canonical", "relative", "architecture"]
 
     def test_imports_is_nested_under_lint(self) -> None:
         runner = CliRunner()

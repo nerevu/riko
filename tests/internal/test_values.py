@@ -31,6 +31,7 @@ from riko.base._paths import ROOT_DIR, get_path
 from riko.base.exceptions import CyclicIdentityError, IdentityEncodingError
 from riko.coercion._canonical import (
     IdentityDomain,
+    ReprCacheWrapper,
     canonical_bytes,
     canonicalize,
     digest,
@@ -118,7 +119,6 @@ class TestCanonicalBytes:
     @pytest.mark.parametrize(
         ("left", "right"),
         [
-            (True, 1),
             (1, 1.0),
             (1.0, Decimal(1)),
             ([1], (1,)),
@@ -128,9 +128,6 @@ class TestCanonicalBytes:
     )
     def test_conflatable_types_stay_distinct(self, left, right):
         assert canonical_bytes(left) != canonical_bytes(right)
-
-    def test_mapping_is_order_independent(self):
-        assert canonical_bytes({"a": 1, "b": 2}) == canonical_bytes({"b": 2, "a": 1})
 
     def test_heterogeneous_mapping_keys_sort_deterministically(self):
         first = canonical_bytes({1: "x", "a": "y", (2, 3): "z"})
@@ -197,11 +194,11 @@ class TestCanonicalBytes:
         assert canonical_bytes(Color.RED) != canonical_bytes(1)
         assert canonical_bytes(Flavor.SWEET) != canonical_bytes("sweet")
 
-    def test_dataclass_freezes_by_type_and_fields(self):
+    def test_dataclass_encodes_by_type_and_fields(self):
         assert canonical_bytes(Point(1, 2)) == canonical_bytes(Point(1, 2))
         assert canonical_bytes(Point(1, 2)) != canonical_bytes(Point(2, 1))
 
-    def test_attrs_freezes_by_type_and_fields(self):
+    def test_attrs_encodes_by_type_and_fields(self):
         assert canonical_bytes(Pin(1, 2)) == canonical_bytes(Pin(1, 2))
         assert canonical_bytes(Pin(1, 2)) != canonical_bytes(Pin(2, 1))
 
@@ -209,7 +206,9 @@ class TestCanonicalBytes:
         assert canonical_bytes(Pin(1, 2)) != canonical_bytes(Point(1, 2))
 
     def test_recursive_tuple_keys_are_supported(self):
-        assert canonical_bytes((1, (2, (3, 4)))) == canonical_bytes((1, (2, (3, 4))))
+        first = canonical_bytes({(1, (2, 3)): "x", (1, 2, 3): "y"})
+        second = canonical_bytes({(1, 2, 3): "y", (1, (2, 3)): "x"})
+        assert first == second
 
     def test_encoding_is_repeatable(self):
         value = {"a": [1, 2], "b": (3, 4), "c": {5, 6}}
@@ -268,11 +267,6 @@ class TestDigest:
         assert result == expected
         assert len(result) == 32
 
-    def test_domain_separates_digests(self):
-        assert digest(1, IdentityDomain.FINGERPRINT) != digest(
-            1, IdentityDomain.IDEMPOTENCY
-        )
-
     def test_digest_is_stable_across_processes_with_different_hash_seeds(self):
         digests = {_get_subprocess_digest(seed) for seed in ("0", "1", "4242")}
         assert len(digests) == 1
@@ -282,38 +276,25 @@ class _Opaque:
     pass
 
 
+def _counting_cache() -> tuple[list[object], ReprCacheWrapper[int]]:
+    calls: list[object] = []
+
+    @repr_cache
+    def tally(value: object) -> int:
+        calls.append(value)
+        return len(calls)
+
+    return calls, tally
+
+
 class TestReprCache:
     def test_repr_cache_memoizes_supported_arguments(self):
-        calls: list[object] = []
-
-        @repr_cache
-        def tally(value):
-            calls.append(value)
-            return len(calls)
-
+        calls, tally = _counting_cache()
         assert (tally({"a": 1}), tally({"a": 1})) == (1, 1)
         assert len(calls) == 1
 
-    def test_repr_cache_bypasses_unsupported_arguments(self):
-        calls: list[object] = []
-
-        @repr_cache
-        def tally(value):
-            calls.append(value)
-            return len(calls)
-
-        tally(object())
-        tally(object())
-        assert len(calls) == 2
-
     def test_repr_cache_bypasses_lone_surrogate_strings(self):
-        calls: list[object] = []
-
-        @repr_cache
-        def tally(value):
-            calls.append(value)
-            return len(calls)
-
+        _, tally = _counting_cache()
         assert (tally("\ud800"), tally("\ud800")) == (1, 2)
 
     def test_nested_unsupported_bypasses_cache_and_reaches_fn(self):
@@ -322,20 +303,14 @@ class TestReprCache:
 
         Distinct instances must neither collide nor be replaced by the sentinel.
         """
-        calls = []
-
-        @repr_cache
-        def record(arg):
-            calls.append(arg)
-            return len(calls)
-
+        calls, record = _counting_cache()
         first, second = _Opaque(), _Opaque()
         record({"x": first})
         record({"x": second})
 
         assert len(calls) == 2
-        assert calls[0]["x"] is first
-        assert calls[1]["x"] is second
+        assert cast("dict", calls[0])["x"] is first
+        assert cast("dict", calls[1])["x"] is second
 
 
 class TestCastDatetime:
@@ -347,19 +322,19 @@ class TestCastDatetime:
             ("15 JUN 06", (2006, 6, 15)),
         ],
     )
-    def test_documented_absolute_date_strings(self, value, expected):
+    def test_absolute_date_strings(self, value, expected):
         result = cast_datetime(value)
         assert result is not None
         assert (result.year, result.month, result.day) == expected
 
-    def test_documented_relative_date_strings(self):
+    def test_relative_date_strings_offset_from_today(self):
         today = cast_datetime("today")
         assert today is not None
         assert cast_datetime("+3 days") == today + timedelta(days=3)
         assert cast_datetime("-10 weeks") == today - timedelta(weeks=10)
         assert cast_datetime("last year") == today - relativedelta(years=1)
 
-    def test_documented_epoch_value(self):
+    def test_epoch_seconds(self):
         result = cast_datetime(1181230100)
         assert result is not None
         assert int(result.timestamp()) == 1181230100

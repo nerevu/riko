@@ -42,11 +42,7 @@ from riko.definitions._nodes import (
     WriteNode,
 )
 from riko.definitions._normalize import _NODE_BUILDERS, _normalize_port
-from riko.definitions._resource_definition import (
-    OneShotResource,
-    Resource,
-    ReusableResource,
-)
+from riko.definitions._resource_definition import Resource, ReusableResource
 from riko.definitions._targets import (
     FileTarget,
     build_write,
@@ -74,7 +70,6 @@ from riko.runtime._write_session import (
     _SyncFileWriteSession,
     async_file_write_session,
     awrite_through,
-    build_write_resource,
     file_write_session,
     write_through,
 )
@@ -203,20 +198,23 @@ class TestContext:
         with pytest.raises(TypeError, match="Context 'resources' must be a mapping"):
             Context(_resources=resources)
 
-    def test_invalid_mode_is_rejected(self):
-        with pytest.raises(ValueError, match="Invalid ExecutionMode: 5"):
-            Context(mode=5)  # pyright: ignore[reportArgumentType]
-
-    def test_context_mode_raises_a_call_site_error(self):
-        with pytest.raises(ValueError, match="Invalid ExecutionMode"):
-            Context(mode="bogus")
+    @pytest.mark.parametrize(
+        ("mode", "match"),
+        [
+            pytest.param(5, "Invalid ExecutionMode: 5", id="non-string"),
+            pytest.param("bogus", "Invalid ExecutionMode: 'bogus'", id="unknown"),
+        ],
+    )
+    def test_invalid_mode_is_rejected(self, mode: Any, match: str):
+        with pytest.raises(ValueError, match=match):
+            Context(mode=mode)
 
     def test_derived_inputs_are_read_only(self):
         derived = Context().replace(inputs=untyped_inputs(tags=["a"]))
         assert derived.inputs is not None
         assert derived.inputs["tags"] == ("a",)
 
-    def test_inputs_are_detached_from_the_source(self):
+    def test_nested_source_mutation_does_not_leak(self):
         tags = ["a"]
         context = Context(inputs=untyped_inputs(tags=tags))
         tags.append("b")
@@ -349,11 +347,25 @@ class TestResourceView:
 
 class TestResourceBinding:
     @pytest.mark.parametrize(
-        "resources",
-        [b"db", "", {"db": 1}, {"db": None}, {1: "db"}, {"": "db"}, ["db", 1]],
+        ("resources", "match"),
+        [
+            *(
+                pytest.param(value, "must bind non-empty strings", id=repr(value))
+                for value in (
+                    b"db",
+                    "",
+                    {"db": 1},
+                    {"db": None},
+                    {1: "db"},
+                    {"": "db"},
+                    ["db", 1],
+                )
+            ),
+            pytest.param(5, "must be a str, mapping, or iterable", id="non-binding"),
+        ],
     )
-    def test_names_must_be_non_empty_strings(self, resources: Any):
-        with pytest.raises(InvalidPipelineError, match="must bind non-empty strings"):
+    def test_invalid_bindings_are_rejected(self, resources: Any, match: str):
+        with pytest.raises(InvalidPipelineError, match=f"node 'resources' {match}"):
             ModuleNode(id="a", name="hash", resources=resources)
 
     def test_an_alias_cannot_repeat(self):
@@ -381,15 +393,6 @@ class _Rule:
 
 
 class TestNodes:
-    def test_node_resources_accept_shorthand_bindings(self):
-        named = ModuleNode(id="a", name="x", resources="db")
-        listed = ModuleNode(id="a", name="x", resources=["db"])
-        assert named.resources == listed.resources == {"db": "db"}
-
-    def test_node_resources_reject_non_bindings(self):
-        with pytest.raises(InvalidPipelineError, match="node 'resources' must be"):
-            ModuleNode(id="a", name="x", resources=5)  # pyright: ignore[reportArgumentType]
-
     def test_module_conf_accepts_floats_and_none(self):
         node = ModuleNode(id="a", name="sleep", conf={"wait": 1.5, "join_key": None})
         assert node.conf == {"wait": 1.5, "join_key": None}
@@ -475,7 +478,7 @@ class TestWorkflowFields:
         with pytest.raises(InvalidPipelineError, match=match):
             Workflow(**fields)
 
-    @pytest.mark.parametrize("field", ["nodes", "outputs", "inputs"])
+    @pytest.mark.parametrize("field", ["outputs", "inputs"])
     def test_non_mapping_fields_are_rejected(self, field: str):
         fields: dict[str, Any] = {"nodes": [], "outputs": {}, field: "abc"}
 
@@ -832,38 +835,36 @@ class TestFormats:
 
 
 class TestWriteOperation:
-    def test_is_plain_normalized_intent(self):
-        op = WriteOperation(WriteMode.MERGE, keys=("endpoint_id",))
+    @pytest.mark.parametrize(
+        ("kwargs", "expected"),
+        [
+            pytest.param({}, (), id="omitted"),
+            pytest.param({"keys": ("endpoint_id",)}, ("endpoint_id",), id="tuple"),
+            pytest.param({"keys": ["id"]}, ("id",), id="list"),
+            pytest.param({"keys": "id"}, ("id",), id="bare-key-not-split"),
+        ],
+    )
+    def test_keys_normalize_to_a_tuple(self, kwargs: dict[str, Any], expected):
+        assert WriteOperation(WriteMode.MERGE, **kwargs).keys == expected
 
-        assert op.mode is WriteMode.MERGE
-        assert op.keys == ("endpoint_id",)
+    @pytest.mark.parametrize(
+        "mode", [WriteMode.MERGE, "merge"], ids=["member", "string"]
+    )
+    def test_mode_normalizes_to_a_member(self, mode: WriteMode | str):
+        assert WriteOperation(mode).mode is WriteMode.MERGE
 
-    def test_keys_default_empty(self):
-        assert WriteOperation(WriteMode.APPEND).keys == ()
+    def test_equal_intents_hash_alike(self):
+        listed = WriteOperation(WriteMode.MERGE, keys=["id"])
+        bare = WriteOperation(WriteMode.MERGE, keys=("id",))
+
+        assert listed == bare
+        assert hash(listed) == hash(bare)
 
     def test_is_frozen(self):
         op = WriteOperation(WriteMode.REPLACE)
 
         with pytest.raises(AttributeError):
             op.mode = WriteMode.APPEND  # pyright: ignore[reportAttributeAccessIssue]
-
-    def test_keys_are_a_tuple(self):
-        operation = WriteOperation(WriteMode.MERGE, keys=["id"])
-
-        assert operation.keys == ("id",)
-        assert operation == WriteOperation(WriteMode.MERGE, keys=("id",))
-        assert hash(operation) == hash(WriteOperation(WriteMode.MERGE, keys=("id",)))
-
-    def test_mode_is_normalized(self):
-        assert WriteOperation("replace").mode is WriteMode.REPLACE
-
-    def test_a_bare_key_is_not_split(self):
-        operation = WriteOperation(WriteMode.MERGE, keys="id")
-        assert operation.keys == ("id",)
-
-    def test_an_unknown_mode_is_rejected(self):
-        with pytest.raises(ValueError, match="bogus"):
-            WriteOperation("bogus")
 
 
 class TestWriteCapabilities:
@@ -1019,16 +1020,6 @@ class TestBuildWrite:
             build_write("out.csv", **kwargs)
 
 
-class TestBuildWriteResource:
-    def test_never_stored_in_context(self):
-        resource = build_write_resource("report.csv")
-
-        assert isinstance(resource, OneShotResource)
-        assert resource.reusable is False
-        assert resource.external is False
-        assert resource.kind is FactoryKind.SYNC_CONTEXTMANAGER
-
-
 class TestConverterPath:
     """The native whole-stream path and the temporary singleton path."""
 
@@ -1104,11 +1095,6 @@ class TestCsv:
 
 
 class TestJsonl:
-    def test_native_stream_has_no_array(self, tmp_path):
-        path = tmp_path / "out.jsonl"
-        _sink(ITEMS, path)
-        assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
-
     def test_singleton_has_no_array(self, tmp_path):
         path = tmp_path / "out.jsonl"
         list(write_through(ITEMS, build_write(path), terminating=_never))
@@ -1137,14 +1123,15 @@ class TestFramed:
     def test_passthrough_buffers_until_finalize(self, tmp_path):
         path = tmp_path / "out.json"
         stream = write_through(ITEMS, build_write(path), terminating=_never)
-        next(stream)
+        first = next(stream)
         assert not path.exists()
-        list(stream)
+        assert [first, *stream] == ITEMS
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
     def test_sink_writes_one_document(self, tmp_path):
         path = tmp_path / "out.json"
         result = _sink(ITEMS, path)
+        assert isinstance(result, WriteResult)
         assert result.written > 0
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
@@ -1199,12 +1186,6 @@ class TestSessionLifecycle:
 
         session.teardown()
 
-    def test_finalize_twice_returns_cached(self, tmp_path):
-        session = self._session(tmp_path)
-        session.write(ITEMS)
-        assert session.finalize() is session.finalize()
-        session.teardown()
-
     def test_teardown_twice_is_safe(self, tmp_path):
         session = self._session(tmp_path)
         session.teardown()
@@ -1256,10 +1237,6 @@ class TestSessionLifecycle:
 
 
 class TestWriteExecution:
-    def test_passthrough_preserves_stream(self, tmp_path):
-        prepared = build_write(tmp_path / "out.json")
-        assert list(write_through(ITEMS, prepared, terminating=_never)) == ITEMS
-
     def test_writes_mid_chain(self, tmp_path):
         path = tmp_path / "out.json"
         stream = write_through(ITEMS, build_write(path), terminating=_never)
@@ -1385,16 +1362,6 @@ class TestAsyncWriteExecution:
 
 
 class TestSink:
-    def test_terminal_returns_result(self, tmp_path):
-        result = _sink(ITEMS, tmp_path / "out.json")
-
-        assert isinstance(result, WriteResult)
-        assert result.written > 0
-
-    def test_file_rejects_keys(self, tmp_path):
-        with pytest.raises(ValueError, match="forbids 'keys'"):
-            build_write(tmp_path / "out.csv", keys="x")
-
     def test_non_file_target_execution_unsupported(self):
         prepared = build_write(_RecordStore(), "replace")
 

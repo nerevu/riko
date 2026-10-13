@@ -637,19 +637,8 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
         Examples:
 
-            >>> r = DotDict({'author': 'bar', 'title': 'foo'})
-            >>> r.delete('author')
-            >>> r.asdict()
-            {'title': 'foo'}
-            >>> r = DotDict({'author': {'name': 'bar', 'url': 'x.com'}})
-            >>> r.delete('author.name')
-            >>> r.asdict()
-            {'author': {'url': 'x.com'}}
             >>> r = DotDict({'author': {'name': 'bar', 'url': 'x.com'}})
             >>> r.delete('AUTHOR.NAME')
-            >>> r.asdict()
-            {'author': {'url': 'x.com'}}
-            >>> r.delete('missing.key')
             >>> r.asdict()
             {'author': {'url': 'x.com'}}
 

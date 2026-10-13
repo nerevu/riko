@@ -51,7 +51,6 @@ from tests._execution import (
 if TYPE_CHECKING:
     from riko.types._streams import AsyncItemGenerator, Cascade
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
-    from riko.types.modules import CallOptions
 
 
 _sync_pipe = cast("SyncModuleWrapper", lambda source, **_: iter(source or {}))
@@ -101,11 +100,16 @@ async def _arun(workflow, dispatcher, output="default"):
         return [item async for item in stream]
 
 
-def _resource_reader_plan():
-    @operator()
-    def reader(stream, objconf, tuples, **kwargs):
-        yield {"got": kwargs["resources"]["slot"]}
+def _plain_reader(stream, **kwargs):
+    yield {"got": kwargs["resources"]["slot"]}
 
+
+@operator()
+def _decorated_reader(stream, objconf, tuples, **kwargs):
+    yield {"got": kwargs["resources"]["slot"]}
+
+
+def _resource_reader_plan(reader=_decorated_reader):
     sync_pipe = cast("SyncModuleWrapper", reader)
     dispatcher = build_dispatcher(ModuleDefinition(name="reader", sync_pipe=sync_pipe))
     node = ModuleNode(id="n", name="reader", resources={"slot": "primary"})
@@ -142,6 +146,20 @@ def _doubler_dispatcher():
     return build_dispatcher(definition, adefinition)
 
 
+# An async stream seed is the stream itself, never one item holding the stream
+# object, and an awaitable seed is awaited once for its items.
+SEEDS = [
+    pytest.param(lambda: [{"x": 1}, {"x": 2}], [{"x": 2}, {"x": 4}], id="list"),
+    pytest.param(lambda: {"x": 5}, [{"x": 10}], id="one-item"),
+    pytest.param(
+        agen_source, [{"x": 2}, {"x": 4}], id="async-stream", marks=skipif_issync
+    ),
+    pytest.param(
+        awaitable_source, [{"x": 2}, {"x": 4}], id="awaitable", marks=skipif_issync
+    ),
+]
+
+
 def _loop(loop_name="fakeloop", embed_name="up"):
     src = ModuleNode(id="s", name="src")
     loop = ModuleNode(
@@ -163,44 +181,36 @@ def _real_loop_workflow(embed_name="child"):
     return _loop(loop_name="loop", embed_name=embed_name)
 
 
+SELECTIONS = [
+    pytest.param(
+        {"sync_pipe": _sync_pipe, "async_pipe": _async_pipe},
+        "sync",
+        _sync_pipe,
+        id="native-sync",
+    ),
+    pytest.param(
+        {"sync_pipe": _sync_pipe, "async_pipe": _async_pipe},
+        "async",
+        _async_pipe,
+        id="native-async",
+    ),
+    pytest.param({"sync_pipe": _sync_pipe}, "async", _sync_pipe, id="sync-only"),
+    pytest.param({"async_pipe": _async_pipe}, "sync", _async_pipe, id="async-only"),
+]
+
+
 class TestExecutionPlan:
-    def test_prepare_selects_native_sync(self) -> None:
-        definition = ModuleDefinition(
-            name="m", sync_pipe=_sync_pipe, async_pipe=_async_pipe
-        )
+    @pytest.mark.parametrize(("pipes", "mode", "expected"), SELECTIONS)
+    def test_build_selects_the_pipe_for_each_mode(self, pipes, mode, expected) -> None:
+        definition = ModuleDefinition(name="m", **pipes)
         plan = build_execution_plan(
             module_workflow(), dispatcher=build_dispatcher(definition)
         )
-        node = plan.nodes["n"]
-        assert node.module.select_sync() is _sync_pipe
+        module = plan.nodes["n"].module
+        selected = module.select_sync() if mode == "sync" else module.select_async()
+        assert selected is expected
 
-    def test_prepare_selects_native_async(self) -> None:
-        definition = ModuleDefinition(
-            name="m", sync_pipe=_sync_pipe, async_pipe=_async_pipe
-        )
-        plan = build_execution_plan(
-            module_workflow(), dispatcher=build_dispatcher(definition)
-        )
-        node = plan.nodes["n"]
-        assert node.module.select_async() is _async_pipe
-
-    def test_prepare_adapts_sync_only_under_async(self) -> None:
-        definition = ModuleDefinition(name="m", sync_pipe=_sync_pipe)
-        plan = build_execution_plan(
-            module_workflow(), dispatcher=build_dispatcher(definition)
-        )
-        node = plan.nodes["n"]
-        assert node.module.select_async() is _sync_pipe
-
-    def test_prepare_adapts_async_only_under_sync(self) -> None:
-        definition = ModuleDefinition(name="m", async_pipe=_async_pipe)
-        plan = build_execution_plan(
-            module_workflow(), dispatcher=build_dispatcher(definition)
-        )
-        node = plan.nodes["n"]
-        assert node.module.select_sync() is _async_pipe
-
-    def test_prepare_does_not_invoke_the_pipe(self) -> None:
+    def test_build_does_not_invoke_the_pipe(self) -> None:
         calls: list[int] = []
 
         def pipe(source, **_):
@@ -240,7 +250,7 @@ class TestExecutionPlan:
         with SyncExecution() as execution:
             assert list(execution.run(plan)) == [{"t": "a"}]
 
-    def test_prepare_carries_conf_index_and_resources(self) -> None:
+    def test_build_carries_conf_index_and_resources(self) -> None:
         definition = ModuleDefinition(name="m", sync_pipe=_sync_pipe)
         node = ModuleNode(id="n", name="m", conf={"url": "x"}, resources={"db": "db"})
         workflow = _workflow(
@@ -253,15 +263,7 @@ class TestExecutionPlan:
         assert set(prepared.resources.values()) == {"db"}
         assert plan.index.outputs["default"].node == "n"
 
-    def test_module_node_rejects_an_unknown_option(self) -> None:
-        options = cast("CallOptions", {"bogus": 1})
-
-        with pytest.raises(
-            InvalidPipelineError, match="unknown ModuleNode 'options' key"
-        ):
-            ModuleNode(id="n", name="m", options=options)
-
-    def test_prepare_rejects_unsupported_node_family(self) -> None:
+    def test_build_rejects_unsupported_node_family(self) -> None:
         workflow = _workflow(
             [CacheNode(id="c", name="x")], {"default": Endpoint("c", "out")}
         )
@@ -269,13 +271,13 @@ class TestExecutionPlan:
         with pytest.raises(InvalidPipelineError, match="cache"):
             build_execution_plan(workflow, dispatcher=build_dispatcher())
 
-    def test_prepare_rejects_unresolved_module(self) -> None:
+    def test_build_rejects_unresolved_module(self) -> None:
         workflow = module_workflow(name="does_not_exist_module")
 
         with pytest.raises(UnsupportedModuleError):
             build_execution_plan(workflow, dispatcher=build_dispatcher())
 
-    def test_prepare_validates_before_preparing(self) -> None:
+    def test_build_validates_before_building(self) -> None:
         workflow = _workflow([ModuleNode(id="n", name="m")], {})
 
         with pytest.raises(InvalidPipelineError):
@@ -424,10 +426,26 @@ async def _unused_worker(func, *args):
     return func(*args)
 
 
+ADAPTERS = [
+    pytest.param(
+        lambda stub: adapt_embed(cast("AsyncModuleWrapper", stub), _unused_drain),
+        True,
+        id="for-sync",
+    ),
+    pytest.param(
+        lambda stub: async_adapt_embed(cast("SyncModuleWrapper", stub), _unused_worker),
+        False,
+        id="for-async",
+    ),
+]
+
+
 class TestCrossModeAdaptation:
-    def test_adapt_embed_for_sync_copies_metadata(self) -> None:
+    @pytest.mark.parametrize(("adapt", "isasync"), ADAPTERS)
+    def test_adapt_embed_copies_metadata(self, adapt, isasync: bool) -> None:
         stub = _EmbedStub()
-        adapted = adapt_embed(cast("AsyncModuleWrapper", stub), _unused_drain)
+        stub.isasync = isasync
+        adapted = adapt(stub)
 
         assert adapted.name == "up"
         assert adapted.type == "processor"
@@ -435,21 +453,7 @@ class TestCrossModeAdaptation:
         assert adapted.subtypes == frozenset({"transformer"})
         assert adapted.pollable is False
         assert adapted.loopable is True
-        assert adapted.isasync is False
-        assert not hasattr(adapted, "__wrapped__")
-
-    def test_adapt_embed_for_async_copies_metadata(self) -> None:
-        stub = _EmbedStub()
-        stub.isasync = False
-        adapted = async_adapt_embed(cast("SyncModuleWrapper", stub), _unused_worker)
-
-        assert adapted.name == "up"
-        assert adapted.type == "processor"
-        assert adapted.subtype == "transformer"
-        assert adapted.subtypes == frozenset({"transformer"})
-        assert adapted.pollable is False
-        assert adapted.loopable is True
-        assert adapted.isasync is True
+        assert adapted.isasync is not isasync
         assert not hasattr(adapted, "__wrapped__")
 
     def test_require_stream_refuses_a_splitter_pipe_without_consuming(self) -> None:
@@ -469,6 +473,12 @@ class TestCrossModeAdaptation:
 
         assert consumed == []
         assert list(require_stream(_sync_pipe([{"x": 1}]), _sync_pipe)) == [{"x": 1}]
+
+
+READERS = [
+    pytest.param(_plain_reader, id="plain"),
+    pytest.param(_decorated_reader, id="decorated"),
+]
 
 
 class TestPlanRun:
@@ -700,59 +710,9 @@ class TestPlanRun:
 
         assert _run(workflow, dispatcher) == [{"t": "a"}, {"t": "b"}, {"t": "c"}]
 
-    def test_run_injects_bound_resource(self) -> None:
-        sentinel = object()
-
-        def reader(items, **kw):
-            yield {"got": kw["resources"]["slot"]}
-
-        sync_pipe = cast("SyncModuleWrapper", reader)
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="reader", sync_pipe=sync_pipe)
-        )
-        node = ModuleNode(id="n", name="reader", resources={"slot": "primary"})
-        workflow = _workflow(
-            [node], {"default": Endpoint("n", "out")}, resources=("primary",)
-        )
-        plan = build_execution_plan(workflow, dispatcher=dispatcher)
-        context = Context().with_resource("primary", Resource.from_external(sentinel))
-
-        with SyncExecution(context) as execution:
-            assert list(execution.run(plan)) == [{"got": sentinel}]
-
-    def test_run_resource_lifecycle_owned_by_execution(self) -> None:
-        events: list[str] = []
-
-        def db():
-            events.append("open")
-
-            try:
-                yield "conn"
-            finally:
-                events.append("close")
-
-        def reader(items, **kw):
-            yield {"db": kw["resources"]["slot"]}
-
-        sync_pipe = cast("SyncModuleWrapper", reader)
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="reader", sync_pipe=sync_pipe)
-        )
-        node = ModuleNode(id="n", name="reader", resources={"slot": "primary"})
-        workflow = _workflow(
-            [node], {"default": Endpoint("n", "out")}, resources=("primary",)
-        )
-        plan = build_execution_plan(workflow, dispatcher=dispatcher)
-        context = Context().with_resource("primary", db)
-
-        with SyncExecution(context) as execution:
-            assert list(execution.run(plan)) == [{"db": "conn"}]
-            assert events == ["open"]
-
-        assert events == ["open", "close"]
-
-    def test_run_decorated_module_reads_execution_resources(self) -> None:
-        plan = _resource_reader_plan()
+    @pytest.mark.parametrize("reader", READERS)
+    def test_run_module_reads_execution_resources(self, reader) -> None:
+        plan = _resource_reader_plan(reader)
         external = Context().with_resource("primary", Resource.from_external("ext"))
 
         with SyncExecution(external) as execution:
@@ -853,19 +813,12 @@ class TestPlanRun:
 
         assert _run(workflow, dispatcher) == [{"x": 1, "seen": True}]
 
-    def test_run_seeds_root_with_supplied_source(self) -> None:
-        def double(source, **_):
-            return ({"x": row["x"] * 2} for row in source)
-
-        sync_pipe = cast("SyncModuleWrapper", double)
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="double", sync_pipe=sync_pipe)
-        )
-        plan = build_execution_plan(module_workflow("double"), dispatcher=dispatcher)
+    @pytest.mark.parametrize(("make_seed", "expected"), SEEDS)
+    def test_run_seeds_the_root_from_each_seed_shape(self, make_seed, expected) -> None:
+        plan = build_execution_plan(module_workflow("double"), _doubler_dispatcher())
 
         with SyncExecution() as execution:
-            stream = execution.run(plan, source=[{"x": 1}, {"x": 2}])
-            assert list(stream) == [{"x": 2}, {"x": 4}]
+            assert list(execution.run(plan, source=make_seed())) == expected
 
     def test_run_without_seed_keeps_forever_source(self) -> None:
         seen: list[object] = []
@@ -906,28 +859,6 @@ class TestPlanRun:
             pytest.raises(InvalidPipelineError, match="exactly one open input"),
         ):
             execution.run(plan, source=[{"x": 1}])
-
-    def test_run_seeds_one_item_as_a_single_item_stream(self) -> None:
-        plan = build_execution_plan(module_workflow("double"), _doubler_dispatcher())
-
-        with SyncExecution() as execution:
-            assert list(execution.run(plan, source={"x": 5})) == [{"x": 10}]
-
-    @skipif_issync
-    def test_run_seeds_an_async_stream_through_the_portal(self) -> None:
-        plan = build_execution_plan(module_workflow("double"), _doubler_dispatcher())
-
-        with SyncExecution() as execution:
-            stream = execution.run(plan, source=agen_source())
-            assert list(stream) == [{"x": 2}, {"x": 4}]
-
-    @skipif_issync
-    def test_run_awaits_an_awaitable_seed_once(self) -> None:
-        plan = build_execution_plan(module_workflow("double"), _doubler_dispatcher())
-
-        with SyncExecution() as execution:
-            stream = execution.run(plan, source=awaitable_source())
-            assert list(stream) == [{"x": 2}, {"x": 4}]
 
     @pytest.mark.xfail(
         strict=True,
@@ -1131,47 +1062,16 @@ class TestAsyncPlanRun:
 
         assert events == ["open", "close"]
 
+    @pytest.mark.parametrize(("make_seed", "expected"), SEEDS)
     @async_test
-    async def test_arun_seeds_root_with_supplied_source(self) -> None:
-        async def adouble(source, **_):
-            async for row in source:
-                yield {"x": row["x"] * 2}
-
-        async_pipe = cast("AsyncModuleWrapper", adouble)
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="adouble", async_pipe=async_pipe)
-        )
-        plan = build_execution_plan(module_workflow("adouble"), dispatcher=dispatcher)
-
-        async with AsyncExecution() as execution:
-            stream = await execution.arun(plan, source=[{"x": 1}, {"x": 2}])
-            assert [item async for item in stream] == [{"x": 2}, {"x": 4}]
-
-    @async_test
-    async def test_arun_seeds_one_item_as_a_single_item_stream(self) -> None:
+    async def test_arun_seeds_the_root_from_each_seed_shape(
+        self, make_seed, expected
+    ) -> None:
         plan = build_execution_plan(module_workflow("adouble"), _doubler_dispatcher())
 
         async with AsyncExecution() as execution:
-            stream = await execution.arun(plan, source={"x": 5})
-            assert [item async for item in stream] == [{"x": 10}]
-
-    @async_test
-    async def test_arun_seeds_an_async_stream_without_wrapping_it(self) -> None:
-        # An async stream seed is the stream itself, never one item holding the
-        # stream object.
-        plan = build_execution_plan(module_workflow("adouble"), _doubler_dispatcher())
-
-        async with AsyncExecution() as execution:
-            stream = await execution.arun(plan, source=agen_source())
-            assert [item async for item in stream] == [{"x": 2}, {"x": 4}]
-
-    @async_test
-    async def test_arun_awaits_an_awaitable_seed_once(self) -> None:
-        plan = build_execution_plan(module_workflow("adouble"), _doubler_dispatcher())
-
-        async with AsyncExecution() as execution:
-            stream = await execution.arun(plan, source=awaitable_source())
-            assert [item async for item in stream] == [{"x": 2}, {"x": 4}]
+            stream = await execution.arun(plan, source=make_seed())
+            assert [item async for item in stream] == expected
 
     @async_test
     async def test_arun_without_seed_keeps_forever_source(self) -> None:
@@ -1343,7 +1243,7 @@ class TestAsyncPlanRun:
         assert loop_thread not in threads
 
 
-def _prepare_loop(embed_conf=None):
+def _lone_loop(embed_conf=None):
     loop = ModuleNode(
         id="loop",
         name="fakeloop",
@@ -1380,14 +1280,14 @@ def _async_child(produced: list[int], closed: list[str]):
 
 
 class TestEmbed:
-    def test_prepare_resolves_nested_embed(self) -> None:
+    def test_build_resolves_nested_embed(self) -> None:
         up = cast("SyncModuleWrapper", lambda item, **_: item)
         dispatcher = build_dispatcher(
             ModuleDefinition(name="fakeloop", sync_pipe=_sync_pipe),
             ModuleDefinition(name="up", sync_pipe=up),
         )
         plan = build_execution_plan(
-            _prepare_loop({"case": "upper"}), dispatcher=dispatcher
+            _lone_loop({"case": "upper"}), dispatcher=dispatcher
         )
         node = plan.nodes["loop"]
 
@@ -1395,22 +1295,22 @@ class TestEmbed:
         assert node.module.name == "fakeloop"
         assert dict(node.options) == {"emit": True, "count": "first"}
 
-    def test_prepare_adapts_async_only_embed_under_sync(self) -> None:
+    def test_build_adapts_async_only_embed_under_sync(self) -> None:
         dispatcher = build_dispatcher(
             ModuleDefinition(name="fakeloop", sync_pipe=_sync_pipe),
             ModuleDefinition(name="up", async_pipe=_async_pipe),
         )
-        plan = build_execution_plan(_prepare_loop(), dispatcher=dispatcher)
+        plan = build_execution_plan(_lone_loop(), dispatcher=dispatcher)
         embed = plan.nodes["loop"].embed
         assert embed is not None
         assert embed.select_sync() is _async_pipe
 
-    def test_prepare_adapts_sync_only_embed_under_async(self) -> None:
+    def test_build_adapts_sync_only_embed_under_async(self) -> None:
         dispatcher = build_dispatcher(
             ModuleDefinition(name="fakeloop", async_pipe=_async_pipe),
             ModuleDefinition(name="up", sync_pipe=_sync_pipe),
         )
-        plan = build_execution_plan(_prepare_loop(), dispatcher=dispatcher)
+        plan = build_execution_plan(_lone_loop(), dispatcher=dispatcher)
         embed = plan.nodes["loop"].embed
 
         assert embed is not None
@@ -1433,19 +1333,8 @@ class TestEmbed:
             ),
             ModuleDefinition(name="up", async_pipe=cast("AsyncModuleWrapper", up)),
         )
-        src = ModuleNode(id="s", name="src")
-        loop = ModuleNode(
-            id="loop",
-            name="fakeloop",
-            embed={"name": "up", "conf": {}},
-            options={"emit": True, "count": "first"},
-        )
-        edge = StreamEdge(Endpoint("s", "out"), Endpoint("loop", "in"))
-        workflow = _workflow(
-            [src, loop], {"default": Endpoint("loop", "out")}, edges=(edge,)
-        )
 
-        assert _run(workflow, dispatcher) == [{"up": "X"}]
+        assert _run(_loop(), dispatcher) == [{"up": "X"}]
 
     def test_run_forwards_embed_and_options_to_loop(self) -> None:
         seen: dict[str, object] = {}
@@ -1466,19 +1355,8 @@ class TestEmbed:
             ModuleDefinition(name="fakeloop", sync_pipe=sync_pipe),
             ModuleDefinition(name="up", sync_pipe=cast("SyncModuleWrapper", up)),
         )
-        src = ModuleNode(id="s", name="src")
-        loop = ModuleNode(
-            id="loop",
-            name="fakeloop",
-            embed={"name": "up", "conf": {}},
-            options={"emit": True, "count": "first"},
-        )
-        edge = StreamEdge(Endpoint("s", "out"), Endpoint("loop", "in"))
-        workflow = _workflow(
-            [src, loop], {"default": Endpoint("loop", "out")}, edges=(edge,)
-        )
 
-        assert _run(workflow, dispatcher) == [{"up": "X"}]
+        assert _run(_loop(), dispatcher) == [{"up": "X"}]
         assert seen["embed"] is up
         assert seen["options"] == {"emit": True, "count": "first"}
 

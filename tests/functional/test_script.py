@@ -154,15 +154,20 @@ class TestRunPipe:
         assert ran.returncode == 0, ran.stderr
         assert ran.stdout == expected
 
-    def test_run_pipe_unknown_example_id_names_the_searched_directories(self, tmp_path):
-        ran = run_module("runpipe", "pipe_missing", cwd=tmp_path)
+    @pytest.mark.parametrize(
+        ("outside", "message"),
+        [
+            pytest.param(True, "not found in examples", id="outside-checkout"),
+            pytest.param(False, "not found in examples!", id="checkout-listed-once"),
+        ],
+    )
+    def test_run_pipe_unknown_example_id_names_the_searched_directories(
+        self, tmp_path, outside, message
+    ):
+        options = {"cwd": tmp_path} if outside else {}
+        ran = run_module("runpipe", "pipe_missing", **options)
         assert ran.returncode == 1
-        assert "Example pipe_missing not found in examples" in ran.stderr
-
-    def test_run_pipe_unknown_example_id_lists_the_checkout_once(self):
-        ran = run_module("runpipe", "pipe_missing")
-        assert ran.returncode == 1
-        assert "Example pipe_missing not found in examples!" in ran.stderr
+        assert f"Example pipe_missing {message}" in ran.stderr
 
     def test_run_pipe_missing_workflow_document(self, tmp_path):
         ran = run_module("runpipe", "-p", str(tmp_path / "missing.json"))
@@ -171,22 +176,20 @@ class TestRunPipe:
 
 
 class TestBuildWorkflow:
-    def test_build_workflow_output_compiles_from_stdin(self):
-        convert = run_module("build_workflow", str(DAG_PATH))
-        compiled = run_module("compile", "-", input=convert.stdout)
-
-        assert '"version": "2"' in convert.stdout
-        assert '"nodes"' in convert.stdout
-        assert "pipe = build_workflow_pipes(" in compiled.stdout
-        assert "TruncateRawConf" in compiled.stdout
-
-    def test_build_workflow_and_compile(self, tmp_path):
+    @pytest.mark.parametrize("to_file", [False, True], ids=["stdout", "file"])
+    def test_build_workflow_output_compiles(self, tmp_path, to_file):
         workflow_file = tmp_path / "pipe_forever.json"
-        convert = run_module("build_workflow", str(DAG_PATH), "-o", str(workflow_file))
-        compiled = run_module("compile", str(workflow_file))
-        converted = workflow_file.read_text(encoding="utf-8")
+        output = ["-o", str(workflow_file)] if to_file else []
+        convert = run_module("build_workflow", str(DAG_PATH), *output)
 
-        assert not convert.stdout
+        if to_file:
+            converted = workflow_file.read_text(encoding="utf-8")
+            compiled = run_module("compile", str(workflow_file))
+            assert not convert.stdout
+        else:
+            converted = convert.stdout
+            compiled = run_module("compile", "-", input=converted)
+
         assert '"version": "2"' in converted
         assert '"nodes"' in converted
         assert "pipe = build_workflow_pipes(" in compiled.stdout

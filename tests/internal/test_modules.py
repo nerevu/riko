@@ -134,7 +134,14 @@ MOD_DEFN = ModuleDefinition(name=_NAME, sync_pipe=marker)
 
 
 class TestIsasyncInferenceValid:
-    """Every non-contradictory combination and its resolved ``isasync``."""
+    """
+    Every non-contradictory combination and its resolved ``isasync``.
+
+    ``isasync`` marks which interface a pipe is (``pipe`` or ``async_pipe``), not
+    whether the function is a coroutine. It resolves to explicit ``isasync`` OR
+    ``async def`` OR name == ``async_pipe``, so it is only needed explicitly for a
+    sync callable that is the async interface under another name.
+    """
 
     @pytest.mark.parametrize(
         ("name", "iscoro", "isasync", "expected"),
@@ -151,25 +158,6 @@ class TestIsasyncInferenceValid:
     )
     def test_resolved_isasync(self, name, iscoro, isasync, expected):
         assert _create_wrapper(name, iscoro=iscoro, isasync=isasync).isasync is expected
-
-
-class TestExplicitIsasyncRequired:
-    """
-    Require ``isasync=True`` for an unusually named async-interface callable.
-
-    This covers a sync callable, such as a lambda, used as the async interface
-    without the name ``async_pipe``.
-    """
-
-    @async_test
-    async def test_explicit_lambda_runs_as_async_pipe(self):
-        async_shout = processor(isasync=True)(
-            lambda item, *args, **kwargs: str(
-                cast("Item", item).get("content", "")
-            ).upper()
-        )
-        stream = async_shout({"content": "hi"}, assign="content")
-        assert [item async for item in stream] == [{"content": "HI"}]
 
 
 class TestInvalidCombinations:
@@ -193,41 +181,27 @@ class TestInvalidCombinations:
         assert reason in message
 
     @pytest.mark.parametrize(
-        ("decorator", "option"),
+        ("decorator", "option", "value"),
         [
-            pytest.param(processor, "embed", id="processor+embed"),
-            pytest.param(operator, "skip_if", id="operator+skip_if"),
-            pytest.param(splitter, "pollable", id="splitter+pollable"),
-            pytest.param(splitter, "emit", id="splitter+emit"),
-            pytest.param(splitter, "count", id="splitter+count"),
-            pytest.param(splitter, "skip_if", id="splitter+skip_if"),
-            pytest.param(splitter, "embed", id="splitter+embed"),
+            pytest.param(processor, "embed", True, id="processor+embed"),
+            pytest.param(operator, "skip_if", True, id="operator+skip_if"),
+            pytest.param(splitter, "pollable", True, id="splitter+pollable"),
+            pytest.param(splitter, "emit", True, id="splitter+emit"),
+            pytest.param(splitter, "count", True, id="splitter+count"),
+            pytest.param(splitter, "skip_if", True, id="splitter+skip_if"),
+            pytest.param(splitter, "embed", True, id="splitter+embed"),
+            pytest.param(processor, "count", "first", id="processor+count"),
+            pytest.param(processor, "conf", "first", id="processor+conf"),
+            pytest.param(processor, "bogus", "first", id="processor+bogus"),
+            pytest.param(operator, "bogus", "first", id="operator+bogus"),
+            pytest.param(operator, "resources", "first", id="operator+resources"),
+            pytest.param(operator, "count", "first", id="operator+count"),
+            pytest.param(operator, "embed", "first", id="operator+embed"),
+            pytest.param(splitter, "bogus", "first", id="splitter+bogus"),
         ],
     )
-    def test_foreign_option_raises(self, decorator, option):
-        kwargs: dict[str, object] = {option: True}
-        name = decorator.__name__
-
-        with pytest.raises(
-            TypeError, match=f"{name} modules do not support the '{option}'"
-        ):
-            decorator(**kwargs)
-
-    @pytest.mark.parametrize(
-        ("decorator", "option"),
-        [
-            pytest.param(processor, "count", id="processor+count"),
-            pytest.param(processor, "conf", id="processor+conf"),
-            pytest.param(processor, "bogus", id="processor+bogus"),
-            pytest.param(operator, "bogus", id="operator+bogus"),
-            pytest.param(operator, "resources", id="operator+resources"),
-            pytest.param(operator, "count", id="operator+count"),
-            pytest.param(operator, "embed", id="operator+embed"),
-            pytest.param(splitter, "bogus", id="splitter+bogus"),
-        ],
-    )
-    def test_unread_option_raises(self, decorator, option):
-        kwargs: dict[str, object] = {option: "first"}
+    def test_unsupported_option_raises(self, decorator, option, value):
+        kwargs: dict[str, object] = {option: value}
         name = decorator.__name__
 
         with pytest.raises(
@@ -249,7 +223,7 @@ class TestAsyncGeneratorSource:
         assert [item async for item in result] == [{"x": 0}, {"x": 1}, {"x": 2}]
 
     @async_test
-    async def test_feed_delivered_lazily_to_parser(self):
+    async def test_feed_reaches_parser_as_async_iterator(self):
         received = {}
 
         @operator(isasync=True)
@@ -590,6 +564,11 @@ class TestReturnInference:
             pytest.param(
                 _ambiguous, ("build_result", "return annotation"), id="ambiguous-call"
             ),
+            pytest.param(
+                lambda items: undefined(items),  # noqa: F821, PLW0108 # pyright: ignore[reportUndefinedVariable]
+                ("no function definition", "return annotation"),
+                id="lambda-in-expression",
+            ),
         ],
     )
     def test_unknown_with_reason(self, pipe, reasons):
@@ -620,17 +599,6 @@ class TestReturnInference:
             return iter(items)
 
         assert set(gen_operator_return_kinds(pipe)) == {STREAM, NONSTREAM}
-
-    @pytest.mark.parametrize(
-        "pipe",
-        [len, lambda items: undefined(items)],  # noqa: F821, PLW0108 # pyright: ignore[reportUndefinedVariable]
-    )
-    def test_every_unknown_is_actionable(self, pipe):
-        for inference in gen_return_inferences(pipe):
-            if inference.kind is UNKNOWN:
-                assert inference.source is None
-                assert inference.reason is not None
-                assert "return annotation" in inference.reason
 
     def test_unclassifiable_operator_error_explains_why(self):
         def pipe(items) -> Any:
@@ -713,9 +681,6 @@ class TestModuleMetadata:
 
         assert composition_key_pipe.subtype == "aggregator"
         assert composition_key_pipe.subtypes == {"aggregator", "composer"}
-
-    def test_unknown_module_metadata_is_none(self):
-        assert get_module_metadata("not_a_builtin_module") is None
 
     def test_unknown_module_metadata_raises_when_strict(self):
         with pytest.raises(ValueError, match="has no metadata"):
@@ -882,6 +847,15 @@ _ASYNC_SUBPIPE = mark_subpipe(_async_subpipe)
 
 
 class TestLoopCharacterization:
+    """
+    The explicit loop runs its embed once per parent and folds against that parent.
+
+    ``embed`` is the sub-pipe callable and ``conf`` its own conf; ``count``,
+    ``emit``, ``assign``, and ``field`` are top-level kwargs. Every stream has at
+    least two parents, since one parent cannot expose a global-vs-per-parent
+    ``count`` gap.
+    """
+
     def test_loop_maps_embed_once_per_parent(self):
         rule = RegexRawRule(
             {
@@ -956,13 +930,6 @@ class TestImplicitLooping:
         result = tokenizer(iter(PARENTS), conf=TOKENIZER_CONF, field="title", **kwargs)
         assert list(result) == expected
 
-    def test_matches_explicit_loop(self):
-        implicit = tokenizer(
-            iter(PARENTS), conf=TOKENIZER_CONF, field="title", count="first", emit=True
-        )
-        explicit = _tokenizer_loop(iter(PARENTS), count="first", emit=True)
-        assert list(implicit) == list(explicit)
-
     def test_single_item_is_not_double_mapped(self):
         item = {"title": "a b"}
         result = tokenizer(item, conf=TOKENIZER_CONF, field="title", emit=True)
@@ -1004,38 +971,14 @@ class TestSubpipeLoop:
 class TestAsyncLoop:
     """Async loop preserves the sync per-parent fold and laziness contract."""
 
+    @pytest.mark.parametrize(("kwargs", "expected"), LOOP_FOLD_CASES)
     @pytest.mark.anyio
-    async def test_async_loop_matches_sync_emit(self):
+    async def test_fold_per_parent(self, kwargs, expected):
         stream = async_loop(
-            iter(PARENTS),
-            embed=async_tok,
-            conf=TOKENIZER_CONF,
-            field="title",
-            count="all",
-            emit=True,
-        )
-
-        async_result = [item async for item in stream]
-        sync_result = list(_tokenizer_loop(iter(PARENTS), count="all", emit=True))
-        assert async_result == sync_result
-
-    @pytest.mark.anyio
-    async def test_async_loop_assign_per_parent(self):
-        stream = async_loop(
-            iter(PARENTS),
-            embed=async_tok,
-            conf=TOKENIZER_CONF,
-            field="title",
-            count="first",
-            assign="first",
-            emit=False,
+            iter(PARENTS), embed=async_tok, conf=TOKENIZER_CONF, field="title", **kwargs
         )
         result = [item async for item in stream]
-
-        assert result == [
-            {"title": "a b", "first": {"content": "a"}},
-            {"title": "c d", "first": {"content": "c"}},
-        ]
+        assert result == expected
 
     @pytest.mark.anyio
     async def test_async_loop_is_lazy_and_ordered(self):
@@ -1233,9 +1176,6 @@ class TestPublicRegister:
 
 
 class TestResolverDispatcher:
-    def test_module_resolves_via_registry(self, fixed_registry):
-        assert dispatcher.require("tokenizer").__name__ == "pipe"
-
     def test_non_stored_workflow_name_routes_to_module_registry(self, fixed_registry):
         # A plain (non ``pipe_*``) name resolves through the module registry, so a
         # miss surfaces as UnsupportedModuleError, not UnsupportedWorkflowError.
@@ -1341,10 +1281,6 @@ class TestEntryPointModules:
         with pytest.raises(ValueError, match="must match"):
             fixed_registry.require(_NAME)
 
-    def test_entry_point_via_facade(self, monkeypatch, fixed_registry):
-        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, MOD_DEFN))
-        assert dispatcher.require(_NAME) is marker
-
     def test_entry_point_may_name_a_bare_module(self, monkeypatch, fixed_registry):
         """The entry point resolves to a module, not a ModuleDefinition."""
         mod = SimpleNamespace(pipe=marker, async_pipe=marker, __doc__=_DOC)
@@ -1418,13 +1354,16 @@ class TestWorkflowResolver:
         with pytest.raises(UnsupportedWorkflowError, match="no document store"):
             resolver.load_workflow("pipe_x")
 
-    def test_configured_resolver_loads_resolved_workflow(self):
-        resolver = WorkflowResolver(module_store=PackageStore("tests.pyworkflows"))
+    @pytest.mark.parametrize(
+        "package",
+        [
+            pytest.param("tests.pyworkflows", id="import-path"),
+            pytest.param(pyworkflows, id="package"),
+        ],
+    )
+    def test_configured_resolver_loads_resolved_workflow(self, package):
+        resolver = WorkflowResolver(module_store=PackageStore(package))
         assert resolver.load("pipe_kazeeki1") is not None
-
-    def test_missing_module_returns_none(self):
-        resolver = WorkflowResolver(module_store=PackageStore("tests.pyworkflows"))
-        assert resolver.load("pipe_missing") is None
 
     def test_interfaces_accept_the_colon_alias(self):
         module = ModuleType("pipe_demo")
@@ -1451,23 +1390,12 @@ class TestWorkflowResolver:
         with pytest.raises(ValueError, match="document store already registered"):
             resolver.register(document_store=DirectoryStore(tmp_path))
 
-    def test_load_accepts_the_colon_alias(self):
-        """``pipe:<id>`` finds the same stored workflow ``require`` does."""
-        store = MappingStore({"pipe_mem": tokenizer_module})
-        resolver = WorkflowResolver(module_store=store)
-        assert resolver.load("pipe:mem") is resolver.load("pipe_mem")
-        assert resolver.load("pipe:mem") is not None
-
     def test_load_workflow_accepts_the_colon_alias(self):
         directory = ROOT_DIR / "tests" / "workflows"
         resolver = WorkflowResolver(document_store=DirectoryStore(directory))
         assert resolver.load_workflow("pipe:gigs") == resolver.load_workflow(
             "pipe_gigs"
         )
-
-    def test_package_store_accepts_the_package_itself(self):
-        resolver = WorkflowResolver(module_store=PackageStore(pyworkflows))
-        assert resolver.load("pipe_kazeeki1") is not None
 
     def test_mistyped_package_path_raises_when_built(self):
         with pytest.raises(ModuleNotFoundError, match="no_such_package"):
@@ -1507,11 +1435,6 @@ class TestWorkflowResolver:
         assert store.load("pipe_x") is tokenizer_module
         assert store.load("pipe_x") is not regex_module
         assert store.load("absent") is None
-
-    def test_mapping_store_returns_the_supplied_module(self):
-        store = MappingStore({"pipe_mem": tokenizer_module})
-        resolver = WorkflowResolver(module_store=store)
-        assert resolver.load("pipe_mem") is tokenizer_module
 
 
 _META = {

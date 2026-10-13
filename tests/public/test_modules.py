@@ -62,7 +62,7 @@ from riko.types.modules import (
     SortConf,
     SortConfRule,
 )
-from tests import async_test, skipif_issync
+from tests import async_test
 
 if TYPE_CHECKING:
     from riko.types._streams import AsyncStream, Item, ItemOrValue, Stream
@@ -127,14 +127,13 @@ async def _titles(conf):
     return [item.get("title") async for item in stream]
 
 
-@skipif_issync
-class TestExtensionlessFetchdata:
-    """``fetchdata`` infers the parser for an extensionless HTTP URL."""
+class TestFetchdata:
+    """``fetchdata`` infers the parser for extensionless URLs and local documents."""
 
     @pytest.mark.parametrize(
         ("content", "content_type"), [(JSON, "application/json"), (XML, "text/xml")]
     )
-    @pytest.mark.anyio
+    @async_test
     async def test_file_contents(self, monkeypatch, content, content_type):
         monkeypatch.setattr(
             "riko.io._async.async_get", _async_get(content, content_type)
@@ -142,12 +141,18 @@ class TestExtensionlessFetchdata:
         result = await _titles({"url": URL, "path": "items"})
         assert result == ["A", "B"]
 
+    def test_minified_xml_parses(self, tmp_path):
+        path = tmp_path / "data.xml"
+        path.write_bytes(XML)
+        items = fetchdata_pipe(conf={"url": path.as_uri(), "path": "items"})
+        assert [item.get("title") for item in items] == ["A", "B"]
+
     @pytest.mark.xfail(
         strict=True,
         reason="splitext keeps the query string in the extension ('json?token=abc'), "
         "so the JSON parser is never selected ",
     )
-    @pytest.mark.anyio
+    @async_test
     async def test_query_string_does_not_defeat_extension(self, monkeypatch):
         """Detect URL formats from extensions even when queries are present."""
         monkeypatch.setattr(
@@ -156,16 +161,6 @@ class TestExtensionlessFetchdata:
         url = "https://example.test/export.json?token=abc"
         result = await _titles({"url": url, "path": "items"})
         assert result == ["A", "B"]
-
-
-class TestLocalDocuments:
-    """``fetchdata`` parses local XML documents."""
-
-    def test_minified_xml_parses(self, tmp_path):
-        path = tmp_path / "data.xml"
-        path.write_bytes(XML)
-        items = fetchdata_pipe(conf={"url": path.as_uri(), "path": "items"})
-        assert [item.get("title") for item in items] == ["A", "B"]
 
     @pytest.mark.xfail(
         strict=True,
@@ -514,35 +509,26 @@ class TestAsyncReceive:
         assert seen <= _LOOKAHEAD
 
 
-class TestRequiredOperands:
-    @pytest.mark.parametrize(
-        ("pipe", "operand"),
-        [
-            (udf_pipe, "func"),
-            (aggregate_pipe, "func"),
-            (join_pipe, "other"),
-            (send_pipe, "others"),
-        ],
-    )
-    def test_omitting_an_operand_raises(self, pipe: Any, operand: str):
-        """An omitted operand is a call-site error, so ``require_arg`` names it."""
-        with pytest.raises(TypeError, match=f"requires the {operand!r} keyword"):
-            list(pipe([{"x": 0}]))
+_OMITTED = object()
 
+
+class TestRequiredOperands:
     @pytest.mark.parametrize(
         ("pipe", "operand", "value"),
         [
-            (udf_pipe, "func", 0),
-            (aggregate_pipe, "func", 0),
-            (join_pipe, "other", []),
-            (send_pipe, "others", []),
+            pytest.param(udf_pipe, "func", _OMITTED, id="udf-omitted"),
+            pytest.param(aggregate_pipe, "func", _OMITTED, id="aggregate-omitted"),
+            pytest.param(join_pipe, "other", _OMITTED, id="join-omitted"),
+            pytest.param(send_pipe, "others", _OMITTED, id="send-omitted"),
+            pytest.param(udf_pipe, "func", 0, id="udf-empty"),
+            pytest.param(aggregate_pipe, "func", 0, id="aggregate-empty"),
+            pytest.param(join_pipe, "other", [], id="join-empty"),
+            pytest.param(send_pipe, "others", [], id="send-empty"),
         ],
     )
-    def test_passing_an_empty_operand_raises(
-        self, pipe: Any, operand: str, value: object
-    ):
-        """An empty operand is a call-site error, so ``require_arg`` names it."""
-        kwargs = {operand: value}
+    def test_missing_operand_raises(self, pipe: Any, operand: str, value: object):
+        """An omitted or empty operand is a call-site error that names the operand."""
+        kwargs = {} if value is _OMITTED else {operand: value}
 
         with pytest.raises(TypeError, match=f"requires the {operand!r} keyword"):
             list(pipe([{"x": 0}], **kwargs))
@@ -560,11 +546,16 @@ class TestListModules:
         assert "split" in names
         assert "dateformat" not in names
 
-    def test_filter_non_loopable_sources(self):
-        assert list_modules(subtype="source", loopable=False) == ["input"]
-
-    def test_filter_non_loopable_processors(self):
-        assert list_modules(type="processor", loopable=False) == ["input"]
+    @pytest.mark.parametrize(
+        ("kind", "subtype"),
+        [
+            pytest.param(None, "source", id="sources"),
+            pytest.param("processor", None, id="processors"),
+        ],
+    )
+    def test_filter_non_loopable_by_kind(self, kind: str | None, subtype: str | None):
+        modules = list_modules(type=kind, subtype=subtype, loopable=False)
+        assert modules == ["input"]
 
     def test_type_and_subtype_cannot_be_combined(self):
         with pytest.raises(ValueError, match="type and subtype cannot be combined"):
@@ -576,24 +567,32 @@ class TestListModules:
 
 
 class TestDescribeModule:
-    def test_describe_module_reraises_nested_dependency_error(self, monkeypatch):
+    @pytest.mark.parametrize(
+        ("error", "match"),
+        [
+            pytest.param(
+                ModuleNotFoundError(
+                    "No module named 'phantom_dep'", name="phantom_dep"
+                ),
+                "phantom_dep",
+                id="nested-dependency",
+            ),
+            pytest.param(
+                ModuleNotFoundError("broken import with no module name"),
+                "no module name",
+                id="unnamed",
+            ),
+        ],
+    )
+    def test_describe_module_reraises_import_error(
+        self, monkeypatch, error: ModuleNotFoundError, match: str
+    ):
         def boom(target):
-            raise ModuleNotFoundError(
-                "No module named 'phantom_dep'", name="phantom_dep"
-            )
+            raise error
 
         monkeypatch.setattr("riko.base._imports.import_module", boom)
 
-        with pytest.raises(ModuleNotFoundError, match="phantom_dep"):
-            describe_module("hash")
-
-    def test_describe_module_reraises_unnamed_import_error(self, monkeypatch):
-        def boom(target):
-            raise ModuleNotFoundError("broken import with no module name")
-
-        monkeypatch.setattr("riko.base._imports.import_module", boom)
-
-        with pytest.raises(ModuleNotFoundError, match="no module name"):
+        with pytest.raises(ModuleNotFoundError, match=match):
             describe_module("hash")
 
 

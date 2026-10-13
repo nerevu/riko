@@ -3,7 +3,7 @@ Provides internal tests: mechanics, drift guards, and failure modes.
 
 Index (file, then the subjects it owns, in file order):
 
-    test_execution.py         SyncExecution, ResourceAcquisition, LifecyleFactory,
+    test_execution.py         SyncExecution, ResourceAcquisition, LifecycleFactory,
                               ValueFactory, Values, ResourceEcosystem,
                               ResourceImmutability, WorkerCnt, PoolHandle, OpenPool,
                               ExecutionSettings, MappingPolicy, SyncConcurrency
@@ -17,8 +17,8 @@ Index (file, then the subjects it owns, in file order):
                               TypedDictKeys, WriteMode, Formats, WriteOperation,
                               WriteCapabilities, NormalizeTarget, RegisterTarget,
                               ResolveFormat, FileCapabilities, ValidateTargetMode,
-                              BuildWrite, BuildWriteResource, ConverterPath, Csv, Jsonl,
-                              Framed, SessionLifecycle, WriteExecution, Sink
+                              BuildWrite, ConverterPath, Csv, Jsonl, Framed,
+                              SessionLifecycle, WriteExecution, Sink
     test_values.py            CanonicalBytes, Digest, ReprCache, CastDatetime,
                               TryLocalTz, Dates, DotDict, Parsers, RSSUtils, Graph,
                               GraphIndex
@@ -26,9 +26,8 @@ Index (file, then the subjects it owns, in file order):
                               ExtensionlessAsyncUrlOpen, Reencode, ConversionFuncs,
                               AsyncMapStream, AsyncMap, AsyncMerge, GatherResults,
                               AsyncTimeoutIterator
-    test_modules.py           IsasyncInferenceValid, ExplicitIsasyncRequired,
-                              InvalidCombinations, AsyncGeneratorSource,
-                              AsyncOperatorReturnsStreamDirectly,
+    test_modules.py           IsasyncInferenceValid, InvalidCombinations,
+                              AsyncGeneratorSource, AsyncOperatorReturnsStreamDirectly,
                               AsyncProcessorDualProtocol, ProcessorListKeepsTestFlag,
                               BareDecorator, Splitter, AsyncOperatorLaziness,
                               ReturnInference, ModuleMetadata, WrapperMeta,

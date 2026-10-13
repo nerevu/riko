@@ -74,6 +74,22 @@ class TestFetch:
         list(csv.parser({}, None, conf))
         assert closed
 
+    def test_unified_http_backend(self):
+        """Route parameterless HTTP URLs through the requests backend."""
+        response = Mock()
+        response.headers = {"Content-Type": "application/rss+xml"}
+        target = "http://example.com/feed.xml"
+
+        with (
+            patch("riko.io._sync.requests.get", return_value=response) as mock_requests,
+            patch("riko.io._sync.urlopen") as mock_urlopen,
+        ):
+            Fetch(target, binary=True)
+
+        mock_requests.assert_called_once()
+        mock_urlopen.assert_not_called()
+        assert mock_requests.call_args.args[0] == target
+
 
 @pytest.mark.simulated_network
 class TestLoopbackServer:
@@ -121,22 +137,6 @@ class TestLoopbackServer:
     def test_streamed_binary_read_returns_payload(self, url):
         with Fetch(url, binary=True) as f:
             assert f.read() == self.PAYLOAD
-
-    def test_unified_http_backend(self):
-        """Route parameterless HTTP URLs through the requests backend."""
-        response = Mock()
-        response.headers = {"Content-Type": "application/rss+xml"}
-        target = "http://example.com/feed.xml"
-
-        with (
-            patch("riko.io._sync.requests.get", return_value=response) as mock_requests,
-            patch("riko.io._sync.urlopen") as mock_urlopen,
-        ):
-            Fetch(target, binary=True)
-
-        mock_requests.assert_called_once()
-        mock_urlopen.assert_not_called()
-        assert mock_requests.call_args.args[0] == target
 
 
 class TestAsyncUrlOpen:
@@ -361,7 +361,7 @@ class TestReencode:
         assert getattr(reader, method)(0) == ""
         assert reader.read() == data.decode()
 
-    def test_reencode_readline(self):
+    def test_readline_without_ends_resumes_at_the_next_line(self):
         data = b"line one\nline two\nline three\n"
         full = reencode(BytesIO(data), decode=True).readlines(keepends=False)
         reader = reencode(BytesIO(data), decode=True)
@@ -371,16 +371,12 @@ class TestReencode:
         assert rest == ["line two", "line three"]
         assert [head] + rest == full
 
-    def test_reencode_read_and_readline(self):
-        data = b"line one\nline two\nline three\n"
-        full = reencode(BytesIO(data), decode=True).read()
-        reader = reencode(BytesIO(data), decode=True)
-        head, mid, rest = reader.read(1), reader.readline(), reader.readlines()
+    def test_readline_resumes_after_a_partial_read(self):
+        reader = reencode(BytesIO(b"line one\nline two\nline three\n"), decode=True)
+        reader.read(1)
 
-        assert head == "l"
-        assert mid == "ine one\n"
-        assert rest == ["line two\n", "line three\n"]
-        assert head + mid + "".join(rest) == full
+        assert reader.readline() == "ine one\n"
+        assert reader.readlines() == ["line two\n", "line three\n"]
 
 
 class TestConversionFuncs:
@@ -423,13 +419,15 @@ class TestAsyncMapStream:
     """
 
     @skipif_issync
-    def test_maps_all_items_order_independent(self):
-        results = aresolve(async_map_stream(_double, range(10), limit=4))
-        assert sorted(results) == [x * 2 for x in range(10)]
-
-    @skipif_issync
-    def test_empty_source_yields_nothing(self):
-        assert aresolve(async_map_stream(_double, [], limit=4)) == []
+    @pytest.mark.parametrize(
+        "stream",
+        [
+            pytest.param(async_map_stream, id="unordered"),
+            pytest.param(async_map_ordered_stream, id="ordered"),
+        ],
+    )
+    def test_empty_source_yields_nothing(self, stream):
+        assert aresolve(stream(_double, [], limit=4)) == []
 
     @skipif_issync
     def test_accepts_async_source(self):
@@ -440,10 +438,17 @@ class TestAsyncMapStream:
         results = aresolve(async_map_stream(_double, gen(), limit=2))
         assert sorted(results) == [0, 2, 4, 6, 8]
 
+    @pytest.mark.parametrize(
+        ("stream", "bound"),
+        [
+            pytest.param(async_map_stream, 3 + 2 + 2, id="unordered"),
+            pytest.param(async_map_ordered_stream, 2 * (3 + 2), id="ordered"),
+        ],
+    )
     @async_test
-    async def test_backpressure_bounds_inflight(self):
+    async def test_backpressure_bounds_inflight(self, stream, bound):
         """An unbounded-ish source with a slow consumer must not run far ahead."""
-        limit, buffer, total = 3, 2, 200
+        total = 200
         produced = 0
 
         async def gen():
@@ -454,13 +459,12 @@ class TestAsyncMapStream:
 
         seen = 0
 
-        async for _ in async_map_stream(_double, gen(), limit=limit, buffer=buffer):
+        async for _ in stream(_double, gen(), limit=3, buffer=2):
             seen += 1
-            assert produced - seen <= limit + buffer + 2
+            assert produced - seen <= bound
             await lowlevel.checkpoint()
 
-        assert produced == total
-        assert seen == total
+        assert produced == total == seen
 
     @skipif_issync
     def test_ordered_preserves_source_order_under_skew(self):
@@ -473,31 +477,6 @@ class TestAsyncMapStream:
         result = aresolve(async_map_ordered_stream(slow_first, range(6), limit=3))
         assert result == list(range(6))
 
-    @skipif_issync
-    def test_ordered_empty_source_yields_nothing(self):
-        assert aresolve(async_map_ordered_stream(_double, [], limit=4)) == []
-
-    @async_test
-    async def test_ordered_backpressure_bounds_inflight(self):
-        limit, buffer, total = 3, 2, 200
-        produced = 0
-
-        async def gen():
-            nonlocal produced
-            for i in range(total):
-                produced += 1
-                yield i
-
-        seen = 0
-        stream = async_map_ordered_stream(_double, gen(), limit=limit, buffer=buffer)
-
-        async for _ in stream:
-            seen += 1
-            assert produced - seen <= 2 * (limit + buffer)
-            await lowlevel.checkpoint()
-
-        assert produced == total == seen
-
     @async_test
     async def test_shared_budget_caps_nested_fanout(self):
         """
@@ -507,15 +486,8 @@ class TestAsyncMapStream:
         operations but never exceeds a budget of 3. The outer fan-out remains
         unbudgeted to avoid deadlock.
         """
-        state = {"current": 0, "peak": 0}
+        state, leaf = _budgeted_probe()
         budget = Semaphore(3)
-
-        async def leaf(x: int) -> int:
-            state["current"] += 1
-            state["peak"] = max(state["peak"], state["current"])
-            await async_sleep(0.01)
-            state["current"] -= 1
-            return x
 
         async def source(i: int) -> list[int]:
             leaves = async_map_stream(leaf, range(5), limit=10, budget=budget)
@@ -526,52 +498,41 @@ class TestAsyncMapStream:
         assert len(results) == 4
         assert state["peak"] <= 3
 
+    @pytest.mark.parametrize(
+        ("stream", "arrange"),
+        [
+            pytest.param(async_map_stream, sorted, id="unordered"),
+            pytest.param(async_map_ordered_stream, list, id="ordered"),
+        ],
+    )
     @async_test
-    async def test_shared_budget_caps_concurrent_unordered_streams(self):
-        """Two concurrent unordered maps sharing a budget of 3 never exceed it."""
+    async def test_shared_budget_caps_concurrent_streams(self, stream, arrange):
+        """Two concurrent maps sharing a budget of 3 never exceed it."""
         state, leaf = _budgeted_probe()
         budget = Semaphore(3)
 
         async def collect() -> list[int]:
-            stream = async_map_stream(leaf, range(10), limit=4, budget=budget)
-            return [r async for r in stream]
+            mapped = stream(leaf, range(10), limit=4, budget=budget)
+            return [r async for r in mapped]
 
         results = await gather_results([collect(), collect()])
-        assert [sorted(result) for result in results] == [list(range(10))] * 2
+        assert [arrange(result) for result in results] == [list(range(10))] * 2
         assert 1 < state["peak"] <= 3
 
+    @pytest.mark.parametrize(
+        ("stream", "firsts"),
+        [
+            pytest.param(async_map_stream, {0, 2}, id="unordered"),
+            pytest.param(async_map_ordered_stream, {0}, id="ordered"),
+        ],
+    )
     @async_test
-    async def test_shared_budget_caps_concurrent_ordered_streams(self):
-        """Two concurrent ordered maps sharing a budget of 3 never exceed it."""
-        state, leaf = _budgeted_probe()
-        budget = Semaphore(3)
-
-        async def collect() -> list[int]:
-            stream = async_map_ordered_stream(leaf, range(10), limit=4, budget=budget)
-            return [r async for r in stream]
-
-        results = await gather_results([collect(), collect()])
-        assert results == [list(range(10))] * 2
-        assert 1 < state["peak"] <= 3
-
-    @async_test
-    async def test_async_map_stream_early_close_stops_workers_and_closes_source(self):
+    async def test_early_close_stops_workers_and_closes_source(self, stream, firsts):
         closed: list[bool] = []
-        stream = async_map_stream(_double, _forever(closed), limit=2)
-        first = await anext(stream)
-        await stream.aclose()
-        assert first in {0, 2}
-        assert closed == [True]
-
-    @async_test
-    async def test_async_map_ordered_stream_early_close_stops_workers_and_closes_source(
-        self,
-    ):
-        closed: list[bool] = []
-        stream = async_map_ordered_stream(_double, _forever(closed), limit=2)
-        first = await anext(stream)
-        await stream.aclose()
-        assert first == 0
+        mapped = stream(_double, _forever(closed), limit=2)
+        first = await anext(mapped)
+        await mapped.aclose()
+        assert first in firsts
         assert closed == [True]
 
     @skipif_issync
@@ -589,11 +550,6 @@ class TestAsyncMapStream:
 
 class TestAsyncMap:
     @async_test
-    async def test_async_map_allows_no_limit(self):
-        result = await async_map(_double, range(3), 0)
-        assert result == [0, 2, 4]
-
-    @async_test
     async def test_async_map_rejects_negative_limit(self):
         with pytest.raises(ValueError, match="limit cannot be negative"):
             await async_map(_double, range(3), -1)
@@ -610,6 +566,7 @@ async def _gen_items(items, delay=0.0):
 class TestAsyncMerge:
     @skipif_issync
     def test_async_merge_yields_every_value(self):
+        """More iterables than ``limit`` still merge in full."""
         iterables = [_gen_items([1, 2]), _gen_items([3, 4]), _gen_items([5])]
         assert sorted(aresolve(async_merge(iterables, limit=2))) == [1, 2, 3, 4, 5]
 

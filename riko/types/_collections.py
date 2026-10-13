@@ -1015,10 +1015,6 @@ def require_binding(
         FrozenDict({'db': 'db', 'cache': 'cache'})
         >>> require_binding({"db": "primary_db"})
         FrozenDict({'db': 'primary_db'})
-        >>> require_binding(b"db")
-        Traceback (most recent call last):
-        ...
-        riko.base.exceptions.InvalidPipelineError: ...must bind non-empty strings...
 
     """
     if isinstance(value, str):

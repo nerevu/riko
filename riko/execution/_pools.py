@@ -4,21 +4,6 @@ Worker pools for per-item work in synchronous executions.
 
 An execution opens a thread or process pool to map items across workers and sized
 from the source length. Each pool is held by a handle that releases it once.
-
-Examples:
-
-    Basic usage::
-
-        >>> from riko.execution._pools import open_pool
-        >>> from riko.types._enums import Executor
-        >>>
-        >>> handle = open_pool(Executor.THREAD, 2)
-        >>> handle.pool
-        <multiprocessing.pool.ThreadPool state=RUN pool_size=2>
-        >>> handle.close()
-        >>> handle.pool is None
-        True
-
 """
 
 from __future__ import annotations

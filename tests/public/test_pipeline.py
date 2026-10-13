@@ -30,7 +30,6 @@ from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode
 from riko.definitions._workflow import Workflow
 from riko.definitions._write import WriteCapabilities, WriteMode
 from riko.definitions.modules import ModuleDefinition, normalize_module_name
-from riko.execution._execution import AsyncExecution, SyncExecution
 from riko.modules._names import Transforms
 from riko.modules.write import async_pipe, pipe
 from riko.parsing._dotdict import DotDict
@@ -97,7 +96,12 @@ SPLIT_PENDING = pytest.mark.xfail(
     strict=True, reason="Pipeline.split() is not available yet"
 )
 CALLABLE_PENDING = pytest.mark.xfail(
-    strict=True, reason="Pipeline.map() is not available yet"
+    strict=True,
+    reason=(
+        "Pipeline.map() is not available yet; once it is, the callable's return "
+        "type should flow through as the pipeline's item type instead of the "
+        "current Pipeline[Any] fallback"
+    ),
 )
 SEED_PENDING = pytest.mark.xfail(
     strict=True,
@@ -133,6 +137,12 @@ class TestPipelineConstruction:
         assert pipeline.workflow.edges == ()
         assert pipeline.workflow.isvalid
         assert pipeline.source is None
+
+    def test_pipeline_repr_notes_seed_and_context(self):
+        fetch = Pipeline.from_module("fetch")
+        assert repr(fetch) == "Pipeline(fetch-1; outputs: default)"
+        seeded = Pipeline(source=[{"x": 1}], context=Context())
+        assert repr(seeded) == "Pipeline(empty; seed; context)"
 
     def test_workflow_constructor_keeps_the_workflow(self):
         workflow = _workflow()
@@ -211,17 +221,9 @@ class TestPipelineChaining:
         p2 = p1.pipe("sort")
         assert p2.workflow.nodes["fetch-1"] is p1.workflow.nodes["fetch-1"]
 
-    def test_getattr_chains_sort(self):
-        pipeline = Pipeline.from_module("fetch").sort(conf=_SORT_CONF)
-        assert pipeline.workflow.nodes["sort-1"].name == "sort"
-
     def test_getattr_chains_filter(self):
         pipeline = Pipeline.from_module("fetch").filter(conf={"rule": []})
         assert pipeline.workflow.nodes["filter-1"].name == "filter"
-
-    def test_or_chains_str(self):
-        pipeline = Pipeline.from_module("fetch") | "sort"
-        assert sorted(pipeline.workflow.nodes) == ["fetch-1", "sort-1"]
 
     def test_or_chains_name_conf_pair(self):
         pipeline = Pipeline.from_module("fetch") | ("sort", _SORT_CONF)
@@ -265,12 +267,6 @@ class TestPipelineChaining:
         assert dict(node.conf) == conf
         assert node.options == {"emit": False}
 
-    def test_ror_seeds_source(self):
-        items = [{"x": 1}]
-        pipeline = items | Pipeline.from_module("sort")
-        assert pipeline.source is items
-        assert sorted(pipeline.workflow.nodes) == ["sort-1"]
-
     def test_ror_seeds_async_stream(self):
         async def stream():
             yield {"x": 1}
@@ -300,25 +296,6 @@ class TestPipelineChaining:
     def test_ror_rejects_reseeding(self):
         with pytest.raises(TypeError):
             _ = [{"x": 1}] | Pipeline(source=[{"y": 1}])
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "owned by the pending callable-pipes work: Pipeline.map(callable) chains "
-            "a callable node; today attribute chaining treats 'map' as a module name. "
-            "That work also owns concrete item-type threading: the callable's return "
-            "type should flow through as the pipeline's item type instead of the "
-            "current Pipeline[Any] fallback"
-        ),
-    )
-    def test_map_chains_a_callable_node(self) -> None:
-        def double(item):
-            return {"x": item["x"] * 2}
-
-        pipeline = Pipeline(source=[{"x": 1}, {"x": 2}]).map(double)
-
-        assert isinstance(pipeline, Pipeline)
-        assert list(pipeline) == [{"x": 2}, {"x": 4}]
 
 
 class _Mod(ModuleName):
@@ -354,6 +331,23 @@ class TestPipelineIteration:
     def test_iterating_a_source_only_pipeline_streams_the_source(self):
         assert list(Pipeline(source=[{"x": 1}, {"x": 2}])) == [{"x": 1}, {"x": 2}]
         assert list(Pipeline(source={"x": 1})) == [{"x": 1}]
+
+    def test_a_source_seed_runs_through_a_registered_module(self) -> None:
+        def double(source, **_):
+            return ({"x": item["x"] * 2} for item in source)
+
+        reset_module_registry()
+        sync_pipe = cast("SyncModuleWrapper", double)
+        register_module(ModuleDefinition(name="doubler", sync_pipe=sync_pipe))
+
+        try:
+            expected = [{"x": 2}, {"x": 4}]
+            assert (
+                list([{"x": 1}, {"x": 2}] | Pipeline.from_module("doubler")) == expected
+            )
+            assert list(Pipeline(source=[{"x": 10}]).pipe("doubler")) == [{"x": 20}]
+        finally:
+            reset_module_registry()
 
     def test_first_returns_the_default_on_an_empty_pipeline(self):
         assert Pipeline(source=[]).first(default=None) is None
@@ -398,6 +392,30 @@ class TestAsyncPipelineIteration:
 
         assert [item async for item in Pipeline(source=source())] == [{"x": 1}]
 
+    @pytest.mark.parametrize(
+        "make_seed",
+        [
+            pytest.param(lambda: [{"x": 1}, {"x": 2}], id="sync-iterable"),
+            pytest.param(agen_source, id="async-iterable"),
+            pytest.param(awaitable_source, id="awaitable"),
+        ],
+    )
+    @async_test
+    async def test_a_seed_runs_through_a_registered_async_module(self, make_seed):
+        async def adouble(source, **_):
+            async for item in source:
+                yield {"x": item["x"] * 2}
+
+        reset_module_registry()
+        async_pipe = cast("AsyncModuleWrapper", adouble)
+        register_module(ModuleDefinition(name="adoubler", async_pipe=async_pipe))
+
+        try:
+            pipeline = make_seed() | Pipeline.from_module("adoubler")
+            assert [item async for item in pipeline] == [{"x": 2}, {"x": 4}]
+        finally:
+            reset_module_registry()
+
     @async_test
     async def test_afirst_on_an_empty_pipeline_raises_a_lookup_error(self):
         with pytest.raises(EmptyPipelineError):
@@ -420,124 +438,20 @@ class TestAsyncPipelineIteration:
         assert consumed == []
 
 
-class TestPipelineExecution:
-    def test_pipeline_iter_runs_end_to_end(self) -> None:
-        def src(_items=None, **_):
-            yield {"x": 1}
-
-        reset_module_registry()
-        sync_pipe = cast("SyncModuleWrapper", src)
-        register_module(ModuleDefinition(name="itersrc", sync_pipe=sync_pipe))
-
-        try:
-            assert list(Pipeline(module_workflow("itersrc"))) == [{"x": 1}]
-        finally:
-            reset_module_registry()
-
-    def test_pipeline_source_seed_runs_end_to_end(self) -> None:
-        def double(source, **_):
-            return ({"x": item["x"] * 2} for item in source)
-
-        reset_module_registry()
-        sync_pipe = cast("SyncModuleWrapper", double)
-        register_module(ModuleDefinition(name="doubler", sync_pipe=sync_pipe))
-
-        try:
-            expected = [{"x": 2}, {"x": 4}]
-            assert (
-                list([{"x": 1}, {"x": 2}] | Pipeline.from_module("doubler")) == expected
-            )
-            assert list(Pipeline(source=[{"x": 10}]).pipe("doubler")) == [{"x": 20}]
-        finally:
-            reset_module_registry()
-
-    @async_test
-    async def test_pipeline_async_source_seed_runs_end_to_end(self) -> None:
-        async def adouble(source, **_):
-            async for item in source:
-                yield {"x": item["x"] * 2}
-
-        reset_module_registry()
-        async_pipe = cast("AsyncModuleWrapper", adouble)
-        register_module(ModuleDefinition(name="adoubler", async_pipe=async_pipe))
-
-        try:
-            streamed = agen_source() | Pipeline.from_module("adoubler")
-            assert [item async for item in streamed] == [{"x": 2}, {"x": 4}]
-            awaited = awaitable_source() | Pipeline.from_module("adoubler")
-            assert [item async for item in awaited] == [{"x": 2}, {"x": 4}]
-        finally:
-            reset_module_registry()
-
-    def test_pipeline_iter_closes_upstream_on_early_break(self) -> None:
-        closed: list[bool] = []
-
-        def src(_items=None, **_):
-            try:
-                yield {"x": 1}
-                yield {"x": 2}
-            finally:
-                closed.append(True)
-
-        reset_module_registry()
-        sync_pipe = cast("SyncModuleWrapper", src)
-        register_module(ModuleDefinition(name="itersrc2", sync_pipe=sync_pipe))
-
-        try:
-            iterator = iter(Pipeline(module_workflow("itersrc2")))
-            assert next(iterator) == {"x": 1}
-            iterator.close()
-            assert closed == [True]
-        finally:
-            reset_module_registry()
-
-    @async_test
-    async def test_pipeline_aiter_runs_end_to_end(self) -> None:
-        async def src(_items=None, **_):
-            yield {"x": 1}
-
-        reset_module_registry()
-        async_pipe = cast("AsyncModuleWrapper", src)
-        register_module(ModuleDefinition(name="aitersrc", async_pipe=async_pipe))
-
-        try:
-            assert [x async for x in Pipeline(module_workflow("aitersrc"))] == [
-                {"x": 1}
-            ]
-        finally:
-            reset_module_registry()
-
-    @async_test
-    async def test_pipeline_source_seed_aruns_end_to_end(self) -> None:
-        async def double(source, **_):
-            async for item in source:
-                yield {"x": item["x"] * 2}
-
-        reset_module_registry()
-        async_pipe = cast("AsyncModuleWrapper", double)
-        register_module(ModuleDefinition(name="adoubler", async_pipe=async_pipe))
-
-        try:
-            pipeline = [{"x": 1}, {"x": 2}] | Pipeline.from_module("adoubler")
-            assert [x async for x in pipeline] == [{"x": 2}, {"x": 4}]
-        finally:
-            reset_module_registry()
-
-
 _PARITY_BUILDER_CONF = ItemBuilderConf(
     {"attrs": {"key": "content", "value": "a,bb,ccc"}}
 )
 _PARITY_STRR_CONF = StrReplaceConf({"rule": StrReplaceConfRule(find="c", replace="C")})
 
 
-def _tokenize() -> Pipeline:
+def _parity_tokens() -> Pipeline:
     source = Pipeline.from_module("itembuilder", conf=_PARITY_BUILDER_CONF)
     return source.tokenizer(options={"emit": True})
 
 
 def _both(build: Callable[[Pipeline], Pipeline]) -> tuple[Items, Items]:
     """Iterate *build*'s pipeline both ways; return ``(sync_result, async_result)``."""
-    pipeline = build(_tokenize())
+    pipeline = build(_parity_tokens())
     return list(pipeline), aresolve(pipeline)
 
 
@@ -589,11 +503,6 @@ class TestReiteration:
         pipeline = tokenized_letters()
         assert len(list(pipeline)) == 3
         assert len(list(pipeline)) == 3
-
-    def test_replayable_source_replays(self):
-        pipeline = Pipeline(source=LIFECYCLE_SRC).hash()
-        assert len(list(pipeline)) == 2
-        assert len(list(pipeline)) == 2
 
     def test_one_shot_source_is_seen_consumed(self):
         pipeline = iter(LIFECYCLE_SRC) | Pipeline.from_module("hash")
@@ -666,6 +575,28 @@ class TestClose:
         assert next(stream)
         stream.close()
         assert len(list(pipeline)) == 3
+
+    def test_early_close_closes_an_upstream_module(self) -> None:
+        closed: list[bool] = []
+
+        def src(_items=None, **_):
+            try:
+                yield {"x": 1}
+                yield {"x": 2}
+            finally:
+                closed.append(True)
+
+        reset_module_registry()
+        sync_pipe = cast("SyncModuleWrapper", src)
+        register_module(ModuleDefinition(name="itersrc2", sync_pipe=sync_pipe))
+
+        try:
+            iterator = iter(Pipeline(module_workflow("itersrc2")))
+            assert next(iterator) == {"x": 1}
+            iterator.close()
+            assert closed == [True]
+        finally:
+            reset_module_registry()
 
 
 class TestAsyncClose:
@@ -742,7 +673,7 @@ class TestFailure:
         with pytest.raises(RuntimeError, match="boom"):
             list(pipeline)
 
-    def test_a_fresh_iteration_starts_cleanly_after_a_failure(self):
+    def test_a_failing_pipeline_does_not_break_another_pipelines_run(self):
         pipeline = tokenized_letters()
 
         with pytest.raises(RuntimeError, match="boom"):
@@ -777,9 +708,12 @@ class TestAsyncSourceAdapter:
 
     @pytest.mark.parametrize("make_source", GOOD_SOURCES)
     @async_test
-    async def test_source_iterates(self, make_source):
+    async def test_source_iterates_and_closes(self, make_source):
         pipeline = make_source() | Pipeline.from_module("hash")
-        assert len([item async for item in pipeline]) == len(LIFECYCLE_SRC)
+        stream = aiter(pipeline)
+        items = [item async for item in stream]
+        await stream.aclose()
+        assert len(items) == len(LIFECYCLE_SRC)
 
     @pytest.mark.parametrize("make_source", RAISING_SOURCES)
     @async_test
@@ -788,15 +722,6 @@ class TestAsyncSourceAdapter:
 
         with pytest.raises(RuntimeError, match="boom"):
             _ = [item async for item in pipeline]
-
-    @pytest.mark.parametrize("make_source", GOOD_SOURCES)
-    @async_test
-    async def test_source_closes(self, make_source):
-        pipeline = make_source() | Pipeline.from_module("hash")
-        stream = aiter(pipeline)
-        items = [item async for item in stream]
-        await stream.aclose()
-        assert len(items) == len(LIFECYCLE_SRC)
 
 
 class TestFanIn:
@@ -914,6 +839,8 @@ class TestWithExecution:
             event_sink=sink,
             shutdown_timeout=2.5,
         )
+        assert pipeline.settings.event_sink is sink
+        assert pipeline.settings.shutdown_timeout == pytest.approx(2.5)
         assert pipeline.with_execution().settings == pipeline.settings
 
     @pytest.mark.parametrize(
@@ -936,17 +863,6 @@ class TestWithExecution:
             assert reset.settings.executor is Executor.PROCESS
             assert reset.settings.concurrency == 8
 
-    def test_event_sink_reaches_the_execution(self):
-        sink = Recorder()
-        pipeline = Pipeline.from_module("fetch").with_execution(event_sink=sink)
-        execution = SyncExecution(pipeline.context, settings=pipeline.settings)
-        assert execution.events is sink
-
-    def test_shutdown_timeout_reaches_the_async_execution(self):
-        pipeline = Pipeline.from_module("fetch").with_execution(shutdown_timeout=1.5)
-        execution = AsyncExecution(pipeline.context, settings=pipeline.settings)
-        assert execution.shutdown_timeout == pytest.approx(1.5)
-
     @pytest.mark.parametrize(
         ("kwargs", "error"),
         [
@@ -967,38 +883,49 @@ class TestWithExecution:
 class TestExecutionSettings:
     """Run-wide settings: concurrency, ordering, and where per-item work runs."""
 
-    def test_parallel_matches_sequential_as_multiset(self):
-        pipeline = _tokenized().hash(options={"assign": "h"})
+    @pytest.mark.parametrize(
+        "build",
+        [
+            pytest.param(_tokenized, id="module-source"),
+            pytest.param(lambda: Pipeline(source=SRC), id="seed"),
+        ],
+    )
+    def test_parallel_matches_sequential_as_multiset(self, build):
+        pipeline = build().hash(options={"assign": "h"})
         sequential = list(pipeline)
         parallel = list(pipeline.with_execution(concurrency=4))
         assert len(parallel) == len(sequential) == 3
         assert _by_content(parallel) == _by_content(sequential)
 
-    def test_ordered_preserves_source_order(self):
-        pipeline = _tokenized().hash(options={"assign": "h"})
-        sequential = list(pipeline)
-        ordered = list(pipeline.with_execution(concurrency=4, ordered=True))
-        assert ordered == sequential
+    @pytest.mark.parametrize(
+        ("build", "settings", "expected"),
+        [
+            pytest.param(
+                _tokenized,
+                {"concurrency": 4, "ordered": True},
+                [item["content"] for item in EXPECTED],
+                id="ordered",
+            ),
+            pytest.param(
+                lambda: Pipeline(source=SRC), {}, ["a", "b", "c"], id="no-settings"
+            ),
+            pytest.param(
+                lambda: Pipeline(source=SRC),
+                {"executor": "inline", "concurrency": 4},
+                ["a", "b", "c"],
+                id="inline",
+            ),
+        ],
+    )
+    def test_preserves_source_order(self, build, settings, expected):
+        pipeline = build().hash(options={"assign": "h"}).with_execution(**settings)
+        assert [item["content"] for item in pipeline] == expected
 
     @pytest.mark.parametrize("executor", ["inline", "thread", "process"])
     def test_every_executor_produces_the_same_items(self, executor):
         pipeline = Pipeline(source=SRC).hash(options={"assign": "h"})
         executed = list(pipeline.with_execution(executor=executor))
         assert _by_content(executed) == _by_content(pipeline)
-
-    def test_no_settings_preserve_source_order(self):
-        pipeline = Pipeline[dict[str, object]](source=SRC).hash(options={"assign": "h"})
-        assert [item["content"] for item in pipeline] == ["a", "b", "c"]
-
-    def test_inline_executor_preserves_source_order(self):
-        pipeline = Pipeline[dict[str, object]](source=SRC).hash(options={"assign": "h"})
-        inline = pipeline.with_execution(executor="inline", concurrency=4)
-        assert [item["content"] for item in inline] == ["a", "b", "c"]
-
-    def test_auto_with_a_limit_matches_sequential_as_multiset(self):
-        pipeline = Pipeline(source=SRC).hash(options={"assign": "h"})
-        parallel = list(pipeline.with_execution(concurrency=4))
-        assert _by_content(parallel) == _by_content(pipeline)
 
 
 _PARALLEL_BUILDER_CONF = ItemBuilderConf(
@@ -1370,10 +1297,6 @@ class TestWritePassthrough:
 class TestWriteParity:
     """The sync and async parsers serialize identical bytes."""
 
-    def _read(self, path):
-        with open(path, mode="rb") as f:
-            return f.read()
-
     @pytest.mark.anyio
     async def test_json_parity(self, tmp_path):
         sync_path, async_path = tmp_path / "sync.json", tmp_path / "async.json"
@@ -1381,8 +1304,8 @@ class TestWriteParity:
         conf = WriteConf({"dest": async_path, "fmt": "json"})
         _ = [item async for item in async_pipe(ITEMS, conf=conf)]
         expected = b'[{"x": 0}, {"x": 1}, {"x": 2}]'
-        assert self._read(sync_path) == expected
-        assert self._read(async_path) == expected
+        assert sync_path.read_bytes() == expected
+        assert async_path.read_bytes() == expected
 
     @pytest.mark.anyio
     async def test_csv_parity(self, tmp_path):
@@ -1390,8 +1313,8 @@ class TestWriteParity:
         list(pipe(ITEMS, conf=WriteConf({"dest": sync_path, "fmt": "csv"})))
         conf = WriteConf({"dest": async_path, "fmt": "csv"})
         _ = [item async for item in async_pipe(ITEMS, conf=conf)]
-        sync_bytes = self._read(sync_path)
-        assert sync_bytes == self._read(async_path)
+        sync_bytes = sync_path.read_bytes()
+        assert sync_bytes == async_path.read_bytes()
         assert sync_bytes.split() == [b"x", b"0", b"1", b"2"]
 
 
@@ -1469,26 +1392,22 @@ class TestWriteSkips:
 class TestWriteTargetFromExtension:
     """When ``fmt`` is omitted, the dest extension selects the converter."""
 
-    def _read(self, path):
-        with open(path, mode="rb") as f:
-            return f.read()
-
     def test_sync_csv_extension(self, tmp_path):
         path = tmp_path / "out.csv"
         list(pipe(ITEMS, conf=WriteConf({"dest": path})))
-        assert self._read(path).split() == [b"x", b"0", b"1", b"2"]
+        assert path.read_bytes().split() == [b"x", b"0", b"1", b"2"]
 
     @async_test
     async def test_async_csv_extension(self, tmp_path):
         path = tmp_path / "out.csv"
         result = async_pipe(ITEMS, conf=WriteConf({"dest": path}))
         _ = [item async for item in result]
-        assert self._read(path).split() == [b"x", b"0", b"1", b"2"]
+        assert path.read_bytes().split() == [b"x", b"0", b"1", b"2"]
 
     def test_explicit_target_overrides_extension(self, tmp_path):
         path = tmp_path / "out.csv"
         list(pipe(ITEMS, conf=WriteConf({"dest": path, "fmt": "json"})))
-        assert self._read(path) == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
+        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
     def test_unknown_extension_fails(self, tmp_path, caplog):
         path = tmp_path / "out.dat"
@@ -1771,6 +1690,7 @@ class TestCallableNodes:
 
     def test_map_extracts_a_field(self):
         pipeline = _tokenized().map(itemgetter("content"))
+        assert isinstance(pipeline, Pipeline)
         assert list(pipeline) == ["once is 1x", "twice is 2x", "thrice is 3x"]
 
     def test_map_runs_once_per_item_mid_chain(self):

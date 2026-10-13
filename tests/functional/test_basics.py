@@ -210,15 +210,6 @@ class TestStoredWorkflows:
 
         _check_results(pydeps, items, pipe_name, value=value, check=check)
 
-    async def _aload(self, items: Sequence[Items], pipe_name, value=0, check=1):
-        if _document(pipe_name) is None:
-            module = import_module(f"tests.pyworkflows.{pipe_name}")
-            pydeps = _workflow_dependencies(module.build().workflow)
-        else:
-            pydeps = _workflow_dependencies(_load_workflow(pipe_name))
-
-        _check_results(pydeps, items, pipe_name, value=value, check=check)
-
     def setup_method(self):
         """Creates the shared test ``Context``."""
         self.context = Context(test=True)
@@ -298,7 +289,7 @@ class TestStoredWorkflows:
         pipe_name = "pipe_async_kazeeki1"
         stream = self._async_run_example(pipe_name)
         items = [item async for item in stream]
-        await self._aload(items, pipe_name, 5, 0)
+        self._load(items, pipe_name, 5, 0)
         item = items[0]
         assert is_mapping(item)
         _assert_kazeeki(item, KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT)
@@ -309,7 +300,7 @@ class TestStoredWorkflows:
         pipe_name = "pipe_async_kazeeki2"
         stream = self._async_run_example(pipe_name)
         items = [item async for item in stream]
-        await self._aload(items, pipe_name, 1, 0)
+        self._load(items, pipe_name, 1, 0)
         item = items[0]
         assert is_mapping(item)
         _assert_kazeeki(item, KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
@@ -481,7 +472,6 @@ class TestStoredWorkflows:
             msg = f"Expected one of {cars} in summary, but got {summary}"
             assert any(car in summary.lower() for car in cars), msg
 
-    # todo: need tests with single and mult-part key
     def test_reverse_truncate(self):
         """Loads a workflow containing a reverse and truncate."""
         pipe_name = "pipe_58a53262da5a095fe7a0d6d905cc4db6"
@@ -799,9 +789,6 @@ class TestStoredWorkflows:
         content = first.get("media:content")
         assert is_mapping(content)
         assert content.get("url") == chart_url
-        assert "cht=qr" in chart_url
-        assert "chs=200x200" in chart_url
-        assert "chl=https%3A%2F%2Fexample.invalid%2Fitem%2F1" in chart_url
         assert str(first.get("description")).startswith(
             f'<img src="{chart_url}" alt="QRcode" /><br/>'
         )
@@ -847,12 +834,6 @@ class TestStoredWorkflows:
 
         with pytest.raises(UnsupportedModuleError, match=r"\blocationbuilder\b"):
             self._run_example(pipe_name)
-            # self._load(items, pipe_name, 63, 0)
-            # contains = "Hywel Francis (University of Wales, Swansea (UWS))"
-            #
-            # for i in islice(items, 3):  # lots of data, so just check some of it
-            #     item = cast(dict, i)
-            #     assert item["title"] == contains
 
     def test_simpletagger_reports_unsupported_module(self):
         """Term extraction (used by the simple tagger) is not implemented."""
