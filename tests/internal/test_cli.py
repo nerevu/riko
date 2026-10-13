@@ -16,7 +16,8 @@ from click.testing import CliRunner
 
 from riko.base._paths import ROOT_DIR
 from riko.base.exceptions import InvalidArchitectureError, InvalidPipelineError
-from riko.cli import _codegen, _import_commands, _lint, _upgrade, _workflow
+from riko.cli import _codegen, _import_commands, _lint, _test, _upgrade, _workflow
+from riko.cli._coverage import build_ceiling_text
 from riko.cli._docstyle import summary_leads_with_output
 from riko.cli._lint_canonical_imports import _iter_issues as canonical_issues
 from riko.cli._lint_deps import (
@@ -33,6 +34,7 @@ from riko.cli._lint_import_architecture import (
 from riko.cli._lint_literals import gen_literal_issues
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
 from riko.cli._lint_terms import BANNED_TERMS, BannedTerm, gen_term_issues
+from riko.cli._lint_tests import LayoutIssue, format_layout_issue, gen_layout_issues
 from riko.cli._upgrade import _pin_hooks
 from riko.cli._workflow import read_document, require_workflow
 from riko.cli.manage import manager
@@ -252,6 +254,7 @@ def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
         _lint, "_lint_literals", lambda *_: calls.append("literals") or 0
     )
     monkeypatch.setattr(_lint, "_lint_deps", lambda: calls.append("deps") or 0)
+    monkeypatch.setattr(_lint, "_lint_tests", lambda: calls.append("tests") or 0)
     monkeypatch.setattr(_lint, "_lint_actions", lambda *_: calls.append("actions") or 0)
     monkeypatch.setattr(_lint, "_lint_yaml", lambda *_: calls.append("yaml") or 0)
     monkeypatch.setattr(
@@ -317,12 +320,16 @@ class TestLintCommand:
                     "terms",
                     "literals",
                     "deps",
+                    "tests",
                     "actions",
                     "yaml",
                     "imports",
                 ],
             ),
-            (["--terms", "--literals", "--deps"], ["terms", "literals", "deps"]),
+            (
+                ["--terms", "--literals", "--deps", "--tests"],
+                ["terms", "literals", "deps", "tests"],
+            ),
             (["--check-types", "--strict"], ["types", "strict"]),
         ],
     )
@@ -340,6 +347,87 @@ class TestLintCommand:
 
 PYPROJECT = Path(__file__).parents[2] / "pyproject.toml"
 SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
+
+
+def _coverage_report(root: Path, uncovered: int) -> Path:
+    report = root / "coverage.json"
+    report.write_text(json.dumps({"totals": {"missing_lines": uncovered}}))
+    return report
+
+
+class TestCoverageRatchet:
+    """The ``manage test --ratchet`` uncovered-line ceiling."""
+
+    @pytest.mark.parametrize(
+        ("recorded", "uncovered", "code", "ceiling"),
+        [
+            pytest.param(1249, 1240, 0, "uncovered = 1240", id="gain-lowers"),
+            pytest.param(1249, 1249, 0, "uncovered = 1249", id="equal-holds"),
+            pytest.param(1249, 1250, 1, "uncovered = 1249", id="loss-fails"),
+            pytest.param(None, 1250, 0, "uncovered = 1250", id="first-run-records"),
+        ],
+    )
+    def test_ratchet_holds_or_lowers_the_ceiling(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        recorded: int | None,
+        uncovered: int,
+        code: int,
+        ceiling: str,
+    ) -> None:
+        pyproject = tmp_path / "pyproject.toml"
+        table = (
+            ""
+            if recorded is None
+            else f"[tool.riko.coverage]\nuncovered = {recorded}\n"
+        )
+        pyproject.write_text(f"[project]\nname = 'x'\n{table}")
+        monkeypatch.setattr(_test, "ROOT_DIR", tmp_path)
+
+        assert _test._ratchet_coverage(_coverage_report(tmp_path, uncovered)) == code
+        assert ceiling in pyproject.read_text()
+
+    def test_a_table_without_a_ceiling_line_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="has no uncovered line"):
+            build_ceiling_text("[tool.riko.coverage]\nother = 1\n", 5)
+
+    @pytest.mark.parametrize(
+        ("args", "present", "absent"),
+        [
+            pytest.param(["-q"], "--cov=riko", "--cov-report", id="default"),
+            pytest.param(["-q", "--no-cov"], "--no-cov", "--cov-report", id="no-cov"),
+            pytest.param(["-q", "--ratchet"], "--cov-report=json:", "", id="ratchet"),
+        ],
+    )
+    def test_command_passes_coverage_options_to_pytest(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        args: list[str],
+        present: str,
+        absent: str,
+    ) -> None:
+        calls: list[list[str]] = []
+        monkeypatch.setattr(_test, "_pytest", "pytest")
+        monkeypatch.setattr(_test, "check_call", calls.append)
+        monkeypatch.setattr(_test, "_ratchet_coverage", lambda _: 0)
+
+        result = CliRunner().invoke(_test.TEST_COMMAND, args)
+        command = " ".join(calls[0])
+        assert result.exit_code == 0
+        assert present in command
+        assert not absent or absent not in command
+
+    def test_ratchet_refuses_a_partial_run(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        folders: list[str] = []
+        monkeypatch.setattr(_test, "mkdtemp", lambda: folders.append("made") or "")
+
+        result = CliRunner().invoke(_test.TEST_COMMAND, ["--ratchet", "tests/public"])
+        assert result.exit_code == 2
+        assert "measures the whole suite" in result.output
+        assert folders == []
 
 
 class TestConsoleScripts:
@@ -480,6 +568,176 @@ def _issues(tmp_path: Path, source: str, pyproject: str = PYPROJECT_TOML) -> lis
     config.write_text(pyproject, encoding="utf-8")
     issues = gen_dependency_issues(package, config, DISTRIBUTIONS)
     return [issue.message for issue in issues]
+
+
+_INDEX = """
+Index (file, then the subjects it owns, in file order):
+
+    test_alpha.py    Alpha, Beta
+"""
+
+_ALPHA = """
+class TestAlpha:
+    def test_one(self): ...
+
+
+class TestAsyncAlpha:
+    def test_one(self): ...
+
+
+class TestBeta:
+    def test_two(self): ...
+"""
+
+
+def _write_suite(root: Path, **files: str) -> Path:
+    tests_dir = root / "tests"
+    tier = tests_dir / "public"
+    tier.mkdir(parents=True)
+    (tier / "__init__.py").write_text(f'"""{_INDEX}"""\n', encoding="utf-8")
+    (tier / "test_alpha.py").write_text(_ALPHA * 40, encoding="utf-8")
+
+    for name, text in files.items():
+        path = tests_dir / name.replace("__", "/")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    return tests_dir
+
+
+def _messages(tests_dir: Path) -> list[tuple[str, bool]]:
+    return [(issue.message, issue.fatal) for issue in gen_layout_issues(tests_dir)]
+
+
+class TestLayoutLint:
+    """The indexed test-layout lint check."""
+
+    def test_an_indexed_suite_passes(self, tmp_path: Path) -> None:
+        assert _messages(_write_suite(tmp_path)) == []
+
+    @pytest.mark.parametrize(
+        ("files", "message"),
+        [
+            pytest.param(
+                {"public__test_gamma.py": _ALPHA},
+                "test_gamma.py has no row in __init__.py",
+                id="unindexed-file",
+            ),
+            pytest.param(
+                {"public__test_regressions.py": ""},
+                "name the file for its subject, not its history",
+                id="history-name",
+            ),
+            pytest.param(
+                {"public__helpers.py": ""},
+                "shared helpers belong in a tests/_*.py module",
+                id="helper-in-tier",
+            ),
+            pytest.param(
+                {"test_root.py": ""},
+                "test files live in public, internal, functional",
+                id="root-test-file",
+            ),
+            pytest.param(
+                {"misc__test_x.py": ""},
+                "unexpected folder; tests live in public, internal, functional",
+                id="stray-folder",
+            ),
+        ],
+    )
+    def test_misplaced_files_fail(
+        self, tmp_path: Path, files: dict[str, str], message: str
+    ) -> None:
+        assert (message, True) in _messages(_write_suite(tmp_path, **files))
+
+    @pytest.mark.parametrize(
+        ("addition", "message"),
+        [
+            pytest.param(
+                "\ndef test_loose(): ...\n",
+                "test_loose must live in a Test<Subject> class",
+                id="top-level-test",
+            ),
+            pytest.param(
+                "\nclass TestGamma: ...\n",
+                "TestGamma names no subject in the index row",
+                id="unlisted-class",
+            ),
+            pytest.param(
+                "\nfrom riko.x import _hidden\n",
+                "public tests import supported names: _hidden",
+                id="private-import",
+            ),
+        ],
+    )
+    def test_in_file_departures_fail(
+        self, tmp_path: Path, addition: str, message: str
+    ) -> None:
+        tests_dir = _write_suite(tmp_path)
+        path = tests_dir / "public" / "test_alpha.py"
+        path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+        assert (message, True) in _messages(tests_dir)
+
+    @pytest.mark.parametrize(
+        ("rows", "message"),
+        [
+            pytest.param(None, "the docstring has no test index", id="no-index"),
+            pytest.param(
+                "    test_alpha.py    Alpha, Beta, Alpha\n",
+                "Alpha is indexed under both test_alpha.py and test_alpha.py",
+                id="duplicate-subject",
+            ),
+            pytest.param(
+                "    test_alpha.py    Alpha, Beta\n    test_ghost.py    Ghost\n",
+                "test_ghost.py is indexed but does not exist",
+                id="missing-file",
+            ),
+        ],
+    )
+    def test_index_departures_fail(
+        self, tmp_path: Path, rows: str | None, message: str
+    ) -> None:
+        tests_dir = _write_suite(tmp_path)
+        header = "Index (file, then the subjects it owns, in file order):\n\n"
+        index = "Provides tests." if rows is None else f"{header}{rows}"
+        (tests_dir / "public" / "__init__.py").write_text(f'"""{index}"""\n')
+        assert (message, True) in _messages(tests_dir)
+
+    def test_long_files_get_advice_to_split(self, tmp_path: Path) -> None:
+        tests_dir = _write_suite(tmp_path)
+        (tests_dir / "public" / "test_alpha.py").write_text(_ALPHA * 400)
+        messages = _messages(tests_dir)
+        assert [fatal for _, fatal in messages] == [False]
+        assert "split its largest index row" in messages[0][0]
+
+    @pytest.mark.parametrize(
+        ("fatal", "line", "code"),
+        [
+            pytest.param(True, "a.py:3: error: bad", 1, id="error"),
+            pytest.param(False, "a.py:3: advice: bad", 0, id="advice"),
+        ],
+    )
+    def test_findings_print_and_set_the_exit_code(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        fatal: bool,
+        line: str,
+        code: int,
+    ) -> None:
+        issue = LayoutIssue(Path("a.py"), 3, "bad", fatal=fatal)
+        monkeypatch.setattr(_lint, "gen_layout_issues", lambda _: [issue])
+
+        assert format_layout_issue(issue) == line
+        assert _lint._lint_tests() == code
+        assert line in capsys.readouterr().out
+
+    def test_short_files_get_advice_not_failure(self, tmp_path: Path) -> None:
+        tests_dir = _write_suite(tmp_path)
+        (tests_dir / "public" / "test_alpha.py").write_text(_ALPHA, encoding="utf-8")
+        messages = _messages(tests_dir)
+        assert [fatal for _, fatal in messages] == [False]
+        assert "consider merging" in messages[0][0]
 
 
 class TestDependencyLint:

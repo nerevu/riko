@@ -181,6 +181,8 @@ write/session contracts.
 | `riko/cli/_workflow.py` | shared JSON document front door for the console scripts: `read_document` and the `WorkflowDocument`-only `require_workflow` (the run-it-through-`build-workflow`-first guard for `run-pipe`/`compile-workflow`); `build-workflow` reads any shape through `Workflow.parse` |
 | `riko/cli/{compile,build_workflow,runpipe,benchmark}.py` | standalone console-script implementations, all on canonical Workflow v2: `build-workflow` is the one lenient converter, `compile-workflow` generates from `WorkflowDocument`s only, `run-pipe` runs a script or a `WorkflowDocument`, `benchmark` times `Pipeline` and workflow execution |
 | `riko/cli/{_build,_docs,_docstyle,_lint_deps,_lint_literals,_lint_terms,_release,_shipped_text,_test,_upgrade}.py` | private `manage` command helpers grouped by reason to change |
+| `riko/cli/_lint_tests.py` | `manage lint --tests`: holds `tests/` to the tier indexes in each `tests/<tier>/__init__.py` (every file indexed, every test in a listed `Test<Subject>` class, no private imports in `public/`, size advice) |
+| `riko/cli/_coverage.py` | `manage test --ratchet`'s uncovered-line ceiling (`[tool.riko.coverage] uncovered` in `pyproject.toml`): fail above it, lower it on a gain; dev-only `manage` modules are in `[tool.coverage.run] omit`, console scripts are measured through subprocesses |
 
 Use `_docs/gameplans/dependency-layers.md` when deciding **which package** should own
 new code. Use this file when deciding **which existing module** is the closest home.

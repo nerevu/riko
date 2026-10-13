@@ -170,7 +170,7 @@ non-UTC host `"now"` and `"+1 seconds"` disagree by the host offset (the default
 `tests/internal/test_values.py::TestTryLocalTz::test_relative_offsets_share_the_named_day_zone`.
 
 The same setting covers `typecast`'s date/datetime casts (it has no timezone option today)
-and the pending `dateformat` timezone setting (strict xfail in `tests/functional/test_examples.py`).
+and the pending `dateformat` timezone setting (strict xfail in `tests/functional/test_script.py`).
 
 Related backlog: `riko/base/_dateutils.py` builds its abbreviation table from `pytz`
 (`pytz>=2019.3` in `pyproject.toml`); replace that with `zoneinfo`/`tzdata` and drop the

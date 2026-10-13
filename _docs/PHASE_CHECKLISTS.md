@@ -37,7 +37,7 @@ forward architecture dependency graph in [implementation-sequence.md](gameplans/
 | **P10** bounded parallelism + backpressure | ✅ done | § P10. Execution-wide wiring shipped with R4B: async nodes share one `Semaphore` budget per run; the sync pool honors `ordered`. |
 | **P11** pub/sub + poll protocols | ⬜ pending | `Publisher`/`Subscription`/`.poll`; reshaped by fanout/execution owners and sequenced as R7 after Pipeline execution foundations |
 | **P12** stable errors + events | ⏳ in progress | `RikoError` tree (`riko/base/exceptions.py`) and the `EventSink` transport (`riko/types/_events.py`, exported) shipped; remaining: the feature-owned event payloads (cache, write/action results, pub/sub lifecycle, state) and optional consumers such as OpenTelemetry → [gameplans/events.md](gameplans/events.md) |
-| **P13** public/typing/internal test split | ⬜ pending | `tests/typing/`; test-layering audit + fix/remove/consolidate plan → [gameplans/testing.md](gameplans/testing.md) |
+| **P13** public/typing/internal test split | ⏳ in progress | Layering shipped: indexed public/internal/functional layout, `manage lint --tests`, uncovered-line ratchet (`manage test --ratchet`); remaining: `tests/typing/` → [gameplans/testing.md](gameplans/testing.md) |
 | **P14** extensions outside core | ⬜ pending | `riko-microsoft`, `riko-ai` |
 
 **Milestone 1 (P1–P7): complete** (P10 landed early, out of sequence, at the user's request). **P8

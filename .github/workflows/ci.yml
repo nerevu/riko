@@ -120,4 +120,11 @@ jobs:
           # so source-only changes (new CLI options) never take effect on CI.
           uv pip install --reinstall --no-deps --editable .
       - name: Test
-        run: uv run --no-sync manage test --no-cov
+        run: |
+          # The coverage ceiling is recorded in the full-extras Python 3.12
+          # environment, so only that leg enforces it.
+          if [ "${{ matrix.optional }}" = "true" ] && [ "${{ matrix.python-version }}" = "3.12" ]; then
+            uv run --no-sync manage test --ratchet
+          else
+            uv run --no-sync manage test --no-cov
+          fi

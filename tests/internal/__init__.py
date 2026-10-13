@@ -41,9 +41,9 @@ Index (file, then the subjects it owns, in file order):
                               GenerateModuleNames, GenerateModuleIds, ConfigCodegen,
                               WorkflowFixtures, WorkflowProbes
     test_cli.py               CodegenCommand, UpgradeCommand, ImportsCommand,
-                              LintCommand, ConsoleScripts, Docstyle, TermLint,
-                              LiteralLint, DependencyLint, HookPinLint,
-                              CanonicalImportLint, RelativeImportLint,
+                              LintCommand, CoverageRatchet, ConsoleScripts, Docstyle,
+                              TermLint, LiteralLint, LayoutLint, DependencyLint,
+                              HookPinLint, CanonicalImportLint, RelativeImportLint,
                               ImportArchitectureLint, ValidateGraph, RequireWorkflow,
                               ReadDocument, Timeouts
 """

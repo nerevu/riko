@@ -1031,7 +1031,7 @@ close R4B  →  R4C  →  R4D  →  R5A  →  R7  →  merge next → features
 
 R5B, R5C, R6, and everything after follow the merge. Parity means every strict-xfail tripwire written
 for a retired v1 behavior — execution settings (`test_parallel.py`, `TestExecutionSettings`), local
-pub/sub and split (`TestSubscriptions`, `TestSplit`, the `split` rows in `test_examples.py`), and
+pub/sub and split (`TestSubscriptions`, `TestSplit`, the `split` rows in `test_script.py`), and
 callable nodes (`TestCallableNodes`) — has flipped, with the sole documented exception of per-item
 gating (`skip_if`), whose successor is still undecided. Write execution (`TestPipelineWrite`) is R5C
 and is **not** a parity item. [release-readiness.md § 9.1](release-readiness.md#91-merge-gate-features--main)

@@ -303,10 +303,14 @@ Fixes
 Dev
 ~~~
 
-- Added ``--docstrings``, ``--docs``, ``--terms``, ``--deps``, ``--literals``, and
-  ``--all`` to ``manage lint``. ``manage lint`` no longer takes paths to check.
+- Added ``--docstrings``, ``--docs``, ``--terms``, ``--deps``, ``--literals``, ``--tests``,
+  and ``--all`` to ``manage lint``. ``manage lint`` no longer takes paths to check.
 
 - Added ``manage lint imports`` to check the internal import contracts.
+
+- Added ``manage test --ratchet``, which fails a full-suite run that leaves more
+  statements uncovered than the ceiling recorded in ``pyproject.toml`` and lowers the
+  ceiling when it leaves fewer.
 
 - ``manage prettify --yaml`` now formats only tracked YAML files (like ``manage
   lint --yaml``) instead of everything under the repository root.

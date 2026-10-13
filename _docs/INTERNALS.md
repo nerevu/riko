@@ -162,6 +162,18 @@ sync when source is moved between package groups.
   sync writes. `PYRIGHT_PYTHON_FORCE_VERSION` never reaches tox (not in `pass_env`)
   and must not be added; `[tool.pyright] pythonPlatform = "Linux"` keeps local type
   checks on CI's platform.
+- **Test layout lint.** `manage lint --tests` reads each tier index from the raw
+  `tests/<tier>/__init__.py` docstring (cleaned docstrings lose the row indentation it
+  parses). An `Async<Subject>` class matches its `<Subject>` or `Sync<Subject>` row, so a
+  twin pair takes one index entry. A bare section keyword (`Examples`, `Returns`) on its
+  own index line reads as a docstring section to pydocstyle, so name such subjects longer.
+- **Coverage ratchet.** `manage test --ratchet` counts `missing_lines` from a JSON report
+  written to a fresh temp folder. Coverage runs on the `sysmon` core (Python 3.12
+  `sys.monitoring`; about the cost of a no-coverage run) and measures the console scripts
+  through `patch = ["subprocess"]`. Dev-only `manage` modules are listed in
+  `[tool.coverage.run] omit`, so a new `manage` helper module must join that list. The
+  ceiling is specific to the full dev environment on Python 3.12; other environments run
+  `--no-cov`.
 - **Python 3.12+.** Prefer PEP 695 type parameters and modern union syntax.
 - **Doctests are tests.** Source/docs examples under the configured pytest testpaths
   are collected; avoid copying the same happy-path example into multiple files.

@@ -3,13 +3,43 @@
 """Test runner helpers for the manage CLI."""
 
 import shutil
+from pathlib import Path
 from subprocess import CalledProcessError, check_call
 from sys import exit
+from tempfile import mkdtemp
 
 import click
 
+from riko.base._paths import ROOT_DIR
+
+from ._coverage import (
+    build_ceiling_text,
+    get_ratcheted_ceiling,
+    get_uncovered_ceiling,
+    load_uncovered_lines,
+)
+
 _tox: str | None = shutil.which("tox")
 _pytest: str | None = shutil.which("pytest")
+
+
+def _ratchet_coverage(report: Path) -> int:
+    pyproject = ROOT_DIR / "pyproject.toml"
+    text = pyproject.read_text(encoding="utf-8")
+    uncovered = load_uncovered_lines(report)
+    recorded = get_uncovered_ceiling(text)
+    ceiling = uncovered if recorded is None else recorded
+    ratcheted = get_ratcheted_ceiling(ceiling, uncovered)
+
+    if uncovered > ceiling:
+        print(f"{uncovered} uncovered lines exceed the recorded ceiling of {ceiling}.")
+    elif recorded is None or ratcheted < recorded:
+        pyproject.write_text(build_ceiling_text(text, ratcheted), encoding="utf-8")
+        print(f"{uncovered} uncovered lines; recorded the ceiling as {ratcheted}.")
+    else:
+        print(f"{uncovered} uncovered lines hold the ceiling of {ceiling}.")
+
+    return 1 if uncovered > ceiling else 0
 
 
 @click.command(name="test")
@@ -27,6 +57,12 @@ _pytest: str | None = shutil.which("pytest")
 )
 @click.option("-W", "--watch", help="Rerun tests on file changes", is_flag=True)
 @click.option("-c", "--cov/--no-cov", help="Add coverage report", default=True)
+@click.option(
+    "-R",
+    "--ratchet",
+    help="Fail when uncovered lines exceed the recorded ceiling; lower it on a gain",
+    is_flag=True,
+)
 @click.option(
     "-C",
     "--capture/--no-capture",
@@ -50,6 +86,11 @@ def _test_command(
 ) -> None:
     """Run pytest, tox, and script tests."""
     _where = [*where, *paths]
+    ratchet = bool(kwargs.get("ratchet"))
+    if ratchet and _where:
+        raise click.UsageError("--ratchet measures the whole suite; drop the paths")
+
+    report = Path(mkdtemp()) / "coverage.json" if ratchet else None
 
     if kwargs.get("quiet"):
         verbosity = "q"
@@ -59,7 +100,8 @@ def _test_command(
         verbosity = "v --tb=short -ra"
 
     opts = f"-x{verbosity}" if stop else f"-{verbosity}"
-    opts += " --cov=riko" if kwargs.get("cov") else " --no-cov"
+    opts += " --cov=riko" if kwargs.get("cov") or ratchet else " --no-cov"
+    opts += "" if report is None else f" --cov-report=json:{report}"
     opts += "" if kwargs.get("capture") else " -s"
     opts += " --last-failed" if kwargs.get("failed") else ""
 
@@ -86,6 +128,9 @@ def _test_command(
                 cmd += " -n auto"
 
             check_call([_pytest] + cmd.split(" "))
+
+            if report is not None:
+                exit(_ratchet_coverage(report))
         else:
             raise RuntimeError("pytest not found")
     except CalledProcessError as e:

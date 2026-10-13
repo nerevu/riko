@@ -88,6 +88,17 @@ neighborhood it affects:
    state; docstrings that explain mechanism instead of what the caller gets.
 8. **Doc hygiene** — duplicated table rows or sections, broken cross-references
    the docs lint does not cover, `_docs/` paths in shipped text.
+9. **Test ownership** — for each new or moved test (`manage lint --tests` already
+   holds the file to its index row and class layout): is it in the right tier
+   (functional if it runs a CLI command, `examples` pipeline, or stored fixture end
+   to end; public if it uses only supported names; else internal) and in the file
+   whose index row names its subject? Does a collected doctest or an existing test
+   already assert the same input and outcome? A public symbol's doctest wins over a
+   pytest copy; for a private symbol, trim whichever side the module has more of.
+   Three near-identical bodies belong in one parametrize table, and a regression
+   test goes in its subject's class, never a history-named file. If `manage test
+   --ratchet` reports more uncovered lines, find the lines the change stopped
+   executing before anything else.
 
 Verify every finding against the code before acting on it; drop what you
 cannot substantiate.

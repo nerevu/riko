@@ -121,6 +121,9 @@ The common development commands are:
 ``manage test``
     Run pytest. Paths may be passed positionally or with repeatable ``--where``;
     use ``--no-cov`` for faster focused runs and ``--tox`` for the tox runner.
+    ``--ratchet`` runs the whole suite and fails when it leaves more statements
+    uncovered than the ceiling recorded in ``pyproject.toml``
+    (``[tool.riko.coverage]``); when it leaves fewer, it lowers the ceiling.
 
 ``manage prettify``
     Sort imports, apply Ruff fixes, and format Python. Use ``--where`` to limit
@@ -134,9 +137,11 @@ The common development commands are:
     Run Ruff lint plus ``ruff format --check`` by default. Standard checks may be
     selected additively with ``--rst``, ``--docs``, ``--actions``, ``--yaml``,
     ``--docstrings``, ``--terms`` (phrases the reserved-terms rules replace),
-    ``--literals`` (single-quoted or backticked default values), and
+    ``--literals`` (single-quoted or backticked default values),
     ``--deps`` (imports that ``pyproject.toml`` does not declare, declared
-    dependencies nothing imports, and typing stubs shipped as runtime requirements).
+    dependencies nothing imports, and typing stubs shipped as runtime requirements),
+    and ``--tests`` (test files and classes that depart from the tier indexes in
+    each ``tests/<tier>/__init__.py``).
     ``manage lint --all`` runs all standard checks, including all import-contract ones.
     Type completeness, strict pylint, and distribution checks remain explicit via
     ``--check-types``, ``--verify-types``, ``--strict``, and ``--dist``.
@@ -223,11 +228,12 @@ the repository-wide checks:
 
        uv run manage test --no-cov tests/path/to/test_file.py
 
-5. Run the complete local test suite.
+5. Run the complete local test suite with the coverage ratchet. Keep any
+   lowered ceiling in ``pyproject.toml`` as part of the change.
 
    .. code-block:: bash
 
-       uv run manage test --no-cov
+       uv run manage test --ratchet
 
 6. Run the standard repository lint bundle.
 
@@ -369,10 +375,9 @@ A built-in module change commonly requires work in several places:
        uv run manage codegen --config --names
 
 5. Add or update sync and async tests where both execution paths exist. Place
-   each test by the index in ``tests/__init__.py``: pick the tier, then the file
-   whose row names the test's subject, and put the test in that subject's
-   ``Test<Subject>`` class. An
-   asynchronous test is a native ``async def`` decorated with ``async_test``
+   each test by the rules in ``tests/__init__.py``: pick the tier, then the file
+   whose row in that tier's index names the test's subject, and put the test in
+   that subject's ``Test<Subject>`` class. An asynchronous test is a native ``async def`` decorated with ``async_test``
    from ``tests/__init__.py``. Never wrap a coroutine in a synchronous test
    body. A test stays a plain ``def`` under ``skipif_issync`` only when the
    synchronous path is deliberately what it exercises (for example, the

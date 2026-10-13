@@ -186,7 +186,7 @@ Depends on steps 1–3. Deletes `SyncPipe`, `AsyncPipe`, `PyPipe`, `PyCollection
   --api` regenerates the `_docs/API_SURFACE.md` blocks; update `tests/public/test_modules.py`.
 - Delete/port `tests/public/test_collections.py` (chaining coverage already re-homed, step 0).
 - Scrub docstring/doc references: `riko/modules/__init__.py`, `riko/modules/receive.py`,
-  `README.rst`, `docs/FAQ.rst`, `docs/COOKBOOK.rst`, `tests/functional/test_examples.py` example
+  `README.rst`, `docs/FAQ.rst`, `docs/COOKBOOK.rst`, `tests/functional/test_script.py` example
   flows → v2 `Pipeline`.
 - `docs/CHANGES.rst` + `docs/MIGRATION.rst` entries (clean break, no deprecation wrappers).
 

@@ -27,6 +27,7 @@ from ._lint_deps import (
 )
 from ._lint_literals import format_literal_issue, gen_literal_issues
 from ._lint_terms import format_term_issue, gen_term_issues
+from ._lint_tests import format_layout_issue, gen_layout_issues
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -121,6 +122,16 @@ def _lint_literals(where: str | None = "") -> int:
         print(format_literal_issue(issue))
 
     return 1 if issues else 0
+
+
+def _lint_tests() -> int:
+    """Checks the test suite against its indexed layout."""
+    issues = list(gen_layout_issues(ROOT_DIR / "tests"))
+
+    for issue in issues:
+        print(format_layout_issue(issue))
+
+    return 1 if any(issue.fatal for issue in issues) else 0
 
 
 def _lint_deps() -> int:
@@ -237,6 +248,7 @@ def _check_command() -> None:
 @click.option(
     "--deps", help="Check imports against declared dependencies", is_flag=True
 )
+@click.option("--tests", help="Check the test suite's indexed layout", is_flag=True)
 @click.option("--all", "all_", help="Run every standard lint check", is_flag=True)
 @click.option(
     "-p",
@@ -261,6 +273,7 @@ def _lint_command(
     terms: bool = False,
     literals: bool = False,
     deps: bool = False,
+    tests: bool = False,
     all_: bool = False,
     parallel: bool = False,
 ) -> None:
@@ -281,6 +294,7 @@ def _lint_command(
                 terms,
                 literals,
                 deps,
+                tests,
                 all_,
             )
         )
@@ -306,6 +320,9 @@ def _lint_command(
 
         if deps or all_:
             return_codes.append(_lint_deps())
+
+        if tests or all_:
+            return_codes.append(_lint_tests())
 
         if actions or all_:
             exts = ["yml", "yaml"]

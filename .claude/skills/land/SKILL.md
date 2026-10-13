@@ -62,8 +62,14 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's).
    terms/literals/deps checks, actionlint, YAML, and every import contract, so do not rerun
    `--docs`, `--docstrings`, `--terms`, `--literals`, or `--deps` separately. It does **not** run the type gate.
 5. **Tests**: targeted tests for the touched area first while iterating, then
-   the full suite `manage test --no-cov --quiet` before declaring ready.
-   Doctests are tests here — doc examples run under pytest.
+   the full suite `manage test --ratchet --quiet` before declaring ready.
+   Doctests are tests here — doc examples run under pytest. `--ratchet` fails
+   when the run leaves more statements uncovered than the ceiling in
+   `pyproject.toml` (`[tool.riko.coverage] uncovered`): cover the new or
+   newly-unexecuted lines rather than raising the ceiling (raising it is a
+   judgment call for the user). When it lowers the ceiling, that `pyproject.toml`
+   diff is part of the change — keep it. The ceiling is measured in the full dev
+   environment (`--group dev --all-extras`, Python 3.12).
 6. **Types**: `manage lint --check-types` (never part of `--all`); add
    `--verify-types` for changes to exported surfaces.
 
@@ -97,16 +103,17 @@ unpushed commits it amends, plus at most one new commit for the rest.
    unpushed** commit. If that commit is itself a `fixup! X`, target `X`. Hunks
    with mixed, pushed, or uncommitted blame belong to the new commit.
 3. **Rehearse each target**: confirm the grouped hunks rebase cleanly in a
-   throwaway detached worktree under the scratchpad — never on the user's
+   throwaway detached worktree in a fresh temp folder — never on the user's
    branch:
 
    ```bash
-   git worktree add --detach <scratch>/fixup HEAD
-   cd <scratch>/fixup
+   wt="$(mktemp -d)/fixup"                       # new folder every run; never reused
+   git worktree add --detach "$wt" HEAD
+   cd "$wt"
    git apply --index <hunks-for-target>.patch   # split `git diff` at @@ headers
    git commit -q --no-verify --fixup=<target>   # hooks already ran as gates
    GIT_SEQUENCE_EDITOR=: git rebase -q -i --autosquash <oldest-target>~1
-   cd - && git worktree remove --force <scratch>/fixup
+   cd -
    ```
 
    Rehearse all fixup targets together in one worktree (one patch and
@@ -115,7 +122,8 @@ unpushed commits it amends, plus at most one new commit for the rest.
    means the rehearsal itself is broken: fix it, don't call that a conflict. If
    the rebase stops on a conflict, run `git rebase --abort`, move
    the conflicting target's hunks to the new commit, and rehearse again with the
-   remaining targets. Remove the worktree whatever the outcome. Afterwards
+   remaining targets. Leave the worktree where it is: never delete it; the OS clears
+   its temp folder (git prunes the stale entry once the folder is gone). Afterwards
    `git status` on the user's tree must be unchanged.
 4. **Hand over the commands**: for each target that rehearsed cleanly, give the
    user `git add -p <files>` (naming the hunks to stage), `git commit

@@ -102,31 +102,43 @@ behaviour to pin. That boundary landed at cutover step 3 (2026-09-29): the `Pipe
 rejects an empty DAG with `InvalidPipelineError`, the tripwire is retired, and
 `tests/public/test_workflow.py::TestPipeDag::test_empty_modules_raise_invalid_pipeline` guards it.
 
-## 3. File-by-file audit
+## 3. Layout and enforcement
 
-| Test area | Recommendation | Main changes |
-|---|---|---|
-| `functional/test_basics.py` | **Keep, heavily refactor** | Fix `_load`/`_aload` first. Parametrize the three `augment_entries` fallback cases. Share expected payloads between sync/async Kazeeki tests. `fetchpage` vs `fetchpage_loop` should be parametrized or make the loop test assert loop-specific semantics. Move mocked `_io` and direct `augment_entries` unit tests to internal suites. Keep the legacy JSON/generated-pipeline regressions. |
-| `functional/test_examples.py` | **Keep, consolidate** | Important because `examples/**` is not in pytest's doctest collection. Parametrize `simple1`, `simple2`, `split`, `wired`. `gigs`/`kazeeki` overlap functional fixtures elsewhere; make example tests smaller smoke contracts rather than duplicating huge expected records. |
-| `functional/test_pipeline.py` | **Remove / relocate** | No pytest tests; generated pipeline implementation under a `test_*.py` filename. |
-| `functional/test_script.py` | **Keep, strengthen helper** | CLI/subprocess coverage is distinct. Fix/remove the boolean-comparison path: `fd.readlines()` consumes the stream before `bool(fd.read())`, so that branch always sees empty text. Replace the `SequenceMatcher(...).blocks[0].size == 7` benchmark check with explicit containment of stable benchmark labels. Keep `build-workflow → compile` (validates CLI wiring, not just library functions). |
-| `internal/test_codegen.py` | **Keep, consolidate** | Collapse three taxonomy partition tests into one golden mapping. Fold enum override into the existing parametrization. Remove `test_member_is_shared_object` (public discovery suite owns it). Keep byte drift, order independence, collisions, and provider behavior. **Execute** generated provider code rather than string-searching it. |
-| `internal/test_compile.py` | **Deleted at v1-cutover step 5 (2026-10-03)** | Its v1 compiler subjects went with the compiler. Owners now: codegen↔document parity, describe modes, and determinism in `internal/test_codegen.py`; `GraphIndex` structure in `internal/test_values.py::TestGraphIndex::test_workflow_index_orders_and_indexes`; loop/embed semantics in `internal/test_modules.py`, `internal/test_execution_plan.py`, and `functional/test_basics.py` (`test_loop_subpipe_embed`, `test_loop_count_all_assign`); `pipe_missing` resolution in `internal/test_modules.py`. The v1-only `MALFORMED` `KeyError`/`IndexError` cases have no v2 meaning. |
-| `internal/test_modules.py` | **Keep, trim duplicate rows** | Main truth table is good. `test_lambda_infers_sync_without_isasync`/`test_lambda_needs_explicit_isasync` repeat rows already in `test_resolved_isasync`; retain only the end-to-end async execution test from that class. Keep diagnostics. |
-| `internal/test_values.py` | **Keep, parametrize** | Not duplicated by the `DotDict` doctests (which cover retrieval/conversion). Nine deletion tests → a compact `(source, key, expected)` table covering root/nested/deep, case variation, missing paths. |
-| `internal/test_codegen.py` | **Reduce 4 → 2** | Keep byte equality (`_CONFIGS.read_text() == render()`) and the `FetchTableObjconf → CsvObjconf` inheritance semantic. Delete `test_configs_structure_matches_generated` and `test_every_objconf_has_nonraw_source`: `render()` is built from `objconf_structure()`, so byte equality subsumes both. |
-| `internal/test_modules.py` | **Keep, consolidate cases** | Good diagnostic matrix; parametrize call/annotation shapes. `_inference.py` doctests `map`/`sum`/unknown-call that pytest re-tests — since `_inference` is private, keep the pytest suite and remove those private doctest examples. |
-| `internal/test_modules.py` | **Keep, remove one duplicate** | Rewrite `test_loop_level_field_selects_child_input` to actually isolate `field` (give the parent a second candidate field). Remove `test_loop_has_async_pipe`: the async tests below already prove the interface exists. |
-| `internal/test_parsers.py` | **Keep** | Two focused namespace-regression tests with distinct layers. No redundant coverage. |
-| `internal/test_modules.py` | **Keep, strengthen precedence** | Fix runtime-vs-entry-point test (distinguishable callables). `test_composite_store_first_hit_wins` should put the same name in two stores with different objects; currently the first store is empty, so it proves fallback, not precedence. Public `register(... requires name)` duplicates registry-level validation; one layer suffices. Rename `test_pipeline_delegates_to_compiler` (it proves non-pipeline names route to the module registry). |
-| `internal/test_io.py` | **Keep** | Strong primitives: boundedness, ordering, shared budgets, validation, merge incrementality. Parametrize ordered/unordered empty-source tests if desired. |
-| `public/test_collections.py` | **Keep, split responsibilities** | Doing too much (pub/sub, executors, resource ownership, chaining, parity, module enums). Keep `TestModuleNameEnum` here as the ModuleName owner; remove redundant enum/string equivalence. Share `_ENGINES` for sync/async loopability. Keep pub/sub identity/cleanup + pool ownership. `"hash"` basics exist in README doctests → concentrate on tuple/template/reverse-operator/error variants. |
-| `public/test_pipeline.py` | **Keep** | Compact, contract-focused. Keep the ignored-legacy-kwargs test as compatibility coverage while `Context` still accepts `**kwargs`. |
-| `public/test_modules.py` | **Split public from internal; remove doctest duplication** | Imports implementation objects despite living under `public`. Keep API errors + meaningful public filtering contracts; import from the **defining modules** (the stable `riko` facade is reserved for user-facing docs/examples — internal `riko/` and `tests/` files always import from a symbol's defining module). Move exact metadata derivation, `@operator` inference, direct `count_pipe`, and implementation constants to internal. Basic `list_modules()` type/loopable/subtype/metadata and `list_formats()` happy paths are already FAQ doctests. |
-| `public/test_pipeline.py` | **Keep** | Good boundary vs primitive mechanics: it leaves precise backpressure math to `internal/test_io.py`. Keep result equivalence, ordering, early close, non-materialization. |
-| `public/test_pipeline.py` | **Keep as lifecycle owner** | Large but coherent; sync/async mirroring is intentional. Single owner of exhaustion/reiteration/partial-chain lifecycle behavior. Do not sacrifice readability for LOC. |
-| `public/test_pipeline.py` | **Keep output parity; delete lifecycle class** | `TestOutputParity` is valuable. Remove `TestLifecycleObservableParity`: reiteration and partial-chain are already tested for both engines in `test_pipe_lifecycle.py`, and this file's own docstring says lifecycle parity lives there. |
-| `public/test_modules.py` | **Consolidate** | One stable-surface assertion + one extension-surface assertion replace per-name `hasattr` parametrization. Exact golden-set equality makes `test_no_private_names_in_public_all` redundant. Fold runtime disjointness into the surface test. Keep the `Context` identity shim. Strengthen or rename `test_no_leaked_public_functions` — it only detects functions while claiming the whole surface is exactly `__all__`. |
+The suite is laid out so that placing a test is a lookup, not a judgment. The rules live in the
+test folders themselves — this gameplan does not restate them:
+
+- `tests/__init__.py` (docstring) — the two-step placement rule (tier first: functional, then public,
+  then internal; then the subject's row), the in-file layout (every test in a `Test<Subject>` class,
+  async twin after its sync class, behaviors → rejection tables → strict-xfail tripwires), and the
+  size triggers (split a file past ~2000 lines by moving its largest row out; merge one under ~300).
+- `tests/<tier>/__init__.py` (docstring) — that tier's index: one row per file naming the subjects it
+  owns. Files start coarse (3 public, 8 internal, 2 functional) and split only when unwieldy. Files
+  are named for stable concepts, never mirrored from `riko/` package paths, so package refactors
+  move imports, not tests.
+- Shared helpers live in `tests/_*.py` (`_lifecycle`, `_execution`, `_workflows`, `_loopback`,
+  `_timeouts`); no helper is defined in two test files.
+
+Enforcement:
+
+- `manage lint --tests` (in `--all`, `riko/cli/_lint_tests.py`) fails on an unindexed or missing
+  file, a subject on two rows, a top-level `test_*` function, a `Test*` class whose subject is not on
+  its row, a private name imported in `public/`, a history-named file (`test_regressions`), a helper
+  module inside a tier, or a stray folder; it prints size advice without failing.
+- Ruff `ERA` (commented-out code) is enforced for `tests/` (generated `pyworkflows` excepted).
+- `manage test --ratchet` fails when the full suite leaves more statements uncovered than
+  `[tool.riko.coverage] uncovered` in `pyproject.toml`, and lowers that ceiling on a gain. The
+  ceiling counts uncovered lines rather than a percentage, so losing coverage of existing code and
+  adding untested code both fail it while deleting code never does. It is measured in the full dev
+  environment (Python 3.12, all extras); `/land` and that CI leg run it. Dev-only `manage`
+  tooling is omitted (`[tool.coverage.run] omit`), and the console scripts count through their
+  subprocess runs (`patch = ["subprocess"]`); a new `manage` helper module joins the omit list.
+- `/tidy` § 3.9 asks the judgment questions the lint cannot: right tier and row, and whether a
+  doctest or existing test already owns the case.
+
+Pending: `manage lint --tests` bans only `_private` names in `public/`. The fuller placement rule
+— a public test uses only supported names — would check `public/` imports against
+`riko/base/_api_surface.py`; the `public/` files' imports of non-surface modules need moving or an
+allowlist first.
 
 ### Import-linter coverage gap
 
@@ -138,16 +150,12 @@ type-only graph recorded but not violated; dangling/cyclic/redundant architectur
 deterministic diagnostics; exit codes (analysis error → 2, violation → 1, clean → 0); complete
 `ArchitectureReport` rendering.
 
-### Discovery coverage (post-P9A note)
+### Discovery coverage
 
-The audit's `public/test_fluent_discovery.py` section is **already actioned**: the standalone file
-was dropped in P9A and its coverage folded into `test_collections.py`/`test_modules.py`. Its durable
-recommendations still apply to *those* files: own `Modules.Sources`/`Transforms`, `list_modules`,
-and `describe_module`; prove the enum crosses the pipe boundary with a deterministic module
-(`SyncPipe(Sources.ITEMBUILDER, conf={"attrs": …})` yielding the built item) rather than comparing
-`.name`; keep the graceful `describe_module(unknown) is None` edge; drop assertions that only test
-`StrEnum` (`str(x) == "fetch"`) or that are misnamed (`list(Sinks) == []` catalog state,
-`str(Module.Sources.__name__)`).
+Discovery is owned by `public/test_modules.py` (`TestListModules`, `TestDescribeModule`) and the
+`ModuleName` enum by `public/test_pipeline.py` (`TestModuleNameEnum`). Prove the enum crosses the
+pipe boundary with a deterministic module rather than comparing `.name`; keep the graceful
+`describe_module(unknown) is None` edge; do not add assertions that only test `StrEnum` behavior.
 
 ## 4. Doctest audit
 
@@ -344,6 +352,24 @@ a regression once the contract was decided (type-aware comparison):
 **Remaining.** None — the § 2b regression batch is complete (local repairs fixed, owned rows guarded
 by strict-xfail tripwires).
 
+**Shipped (second pass, 2026-10-13).** A full test-cruft audit (55 files, ~1,680 collected tests)
+landed in four slices:
+
+1. Broken tests repaired: the R9 sqlite tripwire never ran its body (missing fixture) and now pins
+   both live failure modes; a replay-style pub/sub tripwire contradicted the `func=` contract and
+   moved under `PUBSUB_PENDING`; an assertion-free resource test; lint-selector stubs that let
+   `--all` scan the real repo; `lint --strict`'s missing rc file.
+2. Consolidated 55 files into 14 indexed subject files with `Test<Subject>` classes and shared
+   `tests/_*.py` helpers; the collected test-id set was unchanged.
+3. Removed ~62 duplicate cases (pytest copies of public doctests, cross-file repeats, private doctest
+   repeats trimmed on the side the module had more of) and parametrized copy-paste families; every
+   deletion names its covering owner.
+4. Added the § 3 enforcement (`lint --tests`, `ERA`, the uncovered-line ratchet, `/tidy` § 3.9).
+
+Uncovered lines were checked commit by commit: slices 1–2 lost 14 executed lines (lint wrappers
+stubbed out; an evaluated-`ClassVar` branch only a non-postponed module reached), restored by direct
+tests before the ratchet's first ceiling was recorded.
+
 ## 5b. Execution lifetime proofs (R4)
 
 `implementation-sequence.md` R4 adds a proof obligation that does not fit the existing file map, so
@@ -374,24 +400,18 @@ Both guards belong in `tests/internal/`, since they are drift guards rather than
 ## 5c. Write-session coverage (shipped)
 
 The write-session architecture (see [IMPLEMENTED.md § Write sessions](../IMPLEMENTED.md#write-sessions--private-seam-awaiting-writenode)) ships
-with its behavior proven across three files, laid out by the same ownership rule as § 1:
+with its behavior proven in two files, laid out by the same ownership rule as § 1:
 
-- `tests/internal/test_definitions.py` — the capability model: `appendable` derives from `modes`,
-  `serializes` derives from a resolved `fmt`, `keyed_modes` is the union of both keyed sets, the
-  match/idempotent sets cannot overlap and must be subsets of `modes`; `File × {CSV, JSONL, JSON}`
-  capability rows; and the key-validation matrix (match-keyed requires keys, idempotent mode accepts
-  keys-or-none, unkeyed mode rejects keys, duplicate/empty keys rejected).
-- `tests/internal/test_definitions.py` — session behavior: the whole-stream converter path calls the
-  converter once (no per-record regression) while passthrough invokes the singleton adapter per item;
-  CSV header/schema/append-boundary cases; JSONL one-value-per-line with exactly one final terminator
-  and no bracket surgery; framed JSON/GeoJSON stage-then-publish-once with abort discarding the staged
-  document; the `_SessionState` transitions and misuse (write-after-finalize/abort rejected, double
-  finalize/teardown safe, teardown never commits); and the passthrough host proof that
-  `SyncPipe(...).hash().write(...)` does not run `hash` twice and `SyncCollection(...).write(...)` never
-  touches a nonexistent `self.name`.
+- `tests/internal/test_definitions.py` — the capability model (`appendable` derives from `modes`,
+  `serializes` from a resolved `fmt`, `keyed_modes` is the union of both keyed sets, match/idempotent
+  sets never overlap and stay subsets of `modes`; `File × {CSV, JSONL, JSON}` rows; the
+  key-validation matrix) and session behavior (one converter call on the whole-stream path,
+  per-item passthrough; CSV header/schema/append boundaries; JSONL one value per line with one final
+  terminator; framed JSON/GeoJSON stage-then-publish-once with abort discarding the staged document;
+  the `_SessionState` transitions and misuse).
 - `tests/public/test_pipeline.py` — the public surface: `write()` passthrough yields each input once,
-  `sink()` returns a `WriteResult` (not a tuple) for both sync and async, and the async error text
-  carries no pub/sub language.
+  `sink()` returns a `WriteResult` for both sync and async, and the async error text carries no
+  pub/sub language; the pending `Pipeline.write` tripwires sit beside them.
 
 For incremental formats these tests deliberately do **not** assert rollback of already-written bytes.
 When R4B/R5C take over session-lifetime ownership, they reuse this same contract rather than

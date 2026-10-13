@@ -145,6 +145,7 @@ extend-select = [
     "T20",  # flake8-print
     "PT",   # flake8-pytest-style
     "PLC0415", # Import not at top of file
+    "ERA",  # eradicate: commented-out code (tests only; see per-file ignores)
 ]
 
 ignore = [
@@ -196,7 +197,12 @@ split-on-trailing-comma = false
     "S102",   # Use of `exec` detected
 ]
 
+"riko/**/*" = [
+    "ERA001",  # Commented-out code (enforced in tests only)
+]
+
 "tests/pyworkflows/*" = [
+    "ERA001",  # Commented-out code (generated fixture data)
     "E501",  # Line too long (generated fixture data)
     "N999",  # Invalid module name
     "N802",  # Function name
@@ -255,6 +261,35 @@ filterwarnings = [
     "default::DeprecationWarning",
     "default::PendingDeprecationWarning",
 ]
+
+[tool.coverage.run]
+# Python 3.12's sys.monitoring tracer: line coverage at a fraction of the default cost.
+core = "sysmon"
+# Console scripts run as subprocesses in the functional tests; measure them there.
+patch = ["subprocess"]
+# Dev-only `manage` tooling is not shipped behavior, so it does not count toward the
+# uncovered-line ceiling. The console scripts and their `_workflow` front door do.
+omit = [
+    "*/riko/cli/manage.py",
+    "*/riko/cli/_build.py",
+    "*/riko/cli/_codegen.py",
+    "*/riko/cli/_coverage.py",
+    "*/riko/cli/_docs.py",
+    "*/riko/cli/_docstyle.py",
+    "*/riko/cli/_gen_*.py",
+    "*/riko/cli/_import_*.py",
+    "*/riko/cli/_lint*.py",
+    "*/riko/cli/_release.py",
+    "*/riko/cli/_shipped_text.py",
+    "*/riko/cli/_test.py",
+    "*/riko/cli/_upgrade.py",
+]
+
+[tool.riko.coverage]
+# Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
+# environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
+# above it and lowers it on a gain.
+uncovered = 584
 
 [tool.pylint.format]
 max-line-length=88
