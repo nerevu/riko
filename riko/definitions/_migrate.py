@@ -34,7 +34,7 @@ from riko.types._workflow import (
     RawNode,
     RawWorkflow,
 )
-from riko.types.modules import AnyModuleConf, CallOptions, Conf, WriteConf
+from riko.types.modules import CallOptions, Conf, WriteConf, require_module_conf
 
 from ._nodes import optional_str
 from ._normalize import resolve_port
@@ -157,7 +157,7 @@ def _migrate_pipe_module(module: PipeModule) -> RawNode:
     conf = _lower_keys(module["conf"])
 
     if (name := module["type"]) == _WRITE:
-        write_conf = require_write_conf(cast("AnyModuleConf", conf))
+        write_conf = require_write_conf(require_module_conf(conf))
         require_base_pipe(module)
         node = RawNode(
             {

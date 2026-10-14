@@ -443,7 +443,7 @@ ADAPTERS = [
 ]
 
 
-class TestCrossModeAdaptation:
+class TestEmbedAdaptation:
     @pytest.mark.parametrize(("adapt", "isasync"), ADAPTERS)
     def test_adapt_embed_copies_metadata(self, adapt, isasync: bool) -> None:
         stub = _EmbedStub()

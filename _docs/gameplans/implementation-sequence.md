@@ -1066,6 +1066,31 @@ that annotation (making `get_conf_type` the contract reader) or keeps the contra
 `ModuleDefinition` alone and deprecates `get_conf_type`. Keeping both is the second carrier the exit
 forbids. Do not wire the runtime to instantiate `get_conf_type(parser)` ahead of this decision.
 
+Open decision (triaged 2026-10-13): prepared conf immutability. `PreparedModule` (`riko/modules/_prepare.py`)
+is a frozen record, but its `conf` is a plain mutable dict (`Module.prepare` passes the merged
+`DotDict(...).asdict()`). An omitted conf gets a fresh empty dict per instance (a field factory),
+so no dict is shared, but each one can still be mutated. Nothing writes to `prepared.conf` today,
+and `ModuleNode.conf` upstream is already frozen JSON, so this is a latent hazard against the
+"immutable definitions" invariant, not a live bug. R4E owns it because the fix belongs with the conf contract:
+
+- **Target:** parse a node's conf once into a frozen, typed per-module config object and store that on
+  `PreparedModule` (the shape Dagster `Config` and pydantic-settings use). The generated
+  `<Name>Objconf` classes are typed but are mutable `DynamicConf` views built per item after
+  resolution, and a dynamic conf (one naming a per-item terminal) must represent its unresolved
+  references, so this is a contract redesign, not a type swap.
+- **Interim, sized 2026-10-13:** mark every key of the conf `TypedDict`s `ReadOnly[...]` (PEP 705; no
+  class-wide flag exists). A scripted rewrite of `riko/types/modules.py` wraps 247 keys across 89
+  classes and adds no pyright errors (no code writes into a conf `TypedDict`). It needs two helpers to
+  look through `ReadOnly[...]`: `_get_key_qualifier` (`riko/types/_collections.py`), without which
+  `typed_dict_keys` misreads `Required`/`NotRequired` in 27 conf types; and `_strip_required`
+  (`riko/cli/_gen_config.py`), without which regenerating `_configs.py` changes 127 lines and the
+  codegen drift test fails. Enforcement is static only.
+- **Rejected:** deep-freezing with `freeze_json` (real confs carry non-JSON values such as NaN, and
+  seven consumers are typed for a plain `Conf`); a `MappingProxyType` view (it cannot be pickled, and
+  the process executor ships `PreparedModule`); defensive copies at each hand-off (convention only).
+
+Do not freeze `PreparedModule.conf` or flip the conf keys to `ReadOnly` ahead of this decision.
+
 Out of scope: action-params and target-config validation (R5C contracts), declared ports and fan-in
 arity (their own E3.9 rows), and `ModuleNode.options` validation beyond what the contract already
 types. Unknown keyword arguments on a direct module call (`hash.pipe(items, bogus=1)`) also stay

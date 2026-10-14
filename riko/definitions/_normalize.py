@@ -75,7 +75,7 @@ class WorkflowFields(TypedDict):
 _ALIASES: Mapping[str, Mapping[str, str]] = {"node": {"format": "fmt"}, "edge": {}}
 _REJECTED_EDGE_KEYS = frozenset({"src", "tgt", "from", "to"})
 
-require_endpoint = require_from_attrs(Endpoint, exclude={"port"})
+require_endpoint = require_from_attrs(Endpoint, not_required={"port"})
 require_edge = require_from_attrs(Edge)
 require_raw_workflow = require_from_typed_dict(RawWorkflow, "Workflow")
 

@@ -46,7 +46,7 @@ from riko.bado.itertools import (
 )
 from riko.definitions._context import Context
 from riko.parsing._dotdict import DotDict
-from riko.parsing.config import conf_is_dynamic, get_field, get_skip, resolve_conf
+from riko.parsing.config import get_field, get_skip
 from riko.types._collections import require_from_typed_dict, typed_dict_keys
 from riko.types._compiler import CountValues, EmbedKwargs
 from riko.types._enums import BasicCastType
@@ -69,7 +69,7 @@ from riko.types._streams import (
     StreamOrValueStream,
 )
 from riko.types._wrappers import PreparedCall, stamp_wrapper_meta
-from riko.types.modules import CallOptions, ContextOverrides
+from riko.types.modules import CallOptions, Conf, ContextOverrides, require_conf
 
 from ._assignment import build_assignment, gen_assignments
 from ._derive import get_module_subtypes, is_loopable
@@ -136,7 +136,7 @@ if TYPE_CHECKING:
         SyncSubPipe,
         TerminalName,
     )
-    from riko.types.modules import Conf, ModuleType
+    from riko.types.modules import ModuleType
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -392,7 +392,7 @@ class Module[B: (Literal[True], Literal[False])]:
 
         module_conf = DotDict(self.defaults)
         module_conf.update(conf or {})
-        _conf = cast("Conf", module_conf.asdict())
+        _conf = require_conf(module_conf.asdict())
 
         if _emit and assign and not callable(_emit):
             msg = f"Assign is set to {assign} for {module_name} but will be "
@@ -405,26 +405,11 @@ class Module[B: (Literal[True], Literal[False])]:
         if "count" in options:
             opts["count"] = options["count"]
 
-        sentinels = dict.fromkeys(terminals)
-
-        if self._opts.get("ptype") == BasicCastType.NONE:
-            is_dynamic, static_conf = False, None
-        elif conf_is_dynamic(_conf, memoize=False, **sentinels):
-            is_dynamic, static_conf = True, None
-        else:
-            is_dynamic = False
-            static_conf = resolve_conf(None, conf=_conf, memoize=True)
-
         return PreparedModule(
             name=module_name,
             conf=_conf,
             opts=opts,
-            assign=_assign,
-            emit=_emit,
-            is_source=is_source,
-            is_dynamic=is_dynamic,
             terminals=terminals,
-            static_conf=static_conf,
             defaults=self.defaults,
         )
 

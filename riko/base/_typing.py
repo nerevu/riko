@@ -1,13 +1,87 @@
 # vim: sw=4:ts=4:expandtab
-"""Runtime type-hint resolution helpers for PEP 563 annotations."""
+"""Runtime type-hint helpers: PEP 563 resolution and alias/union decomposition."""
 
 from __future__ import annotations
 
-from types import ModuleType
-from typing import TYPE_CHECKING, Any, get_type_hints
+from types import ModuleType, UnionType
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    TypeAliasType,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterator, Mapping
+
+
+def resolve_alias(annotation: object) -> object:
+    """
+    Resolves a ``type`` alias to the annotation it names.
+
+    An alias may name another alias (``type A = B``; ``type B = int``), so this
+    follows the chain to its end. Any other annotation passes through.
+
+    Args:
+
+        annotation: The annotation to resolve.
+
+    Returns:
+
+        The annotation the alias chain ends at, or ``annotation`` itself.
+
+    Examples:
+
+        >>> type Count = int
+        >>> type Total = Count
+        >>> resolve_alias(Total), resolve_alias(str)
+        (<class 'int'>, <class 'str'>)
+
+    """
+    while isinstance(annotation, TypeAliasType):
+        annotation = annotation.__value__
+
+    return annotation
+
+
+def gen_union_members(annotation: object) -> Iterator[object]:
+    """
+    Generates the arms of an annotation once aliases, unions, and ``Annotated`` go.
+
+    Aliases are resolved and unions flattened at every level, and ``Annotated[T, ...]``
+    yields the arms of ``T``. Anything else is one arm.
+
+    Args:
+
+        annotation: The annotation to decompose.
+
+    Yields:
+
+        Each arm in declaration order.
+
+    Examples:
+
+        >>> from typing import Annotated
+        >>>
+        >>> type Number = int | float
+        >>> list(gen_union_members(Annotated[Number, "units"] | str))
+        [<class 'int'>, <class 'float'>, <class 'str'>]
+
+    """
+    annotation = resolve_alias(annotation)
+    origin = get_origin(annotation)
+
+    if origin is Union or origin is UnionType:
+        for arg in get_args(annotation):
+            yield from gen_union_members(arg)
+    elif origin is Annotated:
+        yield from gen_union_members(get_args(annotation)[0])
+    else:
+        yield annotation
 
 
 def resolve_type_hints(

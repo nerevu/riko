@@ -27,6 +27,7 @@ from attrs import Attribute, AttrsInstance, validators
 from typing_extensions import TypeForm
 
 from riko.base._iterutils import map_values
+from riko.base._typing import gen_union_members
 from riko.base.exceptions import InvalidPipelineError
 
 from ._guards import is_attrs_inst, is_conf_rule, is_mapping, require_mapping
@@ -107,11 +108,25 @@ type RikoValue = PrimitiveValue | RikoList
 # Other
 @runtime_checkable
 class TypeRequire[T, R](Protocol):
+    """
+    A guard that narrows a value to ``R``.
+
+    ``what`` names the value in error messages. The ``*_from_require`` helpers turn
+    any such guard into an attrs converter or validator.
+    """
+
     def __call__(self, value: T, what: str | None = None, **_: Any) -> R: ...  # noqa: E704
 
 
 @runtime_checkable
 class InstanceRequire[T, R](Protocol):
+    """
+    A guard that narrows a value to ``cls``, as ``require_instance`` does.
+
+    The helpers that accept it bind the class first, which also types their result
+    for that class.
+    """
+
     def __call__(  # noqa: E704
         self, cls: type[R], value: T, what: str | None = None, **_: Any
     ) -> R: ...
@@ -264,7 +279,38 @@ def _require_typed_dict_class(item: TypeForm[object]) -> type:
 
 
 def typed_dict_keys[T](item: TypeForm[T]) -> tuple[frozenset[str], frozenset[str]]:
-    """Obtains the semantic required and optional keys of a TypedDict."""
+    """
+    Gets a TypedDict's required and optional keys.
+
+    A ``Required``/``NotRequired`` qualifier wins over the class's totality, even in a
+    string annotation that was never evaluated, which ``__required_keys__`` alone
+    can miss.
+
+    Args:
+
+        item: The TypedDict to inspect.
+
+    Returns:
+
+        The required keys, then the optional keys.
+
+    Raises:
+
+        TypeError: If ``item`` is not a TypedDict class.
+
+    Examples:
+
+        >>> from typing import NotRequired, TypedDict
+        >>>
+        >>> class Embed(TypedDict):
+        ...     name: str
+        ...     id: NotRequired[str]
+        >>>
+        >>> required, optional = typed_dict_keys(Embed)
+        >>> sorted(required), sorted(optional)
+        (['name'], ['id'])
+
+    """
     cls = _require_typed_dict_class(item)
     required = set(cls.__required_keys__)
     optional = set(cls.__optional_keys__)
@@ -282,32 +328,130 @@ def typed_dict_keys[T](item: TypeForm[T]) -> tuple[frozenset[str], frozenset[str
     return frozenset(required), frozenset(optional)
 
 
+def require_from_keys[V](
+    required: Collection[str],
+    allowed: Collection[str],
+    what: str | None = "value",
+    *,
+    error: type[Exception] = InvalidPipelineError,
+) -> TypeRequire[Mapping[str, V], dict[str, V]]:
+    """
+    Builds a guard that requires a mapping's keys to fit explicit key sets.
+
+    Use ``require_from_typed_dict`` or ``require_from_attrs`` instead when the keys
+    come from a TypedDict or an attrs class respectively since they derive the key sets.
+
+    Args:
+
+        required: The keys that must be present.
+        allowed: The keys that may be present (every required key is allowed).
+        what: The name used in error messages.
+
+    Kwargs:
+
+        error: The exception raised for an unknown or missing key.
+
+    Returns:
+
+        A guard that returns a copy of the mapping.
+
+    Examples:
+
+        >>> require_point = require_from_keys({"x"}, {"y"}, "point")
+        >>> require_point({"x": 1, "y": 2})
+        {'x': 1, 'y': 2}
+        >>> require_point({"y": 2})
+        Traceback (most recent call last):
+            ...
+        riko.base.exceptions.InvalidPipelineError: ...missing point key(s): ['x']
+        >>> require_point({"x": 1, "z": 3})
+        Traceback (most recent call last):
+            ...
+        riko.base.exceptions.InvalidPipelineError: ...unknown point key(s): ['z']
+
+    """
+    _required = frozenset(required)
+    _allowed = _required.union(allowed)
+    default_what = what
+
+    def require(value: Mapping[str, V], what: str | None = None, **_) -> dict[str, V]:
+        """Confirms a mapping has only the allowed keys and all required ones."""
+        what = default_what if what is None else what
+        keys = set(value)
+
+        if unknown := keys - _allowed:
+            raise error(f"unknown {what} key(s): {sorted(unknown)}")
+        elif missing := _required - keys:
+            raise error(f"missing {what} key(s): {sorted(missing)}")
+
+        return dict(value)
+
+    return require
+
+
 def require_from_typed_dict[T](
     item: TypeForm[T],
     what: str | None = None,
     *,
     exclude: Collection[str] = (),
+    not_required: Collection[str] = (),
     extra: Collection[str] = (),
     error: type[Exception] = InvalidPipelineError,
 ) -> TypeRequire[Mapping[str, object], T]:
+    """
+    Builds a guard that requires a mapping's keys to fit a TypedDict.
+
+    Equivalent to ``require_from_form`` if you don't need ``exclude``, ``not_required``,
+    or ``extra``. Use ``require_from_form`` instead if you need to check against
+    a tuple of TypedDicts.
+
+    Args:
+
+        item: The TypedDict whose keys the mapping must fit.
+        what: The name used in error messages (default: the TypedDict's name).
+
+    Kwargs:
+
+        exclude: Keys of ``item`` the mapping must not have.
+        not_required: Required keys of ``item`` the mapping may leave out.
+        extra: Keys outside ``item`` the mapping may also have.
+        error: The exception raised for an unknown or missing key.
+
+    Returns:
+
+        A guard that returns the mapping as a new ``item``.
+
+    Raises:
+
+        TypeError: If ``item`` is not a TypedDict class.
+
+    Examples:
+
+        >>> from typing import TypedDict
+        >>>
+        >>> class Point(TypedDict):
+        ...     x: int
+        ...     y: int
+        >>>
+        >>> require_from_typed_dict(Point, not_required={"y"})({"x": 1})
+        {'x': 1}
+        >>> require_from_typed_dict(Point, exclude={"y"})({"x": 1, "y": 2})
+        Traceback (most recent call last):
+            ...
+        riko.base.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
+
+    """
     cls = _require_typed_dict_class(item)
     _required, _optional = typed_dict_keys(cls)
-    default_what = cls.__name__ if what is None else what
     excluded = frozenset(exclude)
-    required = _required - excluded
+    required = _required - excluded - frozenset(not_required)
     allowed = ((_required | _optional) - excluded).union(extra)
+    default_what = cls.__name__ if what is None else what
+    check = require_from_keys(required, allowed, default_what, error=error)
 
     def require(value: Mapping[str, object], what: str | None = None, **_) -> T:
         """Confirms a mapping has only the TypedDict's keys and all required ones."""
-        what = default_what if what is None else what
-        keys = set(value)
-
-        if unknown := keys - allowed:
-            raise error(f"unknown {what} key(s): {sorted(unknown)}")
-        elif missing := required - keys:
-            raise error(f"missing {what} key(s): {sorted(missing)}")
-
-        return cls(**value)
+        return cls(**check(value, what))
 
     return require
 
@@ -346,26 +490,56 @@ def require_from_attrs[T: AttrsInstance, V](
     what: str | None = None,
     *,
     exclude: Collection[str] = (),
+    not_required: Collection[str] = (),
     extra: Collection[str] = (),
     error: type[Exception] = InvalidPipelineError,
 ) -> TypeRequire[Mapping[str, V], dict[str, V]]:
+    """
+    Builds a guard that requires a mapping's keys to fit an attrs ``__init__``.
+
+    Use ``require_instance`` instead to check a ``cls`` instance. This guard checks a
+    mapping meant to build one.
+
+    Args:
+
+        cls: The attrs class whose ``__init__`` arguments the mapping must fit.
+        what: The name used in error messages (default: the class name).
+
+    Kwargs:
+
+        exclude: Arguments of ``cls`` the mapping must not have.
+        not_required: Required arguments of ``cls`` the mapping may leave out.
+        extra: Keys outside ``cls`` the mapping may also have.
+        error: The exception raised for an unknown or missing key.
+
+    Returns:
+
+        A guard that returns a copy of the mapping.
+
+    Examples:
+
+        >>> @attrs.define
+        ... class Point:
+        ...     x: int
+        ...     y: int
+        >>>
+        >>> require_from_attrs(Point, not_required={"y"})({"x": 1})
+        {'x': 1}
+        >>> require_from_attrs(Point, not_required={"y"})({"y": 2})
+        Traceback (most recent call last):
+            ...
+        riko.base.exceptions.InvalidPipelineError: ...missing Point key(s): ['x']
+        >>> require_from_attrs(Point, exclude={"y"})({"x": 1, "y": 2})
+        Traceback (most recent call last):
+            ...
+        riko.base.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
+
+    """
+    excluded = frozenset(exclude)
+    required = required_attrs_keys(cls) - excluded - frozenset(not_required)
+    allowed = (field_names(cls) - excluded).union(extra)
     default_what = cls.__name__ if what is None else what
-    required = required_attrs_keys(cls) - frozenset(exclude)
-    allowed = field_names(cls).union(extra)
-
-    def require(value: Mapping[str, V], what: str | None = None, **_) -> dict[str, V]:
-        """Confirms a mapping has only the attrs' keys and all required ones."""
-        what = default_what if what is None else what
-        keys = set(value)
-
-        if unknown := keys - allowed:
-            raise error(f"unknown {what} key(s): {sorted(unknown)}")
-        elif missing := required - keys:
-            raise error(f"missing {what} key(s): {sorted(missing)}")
-
-        return dict(value)
-
-    return require
+    return require_from_keys(required, allowed, default_what, error=error)
 
 
 @overload
@@ -459,8 +633,46 @@ def def_from_typed_dict[T, D](
     what: str | None = None,
     exclude: Collection[str] = (),
     extra: Collection[str] = (),
+    *,
+    not_required: Collection[str] = (),
 ) -> DefFunc[Mapping[str, object], T | D | None]:
-    require = require_from_typed_dict(item, what, exclude=exclude, extra=extra)
+    """
+    Adapts a TypedDict to an attrs converter that ignores ``None``s.
+
+    A ``None`` value becomes ``default``. Anything else is checked against the
+    TypedDict.
+
+    Args:
+
+        item: The TypedDict whose keys the mapping must fit.
+        default: The result for ``None``.
+        what: The name used in error messages (default: the TypedDict's name).
+        exclude: Keys of ``item`` the mapping must not have.
+        extra: Keys outside ``item`` the mapping may also have.
+
+    Kwargs:
+
+        not_required: Required keys of ``item`` the mapping may leave out.
+
+    Returns:
+
+        A one-argument converter.
+
+    Examples:
+
+        >>> from typing import TypedDict
+        >>>
+        >>> class Point(TypedDict):
+        ...     x: int
+        >>>
+        >>> to_point = def_from_typed_dict(Point, default={"x": 0})
+        >>> to_point(None), to_point({"x": 1})
+        ({'x': 0}, {'x': 1})
+
+    """
+    require = require_from_typed_dict(
+        item, what, exclude=exclude, not_required=not_required, extra=extra
+    )
     return def_from_require(require, default=default, what=what)
 
 
@@ -595,8 +807,50 @@ def validator_from_typed_dict[T](
     optional: bool = False,
     exclude: Collection[str] = (),
     extra: Collection[str] = (),
-):
-    require = require_from_typed_dict(item, what, exclude=exclude, extra=extra)
+    *,
+    not_required: Collection[str] = (),
+) -> AttrsValidator[object]:
+    """
+    Builds an attrs validator that checks a mapping's keys against a TypedDict.
+
+    Args:
+
+        item: The TypedDict whose keys the mapping must fit.
+        what: The name used in error messages (default: the TypedDict's name).
+        optional: Whether ``None`` skips the check.
+        exclude: Keys of ``item`` the mapping must not have.
+        extra: Keys outside ``item`` the mapping may also have.
+
+    Kwargs:
+
+        not_required: Required keys of ``item`` the mapping may leave out.
+
+    Returns:
+
+        An attrs validator.
+
+    Examples:
+
+        >>> from typing import TypedDict
+        >>>
+        >>> class Point(TypedDict):
+        ...     x: int
+        >>>
+        >>> @attrs.define
+        ... class Shape:
+        ...     origin: dict = attrs.field(validator=validator_from_typed_dict(Point))
+        >>>
+        >>> Shape({"x": 1}).origin
+        {'x': 1}
+        >>> Shape({"y": 1})
+        Traceback (most recent call last):
+            ...
+        riko.base.exceptions.InvalidPipelineError: ...unknown Shape 'origin' key(s)...
+
+    """
+    require = require_from_typed_dict(
+        item, what, exclude=exclude, not_required=not_required, extra=extra
+    )
     return validator_from_require(require, optional=optional)
 
 
@@ -609,7 +863,29 @@ def require_instance[T](
     **_,
 ) -> T:
     """
-    Narrows ``value`` to an instance of ``cls`` or raises ``error`` otherwise.
+    Narrows ``value`` to an instance of ``cls``, or raises ``error`` otherwise.
+
+    Use ``require_from_form`` instead to pass an alias or union of classes. Combine with
+    ``validator_from_require`` or ``def_from_require`` to build an attrs validator or
+    converter for one class.
+
+    Args:
+
+        cls: The class ``value`` must be an instance of.
+        value: The value to check.
+        what: The name used in the error message.
+
+    Kwargs:
+
+        error: The exception raised when ``value`` isn't a ``cls``.
+
+    Returns:
+
+        ``value``, typed as ``cls``.
+
+    Raises:
+
+        error: If ``value`` isn't an instance of ``cls``.
 
     Examples:
 
@@ -701,11 +977,132 @@ def require_instances[K, T](  # noqa: E302
 require_str = partial(require_instance, str)
 
 
+def require_from_form[T](
+    form: TypeForm[T],
+    what: str | None = None,
+    *,
+    error: type[Exception] = InvalidPipelineError,
+) -> TypeRequire[object, T]:
+    """
+    Builds a guard that narrows a value to a type.
+
+    Use it when all you have is the type, such as a union or an alias of one:
+
+    - An alias is checked as the type it names.
+    - A lone class is checked with ``require_instance``.
+    - A lone TypedDict is checked with ``require_from_typed_dict``, so unknown and
+      missing keys raise.
+    - A union passes a value that matches any member, and any mapping matches a
+      TypedDict member no matter its keys.
+
+    Use ``require_instance`` instead to build a validator or converter for one class,
+    e.g., ``validator_from_require(require_instance, bool)``. Use
+    ``require_from_typed_dict`` instead when you need ``exclude``, ``not_required``,
+    or ``extra``.
+
+    Args:
+
+        form: The type the guard narrows to.
+        what: The name used in error messages (default: the name of ``form``).
+
+    Kwargs:
+
+        error: The exception raised for a value that doesn't fit.
+
+    Returns:
+
+        A guard that returns the value typed as ``form``.
+
+    Raises:
+
+        TypeError: If ``form`` contains anything other than classes and TypedDicts.
+
+    Examples:
+
+        >>> from typing import Literal, TypedDict
+        >>>
+        >>> class Point(TypedDict):
+        ...     x: int
+        >>>
+        >>> type Shape = Point | int
+        >>> type Coord = Shape | str
+        >>> require_from_form(Point)({"y": 1})
+        Traceback (most recent call last):
+            ...
+        riko.base.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
+        >>> require_from_form(int)("1")
+        Traceback (most recent call last):
+            ...
+        riko.base.exceptions.InvalidPipelineError: ...int must be of type int, not str
+        >>> require_coord = require_from_form(Coord, error=TypeError)
+        >>> require_coord({"y": 1})
+        {'y': 1}
+        >>> require_coord("a")
+        'a'
+        >>> require_coord(1.5)
+        Traceback (most recent call last):
+            ...
+        TypeError: Coord must be of type int | str | mapping, not float
+        >>> require_from_form(Literal["a"])
+        Traceback (most recent call last):
+            ...
+        TypeError: typing.Literal['a'] is not a class or TypedDict
+
+    """
+    default_what = getattr(form, "__name__", "value") if what is None else what
+    leaves = tuple(gen_union_members(form))
+    classes = tuple(leaf for leaf in leaves if isinstance(leaf, type))
+    shapes = tuple(cls for cls in classes if not is_typeddict(cls))
+
+    if unsupported := [leaf for leaf in leaves if not isinstance(leaf, type)]:
+        raise TypeError(f"{unsupported[0]!r} is not a class or TypedDict")
+    elif len(classes) == 1 and not shapes:
+        typed = require_from_typed_dict(classes[0], default_what, error=error)
+
+        def check(value: object, what: str) -> object:
+            return typed(require_mapping(value, what, error=error), what)
+
+    elif len(classes) == 1:
+        check = partial(require_instance, classes[0], error=error)
+    else:
+        is_mappable = len(shapes) < len(classes)
+        names = [cls.__name__ for cls in shapes] + (["mapping"] if is_mappable else [])
+        expected = f"of type {' | '.join(names)}" if shapes else "a mapping"
+
+        def check(value: object, what: str) -> object:
+            if not (isinstance(value, shapes) or (is_mappable and is_mapping(value))):
+                raise error(f"{what} must be {expected}, not {type(value).__name__}")
+
+            return value
+
+    def require(value: object, what: str | None = None, **_) -> T:
+        """Narrows ``value`` to ``form``."""
+        return cast("T", check(value, default_what if what is None else what))
+
+    return require
+
+
 def instances_freezer[T](
     cls: type[T], what: str, *, error: type[Exception] = InvalidPipelineError
 ) -> Freezer[T]:
     """
     Builds a freezer that requires every value of a mapping to be a ``cls`` instance.
+
+    Pass it to ``mapping_converter`` or ``optional_mapping_converter`` for a field
+    whose values must all share one type.
+
+    Args:
+
+        cls: The class every value must be an instance of.
+        what: The name used in error messages.
+
+    Kwargs:
+
+        error: The exception raised for a value that isn't a ``cls``.
+
+    Returns:
+
+        A freezer that returns the checked mapping as a ``FrozenDict``.
 
     Examples:
 
@@ -970,7 +1367,34 @@ def require_finite(
     """
     Narrows ``value`` to a finite float.
 
-    Raises ``error`` when ``value`` is NaN or infinite.
+    Used by ``freeze_json`` to reject NaN and infinity.
+
+    Args:
+
+        value: The float to check.
+        what: The name used in the error message.
+
+    Kwargs:
+
+        error: The exception raised for NaN or infinity.
+
+    Returns:
+
+        ``value``.
+
+    Raises:
+
+        error: If ``value`` is NaN or infinite.
+
+    Examples:
+
+        >>> require_finite(1.5)
+        1.5
+        >>> require_finite(float("inf"), "rate")
+        Traceback (most recent call last):
+            ...
+        riko.base.exceptions.InvalidPipelineError: ...rate must be a finite float...
+
     """
     if isnan(value) or isinf(value):
         msg = f"{what} must be a finite float to be JSON-native, got {value!r}"

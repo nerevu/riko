@@ -993,8 +993,8 @@ context and the secondary input streams, `resources`, or `embed`. The decorators
 `field`/`count`/`parser`), which subclasses the `PreparedCall` protocol; a
 plain wrapper (a stored-workflow pipe, a cross-mode adapter) is bound by `bind_call`/`build_call`
 (`riko/types/_wrappers.py`), and `stamp_wrapper_meta` attaches a default `prepare`. `PreparedModule`
-(`riko/modules/_prepare.py`) is a frozen attrs record of plain values (merged conf, options, assign,
-emit, `is_source`, `is_dynamic`, terminals, static conf, defaults) whose `parsers`/`casters`/
+(`riko/modules/_prepare.py`) is a frozen attrs record of plain values (name, merged conf, options,
+terminals, defaults; all but the name default) whose `assign`/`emit` (read from the options), `is_conf_parsed`/`is_dynamic`/`static_conf`/`parsers`/`casters`/
 `static_casted` are cached derivations, so it pickles and the process executor ships it. Dynamic-conf
 detection sees the node's terminals, which `PreparedNode.terminals` derives from its incoming edges
 (named ports, `others`, `resources`, `embed`). Call

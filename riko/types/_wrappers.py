@@ -170,7 +170,9 @@ class Preparer(Protocol):
     ) -> PreparedCall: ...
 
 
-class ModuleWrapper(Protocol):
+class WrapperMeta(Protocol):
+    """A callable stamped with the discovery metadata every module wrapper carries."""
+
     __name__: str
     __qualname__: str
 
@@ -185,11 +187,16 @@ class ModuleWrapper(Protocol):
     pollable: bool
     loopable: bool
     isasync: bool
+
+
+class ModuleWrapper(WrapperMeta, Protocol):
+    """A module wrapper: the discovery metadata plus a ``prepare`` binding its calls."""
+
     prepare: Preparer
 
 
 def bind_call(
-    wrapper: ModuleWrapper,
+    wrapper: Func[WrapperOutput | SplitterWrapperOutput],
     *_: TerminalName,
     conf: PrepareConf | None = None,
     **options: Unpack[CallOptions],
@@ -311,7 +318,7 @@ WRAPPER_META: tuple[str, ...] = (
 )
 
 
-def is_module_wrapper(value: object) -> TypeIs[ModuleWrapper]:
+def is_module_wrapper(value: object) -> TypeIs[WrapperMeta]:
     """
     Reports whether ``value`` is callable and carries every ``WRAPPER_META`` attribute.
 
@@ -321,7 +328,7 @@ def is_module_wrapper(value: object) -> TypeIs[ModuleWrapper]:
 
     Returns:
 
-        Whether ``value`` is a module wrapper.
+        Whether ``value`` is a callable carrying the wrapper metadata.
 
     Examples:
 

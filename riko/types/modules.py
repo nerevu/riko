@@ -6,14 +6,14 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict
 
-from ._collections import FrozenConf
+from ._collections import FrozenConf, require_from_form
 from ._compiler import Embed
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from re import Pattern, RegexFlag
 
-    from ._collections import Inputs
+    from ._collections import Inputs, TypeRequire
     from ._compiler import CountValues
     from ._enums import CastType, ExecutionMode, FmtLike, LocationType, SortableCastType
     from ._io import PathLike
@@ -897,6 +897,11 @@ type AnyModuleConf = (
 
 type Conf = AnyModuleConf | AnyModuleRawConf
 type MaybeFrozenConf = Conf | FrozenConf
+
+require_module_conf: TypeRequire[object, AnyModuleConf] = require_from_form(
+    AnyModuleConf
+)
+require_conf: TypeRequire[object, Conf] = require_from_form(Conf)
 
 
 class CallOptions(TypedDict, total=False):

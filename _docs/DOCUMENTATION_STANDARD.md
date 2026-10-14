@@ -520,11 +520,17 @@ compact executable example clarifies non-obvious behavior.
   `"""Formats the default user agent as name/version."""`.
 - Blank line after the summary only when more detail follows.
 - Do not repeat the signature or annotated types; document semantics, not syntax.
-- Sections, only when needed, and always in this order: `Args:` →
+- Sections, only when needed, and always in this order: `Args:` → `Kwargs:` →
   `Returns:`/`Yields:` → `Raises:` → `Examples:` → `Notes:`. `Examples:` is
   never first among the sections — a docstring that jumps from the summary
   straight to `Examples:`, skipping `Args:`/`Returns:`, is the single most
   common miss. Never leave an empty section.
+- `Args:` documents the parameters a caller may pass positionally; `Kwargs:`
+  documents the keyword-only ones (after `*` or `*args`) and the entries of a
+  `**kwargs` bag. The signature already forces those names to be keywords, so the
+  docs mirror that split. A typed keyword-only parameter carries no type label;
+  only entries from an untyped `**kwargs` keep labels (see the exception above).
+  When `Kwargs:` names a bag's entries, do not also list the bag under `Args:`.
 - Give every non-underscore function the sections its signature implies: `Args:`
   for its parameters, `Returns:`/`Yields:` for its output. Model it on the file's
   *fullest* docstring, not its thinnest — in `riko/_io.py` that is

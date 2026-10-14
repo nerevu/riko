@@ -239,10 +239,8 @@ class ResolvedModule:
         return self.pipe is not None and getattr(self.pipe, "loopable", False) is True
 
 
-_is_module = validator_from_require(require_instance, ResolvedModule)
-_is_optional_module = validator_from_require(
-    require_instance, ResolvedModule, optional=True
-)
+_build_is_module = partial(validator_from_require, require_instance, ResolvedModule)
+_is_optional_module = _build_is_module(optional=True)
 
 
 @define(frozen=True, slots=True)
@@ -281,7 +279,7 @@ class PreparedNode:
     """
 
     node: ModuleNode = field(converter=require_module_node)
-    module: ResolvedModule = field(validator=_is_module)
+    module: ResolvedModule = field(validator=_build_is_module())
     embed: ResolvedModule | None = field(default=None, validator=_is_optional_module)
     incoming: tuple[GraphEdge, ...] = field(default=(), converter=tuple)
 
@@ -361,6 +359,7 @@ _rmodule_freezer = instances_freezer(ResolvedModule, "ExecutionPlan module")
 _modules_converter = mapping_converter(
     _rmodule_freezer, ResolvedModulesInput, what="ExecutionPlan 'modules'"
 )
+_EMPTY_EMBEDS: ResolvedModules = FrozenDict()
 _embeds_converter = optional_mapping_converter(
     _rmodule_freezer, ResolvedModulesInput, what="ExecutionPlan 'embeds'"
 )
@@ -415,7 +414,7 @@ class ExecutionPlan:
 
     workflow: Workflow = field(converter=_require_workflow)
     modules: ResolvedModules = field(converter=_modules_converter)
-    embeds: ResolvedModules = field(default=None, converter=_embeds_converter)
+    embeds: ResolvedModules = field(default=_EMPTY_EMBEDS, converter=_embeds_converter)
 
     def __attrs_post_init__(self) -> None:
         self.validate()

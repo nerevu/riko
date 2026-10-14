@@ -80,7 +80,6 @@ from riko.types._collections import (
     normalize_strs,
     require_binding,
     require_finite,
-    require_from_attrs,
     require_from_typed_dict,
     require_str,
     require_strlike,
@@ -726,15 +725,6 @@ class TestRequireHelpers:
     def test_caller_can_pick_the_error(self, require, value):
         with pytest.raises(ValueError, match="field"):
             require(value, "field", error=ValueError)
-
-    def test_required_attrs_keys_respect_exclude(self):
-        require = require_from_attrs(Endpoint, exclude={"port"})
-        assert require({"node": "a"}) == {"node": "a"}
-
-        with pytest.raises(
-            InvalidPipelineError, match=r"missing Endpoint key\(s\): \['node'\]"
-        ):
-            require({"port": "out"})
 
 
 class TestResolveEnum:

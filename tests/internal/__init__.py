@@ -7,7 +7,7 @@ Index (file, then the subjects it owns, in file order):
                               ValueFactory, Values, ResourceEcosystem,
                               ResourceImmutability, WorkerCnt, PoolHandle, OpenPool,
                               ExecutionSettings, MappingPolicy, SyncConcurrency
-    test_execution_plan.py    ExecutionPlan, ResolvedModule, CrossModeAdaptation,
+    test_execution_plan.py    ExecutionPlan, ResolvedModule, EmbedAdaptation,
                               PlanRun, Embed, PreparedCall
     test_definitions.py       FrozenDict, Context, ResourceFreezing, ResourceView,
                               ResourceBinding, Nodes, WorkflowFields,

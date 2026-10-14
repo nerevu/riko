@@ -8,13 +8,14 @@ from functools import cached_property, partial
 from typing import TYPE_CHECKING, cast, overload
 
 import pygogo as gogo
-from attrs import Factory, define
+from attrs import Factory, define, field
 
 from riko.base._iterutils import broadcast, dispatch
 from riko.coercion._objectify import objectify
 from riko.coercion._sequences import listize
 from riko.coercion.cast import CAST_SWITCH, cast_none, cast_pass, cast_value
-from riko.parsing.config import get_field, resolve_conf
+from riko.parsing.config import conf_is_dynamic, get_field, resolve_conf
+from riko.types._collections import narrow_from_require, require_from_form
 from riko.types._enums import BasicCastType, CastType
 from riko.types._guards import is_mapping
 from riko.types._options import (
@@ -32,6 +33,7 @@ from riko.types._wrappers import (
     ParserOutput,
     SyncConfCastFunc,
 )
+from riko.types.modules import AnyModuleConf, Conf, require_module_conf
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -43,7 +45,6 @@ if TYPE_CHECKING:
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import Item, ItemOrValue
     from riko.types._wrappers import Terminals
-    from riko.types.modules import AnyModuleConf, Conf
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -197,9 +198,9 @@ def build_conf(
 
     """
     if is_mapping(parsed_conf):
-        merged_conf = cast("AnyModuleConf", {**defaults, **parsed_conf})
+        merged_conf = require_module_conf({**defaults, **parsed_conf})
     else:
-        merged_conf = cast("AnyModuleConf", defaults)
+        merged_conf = require_module_conf(defaults)
 
     if extract := opts.get("extract"):
         try:
@@ -215,46 +216,6 @@ def build_conf(
         pieces_or_conf = merged_conf
 
     return pieces_or_conf, merged_conf
-
-
-def build_parsers(
-    opts: DecorationOptions,
-    conf: Conf,
-    *,
-    is_dynamic: bool = False,
-    static: AnyModuleConf | None = None,
-) -> ParseFuncs:
-    """
-    Builds the field and conf parsers for a module.
-
-    A ``"none"`` ``ftype``/``ptype`` yields a null parser. A conf that varies per item
-    is parsed per call. Otherwise every call gets the already parsed ``static`` conf.
-
-    Args:
-
-        opts: The decoration options (``ftype``/``ptype``).
-        conf: The merged module configuration.
-        is_dynamic: Whether the configuration varies per item.
-        static: The parsed configuration when it does not vary per item.
-
-    Returns:
-
-        The field and conf parsers.
-
-    """
-    if opts.get("ftype") == BasicCastType.NONE:
-        field_parser = cast_none
-    else:
-        field_parser = partial(get_field)
-
-    if opts.get("ptype") == BasicCastType.NONE:
-        conf_parser = cast_none
-    elif is_dynamic:
-        conf_parser = partial(resolve_conf, conf=conf, memoize=False)
-    else:
-        conf_parser = lambda _, **__: static
-
-    return ParseFuncs(field_parser, conf_parser)
 
 
 @overload
@@ -339,6 +300,10 @@ def build_casters(opts: DecorationOptions) -> CastFuncs[ItemOrValue, object]:
     return CastFuncs(field_caster, extract_caster, conf_caster)
 
 
+_require_conf = require_from_form(Conf, "PreparedModule 'conf'", error=TypeError)
+_conf_converter = narrow_from_require(_require_conf, accepted=Conf)
+
+
 @define(frozen=True, slots=True)
 class PreparedModule[T, E]:
     """
@@ -352,21 +317,21 @@ class PreparedModule[T, E]:
 
         opts: The decoration options plus the resolved call options.
 
-        assign: The field results are assigned to.
-
-        emit: Whether (or a predicate deciding whether) to emit rather than assign.
-
-        is_source: Whether the module is a source (``ftype`` is ``"none"``).
-
-        is_dynamic: Whether the configuration varies per item.
-
         terminals: The names of the extra inputs delivered with each item. A
             configuration value naming one is resolved per item.
 
+        defaults: The module's default configuration.
+
+        assign: The field results are assigned to (default: the module name).
+
+        emit: Whether (or a predicate deciding whether) to emit rather than assign.
+
+        is_conf_parsed: Whether the module parses its configuration.
+
+        is_dynamic: Whether the configuration varies per item.
+
         static_conf: The parsed configuration when it does not vary per item, else
             ``None``.
-
-        defaults: The module's default configuration.
 
         parsers: The field and conf parsers.
 
@@ -377,31 +342,78 @@ class PreparedModule[T, E]:
 
     Examples:
 
-        >>> prepared = PreparedModule(
-        ...     name="pipe", conf={"times": 2}, opts={}, assign="pipe", emit=False,
-        ...     is_source=False, static_conf={"times": 2},
-        ... )
+        >>> prepared = PreparedModule(name="pipe", conf={"times": 2})
+        >>> prepared.assign, prepared.is_dynamic, prepared.static_conf
+        ('pipe', False, {'times': 2})
         >>> prepared.static_casted[1]
         {'times': 2}
 
     """
 
     name: str
-    conf: Conf
-    opts: DecorationOptions
-    assign: str
-    emit: bool | Callable[[ParserOutput], bool] | None
-    is_source: bool
-    is_dynamic: bool = False
+    conf: Conf = field(factory=lambda: _require_conf({}), converter=_conf_converter)
+    opts: DecorationOptions = Factory(DecorationOptions)
     terminals: Terminals = ()
-    static_conf: AnyModuleConf | None = None
     defaults: Defaults = Factory(Defaults)
 
     @cached_property
+    def assign(self) -> str:
+        """The field results are assigned to."""
+        return self.opts.get("assign", self.name)
+
+    @cached_property
+    def emit(self) -> bool | Callable[[ParserOutput[ItemOrValue]], bool] | None:
+        """Whether (or a predicate deciding whether) to emit rather than assign."""
+        return self.opts.get("emit")
+
+    @cached_property
+    def is_conf_parsed(self) -> bool:
+        """Whether the module parses its configuration."""
+        return self.opts.get("ptype") != BasicCastType.NONE
+
+    @cached_property
+    def is_dynamic(self) -> bool:
+        """Whether the configuration varies per item."""
+        if self.is_conf_parsed:
+            sentinels = dict.fromkeys(self.terminals)
+            is_dynamic = conf_is_dynamic(self.conf, memoize=False, **sentinels)
+        else:
+            is_dynamic = False
+
+        return is_dynamic
+
+    @cached_property
+    def static_conf(self) -> AnyModuleConf | None:
+        """The parsed configuration when it does not vary per item, else ``None``."""
+        if self.is_dynamic or not self.is_conf_parsed:
+            static_conf = None
+        else:
+            static_conf = resolve_conf(None, conf=self.conf, memoize=True)
+
+        return static_conf
+
+    @cached_property
     def parsers(self) -> ParseFuncs:
-        """The field and conf parsers."""
-        args = (self.opts, self.conf)
-        return build_parsers(*args, is_dynamic=self.is_dynamic, static=self.static_conf)
+        """
+        The field and conf parsers.
+
+        A ``"none"`` ``ftype``/``ptype`` yields a null parser. A conf that varies per
+        item is parsed per call; otherwise every call gets the parsed static conf.
+        """
+        if self.opts.get("ftype") == BasicCastType.NONE:
+            field_parser = cast_none
+        else:
+            field_parser = partial(get_field)
+
+        if self.opts.get("ptype") == BasicCastType.NONE:
+            conf_parser = cast_none
+        elif self.is_dynamic:
+            conf_parser = partial(resolve_conf, conf=self.conf, memoize=False)
+        else:
+            static = self.static_conf
+            conf_parser = lambda _, **__: static
+
+        return ParseFuncs(field_parser, conf_parser)
 
     @cached_property
     def casters(self) -> CastFuncs[ItemOrValue, E]:
@@ -442,10 +454,9 @@ class PreparedModule[T, E]:
         Examples:
 
             >>> from riko.types._guards import is_mapping
-            >>> prepared = PreparedModule(
-            ...     name="pipe", conf={}, opts={}, assign="content", emit=is_mapping,
-            ...     is_source=False,
-            ... )
+            >>>
+            >>> opts = {"assign": "content", "emit": is_mapping}
+            >>> prepared = PreparedModule(name="pipe", opts=opts)
             >>> prepared.resolve_emit({"x": 1})
             True
             >>> prepared.resolve_emit("x")
