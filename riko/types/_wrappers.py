@@ -318,7 +318,7 @@ WRAPPER_META: tuple[str, ...] = (
 )
 
 
-def is_module_wrapper(value: object) -> TypeIs[WrapperMeta]:
+def is_wrapper_meta(value: object) -> TypeIs[WrapperMeta]:
     """
     Reports whether ``value`` is callable and carries every ``WRAPPER_META`` attribute.
 
@@ -334,7 +334,7 @@ def is_module_wrapper(value: object) -> TypeIs[WrapperMeta]:
 
         >>> from riko.modules.hash import pipe
         >>>
-        >>> is_module_wrapper(pipe), is_module_wrapper(len)
+        >>> is_wrapper_meta(pipe), is_wrapper_meta(len)
         (True, False)
 
     """
@@ -403,7 +403,7 @@ def stamp_wrapper_meta(
     setattr(target, "isasync", isasync)  # noqa: B010
     bound = prepare
 
-    if bound is None and is_module_wrapper(target):
+    if bound is None and is_wrapper_meta(target):
         bound = partial(bind_call, target)
 
     setattr(target, "prepare", bound)  # noqa: B010

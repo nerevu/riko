@@ -531,6 +531,25 @@ class TestLiteralLint:
         )
         assert list(gen_literal_issues(source)) == []
 
+    def test_bare_string_defaults_are_flagged_only_for_string_signature_defaults(
+        self, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "mod.py"
+        source.write_text(
+            "def f(a='content', b=None, *, c='x', d=3):\n"
+            '    """\n'
+            "    Args:\n"
+            "        a: The field (default: content).\n"
+            "        b: The other field (default: content).\n"
+            "    Kwargs:\n"
+            "        c: A key (default: x).\n"
+            "        d: A count (default: 3).\n"
+            '    """\n',
+            encoding="utf-8",
+        )
+        found = [(issue.lineno, issue.found) for issue in gen_literal_issues(source)]
+        assert found == [(4, "(default: content)"), (7, "(default: x)")]
+
     def test_prose_files_are_checked_including_the_changelog(
         self, tmp_path: Path
     ) -> None:

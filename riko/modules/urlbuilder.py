@@ -39,7 +39,7 @@ from riko.base._strutils import INVALID_FILECHAR_PATTERN
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._prepare import require_conf_key
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -103,7 +103,7 @@ def parser(
         paths = []
 
     encoded = urlencode([(p.key, p.value) for p in param if p.key])
-    base: str = require_conf(objconf, "base", "urlbuilder")
+    base: str = require_conf_key(objconf, "base", "urlbuilder")
     joined = urljoin(base, "/".join(paths))
     stream = f"{joined}?{encoded}" if encoded else joined
 

@@ -38,7 +38,7 @@ from riko.parsing.documents import any2dict
 from riko.types._options import Defaults
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._prepare import require_conf_key
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -103,7 +103,7 @@ async def async_parser(
         Help Page -- ScienceDaily
 
     """
-    url: str = require_conf(objconf, "url", "xpathfetchpage")
+    url: str = require_conf_key(objconf, "url", "xpathfetchpage")
     ext = splitext(url)[1].lstrip(".")
 
     if url.startswith("http") and not ext:
@@ -152,7 +152,7 @@ def parser(
         'Help Page -- ScienceDaily'
 
     """
-    url: str = require_conf(objconf, "url", "xpathfetchpage")
+    url: str = require_conf_key(objconf, "url", "xpathfetchpage")
     ext = splitext(url)[1].lstrip(".")
 
     if url.startswith("http") and not ext:

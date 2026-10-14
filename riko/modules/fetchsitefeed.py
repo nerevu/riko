@@ -32,7 +32,7 @@ from riko.rss.entries import augment_entries
 from riko.rss.parsing import parse_rss
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._prepare import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -82,7 +82,7 @@ async def async_parser(
         EU sets out 'phased' Brexit strategy
 
     """
-    url: str = require_conf(objconf, "url", "fetchsitefeed")
+    url: str = require_conf_key(objconf, "url", "fetchsitefeed")
     rss = await aload_rss_links(url)
 
     if (first := next(rss, None)) is None:
@@ -126,7 +126,7 @@ def parser(
         "EU sets out 'phased' Brexit strategy"
 
     """
-    url: str = require_conf(objconf, "url", "fetchsitefeed")
+    url: str = require_conf_key(objconf, "url", "fetchsitefeed")
     rss = load_rss_links(url)
 
     if (first := next(rss, None)) is None:

@@ -36,7 +36,7 @@ from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close, seekable
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._prepare import require_conf_key
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -99,7 +99,7 @@ async def async_parser(
         7213
 
     """
-    url: str = require_conf(objconf, "url", "csv")
+    url: str = require_conf_key(objconf, "url", "csv")
     r = await async_url_open(url, encoding=objconf.encoding)
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
@@ -144,7 +144,7 @@ def parser(
         '7213'
 
     """
-    url: str = require_conf(objconf, "url", "csv")
+    url: str = require_conf_key(objconf, "url", "csv")
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
 

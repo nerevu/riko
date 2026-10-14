@@ -32,7 +32,7 @@ from riko.base.currencies import CURRENCY_CODES
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._prepare import require_conf_key
 
 if TYPE_CHECKING:
     from decimal import Decimal
@@ -78,7 +78,7 @@ def parser(
     if amount is None or amount.is_nan():
         parsed = ""
     else:
-        currency: str = require_conf(objconf, "currency", "currencyformat")
+        currency: str = require_conf_key(objconf, "currency", "currencyformat")
         currency_code = CURRENCY_CODES.get(currency, cast("dict[str, str]", {}))
         locale = objconf.locale or currency_code.get("locale", "")
 

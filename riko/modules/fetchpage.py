@@ -41,7 +41,7 @@ from riko.parsing.documents import get_text
 from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._prepare import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -101,7 +101,7 @@ async def async_parser(
         CNN.com International - Breaking
 
     """
-    url: str = require_conf(objconf, "url", "fetchpage")
+    url: str = require_conf_key(objconf, "url", "fetchpage")
     content = await async_url_read(url)
     parsed = get_string(content, objconf.start or "", objconf.end or "")
     detagged = get_text(parsed) if objconf.detag else parsed
@@ -145,7 +145,7 @@ def parser(
         'CNN.com International'
 
     """
-    url: str = require_conf(objconf, "url", "fetchpage")
+    url: str = require_conf_key(objconf, "url", "fetchpage")
     with Fetch(url, encoding=objconf.encoding) as f:
         sliced = betwix(f, objconf.start, objconf.end, True)
         content = "\n".join(sliced)

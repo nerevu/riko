@@ -40,7 +40,7 @@ import pygogo as gogo
 from riko.coercion._sequences import gen_items
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._prepare import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -94,7 +94,7 @@ def parser(
         {'content': 'verse1'}
 
     """
-    raw: str | Sequence[str] = require_conf(objconf, "path", "subelement")
+    raw: str | Sequence[str] = require_conf_key(objconf, "path", "subelement")
     path = raw if isinstance(raw, str) else ".".join(raw)
     element = cast("RikoValue", item.get(path, **kwargs))
     return gen_items(element, objconf.token_key or "")

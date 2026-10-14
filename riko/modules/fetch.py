@@ -36,7 +36,7 @@ from riko.rss.entries import augment_entries
 from riko.rss.parsing import parse_rss
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._prepare import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -89,7 +89,7 @@ async def async_parser(
         Donations
 
     """
-    url: str = require_conf(objconf, "url", "fetch")
+    url: str = require_conf_key(objconf, "url", "fetch")
     content: str = await async_url_read(url, encoding=objconf.encoding)
     return augment_entries(parse_rss(content=content))
 
@@ -127,7 +127,7 @@ def parser(
         'Donations'
 
     """
-    url: str = require_conf(objconf, "url", "fetch")
+    url: str = require_conf_key(objconf, "url", "fetch")
     entries = parse_rss(url, encoding=objconf.encoding)
     return augment_entries(entries)
 

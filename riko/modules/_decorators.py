@@ -352,9 +352,9 @@ class Module[B: (Literal[True], Literal[False])]:
                 ``others``, bound resources as ``resources``, and a loop's embed as
                 ``embed``. A configuration value naming one is resolved per item.
 
-            conf: The call-time configuration, merged over the module defaults.
-
         Kwargs:
+
+            conf: The call-time configuration, merged over the module defaults.
 
             assign (str): The field results are assigned to. Defaults to the module
                 name (or ``"content"`` for a source). Ignored when ``emit`` is true.

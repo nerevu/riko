@@ -30,7 +30,7 @@ from riko.coercion.cast import SourceOpts
 from riko.rss.discovery import aload_rss_links, load_rss_links
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._prepare import require_conf_key
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -78,7 +78,7 @@ async def async_parser(
         file://riko/data/bbci.co.uk.xml
 
     """
-    url: str = require_conf(objconf, "url", "feedautodiscovery")
+    url: str = require_conf_key(objconf, "url", "feedautodiscovery")
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
     stream = await aload_rss_links(url, link_type=None, **rkwargs)
     return stream
@@ -121,7 +121,7 @@ def parser(
         'file://riko/data/bbci.co.uk.xml'
 
     """
-    url: str = require_conf(objconf, "url", "feedautodiscovery")
+    url: str = require_conf_key(objconf, "url", "feedautodiscovery")
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
     stream = load_rss_links(url, link_type=None, **rkwargs)
     return stream

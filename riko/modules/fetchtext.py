@@ -36,7 +36,7 @@ from riko.io._sync import Fetch, auto_close
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._prepare import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -86,7 +86,7 @@ async def async_parser(
         What is Lorem Ipsum?
 
     """
-    url: str = require_conf(objconf, "url", "fetchtext")
+    url: str = require_conf_key(objconf, "url", "fetchtext")
     f = await async_url_open(url, encoding=objconf.encoding)
     return auto_close(map(str.strip, f), f)
 
@@ -123,7 +123,7 @@ def parser(
         'What is Lorem Ipsum?'
 
     """
-    url: str = require_conf(objconf, "url", "fetchtext")
+    url: str = require_conf_key(objconf, "url", "fetchtext")
     f = Fetch(url, encoding=objconf.encoding)
     return auto_close(map(str.strip, f), f)
 

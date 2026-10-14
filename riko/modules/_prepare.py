@@ -106,15 +106,15 @@ def require_arg[T](value: T | None, name: str, module: str, strict: bool = False
     return value
 
 
-def require_conf[T](  # noqa: E704
+def require_conf_key[T](  # noqa: E704
     objconf: DynamicConf, key: str, module: str, strict: bool = False
 ) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
     """
-    Resolves a required conf value, or reports which one is unusable.
+    Narrows a required conf key, or reports which one is unusable.
 
     A missing conf key is a call-site programming error, so this raises rather
-    than degrading — unlike an absent *field* on an item, which is a runtime
-    data condition and is skipped.
+    than degrading (unlike an absent *field* on an item, which is a runtime
+    data condition and is skipped).
 
     Args:
 
@@ -142,18 +142,18 @@ def require_conf[T](  # noqa: E704
 
         >>> from meza.fntools import Objectify
         >>>
-        >>> require_conf(Objectify({"url": "x"}), "url", "csv")
+        >>> require_conf_key(Objectify({"url": "x"}), "url", "csv")
         'x'
-        >>> require_conf(Objectify({}), "url", "csv")
+        >>> require_conf_key(Objectify({}), "url", "csv")
         Traceback (most recent call last):
             ...
         TypeError: the 'csv' module requires the 'url' conf key
 
         A falsy value passes unless ``strict`` is set:
 
-        >>> require_conf(Objectify({"url": ""}), "url", "csv")
+        >>> require_conf_key(Objectify({"url": ""}), "url", "csv")
         ''
-        >>> require_conf(Objectify({"url": ""}), "url", "csv", strict=True)
+        >>> require_conf_key(Objectify({"url": ""}), "url", "csv", strict=True)
         Traceback (most recent call last):
             ...
         TypeError: the 'csv' module requires the 'url' conf key
@@ -405,7 +405,7 @@ class PreparedModule[T, E]:
         else:
             field_parser = partial(get_field)
 
-        if self.opts.get("ptype") == BasicCastType.NONE:
+        if not self.is_conf_parsed:
             conf_parser = cast_none
         elif self.is_dynamic:
             conf_parser = partial(resolve_conf, conf=self.conf, memoize=False)

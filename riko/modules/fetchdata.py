@@ -39,7 +39,7 @@ from riko.parsing.documents import any2dict
 from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._prepare import require_conf_key
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -91,7 +91,7 @@ async def async_parser(
         Business System Analyst
 
     """
-    url: str = require_conf(objconf, "url", "fetchdata")
+    url: str = require_conf_key(objconf, "url", "fetchdata")
     ext = splitext(url)[1].lstrip(".")
     path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
     binary = ext == "json"
@@ -136,7 +136,7 @@ def parser(
         'Business System Analyst'
 
     """
-    url: str = require_conf(objconf, "url", "fetchdata")
+    url: str = require_conf_key(objconf, "url", "fetchdata")
     ext = splitext(url)[1].lstrip(".")
     paths = cast("list[str]", listize(objconf.path))
     path = ".".join(paths)

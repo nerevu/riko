@@ -449,6 +449,14 @@ and a bound class (`InstanceRequire[T, R]`, `cls: type[R]`) infers the result fo
 `def_from_require`'s overloads carry the `TypeRequire`/`InstanceRequire` narrowing while its body
 calls `require(*args, value, ...)` (protocols that differ only in `__call__` cannot be told apart at
 runtime). `isinstance_strict` returns `TypeIs[P]`.
+`require_from_form(form)` builds a guard for any type form: it flattens aliases, unions, and
+`Annotated` with `gen_union_members` (`riko/base/_typing.py`, shared with return-kind inference),
+sends a lone class to `require_instance` and a lone TypedDict to `require_from_typed_dict`, accepts a
+union member by `isinstance` (any mapping matches a TypedDict member, keys unchecked), and raises
+`TypeError` for any other form when the guard is built. `require_from_typed_dict` and
+`require_from_attrs` both reduce to `require_from_keys(required, allowed)`; in both, `exclude=`
+forbids a key and `not_required=` only drops it from the required set. The conf contracts' guards
+(`require_module_conf`, `require_conf`) live beside them in `riko/types/modules.py`, off `__all__`.
 Mapping fields use one converter callable, never a converter list: pyright types the generated
 `__init__` parameter from a single converter's argument but falls back to the field annotation for a
 list. The helpers live in `riko/types/_collections.py`: `mapping_converter` (required — `None` or a

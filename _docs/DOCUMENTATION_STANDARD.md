@@ -528,9 +528,12 @@ compact executable example clarifies non-obvious behavior.
 - `Args:` documents the parameters a caller may pass positionally; `Kwargs:`
   documents the keyword-only ones (after `*` or `*args`) and the entries of a
   `**kwargs` bag. The signature already forces those names to be keywords, so the
-  docs mirror that split. A typed keyword-only parameter carries no type label;
-  only entries from an untyped `**kwargs` keep labels (see the exception above).
-  When `Kwargs:` names a bag's entries, do not also list the bag under `Args:`.
+  docs mirror that split. A keyword-only parameter with its own annotation carries
+  no type label. Every entry of a `**kwargs` bag does, because the signature gives
+  it no explicit hint: that includes an `Unpack[SomeTypedDict]` bag, so readers
+  never have to look up the `TypedDict` to learn an entry's type (see the
+  exception above). When `Kwargs:` names a bag's entries, do not also list the bag
+  under `Args:`.
 - Give every non-underscore function the sections its signature implies: `Args:`
   for its parameters, `Returns:`/`Yields:` for its output. Model it on the file's
   *fullest* docstring, not its thinnest — in `riko/_io.py` that is
@@ -596,8 +599,9 @@ The test: pasted into Python, does the literal mean the right thing? ``thread`` 
 be a variable, so a value needs ``"thread"``; ``"content"`` would be a string, so a
 field name needs ``content``.
 
-`manage lint --literals` flags the two mechanical slips: a backticked `(default: …)`
-(an `ALL_CAPS` constant name is allowed) and a single-quoted ``'x'``. Value vs. name
+`manage lint --literals` flags the three mechanical slips: a backticked `(default: …)`
+(an `ALL_CAPS` constant name is allowed), a single-quoted ``'x'``, and an unquoted
+`(default: word)` whose parameter defaults to the string ``"word"``. Value vs. name
 vs. label is a judgment call no lint makes.
 
 ```rst

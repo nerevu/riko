@@ -137,7 +137,7 @@ The common development commands are:
     Run Ruff lint plus ``ruff format --check`` by default. Standard checks may be
     selected additively with ``--rst``, ``--docs``, ``--actions``, ``--yaml``,
     ``--docstrings``, ``--terms`` (phrases the reserved-terms rules replace),
-    ``--literals`` (single-quoted or backticked default values),
+    ``--literals`` (single-quoted values, and backticked or unquoted string defaults),
     ``--deps`` (imports that ``pyproject.toml`` does not declare, declared
     dependencies nothing imports, and typing stubs shipped as runtime requirements),
     and ``--tests`` (test files and classes that depart from the tier indexes in
