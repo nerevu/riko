@@ -13,15 +13,16 @@ Index (file, then the subjects it owns, in file order):
                               ResourceBinding, Nodes, WorkflowFields,
                               NormalizeInternals, RawWorkflowFields,
                               ExecutionPlanFields, PipelineDefinitionFields,
-                              RequireHelpers, ResolveEnum, NormalizeStrs, FieldNames,
-                              TypedDictKeys, WriteMode, Formats, WriteOperation,
-                              WriteCapabilities, NormalizeTarget, RegisterTarget,
-                              ResolveFormat, FileCapabilities, ValidateTargetMode,
-                              BuildWrite, ConverterPath, Csv, Jsonl, Framed,
-                              SessionLifecycle, WriteExecution, Sink
+                              RequireHelpers, RequireFromForm, ResolveEnum,
+                              NormalizeStrs, FieldNames, TypedDictKeys, WriteMode,
+                              Formats, WriteOperation, WriteCapabilities,
+                              NormalizeTarget, RegisterTarget, ResolveFormat,
+                              FileCapabilities, ValidateTargetMode, BuildWrite,
+                              ConverterPath, Csv, Jsonl, Framed, SessionLifecycle,
+                              WriteExecution, Sink
     test_values.py            CanonicalBytes, Digest, ReprCache, CastDatetime,
-                              TryLocalTz, Dates, DotDict, Parsers, RSSUtils, Graph,
-                              GraphIndex
+                              Fromdict, TryLocalTz, Dates, DotDict, Parsers, RSSUtils,
+                              Graph, GraphIndex
     test_io.py                Fetch, LoopbackServer, AsyncUrlOpen,
                               ExtensionlessAsyncUrlOpen, Reencode, ConversionFuncs,
                               AsyncMapStream, AsyncMap, AsyncMerge, GatherResults,

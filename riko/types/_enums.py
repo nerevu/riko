@@ -293,7 +293,7 @@ def resolve_enum[E: StrEnum](  # noqa: E302
         >>> resolve_enum(Executor, "bogus", error=ValueError)
         Traceback (most recent call last):
         ...
-        ValueError: Invalid Executor: 'bogus'; expected one of auto, inline, thread, ...
+        ValueError: Invalid Executor: 'bogus'. Expected one of auto, inline, thread, ...
 
     """
     what = enum.__name__ if what is None else what
@@ -307,7 +307,7 @@ def resolve_enum[E: StrEnum](  # noqa: E302
             result = value if isinstance(value, enum) else enum(value)
         except ValueError as e:
             accepted = ", ".join(member.value for member in enum)
-            raise error(f"Invalid {what}: {value!r}; expected one of {accepted}") from e
+            raise error(f"Invalid {what}: {value!r}. Expected one of {accepted}") from e
 
     return result
 

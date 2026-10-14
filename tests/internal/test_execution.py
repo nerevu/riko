@@ -1366,7 +1366,7 @@ class _Sink:
 
 class TestExecutionSettings:
     def test_unknown_executor_lists_the_known_executors(self) -> None:
-        message = "ExecutionSettings 'executor': 'bogus'; expected one of auto, inline"
+        message = "ExecutionSettings 'executor': 'bogus'. Expected one of auto, inline"
 
         with pytest.raises(ValueError, match=message):
             ExecutionSettings(executor="bogus")

@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from ._compiler import Embed
     from ._enums import BackendLike, FmtLike, StrLike
     from ._io import PathLike
-    from .modules import CallOptions, Conf
+    from .modules import Conf, RawCallOptions
 
 type NodeId = str
 type Port = str
@@ -101,7 +101,7 @@ class RawNode(TypedDict, total=False):
     family: NodeFamily
     label: str
     conf: Conf | Mapping[str, object]
-    options: CallOptions | Mapping[str, object]
+    options: RawCallOptions | Mapping[str, object]
     embed: Embed | Mapping[str, object]
     policy: Mapping[str, object]
     params: Mapping[str, object]

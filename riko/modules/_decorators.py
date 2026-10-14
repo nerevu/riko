@@ -69,7 +69,13 @@ from riko.types._streams import (
     StreamOrValueStream,
 )
 from riko.types._wrappers import PreparedCall, stamp_wrapper_meta
-from riko.types.modules import CallOptions, Conf, ContextOverrides, require_conf
+from riko.types.modules import (
+    Conf,
+    ContextOverrides,
+    RawCallOptions,
+    build_require_raw_call_options,
+    require_conf,
+)
 
 from ._assignment import build_assignment, gen_assignments
 from ._derive import get_module_subtypes, is_loopable
@@ -102,6 +108,7 @@ if TYPE_CHECKING:
         AwaitableOperatorParser,
         AwaitableProcessorParser,
         AwaitableSplitterParser,
+        ExtraName,
         ItemDispatcher,
         ModuleParser,
         ModuleWrapper,
@@ -134,7 +141,7 @@ if TYPE_CHECKING:
         SyncSplitterWrapperInput,
         SyncSplitterWrapperOutput,
         SyncSubPipe,
-        TerminalName,
+        WrapperOutput,
     )
     from riko.types.modules import ModuleType
 
@@ -156,11 +163,19 @@ _PROCESSOR_OPTS: frozenset[str] = frozenset(
     ProcessorDecorationOptions.__required_keys__
     | ProcessorDecorationOptions.__optional_keys__
 )
-_CALL_OPTS: frozenset[str] = frozenset().union(*typed_dict_keys(CallOptions))
+_CALL_OPTS: frozenset[str] = frozenset().union(*typed_dict_keys(RawCallOptions))
 _CONTEXT_OPTS: frozenset[str] = frozenset().union(*typed_dict_keys(ContextOverrides))
 _SPLITTER_CALL_OPTS: frozenset[str] = _CALL_OPTS - {"count"}
-_require_call_options = require_from_typed_dict(CallOptions, error=TypeError)
+_require_call_options = build_require_raw_call_options(error=TypeError)
 _require_overrides = require_from_typed_dict(ContextOverrides, error=TypeError)
+
+
+def _resolve_context(
+    context: Context | None, **overrides: Unpack[ContextOverrides]
+) -> Context:
+    """Derives the context a pipe call runs under from the caller's and overrides."""
+    base = Context() if context is None else context
+    return base.replace(**overrides)
 
 
 class _AsyncWrapperStream[T]:
@@ -333,9 +348,9 @@ class Module[B: (Literal[True], Literal[False])]:
     def prepare(
         self,
         module_name: str,
-        *terminals: TerminalName,
+        *extras: ExtraName,
         conf: PrepareConf | None = None,
-        **options: Unpack[CallOptions],
+        **options: Unpack[RawCallOptions],
     ) -> PreparedModule[ItemOrValue, object]:
         """
         Builds immutable invocation state for a module call.
@@ -347,7 +362,7 @@ class Module[B: (Literal[True], Literal[False])]:
 
             module_name: The module name.
 
-            terminals: The names of the extra inputs delivered with each item: a
+            extras: The names of the extra inputs delivered with each item: a
                 named input stream under its port name, positional streams as
                 ``others``, bound resources as ``resources``, and a loop's embed as
                 ``embed``. A configuration value naming one is resolved per item.
@@ -409,16 +424,16 @@ class Module[B: (Literal[True], Literal[False])]:
             name=module_name,
             conf=_conf,
             opts=opts,
-            terminals=terminals,
+            extras=extras,
             defaults=self.defaults,
         )
 
     def prepare_call(
         self,
         wrapper: ModuleWrapper,
-        *terminals: TerminalName,
+        *extras: ExtraName,
         conf: PrepareConf | None = None,
-        **options: Unpack[CallOptions],
+        **options: Unpack[RawCallOptions],
     ) -> PreparedCall:
         """
         Binds ``wrapper``'s configuration and call options for reuse over many items.
@@ -431,7 +446,7 @@ class Module[B: (Literal[True], Literal[False])]:
 
             wrapper: The module wrapper this decorator built.
 
-            terminals: The names of the extra inputs delivered with each item: a named
+            extras: The names of the extra inputs delivered with each item: a named
                 input stream under its port name, positional streams as ``others``,
                 bound resources as ``resources``, and a loop's embed as ``embed``.
 
@@ -480,8 +495,34 @@ class Module[B: (Literal[True], Literal[False])]:
             msg += "not as a call option"
             raise TypeError(msg)
 
-        prepared = self.prepare(wrapper.name, *terminals, conf=conf, **options)
+        prepared = self.prepare(wrapper.name, *extras, conf=conf, **options)
         return self.call_record(self, wrapper, prepared, options)
+
+    def _call_direct(
+        self,
+        wrapper: ModuleWrapper,
+        items: object,
+        *,
+        conf: Conf | DynamicConf | None,
+        context: Context | None,
+        **kwargs: object,
+    ) -> WrapperOutput | SplitterWrapperOutput:
+        """
+        Prepares a direct wrapper call and runs it once on ``items``.
+
+        Every keyword name counts as a per-item input when preparing, because a direct
+        call cannot differentiate an input port named like a call option (e.g., ``tail``
+        uses ``count`` as an input stream).
+        """
+        named = self.call_options | self.context_options
+        call_options = {k: kwargs[k] for k in self.call_options.intersection(kwargs)}
+        _overrides = {k: kwargs[k] for k in self.context_options.intersection(kwargs)}
+        overrides = _require_overrides(_overrides)
+        extra = {key: value for key, value in kwargs.items() if key not in named}
+        options = _require_call_options(call_options)
+        resolved = _resolve_context(context, **overrides) if overrides else context
+        call = wrapper.prepare(*kwargs, conf=conf, **options)
+        return call(items, context=resolved, **extra)
 
 
 @overload
@@ -595,26 +636,6 @@ def _validate_opts(
         raise TypeError(msg)
 
 
-def _resolve_context(
-    context: Context | None, **overrides: Unpack[ContextOverrides]
-) -> Context:
-    """Derives the context a pipe call runs under from the caller's and overrides."""
-    base = Context() if context is None else context
-    return base.replace(**overrides)
-
-
-def _split_call_kwargs(
-    kwargs: Mapping[str, object], options: frozenset[str], overrides: frozenset[str]
-) -> tuple[CallOptions, ContextOverrides, dict[str, object]]:
-    """Separates a direct call's options and overrides from its per-item arguments."""
-    named = options | overrides
-    call_options = {key: kwargs[key] for key in options.intersection(kwargs)}
-    context_overrides = {key: kwargs[key] for key in overrides.intersection(kwargs)}
-    extra = {key: value for key, value in kwargs.items() if key not in named}
-    narrowed = _require_call_options(call_options)
-    return narrowed, _require_overrides(context_overrides), extra
-
-
 class _ProcessorCall(NamedTuple):
     """The state a processor parser call and its result assignment share."""
 
@@ -641,7 +662,7 @@ class _PreparedCall[M: Module[Any]](PreparedCall):
     module: M
     wrapper: ModuleWrapper
     prepared: PreparedModule[ItemOrValue, object]
-    options: CallOptions
+    options: RawCallOptions
 
     @property
     def parser(self) -> Callable[..., Any]:
@@ -1240,11 +1261,8 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             context: Context | None = None,
             **kwargs: object,
         ) -> AsyncProcessorWrapperOutput:
-            split = (kwargs, self.call_options, self.context_options)
-            options, overrides, extra = _split_call_kwargs(*split)
-            context = _resolve_context(context, **overrides)
-            call = wrapper.prepare(*kwargs, conf=conf, **options)
-            output = call(item, context=context, **extra)
+            args = (wrapper, item)
+            output = self._call_direct(*args, conf=conf, context=context, **kwargs)
             return cast("AsyncProcessorWrapperOutput", output)
 
         def sync_wrapper(
@@ -1253,11 +1271,8 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             context: Context | None = None,
             **kwargs: object,
         ) -> SyncProcessorWrapperInternalOutput:
-            split = (kwargs, self.call_options, self.context_options)
-            options, overrides, extra = _split_call_kwargs(*split)
-            context = _resolve_context(context, **overrides)
-            call = wrapper.prepare(*kwargs, conf=conf, **options)
-            output = call(item, context=context, **extra)
+            args = (wrapper, item)
+            output = self._call_direct(*args, conf=conf, context=context, **kwargs)
             yield from cast("SyncProcessorWrapperInternalOutput", output)
 
         isasync = self._resolve_isasync(pipe)
@@ -1645,11 +1660,8 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             context: Context | None = None,
             **kwargs: object,
         ) -> AsyncOperatorWrapperInternalOutput:
-            split = (kwargs, self.call_options, self.context_options)
-            options, overrides, extra = _split_call_kwargs(*split)
-            context = _resolve_context(context, **overrides)
-            call = wrapper.prepare(*kwargs, conf=conf, **options)
-            output = call(items, context=context, **extra)
+            args = (wrapper, items)
+            output = self._call_direct(*args, conf=conf, context=context, **kwargs)
             stream = cast("AsyncOperatorWrapperInternalOutput", output)
 
             async for item in stream:
@@ -1661,11 +1673,8 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             context: Context | None = None,
             **kwargs: object,
         ) -> SyncOperatorWrapperInternalOutput:
-            split = (kwargs, self.call_options, self.context_options)
-            options, overrides, extra = _split_call_kwargs(*split)
-            context = _resolve_context(context, **overrides)
-            call = wrapper.prepare(*kwargs, conf=conf, **options)
-            output = call(items, context=context, **extra)
+            args = (wrapper, items)
+            output = self._call_direct(*args, conf=conf, context=context, **kwargs)
             yield from cast("SyncOperatorWrapperInternalOutput", output)
 
         isasync = self._resolve_isasync(pipe)
@@ -1867,10 +1876,8 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             context: Context | None = None,
             **kwargs: object,
         ) -> AsyncSplitterWrapperOutput:
-            split = (kwargs, self.call_options, self.context_options)
-            options, _, extra = _split_call_kwargs(*split)
-            call = wrapper.prepare(*kwargs, conf=conf, **options)
-            output = call(items, context=context, **extra)
+            args = (wrapper, items)
+            output = self._call_direct(*args, conf=conf, context=context, **kwargs)
             return cast("AsyncSplitterWrapperOutput", output)
 
         def sync_wrapper(
@@ -1879,10 +1886,8 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             context: Context | None = None,
             **kwargs: object,
         ) -> SyncSplitterWrapperOutput:
-            split = (kwargs, self.call_options, self.context_options)
-            options, _, extra = _split_call_kwargs(*split)
-            call = wrapper.prepare(*kwargs, conf=conf, **options)
-            output = call(items, context=context, **extra)
+            args = (wrapper, items)
+            output = self._call_direct(*args, conf=conf, context=context, **kwargs)
             yield from cast("SyncSplitterWrapperOutput", output)
 
         isasync = self._resolve_isasync(pipe)

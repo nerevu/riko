@@ -16,6 +16,7 @@ from typing import (
     Protocol,
     cast,
     final,
+    get_args,
     get_origin,
     is_typeddict,
     overload,
@@ -26,7 +27,7 @@ import attrs
 from attrs import Attribute, AttrsInstance, validators
 from typing_extensions import TypeForm
 
-from riko.base._iterutils import map_values
+from riko.base._iterutils import map_values, sort_stably
 from riko.base._typing import gen_union_members
 from riko.base.exceptions import InvalidPipelineError
 
@@ -52,7 +53,6 @@ type FrozenJSON = (
 )
 
 type FrozenConf = FrozenDict[str, FrozenJSON]
-type FrozenOptions = FrozenDict[str, FrozenJSON]
 type FrozenParams = FrozenDict[str, FrozenJSON]
 type FrozenPolicy = FrozenDict[str, FrozenJSON]
 type FrozenTupleMapping = FrozenDict[str, tuple[GraphEdge, ...]]
@@ -151,6 +151,8 @@ def _keep_or_has_value(*keep_fields: str):
     def has_value(field: Field[Any] | Attribute[Any], value: object) -> bool:
         if isinstance(value, (Mapping, tuple)):
             _has_value = bool(value)
+        elif is_attrs_inst(value):
+            _has_value = bool(serialize_attrs(value))
         else:
             _has_value = value is not None
 
@@ -443,9 +445,8 @@ def require_from_typed_dict[T](
     """
     cls = _require_typed_dict_class(item)
     _required, _optional = typed_dict_keys(cls)
-    excluded = frozenset(exclude)
-    required = _required - excluded - frozenset(not_required)
-    allowed = ((_required | _optional) - excluded).union(extra)
+    required = _required.difference(exclude, not_required)
+    allowed = (_required | _optional).difference(exclude).union(extra)
     default_what = cls.__name__ if what is None else what
     check = require_from_keys(required, allowed, default_what, error=error)
 
@@ -992,8 +993,10 @@ def require_from_form[T](
     - A lone class is checked with ``require_instance``.
     - A lone TypedDict is checked with ``require_from_typed_dict``, so unknown and
       missing keys raise.
-    - A union passes a value that matches any member, and any mapping matches a
-      TypedDict member no matter its keys.
+    - A ``Literal`` is checked by value and type, so ``Literal[1]`` rejects ``True``
+      even though ``True == 1``.
+    - A union is checked against each member, and any mapping matches a TypedDict
+      member no matter its keys.
 
     Use ``require_instance`` instead to build a validator or converter for one class,
     e.g., ``validator_from_require(require_instance, bool)``. Use
@@ -1015,7 +1018,8 @@ def require_from_form[T](
 
     Raises:
 
-        TypeError: If ``form`` contains anything other than classes and TypedDicts.
+        TypeError: If ``form`` contains anything other than classes, TypedDicts, and
+            ``Literal`` types.
 
     Examples:
 
@@ -1024,53 +1028,68 @@ def require_from_form[T](
         >>> class Point(TypedDict):
         ...     x: int
         >>>
-        >>> type Shape = Point | int
-        >>> type Coord = Shape | str
+        >>> type Coord = Point | int | str
         >>> require_from_form(Point)({"y": 1})
         Traceback (most recent call last):
             ...
         riko.base.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
-        >>> require_from_form(int)("1")
-        Traceback (most recent call last):
-            ...
-        riko.base.exceptions.InvalidPipelineError: ...int must be of type int, not str
         >>> require_coord = require_from_form(Coord, error=TypeError)
         >>> require_coord({"y": 1})
         {'y': 1}
-        >>> require_coord("a")
-        'a'
         >>> require_coord(1.5)
         Traceback (most recent call last):
             ...
         TypeError: Coord must be of type int | str | mapping, not float
-        >>> require_from_form(Literal["a"])
+        >>> require_from_form(Literal["a", "b"], "mode")("c")
         Traceback (most recent call last):
             ...
-        TypeError: typing.Literal['a'] is not a class or TypedDict
+        riko.base.exceptions.InvalidPipelineError: ...mode: 'c'. Expected one of a, b
 
     """
     default_what = getattr(form, "__name__", "value") if what is None else what
     leaves = tuple(gen_union_members(form))
     classes = tuple(leaf for leaf in leaves if isinstance(leaf, type))
     shapes = tuple(cls for cls in classes if not is_typeddict(cls))
+    arms = tuple(leaf for leaf in leaves if get_origin(leaf) is Literal)
+    literals = tuple(arg for arm in arms for arg in get_args(arm))
 
-    if unsupported := [leaf for leaf in leaves if not isinstance(leaf, type)]:
-        raise TypeError(f"{unsupported[0]!r} is not a class or TypedDict")
-    elif len(classes) == 1 and not shapes:
+    def is_member(value: object) -> bool:
+        return any(type(value) is type(arg) and value == arg for arg in literals)
+
+    if _unsupported := set(leaves).difference(classes, arms):
+        unsupported = ", ".join(map(repr, sort_stably(_unsupported)))
+
+        if len(_unsupported) > 1:
+            raise TypeError(f"{unsupported} are not classes, TypedDicts, or Literals")
+        else:
+            raise TypeError(f"{unsupported} is not a class, TypedDict, or Literal")
+    elif not classes:
+        accepted = ", ".join(map(str, literals))
+
+        def check(value: object, what: str) -> object:
+            if not is_member(value):
+                raise error(f"Invalid {what}: {value!r}. Expected one of {accepted}")
+
+            return value
+
+    elif len(classes) == 1 and not (shapes or literals):
         typed = require_from_typed_dict(classes[0], default_what, error=error)
 
         def check(value: object, what: str) -> object:
             return typed(require_mapping(value, what, error=error), what)
 
-    elif len(classes) == 1:
+    elif len(classes) == 1 and not literals:
         check = partial(require_instance, classes[0], error=error)
     else:
         is_mappable = len(shapes) < len(classes)
         names = [cls.__name__ for cls in shapes] + (["mapping"] if is_mappable else [])
-        expected = f"of type {' | '.join(names)}" if shapes else "a mapping"
+        names += [repr(arg) for arg in literals]
+        expected = f"of type {' | '.join(names)}" if shapes or literals else "a mapping"
 
         def check(value: object, what: str) -> object:
-            if not (isinstance(value, shapes) or (is_mappable and is_mapping(value))):
+            member_or_shape = is_member(value) or isinstance(value, shapes)
+
+            if not (member_or_shape or (is_mappable and is_mapping(value))):
                 raise error(f"{what} must be {expected}, not {type(value).__name__}")
 
             return value
@@ -1464,8 +1483,8 @@ def serialize_dataclass(
     """
     Reads a dataclass's set fields into a dict.
 
-    A field that is ``None`` or an empty mapping or tuple is left out unless it is
-    named in ``keep_fields``.
+    A field that is ``None``, an empty mapping or tuple, or an attrs record with no set
+    fields is left out unless it is named in ``keep_fields``.
 
     Args:
 
@@ -1501,9 +1520,9 @@ def serialize_attrs(
     """
     Reads an attrs record's set fields into a dict.
 
-    A field that is ``None`` or an empty mapping or tuple is left out unless it is
-    named in ``keep_fields``. A mapping field, including a ``FrozenDict``, is kept as
-    is.
+    A field that is ``None``, an empty mapping or tuple, or an attrs record with no set
+    fields is left out unless it is named in ``keep_fields``. A mapping field,
+    including a ``FrozenDict``, is kept as is.
 
     Args:
 

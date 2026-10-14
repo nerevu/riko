@@ -145,8 +145,8 @@ def _render_node(node: ModuleNode) -> str:
     if node.embed is not None:
         parts.append(f"embed={_render_embed(node.embed)}")
 
-    if len(node.options):
-        parts.append(f"options={render_value(node.options)}")
+    if options := node.options.kwargs:
+        parts.append(f"options={render_value(options)}")
 
     if len(node.resources):
         parts.append(f"resources={render_value(node.resources)}")

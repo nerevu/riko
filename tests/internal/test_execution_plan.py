@@ -1314,7 +1314,7 @@ class TestEmbed:
 
         assert node.embed == ResolvedModule("up", {"case": "upper"}, sync_pipe=up)
         assert node.module.name == "fakeloop"
-        assert dict(node.options) == {"emit": True, "count": "first"}
+        assert node.options.kwargs == {"emit": True, "count": "first"}
 
     def test_build_adapts_async_only_embed_under_sync(self) -> None:
         dispatcher = build_dispatcher(
@@ -1589,7 +1589,7 @@ class TestPreparedCall:
             {"content": "aa", "strreplace": "YY"},
         ]
 
-        assert plan.nodes["r"].terminals == ("rep",)
+        assert plan.nodes["r"].extras == ("rep",)
 
         with SyncExecution() as execution:
             assert list(execution.run(plan)) == expected
@@ -1609,7 +1609,7 @@ class TestPreparedCall:
 
         assert list(restored_items) == list(call_items)
 
-    def test_the_plan_names_each_node_terminal(self) -> None:
+    def test_the_plan_names_each_nodes_extras(self) -> None:
         dispatcher = build_dispatcher(
             ModuleDefinition(name="src", sync_pipe=_tagged_source("a")),
             ModuleDefinition(name="host", sync_pipe=_sync_pipe),
@@ -1631,8 +1631,8 @@ class TestPreparedCall:
         workflow = _workflow([*sources, host], outputs, edges=edges, resources=("db",))
         plan = ExecutionPlan.from_workflow(workflow, dispatcher)
 
-        assert plan.nodes["n"].terminals == ("label", "others", "resources", "embed")
-        assert plan.nodes["a"].terminals == ()
+        assert plan.nodes["n"].extras == ("label", "others", "resources", "embed")
+        assert plan.nodes["a"].extras == ()
 
     def test_select_call_requires_a_matching_pipe(self) -> None:
         node = PreparedNode(

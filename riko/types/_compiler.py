@@ -16,7 +16,7 @@ from riko.base._config import PIPE_ID_PREFIXES
 
 if TYPE_CHECKING:
     from ._module_ids import ModuleId
-    from .modules import AnyModuleRawConf, CallOptions, Conf
+    from .modules import AnyModuleRawConf, Conf, RawCallOptions
 
 
 PipeId = NewType("PipeId", str)
@@ -105,7 +105,7 @@ class DagModule(TypedDict, total=False):
     type: ModuleId | PipeId
     id: str
     conf: Conf
-    options: CallOptions
+    options: RawCallOptions
     label: str
     embed: Embed
     resources: str | Sequence[str] | Mapping[str, str]

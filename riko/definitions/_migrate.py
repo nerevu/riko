@@ -11,7 +11,7 @@ warns.
 
 from __future__ import annotations
 
-from itertools import pairwise
+from itertools import chain, pairwise
 from typing import TYPE_CHECKING, cast
 
 import pygogo as gogo
@@ -24,6 +24,7 @@ from riko.types._collections import (
     def_from_require,
     require_from_typed_dict,
     require_str,
+    typed_dict_keys,
 )
 from riko.types._compiler import DagModule, Embed, EmbedRef, PipeModule
 from riko.types._guards import is_mapping, require_mapping, require_sequence
@@ -34,7 +35,7 @@ from riko.types._workflow import (
     RawNode,
     RawWorkflow,
 )
-from riko.types.modules import CallOptions, Conf, WriteConf, require_module_conf
+from riko.types.modules import Conf, RawCallOptions, WriteConf, require_module_conf
 
 from ._nodes import optional_str
 from ._normalize import resolve_port
@@ -45,12 +46,17 @@ if TYPE_CHECKING:
 
     from riko.types._compiler import PipeDag, PipeDefLike
 
-_OPTIONS = frozenset(CallOptions.__annotations__)
+_OPTIONS = frozenset(chain.from_iterable(typed_dict_keys(RawCallOptions)))
 _WRITE = "write"
 _LOOP = "loop"
 _MODULE_FAMILY = "module"
 _WARNING = "migrating a pipe definition to a workflow"
+_WRITE_MODES = {"w": WriteMode.REPLACE, "a": WriteMode.APPEND}
+
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+
+_optional_mapping = def_from_require(require_mapping)
+_require_embed_ref = require_from_typed_dict(EmbedRef)
 
 require_dag = require_from_typed_dict(DagModule)
 require_pipe = require_from_typed_dict(PipeModule)
@@ -58,10 +64,6 @@ require_base_pipe = require_from_typed_dict(
     PipeModule, "write option", exclude=_OPTIONS
 )
 require_write_conf = require_from_typed_dict(WriteConf, extra={"keys"})
-
-_WRITE_MODES = {"w": WriteMode.REPLACE, "a": WriteMode.APPEND}
-_optional_mapping = def_from_require(require_mapping)
-_require_embed_ref = require_from_typed_dict(EmbedRef)
 
 
 def _lower_keys[T](obj: T) -> T:

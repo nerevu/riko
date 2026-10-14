@@ -31,37 +31,33 @@ from riko.types._collections import (
     mapping_converter,
     narrow_from_require,
     optional_mapping_converter,
-    require_from_typed_dict,
     require_instance,
     require_str,
     validator_from_require,
 )
 from riko.types._workflow import parse_port
 from riko.types._wrappers import build_call, require_single_output
-from riko.types.modules import CallOptions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from riko.definitions._nodes import ConfInput
-    from riko.types._collections import FrozenOptions
     from riko.types._workflow import GraphEdge, GraphIndex, NodeId
     from riko.types._wrappers import (
         AnyModuleWrapper,
         AsyncModuleWrapper,
         Dispatcher,
+        ExtraNames,
         ModuleWrapper,
         PreparedCall,
         SyncModuleWrapper,
-        Terminals,
     )
-    from riko.types.modules import ModuleType
+    from riko.types.modules import CallOptions, ModuleType
 
 type PreparedNodes = FrozenDict[NodeId, PreparedNode]
 type ResolvedModules = FrozenDict[NodeId, ResolvedModule]
 type ResolvedModulesInput = Mapping[NodeId, ResolvedModule]
 
-_require_call_options = require_from_typed_dict(CallOptions, "ModuleNode 'options'")
 _is_single = validator_from_require(require_single_output, optional=True)
 _rmodule_conf_converter = conf_converter(what="ModuleNode 'conf'")
 
@@ -254,7 +250,7 @@ class PreparedNode:
         module: The node's resolved implementation.
         embed: The resolved module a loop node runs per item, else ``None``.
         incoming: The stream edges that target the node.
-        terminals: The names of the extra inputs delivered with each item: a named
+        extras: The names of the extra inputs delivered with each item: a named
             input stream under its port name, positional streams as ``others``, bound
             resources as ``resources``, and a loop's embed as ``embed``, in that order.
 
@@ -273,7 +269,7 @@ class PreparedNode:
         'n'
         >>> dict(prepared.resources)
         {'db': 'db'}
-        >>> prepared.terminals
+        >>> prepared.extras
         ('part', 'others', 'resources')
 
     """
@@ -288,7 +284,7 @@ class PreparedNode:
         return self.node.resources
 
     @property
-    def options(self) -> FrozenOptions:
+    def options(self) -> CallOptions:
         return self.node.options
 
     @property
@@ -300,7 +296,7 @@ class PreparedNode:
         return self.module.loopable
 
     @cached_property
-    def terminals(self) -> Terminals:
+    def extras(self) -> ExtraNames:
         """The names of the extra inputs delivered with each item, in call order."""
         node = self.node
         ports = [parse_port(edge.target_port) for edge in self.incoming]
@@ -315,8 +311,8 @@ class PreparedNode:
         if pipe is None:
             call = None
         else:
-            conf, options = self.embed_or_self_conf, _require_call_options(self.options)
-            call = build_call(pipe, *self.terminals, conf=conf, **options)
+            conf, options = self.embed_or_self_conf, self.options.kwargs
+            call = build_call(pipe, *self.extras, conf=conf, **options)
 
         return call
 

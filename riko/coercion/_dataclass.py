@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Literal, Union, get_args, get_origin
 import riko.types._enums as enums_module
 import riko.types._scalars as scalars_module
 from riko.base._typing import resolve_type_hints
+from riko.types._collections import require_from_form
 from riko.types._guards import is_mapping
 from riko.types.modules import RegexConfRule, RegexRule
 
@@ -58,14 +59,6 @@ def fromdict(
         ...     inner: Inner | None = None
         >>> fromdict(Outer, inner={'n': 5}).inner
         Inner(n=5)
-        >>> @dataclass
-        ... class Other:
-        ...     m: int = 0
-        >>> @dataclass
-        ... class Either:
-        ...     val: Inner | Other | None = None
-        >>> fromdict(Either, val={'m': 9}).val
-        {'m': 9}
 
     """
     # Adds the caller's namespace so dataclasses defined in a local scope (e.g. a
@@ -93,10 +86,7 @@ def fromdict(
                 origin = get_origin(ftype)
 
         if origin is Literal:
-            valid = get_args(ftype)
-
-            if val not in valid:
-                raise ValueError(f"Invalid {f.name}={val!r}, expected one of {valid}")
+            val = require_from_form(ftype, f.name, error=ValueError)(val)
         elif is_dataclass(ftype) and isinstance(ftype, type) and is_mapping(val):
             val = fromdict(ftype, **val)
 

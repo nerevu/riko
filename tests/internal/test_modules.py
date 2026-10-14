@@ -1602,12 +1602,12 @@ class TestPrepare:
             strconcat.prepare(extra, conf={}, **kwargs)
 
     @pytest.mark.parametrize(
-        ("terminals", "is_dynamic"), [(("label",), True), ((), False)]
+        ("extras", "is_dynamic"), [(("label",), True), ((), False)]
     )
-    def test_terminals_decide_whether_the_conf_is_dynamic(self, terminals, is_dynamic):
+    def test_extras_decide_whether_the_conf_is_dynamic(self, extras, is_dynamic):
         conf = cast("Conf", {"part": {"terminal": "label", "type": "text"}})
-        prepared = processor().prepare("m", *terminals, conf=conf)
+        prepared = processor().prepare("m", *extras, conf=conf)
 
         assert prepared.is_dynamic is is_dynamic
-        assert prepared.terminals == terminals
+        assert prepared.extras == extras
         assert (prepared.static_casted is None) is is_dynamic

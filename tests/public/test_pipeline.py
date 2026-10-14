@@ -265,7 +265,7 @@ class TestPipelineChaining:
         assert isinstance(node, ModuleNode)
         assert primed.source is SRC
         assert dict(node.conf) == conf
-        assert node.options == {"emit": False}
+        assert node.options.kwargs == {"emit": False}
 
     def test_ror_seeds_async_stream(self):
         async def stream():

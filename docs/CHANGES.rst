@@ -11,14 +11,14 @@ New
   ``Pipeline.from_module`` or ``Pipeline``, or seed one with ``items | pipeline``.
   Run it with ``list(pipeline)``, ``async for``, or ``.first()``/``.afirst()``.
   ``.with_context`` sets the run ``Context`` and ``.with_resource`` provides a resource.
-  ``.with_execution(...)`` configures concurrency. A ``Pipeline`` prints a compact
-  summary of its workflow.
+  ``.with_execution(...)`` configures concurrency. Each chained module takes
+  ``options=`` call options that are stored as a ``CallOptions`` record.
 
 - Added the ``Workflow`` graph (``Node``, ``Edge``, and ``Endpoint``) that a
   ``Pipeline`` runs. ``Workflow.parse`` reads a workflow document
   (``WorkflowDocument``), a bare-bones DAG (``PipeDag``), or a pipe definition
   (``PipeDef``), and ``riko.DocumentShape`` pins a specific shape. ``Workflow.load``
-  reads any of those shapes from a file; ``flow.serialize()`` writes a
+  reads any of those shapes from a file, and ``flow.serialize()`` writes a
   ``WorkflowDocument``.
 
 - Added ``riko.WorkflowLike`` to annotate anything accepted where a ``Workflow`` is
@@ -167,7 +167,7 @@ Changes
   calling it a pipe, and its constructor requires the ``subject`` keyword argument.
 
 - An invalid ``Formats`` or ``ExecutionMode`` choice is rejected with an error that
-  lists the accepted values, e.g., ``Invalid ExecutionMode: 'bogus'; expected one of
+  lists the accepted values, e.g., ``Invalid ExecutionMode: 'bogus'. Expected one of
   run, describe_inputs, describe_dependencies, describe``.
 
 - Refined the supported ``riko.types`` stream aliases. ``Feed`` now represents either

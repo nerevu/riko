@@ -452,8 +452,10 @@ runtime). `isinstance_strict` returns `TypeIs[P]`.
 `require_from_form(form)` builds a guard for any type form: it flattens aliases, unions, and
 `Annotated` with `gen_union_members` (`riko/base/_typing.py`, shared with return-kind inference),
 sends a lone class to `require_instance` and a lone TypedDict to `require_from_typed_dict`, accepts a
-union member by `isinstance` (any mapping matches a TypedDict member, keys unchecked), and raises
-`TypeError` for any other form when the guard is built. `require_from_typed_dict` and
+union member by `isinstance` (any mapping matches a TypedDict member, keys unchecked), accepts a
+`Literal` arm's values by type and equality (so `True` never passes for `1`; a pure `Literal` raises
+`resolve_enum`-style "Expected one of"), and raises `TypeError` for any other form when the guard is
+built. `CallOptions.count` and `fromdict`'s `Literal` fields both validate through it. `require_from_typed_dict` and
 `require_from_attrs` both reduce to `require_from_keys(required, allowed)`; in both, `exclude=`
 forbids a key and `not_required=` only drops it from the required set. The conf contracts' guards
 (`require_module_conf`, `require_conf`) live beside them in `riko/types/modules.py`, off `__all__`.
@@ -463,9 +465,9 @@ list. The helpers live in `riko/types/_collections.py`: `mapping_converter` (req
 non-mapping raises, `error=` selectable) and `optional_mapping_converter` (`None` → empty) wrap a
 freezer, `freeze_json` for JSON fields or `instances_freezer(cls, what)` for `nodes`/`outputs`,
 `ExecutionPlan.modules`/`embeds`, and `Context.resources` (`error=TypeError`). Their optional positional
-`accepted` type form only sets the static input type (e.g. `ConfInput`/`OptionsInput` keep the conf
-and option vocabulary visible while the stored `FrozenConf`/`FrozenOptions` are
-`FrozenDict[str, FrozenJSON]`); the runtime check is the freezer's. `Node.resources` takes
+`accepted` type form only sets the static input type (e.g. `ConfInput` keeps the conf vocabulary
+visible while the stored `FrozenConf` is `FrozenDict[str, FrozenJSON]`); the runtime check is the
+freezer's. `ModuleNode.options` is the exception: it stores the typed `CallOptions` record (below). `Node.resources` takes
 `ResourcesLike` through the single `binding_converter`, which runs `require_binding` (`riko/types/_collections.py`): it returns the normalized `FrozenDict` alias→Context-name binding and rejects non-string/empty names and repeated aliases. `Workflow.edges` requires `Edge` instances, `Endpoint`/`Edge`/`Node.id` validate their fields, `PipelineDefinition.context`/`settings` raise `TypeError` on a wrong type, and `ExecutionPlan` takes only what the `Workflow` cannot supply — `modules` (one `ResolvedModule` per node id) and `embeds` (one per loop embed) — derives `index` at init and `nodes` (the `PreparedNode` views) as a `cached_property`; `ExecutionPlan.validate()`, run from `__attrs_post_init__`, raises `InvalidPipelineError` at construction for a non-module node or when either key set does not match the workflow. `Context.inputs` and `ModuleNode.embed` still
 use converter lists until R4D and R9 settle their value types. Field introspection
 uses `riko.types._collections.field_names` (attrs-or-dataclass field names *including* `ClassVar`
@@ -632,7 +634,7 @@ name); a module key outside `PipeModule`'s closed set raises `InvalidPipelineErr
 `extra={"keys"}`). `typed_dict_keys` (`riko/types/_collections.py`) reads `Required`/`NotRequired`
 from each annotation's source text with `ast`, because CPython 3.12 ignores string-form qualifiers
 under postponed annotations; it never evaluates the annotated types, so it needs no namespaces; a wire target
-port that is not an identifier is pythonised (`1_URL` → `_1_URL`) to match how module terminals are
+port that is not an identifier is pythonised (`1_URL` → `_1_URL`) to match how module extras are
 looked up; fully-uppercase v1 `conf` keys (e.g. `URL`) are
 lowercased through the private `_lower_keys` in `riko/definitions/_migrate.py` so they keep v1's canonical casing. Orphan modules
 are **retained** as nodes rather than silently erased — arity/reachability is validation's call.
@@ -909,7 +911,7 @@ run:
   chaining copies all three; generated modules render `embed=Embed({...})` through the shared
   `render_value` literal renderer, which keeps conf keys verbatim — no lowercasing), and the loop's
   `emit`/`count`/`assign`/`field` live in `ModuleNode.options`
-  (`CallOptions`, a closed key set validated at construction; serialized only when non-empty). The
+  (a `CallOptions` record; serialized only when an option is set). The
   build resolves the embed into `PreparedNode.embed` (a `ResolvedModule`) and mode-selects it
   the same way; the loop wrapper is prepared with the node's `options` and the runner forwards `embed=<callable>` with each call. The embed is re-selected
   against **whether the host pipe actually runs sync or async** (`select_embed(embed, host_isasync=, run_sync=, drain=)` in `_adapt.py`, which each
@@ -993,7 +995,7 @@ run:
 
 **Prepare once per plan** (2026-10-13). A node's module is prepared once per execution plan, not
 once per item: `PreparedNode.sync_call`/`async_call` (cached) call
-`ModuleWrapper.prepare(*terminals, conf=, **options)` — implemented for every wrapper kind — and the
+`ModuleWrapper.prepare(*extras, conf=, **options)` — implemented for every wrapper kind — and the
 executions call `node.select_call(pipe)(item, context=..., **extra)`, supplying only the per-item
 context and the secondary input streams, `resources`, or `embed`. The decorators' call records
 `_PreparedProcessor`/`_PreparedOperator`/`_PreparedSplitter` share the generic attrs base
@@ -1002,14 +1004,22 @@ context and the secondary input streams, `resources`, or `embed`. The decorators
 plain wrapper (a stored-workflow pipe, a cross-mode adapter) is bound by `bind_call`/`build_call`
 (`riko/types/_wrappers.py`), and `stamp_wrapper_meta` attaches a default `prepare`. `PreparedModule`
 (`riko/modules/_prepare.py`) is a frozen attrs record of plain values (name, merged conf, options,
-terminals, defaults; all but the name default) whose `assign`/`emit` (read from the options), `is_conf_parsed`/`is_dynamic`/`static_conf`/`parsers`/`casters`/
+extras, defaults; all but the name default) whose `assign`/`emit` (read from the options), `is_conf_parsed`/`is_dynamic`/`static_conf`/`parsers`/`casters`/
 `static_casted` are cached derivations, so it pickles and the process executor ships it. Dynamic-conf
-detection sees the node's terminals, which `PreparedNode.terminals` derives from its incoming edges
+detection sees the node's extras, which `PreparedNode.extras` derives from its incoming edges
 (named ports, `others`, `resources`, `embed`). Call
-options are typed: `CallOptions` (emit/assign/field/count) and `ContextOverrides` (mode/inputs/
-verbose/test, mirroring `Context.replace`; `_resolve_context` is `base.replace(**overrides)`) live in
-`riko/types/modules.py`, and the decorators derive their option-name sets from them with
-`typed_dict_keys`. One precedence nuance: when a node both binds a call option and receives a
+options are typed: `RawCallOptions` (emit/assign/field/count, the `**options` keyword form) and
+`ContextOverrides` (mode/inputs/verbose/test, mirroring `Context.replace`; `_resolve_context` is
+`base.replace(**overrides)`) live in `riko/types/modules.py`, and the decorators derive their
+option-name sets from them with `typed_dict_keys`. `ModuleNode.options` stores the frozen attrs
+`CallOptions` record (each field `| None`, `None` = unset, type-checked per field at construction;
+`from_raw` accepts a record or any mapping; `kwargs` returns the set fields as `RawCallOptions`, which
+the plan splats into `build_call` and the serializer/codegen emit). `serialize_attrs` leaves out a
+nested record with no set fields, so an option-less node stays byte-stable. A drift test in
+`TestRawWorkflowFields` keeps the record's fields and types equal to `RawCallOptions` (`| None`).
+Direct wrapper calls share `Module._call_direct`, which still prepares with every keyword name as a
+per-item input: a direct call cannot tell an input port named like a call option (`tail`'s `count`)
+from the option. One precedence nuance: when a node both binds a call option and receives a
 secondary input stream under the same name (e.g. `count`), the stream wins, as it already did on a
 direct call. Measured: `Module.prepare` ran 50 times for 50 items before and once per plan after; a
 2,000-item inline `strtransform` run takes ~46 ms. Regressions:

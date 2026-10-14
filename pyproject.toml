@@ -289,7 +289,7 @@ omit = [
 # Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
 # above it and lowers it on a gain.
-uncovered = 580
+uncovered = 577
 
 [tool.pylint.format]
 max-line-length=88

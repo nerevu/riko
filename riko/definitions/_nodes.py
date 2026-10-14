@@ -25,7 +25,6 @@ from riko.types._collections import (
     FrozenConf,
     FrozenDict,
     FrozenJSON,
-    FrozenOptions,
     FrozenParams,
     FrozenPolicy,
     def_from_require,
@@ -38,13 +37,12 @@ from riko.types._collections import (
     require_binding,
     require_str,
     validator_from_require,
-    validator_from_typed_dict,
 )
 from riko.types._compiler import Embed
 from riko.types._enums import Backends, Formats, resolve_enum
 from riko.types._guards import require_mapping
 from riko.types._workflow import Edge, NodeId
-from riko.types.modules import CallOptions, ConfValues, MaybeFrozenConf, OptionValues
+from riko.types.modules import CallOptions, ConfValues, MaybeFrozenConf
 
 from ._resource_definition import ResourcesLike
 from ._write import WriteMode
@@ -52,14 +50,13 @@ from ._write import WriteMode
 if TYPE_CHECKING:
     from riko.types._workflow import EdgeFamily, NodeFamily
 
-_FROZEN_OPTIONS: FrozenOptions = FrozenDict()
+_NO_OPTIONS = CallOptions()
 _FROZEN_PARAMS: FrozenDict[str, FrozenJSON] = FrozenDict()
 _FROZEN_POLICY: FrozenDict[str, FrozenJSON] = FrozenDict()
 EMPTY_BINDINGS: FrozenDict[str, str] = FrozenDict()
 FROZEN_CONF: FrozenConf = FrozenDict()
 
 type ConfInput = MaybeFrozenConf | Mapping[str, ConfValues]
-type OptionsInput = CallOptions | FrozenOptions | Mapping[str, OptionValues]
 
 _normalize_backend = partial(resolve_enum, Backends)
 _normalize_format = partial(resolve_enum, Formats, strict=False)
@@ -73,7 +70,7 @@ binding_converter = narrow_def_from_require(
     require_binding, EMPTY_BINDINGS, "node 'resources'", accepted=ResourcesLike
 )
 conf_converter = partial(json_converter, ConfInput)
-options_converter = json_converter(OptionsInput, what="ModuleNode 'options'")
+_options_converter = partial(CallOptions.from_raw, what="ModuleNode 'options'")
 _module_conf_converter = conf_converter(what="ModuleNode 'conf'")
 
 
@@ -129,11 +126,7 @@ class ModuleNode(Node):
 
     family: ClassVar[NodeFamily] = "module"
     conf: FrozenConf = field(default=FROZEN_CONF, converter=_module_conf_converter)
-    options: FrozenOptions = field(
-        default=_FROZEN_OPTIONS,
-        converter=options_converter,
-        validator=validator_from_typed_dict(CallOptions),
-    )
+    options: CallOptions = field(default=_NO_OPTIONS, converter=_options_converter)
     embed: Embed | None = field(
         default=None,
         converter=[

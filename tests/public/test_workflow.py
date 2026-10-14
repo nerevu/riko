@@ -348,7 +348,7 @@ class TestPipeDag:
             {"id": "t", "type": "tokenizer", "options": {"emit": True}}
         ]
         workflow = Workflow.parse({"modules": modules})
-        assert dict(_module_node(workflow, "t").options) == {"emit": True}
+        assert _module_node(workflow, "t").options.kwargs == {"emit": True}
 
     def test_pipe_dag_accepts_the_older_type_spelling_of_name(self):
         named = Workflow.parse({"modules": [{"name": "forever"}]})
@@ -417,7 +417,6 @@ class TestPipeDag:
 
 
 _NODE_VALUE_PLACEMENTS = {
-    "options": lambda value: {"name": "tag", "options": {"assign": value}},
     "embed": lambda value: {
         "name": "loop",
         "embed": {"name": "tag", "conf": {"x": value}},
@@ -729,7 +728,7 @@ class TestNormalizeWorkflow:
         )
         node = workflow.nodes["tokenizer-1"]
         assert isinstance(node, ModuleNode)
-        assert node.options == {"field": "title", "count": "first"}
+        assert node.options.kwargs == {"field": "title", "count": "first"}
         assert node.conf == {}
 
     def test_nested_conf_is_deeply_frozen_and_isolated(self):
@@ -989,6 +988,22 @@ class TestNormalizeWorkflow:
         raw = {"nodes": [{"id": "n", **_NODE_VALUE_PLACEMENTS[placement](value)}]}
 
         with pytest.raises(InvalidPipelineError, match="JSON-native"):
+            normalize_workflow(raw)
+
+    @pytest.mark.parametrize(
+        "options",
+        [
+            {"assign": b"bytes"},
+            {"field": float("nan")},
+            {"emit": "yes"},
+            {"count": "x"},
+            {"count": ["first"]},
+        ],
+    )
+    def test_mistyped_option_rejected(self, options):
+        raw = {"nodes": [{"id": "n", "name": "tag", "options": options}]}
+
+        with pytest.raises(InvalidPipelineError, match="CallOptions"):
             normalize_workflow(raw)
 
     def test_non_string_policy_key_rejected(self):
@@ -1359,7 +1374,7 @@ class TestMigrate:
         node = workflow.nodes["c"]
         assert isinstance(node, ModuleNode)
         assert node.conf == {"x": 1}
-        assert node.options == {
+        assert node.options.kwargs == {
             "emit": True,
             "assign": "total",
             "field": "title",
@@ -1382,7 +1397,7 @@ class TestMigrate:
         node = workflow.nodes["t"]
         assert isinstance(node, ModuleNode)
         assert node.conf == {"count": {"value": 3}}
-        assert node.options == {"count": "first"}
+        assert node.options.kwargs == {"count": "first"}
 
     def test_loop_embed_and_its_configuration_become_the_node_embed(self):
         workflow = migrate_v1_to_v2(
@@ -1408,7 +1423,7 @@ class TestMigrate:
             "name": "tokenizer",
             "conf": {"delimiter": {"value": ","}},
         }
-        assert node.options == {
+        assert node.options.kwargs == {
             "count": "first",
             "assign": "words",
             "emit": True,

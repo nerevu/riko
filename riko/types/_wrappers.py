@@ -48,12 +48,12 @@ if TYPE_CHECKING:
     from ._streams import Cascade, Feed, Item, Items
     from .modules import (
         AnyModuleConf,
-        CallOptions,
         Conf,
         MaybeFrozenConf,
         ModuleSubtype,
         ModuleSubtypes,
         ModuleType,
+        RawCallOptions,
     )
 
 # per-item pipe values
@@ -134,8 +134,8 @@ class CastFuncs[T, E](NamedTuple):
 
 # A keyword argument name each item call supplies, which a configuration's
 # ``terminal`` reference may name.
-type TerminalName = str
-type Terminals = tuple[TerminalName, ...]
+type ExtraName = str
+type ExtraNames = tuple[ExtraName, ...]
 type PrepareConf = MaybeFrozenConf | DynamicConf
 
 
@@ -164,9 +164,9 @@ class Preparer(Protocol):
 
     def __call__(  # noqa: E704
         self,
-        *terminals: TerminalName,
+        *extras: ExtraName,
         conf: PrepareConf | None = None,
-        **options: Unpack[CallOptions],
+        **options: Unpack[RawCallOptions],
     ) -> PreparedCall: ...
 
 
@@ -197,9 +197,9 @@ class ModuleWrapper(WrapperMeta, Protocol):
 
 def bind_call(
     wrapper: Func[WrapperOutput | SplitterWrapperOutput],
-    *_: TerminalName,
+    *_: ExtraName,
     conf: PrepareConf | None = None,
-    **options: Unpack[CallOptions],
+    **options: Unpack[RawCallOptions],
 ) -> PreparedCall:
     """
     Binds a pipe's configuration and call options for reuse over many items.
@@ -249,9 +249,9 @@ def bind_call(
 
 def build_call(
     pipe: ModuleWrapper,
-    *terminals: TerminalName,
+    *extras: ExtraName,
     conf: PrepareConf | None = None,
-    **options: Unpack[CallOptions],
+    **options: Unpack[RawCallOptions],
 ) -> PreparedCall:
     """
     Binds ``pipe``'s configuration and call options once for reuse over many items.
@@ -264,7 +264,7 @@ def build_call(
 
         pipe: The pipe to call.
 
-        terminals: The names of the extra inputs delivered with each item: a named
+        extras: The names of the extra inputs delivered with each item: a named
             input stream under its port name, positional streams as ``others``, bound
             resources as ``resources``, and a loop's embed as ``embed``.
 
@@ -300,9 +300,9 @@ def build_call(
     prepare: Preparer | None = getattr(pipe, "prepare", None)
 
     if prepare is None:
-        call = bind_call(pipe, *terminals, conf=conf, **options)
+        call = bind_call(pipe, *extras, conf=conf, **options)
     else:
-        call = prepare(*terminals, conf=conf, **options)
+        call = prepare(*extras, conf=conf, **options)
 
     return call
 

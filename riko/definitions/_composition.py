@@ -20,7 +20,6 @@ from typing_extensions import TypeVar
 from riko.base.exceptions import InvalidPipelineError
 from riko.types._collections import (
     FrozenConf,
-    FrozenOptions,
     narrow_def_from_require,
     require_instance,
     validator_from_require,
@@ -51,7 +50,7 @@ if TYPE_CHECKING:
     from riko.types._events import EventSink
     from riko.types._resource import LifecycleFactory
     from riko.types._streams import SourceLike
-    from riko.types.modules import AnyModuleConf, CallOptions, Conf
+    from riko.types.modules import AnyModuleConf, CallOptionsLike, Conf
 
     from ._resource_definition import ResourceDefinition, ReusableResource
     from ._write import Destination
@@ -114,7 +113,7 @@ def _build_chained_workflow(
     workflow: Workflow | None = None,
     *,
     conf: FrozenConf | Conf | None = None,
-    options: FrozenOptions | CallOptions | None = None,
+    options: CallOptionsLike | None = None,
     embed: Embed | None = None,
 ) -> Workflow:
     """Builds a workflow that appends a module node and re-points the default output."""
@@ -228,7 +227,7 @@ class PipelineDefinition(Generic[T]):
         name: ModuleNameLike,
         *,
         conf: Conf | None = None,
-        options: CallOptions | None = None,
+        options: CallOptionsLike | None = None,
         embed: Embed | None = None,
     ) -> Self:
         """
@@ -272,7 +271,7 @@ class PipelineDefinition(Generic[T]):
         name: ModuleNameLike,
         *,
         conf: FrozenConf | Conf | None = None,
-        options: FrozenOptions | CallOptions | None = None,
+        options: CallOptionsLike | None = None,
         embed: Embed | None = None,
     ) -> Self:
         """
@@ -306,8 +305,8 @@ class PipelineDefinition(Generic[T]):
             >>> looped = builder.loop(embed=embed, options={"emit": True})
             >>> looped.workflow.nodes["loop-1"].embed["name"]
             'tokenizer'
-            >>> dict(looped.workflow.nodes["loop-1"].options)
-            {'emit': True}
+            >>> looped.workflow.nodes["loop-1"].options
+            CallOptions(emit=True)
 
         """
         args = str(name), self.workflow
@@ -325,7 +324,7 @@ class PipelineDefinition(Generic[T]):
         fmt: FmtLike | None = None,
         keys: StrLike | None = None,
         conf: FrozenConf | Conf | None = None,
-        options: FrozenOptions | CallOptions | None = None,
+        options: CallOptionsLike | None = None,
         embed: Embed | None = None,
     ) -> Self:
         """

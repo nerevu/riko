@@ -16,7 +16,7 @@ from io import BytesIO
 from pathlib import PurePosixPath, PureWindowsPath
 from time import struct_time
 from types import MappingProxyType
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -37,6 +37,7 @@ from riko.coercion._canonical import (
     digest,
     repr_cache,
 )
+from riko.coercion._dataclass import fromdict
 from riko.coercion._dates import (
     date_to_tt,
     parse_date_string,
@@ -349,6 +350,35 @@ def tokyo(monkeypatch):
     time.tzset()
     yield
     time.tzset()
+
+
+@dataclass
+class _Inner:
+    n: int = 0
+
+
+@dataclass
+class _Other:
+    m: int = 0
+
+
+@dataclass
+class _Either:
+    val: _Inner | _Other | None = None
+
+
+@dataclass
+class _Sorted:
+    dir: Literal["asc", "desc"] = "asc"
+
+
+class TestFromdict:
+    def test_an_ambiguous_union_field_stays_a_mapping(self):
+        assert vars(fromdict(_Either, val={"m": 9}))["val"] == {"m": 9}
+
+    def test_a_literal_field_rejects_a_value_outside_its_choices(self):
+        with pytest.raises(ValueError, match="Invalid dir: 'up'"):
+            fromdict(_Sorted, dir="up")
 
 
 class TestTryLocalTz:

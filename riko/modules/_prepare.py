@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import Item, ItemOrValue
-    from riko.types._wrappers import Terminals
+    from riko.types._wrappers import ExtraNames
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -317,7 +317,7 @@ class PreparedModule[T, E]:
 
         opts: The decoration options plus the resolved call options.
 
-        terminals: The names of the extra inputs delivered with each item. A
+        extras: The names of the extra inputs delivered with each item. A
             configuration value naming one is resolved per item.
 
         defaults: The module's default configuration.
@@ -353,7 +353,7 @@ class PreparedModule[T, E]:
     name: str
     conf: Conf = field(factory=lambda: _require_conf({}), converter=_conf_converter)
     opts: DecorationOptions = Factory(DecorationOptions)
-    terminals: Terminals = ()
+    extras: ExtraNames = ()
     defaults: Defaults = Factory(Defaults)
 
     @cached_property
@@ -375,7 +375,7 @@ class PreparedModule[T, E]:
     def is_dynamic(self) -> bool:
         """Whether the configuration varies per item."""
         if self.is_conf_parsed:
-            sentinels = dict.fromkeys(self.terminals)
+            sentinels = dict.fromkeys(self.extras)
             is_dynamic = conf_is_dynamic(self.conf, memoize=False, **sentinels)
         else:
             is_dynamic = False

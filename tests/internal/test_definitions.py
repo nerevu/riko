@@ -15,10 +15,12 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
+    Literal,
     NotRequired,
     Required,
     TypedDict,
     get_args,
+    get_type_hints,
 )
 
 import pytest
@@ -80,6 +82,7 @@ from riko.types._collections import (
     normalize_strs,
     require_binding,
     require_finite,
+    require_from_form,
     require_from_typed_dict,
     require_str,
     require_strlike,
@@ -91,6 +94,7 @@ from riko.types._guards import require_mapping, require_sequence
 from riko.types._resource import FactoryKind
 from riko.types._workflow import Edge as EdgeBase
 from riko.types._workflow import Endpoint, NodeFamily, RawEdge, RawEndpoint, RawNode
+from riko.types.modules import CallOptions, RawCallOptions
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
@@ -574,11 +578,6 @@ def _attrs_fields(*classes) -> set[str]:
     return {name for cls in classes for name in fields_dict(cls)}
 
 
-def _required_keys(raw) -> set[str]:
-    items = raw.__annotations__.items()
-    return {key for key, hint in items if "Required[" in str(hint)}
-
-
 class TestRawWorkflowFields:
     def test_raw_node_covers_every_node_field(self):
         attrs_keys = _attrs_fields(*_NODES)
@@ -601,12 +600,20 @@ class TestRawWorkflowFields:
         raw_keys = set(RawEndpoint.__annotations__)
         assert attrs_keys == raw_keys
 
+    def test_raw_call_options_matches_record(self):
+        record, raw = get_type_hints(CallOptions), get_type_hints(RawCallOptions)
+        assert record.keys() == raw.keys()
+        assert all(record[key] == hint | None for key, hint in raw.items())
+
+    def test_call_options_kwargs_covers_every_option(self):
+        options = RawCallOptions(emit=True, assign="a", field="f", count="first")
+        assert CallOptions(**options).kwargs == options
+
     def test_raw_requiredness_matches_contract(self):
-        assert _required_keys(RawNode) == {"name"}
         assert "id" in RawNode.__annotations__
-        assert "id" not in _required_keys(RawNode)
-        assert _required_keys(RawEndpoint) == {"node"}
-        assert _required_keys(RawEdge) == {"source", "target"}
+        assert typed_dict_keys(RawNode)[0] == {"name"}
+        assert typed_dict_keys(RawEndpoint)[0] == {"node"}
+        assert typed_dict_keys(RawEdge)[0] == {"source", "target"}
 
 
 _HASH = ResolvedModule("hash", sync_pipe=hash_pipe)
@@ -725,6 +732,37 @@ class TestRequireHelpers:
     def test_caller_can_pick_the_error(self, require, value):
         with pytest.raises(ValueError, match="field"):
             require(value, "field", error=ValueError)
+
+
+class TestRequireFromForm:
+    def test_a_lone_class_is_checked_by_instance(self):
+        with pytest.raises(InvalidPipelineError, match="must be of type int, not str"):
+            require_from_form(int)("1")
+
+    def test_a_union_passes_any_class_member(self):
+        assert require_from_form(int | str)("a") == "a"
+
+    def test_a_literal_passes_one_of_its_values(self):
+        assert require_from_form(Literal["a", "b"])("b") == "b"
+
+    def test_a_literal_value_must_match_by_type(self):
+        with pytest.raises(InvalidPipelineError, match="Expected one of 1"):
+            require_from_form(Literal[1])(True)
+
+    def test_a_mixed_union_passes_a_literal_value(self):
+        assert require_from_form(int | Literal["auto"])("auto") == "auto"
+
+    def test_a_mixed_union_lists_its_literal_values(self):
+        with pytest.raises(InvalidPipelineError, match="'auto', not str"):
+            require_from_form(int | Literal["auto"], "limit")("all")
+
+    def test_an_unsupported_form_raises_when_built(self):
+        with pytest.raises(TypeError, match="not a class, TypedDict, or Literal"):
+            require_from_form(list[str])
+
+    def test_every_unsupported_form_is_named(self):
+        with pytest.raises(TypeError, match="are not classes, TypedDicts, or Literals"):
+            require_from_form(list[str] | dict[str, int])
 
 
 class TestResolveEnum:
