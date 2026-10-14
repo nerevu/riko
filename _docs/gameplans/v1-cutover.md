@@ -37,7 +37,7 @@ the cutover session does not rediscover them:
   two split fixtures survive as `WorkflowDocument`s (workflow documents), and their functional expectations (7 items /
   first title `[Weight] More parents think their overweight…`; 6 items / first title `Open
   researcher open course`) are strict-xfail acceptance tests in `tests/functional/test_basics.py`
-  (`test_split`, `test_simplemath_1`) plus the strict-xfail probe-equivalence case in
+  (`test_first_item_title_prefix[split]`, `test_first_item_field[simplemath]`) plus the strict-xfail probe-equivalence case in
   `tests/internal/test_codegen.py`; R7 un-xfails them. GitHub issue #61 (v1 split routing by traversal order) is
   closed as superseded by this cutover plus R7.
 

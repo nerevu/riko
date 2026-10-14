@@ -37,8 +37,10 @@ are often stated in a phase you wouldn't guess from the file that misbehaves.
 ## 3. Decide the disposition
 
 - **Local repair** — no phase owns the behavior, or the owning phase has
-  already landed: fix now at the root cause, add a regression test, add a
-  `docs/CHANGES.rst` line if user-observable. No prose journaling.
+  already landed: fix now at the root cause, add a regression test (a row in
+  the subject's existing table when one has the same shape; see
+  `tests/__init__.py`), add a `docs/CHANGES.rst` line if user-observable. No
+  prose journaling.
 - **Phase-owned** — a pending phase's goal or exit criteria cover it: do NOT
   fix. Leave a strict-xfail tripwire instead (below) and record the finding
   against the owner in its gameplan if it isn't already captured there.

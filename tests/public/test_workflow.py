@@ -437,23 +437,36 @@ _NODE_VALUE_PLACEMENTS = {
 
 _READ_NODE = {"id": "r", "name": "read", "family": "read", "backend": "file"}
 _TWO_NODES = [{"id": "a", "name": "fetch"}, {"id": "b", "name": "filter"}]
+_CHAIN = {"source": {"node": "a"}, "target": {"node": "b"}}
+_CHAINED = {"nodes": _TWO_NODES, "edges": [_CHAIN]}
+_ERRORS = {"errors": {"node": "a", "port": "_OUTPUT2"}}
+_ROUTED = {"nodes": [{"id": "a", "name": "route"}], "outputs": _ERRORS}
+_EXPLICIT_EMPTY = {"nodes": [{"id": "a", "name": "fetch"}], "outputs": {}}
+NORMALIZED_OUTPUTS = [
+    pytest.param(_CHAINED, {"default": Endpoint("b", "out")}, id="single-leaf"),
+    pytest.param({"nodes": _TWO_NODES}, {}, id="ambiguous-leaves"),
+    pytest.param(_ROUTED, {"errors": Endpoint("a", "out:1")}, id="legacy-port-alias"),
+    pytest.param(_EXPLICIT_EMPTY, {}, id="explicit-empty"),
+]
+_REPEATED = [{"name": "fetch"}, {"name": "filter"}, {"name": "filter"}]
+_TAKEN_ID = [{"name": "fetch"}, {"id": "fetch-1", "name": "sort"}]
+NODE_IDS = [
+    pytest.param(_REPEATED, ["fetch-1", "filter-1", "filter-2"], id="occurrence-ids"),
+    pytest.param([{"id": "keep", "name": "fetch"}], ["keep"], id="explicit-id-kept"),
+    pytest.param({"a": {"id": "a", "name": "fetch"}}, ["a"], id="key-matches-id"),
+    pytest.param(_TAKEN_ID, ["fetch-2", "fetch-1"], id="generated-skip-explicit"),
+]
 
 
 class TestNormalizeWorkflow:
-    def test_list_nodes_generate_occurrence_ids(self):
-        workflow = normalize_workflow(
-            {"nodes": [{"name": "fetch"}, {"name": "filter"}, {"name": "filter"}]}
-        )
-        assert list(workflow.nodes) == ["fetch-1", "filter-1", "filter-2"]
+    @pytest.mark.parametrize(("nodes", "expected"), NODE_IDS)
+    def test_node_ids(self, nodes, expected):
+        assert list(normalize_workflow({"nodes": nodes}).nodes) == expected
 
     def test_mapping_nodes_keep_explicit_ids(self):
         workflow = normalize_workflow({"nodes": {"a": {"name": "fetch"}}})
         assert isinstance(workflow.nodes["a"], ModuleNode)
         assert workflow.nodes["a"].name == "fetch"
-
-    def test_explicit_id_in_list_is_preserved(self):
-        workflow = normalize_workflow({"nodes": [{"id": "keep", "name": "fetch"}]})
-        assert list(workflow.nodes) == ["keep"]
 
     def test_family_dispatch_and_enum_coercion(self):
         workflow = normalize_workflow(
@@ -530,29 +543,9 @@ class TestNormalizeWorkflow:
         assert isinstance(workflow.nodes["s"], SubscribeNode)
         assert isinstance(workflow.edges[0], PublishEdge)
 
-    def test_omitted_outputs_materialize_single_leaf(self):
-        workflow = normalize_workflow(
-            {
-                "nodes": _TWO_NODES,
-                "edges": [{"source": {"node": "a"}, "target": {"node": "b"}}],
-            }
-        )
-        assert workflow.outputs == {"default": Endpoint("b", "out")}
-
-    def test_omitted_outputs_empty_when_ambiguous(self):
-        workflow = normalize_workflow(
-            {"nodes": [{"id": "a", "name": "fetch"}, {"id": "b", "name": "other"}]}
-        )
-        assert workflow.outputs == {}
-
-    def test_explicit_outputs_alias_ports(self):
-        workflow = normalize_workflow(
-            {
-                "nodes": [{"id": "a", "name": "route"}],
-                "outputs": {"errors": {"node": "a", "port": "_OUTPUT2"}},
-            }
-        )
-        assert workflow.outputs == {"errors": Endpoint("a", "out:1")}
+    @pytest.mark.parametrize(("raw", "expected"), NORMALIZED_OUTPUTS)
+    def test_outputs_normalize(self, raw, expected):
+        assert normalize_workflow(raw).outputs == expected
 
     @pytest.mark.parametrize(
         ("declaration", "schema"),
@@ -607,12 +600,6 @@ class TestNormalizeWorkflow:
             }
         )
         assert isinstance(workflow.edges[0], StreamEdge)
-
-    def test_explicit_empty_outputs_not_materialized(self):
-        workflow = normalize_workflow(
-            {"nodes": [{"id": "a", "name": "fetch"}], "outputs": {}}
-        )
-        assert workflow.outputs == {}
 
     def test_write_dest_is_preserved(self):
         workflow = normalize_workflow(
@@ -698,10 +685,6 @@ class TestNormalizeWorkflow:
         )
         assert normalize_workflow(flow) == flow
 
-    def test_mapping_key_matching_inner_id_allowed(self):
-        workflow = normalize_workflow({"nodes": {"a": {"id": "a", "name": "fetch"}}})
-        assert list(workflow.nodes) == ["a"]
-
     @pytest.mark.parametrize(
         "spelling",
         [
@@ -769,11 +752,6 @@ class TestNormalizeWorkflow:
         node = workflow.nodes["loop-1"]
         assert isinstance(node, ModuleNode)
         assert node.embed == {"name": "tokenizer", "conf": {}}
-
-    def test_generated_ids_skip_explicit_ids(self):
-        nodes = [{"name": "fetch"}, {"id": "fetch-1", "name": "sort"}]
-        workflow = normalize_workflow({"nodes": nodes})
-        assert list(workflow.nodes) == ["fetch-2", "fetch-1"]
 
     @pytest.mark.parametrize(
         ("node", "match"),
@@ -849,6 +827,11 @@ class TestNormalizeWorkflow:
                 {"id": "a", "type": "fetch", "conf": {"url": "x"}},
                 "a module goes in 'name'",
                 id="type-key",
+            ),
+            pytest.param(
+                {"id": "n", "family": "cache", "name": "cache", "policy": {1: True}},
+                "mapping key must be of type str",
+                id="non-string-policy-key",
             ),
         ],
     )
@@ -1006,18 +989,6 @@ class TestNormalizeWorkflow:
         with pytest.raises(InvalidPipelineError, match="CallOptions"):
             normalize_workflow(raw)
 
-    def test_non_string_policy_key_rejected(self):
-        raw = {
-            "nodes": [
-                {"id": "n", "family": "cache", "name": "cache", "policy": {1: True}}
-            ]
-        }
-
-        with pytest.raises(
-            InvalidPipelineError, match="mapping key must be of type str"
-        ):
-            normalize_workflow(raw)
-
 
 def _workflow(nodes, edges=(), outputs=None, inputs=None, resources=(), version="2"):
     return Workflow(
@@ -1056,6 +1027,74 @@ class TestRequireModuleOnly:
             workflow.require_module_only("execution")
 
 
+_A_IN, _A_OUT = Endpoint("a", "in"), Endpoint("a", "out")
+_B_IN, _B_OUT = Endpoint("b", "in"), Endpoint("b", "out")
+_C_IN = Endpoint("c", "in")
+_MERGE = {
+    "nodes": [_A, ModuleNode(id="b", name="fetch"), ModuleNode(id="c", name="join")],
+    "edges": [StreamEdge(_A_OUT, _C_IN), StreamEdge(_B_OUT, _C_IN)],
+    "outputs": {"default": Endpoint("c", "out")},
+}
+_HAS_DB = ModuleNode(id="a", name="fetch", resources={"db": "prod"})
+INVALID_WORKFLOWS = [
+    pytest.param(
+        {"nodes": [_A], "outputs": {"default": _A_OUT}, "version": "1"},
+        "unsupported workflow version",
+        id="unsupported-version",
+    ),
+    pytest.param({"nodes": []}, "no nodes", id="no-nodes"),
+    pytest.param(_MERGE, "multiple stream edges", id="multiple-stream-edges"),
+    pytest.param(
+        {"nodes": [_HAS_DB], "outputs": {"default": _A_OUT}},
+        "unresolved resource",
+        id="unresolved-resource",
+    ),
+    pytest.param({"nodes": [_A]}, "exposes no workflow output", id="no-output"),
+]
+INVALID_EDGES = [
+    pytest.param(
+        [StreamEdge(_A_OUT, Endpoint("ghost", "in"))],
+        _B_OUT,
+        "missing node",
+        id="missing-edge-node",
+    ),
+    pytest.param(
+        [], Endpoint("ghost", "out"), "missing node", id="missing-output-node"
+    ),
+    pytest.param(
+        [StreamEdge(_A_IN, _B_IN)],
+        _B_OUT,
+        r"'a', 'in'.*not an 'out' port",
+        id="edge-source-on-input-port",
+    ),
+    pytest.param(
+        [StreamEdge(_A_OUT, _B_OUT)],
+        _B_OUT,
+        r"'b', 'out'.*not an 'in' port",
+        id="edge-target-on-output-port",
+    ),
+    pytest.param([], _A_IN, "not an 'out' port", id="output-on-input-port"),
+    pytest.param(
+        [], Endpoint("a", "sideways"), "invalid port direction", id="malformed-port"
+    ),
+    pytest.param(
+        [StreamEdge(_A_OUT, Endpoint("b", "in:0"))], _B_OUT, "invalid port", id="in:0"
+    ),
+    pytest.param(
+        [StreamEdge(Endpoint("a", "out:0"), _B_IN)], _B_OUT, "invalid port", id="out:0"
+    ),
+    pytest.param(
+        [StreamEdge(_A_OUT, _B_IN), StreamEdge(_B_OUT, _A_IN)],
+        _B_OUT,
+        r"cycle.*\['a', 'b'\]",
+        id="cycle",
+    ),
+    pytest.param(
+        [StreamEdge(_A_OUT, _A_IN)], _A_OUT, r"cycle.*\['a'\]", id="self-loop"
+    ),
+]
+
+
 class TestValidate:
     @pytest.mark.parametrize(
         ("nodes", "edges", "output", "resources"),
@@ -1092,29 +1131,10 @@ class TestValidate:
         workflow = _workflow(nodes, edges=edges, outputs=outputs, resources=resources)
         assert workflow.validate() is None
 
-    def test_unsupported_version_rejected(self):
-        workflow = _workflow(
-            [_A], outputs={"default": Endpoint("a", "out")}, version="1"
-        )
-        with pytest.raises(InvalidPipelineError, match="unsupported workflow version"):
-            workflow.validate()
-
-    def test_empty_node_set_rejected(self):
-        with pytest.raises(InvalidPipelineError, match="no nodes"):
-            _workflow([]).validate()
-
-    def test_multiple_stream_edges_into_one_port_rejected(self):
-        b = ModuleNode(id="b", name="fetch")
-        c = ModuleNode(id="c", name="join")
-        edges = [
-            StreamEdge(Endpoint("a", "out"), Endpoint("c", "in")),
-            StreamEdge(Endpoint("b", "out"), Endpoint("c", "in")),
-        ]
-        workflow = _workflow(
-            [_A, b, c], edges=edges, outputs={"default": Endpoint("c", "out")}
-        )
-        with pytest.raises(InvalidPipelineError, match="multiple stream edges"):
-            workflow.validate()
+    @pytest.mark.parametrize(("kwargs", "match"), INVALID_WORKFLOWS)
+    def test_invalid_workflow_rejected(self, kwargs, match):
+        with pytest.raises(InvalidPipelineError, match=match):
+            _workflow(**kwargs).validate()
 
     @pytest.mark.parametrize(("edge", "target"), EDGE_FAMILY_MISMATCHES)
     def test_edge_family_disagreeing_with_its_target_rejected(self, edge, target):
@@ -1126,87 +1146,10 @@ class TestValidate:
         with pytest.raises(InvalidPipelineError, match="edge family disagrees"):
             workflow.validate()
 
-    def test_unresolved_resource_reference_rejected(self):
-        node = ModuleNode(id="a", name="fetch", resources={"db": "prod"})
-        workflow = _workflow([node], outputs={"default": Endpoint("a", "out")})
-        with pytest.raises(InvalidPipelineError, match="unresolved resource"):
-            workflow.validate()
-
-    def test_non_empty_graph_without_output_rejected(self):
-        with pytest.raises(InvalidPipelineError, match="exposes no workflow output"):
-            _workflow([_A]).validate()
-
-    @pytest.mark.parametrize(
-        ("edges", "output", "match"),
-        [
-            pytest.param(
-                [StreamEdge(Endpoint("a", "out"), Endpoint("ghost", "in"))],
-                Endpoint("b", "out"),
-                "missing node",
-                id="missing-edge-node",
-            ),
-            pytest.param(
-                [], Endpoint("ghost", "out"), "missing node", id="missing-output-node"
-            ),
-            pytest.param(
-                [StreamEdge(Endpoint("a", "in"), Endpoint("b", "in"))],
-                Endpoint("b", "out"),
-                r"'a', 'in'.*not an 'out' port",
-                id="edge-source-on-input-port",
-            ),
-            pytest.param(
-                [StreamEdge(Endpoint("a", "out"), Endpoint("b", "out"))],
-                Endpoint("b", "out"),
-                r"'b', 'out'.*not an 'in' port",
-                id="edge-target-on-output-port",
-            ),
-            pytest.param(
-                [], Endpoint("a", "in"), "not an 'out' port", id="output-on-input-port"
-            ),
-            pytest.param(
-                [],
-                Endpoint("a", "sideways"),
-                "invalid port direction",
-                id="malformed-port",
-            ),
-            pytest.param(
-                [StreamEdge(Endpoint("a", "out"), Endpoint("b", "in:0"))],
-                Endpoint("b", "out"),
-                "invalid port",
-                id="in:0",
-            ),
-            pytest.param(
-                [StreamEdge(Endpoint("a", "out:0"), Endpoint("b", "in"))],
-                Endpoint("b", "out"),
-                "invalid port",
-                id="out:0",
-            ),
-        ],
-    )
-    def test_unusable_endpoint_rejected(self, edges, output, match):
+    @pytest.mark.parametrize(("edges", "output", "match"), INVALID_EDGES)
+    def test_invalid_edges_rejected(self, edges, output, match):
         workflow = _workflow([_A, _B], edges=edges, outputs={"default": output})
         with pytest.raises(InvalidPipelineError, match=match):
-            workflow.validate()
-
-    def test_cycle_rejected(self):
-        a = ModuleNode(id="a", name="sort")
-        edges = [
-            StreamEdge(Endpoint("a", "out"), Endpoint("b", "in")),
-            StreamEdge(Endpoint("b", "out"), Endpoint("a", "in")),
-        ]
-        workflow = _workflow(
-            [a, _B], edges=edges, outputs={"default": Endpoint("b", "out")}
-        )
-        with pytest.raises(InvalidPipelineError, match=r"cycle.*\['a', 'b'\]"):
-            workflow.validate()
-
-    def test_self_loop_rejected(self):
-        node = ModuleNode(id="a", name="sort")
-        edges = [StreamEdge(Endpoint("a", "out"), Endpoint("a", "in"))]
-        workflow = _workflow(
-            [node], edges=edges, outputs={"default": Endpoint("a", "out")}
-        )
-        with pytest.raises(InvalidPipelineError, match=r"cycle.*\['a'\]"):
             workflow.validate()
 
     @pytest.mark.xfail(

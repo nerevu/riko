@@ -759,6 +759,40 @@ class TestLayoutLint:
         assert "consider merging" in messages[0][0]
 
 
+def _unguarded(name: str) -> str:
+    return f"'{name}' is imported unguarded but is not a [project] dependency"
+
+
+def _try_import(*names: str) -> str:
+    imports = "".join(f"    import {name}\n" for name in names)
+    return f"try:\n{imports}except ImportError:\n    pass\n"
+
+
+IMPORTS = "import requests\nimport dateutil\n"
+TYPING = "import typing_extensions\n"
+FROM_DATEUTIL = f"import requests\nfrom dateutil import parser\n{TYPING}"
+LOCAL_TYPING = f"{IMPORTS}def f():\n    {TYPING}"
+TRY_UJSON = IMPORTS + _try_import("lxml", "ujson")
+TRY_HTTPX = IMPORTS + _try_import("httpx")
+TYPE_ONLY = f"import requests\nif TYPE_CHECKING:\n    import dateutil\n    {TYPING}"
+UNGUARDED = [_unguarded("typing_extensions")]
+UNDECLARED = ["'ujson' is imported in a try block but declared nowhere"]
+UNUSED = ["'python-dateutil' is a [project] dependency that nothing imports"]
+STUB = ["'types-lxml' is a typing stub; declare it in a dependency group"]
+PERF = 'perf = ["lxml"]'
+STUB_TOML = PYPROJECT_TOML.replace(PERF, 'perf = ["lxml", "types-lxml"]')
+HTTPX_TOML = PYPROJECT_TOML.replace(PERF, 'perf = ["httpx"]')
+DEPENDENCY_ISSUES = [
+    pytest.param(FROM_DATEUTIL, PYPROJECT_TOML, UNGUARDED, id="unguarded-transitive"),
+    pytest.param(LOCAL_TYPING, PYPROJECT_TOML, UNGUARDED, id="function-local"),
+    pytest.param(TRY_UJSON, PYPROJECT_TOML, UNDECLARED, id="try-undeclared"),
+    pytest.param(TYPE_ONLY, PYPROJECT_TOML, UNUSED, id="type-checking-only"),
+    pytest.param(IMPORTS, PYPROJECT_TOML, [], id="stub-in-group-ok"),
+    pytest.param(IMPORTS, STUB_TOML, STUB, id="stub-in-extra"),
+    pytest.param(TRY_HTTPX, HTTPX_TOML, [], id="uninstalled-extra-name"),
+]
+
+
 class TestDependencyLint:
     """The declared-dependencies lint check."""
 
@@ -789,87 +823,12 @@ class TestDependencyLint:
         ]
         assert sites == expected
 
-    def test_unguarded_import_must_be_a_project_dependency(
-        self, tmp_path: Path
+    @pytest.mark.parametrize(("source", "pyproject", "expected"), DEPENDENCY_ISSUES)
+    def test_dependency_issues(
+        self, tmp_path: Path, source: str, pyproject: str, expected: list[str]
     ) -> None:
-        """An always-run import needs a required dependency, not a transitive one."""
-        source = (
-            "import requests\nfrom dateutil import parser\nimport typing_extensions\n"
-        )
-        expected = [
-            (
-                "'typing_extensions' is imported unguarded "
-                "but is not a [project] dependency"
-            )
-        ]
-        assert _issues(tmp_path, source) == expected
-
-    def test_function_local_import_counts_as_unguarded(self, tmp_path: Path) -> None:
-        """A function-local import needs its package whenever the function runs."""
-        source = (
-            "import requests\nimport dateutil\ndef f():\n    import typing_extensions\n"
-        )
-        expected = [
-            (
-                "'typing_extensions' is imported unguarded "
-                "but is not a [project] dependency"
-            )
-        ]
-        assert _issues(tmp_path, source) == expected
-
-    def test_try_import_may_come_from_any_declaration(self, tmp_path: Path) -> None:
-        """An optional import is fine from an extra but not from nowhere."""
-        source = (
-            "import requests\n"
-            "import dateutil\n"
-            "try:\n"
-            "    import lxml\n"
-            "    import ujson\n"
-            "except ImportError:\n"
-            "    pass\n"
-        )
-        expected = ["'ujson' is imported in a try block but declared nowhere"]
-        assert _issues(tmp_path, source) == expected
-
-    def test_type_checking_import_neither_needs_nor_satisfies_a_dependency(
-        self, tmp_path: Path
-    ) -> None:
-        """A type-only import never needs or justifies a runtime dependency."""
-        source = (
-            "import requests\n"
-            "if TYPE_CHECKING:\n"
-            "    import dateutil\n"
-            "    import typing_extensions\n"
-        )
-        expected = ["'python-dateutil' is a [project] dependency that nothing imports"]
-        assert _issues(tmp_path, source) == expected
-
-    def test_stub_package_must_not_be_a_runtime_requirement(
-        self, tmp_path: Path
-    ) -> None:
-        """A ``types-*`` stub is flagged in an extra, not in a dependency group."""
-        source = "import requests\nimport dateutil\n"
-        expected = ["'types-lxml' is a typing stub; declare it in a dependency group"]
-        pyproject = PYPROJECT_TOML.replace(
-            'perf = ["lxml"]', 'perf = ["lxml", "types-lxml"]'
-        )
-        assert _issues(tmp_path, source) == []
+        """Each import is checked against the declaration its guard requires."""
         assert _issues(tmp_path, source, pyproject) == expected
-
-    def test_uninstalled_module_matches_its_own_distribution_name(
-        self, tmp_path: Path
-    ) -> None:
-        """An uninstalled extra still matches the declaration it shares a name with."""
-        source = (
-            "import requests\n"
-            "import dateutil\n"
-            "try:\n"
-            "    import httpx\n"
-            "except ImportError:\n"
-            "    pass\n"
-        )
-        pyproject = PYPROJECT_TOML.replace('perf = ["lxml"]', 'perf = ["httpx"]')
-        assert _issues(tmp_path, source, pyproject) == []
 
 
 LOCK = """

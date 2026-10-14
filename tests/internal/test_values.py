@@ -61,6 +61,10 @@ from riko.types.modules import XpathFetchPageConf
 if TYPE_CHECKING:
     from riko.types._collections import FrozenSetMapping
 
+NOON_UTC = datetime(2020, 6, 15, 12, tzinfo=UTC)
+NOON_TT = time.struct_time((2020, 6, 15, 12, 0, 0, 0, 0, -1))
+NOON_EST = datetime(2020, 6, 15, 7, tzinfo=timezone(timedelta(hours=-5)))
+
 GOLDEN_BYTES = {
     "none": (None, b'["none",null]'),
     "bool": (True, b'["bool",true]'),
@@ -82,10 +86,10 @@ GOLDEN_BYTES = {
     ),
     "path": (PurePosixPath("a/b"), b'["path","posix","a/b"]'),
     "date": (date(2020, 6, 15), b'["date","2020-06-15"]'),
-    "datetime": (
-        datetime(2020, 6, 15, 12, tzinfo=UTC),
-        b'["dt","2020-06-15T12:00:00+00:00"]',
-    ),
+    "datetime": (NOON_UTC, b'["dt","2020-06-15T12:00:00+00:00"]'),
+    "inf": (float("inf"), b'["float","inf"]'),
+    "neg-inf": (float("-inf"), b'["float","-inf"]'),
+    "nan": (float("nan"), b'["float","nan"]'),
 }
 
 
@@ -110,6 +114,43 @@ class Pin:
     y: int
 
 
+REPEATABLE_VALUE = {"a": [1, 2], "b": (3, 4), "c": {5, 6}}
+
+DISTINCT_PAIRS = [
+    pytest.param(1, 1.0, id="int-vs-float"),
+    pytest.param(1.0, Decimal(1), id="float-vs-decimal"),
+    pytest.param([1], (1,), id="list-vs-tuple"),
+    pytest.param({1}, frozenset({1}), id="set-vs-frozenset"),
+    pytest.param(NOON_UTC, date(2020, 6, 15), id="datetime-vs-date"),
+    pytest.param(NOON_TT, NOON_UTC, id="struct-time-vs-datetime"),
+    pytest.param(
+        PureWindowsPath("a/b"), PurePosixPath("a/b"), id="windows-vs-posix-path"
+    ),
+    pytest.param(Color.RED, 1, id="enum-vs-int"),
+    pytest.param(Flavor.SWEET, "sweet", id="strenum-vs-str"),
+    pytest.param(Pin(1, 2), Point(1, 2), id="attrs-vs-dataclass"),
+]
+
+EQUIVALENT_PAIRS = [
+    pytest.param(
+        {1: "x", "a": "y", (2, 3): "z"},
+        {(2, 3): "z", "a": "y", 1: "x"},
+        id="mixed-key-order",
+    ),
+    pytest.param({1, 2, 3}, {3, 2, 1}, id="set-order"),
+    pytest.param(-0.0, 0.0, id="negative-zero"),
+    pytest.param(Decimal("1.0"), Decimal("1.000"), id="decimal-exponent"),
+    pytest.param(datetime(2020, 6, 15, 12), NOON_UTC, id="naive-datetime-utc"),
+    pytest.param(NOON_EST, NOON_UTC, id="aware-datetime-utc"),
+    pytest.param(
+        {(1, (2, 3)): "x", (1, 2, 3): "y"},
+        {(1, 2, 3): "y", (1, (2, 3)): "x"},
+        id="nested-tuple-keys",
+    ),
+    pytest.param(REPEATABLE_VALUE, REPEATABLE_VALUE, id="repeatable"),
+]
+
+
 class TestCanonicalBytes:
     @pytest.mark.parametrize(
         ("value", "expected"), GOLDEN_BYTES.values(), ids=GOLDEN_BYTES.keys()
@@ -117,26 +158,13 @@ class TestCanonicalBytes:
     def test_golden_canonical_bytes(self, value, expected):
         assert canonical_bytes(value) == expected
 
-    @pytest.mark.parametrize(
-        ("left", "right"),
-        [
-            (1, 1.0),
-            (1.0, Decimal(1)),
-            ([1], (1,)),
-            ({1}, frozenset({1})),
-            (datetime(2020, 6, 15, 12, tzinfo=UTC), date(2020, 6, 15)),
-        ],
-    )
+    @pytest.mark.parametrize(("left", "right"), DISTINCT_PAIRS)
     def test_conflatable_types_stay_distinct(self, left, right):
         assert canonical_bytes(left) != canonical_bytes(right)
 
-    def test_heterogeneous_mapping_keys_sort_deterministically(self):
-        first = canonical_bytes({1: "x", "a": "y", (2, 3): "z"})
-        second = canonical_bytes({(2, 3): "z", "a": "y", 1: "x"})
-        assert first == second
-
-    def test_set_is_order_independent(self):
-        assert canonical_bytes({1, 2, 3}) == canonical_bytes({3, 2, 1})
+    @pytest.mark.parametrize(("left", "right"), EQUIVALENT_PAIRS)
+    def test_equivalent_values_encode_identically(self, left, right):
+        assert canonical_bytes(left) == canonical_bytes(right)
 
     def test_distinct_nan_keys_sort_by_full_pair(self):
         first, second = float("nan"), float("nan")
@@ -144,17 +172,6 @@ class TestCanonicalBytes:
         reverse = {second: "y", first: "x"}
         assert len(forward) == len(reverse) == 2
         assert canonical_bytes(forward) == canonical_bytes(reverse)
-
-    def test_negative_zero_canonicalizes_with_positive_zero(self):
-        assert canonical_bytes(-0.0) == canonical_bytes(0.0)
-
-    def test_float_infinities_and_nan_have_stable_tags(self):
-        assert canonical_bytes(float("inf")) == b'["float","inf"]'
-        assert canonical_bytes(float("-inf")) == b'["float","-inf"]'
-        assert canonical_bytes(float("nan")) == b'["float","nan"]'
-
-    def test_decimal_equivalent_representations_normalize(self):
-        assert canonical_bytes(Decimal("1.0")) == canonical_bytes(Decimal("1.000"))
 
     def test_decimal_encoding_ignores_ambient_context_precision(self):
         value = Decimal("123456.789")
@@ -169,51 +186,12 @@ class TestCanonicalBytes:
 
         assert low == high == canonical_bytes(value)
 
-    def test_naive_datetime_uses_utc_fallback(self):
-        assert canonical_bytes(datetime(2020, 6, 15, 12)) == canonical_bytes(
-            datetime(2020, 6, 15, 12, tzinfo=UTC)
-        )
-
-    def test_aware_datetime_normalizes_to_utc(self):
-        est = timezone(timedelta(hours=-5))
-        assert canonical_bytes(datetime(2020, 6, 15, 7, tzinfo=est)) == canonical_bytes(
-            datetime(2020, 6, 15, 12, tzinfo=UTC)
-        )
-
-    def test_struct_time_is_distinct_from_datetime(self):
-        tt = time.struct_time((2020, 6, 15, 12, 0, 0, 0, 0, -1))
-        assert canonical_bytes(tt) != canonical_bytes(
-            datetime(2020, 6, 15, 12, tzinfo=UTC)
-        )
-
-    def test_path_flavor_is_preserved(self):
-        assert canonical_bytes(PureWindowsPath("a/b")) != canonical_bytes(
-            PurePosixPath("a/b")
-        )
-
-    def test_enum_includes_type_identity(self):
-        assert canonical_bytes(Color.RED) != canonical_bytes(1)
-        assert canonical_bytes(Flavor.SWEET) != canonical_bytes("sweet")
-
-    def test_dataclass_encodes_by_type_and_fields(self):
-        assert canonical_bytes(Point(1, 2)) == canonical_bytes(Point(1, 2))
-        assert canonical_bytes(Point(1, 2)) != canonical_bytes(Point(2, 1))
-
-    def test_attrs_encodes_by_type_and_fields(self):
-        assert canonical_bytes(Pin(1, 2)) == canonical_bytes(Pin(1, 2))
-        assert canonical_bytes(Pin(1, 2)) != canonical_bytes(Pin(2, 1))
-
-    def test_attrs_and_dataclass_stay_distinct(self):
-        assert canonical_bytes(Pin(1, 2)) != canonical_bytes(Point(1, 2))
-
-    def test_recursive_tuple_keys_are_supported(self):
-        first = canonical_bytes({(1, (2, 3)): "x", (1, 2, 3): "y"})
-        second = canonical_bytes({(1, 2, 3): "y", (1, (2, 3)): "x"})
-        assert first == second
-
-    def test_encoding_is_repeatable(self):
-        value = {"a": [1, 2], "b": (3, 4), "c": {5, 6}}
-        assert canonical_bytes(value) == canonical_bytes(value)
+    @pytest.mark.parametrize(
+        "record", [pytest.param(Point, id="dataclass"), pytest.param(Pin, id="attrs")]
+    )
+    def test_record_encodes_by_type_and_fields(self, record):
+        assert canonical_bytes(record(1, 2)) == canonical_bytes(record(1, 2))
+        assert canonical_bytes(record(1, 2)) != canonical_bytes(record(2, 1))
 
     def test_cyclic_structure_is_rejected(self):
         data: list[object] = [1]

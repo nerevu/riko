@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
-from operator import itemgetter
+from operator import itemgetter, methodcaller
 from pickle import dumps, loads  # noqa: S403
 from time import perf_counter
 from typing import TYPE_CHECKING, ClassVar, cast, get_args, get_origin
@@ -455,12 +455,27 @@ def _both(build: Callable[[Pipeline], Pipeline]) -> tuple[Items, Items]:
     return list(pipeline), aresolve(pipeline)
 
 
+_A, _BB, _CCC = {"content": "a"}, {"content": "bb"}, {"content": "ccc"}
+_STRR_ASSIGN = methodcaller(
+    "strreplace", conf=_PARITY_STRR_CONF, options={"assign": "content"}
+)
+_ASSIGNED = [_A, _BB, {"content": "CCC"}]
+_SMOKE = pytest.mark.smoke
+PARITY_CASES = [
+    pytest.param(methodcaller("count"), [{"count": 3}], id="count", marks=_SMOKE),
+    pytest.param(_STRR_ASSIGN, _ASSIGNED, id="strreplace-assign", marks=_SMOKE),
+    pytest.param(methodcaller("reverse"), [_CCC, _BB, _A], id="reverse"),
+    pytest.param(methodcaller("tail", conf={"count": 1}), [_CCC], id="tail"),
+    pytest.param(methodcaller("truncate", conf={"count": 2}), [_A, _BB], id="truncate"),
+]
+
+
 @skipif_issync
 class TestOutputParity:
-    @pytest.mark.smoke
-    def test_pipe_chaining(self):
-        sync_result, async_result = _both(lambda pipeline: pipeline.count())
-        assert sync_result == async_result == [{"count": 3}]
+    @pytest.mark.parametrize(("build", "expected"), PARITY_CASES)
+    def test_sync_matches_async(self, build: methodcaller, expected: Items):
+        sync_result, async_result = _both(build)
+        assert sync_result == async_result == expected
 
     def test_assignment_preserves_parent(self):
         build = lambda pipeline: pipeline.hash(options={"assign": "h"})
@@ -471,31 +486,6 @@ class TestOutputParity:
             item.get("content") for item in sync_result if is_mapping(item)
         ] == expected
         assert all("h" in item for item in sync_result if is_mapping(item))
-
-    @pytest.mark.smoke
-    def test_emit_false_assigns_onto_content(self):
-        build = lambda pipeline: pipeline.strreplace(
-            conf=_PARITY_STRR_CONF, options={"assign": "content"}
-        )
-        sync_result, async_result = _both(build)
-        assert sync_result == async_result
-        assert sync_result == [{"content": "a"}, {"content": "bb"}, {"content": "CCC"}]
-
-    def test_aggregator_reverse(self):
-        sync_result, async_result = _both(lambda pipeline: pipeline.reverse())
-        assert sync_result == async_result
-        assert sync_result == [{"content": "ccc"}, {"content": "bb"}, {"content": "a"}]
-
-    def test_aggregator_tail(self):
-        conf = {"count": 1}
-        sync_result, async_result = _both(lambda pipeline: pipeline.tail(conf=conf))
-        assert sync_result == async_result == [{"content": "ccc"}]
-
-    def test_composer_truncate(self):
-        build = lambda pipeline: pipeline.truncate(conf={"count": 2})
-        sync_result, async_result = _both(build)
-        assert sync_result == async_result
-        assert sync_result == [{"content": "a"}, {"content": "bb"}]
 
 
 class TestReiteration:

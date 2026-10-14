@@ -107,6 +107,20 @@ if TYPE_CHECKING:
 ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
 
 _OUT = {"default": Endpoint("a", "out")}
+_X0, _X1 = [{"x": 0}], [{"x": 1}]
+_CSV0, _CSV012 = b"x\r\n0\r\n", b"x\r\n0\r\n1\r\n2\r\n"
+_JSON0, _JSON01 = b'{"x": 0}\n', b'{"x": 0}\n{"x": 1}\n'
+CSV_SINK_CASES = [
+    pytest.param(None, ITEMS, "replace", _CSV012, id="csv-replace-header-once"),
+    pytest.param(None, _X0, "append", _CSV0, id="csv-append-to-empty-emits-header"),
+    pytest.param(b"x\r\n0", _X1, "append", b"x\r\n0\n1\r\n", id="csv-unterminated"),
+    pytest.param(_CSV0, [], "append", _CSV0, id="csv-empty-append-unchanged"),
+]
+JSONL_APPEND_CASES = [
+    pytest.param(_JSON0, _X1, _JSON01, id="jsonl-append-terminated"),
+    pytest.param(b'{"x": 0}', _X1, _JSON01, id="jsonl-append-unterminated"),
+    pytest.param(_JSON0, [], _JSON0, id="jsonl-empty-append-unchanged"),
+]
 
 
 def untyped_inputs(**values: Any) -> dict[str, Any]:
@@ -1094,33 +1108,20 @@ class TestConverterPath:
 
 
 class TestCsv:
-    def test_replace_writes_header_once(self, tmp_path):
+    @pytest.mark.parametrize(("seed", "items", "mode", "expected"), CSV_SINK_CASES)
+    def test_sink_writes_expected_bytes(self, tmp_path, seed, items, mode, expected):
         path = tmp_path / "out.csv"
-        _sink(ITEMS, path)
-        assert path.read_bytes() == b"x\r\n0\r\n1\r\n2\r\n"
+        if seed is not None:
+            path.write_bytes(seed)
+
+        _sink(items, path, mode)
+        assert path.read_bytes() == expected
 
     def test_append_existing_skips_header(self, tmp_path):
         path = tmp_path / "out.csv"
         _sink([{"x": 0}], path)
         _sink([{"x": 1}], path, "append")
         assert path.read_bytes() == b"x\r\n0\r\n1\r\n"
-
-    def test_append_empty_emits_header(self, tmp_path):
-        path = tmp_path / "out.csv"
-        _sink([{"x": 0}], path, "append")
-        assert path.read_bytes() == b"x\r\n0\r\n"
-
-    def test_append_existing_without_newline_inserts_boundary(self, tmp_path):
-        path = tmp_path / "out.csv"
-        path.write_bytes(b"x\r\n0")
-        _sink([{"x": 1}], path, "append")
-        assert path.read_bytes() == b"x\r\n0\n1\r\n"
-
-    def test_empty_append_does_not_mutate(self, tmp_path):
-        path = tmp_path / "out.csv"
-        path.write_bytes(b"x\r\n0\r\n")
-        _sink([], path, "append")
-        assert path.read_bytes() == b"x\r\n0\r\n"
 
     def test_passthrough_singleton_preserves_schema(self, tmp_path):
         path = tmp_path / "out.csv"
@@ -1142,23 +1143,12 @@ class TestJsonl:
         list(write_through(ITEMS, build_write(path), terminating=_never))
         assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
 
-    def test_append_newline_terminated_concatenates(self, tmp_path):
+    @pytest.mark.parametrize(("seed", "items", "expected"), JSONL_APPEND_CASES)
+    def test_append_writes_expected_bytes(self, tmp_path, seed, items, expected):
         path = tmp_path / "out.jsonl"
-        path.write_bytes(b'{"x": 0}\n')
-        _sink([{"x": 1}], path, "append")
-        assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n'
-
-    def test_append_unterminated_inserts_one_boundary(self, tmp_path):
-        path = tmp_path / "out.jsonl"
-        path.write_bytes(b'{"x": 0}')
-        _sink([{"x": 1}], path, "append")
-        assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n'
-
-    def test_empty_append_does_not_mutate(self, tmp_path):
-        path = tmp_path / "out.jsonl"
-        path.write_bytes(b'{"x": 0}\n')
-        _sink([], path, "append")
-        assert path.read_bytes() == b'{"x": 0}\n'
+        path.write_bytes(seed)
+        _sink(items, path, "append")
+        assert path.read_bytes() == expected
 
 
 class TestFramed:

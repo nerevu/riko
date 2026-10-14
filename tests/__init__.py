@@ -18,6 +18,17 @@ module when several files do. Within a class, behavior tests come first, then
 rejection tables, then strict-xfail tripwires. A regression test goes in its
 subject's class; a tripwire goes where the real test will live once it flips.
 
+Tests that share setup and assertion and differ only in data are one
+parametrized test, and a new case of an existing shape is a row, not a method.
+Keep the table as a module-level constant above its class, one
+``pytest.param(..., id="kebab-id")`` per row, each on one line where it fits:
+name long or repeated values once and drop the trailing comma from a row that
+fits. An ``ids=[...]`` list is fine only when the values and the ids fit
+together on one line, e.g. ``parametrize("v", [a, b], ids=["one", "two"])``. A
+test whose name states a distinct rule stays its own test, as do sync and async
+twins. Folding tests should leave the file shorter; if it grows, compact the
+rows.
+
 Files start coarse. Split one past about 2000 lines by moving its largest subject
 row into ``test_<file>_<row>.py``; merge one under about 300 lines back into its
 neighbor.

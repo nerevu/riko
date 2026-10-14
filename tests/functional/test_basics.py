@@ -34,6 +34,7 @@ from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput, is_subpipe
 from tests import TESTS_DIR, async_test
 from tests._loopback import loopback_url
+from tests._workflows import SPLIT_PENDING
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -177,6 +178,58 @@ def _check_dates[T: datetime | struct_time | date](*dates: T | object) -> tuple[
     return cast("tuple[T, ...]", dates)
 
 
+NATIVE_TITLE = "Running “Native” Data Wrangling Applicat"
+FIRST_ITEM_FIELDS = [
+    pytest.param(
+        "pipe_HrX5bjkv3BGEp9eSy6ky6g",
+        15,
+        "link",
+        "http://sz.de/1.2104731",
+        id="feeddiscovery",
+    ),
+    pytest.param(
+        "pipe_404411a8d22104920f3fc1f428f33642",
+        3,
+        "title",
+        "Markitekt - Architects of Marketing",
+        id="wired-count-truncate",
+    ),
+    pytest.param(
+        "pipe_eb3e27f8f1841835fdfd279cd96ff9d8",
+        3,
+        "ctime",
+        "&time=00:01:41&time=",
+        id="twitter-caption-search",
+    ),
+    pytest.param(
+        "pipe_zKJifuNS3BGLRQK_GsevXg",
+        6,
+        "title",
+        "Open researcher open course",
+        id="simplemath",
+        marks=SPLIT_PENDING,
+    ),
+]
+FIRST_TITLE_PREFIXES = [
+    pytest.param(
+        "pipe_2de0e4517ed76082dcddf66f7b218057", 17, f"{NATIVE_TITLE}i", id="simplest"
+    ),
+    pytest.param(
+        "pipe_c1cfa58f96243cea6ff50a12fc50c984",
+        18,
+        NATIVE_TITLE,
+        id="filtered-multiple-sources",
+    ),
+    pytest.param(
+        "pipe_QMrlL_FS3BGlpwryODY80A",
+        7,
+        "[Weight] More parents think their overweight",
+        id="split",
+        marks=SPLIT_PENDING,
+    ),
+]
+
+
 class TestStoredWorkflows:
     """Test a few sample workflows."""
 
@@ -217,14 +270,25 @@ class TestStoredWorkflows:
         """Creates the shared test ``Context``."""
         self.context = Context(test=True)
 
-    def test_feeddiscovery(self):
-        """Load feed discovery with fetch-feed inside an emit-all loop."""
-        pipe_name = "pipe_HrX5bjkv3BGEp9eSy6ky6g"
+    @pytest.mark.parametrize(
+        ("pipe_name", "count", "field", "expected"), FIRST_ITEM_FIELDS
+    )
+    def test_first_item_field(self, pipe_name, count, field, expected):
+        """Runs a stored workflow and checks one field of its first item."""
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 15, 0)
+        self._load(items, pipe_name, count, 0)
         item = items[0]
         assert is_mapping(item)
-        assert item.get("link") == "http://sz.de/1.2104731"
+        assert item.get(field) == expected
+
+    @pytest.mark.parametrize(("pipe_name", "count", "prefix"), FIRST_TITLE_PREFIXES)
+    def test_first_item_title_prefix(self, pipe_name, count, prefix):
+        """Runs a stored workflow and checks how its first item's title begins."""
+        items = self._run_example(pipe_name)
+        self._load(items, pipe_name, count, 0)
+        item = items[0]
+        assert is_mapping(item)
+        assert str(item.get("title")).startswith(prefix)
 
     def test_fetchsitefeed(self):
         """Loads a workflow containing a fetchsitefeed module."""
@@ -383,26 +447,6 @@ class TestStoredWorkflows:
         assert summary.startswith("<span><b>Description:</b> With this spe")
         assert summary.endswith("ancer Location:</b> Worldwide<br></span>")
 
-    def test_wired_count_truncate_output(self):
-        """Truncates a 15-item feed to a wired count."""
-        pipe_name = "pipe_404411a8d22104920f3fc1f428f33642"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 3, 0)
-        item = items[0]
-        assert is_mapping(item)
-        assert item.get("title") == "Markitekt - Architects of Marketing"
-
-    def test_simplest(self):
-        """Loads the RTW simple test workflow."""
-        pipe_name = "pipe_2de0e4517ed76082dcddf66f7b218057"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 17, 0)
-        item = items[0]
-        assert is_mapping(item)
-
-        title = str(item.get("title"))
-        assert title.startswith("Running “Native” Data Wrangling Applicati")
-
     @pytest.mark.perf
     def test_feed(self):
         """Loads a simple test workflow."""
@@ -424,21 +468,6 @@ class TestStoredWorkflows:
 
         for item in items:
             assert item == {"forever": True}
-
-    def test_filtered_multiple_sources(self):
-        """
-        Loads a workflow that filters multiple source workflows.
-
-        Note: uses the stored workflow pipe_2de0e4517ed76082dcddf66f7b218057.
-        """
-        pipe_name = "pipe_c1cfa58f96243cea6ff50a12fc50c984"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 18, 0)
-        item = items[0]
-        assert is_mapping(item)
-
-        title = str(item.get("title"))
-        assert title.startswith("Running “Native” Data Wrangling Applicat")
 
     @pytest.mark.perf
     def test_european_performance_cars(self):
@@ -689,45 +718,6 @@ class TestStoredWorkflows:
         item = items[2]
         assert is_mapping(item)
         assert item.get("content") == "$3.00</td>"
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason="the execution refuses split nodes until streaming fan-out lands",
-    )
-    def test_split(self):
-        """Loads an example workflow containing a split module."""
-        pipe_name = "pipe_QMrlL_FS3BGlpwryODY80A"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 7, 0)
-        item = items[0]
-        assert is_mapping(item)
-
-        title = str(item.get("title"))
-        assert title.startswith("[Weight] More parents think their overweight")
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason="the execution refuses split nodes until streaming fan-out lands",
-    )
-    def test_simplemath_1(self):
-        """Loads a workflow containing simplemath."""
-        pipe_name = "pipe_zKJifuNS3BGLRQK_GsevXg"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 6, 0)
-        item = items[0]
-        assert is_mapping(item)
-
-        title = str(item.get("title"))
-        assert title == "Open researcher open course"
-
-    def test_twitter_caption_search(self):
-        """Runs the Twitter Caption Search workflow."""
-        pipe_name = "pipe_eb3e27f8f1841835fdfd279cd96ff9d8"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 3, 0)
-        item = items[0]
-        assert is_mapping(item)
-        assert item.get("ctime") == "&time=00:01:41&time="
 
     def test_loop_example(self):
         """Loads the loop example workflow."""

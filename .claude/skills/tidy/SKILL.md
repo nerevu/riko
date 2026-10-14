@@ -109,10 +109,15 @@ neighborhood it affects:
    whose index row names its subject? Does a collected doctest or an existing test
    already assert the same input and outcome? A public symbol's doctest wins over a
    pytest copy; for a private symbol, trim whichever side the module has more of.
-   Three near-identical bodies belong in one parametrize table, and a regression
-   test goes in its subject's class, never a history-named file. If `manage test
-   --ratchet` reports more uncovered lines, find the lines the change stopped
-   executing before anything else.
+   A new test with the same setup and assertion as an existing one (two is
+   enough) is a row in that test's table, and a regression test goes in its
+   subject's class, never a history-named file. Tables follow the
+   `tests/__init__.py` layout: module-level constant, one-line `pytest.param`
+   rows with ids (an `ids=[...]` list only when values and ids share one line);
+   a fold that grows the file needs its rows compacted. A doctest grown past one
+   example per idea moves its extra cases into its subject's test table. If
+   `manage test --ratchet` reports more uncovered lines, find the lines the
+   change stopped executing before anything else.
 
 Verify every finding against the code before acting on it; drop what you
 cannot substantiate.
