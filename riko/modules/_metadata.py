@@ -23,7 +23,6 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 
 from riko.base._config import SINK_NAMES
 from riko.base._imports import import_or_else
-from riko.base._iterutils import broadcast
 from riko.definitions.modules import ModuleDefinition, normalize_module_name
 from riko.runtime._module_registry import module_registry
 from riko.types._wrappers import WRAPPER_META
@@ -242,6 +241,7 @@ def list_modules(  # noqa: E704
     type: ModuleType | str | None = ...,  # noqa: A002
     subtype: ModuleSubtype | str | None = ...,
     category: ModuleCategory | str | None = ...,
+    provider: str | None = ...,
     primary: bool = ...,
     loopable: bool | None = ...,
     show_metadata: Literal[False] = ...,
@@ -252,6 +252,7 @@ def list_modules(  # noqa: E704
     type: ModuleType | str | None = None,  # noqa: A002
     subtype: ModuleSubtype | str | None = None,
     category: ModuleCategory | str | None = ...,
+    provider: str | None = ...,
     primary: bool = ...,
     loopable: bool | None = ...,
     show_metadata: Literal[True],
@@ -261,6 +262,7 @@ def list_modules(  # noqa: E302
     type: ModuleType | str | None = None,  # noqa: A002
     subtype: ModuleSubtype | str | None = None,
     category: ModuleCategory | str | None = None,
+    provider: str | None = None,
     primary: bool = False,
     loopable: bool | None = None,
     show_metadata: bool = False,
@@ -276,6 +278,7 @@ def list_modules(  # noqa: E302
         type: Only list modules of this module type (e.g., ``"operator"``).
         subtype: Only list modules that support this subtype (e.g., ``"aggregator"``).
         category: Only list modules in this discovery category (e.g., ``"source"``).
+        provider: Only list modules from this provider (e.g., ``"riko"`` for built-ins).
         primary: Whether ``subtype`` must be marked as primary (default: False).
         loopable: List modules with matching loopability (or all modules when ``None``).
         show_metadata: Whether to list each module's metadata instead of its name.
@@ -287,8 +290,8 @@ def list_modules(  # noqa: E302
 
     Raises:
 
-        ValueError: When ``type`` and ``subtype`` are both given, or ``primary`` is
-            true without a ``subtype``.
+        ValueError: When ``type`` and ``subtype`` are both given, or ``primary`` is true
+            without a ``subtype``.
 
     Examples:
 
@@ -296,6 +299,8 @@ def list_modules(  # noqa: E302
         ['count', 'sum']
         >>> list_modules(category="sink")
         ['write']
+        >>> list_modules(provider="riko") == list_modules()
+        True
 
     """
     if type and subtype:
@@ -306,11 +311,12 @@ def list_modules(  # noqa: E302
     subtype_match = partial(_matches_subtype, subtype=subtype, primary=primary)
     type_match = lambda module: type is None or module.type == type
     loop_match = lambda module: loopable is None or module.loopable is loopable
-    user_match = lambda module: (
+    category_match = lambda module: (
         category is None or get_module_category(module) == category
     )
-    matches = subtype_match, type_match, loop_match, user_match
-    match = lambda module: all(broadcast(module, *matches))
+    provider_match = lambda module: provider is None or module.provider == provider
+    matches = subtype_match, type_match, loop_match, category_match, provider_match
+    match = lambda module: all(is_match(module) for is_match in matches)
 
     # built-ins first, then registry (runtime + entry-point) modules shadow them
     catalog = {metadata.name: metadata for metadata in gen_module_catalog()}

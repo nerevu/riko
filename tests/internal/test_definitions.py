@@ -972,12 +972,6 @@ class TestNormalizeTarget:
 
 
 class TestRegisterTarget:
-    @pytest.mark.xfail(
-        strict=True,
-        reason="owned by the pending riko.ext extension-point layout work: "
-        "register_target returns None, so using it as a class decorator binds the "
-        "target's name to None instead of the registered class",
-    )
     def test_register_target_returns_the_class_for_decorator_use(self) -> None:
         try:
             assert register_target(_RecordStore) is _RecordStore

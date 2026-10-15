@@ -23,7 +23,7 @@ from riko import Pipeline, issync, run
 from riko.ext import ModuleDefinition, operator, register_module
 
 if TYPE_CHECKING:
-    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.ext import DynamicConf
     from riko.types import Item, PipeTuples, Stream
 
 

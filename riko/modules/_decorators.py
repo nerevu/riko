@@ -6,14 +6,15 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.modules import processor
+        >>> from riko.ext import DynamicConf, processor
         >>>
-        >>> @processor(isasync=False)
-        ... def pipe(content, objconf, skip=False, **kwargs):
-        ...     return content * objconf.times
+        >>> @processor()
+        ... def pipe(item, extraction, objconf, **kwargs) -> int:
+        ...     return item * objconf.times
         >>>
-        >>> list(pipe({"x": 3}, conf={"times": 2}, field="x", assign="doubled"))
-        [{'x': 3, 'doubled': 6}]
+        >>> conf = DynamicConf({"times": 2})
+        >>> next(pipe({"x": 3}, conf=conf, field="x", assign="doubled"))
+        {'x': 3, 'doubled': 6}
 
 """
 

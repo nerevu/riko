@@ -9,7 +9,7 @@
 
 ## Architecture — three layers
 
-- **`ModuleRegistry`** (`riko/ext/registry.py`) — resolves named **module implementations** only.
+- **`ModuleRegistry`** (`riko/ext/modules.py`) — resolves named **module implementations** only.
   `ModuleDefinition` + `register(defn, *, replace=False)` / `resolve(name, interface)` / `names()`.
   Populated from built-ins + entry points + runtime registrations. **Never loads JSON, never invokes
   the compiler.**
@@ -22,7 +22,7 @@
   reference** — the test suite registers its own sources via an autouse `conftest.py` fixture calling
   `register_workflow_store(package=…, directory=…)`. The store classes and `WorkflowResolver` stay
   private; only `register_workflow_store` (primitives) is on `riko.ext`, with `reset_workflow_resolver`
-  in the `riko.ext.registry` submodule.
+  on `riko.ext.workflows` (re-exported from `riko.ext`).
 - **`PipeResolver`** (`riko/runtime/_resolver.py`) — the single façade.
   Precedence **runtime registration → entry-point → built-in → stored workflow** (`register` needs
   `replace=True` to shadow).

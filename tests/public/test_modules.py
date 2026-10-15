@@ -17,6 +17,10 @@ import riko.bado
 import riko.base.exceptions
 import riko.definitions._workflow
 import riko.ext
+import riko.ext.codegen
+import riko.ext.modules
+import riko.ext.targets
+import riko.ext.workflows
 import riko.modules
 import riko.modules._names
 import riko.runtime._codegen
@@ -31,6 +35,10 @@ from riko.base._api_surface import (
     BADO,
     COLLECTIONS,
     COMPILE,
+    EXT_CODEGEN,
+    EXT_MODULES,
+    EXT_TARGETS,
+    EXT_WORKFLOWS,
     EXTENSION,
     MODULES,
     PRIVATE_RESOLUTION,
@@ -627,15 +635,21 @@ EQUAL_SURFACES = (
         {"Workflow", "migrate_v1_to_v2", "normalize_workflow"},
     ),
     (riko.ext, EXTENSION),
+    (riko.ext.codegen, EXT_CODEGEN),
+    (riko.ext.modules, EXT_MODULES),
+    (riko.ext.targets, EXT_TARGETS),
+    (riko.ext.workflows, EXT_WORKFLOWS),
     (riko, STABLE),
     (riko.types, TYPES),
 )
 PUBLIC_EXTENSION_MODULES = (
     "riko.ext.codegen",
-    "riko.ext.config",
-    "riko.ext.decorators",
-    "riko.ext.protocols",
-    "riko.ext.registry",
+    "riko.ext.modules",
+    "riko.ext.targets",
+    "riko.ext.workflows",
+)
+REMOVED_PUBLIC_PATHS = tuple(
+    f"riko.ext.{name}" for name in ("config", "decorators", "protocols", "registry")
 )
 RESOLUTION_MODULES = (
     riko.runtime._resolver,
@@ -760,6 +774,15 @@ class TestImportSurface:
             and isinstance(val, (FunctionType, BuiltinFunctionType))
         )
         assert not leaked, f"Top-level functions leaked outside STABLE: {leaked}"
+
+    @pytest.mark.parametrize("path", REMOVED_PUBLIC_PATHS)
+    def test_removed_public_paths_are_gone(self, path):
+        with pytest.raises(ModuleNotFoundError):
+            import_module(path)
+
+    def test_modules_package_drops_decorators(self):
+        names = ("operator", "processor", "splitter")
+        assert not any(hasattr(riko.modules, name) for name in names)
 
     def test_stable_and_extension_do_not_intersect(self):
         common = STABLE & EXTENSION

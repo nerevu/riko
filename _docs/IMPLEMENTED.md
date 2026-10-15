@@ -273,12 +273,20 @@ is the module removed at the R5C clean-break once `Pipeline.write()` / `WriteNod
 `Modules.FILTER is Transforms.FILTER`) + `Sources`/`Transforms`/`Sinks` bucket enums (member
 `.value` = canonical id; collisions raise). Regenerate with `gen-names`/`manage codegen` (drift guard
 `test_generated_names_match`). Re-exported from `riko`, **not** `riko.modules`.
+A module's **provider** is its namespace, derived from the name (`ModuleMetadata.provider` /
+`get_module_provider` in `riko/types/modules.py`: the first dotted segment, `BUILTIN_PROVIDER` =
+`"riko"` when unqualified). `NameEntry` (`riko/ext/codegen.py`) derives `provider`/`class_name`/
+`member`/`alias` from its name and category: built-ins group by category into the bucket classes;
+a provider's modules form one class per provider whose members drop the prefix (`Example.LOOKUP`),
+and the flat `Modules` alias keeps the full name (`Modules.EXAMPLE_LOOKUP = Example.LOOKUP`).
+Provider classes come from the extension package's own codegen run, never riko's `_names.py`;
+`list_modules(provider=)` filters by provider.
 
 ## Module registry & pipe resolution (P8, shipped)
 
 The runtime→compiler resolution coupling is inverted behind three **compiler-free** layers sharing
 one overloaded `require(name, is_async)` contract (`riko/types/_wrappers.py::Resolver`):
-`ModuleRegistry` (`riko/runtime/_module_registry.py`, re-exported via `riko/ext/registry.py`; built-ins
+`ModuleRegistry` (`riko/runtime/_module_registry.py`, re-exported via `riko/ext/modules.py` and `riko.ext`; built-ins
 lazy per name, runtime `register_module`/`reset_module_registry`, entry
 points under `[project.entry-points."riko.modules"]`; precedence runtime → entry-point → built-in),
 `WorkflowResolver` (`riko/runtime/_workflow_resolver.py`) + injectable workflow stores (`riko/runtime/_workflow_stores.py`): every store is a
@@ -326,7 +334,8 @@ the stable `riko` surface alongside `Formats`. Workflow-store registration is on
 `register_workflow_store(*, package, directory, replace=False)` (`package` is a package or its import path;
 primitives only — the store classes and
 `WorkflowResolver` stay private per `PRIVATE_RESOLUTION`), with `reset_workflow_resolver` alongside
-`reset_module_registry`/`reset_target_registry` in the `riko.ext.registry` submodule.
+`reset_module_registry`/`reset_target_registry`, all on `riko.ext` (grouped in `riko/ext/modules.py`,
+`riko/ext/targets.py`, and `riko/ext/workflows.py`).
 P9A discoverability (generated `Modules` tree, `list_modules`/`describe_module`) shipped — see
 §24 above. Remaining P9 (non-P9A): the installed-env aggregate `riko.generated.Modules` + `.pyi`
 stubs → [module-enums.md](gameplans/module-enums.md).

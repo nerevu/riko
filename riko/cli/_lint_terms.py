@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Checks shipped text for phrases the reserved-terms rules replace and phase codes."""
+"""Checks shipped text for banned phrases, phase codes, and removed ext paths."""
 
 from __future__ import annotations
 
@@ -76,10 +76,17 @@ def _build_pattern(term: BannedTerm) -> re.Pattern[str]:
 
 
 PHASE_CODE = BannedTerm("phase code", "a plain-English name for the pending work")
+REMOVED_EXT_PATH = BannedTerm(
+    "removed riko.ext submodule path", "`riko.ext` or one of its submodules"
+)
 
 _PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
     *((term, _build_pattern(term)) for term in BANNED_TERMS),
     (PHASE_CODE, re.compile(r"\b[RP](?:1[0-2]|[0-9])[A-E]?(?:\.\d+)?\b")),
+    (
+        REMOVED_EXT_PATH,
+        re.compile(r"\briko\.ext\.(?:config|decorators|names|protocols|registry)\b"),
+    ),
 )
 
 
@@ -134,6 +141,7 @@ def format_term_issue(issue: TermIssue) -> str:
 __all__ = [
     "BANNED_TERMS",
     "PHASE_CODE",
+    "REMOVED_EXT_PATH",
     "BannedTerm",
     "TermIssue",
     "format_term_issue",

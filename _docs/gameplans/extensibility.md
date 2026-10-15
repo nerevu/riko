@@ -807,11 +807,9 @@ register(ModuleDefinition(name="example.lookup", async_pipe=pipe))
 Supplying both sync and async implementations is an optimization when they genuinely differ, not a
 parity requirement.
 
-**For the `riko.ext` extension-point layout slice (queued 2026-10-12):** `register_target` returns
-`None`, so it cannot decorate a target class. When that slice moves it to `riko.ext.targets`, have it
-return the registered class so `@register_target` is the one-line registration form; explicit opt-in
-per class is the supported alternative to subclass-hook auto-registration (see E3.3). Tripwire:
-`tests/internal/test_definitions.py::TestRegisterTarget::test_register_target_returns_the_class_for_decorator_use`.
+`register_target` returns the registered class (landed with the `riko.ext` extension-point layout), so
+`@register_target` is the one-line registration form; explicit opt-in per class remains the supported
+alternative to subclass-hook auto-registration (see E3.3).
 
 ## 25. Operation packs and extension registration
 

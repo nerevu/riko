@@ -51,6 +51,7 @@ OUTPUT_PORT = "_OUTPUT"
 OTHER_PORT = "_OTHER"
 OUTPUT_MODULE = "output"
 SUBPIPE_TYPE = "pipe"
+BUILTIN_PROVIDER = "riko"
 SINK_NAMES: frozenset[str] = frozenset({OUTPUT_MODULE, "write"})
 PIPE_ID_PREFIXES: tuple[str, ...] = ("pipe_", "pipe:")
 

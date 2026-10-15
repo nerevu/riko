@@ -434,6 +434,10 @@ class TestEnumMemberName:
 
 
 _NAMES = PACKAGE_DIR / "modules" / "_names.py"
+MEMBER_COLLISIONS = (
+    pytest.param("my_mod", "my-mod", id="builtin"),
+    pytest.param("example.my_mod", "example.my-mod", id="provider"),
+)
 
 
 def _exec_generated_names(*entries: NameEntry) -> dict:
@@ -459,37 +463,41 @@ class TestGenerateModuleNames:
 
     def test_enum_name_override_resolves_collision(self):
         entries = [
-            NameEntry(name="my.mod", category="transform"),
+            NameEntry(name="my_mod", category="transform"),
             NameEntry(name="my-mod", category="transform", enum_name="my_mod_alt"),
         ]
         transforms = _exec_generated_names(*entries)["Transforms"]
 
         assert transforms.MY_MOD_ALT.value == "my-mod"
-        assert transforms.MY_MOD.value == "my.mod"
+        assert transforms.MY_MOD.value == "my_mod"
 
     def test_provider_namespace_flattens(self):
-        entries = [
-            NameEntry(name="fetch", category="source"),
-            NameEntry(name="microsoft.autopilot.ensure", category="microsoft"),
-        ]
-        namespace = _exec_generated_names(*entries)
+        builtin = NameEntry(name="fetch", category="source")
+        entry = NameEntry(name="microsoft.autopilot.ensure", category="transform")
+        namespace = _exec_generated_names(builtin, entry)
         provider = namespace["Microsoft"]
         modules = namespace["Modules"]
 
-        assert provider.MICROSOFT_AUTOPILOT_ENSURE.value == "microsoft.autopilot.ensure"
-        assert modules.MICROSOFT_AUTOPILOT_ENSURE is provider.MICROSOFT_AUTOPILOT_ENSURE
+        assert entry.provider == "microsoft"
+        assert entry.class_name == "Microsoft"
+        assert entry.member == "AUTOPILOT_ENSURE"
+        assert entry.alias == "MICROSOFT_AUTOPILOT_ENSURE"
+        assert provider.AUTOPILOT_ENSURE.value == "microsoft.autopilot.ensure"
+        assert modules.MICROSOFT_AUTOPILOT_ENSURE is provider.AUTOPILOT_ENSURE
+        assert "AUTOPILOT_ENSURE" not in namespace["Transforms"].__members__
 
-    def test_member_collision_fails_with_diagnostic(self):
+    @pytest.mark.parametrize(("first", "second"), MEMBER_COLLISIONS)
+    def test_member_collision_fails_with_diagnostic(self, first, second):
         entries = [
-            NameEntry(name="my.mod", category="transform"),
-            NameEntry(name="my-mod", category="transform"),
+            NameEntry(name=first, category="transform"),
+            NameEntry(name=second, category="transform"),
         ]
 
         with pytest.raises(ValueError, match="enum_name") as excinfo:
             generate_module_names(*entries)
 
-        assert "'my.mod'" in str(excinfo.value)
-        assert "'my-mod'" in str(excinfo.value)
+        assert repr(first) in str(excinfo.value)
+        assert repr(second) in str(excinfo.value)
 
 
 _MODULE_IDS = PACKAGE_DIR / "types" / "_module_ids.py"

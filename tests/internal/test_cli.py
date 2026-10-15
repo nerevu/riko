@@ -519,6 +519,16 @@ class TestTermLint:
         found = [(issue.lineno, issue.found) for issue in gen_term_issues(source)]
         assert found == [(1, "R5C"), (2, "R4B.2"), (2, "P10")]
 
+    def test_removed_ext_paths_are_checked(self, tmp_path: Path) -> None:
+        source = tmp_path / "mod.py"
+        source.write_text(
+            "# import from riko.ext.registry, not riko.ext.modules\n"
+            "# riko.ext.names is gone too\n",
+            encoding="utf-8",
+        )
+        found = [(issue.lineno, issue.found) for issue in gen_term_issues(source)]
+        assert found == [(1, "riko.ext.registry"), (2, "riko.ext.names")]
+
     def test_prose_files_are_checked_except_the_changelog(self, tmp_path: Path) -> None:
         (tmp_path / "GUIDE.rst").write_text("Run a sub-pipeline.\n", encoding="utf-8")
         (tmp_path / "CHANGES.rst").write_text("Run a sub-pipeline.\n", encoding="utf-8")

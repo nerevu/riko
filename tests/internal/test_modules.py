@@ -25,8 +25,6 @@ from riko.base.exceptions import (
 from riko.definitions._context import Context
 from riko.definitions._workflow import Workflow
 from riko.definitions.modules import ModuleDefinition
-from riko.ext import register_module
-from riko.ext.registry import reset_module_registry
 from riko.modules import regex as regex_module
 from riko.modules import tokenizer as tokenizer_module
 from riko.modules._decorators import operator, processor, splitter
@@ -46,7 +44,11 @@ from riko.modules.truncate import async_pipe as async_truncate
 from riko.modules.truncate import pipe as truncate
 from riko.modules.union import async_pipe as async_union
 from riko.runtime._importutils import require_interface
-from riko.runtime._module_registry import module_registry
+from riko.runtime._module_registry import (
+    module_registry,
+    register_module,
+    reset_module_registry,
+)
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflow_pipes import workflow
@@ -684,6 +686,9 @@ class TestModuleMetadata:
         assert composition_key_pipe.subtype == "aggregator"
         assert composition_key_pipe.subtypes == {"aggregator", "composer"}
 
+    def test_builtin_metadata_provider(self):
+        assert get_module_metadata("fetch", strict=True).provider == "riko"
+
     def test_unknown_module_metadata_raises_when_strict(self):
         with pytest.raises(ValueError, match="has no metadata"):
             get_module_metadata("not_a_builtin_module", strict=True)
@@ -1182,9 +1187,9 @@ class TestModuleRegistry:
 
 
 class TestPublicRegister:
-    """Public ``riko.ext.module_registry`` surface that targets the global registry."""
+    """Exercise ``register_module`` against the process-global registry."""
 
-    def test_register_resolves_via_facade(self, fixed_registry):
+    def test_register_resolves_via_global_registry(self, fixed_registry):
         register_module(MOD_DEFN)
         assert dispatcher.require(_NAME) is marker
         assert module_registry.require(_NAME) is marker
@@ -1531,6 +1536,14 @@ class TestCatalog:
         fixed_registry.register(MOD_DEFN)
 
         assert _NAME not in list_modules()
+
+    def test_list_modules_filters_by_provider(self, fixed_registry):
+        pipe = _pipe_wrapper(name=_NAME, **_META)
+        fixed_registry.register(ModuleDefinition(name=_NAME, sync_pipe=pipe))
+        metadata = list_modules(provider="acme", show_metadata=True)
+
+        assert list_modules(provider="acme") == [_NAME]
+        assert metadata[0].provider == "acme"
 
 
 def _document_resolver(directory, **kwargs) -> WorkflowResolver:

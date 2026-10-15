@@ -44,21 +44,25 @@ New
 - Added ``riko.Backends`` and ``riko.Executor`` enums, and the ``riko.types.EventSink``
   protocol.
 
-- Added ``normalize_workflow`` (turns a ``WorkflowLike`` into a ``Workflow``),
-  ``migrate_v1_to_v2`` (converts a ``PipeDef`` to a ``Workflow``), the workflow node and
-  edge classes (e.g., ``ModuleNode``), and the write-target classes (e.g.,
-  ``FileTarget``) to ``riko.ext``.
+- Added ``normalize_workflow`` (``WorkflowLike`` -> ``Workflow``), ``migrate_v1_to_v2``
+  (``PipeDef`` -> ``Workflow``), the node and edge classes (e.g., ``ModuleNode``), and
+  the write-target classes (e.g., ``FileTarget``) to ``riko.ext``.
 
 - Extension authors can register a workflow store, a package of ``pipe_<id>.py`` files
   (saved ``WorkflowModule``\s) or a directory of ``pipe_<id>.json``
   ``WorkflowDocument``\s, via ``register_workflow_store``. ``Target``\s register via
-  ``register_target``.
+  ``register_target``, which also works as a class decorator; ``reset_target_registry``
+  and ``reset_workflow_resolver`` undo those registrations. ``riko.ext.Dispatcher`` is
+  the protocol that finds a module's or stored workflow's pipe by name.
 
-- Module wrappers gained ``prepare`` and ``isasync``. ``prepare`` binds a call's
-  configuration and call options once for reuse over many items: a ``Pipeline`` run
-  prepares each node's module once, so static configuration is merged and cast a
-  single time, and a direct ``pipe(stream, conf=...)`` call prepares once per call.
-  ``ModuleDefinition.interfaces`` lists the sync and async interfaces it provides.
+- Module wrappers gained ``prepare``: binds a call's configuration and call options once
+  for reuse over many items; and ``isasync``. ``riko.ext.PreparedCall`` annotates what
+  ``prepare`` returns. ``ModuleDefinition.interfaces`` are the (a)sync callables.
+
+- Added ``ModuleMetadata.provider`` and ``list_modules(provider=)``. A module's provider
+  is the first dotted segment of its name (``"riko"`` for the built-ins). Each provider
+  gets its own discovery class, with the prefix left off its members: ``example.lookup``
+  is ``Example.LOOKUP``, and ``Modules.EXAMPLE_LOOKUP`` keeps the full name.
 
 - Added ``PipeDag``, ``PipeDef``, and ``PipeDefLike`` to ``riko.types`` for annotating
   ``Workflow.parse`` and ``migrate_v1_to_v2`` input.
@@ -115,6 +119,9 @@ Changes
 - The decorators' ``parse`` method (and ``@operator``'s ``aparse``) is now
   ``normalize_input`` (and ``anormalize_input``).
 
+- Moved ``processor``, ``operator``, and ``splitter`` from ``riko.modules`` to
+  ``riko.ext``.
+
 - An async operator's ``async_pipe`` now returns an async iterator directly. Consume it
   with ``async for``/``anext`` without awaiting the call first. Async processors and
   splitters are unchanged.
@@ -123,11 +130,9 @@ Changes
   re-exported from ``riko.bado``. Import them from ``riko`` (or ``riko.io``).
   ``riko.bado`` now covers only the async iteration and runtime helpers.
 
-- Renamed ``riko.get_async_temp_file`` to ``riko.async_get_temp_file`` (no longer
-  re-exported from ``riko.bado``), ``derive_category`` to ``get_module_category``, and
-  ``riko.ext.register`` to ``riko.ext.register_module``. ``get_module_category`` no
-  longer takes ``provider`` or ``override``: a module's category is always derived from
-  its metadata.
+- Renamed ``get_async_temp_file`` to ``async_get_temp_file`` (import from ``riko`` now),
+  ``derive_category`` to ``get_module_category``, ``register`` to ``register_module``.
+  ``get_module_category`` no longer takes ``provider`` or ``override``.
 
 - Renamed ``riko.Targets`` to ``Formats`` (its members name serialization formats)
   and ``riko.list_targets`` to ``riko.list_formats``. ``Formats`` drops the ``LIST`` and
@@ -215,10 +220,16 @@ Removed
 
 - Removed unused ``Context.submodule`` and the ``submodule`` keyword argument.
 
-- Removed the ``autorss``, ``cast``, ``collections``, ``compile``, ``context``,
-  ``currencies``, ``dates``, ``dotdict``, ``exceptions``, ``locations``, ``parsers``,
-  ``paths``, ``pprint2``, and ``topsort`` modules from ``riko``. Also removed
-  ``riko.bado.io``, ``riko.ext.names``, and ``riko.types.compile`` modules.
+- Removed ``autorss``, ``cast``, ``collections``, ``compile``, ``context``, ``parsers``,
+  ``currencies``, ``dotdict``, ``exceptions``, ``locations``, ``pprint2``, ``topsort``,
+  ``paths``, ``dates``, ``bado.io``, ``ext.names``, and ``types.compile`` from ``riko``.
+
+- Removed the ``config``, ``decorators``, ``protocols``, and ``registry`` modules from
+  ``riko.ext``. ``riko.ext`` now exports what they held: ``processor``, ``operator``,
+  ``splitter``, the ``Sync*Wrapper``/``Async*Wrapper`` protocols, ``DynamicConf``,
+  ``ModuleRegistry``, ``ModuleWrapper``, ``ModuleDefinition``, ``register_module``, and
+  ``get_conf_type``; its ``reset_registry`` is now ``reset_module_registry``. ``Feed``,
+  ``Stream``, ``AsyncStream``, and ``AsyncItems`` are on ``riko.types``.
 
 - Import ``CastType``, ``Context``, ``ExecutionMode``, ``Executor``, ``get_temp_file``,
   ``async_get_temp_file``, ``async_url_open``, ``async_write``, ``compile_workflow``,

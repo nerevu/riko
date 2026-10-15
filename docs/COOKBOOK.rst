@@ -1023,7 +1023,7 @@ Notes:
 - Registering a second package or directory raises ``ValueError`` unless you pass
   ``replace=True``.
 
-- ``riko.ext.registry.reset_workflow_resolver()`` unregisters the package and the
+- ``riko.ext.reset_workflow_resolver()`` unregisters the package and the
   directory. No stored workflow will be found until you register one again.
 
 - Running a ``pipe_<id>`` that neither has raises ``UnsupportedWorkflowError``.

@@ -1,14 +1,14 @@
 # vim: sw=4:ts=4:expandtab
 """
-Built-in riko modules and module-author utilities.
+Built-in riko modules and their catalog.
 
-Most users interact with modules through ``Pipeline``.
-Extension authors should prefer the supported contracts in ``riko.ext``.
+Most users interact with modules through ``Pipeline``. The catalog describes the
+built-in modules and their metadata. Extension authors import authoring contracts from
+``riko.ext``.
 """
 
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
-from ._decorators import operator, processor, splitter
 from ._metadata import describe_module, get_module_metadata
 
 __all__ = [
@@ -17,7 +17,4 @@ __all__ = [
     "ModuleType",
     "describe_module",
     "get_module_metadata",
-    "operator",
-    "processor",
-    "splitter",
 ]

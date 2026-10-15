@@ -149,9 +149,60 @@ authors rather than ordinary application code.
 <!-- api-surface:extension -->
 ```python
 >>> sorted(EXTENSION)
-['ActionNode', 'AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'CacheNode', 'DynamicConf', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleNode', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WriteCapabilities', 'WriteNode', 'get_conf_type', 'get_module_category', 'migrate_v1_to_v2', 'normalize_module_name', 'normalize_workflow', 'operator', 'processor', 'register_module', 'register_target', 'register_workflow_store', 'splitter']
+['ActionNode', 'AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'CacheNode', 'Dispatcher', 'DynamicConf', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleNode', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PreparedCall', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WriteCapabilities', 'WriteNode', 'get_conf_type', 'get_module_category', 'migrate_v1_to_v2', 'normalize_module_name', 'normalize_workflow', 'operator', 'processor', 'register_module', 'register_target', 'register_workflow_store', 'reset_module_registry', 'reset_target_registry', 'reset_workflow_resolver', 'splitter']
 ```
 <!-- /api-surface:extension -->
+
+The names are grouped by extension point. Each submodule's `__all__` is one set,
+and `riko.ext` re-exports all three.
+
+`riko.ext.modules` covers module authoring: decorators, definitions, registration,
+metadata, naming, and configuration helpers.
+
+<!-- api-surface:ext-modules -->
+```python
+>>> sorted(EXT_MODULES)
+['AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'DynamicConf', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PreparedCall', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'get_conf_type', 'get_module_category', 'normalize_module_name', 'operator', 'processor', 'register_module', 'reset_module_registry', 'splitter']
+```
+<!-- /api-surface:ext-modules -->
+
+`riko.ext.targets` covers write targets: target protocols, the built-in file
+target, write capabilities, and target registration.
+
+<!-- api-surface:ext-targets -->
+```python
+>>> sorted(EXT_TARGETS)
+['FileTarget', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'Target', 'TargetRegistry', 'WriteCapabilities', 'register_target', 'reset_target_registry']
+```
+<!-- /api-surface:ext-targets -->
+
+`riko.ext.workflows` covers workflow graphs and stored workflows: node and edge
+classes, normalization and migration, stored-workflow registration, and the
+dispatcher protocol.
+
+<!-- api-surface:ext-workflows -->
+```python
+>>> sorted(EXT_WORKFLOWS)
+['ActionNode', 'CacheNode', 'Dispatcher', 'ModuleNode', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'WriteNode', 'migrate_v1_to_v2', 'normalize_workflow', 'register_workflow_store', 'reset_workflow_resolver']
+```
+<!-- /api-surface:ext-workflows -->
+
+<!-- api-surface:extension-union -->
+```python
+>>> EXTENSION == EXT_MODULES | EXT_TARGETS | EXT_WORKFLOWS
+True
+```
+<!-- /api-surface:extension-union -->
+
+`riko.ext.codegen` generates typed discovery names for an extension package. It is
+part of the extension contract but is not re-exported from `riko.ext`.
+
+<!-- api-surface:ext-codegen -->
+```python
+>>> sorted(EXT_CODEGEN)
+['NameEntry', 'enum_member_name', 'gen_catalog_entries', 'generate_module_ids', 'generate_module_names']
+```
+<!-- /api-surface:ext-codegen -->
 
 The stable application and extension surfaces are separate contracts:
 

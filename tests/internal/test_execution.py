@@ -54,7 +54,7 @@ from riko.execution._pools import PoolHandle, get_worker_cnt, open_pool
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._resource_view import ResourceView
 from riko.execution._sync_execution import SyncExecution
-from riko.modules import operator
+from riko.modules._decorators import operator
 from riko.runtime._resolver import dispatcher
 from riko.types._enums import Executor
 from riko.types._resource import FactoryKind, get_factory_kind

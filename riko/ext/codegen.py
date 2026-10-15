@@ -24,8 +24,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from riko.base._config import BUILTIN_PROVIDER
 from riko.base._source_format import ruff_format
 from riko.modules._metadata import gen_module_catalog, get_module_category
+from riko.types.modules import get_module_provider
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
@@ -49,21 +51,12 @@ _IDS_DOC = '''"""Generated built-in module-id typing aliases."""'''
 _IMPORT = "from riko.types._enums import ModuleName"
 _IMPORT += '\n\n__all__ = ["Modules", "Sinks", "Sources", "Transforms"]'
 
-_CANONICAL: dict[ModuleCategory | str, ModuleClass] = {
+_CANONICAL: dict[ModuleCategory, ModuleClass] = {
     "source": "Sources",
     "transform": "Transforms",
     "sink": "Sinks",
 }
 _MEMBER_SPLIT = re.compile(r"[^0-9A-Za-z]+")
-
-
-@dataclass(frozen=True, slots=True)
-class NameEntry:
-    """A module name and its generated enum metadata."""
-
-    name: str
-    category: ModuleCategory | str
-    enum_name: str | None = None
 
 
 # TODO: compare to pythonise
@@ -74,32 +67,78 @@ def enum_member_name(name: str, *, override: str | None = None) -> str:
     return f"_{collapsed}" if collapsed[:1].isdigit() else collapsed
 
 
+@dataclass(frozen=True, slots=True)
+class NameEntry:
+    """A module name and its generated enum metadata."""
+
+    name: str
+    category: ModuleCategory
+    enum_name: str | None = None
+
+    @property
+    def provider(self) -> str:
+        """The provider, or namespace, the module belongs to."""
+        return get_module_provider(self.name)
+
+    @property
+    def is_builtin(self) -> bool:
+        """Whether the module belongs to the built-in provider."""
+        return self.provider == BUILTIN_PROVIDER
+
+    @property
+    def class_name(self) -> str:
+        """The generated class holding the module: its category or its provider."""
+        if self.is_builtin:
+            class_name = _CANONICAL[self.category]
+        else:
+            class_name = enum_member_name(self.provider).capitalize()
+
+        return class_name
+
+    @property
+    def member(self) -> str:
+        """The enum member name inside the module's generated class."""
+        if self.is_builtin:
+            source = self.name
+        else:
+            source = self.name.removeprefix(f"{self.provider}.")
+
+        return enum_member_name(source, override=self.enum_name)
+
+    @property
+    def alias(self) -> str:
+        """The member name in the flat ``Modules`` class."""
+        if self.is_builtin:
+            alias = self.member
+        else:
+            alias = f"{enum_member_name(self.provider)}_{self.member}"
+
+        return alias
+
+
 def gen_catalog_entries() -> Iterator[NameEntry]:
     """Emits name entries from the runtime module catalog."""
     for md in sorted(gen_module_catalog(), key=lambda md: md.name):
         yield NameEntry(name=md.name, category=get_module_category(md))
 
 
-def _class_name(group: ModuleCategory | str) -> ModuleClass | str:
-    return _CANONICAL.get(group, group[:1].upper() + group[1:])
-
-
-def _group(entries: Iterable[NameEntry]) -> dict[ModuleCategory | str, list[NameEntry]]:
-    groups: dict[ModuleCategory | str, list[NameEntry]] = defaultdict(list)
-    [groups[entry.category].append(entry) for entry in entries]
+def _group(entries: Iterable[NameEntry]) -> dict[str, list[NameEntry]]:
+    groups: dict[str, list[NameEntry]] = defaultdict(list)
+    [groups[entry.class_name].append(entry) for entry in entries]
     return groups
 
 
-def _order_groups(*groups: ModuleCategory | str) -> list[ModuleCategory | str]:
-    extra = sorted(set(groups).difference(_CANONICAL))
-    return [*_CANONICAL, *extra]
+def _order_groups(*names: str) -> list[str]:
+    canonical = tuple(_CANONICAL.values())
+    extra = sorted(set(names).difference(canonical))
+    return [*canonical, *extra]
 
 
 def _get_members(*entries: NameEntry) -> dict[str, str]:
     resolved: dict[str, str] = {}
 
     for entry in sorted(entries, key=lambda e: e.name):
-        member = enum_member_name(entry.name, override=entry.enum_name)
+        member = entry.member
 
         if member in resolved:
             raise ValueError(
@@ -112,43 +151,37 @@ def _get_members(*entries: NameEntry) -> dict[str, str]:
     return resolved
 
 
-def _gen_class_blocks(
-    groups: Mapping[ModuleCategory | str, Iterable[NameEntry]],
-) -> Iterator[str]:
-    for group in _order_groups(*groups):
-        members = _get_members(*groups.get(group, []))
-        class_name = _class_name(group)
+def _gen_class_blocks(groups: Mapping[str, Iterable[NameEntry]]) -> Iterator[str]:
+    for class_name in _order_groups(*groups):
+        members = _get_members(*groups.get(class_name, []))
         lines = [f'    {member} = "{mid}"' for member, mid in members.items()]
         body = lines or ["    pass"]
         yield "\n".join([f"class {class_name}(ModuleName):", *body])
 
 
 def _gen_aliases(
-    group: ModuleCategory | str, *name_entries: NameEntry
+    class_name: str, *entries: NameEntry
 ) -> Iterator[tuple[str, str, str]]:
-    class_name = _class_name(group)
+    for entry in sorted(entries, key=lambda e: e.name):
+        line = f"    {entry.alias} = {class_name}.{entry.member}"
+        yield (entry.name, line, entry.alias)
 
-    for member, mid in _get_members(*name_entries).items():
-        yield (mid, f"    {member} = {class_name}.{member}", member)
 
-
-def _generate_module_block(
-    groups: Mapping[ModuleCategory | str, Iterable[NameEntry]],
-) -> str:
+def _generate_module_block(groups: Mapping[str, Iterable[NameEntry]]) -> str:
     resolved: dict[str, str] = {}
     aliases: list[tuple[str, str]] = []
 
-    for group in _order_groups(*groups):
-        name_entries = groups.get(group, [])
+    for class_name in _order_groups(*groups):
+        entries = groups.get(class_name, [])
 
-        for mid, line, member in _gen_aliases(group, *name_entries):
-            if member in resolved:
+        for mid, line, alias in _gen_aliases(class_name, *entries):
+            if alias in resolved:
                 raise ValueError(
-                    f"module ids {resolved[member]!r} and {mid!r} both map to "
-                    f"enum member {member!r}; give one an explicit enum_name"
+                    f"module ids {resolved[alias]!r} and {mid!r} both map to "
+                    f"enum member {alias!r}; give one an explicit enum_name"
                 )
 
-            resolved[member] = mid
+            resolved[alias] = mid
             aliases.append((mid, line))
 
     body = [line for _mid, line in sorted(aliases)] or ["    pass"]
@@ -185,3 +218,12 @@ def generate_module_ids() -> str:
     )
     src = f"{_HEADER}\n\n{_IDS_DOC}\n\nfrom typing import Literal\n\n{aliases}\n"
     return ruff_format(src)
+
+
+__all__ = [
+    "NameEntry",
+    "enum_member_name",
+    "gen_catalog_entries",
+    "generate_module_ids",
+    "generate_module_names",
+]

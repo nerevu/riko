@@ -493,7 +493,7 @@ public path, never the private one:
 
 | Module | Public surface | Module example |
 |---|---|---|
-| `riko/modules/_decorators.py` | `processor`, `operator`, `splitter` | yes — `from riko.modules import processor` |
+| `riko/modules/_decorators.py` | `processor`, `operator`, `splitter` | yes — `from riko.ext import processor` |
 | `riko/modules/_inference.py` | none | no |
 | `riko/_io.py` | none | no |
 
@@ -801,6 +801,7 @@ reader to the wrong place.
 | **feed** | an RSS/Atom feed (`fetch`, `fetchsitefeed`, `feedautodiscovery`); in backticks, ``Feed`` is the `Items \| AsyncItems` type (sync or async items) | "stream" for any other sequence of items; "async iterable" for a generic one |
 | **source** | a module that creates items (the `Sources` enum, the `"source"` category/subtype: `fetch`, `csv`, `itembuilder`); an edge's `source`/`target` endpoint keeps its graph meaning when qualified ("source port") | "input stream"/"input item" for what a module receives; "seed" for the items handed to a `Pipeline` (the `source=` parameter keeps its name for now) |
 | **target** | a `Target` endpoint identified by its backend (`FileTarget`, `SupportsRead`/`SupportsWrite`, the target registry); an edge's `target` endpoint keeps its graph meaning when qualified ("target port", "target node") | "format" for a `Formats` value or what `export` serializes to ("export format", never "export target"); "destination" only for where a write lands (`dest`), never "destination type" for a cast type |
+| **provider** | the namespace a module name carries: its first dotted segment (`example.lookup` → `"example"`), or `"riko"` for an unqualified built-in; `ModuleMetadata.provider`, `list_modules(provider=)`, and one generated discovery class per provider | "category" for a module's data-flow role (`"source"`/`"transform"`/`"sink"`); "backend" for a `Target`'s kind (`Backends`), so an action target runs a "backend command", never a "provider command"; "extension package", never "provider package", for the installable distribution that ships a provider's modules |
 | **seed** | the items handed to a `Pipeline` (`Pipeline(source=items)`, `items \| pipeline`); "seeds a pipeline" | never for starting a pipeline from a module (`from_module` "starts from" one); "starting value" for a reduce accumulator |
 | **module** | a named, reusable riko unit such as `fetch` or `hash` (`from_module`, `list_modules`, `Modules`); its processor/operator/splitter classification is its *module type* | "Python module" or `types.ModuleType` for an importable Python module — a bare "module" is always a riko module; `ModuleStore` and the `ModuleType` literal are identifier exceptions |
 | **node** | a module placed in a workflow with its conf and options (`ModuleNode`, ids like `sort-1`); a `Pipeline` is a chain of nodes | not "pipe", "step", or "configured pipe" |

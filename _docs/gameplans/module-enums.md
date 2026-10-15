@@ -33,6 +33,12 @@ P8/P11/P12); it appears here only as the fake in-repo example extension that pro
   typed surfaces, `Backends` and `Formats`, backed by their own contracts/registries rather than
   pretending destinations are modules. The runtime execution-role `type`
   (`operator`/`processor`/`splitter`) remains a separate axis.
+- **Provider grouping derives from the name prefix.** `ModuleMetadata.provider` is a module
+  name's first dotted segment (`"riko"` when unqualified). A provider's modules form one class
+  per provider whose members drop the prefix (`Example.LOOKUP`); the flat `Modules` alias keeps
+  the full name (`Modules.EXAMPLE_LOOKUP`), and `list_modules(provider=)` filters by it. Provider
+  classes ship from the extension package's own `riko.ext.codegen` run, not riko's `_names.py`
+  (built-ins only).
 - **No `.then()` — decision: Option C + `__or__`.** `.then()` is **rejected** (avoids a second
   chaining idiom and the `then`-means-callable semantic collision with §4 callable pipes). Instead:
   (a) **extend the existing `.pipe()`** to accept a positional `ModuleNameLike`

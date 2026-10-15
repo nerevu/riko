@@ -86,51 +86,78 @@ PRIVATE_RESOLUTION = frozenset(
     }
 )
 
-EXTENSION = frozenset(
+EXT_MODULES = frozenset(
     {
-        "ActionNode",
         "AsyncOperatorWrapper",
         "AsyncProcessorWrapper",
         "AsyncSplitterWrapper",
-        "CacheNode",
         "DynamicConf",
-        "FileTarget",
         "ModuleDefinition",
         "ModuleMetadata",
         "ModuleName",
         "ModuleNameLike",
-        "ModuleNode",
         "ModuleRegistry",
         "ModuleSubtype",
         "ModuleType",
         "ModuleWrapper",
+        "PreparedCall",
+        "SyncOperatorWrapper",
+        "SyncProcessorWrapper",
+        "SyncSplitterWrapper",
+        "get_conf_type",
+        "get_module_category",
+        "normalize_module_name",
+        "operator",
+        "processor",
+        "register_module",
+        "reset_module_registry",
+        "splitter",
+    }
+)
+
+EXT_TARGETS = frozenset(
+    {
+        "FileTarget",
+        "SupportsActions",
+        "SupportsRead",
+        "SupportsWrite",
+        "Target",
+        "TargetRegistry",
+        "WriteCapabilities",
+        "register_target",
+        "reset_target_registry",
+    }
+)
+
+EXT_WORKFLOWS = frozenset(
+    {
+        "ActionNode",
+        "CacheNode",
+        "Dispatcher",
+        "ModuleNode",
         "PublishEdge",
         "ReadNode",
         "StreamEdge",
         "SubscribeNode",
-        "SupportsActions",
-        "SupportsRead",
-        "SupportsWrite",
-        "SyncOperatorWrapper",
-        "SyncProcessorWrapper",
-        "SyncSplitterWrapper",
-        "Target",
-        "TargetRegistry",
-        "WriteCapabilities",
         "WriteNode",
-        "get_module_category",
-        "get_conf_type",
         "migrate_v1_to_v2",
-        "normalize_module_name",
         "normalize_workflow",
-        "operator",
-        "processor",
-        "register_module",
         "register_workflow_store",
-        "register_target",
-        "splitter",
+        "reset_workflow_resolver",
     }
 )
+
+EXT_CODEGEN = frozenset(
+    {
+        "NameEntry",
+        "enum_member_name",
+        "gen_catalog_entries",
+        "generate_module_ids",
+        "generate_module_names",
+    }
+)
+
+EXTENSION = EXT_MODULES | EXT_TARGETS | EXT_WORKFLOWS
 
 TYPES = frozenset(
     {

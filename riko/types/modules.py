@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict
 import attrs
 from attrs import define
 
+from riko.base._config import BUILTIN_PROVIDER
+
 from ._collections import (
     FrozenConf,
     require_from_form,
@@ -64,6 +66,33 @@ class ReturnInference:
     reason: str = ""
 
 
+def get_module_provider(name: str) -> str:
+    """
+    Gets the provider/namespace a module name belongs to.
+
+    Args:
+
+        name: The module name.
+
+    Returns:
+
+        The first dotted segment of a qualified name, or ``"riko"`` (the built-in
+        provider) for an unqualified name.
+
+    Examples:
+
+        >>> get_module_provider("fetch")
+        'riko'
+        >>> get_module_provider("example.lookup")
+        'example'
+        >>> get_module_provider("microsoft.autopilot.ensure")
+        'microsoft'
+
+    """
+    prefix, dot, _ = name.partition(".")
+    return prefix if dot else BUILTIN_PROVIDER
+
+
 @dataclass(frozen=True, slots=True)
 class ModuleMetadata:
     name: str
@@ -74,6 +103,16 @@ class ModuleMetadata:
     loopable: bool
     has_sync: bool
     has_async: bool
+
+    @property
+    def provider(self) -> str:
+        """
+        The module's namespace.
+
+        The first dotted segment of its name, or the built-in provider for an
+        unqualified name.
+        """
+        return get_module_provider(self.name)
 
     def supports(self, subtype: ModuleSubtype) -> bool:
         return subtype in self.subtypes
@@ -1086,4 +1125,5 @@ __all__ = [
     "UrlParseConf",
     "WriteConf",
     "XpathFetchPageConf",
+    "get_module_provider",
 ]

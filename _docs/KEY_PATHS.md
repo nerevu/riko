@@ -49,7 +49,7 @@ internals stay in `_docs/INTERNALS.md`.
 
 | Path | Role |
 |---|---|
-| `riko/types/modules.py` | hand-maintained module configuration contracts; source input for config code generation; also the call options: the frozen `CallOptions` record `ModuleNode.options` stores (`from_raw`, `kwargs`), its keyword form `RawCallOptions` (emit/assign/field/count), and the `ContextOverrides` `TypedDict` (mode/inputs/verbose/test, mirroring `Context.replace`); plus the conf guards `require_module_conf`/`require_conf`, kept out of `__all__` |
+| `riko/types/modules.py` | hand-maintained module configuration contracts; source input for config code generation; `ModuleMetadata` and its derived `provider` (`get_module_provider`: first dotted segment, `BUILTIN_PROVIDER` when unqualified); also the call options: the frozen `CallOptions` record `ModuleNode.options` stores (`from_raw`, `kwargs`), its keyword form `RawCallOptions` (emit/assign/field/count), and the `ContextOverrides` `TypedDict` (mode/inputs/verbose/test, mirroring `Context.replace`); plus the conf guards `require_module_conf`/`require_conf`, kept out of `__all__` |
 | `riko/types/_module_ids.py` | **generated** `ModuleId`/`LoopableModuleId` literals; regenerate with `gen-names` or `manage codegen --names` |
 | `riko/types/_streams.py` | core `Item`/`Items`/stream aliases and async stream contracts |
 | `riko/types/_workflow.py` | Workflow v2 structural contracts (endpoints, port grammar, node/edge discriminants) plus `GraphEdge` and `GraphIndex`, the one topology interpretation `Workflow.index` builds and `Workflow.validate()`/execution planning both read. `GraphIndex` takes only node ids, edges, and outputs (`Endpoint`s); every other attribute is lazily derived from them using `riko/base/_graph.py` helpers, so a hand-built index is consistent and frozen |
@@ -155,19 +155,19 @@ write/session contracts.
 | Path | Role |
 |---|---|
 | `riko/modules/<name>.py` | one built-in pipe implementation per module |
-| `riko/modules/__init__.py` | intentionally narrow module-development facade; implementation internals should import their defining private modules, not round-trip through the facade |
+| `riko/modules/__init__.py` | intentionally narrow built-in module catalog facade (metadata types, `describe_module`, `get_module_metadata`); authoring contracts live on `riko.ext`; implementation internals should import their defining private modules, not round-trip through the facade |
 | `riko/modules/_decorators.py` | `processor`/`operator`/`splitter` machinery and sync/async wrappers; a wrapper's `prepare` returns one of the call records `_PreparedProcessor`/`_PreparedOperator`/`_PreparedSplitter`, which share the generic attrs base `_PreparedCall[M]` (the decorator, wrapper, prepared module, and bound options, plus `field`/`count`/`parser`) and implement the `PreparedCall` protocol |
 | `riko/modules/_prepare.py` | immutable `PreparedModule` construction and call-site option/resource preparation; `PreparedModule` is a frozen record of plain values (name, merged conf, options, extras, defaults; all but the name default) whose `assign`/`emit` (read from the options), `is_conf_parsed`/`is_dynamic`/`static_conf`/`parsers`/`casters`/`static_casted` are cached derivations, so it pickles and the process executor can ship it |
-| `riko/modules/_metadata.py` | the runtime module catalog and discovery: `list_modules`, `get_module_category`, `describe_module`, `get_module_metadata` read built-in and registered modules' decorator-set metadata |
+| `riko/modules/_metadata.py` | the runtime module catalog and discovery: `list_modules` (filters by type/subtype/category/provider/loopability), `get_module_category`, `describe_module`, `get_module_metadata` read built-in and registered modules' decorator-set metadata |
 | `riko/modules/_require.py` | `require_arg`/`require_conf_key`, the raise-on-missing guards for required pipe call arguments and conf keys; private, not on `riko.ext` |
 | `riko/modules/_textops.py` | the pipe text operations: `substitute`/`multi_substitute`, `reduce_find`, `PARAMS`/`OPS`, `gen_name`, `INVALID_FILECHAR_PATTERN` |
 | `riko/modules/_derive.py` + `riko/modules/_inference.py` | subtype/loopability/return-kind derivation kept isolated from higher extension/runtime surfaces |
 | `riko/modules/_loop.py` | explicit loop module execution, distinct from processors' implicit iterable mapping |
 | `riko/modules/_names.py` | **generated** `Modules`/`Sources`/`Transforms`/`Sinks` discovery enums; never hand-edit |
-| `riko/ext/decorators.py` + `riko/ext/protocols.py` | supported module-author decorator/protocol surface |
-| `riko/ext/registry.py` | supported registration surface (`register_module`/`reset_module_registry`/`ModuleRegistry`, `register_workflow_store`/`reset_workflow_resolver`, `register_target`/`reset_target_registry`/`TargetRegistry`) re-exported over the private runtime module registry |
+| `riko/ext/modules.py` | module-authoring extension point: defines `get_conf_type`; re-exports the decorators (`riko/modules/_decorators.py`), `ModuleDefinition`/`normalize_module_name` (`riko/definitions/modules.py`), `ModuleRegistry`/`register_module`/`reset_module_registry` (`riko/runtime/_module_registry.py`), `DynamicConf`, `get_module_category`, module name/metadata types, and the wrapper protocols plus `PreparedCall` (`riko/types/_wrappers.py`) |
+| `riko/ext/targets.py` | write-target extension point: re-exports `FileTarget` (`riko/definitions/_targets.py`), `WriteCapabilities` (`riko/definitions/_write.py`), `TargetRegistry`/`register_target`/`reset_target_registry` (`riko/runtime/_target_registry.py`), and the target protocols (`riko/types/_targets.py`) |
+| `riko/ext/workflows.py` | workflow extension point: re-exports the node/edge classes (`riko/definitions/_nodes.py`), `normalize_workflow`/`migrate_v1_to_v2` (`riko/definitions/_workflow.py`), `register_workflow_store`/`reset_workflow_resolver` (`riko/runtime/_workflow_resolver.py`), and `Dispatcher` (`riko/types/_wrappers.py`) |
 | `riko/ext/codegen.py` | the discovery-name and module-id generators: `enum_member_name`, `gen_catalog_entries`, `generate_module_names`, `generate_module_ids` |
-| `riko/ext/config.py` | supported extension configuration helpers |
 
 ## CLI and generators
 

@@ -32,7 +32,7 @@ forward architecture dependency graph in [implementation-sequence.md](gameplans/
 | **P5** one-shot lifecycle | ✅ done | § P5; `PipeState` removed with the pipe classes at v1-cutover step 4 (2026-10-02) — one-shot lifetime is now owned by `SyncExecution`/`AsyncExecution` per `Pipeline` iteration |
 | **P6** `ExecutionMode` | ✅ done | § P6 |
 | **P7** sync/async parity + true async streaming | ✅ done | § P7. **Carryover:** bounded-memory streaming *export* → design in [gameplans/feed-native-streaming.md](gameplans/feed-native-streaming.md). |
-| **P8** module registry + entry points | ✅ done | § P8; `riko/ext/registry.py` facade over `riko/runtime/{_module_registry,_workflows,_resolver}.py`, `Resolver` protocol, symmetric dispatch |
+| **P8** module registry + entry points | ✅ done | § P8; `riko/ext/modules.py` facade over `riko/runtime/{_module_registry,_workflows,_resolver}.py`, `Resolver` protocol, symmetric dispatch |
 | **P9** fluent discoverability | ⏳ in progress | **P9A done** (§ P9A): generated flat `Modules` namespace + `Sources`/`Transforms`/`Sinks` bucket tree (`riko/modules/_names.py`), `get_module_category` taxonomy, `riko.ext.codegen` + `gen-names` CLI/drift guard, `list_modules`/`describe_module`, value-taking `.pipe`/`\|`. **Remaining (non-P9A):** installed-env aggregate `riko.generated.Modules` + `.pyi` stubs → [gameplans/module-enums.md](gameplans/module-enums.md) |
 | **P10** bounded parallelism + backpressure | ✅ done | § P10. Execution-wide wiring shipped with R4B: async nodes share one `Semaphore` budget per run; the sync pool honors `ordered`. |
 | **P11** pub/sub + poll protocols | ⬜ pending | `Publisher`/`Subscription`/`.poll`; reshaped by fanout/execution owners and sequenced as R7 after Pipeline execution foundations |
@@ -130,7 +130,7 @@ never `DynamicConf` or the annotated `<Name>Objconf` (whether that changes is an
   nonraw `<Name>Conf` TypedDict contracts in `types/modules.py`; drift-guarded by
   `tests/internal/test_codegen.py`. Edit the contracts, never `_configs.py`.
 - `Objconf` survived one release as a deprecated factory → `DynamicConf`, then was **removed entirely**
-  in the post-v0.72.0 legacy removal. Import `DynamicConf` from `riko.ext.config`. See MIGRATION.rst /
+  in the post-v0.72.0 legacy removal. Import `DynamicConf` from `riko.ext`. See MIGRATION.rst /
   CHANGES.rst.
 
 **Carryover:** none. 62 parsers carry precise `<Name>Objconf`; the ~10 `DynamicConf` cases are
@@ -193,7 +193,7 @@ properties derived from `mode`; generated workflow modules dispatch on `mode` th
 
 **Delivered (P7.1–P7.6).** Observable sync/async differences are execution mechanics only. Async type
 vocabulary (`AsyncStream`/`AsyncItems`/`Feed`, now in `riko/types/_streams.py`, surfaced via
-`riko.ext.protocols`); at the time, the v1 async pipe accepted async-iterable / awaitable /
+`riko.types`); at the time, the v1 async pipe accepted async-iterable / awaitable /
 sync-iterable sources, streamed incrementally through one shared execution, and gained chaining
 parity, async lifecycle, and async `split`/`export`; the AnyIO runtime migration
 (`async_map_stream`); the parity matrix (`tests/public/test_pipeline.py`). The v1 pipe

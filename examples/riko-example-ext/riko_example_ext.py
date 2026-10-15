@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any, cast
 from riko.ext import operator
 
 if TYPE_CHECKING:
-    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.ext import DynamicConf
     from riko.types import Item, PipeTuples, Stream
 
 
