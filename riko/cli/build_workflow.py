@@ -18,10 +18,10 @@ Examples:
         ...         {"name": "truncate", "conf": count},
         ...     ]
         ... }
-        >>> workflow = Workflow.parse(dag)
-        >>> list(workflow.nodes)
+        >>> flow = Workflow.parse(dag)
+        >>> list(flow.nodes)
         ['sw-1', 'sw-2']
-        >>> workflow.outputs["default"]
+        >>> flow.outputs["default"]
         Endpoint(node='sw-2', port='out')
 
     CLI composition::
@@ -98,13 +98,13 @@ def run() -> None:
     else:
         try:
             mapping = require_mapping(document, "workflow")
-            workflow = Workflow.parse(mapping, shape=args.fmt)
+            flow = Workflow.parse(mapping, shape=args.fmt)
         except InvalidPipelineError as e:
             print(e, file=sys.stderr)
             return_code = 1
         else:
             options = {"indent": None} if args.compact else {}
-            text = workflow.serialize(**options).decode("utf-8")
+            text = flow.serialize(**options).decode("utf-8")
 
             if args.output is None:
                 sys.stdout.write(text)

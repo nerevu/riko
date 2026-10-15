@@ -5,12 +5,13 @@
 from __future__ import annotations
 
 import shutil
+from functools import partial
 from glob import glob
 from itertools import chain
 from pathlib import Path
 from subprocess import CalledProcessError, call, check_call, check_output
 from sys import exit
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 import click
 
@@ -20,6 +21,7 @@ from ._build import _twine_check
 from ._docs import _lint_docs, _lint_rst
 from ._docstyle import format_issue, gen_docstring_issues
 from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
+from ._lint_bindings import format_binding_issue, gen_binding_issues
 from ._lint_deps import (
     format_dependency_issue,
     gen_dependency_issues,
@@ -30,7 +32,7 @@ from ._lint_terms import format_term_issue, gen_term_issues
 from ._lint_tests import format_layout_issue, gen_layout_issues
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
 _WORKFLOW_DIR = ROOT_DIR / ".github" / "workflows"
 _TEXT_ROOTS: tuple[str, ...] = (
@@ -102,26 +104,28 @@ def _lint_docstrings(where: str | None = "") -> int:
     return 1 if issues else 0
 
 
-def _lint_terms(where: str | None = "") -> int:
-    """Checks shipped text for phrases the reserved-terms rules replace."""
+class _IssueWalker[I](Protocol):
+    """Walks shipped-text roots for one lint's issues."""
+
+    def __call__(self, *roots: Path) -> Iterable[I]: ...
+
+
+def _run_text_lint[I](
+    gen: _IssueWalker[I], fmt: Callable[[I], str], where: str | None = ""
+) -> int:
+    """Runs one shipped-text lint over ``where`` (or the text roots) and reports it."""
     names = where.split(" ") if where else _TEXT_ROOTS
-    issues = list(gen_term_issues(*(ROOT_DIR / name for name in names)))
+    issues = list(gen(*(ROOT_DIR / name for name in names)))
 
     for issue in issues:
-        print(format_term_issue(issue))
+        print(fmt(issue))
 
     return 1 if issues else 0
 
 
-def _lint_literals(where: str | None = "") -> int:
-    """Checks shipped text for inline literals that break the quoting rules."""
-    names = where.split(" ") if where else _TEXT_ROOTS
-    issues = list(gen_literal_issues(*(ROOT_DIR / name for name in names)))
-
-    for issue in issues:
-        print(format_literal_issue(issue))
-
-    return 1 if issues else 0
+_lint_terms = partial(_run_text_lint, gen_term_issues, format_term_issue)
+_lint_literals = partial(_run_text_lint, gen_literal_issues, format_literal_issue)
+_lint_bindings = partial(_run_text_lint, gen_binding_issues, format_binding_issue)
 
 
 def _lint_tests() -> int:
@@ -253,6 +257,9 @@ def _check_command() -> None:
 @click.option(
     "--deps", help="Check imports against declared dependencies", is_flag=True
 )
+@click.option(
+    "--bindings", help="Check Workflow values are bound as flow", is_flag=True
+)
 @click.option("--tests", help="Check the test suite's indexed layout", is_flag=True)
 @click.option("--all", "all_", help="Run every standard lint check", is_flag=True)
 @click.option(
@@ -278,6 +285,7 @@ def _lint_command(
     terms: bool = False,
     literals: bool = False,
     deps: bool = False,
+    bindings: bool = False,
     tests: bool = False,
     all_: bool = False,
     parallel: bool = False,
@@ -299,6 +307,7 @@ def _lint_command(
                 terms,
                 literals,
                 deps,
+                bindings,
                 tests,
                 all_,
             )
@@ -325,6 +334,9 @@ def _lint_command(
 
         if deps or all_:
             return_codes.append(_lint_deps())
+
+        if bindings or all_:
+            return_codes.append(_lint_bindings(_where))
 
         if tests or all_:
             return_codes.append(_lint_tests())

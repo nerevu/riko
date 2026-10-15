@@ -77,54 +77,54 @@ def _is_module_pair(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
 _EMPTY_WORKFLOW = Workflow(nodes=[], outputs={}, inputs={})
 
 
-def _get_node_id(workflow: Workflow, name: str) -> NodeId:
+def _get_node_id(flow: Workflow, name: str) -> NodeId:
     """Mints a conflict free ``<name>-<occurrence>`` node id."""
-    count = len([node for node in workflow.nodes.values() if node.name == name]) + 1
+    count = len([node for node in flow.nodes.values() if node.name == name]) + 1
     candidate = f"{name}-{count}"
 
-    while candidate in workflow.nodes:
+    while candidate in flow.nodes:
         count += 1
         candidate = f"{name}-{count}"
 
     return candidate
 
 
-def _build_appended_workflow(node: Node, workflow: Workflow | None = None) -> Workflow:
+def _build_appended_workflow(node: Node, flow: Workflow | None = None) -> Workflow:
     """Builds a workflow with ``node``s and re-points the default output to it."""
-    workflow = _EMPTY_WORKFLOW if workflow is None else workflow
+    flow = _EMPTY_WORKFLOW if flow is None else flow
 
-    if (tail := workflow.outputs.get("default")) is None:
-        edges = workflow.edges
+    if (tail := flow.outputs.get("default")) is None:
+        edges = flow.edges
     else:
-        edges = (*workflow.edges, StreamEdge(tail, Endpoint(node.id, "in")))
+        edges = (*flow.edges, StreamEdge(tail, Endpoint(node.id, "in")))
 
     return Workflow(
-        nodes=[*workflow.nodes.values(), node],
-        outputs={**workflow.outputs, "default": Endpoint(node.id, "out")},
-        inputs=workflow.inputs,
+        nodes=[*flow.nodes.values(), node],
+        outputs={**flow.outputs, "default": Endpoint(node.id, "out")},
+        inputs=flow.inputs,
         edges=edges,
-        resources=workflow.resources,
-        version=workflow.version,
+        resources=flow.resources,
+        version=flow.version,
     )
 
 
 def _build_chained_workflow(
     name: str,
-    workflow: Workflow | None = None,
+    flow: Workflow | None = None,
     *,
     conf: FrozenConf | Conf | None = None,
     options: CallOptionsLike | None = None,
     embed: Embed | None = None,
 ) -> Workflow:
     """Builds a workflow that appends a module node and re-points the default output."""
-    workflow = _EMPTY_WORKFLOW if workflow is None else workflow
-    node_id = _get_node_id(workflow, name)
+    flow = _EMPTY_WORKFLOW if flow is None else flow
+    node_id = _get_node_id(flow, name)
     node = ModuleNode(id=node_id, name=name, conf=conf, options=options, embed=embed)
-    return _build_appended_workflow(node, workflow)
+    return _build_appended_workflow(node, flow)
 
 
 def _build_write_workflow(
-    workflow: Workflow,
+    flow: Workflow,
     dest: Destination,
     *,
     mode: WriteMode | str = WriteMode.REPLACE,
@@ -135,7 +135,7 @@ def _build_write_workflow(
     prepared = build_write(dest, mode, fmt=fmt, keys=keys)
     location: object = getattr(prepared.target, "dest", None)
     node = WriteNode(
-        id=_get_node_id(workflow, "write"),
+        id=_get_node_id(flow, "write"),
         name="write",
         backend=prepared.target.backend,
         dest=None if location is None else str(location),
@@ -143,7 +143,7 @@ def _build_write_workflow(
         mode=prepared.operation.mode,
         keys=prepared.operation.keys,
     )
-    return _build_appended_workflow(node, workflow)
+    return _build_appended_workflow(node, flow)
 
 
 def _require_workflow(value: object, what: str | None = None, **_) -> Workflow:
@@ -257,14 +257,14 @@ class PipelineDefinition(Generic[T]):
             Endpoint(node='sort-1', port='out')
 
         """
-        workflow = _build_chained_workflow(
+        flow = _build_chained_workflow(
             str(name), conf=conf, options=options, embed=embed
         )
-        return cls(workflow)
+        return cls(flow)
 
-    def _derive(self, workflow: Workflow, source: SourceLike | None) -> Self:
+    def _derive(self, flow: Workflow, source: SourceLike | None) -> Self:
         """Builds a sibling pipeline over a derived workflow and source."""
-        return evolve(self, workflow=workflow, source=source)
+        return evolve(self, workflow=flow, source=source)
 
     def pipe(
         self,
@@ -310,10 +310,8 @@ class PipelineDefinition(Generic[T]):
 
         """
         args = str(name), self.workflow
-        workflow = _build_chained_workflow(
-            *args, conf=conf, options=options, embed=embed
-        )
-        return self._derive(workflow, self.source)
+        flow = _build_chained_workflow(*args, conf=conf, options=options, embed=embed)
+        return self._derive(flow, self.source)
 
     def write(
         self,
@@ -379,10 +377,10 @@ class PipelineDefinition(Generic[T]):
             msg = "write() takes either a destination or module arguments, not both"
             raise TypeError(msg)
         else:
-            workflow = _build_write_workflow(
+            flow = _build_write_workflow(
                 self.workflow, dest, mode=mode, fmt=fmt, keys=keys
             )
-            written = self._derive(workflow, self.source)
+            written = self._derive(flow, self.source)
 
         return written
 

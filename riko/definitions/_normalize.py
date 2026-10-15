@@ -310,34 +310,34 @@ def _gen_raw[K, V: AttrsInstance, R](
         yield key, raw(**serialize_attrs(_value, recurse=True), **extra(_value))
 
 
-def build_raw_graph(workflow: Workflow) -> RawWorkflow:
+def build_raw_graph(flow: Workflow) -> RawWorkflow:
     """
     Builds the shorthand mapping a built workflow normalizes from.
 
     Args:
 
-        workflow: The ``Workflow`` to convert.
+        flow: The ``Workflow`` to convert.
 
     Returns:
 
         The ``RawWorkflow`` describing the same graph.
 
     """
-    edges = dict(zip(count(), workflow.edges, strict=False))
+    edges = dict(zip(count(), flow.edges, strict=False))
 
     return RawWorkflow(
         {
-            "nodes": dict(_gen_raw(workflow.nodes, RawNode)),
+            "nodes": dict(_gen_raw(flow.nodes, RawNode)),
             "edges": [v for _, v in _gen_raw(edges, RawEdge)],
-            "outputs": dict(_gen_raw(workflow.outputs, RawEndpoint)),
-            "inputs": map_values(_require_input, workflow.inputs),
-            "resources": workflow.resources,
-            "version": workflow.version,
+            "outputs": dict(_gen_raw(flow.outputs, RawEndpoint)),
+            "inputs": map_values(_require_input, flow.inputs),
+            "resources": flow.resources,
+            "version": flow.version,
         }
     )
 
 
-def build_workflow_fields(raw: RawWorkflow | Mapping[str, object]) -> WorkflowFields:
+def build_workflow_fields(value: RawWorkflow | Mapping[str, object]) -> WorkflowFields:
     """
     Builds strict ``Workflow`` field values from a flexible workflow mapping.
 
@@ -348,7 +348,7 @@ def build_workflow_fields(raw: RawWorkflow | Mapping[str, object]) -> WorkflowFi
 
     Args:
 
-        raw: A mapping with ``nodes`` and optional ``edges``, ``outputs``,
+        value: A mapping with ``nodes`` and optional ``edges``, ``outputs``,
             ``inputs``, ``resources``, and ``version``.
 
     Returns:
@@ -357,21 +357,21 @@ def build_workflow_fields(raw: RawWorkflow | Mapping[str, object]) -> WorkflowFi
 
     Raises:
 
-        InvalidPipelineError: If ``raw`` is not a mapping or its structure is
+        InvalidPipelineError: If ``value`` is not a mapping or its structure is
             malformed.
 
     """
-    workflow = require_raw_workflow(require_mapping(raw, "workflow"))
-    _resources = workflow.get("resources")
-    version = workflow.get("version", WORKFLOW_VERSION)
-    nodes = _build_nodes(workflow.get("nodes", ()))
-    _edges = require_sequence(workflow.get("edges", ()), "edges")
+    raw = require_raw_workflow(require_mapping(value, "workflow"))
+    _resources = raw.get("resources")
+    version = raw.get("version", WORKFLOW_VERSION)
+    nodes = _build_nodes(raw.get("nodes", ()))
+    _edges = require_sequence(raw.get("edges", ()), "edges")
     edges = [_normalize_edge(edge, **nodes) for edge in _edges]
 
     return WorkflowFields(
         nodes=tuple(nodes.values()),
-        outputs=_normalize_outputs(workflow.get("outputs"), *edges, **nodes),
-        inputs=_normalize_inputs(workflow.get("inputs")),
+        outputs=_normalize_outputs(raw.get("outputs"), *edges, **nodes),
+        inputs=_normalize_inputs(raw.get("inputs")),
         edges=edges,
         resources=() if _resources is None else require_strlike(_resources),
         version=require_str(version, "workflow 'version'"),

@@ -19,6 +19,7 @@ from riko.base.exceptions import InvalidArchitectureError, InvalidPipelineError
 from riko.cli import _codegen, _import_commands, _lint, _test, _upgrade, _workflow
 from riko.cli._coverage import build_ceiling_text
 from riko.cli._docstyle import gen_example_prose, summary_leads_with_output
+from riko.cli._lint_bindings import gen_binding_issues, gen_binding_lines
 from riko.cli._lint_canonical_imports import _iter_issues as canonical_issues
 from riko.cli._lint_deps import (
     gen_dependency_issues,
@@ -254,6 +255,9 @@ def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
         _lint, "_lint_literals", lambda *_: calls.append("literals") or 0
     )
     monkeypatch.setattr(_lint, "_lint_deps", lambda: calls.append("deps") or 0)
+    monkeypatch.setattr(
+        _lint, "_lint_bindings", lambda *_: calls.append("bindings") or 0
+    )
     monkeypatch.setattr(_lint, "_lint_tests", lambda: calls.append("tests") or 0)
     monkeypatch.setattr(_lint, "_lint_actions", lambda *_: calls.append("actions") or 0)
     monkeypatch.setattr(_lint, "_lint_yaml", lambda *_: calls.append("yaml") or 0)
@@ -320,6 +324,7 @@ class TestLintCommand:
                     "terms",
                     "literals",
                     "deps",
+                    "bindings",
                     "tests",
                     "actions",
                     "yaml",
@@ -327,8 +332,8 @@ class TestLintCommand:
                 ],
             ),
             (
-                ["--terms", "--literals", "--deps", "--tests"],
-                ["terms", "literals", "deps", "tests"],
+                ["--terms", "--literals", "--deps", "--bindings", "--tests"],
+                ["terms", "literals", "deps", "bindings", "tests"],
             ),
             (["--check-types", "--strict"], ["types", "strict"]),
         ],
@@ -581,6 +586,64 @@ class TestLiteralLint:
         (tmp_path / "CHANGES.rst").write_text("Set ``'auto'``.\n", encoding="utf-8")
         found = [issue.path.name for issue in gen_literal_issues(tmp_path)]
         assert found == ["CHANGES.rst", "GUIDE.rst"]
+
+
+BINDING_CASES = [
+    pytest.param("def f(workflow: Workflow): ...\n", [1], id="param"),
+    pytest.param("def f(workflow: WorkflowLike | None): ...\n", [1], id="like-param"),
+    pytest.param("def f(workflow: RawWorkflow): ...\n", [], id="raw-param"),
+    pytest.param("workflow = Workflow.parse(dag)\n", [1], id="parsed-local"),
+    pytest.param("workflow = pipeline.workflow\n", [1], id="attribute-local"),
+    pytest.param("workflow = load(dag)\n", [], id="unknown-call"),
+    pytest.param(
+        "def build() -> Workflow: ...\nworkflow = build()\n", [2], id="helper-local"
+    ),
+    pytest.param("class P:\n    workflow: Workflow = field()\n", [], id="field"),
+    pytest.param("evolve(self, workflow=flow)\n", [], id="keyword"),
+    pytest.param("def from_workflow(cls, flow: Workflow): ...\n", [], id="method"),
+    pytest.param(
+        'def f():\n    """\n    >>> workflow = Workflow(nodes=[])\n    """\n',
+        [3],
+        id="doctest",
+    ),
+]
+
+
+class TestBindingLint:
+    """The ``Workflow`` binding-name lint check."""
+
+    @pytest.mark.parametrize(("source", "expected"), BINDING_CASES)
+    def test_workflow_values_bound_as_workflow_are_flagged(
+        self, source: str, expected: list[int]
+    ) -> None:
+        assert list(gen_binding_lines(source)) == expected
+
+    def test_check_exits_by_whether_issues_were_found(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        clean, flagged = tmp_path / "clean.py", tmp_path / "flagged.py"
+        clean.write_text("flow = Workflow()\n", encoding="utf-8")
+        flagged.write_text("workflow = Workflow()\n", encoding="utf-8")
+
+        assert _lint._lint_bindings(str(clean)) == 0
+        assert _lint._lint_bindings(str(flagged)) == 1
+        assert "flagged.py:1" in capsys.readouterr().out
+
+    def test_prose_doctests_are_checked_from_a_file_or_directory_root(
+        self, tmp_path: Path
+    ) -> None:
+        guide = tmp_path / "GUIDE.rst"
+        guide.write_text(
+            "Parse it::\n\n    >>> workflow = Workflow.parse(dag)\n"
+            "    >>> flow = Workflow.parse(dag)\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "NOTES.md").write_text("workflow = Workflow()\n", encoding="utf-8")
+        found = [(issue.path.name, issue.lineno) for issue in gen_binding_issues(guide)]
+        assert found == [("GUIDE.rst", 3)]
+        assert [issue.path.name for issue in gen_binding_issues(tmp_path)] == [
+            "GUIDE.rst"
+        ]
 
 
 DISTRIBUTIONS = {

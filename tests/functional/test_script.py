@@ -514,13 +514,11 @@ class TestExamplePipelines:
     def test_example_document_runs(self, pipe_name, expected):
         """Runs each example workflow document and checks the stream it produces."""
         document = ROOT_DIR / "examples" / "workflows" / f"{pipe_name}.json"
-        workflow = Workflow.parse(document.read_text())
+        flow = Workflow.parse(document.read_text())
         items = []
 
         with SyncExecution(context=Context(test=True)) as execution:
-            items = list(
-                execution.run(ExecutionPlan.from_workflow(workflow, dispatcher))
-            )
+            items = list(execution.run(ExecutionPlan.from_workflow(flow, dispatcher)))
 
         assert items == expected
 

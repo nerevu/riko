@@ -779,10 +779,10 @@ class TestGraphIndex:
         c = ModuleNode(id="c", name="m")
         edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))
         outputs = {"default": Endpoint("b", "out"), "extra": Endpoint("c", "out")}
-        workflow = Workflow(
+        flow = Workflow(
             nodes=[a, b, c], outputs=outputs, inputs={}, edges=(edge,), resources=()
         )
-        index = workflow.index
+        index = flow.index
 
         assert set(index.order) == {"a", "b", "c"}
         assert index.order.index("a") < index.order.index("b")
@@ -806,7 +806,7 @@ class TestGraphIndex:
             StreamEdge(Endpoint("b", "out"), Endpoint("a", "in:1")),
             StreamEdge(Endpoint("b", "out"), Endpoint("after", "in")),
         )
-        workflow = Workflow(
+        flow = Workflow(
             nodes=[src, a, b, after],
             edges=edges,
             outputs={"default": Endpoint("after", "out")},
@@ -814,4 +814,4 @@ class TestGraphIndex:
             resources=(),
             version="2",
         )
-        assert workflow.index.cyclic == ("a", "b")
+        assert flow.index.cyclic == ("a", "b")

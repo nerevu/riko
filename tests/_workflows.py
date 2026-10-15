@@ -52,12 +52,12 @@ def gen_fixture_paths() -> Iterator[Path]:
         yield from sorted(directory.glob("pipe_*.json"))
 
 
-def run_workflow(workflow: Workflow) -> list[Item]:
-    """Runs ``workflow`` through a synchronous test execution."""
+def run_workflow(flow: Workflow) -> list[Item]:
+    """Runs ``flow`` through a synchronous test execution."""
     items: list[Item] = []
 
     with SyncExecution(context=Context(test=True)) as execution:
-        items = list(execution.run(ExecutionPlan.from_workflow(workflow, dispatcher)))
+        items = list(execution.run(ExecutionPlan.from_workflow(flow, dispatcher)))
 
     return items
 

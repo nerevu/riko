@@ -242,9 +242,9 @@ class Workflow:
             msg = f"a Workflow can only be read as shape 'v2', not {resolved.value!r}"
             raise InvalidPipelineError(msg)
 
-        workflow = cls(**fields)
-        workflow.validate()
-        return workflow
+        flow = cls(**fields)
+        flow.validate()
+        return flow
 
     @classmethod
     def load(cls, path: PathLike, *, shape: DocumentShapeLike | None = None) -> Self:
@@ -523,7 +523,7 @@ class Workflow:
         return result
 
 
-def normalize_workflow(raw: WorkflowLike) -> Workflow:
+def normalize_workflow(value: WorkflowLike) -> Workflow:
     """
     Normalizes a flexible ``WorkflowLike`` into a strict ``Workflow``.
 
@@ -538,7 +538,7 @@ def normalize_workflow(raw: WorkflowLike) -> Workflow:
 
     Args:
 
-        raw: A ``WorkflowLike`` with ``nodes`` and optional ``edges``, ``outputs``,
+        value: A ``WorkflowLike`` with ``nodes`` and optional ``edges``, ``outputs``,
             ``inputs``, ``resources``, and ``version``.
 
     Returns:
@@ -547,7 +547,7 @@ def normalize_workflow(raw: WorkflowLike) -> Workflow:
 
     Raises:
 
-        InvalidPipelineError: If ``raw`` is not a mapping or its structure is
+        InvalidPipelineError: If ``value`` is not a mapping or its structure is
             malformed.
 
     Examples:
@@ -571,8 +571,8 @@ def normalize_workflow(raw: WorkflowLike) -> Workflow:
         Endpoint(node='write-1', port='out')
 
     """
-    source = build_raw_graph(raw) if isinstance(raw, Workflow) else raw
-    return Workflow(**build_workflow_fields(source))
+    raw = build_raw_graph(value) if isinstance(value, Workflow) else value
+    return Workflow(**build_workflow_fields(raw))
 
 
 def migrate_v1_to_v2(pipe_def: PipeDefLike) -> Workflow:

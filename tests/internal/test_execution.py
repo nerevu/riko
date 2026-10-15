@@ -239,7 +239,7 @@ def _test_metadata(
 ITEMS = [{"x": x} for x in range(20)]
 
 
-def _workflow(nodes, edges=(), resources=()):
+def _workflow(nodes, edges=(), resources=()) -> Workflow:
     last = nodes[-1].id
     outputs = {"default": Endpoint(last, "out")}
     return Workflow(nodes=nodes, outputs=outputs, edges=edges, resources=resources)
@@ -1556,8 +1556,8 @@ class TestSyncConcurrency:
         side = ModuleNode(id="s", name="side")
         joined = ModuleNode(id="j", name="joiner")
         edge = StreamEdge(Endpoint("s", "out"), Endpoint("j", "in:side"))
-        workflow = _workflow([side, joined], edges=(edge,))
-        plan = ExecutionPlan.from_workflow(workflow, dispatcher=dispatcher)
+        flow = _workflow([side, joined], edges=(edge,))
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
         settings = ExecutionSettings(concurrency=4)
 
         expected = [{"forever": True}, {"t": "side"}]
@@ -1575,8 +1575,8 @@ class TestSyncConcurrency:
         dispatcher = build_dispatcher(
             ModuleDefinition(name="explode", sync_pipe=_loopable(explode))
         )
-        workflow = _workflow([ModuleNode(id="n", name="explode")])
-        plan = ExecutionPlan.from_workflow(workflow, dispatcher=dispatcher)
+        flow = _workflow([ModuleNode(id="n", name="explode")])
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
         with pytest.raises(ValueError, match="boom"):
             _run_sync(plan, ExecutionSettings(concurrency=2))
@@ -1635,8 +1635,8 @@ class TestSyncConcurrency:
 
     def test_process_executor_refuses_a_resource_node(self, opened) -> None:
         node = ModuleNode(id="h", name="hash", resources={"slot": "primary"})
-        workflow = _workflow([node], resources=("primary",))
-        plan = ExecutionPlan.from_workflow(workflow, dispatcher)
+        flow = _workflow([node], resources=("primary",))
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
         context = Context().with_resource("primary", Resource.from_external(object()))
         settings = ExecutionSettings(executor="process", concurrency=2)
         execution = SyncExecution(context, settings=settings)
@@ -1672,8 +1672,8 @@ class TestSyncConcurrency:
         dispatcher = build_dispatcher(
             ModuleDefinition(name="local", sync_pipe=_loopable(local))
         )
-        workflow = _workflow([ModuleNode(id="n", name="local")])
-        plan = ExecutionPlan.from_workflow(workflow, dispatcher=dispatcher)
+        flow = _workflow([ModuleNode(id="n", name="local")])
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
         settings = ExecutionSettings(executor="process", concurrency=2)
         execution = SyncExecution(settings=settings)
 
@@ -1713,9 +1713,9 @@ def _thread_probe():
         return iter([item])
 
     definition = ModuleDefinition(name="probe", sync_pipe=_loopable(probe))
-    workflow = _workflow([ModuleNode(id="n", name="probe")])
+    flow = _workflow([ModuleNode(id="n", name="probe")])
     return threads, ExecutionPlan.from_workflow(
-        workflow, dispatcher=build_dispatcher(definition)
+        flow, dispatcher=build_dispatcher(definition)
     )
 
 

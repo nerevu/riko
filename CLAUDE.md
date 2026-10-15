@@ -36,7 +36,7 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 
 Important concrete locations:
 
-- collections/export/write verbs: `riko/runtime/collections.py`
+- `export`/`Formats`/`list_formats`: `riko/runtime/collections.py`
 - graph index for validation and execution planning: `GraphIndex` in `riko/types/_workflow.py`, built by `Workflow.index`
 - v2 code generator behind `compile_workflow`/`compile-workflow`: `riko/runtime/_codegen.py`
 - workflow loading/saving: `Workflow.parse`/`load`/`serialize` in `riko/definitions/_workflow.py`, over the data-returning `_normalize.py`/`_migrate.py`/`_serialize.py`; the CLI front door `riko/cli/_workflow.py` keeps only `read_document`/`require_workflow`
@@ -186,7 +186,8 @@ new permanent bullet here.
   (`@workflow(subtype="source")`). So a workflow module binds its `Workflow` as `flow`
   (generated modules included). Instance fields (`pipeline.workflow`,
   `ExecutionPlan.workflow`), the `from_workflow` name, and the `workflow=` keywords
-  that set those fields (constructors, `evolve`) keep their names.
+  that set those fields (constructors, `evolve`) keep their names; `manage lint
+  --bindings` enforces it. A `RawWorkflow` mapping is `raw` (unenforced).
 - **Workflow forms go by their type names** — `Workflow`, `RawWorkflow`,
   `WorkflowDocument` ("workflow document" on first use), `PipeDef` ("pipe definition"
   on first use), `PipeDag`; old JSON is a "serialized `PipeDef`". Full rule and
@@ -284,7 +285,7 @@ is a fallback, so it is a `resolve`.
   `WorkflowDocument`s plus hand-maintained typed probes. Details: `_docs/INTERNALS.md`.
 - **Lint selectors are additive** — bare `manage lint` is Ruff; `manage lint --all`
   runs the whole standard suite (Ruff, RST, `--docs`, `--docstrings`, `--terms`, `--literals`,
-  `--deps`, `--tests`, actionlint, YAML, and all import contracts), so none of those need a separate run. Type
+  `--deps`, `--bindings`, `--tests`, actionlint, YAML, and all import contracts), so none of those need a separate run. Type
   verification (`--check-types`/`--verify-types`), pylint strict mode, and
   distribution checks remain explicit heavyweight checks.
 - **Docs stay consistent by lint** — `manage lint --docs` guards the authoritative

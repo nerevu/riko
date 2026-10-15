@@ -122,7 +122,7 @@ def _by_content(items):
     return sorted(items, key=itemgetter("content"))
 
 
-def _workflow():
+def _workflow() -> Workflow:
     node = Pipeline.from_module("fetch").workflow.nodes["fetch-1"]
     return Workflow(
         nodes=[node], outputs={"default": Endpoint(node.id, "out")}, inputs={}
@@ -145,8 +145,8 @@ class TestPipelineConstruction:
         assert repr(seeded) == "Pipeline(empty; seed; context)"
 
     def test_workflow_constructor_keeps_the_workflow(self):
-        workflow = _workflow()
-        assert Pipeline(workflow).workflow is workflow
+        flow = _workflow()
+        assert Pipeline(flow).workflow is flow
 
     def test_empty_seed_builds_template(self):
         pipeline = Pipeline()
@@ -1010,13 +1010,13 @@ def _fanned_in(names: tuple[str, ...]) -> Pipeline[dict[str, str]]:
         StreamEdge(Endpoint(branch.id, "out"), Endpoint(union.id, port))
         for branch, port in zip(branches, ports, strict=True)
     )
-    workflow = Workflow(
+    flow = Workflow(
         nodes=[*branches, union],
         edges=edges,
         outputs={"default": Endpoint(union.id, "out")},
         inputs={},
     )
-    return Pipeline[dict[str, str]](workflow)
+    return Pipeline[dict[str, str]](flow)
 
 
 @pytest.fixture

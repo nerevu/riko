@@ -515,10 +515,10 @@ class TestWorkflowFields:
 
     def test_omitted_fields_are_empty(self):
         """Every omitted field defaults to its empty form."""
-        workflow = Workflow()
-        mappings = (workflow.nodes, workflow.outputs, workflow.inputs)
+        flow = Workflow()
+        mappings = (flow.nodes, flow.outputs, flow.inputs)
         assert mappings == ({}, {}, {})
-        assert (workflow.edges, workflow.resources) == ((), ())
+        assert (flow.edges, flow.resources) == ((), ())
 
     def test_pickle_and_copy_round_trip(self):
         node = ModuleNode(
@@ -528,12 +528,12 @@ class TestWorkflowFields:
             embed={"name": "tokenizer", "conf": {"delimiter": " "}},
             resources={"db": "primary_db"},
         )
-        workflow = Workflow(nodes=[node], outputs={}, inputs={"q": {"type": "string"}})
+        flow = Workflow(nodes=[node], outputs={}, inputs={"q": {"type": "string"}})
 
-        pickled = loads(dumps(workflow))  # noqa: S301
+        pickled = loads(dumps(flow))  # noqa: S301
 
-        for restored in (pickled, deepcopy(workflow)):
-            assert restored == workflow
+        for restored in (pickled, deepcopy(flow)):
+            assert restored == flow
             restored_node = restored.nodes["a"]
             assert isinstance(restored_node, ModuleNode)
             rules = restored_node.conf["rules"]
@@ -639,26 +639,26 @@ class TestExecutionPlanFields:
             ExecutionPlan(workflow={"nodes": []}, modules={})  # pyright: ignore[reportArgumentType]
 
     def test_execution_plan_modules_must_be_resolved_modules(self):
-        workflow = Workflow(nodes=[], outputs={})
+        flow = Workflow(nodes=[], outputs={})
 
         with pytest.raises(InvalidPipelineError, match="ExecutionPlan module 'n'"):
-            ExecutionPlan(workflow=workflow, modules={"n": 1})  # pyright: ignore[reportArgumentType]
+            ExecutionPlan(workflow=flow, modules={"n": 1})  # pyright: ignore[reportArgumentType]
 
     @pytest.mark.parametrize("modules", ["abc", None])
     def test_execution_plan_modules_must_be_a_mapping(self, modules: Any):
-        workflow = Workflow(nodes=[], outputs={})
+        flow = Workflow(nodes=[], outputs={})
 
         with pytest.raises(InvalidPipelineError, match="ExecutionPlan 'modules'"):
-            ExecutionPlan(workflow=workflow, modules=modules)
+            ExecutionPlan(workflow=flow, modules=modules)
 
     @pytest.mark.parametrize(
         "modules", [{}, {"a": _HASH, "b": _HASH}], ids=["missing", "extra"]
     )
     def test_modules_must_match_the_workflow(self, modules: dict[str, ResolvedModule]):
-        workflow = Workflow(nodes=[ModuleNode(id="a", name="hash")], outputs=_OUT)
+        flow = Workflow(nodes=[ModuleNode(id="a", name="hash")], outputs=_OUT)
 
         with pytest.raises(InvalidPipelineError, match="modules must match"):
-            ExecutionPlan(workflow=workflow, modules=modules)
+            ExecutionPlan(workflow=flow, modules=modules)
 
     @pytest.mark.parametrize(
         ("embed", "embeds"),
@@ -671,24 +671,22 @@ class TestExecutionPlanFields:
         self, embed: Any, embeds: dict[str, ResolvedModule]
     ):
         node = ModuleNode(id="a", name="loop", embed=embed)
-        workflow = Workflow(nodes=[node], outputs=_OUT)
+        flow = Workflow(nodes=[node], outputs=_OUT)
 
         with pytest.raises(InvalidPipelineError, match="embeds must match"):
-            ExecutionPlan(workflow=workflow, modules={"a": _HASH}, embeds=embeds)
+            ExecutionPlan(workflow=flow, modules={"a": _HASH}, embeds=embeds)
 
     def test_a_non_module_node_is_refused_when_built(self):
         node = WriteNode(id="a", name="write", backend="file", dest="out.csv")
-        workflow = Workflow(nodes=[node], outputs=_OUT)
+        flow = Workflow(nodes=[node], outputs=_OUT)
 
         with pytest.raises(InvalidPipelineError, match="not yet supported"):
-            ExecutionPlan(workflow=workflow, modules={"a": _HASH})
+            ExecutionPlan(workflow=flow, modules={"a": _HASH})
 
     def test_nodes_pair_workflow_nodes_with_their_modules(self):
         node = ModuleNode(id="a", name="loop", embed={"name": "hash", "conf": {}})
-        workflow = Workflow(nodes=[node], outputs=_OUT)
-        plan = ExecutionPlan(
-            workflow=workflow, modules={"a": _HASH}, embeds={"a": _HASH}
-        )
+        flow = Workflow(nodes=[node], outputs=_OUT)
+        plan = ExecutionPlan(workflow=flow, modules={"a": _HASH}, embeds={"a": _HASH})
         prepared = plan.nodes["a"]
         assert (prepared.node, prepared.module, prepared.embed) == (node, _HASH, _HASH)
 

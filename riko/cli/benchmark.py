@@ -77,12 +77,12 @@ def build_fanin() -> Workflow:
         for pos in range(length)
     ]
     nodes.append({"id": UNION_ID, "name": "union"})
-    workflow: RawWorkflow = {
+    raw: RawWorkflow = {
         "nodes": nodes,
         "edges": edges,
         "outputs": {"default": {"node": UNION_ID, "port": "out"}},
     }
-    return normalize_workflow(workflow)
+    return normalize_workflow(raw)
 
 
 fanin: Workflow = build_fanin()

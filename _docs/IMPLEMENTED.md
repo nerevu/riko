@@ -855,7 +855,7 @@ run:
   `Pipeline` iteration, and `build_workflow_pipes` (`riko/runtime/_workflow_pipes.py`) builds on them
   for both generated workflow modules and named `WorkflowDocument`s, which the resolver binds to
   the dispatcher that loaded them.
-- `ExecutionPlan.from_workflow(workflow, dispatcher)` (`riko/execution/_prepared.py`; the dispatcher is required — any `Dispatcher`, which runtime's `ResolverDispatcher` satisfies) resolves each node's synchronous and asynchronous callables once,
+- `ExecutionPlan.from_workflow(flow, dispatcher)` (`riko/execution/_prepared.py`; the dispatcher is required — any `Dispatcher`, which runtime's `ResolverDispatcher` satisfies) resolves each node's synchronous and asynchronous callables once,
   then the constructor's `ExecutionPlan.validate()` validates the `Workflow` and shares its index; the plan pairs each with its
   graph node into a `PreparedNode` — the graph `ModuleNode` plus a `ResolvedModule` (`name`, `conf`, `sync_pipe`/`async_pipe`, either
   `None` when that interface is absent) and, for a loop node, a second `ResolvedModule` for its embed

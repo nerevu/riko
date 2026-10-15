@@ -63,7 +63,7 @@ EDGE_FAMILY_MISMATCHES = [
 ]
 
 
-def _fetch_workflow():
+def _fetch_workflow() -> Workflow:
     node = ModuleNode(id="fetch-1", name="fetch")
     return Workflow(
         nodes=[node], edges=(), outputs={"default": Endpoint(node.id, "out")}, inputs={}
@@ -72,10 +72,10 @@ def _fetch_workflow():
 
 class TestWorkflow:
     def test_workflow_mappings_are_read_only(self):
-        workflow = _fetch_workflow()
-        assert isinstance(workflow.nodes, FrozenDict)
+        flow = _fetch_workflow()
+        assert isinstance(flow.nodes, FrozenDict)
         with pytest.raises(TypeError):
-            workflow.outputs["extra"] = Endpoint("fetch-1", "out")  # type: ignore[index]
+            flow.outputs["extra"] = Endpoint("fetch-1", "out")  # type: ignore[index]
 
     @pytest.mark.parametrize(
         "build",
@@ -303,14 +303,14 @@ def _dag(name: str) -> PipeDag:
     return json.loads((DAG_DIR / f"{name}.json").read_text())
 
 
-def _edges(workflow: Workflow) -> list[tuple[str, str]]:
+def _edges(flow: Workflow) -> list[tuple[str, str]]:
     """Projects a workflow's edges onto their source and target node ids."""
-    return [(edge.source.node, edge.target.node) for edge in workflow.edges]
+    return [(edge.source.node, edge.target.node) for edge in flow.edges]
 
 
-def _module_node(workflow: Workflow, node_id: str) -> ModuleNode:
+def _module_node(flow: Workflow, node_id: str) -> ModuleNode:
     """Narrows one of a workflow's nodes to a module node."""
-    node = workflow.nodes[node_id]
+    node = flow.nodes[node_id]
     assert isinstance(node, ModuleNode)
     return node
 
@@ -327,19 +327,19 @@ class TestPipeDag:
         assert _edges(linear) == [("sw-1", "sw-2")]
 
     def test_wires_override_listing_order(self):
-        workflow = Workflow.parse(_dag("pipe_reordered"))
-        assert _edges(workflow) == [("gen", "trunc")]
-        assert workflow.outputs["default"] == Endpoint("trunc", "out")
+        flow = Workflow.parse(_dag("pipe_reordered"))
+        assert _edges(flow) == [("gen", "trunc")]
+        assert flow.outputs["default"] == Endpoint("trunc", "out")
 
     def test_third_wire_entry_sets_the_target_port(self):
-        workflow = Workflow.parse({"modules": FAN_IN_MODULES, "wires": FAN_IN_WIRES})
-        ports = [(edge.source.port, edge.target.port) for edge in workflow.edges]
+        flow = Workflow.parse({"modules": FAN_IN_MODULES, "wires": FAN_IN_WIRES})
+        ports = [(edge.source.port, edge.target.port) for edge in flow.edges]
         assert ports == [("out", "in"), ("out", "in:1")]
-        assert workflow.outputs["default"] == Endpoint("u", "out")
+        assert flow.outputs["default"] == Endpoint("u", "out")
 
     def test_conf_survives_verbatim(self):
-        workflow = Workflow.parse({"modules": MODULES})
-        assert dict(_module_node(workflow, "sw-2").conf) == {
+        flow = Workflow.parse({"modules": MODULES})
+        assert dict(_module_node(flow, "sw-2").conf) == {
             "count": {"type": "int", "value": "3"}
         }
 
@@ -347,8 +347,8 @@ class TestPipeDag:
         modules: list[DagModule] = [
             {"id": "t", "type": "tokenizer", "options": {"emit": True}}
         ]
-        workflow = Workflow.parse({"modules": modules})
-        assert _module_node(workflow, "t").options.kwargs == {"emit": True}
+        flow = Workflow.parse({"modules": modules})
+        assert _module_node(flow, "t").options.kwargs == {"emit": True}
 
     def test_pipe_dag_accepts_the_older_type_spelling_of_name(self):
         named = Workflow.parse({"modules": [{"name": "forever"}]})
@@ -359,18 +359,18 @@ class TestPipeDag:
 
     def test_pipe_dag_offers_known_node_fields_to_the_node(self):
         embed = Embed({"name": "fetch", "conf": {}})
-        workflow = Workflow.parse({"modules": [{"name": "loop", "embed": embed}]})
-        module = _module_node(workflow, "sw-1")
+        flow = Workflow.parse({"modules": [{"name": "loop", "embed": embed}]})
+        module = _module_node(flow, "sw-1")
         assert module.embed is not None
         assert module.embed["name"] == "fetch"
 
     def test_expanded_dag_runs(self):
-        workflow = Workflow.parse(_dag("pipe_forever"))
-        assert list(Pipeline(workflow)) == [{"forever": True}] * 3
+        flow = Workflow.parse(_dag("pipe_forever"))
+        assert list(Pipeline(flow)) == [{"forever": True}] * 3
 
     def test_reordered_dag_runs_in_wired_order(self):
-        workflow = Workflow.parse(_dag("pipe_reordered"))
-        assert list(Pipeline(workflow)) == [{"forever": True}] * 2
+        flow = Workflow.parse(_dag("pipe_reordered"))
+        assert list(Pipeline(flow)) == [{"forever": True}] * 2
 
     def test_empty_modules_raise_invalid_pipeline(self):
         with pytest.raises(InvalidPipelineError, match="no nodes"):
@@ -464,12 +464,12 @@ class TestNormalizeWorkflow:
         assert list(normalize_workflow({"nodes": nodes}).nodes) == expected
 
     def test_mapping_nodes_keep_explicit_ids(self):
-        workflow = normalize_workflow({"nodes": {"a": {"name": "fetch"}}})
-        assert isinstance(workflow.nodes["a"], ModuleNode)
-        assert workflow.nodes["a"].name == "fetch"
+        flow = normalize_workflow({"nodes": {"a": {"name": "fetch"}}})
+        assert isinstance(flow.nodes["a"], ModuleNode)
+        assert flow.nodes["a"].name == "fetch"
 
     def test_family_dispatch_and_enum_coercion(self):
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {
                 "nodes": [
                     {"name": "read", "family": "read", "backend": "file", "fmt": "csv"},
@@ -484,8 +484,8 @@ class TestNormalizeWorkflow:
                 ]
             }
         )
-        read = workflow.nodes["read-1"]
-        write = workflow.nodes["write-1"]
+        read = flow.nodes["read-1"]
+        write = flow.nodes["write-1"]
         assert isinstance(read, ReadNode)
         assert read.backend is Backends.FILE
         assert read.fmt is Formats.CSV
@@ -522,16 +522,16 @@ class TestNormalizeWorkflow:
     def test_edge_ports_normalize_to_canonical_endpoints(
         self, source, target, expected
     ):
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {"nodes": _TWO_NODES, "edges": [{"source": source, "target": target}]}
         )
         source_port, target_port = expected
-        assert workflow.edges == (
+        assert flow.edges == (
             StreamEdge(Endpoint("a", source_port), Endpoint("b", target_port)),
         )
 
     def test_publish_edge_detected_from_subscribe_target(self):
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {
                 "nodes": [
                     {"id": "a", "name": "fetch"},
@@ -540,8 +540,8 @@ class TestNormalizeWorkflow:
                 "edges": [{"source": {"node": "a"}, "target": {"node": "s"}}],
             }
         )
-        assert isinstance(workflow.nodes["s"], SubscribeNode)
-        assert isinstance(workflow.edges[0], PublishEdge)
+        assert isinstance(flow.nodes["s"], SubscribeNode)
+        assert isinstance(flow.edges[0], PublishEdge)
 
     @pytest.mark.parametrize(("raw", "expected"), NORMALIZED_OUTPUTS)
     def test_outputs_normalize(self, raw, expected):
@@ -559,16 +559,16 @@ class TestNormalizeWorkflow:
         ],
     )
     def test_input_declarations_become_schemas(self, declaration, schema):
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {"nodes": [{"id": "a", "name": "fetch"}], "inputs": {"n": declaration}}
         )
-        assert workflow.inputs["n"] == schema
+        assert flow.inputs["n"] == schema
 
     def test_bare_string_resource_binds_to_itself(self):
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {"nodes": [{"id": "a", "name": "fetch", "resources": "db"}]}
         )
-        assert workflow.nodes["a"].resources == {"db": "db"}
+        assert flow.nodes["a"].resources == {"db": "db"}
 
     @pytest.mark.parametrize(
         ("resources", "expected"),
@@ -578,13 +578,13 @@ class TestNormalizeWorkflow:
         ],
     )
     def test_top_level_resources_normalize_to_tuple(self, resources, expected):
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {"nodes": [{"id": "a", "name": "fetch"}], "resources": resources}
         )
-        assert workflow.resources == expected
+        assert flow.resources == expected
 
     def test_explicit_stream_family_to_subscribe_is_preserved(self):
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {
                 "nodes": [
                     {"id": "a", "name": "fetch"},
@@ -599,10 +599,10 @@ class TestNormalizeWorkflow:
                 ],
             }
         )
-        assert isinstance(workflow.edges[0], StreamEdge)
+        assert isinstance(flow.edges[0], StreamEdge)
 
     def test_write_dest_is_preserved(self):
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {
                 "nodes": [
                     {
@@ -614,16 +614,16 @@ class TestNormalizeWorkflow:
                 ]
             }
         )
-        write = workflow.nodes["w-1"]
+        write = flow.nodes["w-1"]
         assert isinstance(write, WriteNode)
         assert write.dest == "out.json"
 
     def test_node_conf_is_isolated_from_caller_mutation(self):
         conf = {"limit": 5}
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {"nodes": [{"id": "a", "name": "fetch", "conf": conf}]}
         )
-        node = workflow.nodes["a"]
+        node = flow.nodes["a"]
         conf["limit"] = 99
         assert isinstance(node, ModuleNode)
         assert node.conf == {"limit": 5}
@@ -693,13 +693,13 @@ class TestNormalizeWorkflow:
         ],
     )
     def test_format_alias_maps_to_fmt(self, spelling):
-        workflow = normalize_workflow({"nodes": [{**_READ_NODE, **spelling}]})
-        read = workflow.nodes["r"]
+        flow = normalize_workflow({"nodes": [{**_READ_NODE, **spelling}]})
+        read = flow.nodes["r"]
         assert isinstance(read, ReadNode)
         assert read.fmt is Formats.CSV
 
     def test_raw_call_options_are_accepted(self):
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {
                 "nodes": [
                     {
@@ -709,14 +709,14 @@ class TestNormalizeWorkflow:
                 ]
             }
         )
-        node = workflow.nodes["tokenizer-1"]
+        node = flow.nodes["tokenizer-1"]
         assert isinstance(node, ModuleNode)
         assert node.options.kwargs == {"field": "title", "count": "first"}
         assert node.conf == {}
 
     def test_nested_conf_is_deeply_frozen_and_isolated(self):
         inner = {"k": 1}
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {
                 "nodes": [
                     {"id": "a", "name": "f", "conf": {"nested": inner, "list": [1, 2]}}
@@ -724,7 +724,7 @@ class TestNormalizeWorkflow:
             }
         )
         inner["k"] = 99
-        node = workflow.nodes["a"]
+        node = flow.nodes["a"]
         assert isinstance(node, ModuleNode)
         assert node.conf is not None
         assert node.conf.get("nested") == {"k": 1}
@@ -732,24 +732,24 @@ class TestNormalizeWorkflow:
         assert isinstance(node.conf.get("nested"), FrozenDict)
 
     def test_raw_embed_becomes_a_read_only_node_field(self):
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {
                 "nodes": [
                     {"name": "loop", "embed": {"name": "tokenizer", "conf": {"d": " "}}}
                 ]
             }
         )
-        node = workflow.nodes["loop-1"]
+        node = flow.nodes["loop-1"]
         assert isinstance(node, ModuleNode)
         assert node.embed == {"name": "tokenizer", "conf": {"d": " "}}
         assert isinstance(node.embed, FrozenDict)
         assert node.conf == {}
 
     def test_embed_conf_defaults_to_empty_when_omitted(self):
-        workflow = normalize_workflow(
+        flow = normalize_workflow(
             {"nodes": [{"name": "loop", "embed": {"name": "tokenizer"}}]}
         )
-        node = workflow.nodes["loop-1"]
+        node = flow.nodes["loop-1"]
         assert isinstance(node, ModuleNode)
         assert node.embed == {"name": "tokenizer", "conf": {}}
 
@@ -990,7 +990,9 @@ class TestNormalizeWorkflow:
             normalize_workflow(raw)
 
 
-def _workflow(nodes, edges=(), outputs=None, inputs=None, resources=(), version="2"):
+def _workflow(
+    nodes, edges=(), outputs=None, inputs=None, resources=(), version="2"
+) -> Workflow:
     return Workflow(
         nodes=nodes,
         edges=tuple(edges),
@@ -1013,18 +1015,18 @@ _B = ModuleNode(id="b", name="sort")
 
 class TestRequireModuleOnly:
     def test_a_module_only_workflow_passes(self):
-        workflow = Workflow(nodes=[_A], outputs={"default": Endpoint("a", "out")})
+        flow = Workflow(nodes=[_A], outputs={"default": Endpoint("a", "out")})
 
-        assert workflow.require_module_only("execution") is None
+        assert flow.require_module_only("execution") is None
 
     def test_other_families_are_named_with_the_activity(self):
         write = WriteNode(id="w", name="write", backend="file", dest="out.csv")
         cache = CacheNode(id="c", name="cache")
         nodes = [_A, write, cache]
-        workflow = Workflow(nodes=nodes, outputs={"default": Endpoint("a", "out")})
+        flow = Workflow(nodes=nodes, outputs={"default": Endpoint("a", "out")})
 
         with pytest.raises(InvalidPipelineError, match="cache, write node execution"):
-            workflow.require_module_only("execution")
+            flow.require_module_only("execution")
 
 
 _A_IN, _A_OUT = Endpoint("a", "in"), Endpoint("a", "out")
@@ -1128,8 +1130,8 @@ class TestValidate:
     )
     def test_valid_graphs_pass(self, nodes, edges, output, resources):
         outputs = {"default": Endpoint(output, "out")}
-        workflow = _workflow(nodes, edges=edges, outputs=outputs, resources=resources)
-        assert workflow.validate() is None
+        flow = _workflow(nodes, edges=edges, outputs=outputs, resources=resources)
+        assert flow.validate() is None
 
     @pytest.mark.parametrize(("kwargs", "match"), INVALID_WORKFLOWS)
     def test_invalid_workflow_rejected(self, kwargs, match):
@@ -1138,19 +1140,19 @@ class TestValidate:
 
     @pytest.mark.parametrize(("edge", "target"), EDGE_FAMILY_MISMATCHES)
     def test_edge_family_disagreeing_with_its_target_rejected(self, edge, target):
-        workflow = _workflow(
+        flow = _workflow(
             [_A, target],
             edges=[edge(Endpoint("a", "out"), Endpoint("b", "in"))],
             outputs={"default": Endpoint("a", "out")},
         )
         with pytest.raises(InvalidPipelineError, match="edge family disagrees"):
-            workflow.validate()
+            flow.validate()
 
     @pytest.mark.parametrize(("edges", "output", "match"), INVALID_EDGES)
     def test_invalid_edges_rejected(self, edges, output, match):
-        workflow = _workflow([_A, _B], edges=edges, outputs={"default": output})
+        flow = _workflow([_A, _B], edges=edges, outputs={"default": output})
         with pytest.raises(InvalidPipelineError, match=match):
-            workflow.validate()
+            flow.validate()
 
     @pytest.mark.xfail(
         strict=True,
@@ -1198,7 +1200,7 @@ def _wire(wid, src_mod, tgt_mod, src_port="_OUTPUT", tgt_port="_INPUT"):
 
 class TestMigrate:
     def test_terminal_output_becomes_default_output(self):
-        workflow = migrate_v1_to_v2(
+        flow = migrate_v1_to_v2(
             {
                 "modules": [
                     {"id": "sw-1", "type": "fetch", "conf": {}},
@@ -1207,10 +1209,10 @@ class TestMigrate:
                 "wires": [_wire("_w1", "sw-1", "_OUTPUT")],
             }
         )
-        assert list(workflow.nodes) == ["sw-1"]
-        assert workflow.outputs["default"] == Endpoint("sw-1", "out")
-        assert workflow.edges == ()
-        assert workflow.version == "2"
+        assert list(flow.nodes) == ["sw-1"]
+        assert flow.outputs["default"] == Endpoint("sw-1", "out")
+        assert flow.edges == ()
+        assert flow.version == "2"
 
     @pytest.mark.parametrize(
         ("source_port", "target_port", "expected"),
@@ -1227,7 +1229,7 @@ class TestMigrate:
     def test_wire_ports_map_to_canonical_endpoints(
         self, source_port, target_port, expected
     ):
-        workflow = migrate_v1_to_v2(
+        flow = migrate_v1_to_v2(
             {
                 "modules": [
                     {"id": "a", "type": "fetch", "conf": {}},
@@ -1237,11 +1239,11 @@ class TestMigrate:
             }
         )
         source, target = expected
-        assert workflow.edges[0].source == Endpoint("a", source)
-        assert workflow.edges[0].target == Endpoint("b", target)
+        assert flow.edges[0].source == Endpoint("a", source)
+        assert flow.edges[0].target == Endpoint("b", target)
 
     def test_write_module_preserves_destination_mode_and_keys(self):
-        workflow = migrate_v1_to_v2(
+        flow = migrate_v1_to_v2(
             {
                 "modules": [
                     {
@@ -1257,7 +1259,7 @@ class TestMigrate:
                 ]
             }
         )
-        node = workflow.nodes["w"]
+        node = flow.nodes["w"]
         assert isinstance(node, WriteNode)
         assert node.dest == "out.jsonl"
         assert node.fmt is Formats.JSONL
@@ -1274,7 +1276,7 @@ class TestMigrate:
         ],
     )
     def test_pipe_def_file_open_mode_translates(self, pipe_def_mode, mode):
-        workflow = migrate_v1_to_v2(
+        flow = migrate_v1_to_v2(
             {
                 "modules": [
                     {
@@ -1285,21 +1287,21 @@ class TestMigrate:
                 ]
             }
         )
-        node = workflow.nodes["w"]
+        node = flow.nodes["w"]
         assert isinstance(node, WriteNode)
         assert node.mode is mode
 
     def test_write_module_without_format_defaults_to_none(self):
-        workflow = migrate_v1_to_v2(
+        flow = migrate_v1_to_v2(
             {"modules": [{"id": "w", "type": "write", "conf": {"dest": "out.dat"}}]}
         )
-        node = workflow.nodes["w"]
+        node = flow.nodes["w"]
         assert isinstance(node, WriteNode)
         assert node.backend is Backends.FILE
         assert node.fmt is None
 
     def test_module_call_options_become_node_options(self):
-        workflow = migrate_v1_to_v2(
+        flow = migrate_v1_to_v2(
             {
                 "modules": [
                     {
@@ -1314,7 +1316,7 @@ class TestMigrate:
                 ]
             }
         )
-        node = workflow.nodes["c"]
+        node = flow.nodes["c"]
         assert isinstance(node, ModuleNode)
         assert node.conf == {"x": 1}
         assert node.options.kwargs == {
@@ -1325,7 +1327,7 @@ class TestMigrate:
         }
 
     def test_call_option_does_not_collide_with_a_same_named_conf_key(self):
-        workflow = migrate_v1_to_v2(
+        flow = migrate_v1_to_v2(
             {
                 "modules": [
                     {
@@ -1337,13 +1339,13 @@ class TestMigrate:
                 ]
             }
         )
-        node = workflow.nodes["t"]
+        node = flow.nodes["t"]
         assert isinstance(node, ModuleNode)
         assert node.conf == {"count": {"value": 3}}
         assert node.options.kwargs == {"count": "first"}
 
     def test_loop_embed_and_its_configuration_become_the_node_embed(self):
-        workflow = migrate_v1_to_v2(
+        flow = migrate_v1_to_v2(
             {
                 "modules": [
                     {
@@ -1359,7 +1361,7 @@ class TestMigrate:
                 ]
             }
         )
-        node = workflow.nodes["sw-2"]
+        node = flow.nodes["sw-2"]
         assert isinstance(node, ModuleNode)
         assert node.conf == {}
         assert node.embed == {
@@ -1374,7 +1376,7 @@ class TestMigrate:
         }
 
     def test_loop_embedded_subpipe_keeps_its_prefixed_name(self):
-        workflow = migrate_v1_to_v2(
+        flow = migrate_v1_to_v2(
             {
                 "modules": [
                     {
@@ -1386,21 +1388,21 @@ class TestMigrate:
                 ]
             }
         )
-        node = workflow.nodes["sw-2"]
+        node = flow.nodes["sw-2"]
         assert isinstance(node, ModuleNode)
         assert node.conf == {}
         assert node.embed == {"name": "pipe:shout", "conf": {}}
 
     def test_uppercase_conf_keys_are_lowered(self):
-        workflow = migrate_v1_to_v2(
+        flow = migrate_v1_to_v2(
             {"modules": [{"id": "f", "type": "fetch", "conf": {"URL": {"value": "x"}}}]}
         )
-        node = workflow.nodes["f"]
+        node = flow.nodes["f"]
         assert isinstance(node, ModuleNode)
         assert node.conf == {"url": {"value": "x"}}
 
     def test_orphan_module_is_retained_not_erased(self):
-        workflow = migrate_v1_to_v2(
+        flow = migrate_v1_to_v2(
             {
                 "modules": [
                     {"id": "a", "type": "fetch", "conf": {}},
@@ -1410,10 +1412,10 @@ class TestMigrate:
                 "wires": [_wire("_w1", "a", "_OUTPUT")],
             }
         )
-        assert "orphan" in workflow.nodes
+        assert "orphan" in flow.nodes
 
     def test_omitted_output_node_defaults_to_lone_leaf(self):
-        workflow = migrate_v1_to_v2(
+        flow = migrate_v1_to_v2(
             {
                 "modules": [
                     {"id": "a", "type": "fetch", "conf": {}},
@@ -1422,7 +1424,7 @@ class TestMigrate:
                 "wires": [_wire("_w1", "a", "b")],
             }
         )
-        assert workflow.outputs == {"default": Endpoint("b", "out")}
+        assert flow.outputs == {"default": Endpoint("b", "out")}
 
     def test_migration_warns(self, caplog):
         migrate_v1_to_v2({"modules": [{"id": "a", "type": "fetch", "conf": {}}]})
@@ -1618,28 +1620,28 @@ WRITE_PIPE_DEF = {
 
 class TestSerialize:
     def test_golden_bytes(self):
-        workflow = normalize_workflow(RICH_RAW)
-        assert workflow.serialize(indent=None) == RICH_GOLDEN
+        flow = normalize_workflow(RICH_RAW)
+        assert flow.serialize(indent=None) == RICH_GOLDEN
 
     def test_default_form_is_indented(self):
-        workflow = normalize_workflow(RICH_RAW)
-        assert workflow.serialize() == workflow.serialize(indent=4)
-        assert workflow.serialize() != workflow.serialize(indent=None)
+        flow = normalize_workflow(RICH_RAW)
+        assert flow.serialize() == flow.serialize(indent=4)
+        assert flow.serialize() != flow.serialize(indent=None)
 
     @pytest.mark.parametrize("raw", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
     def test_topologies_round_trip(self, raw):
-        workflow = normalize_workflow(raw)
-        assert Workflow.parse(workflow.serialize()) == workflow
+        flow = normalize_workflow(raw)
+        assert Workflow.parse(flow.serialize()) == flow
 
     @pytest.mark.parametrize("raw", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
     def test_serialization_is_idempotent(self, raw):
-        workflow = normalize_workflow(raw)
-        once = workflow.serialize()
+        flow = normalize_workflow(raw)
+        once = flow.serialize()
         assert Workflow.parse(once).serialize() == once
 
     def test_indented_output_is_readable_and_sorted(self):
-        workflow = normalize_workflow(RICH_RAW)
-        document = workflow.serialize(indent=2).decode("utf-8")
+        flow = normalize_workflow(RICH_RAW)
+        document = flow.serialize(indent=2).decode("utf-8")
         top_level = [
             line[2:] for line in document.splitlines() if line.startswith('  "')
         ]
@@ -1680,8 +1682,8 @@ class TestSerialize:
             assert token not in text
 
     def test_call_options_are_serialized_apart_from_conf(self):
-        workflow = normalize_workflow(TOPOLOGIES["call-options"])
-        data = workflow.serialize(indent=None)
+        flow = normalize_workflow(TOPOLOGIES["call-options"])
+        data = flow.serialize(indent=None)
         assert b'"options":{"count":"first","emit":true}' in data
         assert b'"conf":{"delimiter":{"value":","}}' in data
 
@@ -1702,8 +1704,8 @@ class TestSerialize:
                 }
             ]
         }
-        workflow = normalize_workflow(raw)
-        assert Workflow.parse(workflow.serialize()) == workflow
+        flow = normalize_workflow(raw)
+        assert Workflow.parse(flow.serialize()) == flow
 
     def test_loop_embed_serializes_as_a_node_field(self):
         raw = {
@@ -1718,8 +1720,8 @@ class TestSerialize:
                 }
             ]
         }
-        workflow = normalize_workflow(raw)
-        document = json.loads(workflow.serialize())
+        flow = normalize_workflow(raw)
+        document = json.loads(flow.serialize())
         node = document["nodes"]["loop-1"]
 
         assert node["embed"] == {
@@ -1727,7 +1729,7 @@ class TestSerialize:
             "conf": {"delimiter": {"value": " "}},
         }
         assert "conf" not in node
-        assert Workflow.parse(workflow.serialize()) == workflow
+        assert Workflow.parse(flow.serialize()) == flow
 
 
 PARENT = [{"title": "hi"}]

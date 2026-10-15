@@ -80,9 +80,9 @@ def _load(source: str, name: str, directory: Path) -> ModuleType:
     return module
 
 
-def _build(workflow: Workflow, name: str, directory: Path, **kwargs) -> ModuleType:
-    """Generates and imports the module for ``workflow``."""
-    return _load(compile_workflow(workflow, name, **kwargs), name, directory)
+def _build(flow: Workflow, name: str, directory: Path, **kwargs) -> ModuleType:
+    """Generates and imports the module for ``flow``."""
+    return _load(compile_workflow(flow, name, **kwargs), name, directory)
 
 
 # These documents cannot run on their own: two name modules riko does not
@@ -117,11 +117,11 @@ def _compile_fixtures(unrunnable: bool = False) -> list[Any]:
     return params
 
 
-async def _arun_document(workflow: Workflow) -> list[Item]:
+async def _arun_document(flow: Workflow) -> list[Item]:
     items: list[Item] = []
 
     async with AsyncExecution(context=Context(test=True)) as execution:
-        stream = await execution.arun(ExecutionPlan.from_workflow(workflow, dispatcher))
+        stream = await execution.arun(ExecutionPlan.from_workflow(flow, dispatcher))
         items = [item async for item in stream]
 
     return items
@@ -146,27 +146,27 @@ class TestWorkflowModule:
     @pytest.mark.parametrize("path", _compile_fixtures())
     def test_generated_matches_document(self, path: Path, tmp_path: Path):
         """Each workflow module yields the items its workflow document yields."""
-        workflow = Workflow.parse(path.read_text())
-        module = _build(workflow, path.stem, tmp_path)
-        assert list(module.pipe(context=Context(test=True))) == run_workflow(workflow)
+        flow = Workflow.parse(path.read_text())
+        module = _build(flow, path.stem, tmp_path)
+        assert list(module.pipe(context=Context(test=True))) == run_workflow(flow)
 
     @pytest.mark.parametrize("path", _compile_fixtures(unrunnable=True))
     def test_generated_matches_document_failure(self, path: Path, tmp_path: Path):
         """A document that cannot run standalone fails the same way once generated."""
-        workflow = Workflow.parse(path.read_text())
-        module = _build(workflow, path.stem, tmp_path)
+        flow = Workflow.parse(path.read_text())
+        module = _build(flow, path.stem, tmp_path)
         generated = _failure(lambda: list(module.pipe(context=Context(test=True))))
-        assert generated == _failure(lambda: run_workflow(workflow))
+        assert generated == _failure(lambda: run_workflow(flow))
 
     @pytest.mark.parametrize("stem", ASYNC_FIXTURES)
     @async_test
     async def test_async_generated_matches_document(self, stem: str, tmp_path: Path):
         """Each generated async module yields the items its document yields."""
         path = TESTS_DIR / "workflows" / f"{stem}.json"
-        workflow = Workflow.parse(path.read_text())
-        module = _build(workflow, stem, tmp_path, is_async=True)
+        flow = Workflow.parse(path.read_text())
+        module = _build(flow, stem, tmp_path, is_async=True)
         stream = module.async_pipe(context=Context(test=True))
-        assert [item async for item in stream] == await _arun_document(workflow)
+        assert [item async for item in stream] == await _arun_document(flow)
 
     @pytest.mark.parametrize(
         ("source", "expected"),
@@ -181,15 +181,15 @@ class TestWorkflowModule:
     )
     def test_generated_pipe_maps_its_input(self, source, expected, tmp_path: Path):
         """A generated transformer maps a single item or every item of a stream."""
-        workflow = Pipeline.from_module("rename", conf=RENAME_CONF).workflow
-        module = _build(workflow, "pipe_rename", tmp_path)
+        flow = Pipeline.from_module("rename", conf=RENAME_CONF).workflow
+        module = _build(flow, "pipe_rename", tmp_path)
         assert list(module.pipe(source)) == expected
 
     @async_test
     async def test_generated_async_pipe_accepts_an_async_stream(self, tmp_path: Path):
         """A generated async transformer maps every item of an async stream."""
-        workflow = Pipeline.from_module("rename", conf=RENAME_CONF).workflow
-        module = _build(workflow, "pipe_arename", tmp_path, is_async=True)
+        flow = Pipeline.from_module("rename", conf=RENAME_CONF).workflow
+        module = _build(flow, "pipe_arename", tmp_path, is_async=True)
 
         async def source():
             yield {"content": "hello"}
@@ -211,8 +211,8 @@ class TestWorkflowModule:
             return await aexit(self, *args)
 
         monkeypatch.setattr(AsyncExecution, "__aexit__", spy)
-        workflow = Pipeline.from_module("forever").workflow
-        module = _build(workflow, "pipe_aforever", tmp_path, is_async=True)
+        flow = Pipeline.from_module("forever").workflow
+        module = _build(flow, "pipe_aforever", tmp_path, is_async=True)
         stream = module.async_pipe()
 
         async for _ in stream:
@@ -280,8 +280,8 @@ def _loop_workflow() -> Workflow:
 class TestCompileWorkflow:
     def test_conf_is_typed_by_its_module(self):
         """A configured node is rendered through its module's raw config class."""
-        workflow = Pipeline.from_module("sort", conf=SORT_CONF).workflow
-        assert "SortRawConf(" in compile_workflow(workflow, "pipe_sorted")
+        flow = Pipeline.from_module("sort", conf=SORT_CONF).workflow
+        assert "SortRawConf(" in compile_workflow(flow, "pipe_sorted")
 
     def test_generated_conf_keeps_its_keys_verbatim(self, tmp_path: Path):
         """A workflow module spells a configuration key exactly as the document does."""
@@ -290,32 +290,30 @@ class TestCompileWorkflow:
             "value": ConfArg(type="text", value="riko"),
         }
         conf = {"attrs": [attrs], "EXTRA": ConfArg(type="text", value="x")}
-        workflow = normalize_workflow(
-            {"nodes": [{"name": "itembuilder", "conf": conf}]}
-        )
-        module = _build(workflow, "pipe_verbatim", tmp_path)
-        assert module.flow == workflow
-        assert list(module.pipe(context=Context(test=True))) == run_workflow(workflow)
+        flow = normalize_workflow({"nodes": [{"name": "itembuilder", "conf": conf}]})
+        module = _build(flow, "pipe_verbatim", tmp_path)
+        assert module.flow == flow
+        assert list(module.pipe(context=Context(test=True))) == run_workflow(flow)
 
     def test_generation_is_deterministic(self):
         """Generating the same workflow twice produces identical source."""
-        workflow = (
+        flow = (
             Pipeline.from_module("itembuilder")
             .pipe("rename", conf=RENAME_CONF)
             .workflow
         )
-        assert compile_workflow(workflow, "pipe_twice") == compile_workflow(
-            workflow, "pipe_twice"
+        assert compile_workflow(flow, "pipe_twice") == compile_workflow(
+            flow, "pipe_twice"
         )
 
     def test_generated_source_parses(self, tmp_path: Path):
         """The generated source is valid Python and imports without running."""
-        workflow = (
+        flow = (
             Pipeline.from_module("itembuilder")
             .pipe("rename", conf=RENAME_CONF)
             .workflow
         )
-        source = compile_workflow(workflow, "pipe_parsed")
+        source = compile_workflow(flow, "pipe_parsed")
         ast.parse(source)
         module = _load(source, "pipe_parsed", tmp_path)
         assert module.flow.outputs["default"] == Endpoint("rename-1", "out")
@@ -329,10 +327,10 @@ class TestCompileWorkflow:
     def test_write_node_is_refused(self):
         """A workflow with a node family that has no generated form is refused."""
         node = WriteNode(id="write-1", name="write", backend="file", dest="out.csv")
-        workflow = Workflow(nodes=[node], outputs={"default": Endpoint(node.id, "out")})
+        flow = Workflow(nodes=[node], outputs={"default": Endpoint(node.id, "out")})
 
         with pytest.raises(InvalidPipelineError, match="write node code generation"):
-            compile_workflow(workflow, "pipe_written")
+            compile_workflow(flow, "pipe_written")
 
     @pytest.mark.xfail(
         strict=True,
@@ -515,9 +513,9 @@ class TestConfigCodegen:
         assert objconf_structure()["FetchTableObjconf"][0] == "CsvObjconf"
 
 
-def _render(workflow: Workflow) -> str:
+def _render(flow: Workflow) -> str:
     """Renders a workflow as the indented document the fixtures are stored in."""
-    return workflow.serialize().decode("utf-8")
+    return flow.serialize().decode("utf-8")
 
 
 def _document_fixtures() -> list[Any]:
@@ -528,9 +526,9 @@ class TestWorkflowFixtures:
     @pytest.mark.parametrize("path", _document_fixtures())
     def test_fixture_round_trips(self, path: Path):
         """Every committed fixture parses, validates, and is stored serialized."""
-        workflow = Workflow.parse(path.read_text())
-        workflow.validate()
-        assert path.read_text() == _render(workflow)
+        flow = Workflow.parse(path.read_text())
+        flow.validate()
+        assert path.read_text() == _render(flow)
 
 
 PROBE_PACKAGES = {

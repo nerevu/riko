@@ -238,11 +238,11 @@ def is_mappable(node: PreparedNode, extra: Mapping[str, object]) -> bool:
         >>> from riko.runtime._resolver import dispatcher
         >>> from riko.types._workflow import Endpoint
         >>>
-        >>> workflow = Workflow(
+        >>> flow = Workflow(
         ...     nodes=[ModuleNode(id="h", name="hash")],
         ...     outputs={"default": Endpoint("h", "out")},
         ... )
-        >>> node = ExecutionPlan.from_workflow(workflow, dispatcher).nodes["h"]
+        >>> node = ExecutionPlan.from_workflow(flow, dispatcher).nodes["h"]
         >>> is_mappable(node, {"emit": True}), is_mappable(node, {"other": iter([])})
         (True, False)
 
@@ -307,11 +307,11 @@ def require_process_safe(
         >>> from riko.runtime._resolver import dispatcher
         >>> from riko.types._workflow import Endpoint
         >>>
-        >>> workflow = Workflow(
+        >>> flow = Workflow(
         ...     nodes=[ModuleNode(id="h", name="hash")],
         ...     outputs={"default": Endpoint("h", "out")},
         ... )
-        >>> plan = ExecutionPlan.from_workflow(workflow, dispatcher)
+        >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
         >>> require_process_safe(plan, {"h"}, None) is None
         True
 

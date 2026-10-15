@@ -114,9 +114,9 @@ def _node_names(node: Node) -> set[str]:
     return names
 
 
-def _workflow_dependencies(workflow: Workflow) -> list[str]:
+def _workflow_dependencies(flow: Workflow) -> list[str]:
     """Collects the built-in module names a workflow depends on."""
-    named = (_node_names(node) for node in workflow.nodes.values())
+    named = (_node_names(node) for node in flow.nodes.values())
     names = set(chain.from_iterable(named))
     return sorted(name for name in names if not name.startswith("pipe"))
 
@@ -130,9 +130,9 @@ def _declared_input(name: str, schema: object) -> tuple[str, str, str, str, str]
     return ("", name, prompt, kind, default)
 
 
-def _declared_inputs(workflow: Workflow) -> list[tuple[str, str, str, str, str]]:
+def _declared_inputs(flow: Workflow) -> list[tuple[str, str, str, str, str]]:
     """Renders a workflow's declared inputs as the prompt tuples a caller is shown."""
-    properties = workflow.inputs.get("properties")
+    properties = flow.inputs.get("properties")
     schemas = properties if is_mapping(properties) else {}
     return [_declared_input(name, schema) for name, schema in sorted(schemas.items())]
 
@@ -243,11 +243,11 @@ class TestStoredWorkflows:
             stream = dispatcher.require(pipe_name)(context=self.context)
             items = cast("ParserMaterializedOutput", list(listize(stream)))
         else:
-            workflow = workflow_resolver.load_workflow(pipe_name, directory=file_path)
+            flow = workflow_resolver.load_workflow(pipe_name, directory=file_path)
 
             with SyncExecution(context=self.context) as execution:
                 items = list(
-                    execution.run(ExecutionPlan.from_workflow(workflow, dispatcher))
+                    execution.run(ExecutionPlan.from_workflow(flow, dispatcher))
                 )
 
         return items
@@ -647,7 +647,7 @@ class TestStoredWorkflows:
     )
     def test_describe_input(self):
         """Reads a workflow's input declarations from what it declares."""
-        workflow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
+        flow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
         expected = [
             ("", "dateinput1", "dateinput1", "datetime", "10/14/2010"),
             ("", "locationinput1", "locationinput1", "location", "isle of wight, uk"),
@@ -663,12 +663,12 @@ class TestStoredWorkflows:
             ("", "urlinput1", "urlinput1", "url", "file://riko/data/example.html"),
         ]
 
-        assert _declared_inputs(workflow) == expected
+        assert _declared_inputs(flow) == expected
 
     def test_describe_dependencies(self):
         """Reads a workflow's module dependencies from its workflow document."""
-        workflow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
-        assert _workflow_dependencies(workflow) == ["input", "rssitembuilder"]
+        flow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
+        assert _workflow_dependencies(flow) == ["input", "rssitembuilder"]
 
     def test_union_just_other(self):
         """

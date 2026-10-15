@@ -55,7 +55,7 @@ class WorkflowEncoder(json.JSONEncoder):
         return result
 
 
-def serialize_graph(workflow: Workflow, *, indent: int | None = 4) -> WorkflowDocument:
+def serialize_graph(flow: Workflow, *, indent: int | None = 4) -> WorkflowDocument:
     """
     Serializes a workflow into a byte-stable ``WorkflowDocument``.
 
@@ -64,7 +64,7 @@ def serialize_graph(workflow: Workflow, *, indent: int | None = 4) -> WorkflowDo
 
     Args:
 
-        workflow: The ``Workflow`` to serialize.
+        flow: The ``Workflow`` to serialize.
 
         indent: Number of spaces to indent each nesting level by. Pass ``None`` for the
             compact single-line form.
@@ -82,7 +82,7 @@ def serialize_graph(workflow: Workflow, *, indent: int | None = 4) -> WorkflowDo
         suffix = "\n"
 
     dumped = json.dumps(
-        serialize_attrs(workflow, "edges"),
+        serialize_attrs(flow, "edges"),
         cls=WorkflowEncoder,
         sort_keys=True,
         indent=indent,

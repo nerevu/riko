@@ -395,12 +395,12 @@ class ExecutionPlan:
         >>> from riko.ext import ModuleNode
         >>> from riko.modules.hash import pipe
         >>>
-        >>> workflow = Workflow(
+        >>> flow = Workflow(
         ...     nodes=[ModuleNode(id="a", name="hash")],
         ...     outputs={"default": Endpoint("a", "out")},
         ... )
         >>> modules = {"a": ResolvedModule("hash", sync_pipe=pipe)}
-        >>> plan = ExecutionPlan(workflow=workflow, modules=modules)
+        >>> plan = ExecutionPlan(workflow=flow, modules=modules)
         >>> plan.nodes["a"].node
         ModuleNode(id='a', name='hash', resources=FrozenDict({})...)
         >>> plan.index.order
@@ -416,13 +416,13 @@ class ExecutionPlan:
         self.validate()
 
     @classmethod
-    def from_workflow(cls, workflow: Workflow, dispatcher: Dispatcher) -> Self:
+    def from_workflow(cls, flow: Workflow, dispatcher: Dispatcher) -> Self:
         """
-        Builds an executable snapshot of ``workflow`` with every node resolved once.
+        Builds an executable snapshot of ``flow`` with every node resolved once.
 
         Args:
 
-            workflow: The ``Workflow`` to prepare.
+            flow: The ``Workflow`` to prepare.
 
             dispatcher: Finds each node's pipe by name, whether a module such as
                 ``fetch`` or a stored workflow's ``pipe_<id>``.
@@ -449,19 +449,19 @@ class ExecutionPlan:
             >>> from riko.ext import ModuleNode
             >>> from riko.runtime._resolver import dispatcher
             >>>
-            >>> workflow = Workflow(
+            >>> flow = Workflow(
             ...     nodes=[ModuleNode(id="count-1", name="count")],
             ...     outputs={"default": Endpoint("count-1", "out")},
             ... )
-            >>> plan = ExecutionPlan.from_workflow(workflow, dispatcher)
+            >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
             >>> sorted(plan.nodes)
             ['count-1']
 
         """
         resolve = partial(ResolvedModule.from_dispatcher, dispatcher)
-        modules = {k: resolve(n.name, n.conf) for k, n in workflow.module_nodes.items()}
-        embeds = {k: resolve(e["name"], e["conf"]) for k, e in workflow.embeds.items()}
-        return cls(workflow, modules, embeds)
+        modules = {k: resolve(n.name, n.conf) for k, n in flow.module_nodes.items()}
+        embeds = {k: resolve(e["name"], e["conf"]) for k, e in flow.embeds.items()}
+        return cls(flow, modules, embeds)
 
     @property
     def index(self) -> GraphIndex:
@@ -491,18 +491,18 @@ class ExecutionPlan:
                 its loop embeds.
 
         """
-        workflow = self.workflow
+        flow = self.workflow
 
-        if not workflow.is_empty:
-            workflow.validate()
+        if not flow.is_empty:
+            flow.validate()
 
-        workflow.require_executable()
-        workflow.require_module_only("execution")
+        flow.require_executable()
+        flow.require_module_only("execution")
 
-        if unresolved := set(workflow.module_nodes).symmetric_difference(self.modules):
+        if unresolved := set(flow.module_nodes).symmetric_difference(self.modules):
             msg = f"modules must match the workflow's nodes: {sorted(unresolved)}"
             raise InvalidPipelineError(msg)
-        elif mismatched := set(workflow.embeds).symmetric_difference(self.embeds):
+        elif mismatched := set(flow.embeds).symmetric_difference(self.embeds):
             msg = f"embeds must match the workflow's loop embeds: {sorted(mismatched)}"
             raise InvalidPipelineError(msg)
 

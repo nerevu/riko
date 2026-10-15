@@ -263,14 +263,12 @@ def migrate_pipe_def(pipe_def: PipeDefLike) -> RawWorkflow:
     nodes = [_migrate_pipe_module(require_pipe(m)) for m in inputs]
     edges, endpoints = _migrate_wires(mapping.get("wires", ()), output_ids)
     logger.warning(_WARNING)
-    raw_workflow = RawWorkflow(
-        {"nodes": nodes, "edges": edges, "version": WORKFLOW_VERSION}
-    )
+    raw = RawWorkflow({"nodes": nodes, "edges": edges, "version": WORKFLOW_VERSION})
 
     if endpoints:
-        raw_workflow["outputs"] = endpoints
+        raw["outputs"] = endpoints
 
-    return raw_workflow
+    return raw
 
 
 def _raw_edge(*wire: object) -> RawEdge:

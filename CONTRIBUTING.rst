@@ -141,7 +141,8 @@ The common development commands are:
     ``--literals`` (single-quoted values, and backticked or unquoted string defaults),
     ``--deps`` (imports that ``pyproject.toml`` does not declare, declared
     dependencies nothing imports, and typing stubs shipped as runtime requirements),
-    and ``--tests`` (test files and classes that depart from the tier indexes in
+    ``--bindings`` (a ``Workflow`` bound to ``workflow`` rather than ``flow`` in code
+    or doctests), and ``--tests`` (test files and classes that depart from the tier indexes in
     each ``tests/<tier>/__init__.py``).
     ``manage lint --all`` runs all standard checks, including all import-contract ones.
     Type completeness, strict pylint, and distribution checks remain explicit via

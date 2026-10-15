@@ -11,14 +11,14 @@ Examples:
 
         >>> from riko import compile_workflow
         >>>
-        >>> workflow = {
+        >>> raw = {
         ...     "nodes": [
         ...         {"id": "gen", "name": "forever"},
         ...         {"id": "trunc", "name": "truncate", "conf": {"count": 3}},
         ...     ],
         ...     "edges": [{"source": {"node": "gen"}, "target": {"node": "trunc"}}],
         ... }
-        >>> source = compile_workflow(workflow, "pipe_demo")
+        >>> source = compile_workflow(raw, "pipe_demo")
         >>> print(next(l for l in source.splitlines() if l.startswith("pipe")))
         pipe = build_workflow_pipes(
 
@@ -89,8 +89,8 @@ def run() -> None:
         return_code = 1
     else:
         try:
-            workflow = require_workflow(document)
-            source = compile_workflow(workflow, name, is_async=args.is_async)
+            flow = require_workflow(document)
+            source = compile_workflow(flow, name, is_async=args.is_async)
         except InvalidPipelineError as e:
             print(e, file=sys.stderr)
             return_code = 1
@@ -103,9 +103,7 @@ def run() -> None:
                 dest = args.output
 
             if args.verbose:
-                deps = ", ".join(
-                    sorted({node.name for node in workflow.nodes.values()})
-                )
+                deps = ", ".join(sorted({node.name for node in flow.nodes.values()}))
                 print(f"Modules used in {name}: {deps}", file=sys.stderr)
                 print(f"wrote {size} bytes to {dest}", file=sys.stderr)
 

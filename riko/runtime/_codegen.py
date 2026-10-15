@@ -188,10 +188,10 @@ def _collect_raw_confs(nodes: list[ModuleNode]) -> list[str]:
 
 
 def compile_workflow(
-    workflow: WorkflowLike, name: str = "anonymous", *, is_async: bool = False
+    flow: WorkflowLike, name: str = "anonymous", *, is_async: bool = False
 ) -> WorkflowModule:
     """
-    Generates the ``WorkflowModule`` that rebuilds and runs ``workflow``.
+    Generates the ``WorkflowModule`` that rebuilds and runs ``flow``.
 
     A ``RawWorkflow`` is normalized into a ``Workflow`` first. This way module always
     reflects the normalized graph rather than the shorthand it was written in. The
@@ -203,7 +203,7 @@ def compile_workflow(
 
     Args:
 
-        workflow: The ``Workflow``, or a ``RawWorkflow`` describing one.
+        flow: The ``Workflow``, or a ``RawWorkflow`` describing one.
         name: The name the module documents itself by.
         is_async: Whether to generate the asynchronous interface.
 
@@ -227,11 +227,11 @@ def compile_workflow(
         async_pipe = build_workflow_pipes(
 
     """
-    workflow = normalize_workflow(workflow)
-    workflow.validate()
-    workflow.require_module_only("code generation")
-    nodes = list(workflow.module_nodes.values())
-    edge_names = sorted({type(edge).__name__ for edge in workflow.edges})
+    flow = normalize_workflow(flow)
+    flow.validate()
+    flow.require_module_only("code generation")
+    nodes = list(flow.module_nodes.values())
+    edge_names = sorted({type(edge).__name__ for edge in flow.edges})
     loader = PackageLoader("riko.runtime")
     env = Environment(loader=loader, autoescape=False)  # noqa: S701
     template = env.get_template("pyworkflow.txt")
@@ -242,13 +242,13 @@ def compile_workflow(
         ext_names=sorted({"ModuleNode", *edge_names}),
         raw_confs=_collect_raw_confs(nodes),
         nodes=[_render_node(node) for node in nodes],
-        edges=_render_edges(workflow.edges),
-        outputs=_render_outputs(workflow.outputs),
-        inputs=render_value(workflow.inputs),
-        resources=render_value(list(workflow.resources)),
-        has_resources=len(workflow.resources) > 0,
+        edges=_render_edges(flow.edges),
+        outputs=_render_outputs(flow.outputs),
+        inputs=render_value(flow.inputs),
+        resources=render_value(list(flow.resources)),
+        has_resources=len(flow.resources) > 0,
         dependencies=render_value(sorted({node.name for node in nodes})),
-        subtype="transformer" if len(workflow.inputs) else "source",
+        subtype="transformer" if len(flow.inputs) else "source",
     )
 
     return WorkflowModule(ruff_format(rendered))

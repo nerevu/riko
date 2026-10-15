@@ -148,7 +148,7 @@ Prettify, then lint and test only what tidy touched:
 
 ```bash
 uv run --active python -m riko.cli.manage prettify
-uv run --active python -m riko.cli.manage lint --terms --literals --docstrings --docs
+uv run --active python -m riko.cli.manage lint --terms --literals --docstrings --docs --bindings
 uv run --active python -m pytest --no-cov -q <test modules for the touched files>
 ```
 
