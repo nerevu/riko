@@ -1103,6 +1103,20 @@ Naming (2026-10-10 naming triage): if `get_conf_type` survives as the contract r
 `DynamicConf`, which is resolve semantics. A deprecation retires the name instead. Either way it is a
 released `riko.ext` name, so the change carries a "Renamed"/"Deprecated" `CHANGES.rst` bullet.
 
+Audit notes (2026-10-10 structural audit): (1) the typed `Pipeline.pipe(conf=...)` parameter rejects
+the dict literals the docs show for modules whose rule types are dataclasses (`SortConfRule`,
+`StrReplaceConfRule` in `riko/types/modules.py`): pyright reports `dict[str, dict[str, str]]` as not
+assignable to `Conf`, and users only dodge it because `__getattr__` chaining is typed `Pipeline[Any]`.
+Pyright-only, no runtime tripwire; the conf-contract decision here settles which literal shapes the
+STABLE signature accepts. (2) The generated `*RawConf` types are asserted private
+(`tests/public/test_modules.py::test_raw_module_confs_are_private`) while generated workflow modules
+import them from `riko.types.modules`; the contract decision here must give generated code a supported
+conf type (shared with the R9 note on generated-module imports). (3) There is no public route from a
+module *name* to its conf type: `describe_module` reports no conf, `get_conf_type` takes a parser
+callable and answers `DynamicConf` for any other object (a name included) without an error, and the
+only name-to-conf map is the private `RAW_CONFS` in `riko/runtime/_compile.py`. The per-module
+configuration schema that `describe_module()` consumes (above) is that route.
+
 **Exit:**
 
 - **ADD:** registered module conf is validated at plan build; the strict-xfail tripwires
@@ -1301,6 +1315,15 @@ consumption.
 reconciliation/mutation. Provider commands that do not naturally mean data write are actions.
 Concrete FILE/HTTP/S3/Postgres/Airtable/Intune/etc. adapters remain R11.
 
+Audit note (2026-10-10 structural audit): `riko/runtime/_write_session.py` (sync/async write sessions,
+incremental/framed delivery, finalize/abort/teardown) has no runtime importer; only
+`tests/internal/test_definitions.py` exercises it since the v1 collections write verbs went at
+v1-cutover step 4. Its sync/async session pairs duplicate the newline/header/finalize state machine
+(`file_write_session` vs `async_file_write_session` differ only by `await`; the
+`isinstance(target, FileTarget)` guard appears three times with two exception types). This phase
+decides whether the `WriteNode` path reuses it (then dedupe the twins) or replaces it (then delete it
+with its tests).
+
 **Exit:**
 
 - **ADD:** `WriteNode`/`ActionNode` execute through the common effect runtime and report
@@ -1435,6 +1458,10 @@ R7 protocols should use one vocabulary for both colors (today the sync hub says 
 where the async hub says `publish`/`complete`), give a coroutine an `a` prefix only when it has a sync
 twin, and avoid `get_` on a method that creates channel state.
 
+Audit note (2026-10-10 structural audit): `riko/runtime/_pubsub/_types.py` holds two aliases whose
+three importers are all `TYPE_CHECKING`-only and consumed from `modules`; merge it into
+`riko/types/_streams.py` when this phase reshapes the hub types rather than moving it twice.
+
 **Exit:**
 
 - **ADD:** publish/subscribe/split use execution-owned topology, buffering, task ownership, and
@@ -1558,6 +1585,13 @@ but `ModuleWrapper.type` is annotated `ModuleType` (`operator`/`processor`/`spli
 the tag moves to its own marker read by its own guard, rather than a fourth `.type` value
 (`"workflow"` would repeat the problem). Decide it with the tag's keep/delete decision above.
 
+Audit note (2026-10-10 structural audit): `riko/modules/_loop.py` carries twin sync/async bodies
+(`loop_embed_sync`/`loop_embed_async`, `_fold_parent`/`_afold_parent`, `_run_loop`/`_arun_loop`) and
+one copy has already drifted (`module_name` vs `op_module_name`); `_take_first` re-implements
+`_close_generator` from `riko/execution/_adapt.py`. Consolidate the pure logic into one body behind an
+iterator adapter (as the execution split did for `_resolve_inputs`) when this phase settles the embed
+shape, since the names change then anyway.
+
 **Exit:**
 
 - **ADD:** the existing `loop` module supports bounded/conditional resumable iteration through R6
@@ -1594,6 +1628,13 @@ R10 therefore owns:
 Naming (2026-10-10 naming triage): `_materialize_terminal`/`_materialize_terminals`
 (`riko/modules/_decorators.py`) drain async terminal sub-sources for the sync conf parser; they are
 async-wrapper shims this phase deletes, so they keep their off-table `materialize` name until then.
+
+Audit note (2026-10-10 structural audit): pipe parser twins with identical bodies are shim shapes this
+phase deletes: the `regex.py` sync/async parsers (the sync one alone wraps `str(rules[0]["field"])`, a
+drift), the six-line table-reader block repeated across `csv.py`/`fetchtable.py`, the sync/async pairs
+in `fetchtext`, `feedautodiscovery`, `write`, `timeout`, `aggregate`, `udf`, and `fetchsitefeed`, and
+`rss/discovery.py`'s `load_rss_links`/`aload_rss_links`. Collapse each pair to one body as it moves to
+the Feed-native path.
 
 **Exit:**
 
@@ -1639,6 +1680,13 @@ Naming (2026-10-10 naming triage): `run-pipe`'s internals wait for the CLI tree 
 `runner` (`riko/cli/runpipe.py`, overlaps `aemit_result`), `resolve_example` (exits on no match and
 executes the pipe script it finds: a `load`), `file2name` (no verb), and `get_example_dirs` (depends
 on the working directory). Rename them with the command.
+
+Audit note (2026-10-10 structural audit, CLI parity): `run-pipe`, `build-workflow`, and
+`compile-workflow` disagree on missing-file handling (`compile-workflow` prints only a logger WARNING
+then exits 1) and flag shapes (`-p/--path` plus a positional id vs a positional path; `-v` only on
+compile, `-f` only on build), and none has `epilog` examples although the README carries the pipeline
+recipe; example lookup leaks the checkout path and never searches `examples/pyworkflows/`. Settle these
+with the Click-native CLI tree (`run-pipe` already catches `RikoError`, done 2026-10-14).
 
 **Exit:**
 
