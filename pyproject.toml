@@ -279,6 +279,7 @@ omit = [
     "*/riko/cli/_gen_*.py",
     "*/riko/cli/_import_*.py",
     "*/riko/cli/_lint*.py",
+    "*/riko/cli/_logging.py",
     "*/riko/cli/_release.py",
     "*/riko/cli/_shipped_text.py",
     "*/riko/cli/_test.py",
@@ -289,7 +290,7 @@ omit = [
 # Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
 # above it and lowers it on a gain.
-uncovered = 499
+uncovered = 474
 
 [tool.pylint.format]
 max-line-length=88

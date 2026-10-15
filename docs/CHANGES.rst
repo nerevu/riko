@@ -38,6 +38,8 @@ New
 - A ``PipeDag`` module can now (like workflow nodes) name its module with ``name``.
   E.g., ``{"name": "fetch"}``. If providing both ``type`` and ``name``, they must agree.
 
+- Added ``logging.getLogger("riko").setLevel(...)`` that governs every riko logger.
+
 - Added ``riko.PipelineError``, ``riko.InvalidPipelineError``, and
   ``riko.EmptyPipelineError``.
 
@@ -326,6 +328,8 @@ Dev
 - Added ``manage test --ratchet``, which fails a full-suite run that leaves more
   statements uncovered than the ceiling recorded in ``pyproject.toml`` and lowers the
   ceiling when it leaves fewer.
+
+- ``manage -v``/``-vv``/``-q`` now set the log level (they previously had no effect).
 
 - ``manage prettify --yaml`` now formats only tracked YAML files (like ``manage
   lint --yaml``) instead of everything under the repository root.

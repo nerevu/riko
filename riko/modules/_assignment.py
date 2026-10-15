@@ -8,8 +8,7 @@ from functools import partial
 from itertools import chain, islice
 from typing import TYPE_CHECKING, overload
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.parsing._dotdict import DotDict
 
 if TYPE_CHECKING:
@@ -38,7 +37,7 @@ if TYPE_CHECKING:
         SyncSubPipe,
     )
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 @overload

@@ -22,7 +22,7 @@ Index (file, then the subjects it owns, in file order):
                               WriteExecution, Sink
     test_values.py            CanonicalBytes, Digest, ReprCache, CastDatetime,
                               Fromdict, TryLocalTz, Dates, DotDict, Parsers, RSSUtils,
-                              Graph, GraphIndex
+                              Graph, GraphIndex, Logging
     test_io.py                Fetch, LoopbackServer, AsyncUrlOpen,
                               ExtensionlessAsyncUrlOpen, Reencode, ConversionFuncs,
                               AsyncMapStream, AsyncMap, AsyncMerge, GatherResults,
@@ -48,5 +48,5 @@ Index (file, then the subjects it owns, in file order):
                               TermLint, LiteralLint, BindingLint, LayoutLint,
                               DependencyLint, HookPinLint, CanonicalImportLint,
                               RelativeImportLint, ImportArchitectureLint, ValidateGraph,
-                              RequireWorkflow, ReadDocument, Timeouts
+                              RequireWorkflow, ReadDocument, Timeouts, LogLevel
 """

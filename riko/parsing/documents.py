@@ -18,9 +18,9 @@ from json import JSONDecodeError, load, loads
 from typing import TYPE_CHECKING, Any, cast
 
 import feedparser
-import pygogo as gogo
 
 from riko.base._constants import STREAMING_THRESHOLD
+from riko.base._logging import get_logger
 from riko.coercion._sequences import listize
 from riko.types._guards import is_mapping
 
@@ -91,7 +91,7 @@ type AnyElementTree = (
 )
 type AnyElement = nativeElement | lxmlElement
 
-logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+logger: Logger = get_logger(__name__)
 logger.debug(f"{IS_LXML=}")
 logger.debug(f"{IS_FASTFEEDPARSER=}")
 

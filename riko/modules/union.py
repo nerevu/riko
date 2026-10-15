@@ -28,8 +28,7 @@ from __future__ import annotations
 from itertools import chain
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.parsing._dotdict import DotDict
 from riko.types._options import DecorationOptions, Defaults
 
@@ -44,7 +43,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = {}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(

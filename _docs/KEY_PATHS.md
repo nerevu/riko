@@ -42,7 +42,7 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/base/_graph.py` | generic graph helpers (stdlib `graphlib` for topological order, `networkx` for strongly connected components, descendants, and transitive reduction) over successor mappings: `edges_to_graph(edges, nodes=)` (keeps edge-less nodes) and `reverse_graph`; `native_topological_sort` (strict flat order) and `topological_sort` (always tuples: one-node groups when acyclic, strongly connected components on a cycle unless `strict`; `key` orders ready nodes) and `cyclic_nodes` built on it; `leaves`; `descendants`; `gen_redundant_edges` (transitive reduction); `freeze_graph`. Shared by the graph index, workflow normalization's lone-leaf default output, execution planning, and the architecture linter |
 | `riko/base/_source_format.py` | shared source-formatting helper used by generators |
 | `riko/base/_typing.py` | runtime type-hint helpers: `resolve_type_hints` (PEP 563 annotations with supplementary namespaces), `resolve_alias` (follows a `type` alias chain), and `gen_union_members` (flattens aliases, unions, and `Annotated` into arms), shared by return-kind inference and `require_from_form` |
-| `riko/base/{_constants,_imports,_locations,_logging,_strutils}.py` | small base utilities; keep them free of upward package dependencies |
+| `riko/base/{_constants,_imports,_locations,_logging,_strutils}.py` | small base utilities; keep them free of upward package dependencies; `_logging` holds the one pygogo configuration (`get_logger`/`set_log_level`) |
 | `riko/base/{currencies,locations,warnings}.py` | shared domain/reference helpers that sit at the bottom of the import graph |
 
 ## Types and coercion
@@ -186,7 +186,7 @@ write/session contracts.
 | `riko/cli/_gen_api_surface.py` | regenerates marked name blocks in `_docs/API_SURFACE.md` from `riko/base/_api_surface.py` |
 | `riko/cli/_workflow.py` | shared JSON document front door for the console scripts: `read_document` and the `WorkflowDocument`-only `require_workflow` (the run-it-through-`build-workflow`-first guard for `run-pipe`/`compile-workflow`); `build-workflow` reads any shape through `Workflow.parse` |
 | `riko/cli/{compile,build_workflow,runpipe,benchmark}.py` | standalone console-script implementations, all on canonical Workflow v2: `build-workflow` is the one lenient converter, `compile-workflow` generates from `WorkflowDocument`s only, `run-pipe` runs a script or a `WorkflowDocument`, `benchmark` times `Pipeline` and workflow execution |
-| `riko/cli/{_build,_docs,_docstyle,_lint_bindings,_lint_deps,_lint_literals,_lint_terms,_release,_shipped_text,_test,_upgrade}.py` | private `manage` command helpers grouped by reason to change |
+| `riko/cli/{_build,_docs,_docstyle,_lint_bindings,_lint_deps,_lint_literals,_lint_terms,_logging,_release,_shipped_text,_test,_upgrade}.py` | private `manage` command helpers grouped by reason to change |
 | `riko/cli/_lint_tests.py` | `manage lint --tests`: holds `tests/` to the tier indexes in each `tests/<tier>/__init__.py` (every file indexed, every test in a listed `Test<Subject>` class, no private imports in `public/`, size advice) |
 | `riko/cli/_coverage.py` | `manage test --ratchet`'s uncovered-line ceiling (`[tool.riko.coverage] uncovered` in `pyproject.toml`): fail above it, lower it on a gain; dev-only `manage` modules are in `[tool.coverage.run] omit`, console scripts are measured through subprocesses |
 

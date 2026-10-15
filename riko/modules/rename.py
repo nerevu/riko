@@ -29,10 +29,10 @@ from __future__ import annotations
 from functools import reduce
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
 from meza.fntools import remove_keys
 
 from riko.bado.itertools import coop_reduce
+from riko.base._logging import get_logger
 from riko.parsing._dotdict import DotDict
 from riko.types._sentinels import MISSING
 
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = {"extract": "rule", "listize": True, "emit": True}
 DEFAULTS: Defaults = {}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def reducer(item: Item, rule: RenameConfRule) -> Item:

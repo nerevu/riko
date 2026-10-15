@@ -28,9 +28,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
 from riko.base._constants import ENCODING
+from riko.base._logging import get_logger
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close
 from riko.types._enums import BasicCastType
@@ -48,7 +47,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = {"ftype": BasicCastType.NONE, "assign": "content"}
 DEFAULTS: Defaults = {"encoding": ENCODING}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 async def async_parser(

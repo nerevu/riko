@@ -31,9 +31,8 @@ from __future__ import annotations
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
 from riko.bado.itertools import async_reduce
+from riko.base._logging import get_logger
 from riko.types._enums import SortableCastType
 from riko.types.modules import SortConfRule
 
@@ -51,7 +50,7 @@ if TYPE_CHECKING:
 OPTS: DecorationOptions = {"listize": True, "extract": "rule"}
 sort_type = SortableCastType.TEXT
 DEFAULTS: Defaults = {"rule": SortConfRule(dir="asc", field="content", type=sort_type)}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def reducer(stream: Stream, rule: SortConfRule) -> Stream:

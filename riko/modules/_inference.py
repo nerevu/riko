@@ -9,12 +9,12 @@ import textwrap
 from ast import AsyncFunctionDef, FunctionDef
 from collections.abc import Awaitable, Callable, Coroutine, Iterator
 from inspect import getsource, isasyncgenfunction, isgeneratorfunction, unwrap
-from typing import Any, NamedTuple, get_args, get_origin
+from typing import TYPE_CHECKING, Any, NamedTuple, get_args, get_origin
 
-import pygogo as gogo
 from typing_extensions import TypeIs
 
 import riko.types._streams as _streams_module
+from riko.base._logging import get_logger
 from riko.base._typing import gen_union_members, resolve_type_hints
 from riko.types.modules import (
     Inference,
@@ -23,7 +23,10 @@ from riko.types.modules import (
     ReturnInference,
 )
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+if TYPE_CHECKING:
+    from logging import Logger
+
+logger: Logger = get_logger(__name__)
 
 _STREAM_CALLS = {"aiter", "enumerate", "filter", "iter", "map", "reversed", "zip"}
 

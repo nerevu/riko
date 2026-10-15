@@ -27,8 +27,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
@@ -42,7 +41,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {"normalize_key": "content"}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(

@@ -34,11 +34,10 @@ from json import load, loads
 from os import getenv
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
-import pygogo as gogo
-
 from riko.bado._util import async_get, async_json
 from riko.base._config import settings
 from riko.base._constants import ENCODING
+from riko.base._logging import get_logger
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch
 from riko.types._enums import BasicCastType
@@ -65,7 +64,7 @@ DEFAULTS: Defaults = {
     "encoding": ENCODING,
 }
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 class RatesJson(TypedDict):

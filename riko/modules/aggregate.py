@@ -29,9 +29,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
 from riko.bado._util import maybe_async
+from riko.base._logging import get_logger
 from riko.coercion._sequences import listize
 from riko.types._options import Defaults
 from riko.types._streams import Item, Items, Stream
@@ -47,7 +46,7 @@ if TYPE_CHECKING:
     from riko.types._wrappers import PipeTuples
 
 DEFAULTS: Defaults = Defaults()
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 type AggregateResult = Item | Items
 

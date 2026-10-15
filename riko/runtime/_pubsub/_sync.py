@@ -7,18 +7,18 @@ from collections import deque
 from itertools import count
 from typing import TYPE_CHECKING
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.types._sentinels import MissingType, StreamState
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from logging import Logger
 
     from riko.types._streams import Item
 
     from ._types import Receiver
 
-logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 class SyncPubSubHub:

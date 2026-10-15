@@ -28,12 +28,13 @@ from urllib.error import URLError
 from xml.sax import SAXParseException  # noqa: S406
 
 import feedparser
-import pygogo as gogo
 
+from riko.base._logging import get_logger
 from riko.base._strutils import truncate_content
 from riko.io._sync import Fetch
 
 if TYPE_CHECKING:
+    from logging import Logger
     from types import ModuleType
 
 try:
@@ -73,7 +74,6 @@ else:
     IJSON_IS_NATIVE = getattr(ijson, "backend", "python") != "python"
 
 if TYPE_CHECKING:
-    from logging import Logger
     from xml.etree.ElementTree import Element as nativeElement
     from xml.etree.ElementTree import ElementTree as nativeElementTree
 
@@ -89,7 +89,7 @@ type AnyElementTree = (
 )
 type AnyElement = nativeElement | lxmlElement
 
-logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+logger: Logger = get_logger(__name__)
 logger.debug(f"{IS_LXML=}")
 logger.debug(f"{IS_FASTFEEDPARSER=}")
 

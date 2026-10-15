@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
+from riko.base._logging import get_logger
 
 from ._decorators import operator
 from ._iterutils import group_by
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = {"extract": "count_key"}
 DEFAULTS: Defaults = {"count_key": None}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(

@@ -30,8 +30,7 @@ from __future__ import annotations
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.types._enums import BasicCastType
 from riko.types._options import DecorationOptions, Defaults
 
@@ -47,7 +46,7 @@ if TYPE_CHECKING:
 OPTS: DecorationOptions = {"ptype": BasicCastType.INT}
 DEFAULTS = Defaults({})
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(

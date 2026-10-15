@@ -25,9 +25,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
 from babel.numbers import format_currency
 
+from riko.base._logging import get_logger
 from riko.base.currencies import CURRENCY_CODES
 from riko.types._enums import BasicCastType
 
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = {"ftype": BasicCastType.DECIMAL, "field": "content"}
 DEFAULTS: Defaults = {"currency": "USD", "clean": False}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(

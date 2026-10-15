@@ -24,8 +24,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import operator
@@ -41,7 +40,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = {"sum_key": "content", "group_key": None}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(

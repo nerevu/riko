@@ -26,8 +26,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.coercion.cast import SourceOpts, cast_value
 from riko.types._enums import CastType
 
@@ -50,7 +49,7 @@ DEFAULTS: Defaults = {
     "test": False,
     "input_key": "content",
 }
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(

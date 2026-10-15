@@ -7,10 +7,10 @@ from collections.abc import Iterator
 from functools import cached_property, partial
 from typing import TYPE_CHECKING, cast, overload
 
-import pygogo as gogo
 from attrs import Factory, define, field
 
 from riko.base._iterutils import broadcast, dispatch
+from riko.base._logging import get_logger
 from riko.coercion._objectify import objectify
 from riko.coercion._sequences import listize
 from riko.coercion.cast import CAST_SWITCH, cast_none, cast_pass, cast_value
@@ -37,6 +37,7 @@ from riko.types.modules import AnyModuleConf, Conf, require_module_conf
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from logging import Logger
 
     from riko.base._locations import AnyLocation
     from riko.coercion._dynamic_conf import DynamicConf
@@ -46,7 +47,7 @@ if TYPE_CHECKING:
     from riko.types._streams import Item, ItemOrValue
     from riko.types._wrappers import ExtraNames
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def build_conf(

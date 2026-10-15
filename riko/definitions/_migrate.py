@@ -14,10 +14,9 @@ from __future__ import annotations
 from itertools import chain, pairwise
 from typing import TYPE_CHECKING, cast
 
-import pygogo as gogo
-
 from riko.base._config import INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
 from riko.base._iterutils import partition, unzip
+from riko.base._logging import get_logger
 from riko.base._strutils import pythonise
 from riko.base.exceptions import InvalidPipelineError
 from riko.types._collections import (
@@ -53,7 +52,7 @@ _MODULE_FAMILY = "module"
 _WARNING = "migrating a pipe definition to a workflow"
 _WRITE_MODES = {"w": WriteMode.REPLACE, "a": WriteMode.APPEND}
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 _optional_mapping = def_from_require(require_mapping)
 _require_embed_ref = require_from_typed_dict(EmbedRef)

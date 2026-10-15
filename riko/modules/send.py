@@ -34,9 +34,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
 from riko.bado.itertools import as_async
+from riko.base._logging import get_logger
 from riko.runtime._pubsub import async_hub, sync_hub
 
 from ._decorators import operator
@@ -52,7 +51,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = {"pollable": True, "emit": True}
 DEFAULTS: Defaults = {"max_wait": 5}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 async def async_parser(

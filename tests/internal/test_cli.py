@@ -8,6 +8,7 @@ import json
 import tomllib
 from datetime import date, timedelta
 from importlib import import_module
+from logging import DEBUG, ERROR, INFO, WARNING, getLogger
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -36,6 +37,7 @@ from riko.cli._lint_literals import gen_literal_issues
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
 from riko.cli._lint_terms import BANNED_TERMS, BannedTerm, gen_term_issues
 from riko.cli._lint_tests import LayoutIssue, format_layout_issue, gen_layout_issues
+from riko.cli._logging import exception_hook, resolve_log_level
 from riko.cli._upgrade import _pin_hooks
 from riko.cli._workflow import read_document, require_workflow
 from riko.cli.manage import manager
@@ -1182,3 +1184,42 @@ class TestTimeouts:
         )
         result.assert_outcomes(failed=1, xfailed=1)
         result.stdout.fnmatch_lines(["*test_hangs hit its timeout*never ends*"])
+
+
+LOG_LEVELS = [
+    pytest.param(0, False, WARNING, id="default"),
+    pytest.param(1, False, INFO, id="verbose"),
+    pytest.param(2, False, DEBUG, id="very-verbose"),
+    pytest.param(3, False, DEBUG, id="capped"),
+    pytest.param(0, True, ERROR, id="quiet"),
+    pytest.param(2, True, ERROR, id="quiet-wins"),
+]
+MANAGER_LEVELS = [
+    pytest.param(["-vv"], DEBUG, id="verbose"),
+    pytest.param(["-q"], ERROR, id="quiet"),
+]
+
+
+class TestLogLevel:
+    """The manage flags select the level every riko logger inherits."""
+
+    @pytest.mark.parametrize(("verbose", "quiet", "level"), LOG_LEVELS)
+    def test_resolve_log_level(self, verbose, quiet, level):
+        assert resolve_log_level(verbose, quiet) == level
+
+    @pytest.mark.parametrize(("args", "level"), MANAGER_LEVELS)
+    def test_manager_sets_the_riko_level(self, riko_level, args, level):
+        result = CliRunner().invoke(manager, [*args, "hello"])
+        assert result.exit_code == 0
+        assert getLogger("riko").level == level
+
+    def test_exception_hook_logs_the_error(self, caplog):
+        error = ValueError("bad value")
+
+        with caplog.at_level(ERROR, logger="riko"):
+            exception_hook(ValueError, error, None)
+
+        assert any(
+            record.levelno == ERROR and "bad value" in record.getMessage()
+            for record in caplog.records
+        )

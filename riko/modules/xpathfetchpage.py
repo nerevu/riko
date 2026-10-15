@@ -28,9 +28,8 @@ from __future__ import annotations
 from os.path import splitext
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
-
 from riko.base._constants import ENCODING
+from riko.base._logging import get_logger
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close
@@ -49,7 +48,7 @@ if TYPE_CHECKING:
 
 OPTS = SourceOpts
 DEFAULTS = Defaults({"encoding": ENCODING, "html5": False})
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 async def async_parser(

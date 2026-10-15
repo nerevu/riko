@@ -36,9 +36,9 @@ from inspect import signature
 from time import sleep
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
 from meza.fntools import dfilter
 
+from riko.base._logging import get_logger
 from riko.runtime._pubsub import async_hub, coroutine, sync_hub
 from riko.types._enums import BasicCastType
 from riko.types._guards import is_missing_type, is_stateful_item
@@ -59,7 +59,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = {"ftype": BasicCastType.NONE, "pollable": True}
 DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5, "max_len": 256}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def _apply(func: ReceiveFunc, item: Item, **fkwargs: object) -> Item | None:

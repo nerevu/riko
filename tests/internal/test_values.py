@@ -13,6 +13,7 @@ from decimal import Decimal, localcontext
 from enum import Enum, StrEnum
 from graphlib import CycleError
 from io import BytesIO
+from logging import ERROR, WARNING
 from operator import methodcaller
 from pathlib import PurePosixPath, PureWindowsPath
 from time import struct_time
@@ -28,6 +29,7 @@ from feedparser import FeedParserDict
 
 from riko.base._dateutils import TZINFOS
 from riko.base._graph import cyclic_nodes, descendants, freeze_graph, topological_sort
+from riko.base._logging import get_logger, set_log_level
 from riko.base._paths import ROOT_DIR, get_path
 from riko.base.exceptions import CyclicIdentityError, IdentityEncodingError
 from riko.coercion._canonical import (
@@ -815,3 +817,24 @@ class TestGraphIndex:
             version="2",
         )
         assert flow.index.cyclic == ("a", "b")
+
+
+class TestLogging:
+    """Every riko logger shares one configuration and follows one level knob."""
+
+    def test_get_logger_reuses_the_named_logger(self):
+        logger = get_logger("riko.modules.fetch")
+        handlers = len(logger.handlers)
+        assert get_logger("riko.modules.fetch") is logger
+        assert len(logger.handlers) == handlers
+
+    def test_default_level_is_warning(self):
+        assert get_logger("riko.tests.default").getEffectiveLevel() == WARNING
+
+    @pytest.mark.usefixtures("riko_level")
+    def test_set_log_level_reaches_every_logger(self):
+        before = get_logger("riko.tests.before")
+        set_log_level(ERROR)
+        after = get_logger("riko.tests.after")
+        assert before.getEffectiveLevel() == ERROR
+        assert after.getEffectiveLevel() == ERROR

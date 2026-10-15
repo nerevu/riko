@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from logging import getLogger
 from os import environ
 from typing import TYPE_CHECKING
 
+from ._logging import get_logger
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from logging import Logger
 
-logger = getLogger("riko")
+logger: Logger = get_logger(__name__)
 
 LAYER_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "base": (),

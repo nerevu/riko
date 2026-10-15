@@ -35,7 +35,6 @@ from typing import (
     overload,
 )
 
-import pygogo as gogo
 from attrs import define
 
 from riko.bado._util import as_awaitable
@@ -45,6 +44,7 @@ from riko.bado.itertools import (
     async_map,
     async_map_ordered_stream,
 )
+from riko.base._logging import get_logger
 from riko.definitions._context import Context
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
@@ -146,7 +146,7 @@ if TYPE_CHECKING:
     )
     from riko.types.modules import ModuleType
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 type AsyncItemProcessor = Callable[
     [ItemOrValue], Awaitable[SyncProcessorWrapperInternalOutput]

@@ -35,8 +35,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.coercion._sequences import gen_items
 
 from ._decorators import processor
@@ -53,7 +52,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = {"emit": True}
 DEFAULTS: Defaults = {"token_key": "content"}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(

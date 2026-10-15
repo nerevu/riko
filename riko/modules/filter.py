@@ -31,9 +31,9 @@ import re
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
 from dateutil.parser import ParserError
 
+from riko.base._logging import get_logger
 from riko.coercion._canonical import repr_cache
 from riko.coercion._objectify import Objectify
 from riko.coercion.cast import cast_date, cast_decimal
@@ -112,7 +112,7 @@ DATE_OPS = {"after", "before"}
 PASSTHROUGH_OPS = {"truthy", "falsy", "eq", "is", "isnot"}
 TRUTHINESS_OPS = {"truthy", "falsy"}
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def _cast_arg_uncached[VT](arg: VT, op: str) -> str | date | VT | None:

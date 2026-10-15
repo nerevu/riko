@@ -33,9 +33,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
 from meza.process import merge
 
+from riko.base._logging import get_logger
 from riko.types._guards import is_mapping
 from riko.types._options import DecorationOptions, Defaults
 from riko.types._sentinels import MISSING
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = {"join_key": None, "lower": False}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(

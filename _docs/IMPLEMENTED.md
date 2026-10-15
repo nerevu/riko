@@ -21,6 +21,7 @@ Planned** (nothing ships yet). Find any `§N` via the [ROADMAP §-index](ROADMAP
 - [7. Timeout (shipped)](#7-timeout-shipped)
 - [8. Union (shipped)](#8-union-shipped)
 - [9. Exit codes (shipped)](#9-exit-codes-shipped)
+- [Logging (shipped)](#logging-shipped)
 - [13. Filter semantics (shipped)](#13-filter-semantics-shipped)
 - [14. Sort keys and feed dates (shipped)](#14-sort-keys-and-feed-dates-shipped)
 - [23. AnyIO runtime (shipped)](#23-anyio-runtime-shipped)
@@ -193,6 +194,15 @@ user-facing `merge` operator is not yet built.
 
 The CLI returns process exit codes (`riko/cli/manage.py`). The `RunStatus` enum and the
 formal 4-code completed/failed/usage/partial scheme are not yet implemented.
+
+## Logging (shipped)
+
+riko has one pygogo configuration: `Gogo("riko")` in `riko/base/_logging.py`, with both its
+low and high handlers on stderr. Each module takes `get_logger(__name__)`, a `riko.<module path>`
+child left at `NOTSET`, so every riko logger inherits the `riko` parent's level. `set_log_level`
+is the one knob; the default WARNING is applied when `riko.base._logging` is imported, so the
+console scripts need no setup. `manage -v`/`-vv`/`-q` map to INFO/DEBUG/ERROR through
+`resolve_log_level` in `riko/cli/_logging.py`, which also holds the `manage` uncaught-exception hook.
 
 ## 13. Filter semantics (shipped)
 

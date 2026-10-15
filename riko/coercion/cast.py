@@ -35,9 +35,8 @@ from time import gmtime, struct_time
 from typing import TYPE_CHECKING, Literal, cast, overload
 from urllib.parse import quote, urlparse
 
-import pygogo as gogo
-
 from riko.base._dateutils import load_local_tz
+from riko.base._logging import get_logger
 from riko.base.currencies import CURRENCY_CODES
 from riko.base.locations import LOCATIONS
 from riko.types._enums import BasicCastType, CastType, LocationType
@@ -66,7 +65,7 @@ MATH_WORDS = {"seconds", "minutes", "hours", "days", "weeks", "months", "years"}
 TEXT_WORDS = {"last", "next", "week", "month", "year"}
 KWARG_TYPES = {CastType.DATE, CastType.DATETIME, CastType.LOCATION}
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 SourceOpts: DecorationOptions = {"ftype": BasicCastType.NONE}
 

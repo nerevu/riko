@@ -9,9 +9,9 @@ from decimal import Decimal
 from functools import reduce
 from typing import TYPE_CHECKING, Self, TypeGuard, TypeVar, cast, overload
 
-import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
+from riko.base._logging import get_logger
 from riko.base._strutils import replacer
 from riko.coercion._objectify import Objectify
 from riko.coercion.cast import CAST_SWITCH, cast_value
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from riko.types._streams import Item, ItemOrValue, StatefulItem, Stream
     from riko.types.modules import ConfArg
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 TV_KEYS = ("type", "value")
 PASSTHROUGH_TYPES = (str, int, float, date, Decimal, Objectify)

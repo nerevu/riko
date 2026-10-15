@@ -12,10 +12,9 @@ from collections.abc import AsyncIterable, Generator
 from functools import partial
 from typing import TYPE_CHECKING, cast
 
-import pygogo as gogo
-
 from riko.bado._util import maybe_aclosing, maybe_async
 from riko.bado.itertools import as_async
+from riko.base._logging import get_logger
 from riko.types._wrappers import is_subpipe
 
 from ._assignment import bind_subpipe
@@ -33,7 +32,7 @@ if TYPE_CHECKING:
         SyncSubPipe,
     )
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def _take_first(results: Items) -> Stream:

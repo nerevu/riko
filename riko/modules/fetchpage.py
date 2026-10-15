@@ -30,10 +30,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
 from riko.base._constants import ENCODING
 from riko.base._iterutils import betwix
+from riko.base._logging import get_logger
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch
@@ -52,7 +51,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING, "detag": False})
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def get_string(content: str, start: str, end: str) -> str:

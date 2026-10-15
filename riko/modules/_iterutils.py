@@ -23,9 +23,9 @@ from math import isnan
 from time import struct_time
 from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
-import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
+from riko.base._logging import get_logger
 from riko.coercion._dates import date_to_datetime, resolve_aware_datetime
 from riko.coercion.cast import CAST_SWITCH, cast_value
 from riko.types._enums import CastType
@@ -34,7 +34,7 @@ from riko.types._scalars import PrimitiveValue, SortableValue
 if TYPE_CHECKING:
     from logging import Logger
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 SORT_FILLER = float("-inf")
 DATELIKE_TYPES = frozenset({CastType.DATE, CastType.DATETIME})

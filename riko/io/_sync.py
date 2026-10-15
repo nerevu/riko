@@ -26,12 +26,12 @@ except ImportError:
     fcntl = None
 
 import mezmorize
-import pygogo as gogo
 import requests
 from mezmorize.utils import get_cache_type
 
 from riko._package import __version__
 from riko.base._constants import ENCODING, STREAMING_THRESHOLD
+from riko.base._logging import get_logger
 from riko.base._paths import normalize_url
 from riko.base._strutils import truncate_content
 
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
 O_NONBLOCK: int = getattr(os, "O_NONBLOCK", 0)
 
-logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def ext_from_content_type(content_type: str | None) -> str | None:

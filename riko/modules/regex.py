@@ -31,9 +31,8 @@ from __future__ import annotations
 from functools import reduce
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
-
 from riko.bado.itertools import async_reduce, coop_reduce
+from riko.base._logging import get_logger
 from riko.coercion._dataclass import build_regex_rule
 from riko.parsing._dotdict import DotDict
 from riko.types._sentinels import MISSING
@@ -54,7 +53,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = {"listize": True, "extract": "rule", "emit": True}
 DEFAULTS: Defaults = {"multi": False}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 async def async_parser(

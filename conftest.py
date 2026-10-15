@@ -3,10 +3,12 @@
 import doctest
 import importlib.util
 import re
+from logging import getLogger
 
 import pytest
 
 from riko.bado._backend import issync
+from riko.base._logging import LOGGER_NAME
 from riko.base._paths import ROOT_DIR
 from riko.parsing.documents import IS_LXML
 from riko.runtime._pubsub import reset_pubsub
@@ -40,6 +42,13 @@ def reset_pubsub_state():
     reset_pubsub()
     yield
     reset_pubsub()
+
+
+@pytest.fixture
+def riko_level():
+    level = getLogger(LOGGER_NAME).level
+    yield
+    getLogger(LOGGER_NAME).setLevel(level)
 
 
 def _skip_coroutine_runs(item) -> None:

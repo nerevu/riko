@@ -8,8 +8,7 @@ from datetime import datetime as dt
 from time import struct_time
 from typing import TYPE_CHECKING, cast
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.coercion._dates import date_to_tt, resolve_aware_datetime
 from riko.types._guards import is_mapping
 
@@ -24,7 +23,7 @@ if TYPE_CHECKING:
         YahooRSSEntry,
     )
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def _get_entry_text(entry: ParserRSSEntry) -> str:

@@ -24,8 +24,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.coercion.cast import SourceOpts
 from riko.rss.discovery import aload_rss_links, load_rss_links
 
@@ -41,7 +40,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = {"strict": True, "sort": False}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 async def async_parser(

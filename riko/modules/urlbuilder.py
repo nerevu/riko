@@ -33,8 +33,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode, urljoin
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
@@ -55,7 +54,7 @@ OPTS: DecorationOptions = {
     "listize": True,
 }
 DEFAULTS: Defaults = {"param": {}}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(

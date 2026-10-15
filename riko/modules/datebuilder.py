@@ -26,8 +26,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.coercion.cast import cast_datetime
 from riko.types._enums import BasicCastType
 from riko.types._scalars import DateLikeType
@@ -43,7 +42,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = {"ptype": BasicCastType.NONE, "field": "content"}
 DEFAULTS: Defaults = {}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(

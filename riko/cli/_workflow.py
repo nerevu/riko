@@ -17,7 +17,7 @@ from json import loads
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from riko.base._logging import logger
+from riko.base._logging import get_logger
 from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._serialize import get_document_shape
 from riko.definitions._workflow import Workflow
@@ -25,7 +25,11 @@ from riko.types._enums import DocumentShape
 from riko.types._guards import require_mapping
 
 if TYPE_CHECKING:
+    from logging import Logger
+
     from riko.types._io import PathLike
+
+logger: Logger = get_logger(__name__)
 
 _OTHER_SHAPES = {
     DocumentShape.DAG: "a serialized bare-bones DAG",

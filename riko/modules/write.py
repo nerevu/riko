@@ -32,9 +32,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
 from meza import io
 
+from riko.base._logging import get_logger
 from riko.definitions._targets import resolve_format
 from riko.io._async import async_write
 from riko.io._filelike import IOFileLike, IOFileLikeType
@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
 OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = Defaults({"fmt": None, "mode": "wb+"})
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def _prepare_content(items: Items, objconf: WriteObjconf) -> AnyStr | IOFileLike | None:
