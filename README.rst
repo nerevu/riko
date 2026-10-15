@@ -600,12 +600,12 @@ CLI Usage
   positional arguments:
     pipeid            The id of an example pipe script or workflow document.
 
-  optional arguments:
-    -h, --help        show this help message and exit
-    -p, --path PATH   Path to a pipe script, workflow module, or workflow document to
-                      run, e.g., pipe.py or flow.json.
-    -a, --async       Load async pipe.
-    -t, --test        Run in test mode (uses default inputs).
+  options:
+    -h, --help            show this help message and exit
+    -p PATH, --path PATH  Path to a pipe script, workflow module, or workflow document to
+                          run, e.g. pipe.py or flow.json.
+    -a, --async           Load async pipe.
+    -t, --test            Run in test mode (uses default inputs).
 
 Now to execute ``pipe.py``, type the command ``run-pipe --path pipe.py``. You should
 then see the following output in your terminal:
