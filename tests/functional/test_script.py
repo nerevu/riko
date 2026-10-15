@@ -281,6 +281,14 @@ class TestBuildWorkflow:
 
 
 class TestCompile:
+    def test_compile_writes_to_a_file_and_reports_it(self, tmp_path):
+        dest = tmp_path / "pipe_testpipe1.py"
+        flow_path = TESTS_DIR / "workflows" / "pipe_testpipe1.json"
+        compiled = run_module("compile", str(flow_path), "-o", str(dest), "-v")
+        assert compiled.returncode == 0
+        assert compiled.stdout == ""
+        assert f"wrote {len(dest.read_text())} bytes to {dest}" in compiled.stderr
+
     def test_compile_rejects_a_serialized_pipe_dag(self):
         compiled = run_module("compile", str(DAG_PATH))
         assert compiled.returncode == 1

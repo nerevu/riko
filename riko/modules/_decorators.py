@@ -1143,7 +1143,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             orig_item = input_
             casted = Casted(casted_field, pre_casted_extract, pre_casted_conf)
         else:
-            args = (input_, prepared.opts, prepared.conf)
+            args = (input_, prepared.opts)
             orig_item, casted = resolve_and_cast(
                 *args,
                 parsers=prepared.parsers,
@@ -1516,7 +1516,6 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         else:
             _disp = partial(
                 resolve_and_cast,
-                conf=prepared.conf,
                 parsers=prepared.parsers,
                 casters=prepared.casters,
                 defaults=self.defaults,
@@ -1818,7 +1817,6 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         """
         _dispatcher = partial(
             resolve_and_cast,
-            conf=prepared.conf,
             parsers=prepared.parsers,
             casters=prepared.casters,
             defaults=self.defaults,

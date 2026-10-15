@@ -249,6 +249,15 @@ class TestWorkflowModuleDescribe:
         context = Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES)
         assert list(module.pipe(context=context)) == ["itembuilder", "rename"]
 
+    @async_test
+    async def test_generated_async_pipe_describes_dependencies(self, tmp_path: Path):
+        pipeline = Pipeline.from_module("itembuilder").pipe("rename", conf=RENAME_CONF)
+        module = _build(pipeline.workflow, "pipe_adescribed", tmp_path, is_async=True)
+        stream = module.async_pipe(
+            context=Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES)
+        )
+        assert [item async for item in stream] == ["itembuilder", "rename"]
+
     @pytest.mark.parametrize(("mode", "expected"), DESCRIBE_INPUT_CASES)
     def test_generated_pipe_describes_inputs(self, mode, expected, tmp_path: Path):
         """Describing inputs reports the declared schemas, alone or with more."""

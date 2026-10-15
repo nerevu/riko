@@ -1097,6 +1097,17 @@ INVALID_EDGES = [
 ]
 
 
+_UNKNOWN_KEY_RULE = {"fieldd": "title", "op": "contains", "value": "1"}
+INVALID_CONFS = [
+    pytest.param("filter", {"rule": _UNKNOWN_KEY_RULE}, "fieldd", id="unknown-key"),
+    pytest.param("sort", {"rule": 5}, "rule", id="wrong-type"),
+    pytest.param(
+        "simplemath", {"op": "nope", "other": {"value": 2}}, "op", id="bad-op"
+    ),
+    pytest.param("strconcat", {}, "part", id="missing-key"),
+]
+
+
 class TestValidate:
     @pytest.mark.parametrize(
         ("nodes", "edges", "output", "resources"),
@@ -1156,35 +1167,14 @@ class TestValidate:
 
     @pytest.mark.xfail(
         strict=True,
-        reason="module configuration is not validated against its contract yet: "
-        "an unknown key is silently ignored",
+        reason="module configuration is not validated against its contract yet",
     )
-    def test_unknown_conf_key_rejected_before_the_source_is_read(self):
+    @pytest.mark.parametrize(("name", "conf", "match"), INVALID_CONFS)
+    def test_invalid_conf_rejected_before_the_source_is_read(self, name, conf, match):
         consumed = []
-        rule = {"fieldd": "title", "op": "contains", "value": "1"}
-        pipeline = _counted_source(consumed) | Pipeline.from_module(
-            "filter",
-            conf={"rule": rule},  # pyright: ignore[reportArgumentType]
-        )
+        pipeline = _counted_source(consumed) | Pipeline.from_module(name, conf=conf)
 
-        with pytest.raises(InvalidPipelineError, match="fieldd"):
-            list(pipeline)
-
-        assert consumed == []
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason="module configuration is not validated against its contract yet: "
-        "a wrongly typed value fails later with AttributeError",
-    )
-    def test_wrongly_typed_conf_value_rejected_before_the_source_is_read(self):
-        consumed = []
-        pipeline = _counted_source(consumed) | Pipeline.from_module(
-            "sort",
-            conf={"rule": 5},  # pyright: ignore[reportArgumentType]
-        )
-
-        with pytest.raises(InvalidPipelineError, match="rule"):
+        with pytest.raises(InvalidPipelineError, match=match):
             list(pipeline)
 
         assert consumed == []
@@ -1196,6 +1186,12 @@ def _wire(wid, src_mod, tgt_mod, src_port="_OUTPUT", tgt_port="_INPUT"):
         "src": {"id": src_port, "moduleid": src_mod},
         "tgt": {"id": tgt_port, "moduleid": tgt_mod},
     }
+
+
+UPPERCASE_CONFS = [
+    pytest.param({"URL": {"value": "x"}}, {"url": {"value": "x"}}, id="mapping"),
+    pytest.param({"URL": [{"VALUE": "x"}]}, {"url": ({"value": "x"},)}, id="list"),
+]
 
 
 class TestMigrate:
@@ -1393,13 +1389,14 @@ class TestMigrate:
         assert node.conf == {}
         assert node.embed == {"name": "pipe:shout", "conf": {}}
 
-    def test_uppercase_conf_keys_are_lowered(self):
+    @pytest.mark.parametrize(("conf", "expected"), UPPERCASE_CONFS)
+    def test_uppercase_conf_keys_are_lowered(self, conf, expected):
         flow = migrate_v1_to_v2(
-            {"modules": [{"id": "f", "type": "fetch", "conf": {"URL": {"value": "x"}}}]}
+            {"modules": [{"id": "f", "type": "fetch", "conf": conf}]}
         )
         node = flow.nodes["f"]
         assert isinstance(node, ModuleNode)
-        assert node.conf == {"url": {"value": "x"}}
+        assert node.conf == expected
 
     def test_orphan_module_is_retained_not_erased(self):
         flow = migrate_v1_to_v2(

@@ -1490,7 +1490,7 @@ def serialize_dataclass(
 
         value: The dataclass instance or class to read.
         keep_fields: Names of fields to include even when they are unset.
-        compact: Whether to leave out unset fields; when false, every field is kept.
+        compact: Whether to leave out unset fields. When false, every field is kept.
 
     Returns:
 
@@ -1529,7 +1529,7 @@ def serialize_attrs(
         value: The attrs record to read.
         keep_fields: Names of fields to include even when they are unset.
         recurse: Whether a field holding another attrs record is read into a dict too.
-        compact: Whether to leave out unset fields; when false, every field is kept.
+        compact: Whether to leave out unset fields. When false, every field is kept.
 
     Returns:
 
@@ -1645,11 +1645,16 @@ def freeze(value: object) -> object:  # noqa: E302
 
     Examples:
 
+        >>> from collections import namedtuple
+        >>>
         >>> frozen = freeze({"a": [1, {"b": {2}}], "c": object})
         >>> frozen["a"]
         (1, FrozenDict({'b': frozenset({2})}))
         >>> frozen["c"]
         <class 'object'>
+        >>> Point = namedtuple("Point", "x y")
+        >>> freeze(Point(1, [2]))
+        Point(x=1, y=[2])
 
     """
     return _freeze_value(value)

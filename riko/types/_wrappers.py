@@ -104,9 +104,7 @@ type SyncSplitterWrapperOutput = Cascade
 type SyncSplitterWrapperInput = SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
 
 type SyncWrapperOutput = SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
-type SyncFieldParseFunc = Callable[..., ItemValue]
 type SyncConfCastFunc = Callable[..., DynamicConf]
-type SyncConfParseFunc = Callable[..., AnyModuleConf | None]
 type SyncProcessorParser[I, E, O: ItemOrValue] = Callable[
     [I, E, DynamicConf], ProcessorParserOutput[O]
 ]
@@ -119,6 +117,20 @@ type SyncPipeParser[T: ItemOrValue] = Callable[..., ParserOutput[T]]
 type SyncWrapperInput = (
     SyncProcessorWrapperInput | SyncOperatorWrapperInput | SyncSplitterWrapperInput
 )
+
+
+class SyncFieldParseFunc(Protocol):
+    """Reads a module's configured field from one item."""
+
+    def __call__(self, item: ItemOrValue, /, **kwargs: Any) -> ItemValue: ...  # noqa: E704
+
+
+class SyncConfParseFunc(Protocol):
+    """Resolves a module's bound configuration against one item."""
+
+    def __call__(  # noqa: E704
+        self, item: ItemOrValue, /, **kwargs: Any
+    ) -> AnyModuleConf | None: ...
 
 
 class ParseFuncs(NamedTuple):

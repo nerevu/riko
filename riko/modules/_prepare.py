@@ -359,7 +359,6 @@ class PreparedModule[T, E]:
 def resolve_and_cast[T, E](  # noqa: E704
     item: Item | RikoDict | DotDict[RikoValue],
     opts: DecorationOptions,
-    conf: Conf,
     *,
     parsers: ParseFuncs,
     casters: CastFuncs[T, E],
@@ -372,7 +371,6 @@ def resolve_and_cast[T, E](  # noqa: E704
 def resolve_and_cast[T, E](  # noqa: E704
     item: PrimitiveValue | RikoList,
     opts: DecorationOptions,
-    conf: Conf,
     *,
     parsers: ParseFuncs,
     casters: CastFuncs[T, E],
@@ -384,7 +382,6 @@ def resolve_and_cast[T, E](  # noqa: E704
 def resolve_and_cast[T, E](  # noqa: E302
     item: ItemOrValue,
     opts: DecorationOptions,
-    conf: Conf,
     *,
     parsers: ParseFuncs,
     casters: CastFuncs[T, E],
@@ -404,7 +401,6 @@ def resolve_and_cast[T, E](  # noqa: E302
 
         item: The input item or value.
         opts: The resolved decoration and call options.
-        conf: The merged module configuration.
         parsers: The field and conf parsers.
         casters: The field, extract, and conf casters.
         defaults: The module's default conf.
@@ -419,12 +415,7 @@ def resolve_and_cast[T, E](  # noqa: E302
     """
     defaults = defaults or Defaults({})
     field = opts.get("field") if field is None else field
-
-    if parsers:
-        parsed_field, parsed_conf = broadcast(item, *parsers, field=field, **kwargs)
-    else:
-        parsed_field, parsed_conf = item, conf
-
+    parsed_field, parsed_conf = broadcast(item, *parsers, field=field, **kwargs)
     pieces_or_conf, merged_conf = build_conf(parsed_conf, defaults, opts, module)
     parsed = (parsed_field, pieces_or_conf, merged_conf)
     casted = dispatch(parsed, *casters) if casters else parsed

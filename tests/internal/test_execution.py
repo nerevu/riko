@@ -52,6 +52,7 @@ from riko.execution._mapping import (
 )
 from riko.execution._pools import PoolHandle, get_worker_cnt, open_pool
 from riko.execution._prepared import ExecutionPlan
+from riko.execution._resource_plan import aclose_resource
 from riko.execution._resource_view import ResourceView
 from riko.execution._sync_execution import SyncExecution
 from riko.modules._decorators import operator
@@ -506,6 +507,34 @@ class TestAsyncExecution:
         assert isinstance(cleanup, RuntimeError)
 
     @async_test
+    async def test_async_sync_callback_runs_on_close(self) -> None:
+        calls: list[str] = []
+
+        async with AsyncExecution() as execution:
+            execution.callback(calls.append, "closed")
+
+        assert calls == ["closed"]
+
+    @async_test
+    async def test_async_native_context_manager_may_replace_primary_error(self) -> None:
+        @asynccontextmanager
+        async def replace():
+            try:
+                yield
+            except ValueError as error:
+                raise KeyError("replaced") from error
+
+        async def run() -> None:
+            async with AsyncExecution() as execution:
+                await execution.enter_async_context(replace())
+                raise ValueError("primary")
+
+        with pytest.raises(KeyError, match="replaced") as info:
+            await run()
+
+        assert isinstance(info.value.__cause__, ValueError)
+
+    @async_test
     async def test_async_shutdown_budget_expiry_is_grouped_with_primary_error(
         self,
     ) -> None:
@@ -736,6 +765,13 @@ class TestResourceAcquisition:
             execution.acquire(Resource(_AsyncClient()))
 
 
+ACLOSE_CASES = [
+    pytest.param(False, False, id="left-open"),
+    pytest.param(_SyncClient.close, True, id="sync-cleanup"),
+    pytest.param(None, True, id="sync-close"),
+]
+
+
 class TestAsyncResourceAcquisition:
     @pytest.mark.parametrize("client_class", CLIENT_CLASSES)
     @async_test
@@ -899,6 +935,49 @@ class TestAsyncResourceAcquisition:
             await fail()
 
         assert events == ["close"]
+
+    @async_test
+    async def test_async_acquire_memoizes_failure(self) -> None:
+        calls: list[int] = []
+
+        async def make() -> object:
+            calls.append(1)
+            raise RuntimeError("boom")
+
+        async with AsyncExecution() as execution:
+            resource = Resource.from_factory(make, cleanup=False)
+
+            with pytest.raises(RuntimeError, match="boom"):
+                await execution.aacquire(resource)
+
+            with pytest.raises(RuntimeError, match="boom"):
+                await execution.aacquire(resource)
+
+        assert len(calls) == 1
+
+    @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+    @async_test
+    async def test_async_owned_value_cleanup_is_authoritative(self, is_async) -> None:
+        client = _SyncClient()
+        events: list[str] = []
+
+        async def acleanup(_: object) -> None:
+            events.append("x")
+
+        cleanup = acleanup if is_async else lambda _: events.append("x")
+
+        async with AsyncExecution() as execution:
+            await execution.aacquire(Resource(client, cleanup=cleanup))
+
+        assert events == ["x"]
+        assert client.closed is False
+
+    @pytest.mark.parametrize(("cleanup", "closed"), ACLOSE_CASES)
+    @async_test
+    async def test_aclose_resource(self, cleanup, closed) -> None:
+        client = _SyncClient()
+        await aclose_resource(cleanup, client)
+        assert client.closed is closed
 
     @pytest.mark.xfail(
         strict=True,
@@ -1738,6 +1817,38 @@ class TestAsyncConcurrency:
                 result = [item async for item in stream]
 
         assert result == ITEMS[:2]
+
+    @async_test
+    async def test_async_later_run_grows_the_thread_reservation(self) -> None:
+        pipe = cast("SyncModuleWrapper", _passthru)
+        dispatcher = build_dispatcher(ModuleDefinition(name="passthru", sync_pipe=pipe))
+        nodes = [ModuleNode(id=f"n{i}", name="passthru") for i in range(45)]
+        short = ExecutionPlan.from_workflow(_chain(*nodes[:1]), dispatcher=dispatcher)
+        long = ExecutionPlan.from_workflow(_chain(*nodes), dispatcher=dispatcher)
+        result: list = []
+
+        with fail_after(20):
+            async with AsyncExecution() as execution:
+                await execution.arun(short, source=ITEMS[:2])
+                stream = await execution.arun(long, source=ITEMS[:2])
+                result = [item async for item in stream]
+
+        assert result == ITEMS[:2]
+
+    @async_test
+    async def test_async_concurrency_collects_async_iterable_results(self) -> None:
+        async def twice(item, **_):
+            yield item
+            yield item
+
+        definition = ModuleDefinition(name="twice", async_pipe=_loopable(twice))
+        flow = _workflow([ModuleNode(id="n", name="twice")])
+        plan = ExecutionPlan.from_workflow(
+            flow, dispatcher=build_dispatcher(definition)
+        )
+        result = await _arun(plan, ExecutionSettings(concurrency=2))
+
+        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS * 2))
 
     @async_test
     async def test_async_concurrency_is_one_ceiling_across_nodes(self) -> None:

@@ -25,12 +25,13 @@ from riko.base.exceptions import (
 from riko.definitions._context import Context
 from riko.definitions._workflow import Workflow
 from riko.definitions.modules import ModuleDefinition
+from riko.modules import count as count_module
 from riko.modules import regex as regex_module
 from riko.modules import tokenizer as tokenizer_module
 from riko.modules._decorators import operator, processor, splitter
 from riko.modules._inference import gen_operator_return_kinds, gen_return_inferences
 from riko.modules._metadata import get_module_metadata, list_modules
-from riko.modules._prepare import build_conf
+from riko.modules._prepare import build_conf, resolve_and_cast
 from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
@@ -60,6 +61,7 @@ from riko.runtime._workflow_stores import (
     PackageStore,
 )
 from riko.types._guards import is_mapping
+from riko.types._options import ItemDispatch, ValueDispatch
 from riko.types._sentinels import MISSING
 from riko.types._wrappers import (
     WRAPPER_META,
@@ -345,6 +347,28 @@ class TestProcessorListKeepsTestFlag:
         assert seen == [True, True]
 
 
+def _skip_marked(item: Item, *args, **kwargs) -> str:
+    return "processed"
+
+
+class TestProcessorSkipIf:
+    """A processor's ``skip_if`` passes matching items through untouched."""
+
+    def test_sync(self):
+        pipe = processor(skip_if=lambda item: "x" in item)(_skip_marked)
+        result = list(pipe([{"x": 1}, {"y": 2}], assign="y"))
+        assert result == [{"x": 1}, {"y": "processed"}]
+
+    @async_test
+    async def test_async(self):
+        async_pipe = processor(isasync=True, skip_if=lambda item: "x" in item)(
+            _skip_marked
+        )
+        stream = async_pipe([{"x": 1}, {"y": 2}], assign="y")
+        result = [item async for item in stream]
+        assert result == [{"x": 1}, {"y": "processed"}]
+
+
 class TestBareDecorator:
     """A decorator used without being called first."""
 
@@ -497,6 +521,9 @@ def _ann_iterator(items) -> Iterator[int]:
     return iter(items)
 
 
+def _ann_awaitable(items) -> Awaitable[Iterator[int]]: ...
+
+
 def _ann_value(items) -> int:
     return len(items)
 
@@ -543,6 +570,7 @@ class TestReturnInference:
             pytest.param(_gen_sync, STREAM, GENERATOR, id="sync-generator"),
             pytest.param(_gen_async, STREAM, GENERATOR, id="async-generator"),
             pytest.param(_ann_iterator, STREAM, ANNOTATION, id="annotated-iterator"),
+            pytest.param(_ann_awaitable, STREAM, ANNOTATION, id="annotated-awaitable"),
             pytest.param(_builtin_nonstream, NONSTREAM, AST, id="builtin-nonstream"),
             pytest.param(_unresolvable, NONSTREAM, AST, id="unresolvable-annotation"),
             pytest.param(_ann_value, NONSTREAM, MISSING, id="annotated-value"),
@@ -1065,26 +1093,35 @@ class TestAsyncSubpipeLoop:
         assert closed == ["a", "b"]
 
 
-class TestCustomEmbed:
-    """An undecorated embed is reported as unsupported and leaves parents untouched."""
+UNEMBEDDABLE = [
+    pytest.param(_custom_embed, "Custom embedded modules", id="custom"),
+    pytest.param(count_module.pipe, "count is not loopable", id="not-loopable"),
+    pytest.param("count", "No embedded module provided", id="not-a-module"),
+]
 
-    def test_passes_parents_through(self, caplog):
-        result = loop(iter(PARENTS), embed=_custom_embed)  # pyright: ignore[reportArgumentType]
+
+class TestCustomEmbed:
+    """An unembeddable embed is reported and leaves parents untouched."""
+
+    @pytest.mark.parametrize(("embed", "message"), UNEMBEDDABLE)
+    def test_passes_parents_through(self, embed, message, caplog):
+        result = loop(iter(PARENTS), embed=embed)
 
         assert list(result) == PARENTS
-        assert any("Custom embedded modules" in r.message for r in caplog.records)
+        assert any(message in r.message for r in caplog.records)
 
 
 @skipif_issync
 class TestAsyncCustomEmbed:
-    """The async loop treats an undecorated embed the same way as the sync loop."""
+    """The async loop treats an unembeddable embed the same way as the sync loop."""
 
+    @pytest.mark.parametrize(("embed", "message"), UNEMBEDDABLE)
     @pytest.mark.anyio
-    async def test_passes_parents_through(self, caplog):
-        stream = async_loop(iter(PARENTS), embed=_custom_embed)  # pyright: ignore[reportArgumentType]
+    async def test_passes_parents_through(self, embed, message, caplog):
+        stream = async_loop(iter(PARENTS), embed=embed)
 
         assert [item async for item in stream] == PARENTS
-        assert any("Custom embedded modules" in r.message for r in caplog.records)
+        assert any(message in r.message for r in caplog.records)
 
 
 class TestModuleRegistry:
@@ -1634,6 +1671,15 @@ class TestModules:
 
 
 class TestPrepare:
+    @pytest.mark.parametrize(
+        ("item", "kind"), [({"content": "a"}, ItemDispatch), ("a", ValueDispatch)]
+    )
+    def test_dispatch_kind_follows_the_item_shape(self, item, kind):
+        prepared = processor().prepare("m", conf={})
+        args = (item, prepared.opts)
+        kwargs = {"parsers": prepared.parsers, "casters": prepared.casters}
+        assert isinstance(resolve_and_cast(*args, **kwargs), kind)
+
     @pytest.mark.parametrize(
         ("value", "expected"), [(0, [0]), (False, [False]), ("", [""]), (None, [])]
     )

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import pickle  # noqa: S403
 import typing
 from collections import ChainMap
@@ -46,6 +47,7 @@ from riko.definitions._nodes import (
 )
 from riko.definitions._normalize import _NODE_BUILDERS, _normalize_port
 from riko.definitions._resource_definition import Resource, ReusableResource
+from riko.definitions._serialize import WorkflowEncoder
 from riko.definitions._targets import (
     FileTarget,
     build_write,
@@ -362,6 +364,9 @@ class TestResourceView:
     def test_resource_view_can_be_copied(self, duplicate):
         assert dict(duplicate(ResourceView({"db": 1}))) == {"db": 1}
 
+    def test_resource_view_counts_its_bindings(self):
+        assert len(ResourceView({"db": 1, "cache": 2})) == 2
+
 
 class TestResourceBinding:
     @pytest.mark.parametrize(
@@ -439,6 +444,10 @@ class TestNodes:
 
 
 class TestWorkflowFields:
+    def test_encoder_rejects_a_value_a_workflow_cannot_hold(self):
+        with pytest.raises(TypeError, match="not JSON serializable"):
+            json.dumps(object(), cls=WorkflowEncoder)
+
     def test_nodes_must_be_an_iterable_of_nodes(self):
         nodes: Any = {"a": ModuleNode(id="a", name="hash")}
 
@@ -848,6 +857,10 @@ class TestTypedDictKeys:
             frozenset({"plain"}),
             frozenset({"dropped", "qualified"}),
         )
+
+    def test_rejects_a_plain_class(self):
+        with pytest.raises(TypeError, match="is not a TypedDict"):
+            typed_dict_keys(dict)
 
     def test_inherited_keys_keep_each_class_totality(self):
         assert typed_dict_keys(Inherited) == (

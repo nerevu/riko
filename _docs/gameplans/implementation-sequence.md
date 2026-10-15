@@ -1091,6 +1091,14 @@ and `ModuleNode.conf` upstream is already frozen JSON, so this is a latent hazar
 
 Do not freeze `PreparedModule.conf` or flip the conf keys to `ReadOnly` ahead of this decision.
 
+Caster typing (triaged 2026-10-15): the conf-casting types this redesign replaces do not describe
+their callables. `_build_casters` (`riko/modules/_prepare.py`) hides behind
+`cast("SyncConfCastFunc", ...)` that its `cast_pass` branch returns the conf unchanged rather than a
+`DynamicConf`, and `ArgCaster` (`riko/types/_wrappers.py`) is `Callable[..., T]` although `dispatch`
+calls every caster with exactly one positional argument. Retype them with the typed config object
+(a one-argument `Callable`, no `cast`); do not tighten them ahead of it. Type-checking only, so no
+runtime tripwire.
+
 Out of scope: action-params and target-config validation (R5C contracts), declared ports and fan-in
 arity (their own E3.9 rows), and `ModuleNode.options` validation beyond what the contract already
 types. Unknown keyword arguments on a direct module call (`hash.pipe(items, bogus=1)`) also stay
@@ -1119,10 +1127,13 @@ configuration schema that `describe_module()` consumes (above) is that route.
 
 **Exit:**
 
-- **ADD:** registered module conf is validated at plan build; the strict-xfail tripwires
-  `tests/public/test_workflow.py::TestValidate::test_unknown_conf_key_rejected_before_the_source_is_read` and
-  `::test_wrongly_typed_conf_value_rejected_before_the_source_is_read` flip to passes.
-- **MIGRATE:** module parsers stop defensively re-checking conf shapes the contract now guarantees.
+- **ADD:** registered module conf is validated at plan build; the strict-xfail tripwire table
+  `tests/public/test_workflow.py::TestValidate::test_invalid_conf_rejected_before_the_source_is_read`
+  (rows `unknown-key`, `wrong-type`, `bad-op`, `missing-key`) flips to passes.
+- **MIGRATE:** module parsers stop defensively re-checking conf shapes the contract now guarantees,
+  including the per-item `TypeError`s for a missing `extract` key (`build_conf` in
+  `riko/modules/_prepare.py`) and an unsupported `simplemath` op, which only the `bad-op` and
+  `missing-key` rows exercise today (no passing test pins the interim call-time error).
 - **DELETE:** none at the public surface; no second conf-schema carrier exists beside the typed
   `<Name>Conf` contracts.
 
@@ -1323,6 +1334,10 @@ v1-cutover step 4. Its sync/async session pairs duplicate the newline/header/fin
 `isinstance(target, FileTarget)` guard appears three times with two exception types). This phase
 decides whether the `WriteNode` path reuses it (then dedupe the twins) or replaces it (then delete it
 with its tests).
+Coverage triage (2026-10-15): the async twin's incremental stream write, append-mode trailing-newline
+probe (`aends_with_newline`/`ainitial_file_size`/`aneeds_newline`), and unsupported-target guard in
+`async_file_write_session` run in no test; they were left untested rather than mirrored, so whichever
+shape this phase picks must cover them.
 
 **Exit:**
 
@@ -1448,6 +1463,12 @@ Deliver:
 
 `func` is intentionally retained rather than renamed to `on_receive`: its materialization timing is
 part of subscription semantics and differs from ordinary downstream UDF evaluation timing.
+
+Coverage triage (2026-10-15): `register_receiver` in `riko/modules/receive.py` still takes
+keyword-only `on_receive`/`on_complete` parameters, leftovers from the dropped `on_receive` API. No
+caller passes them (the `receive` pipe passes only `func`), so the both-arguments `TypeError` guard
+and the `on_receive(item)` call never run. They are left untested on purpose; delete them when
+this phase replaces the legacy `send`/`receive` modules.
 
 Feed-native send/receive/split implementation migration belongs in this phase rather than being
 deferred to R10; only the useful mechanics survive behind the new API.

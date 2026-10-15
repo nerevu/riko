@@ -216,6 +216,12 @@ class TestPipelineChaining:
         assert p1.workflow.outputs["default"] == Endpoint("fetch-1", "out")
         assert p2 is not p1
 
+    def test_pipe_skips_an_id_another_module_holds(self):
+        node = ModuleNode(id="sort-1", name="reverse")
+        flow = Workflow(nodes=[node], outputs={"default": Endpoint("sort-1", "out")})
+        pipeline = Pipeline(flow).pipe("sort")
+        assert pipeline.workflow.nodes["sort-2"].name == "sort"
+
     def test_pipe_shares_prior_node_identity(self):
         p1 = Pipeline.from_module("fetch")
         p2 = p1.pipe("sort")
@@ -1434,6 +1440,10 @@ class TestPipelineWriteDefinition:
     def test_file_rejects_keys(self, tmp_path):
         with pytest.raises(ValueError, match="forbids 'keys'"):
             Pipeline(source=ITEMS).write(tmp_path / "out.csv", keys="x")
+
+    def test_destination_rejects_module_arguments(self, tmp_path):
+        with pytest.raises(TypeError, match="not both"):
+            Pipeline(source=ITEMS).write(tmp_path / "out.csv", conf=WriteConf({}))
 
     def test_declares_the_resolved_format_and_mode(self, tmp_path):
         pipeline = Pipeline(source=ITEMS).write(tmp_path / "out.csv", mode="append")
