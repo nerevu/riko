@@ -119,19 +119,17 @@ Changes
 - The decorators' ``parse`` method (and ``@operator``'s ``aparse``) is now
   ``normalize_input`` (and ``anormalize_input``).
 
-- Moved ``processor``, ``operator``, and ``splitter`` from ``riko.modules`` to
-  ``riko.ext``.
-
 - An async operator's ``async_pipe`` now returns an async iterator directly. Consume it
   with ``async for``/``anext`` without awaiting the call first. Async processors and
   splitters are unchanged.
 
-- The async transport helpers ``async_url_open`` and ``async_write`` are no longer
-  re-exported from ``riko.bado``. Import them from ``riko`` (or ``riko.io``).
-  ``riko.bado`` now covers only the async iteration and runtime helpers.
+- Secondary namespaces no longer re-export names another package owns: import
+  ``processor``, ``operator``, ``splitter``, and ``DynamicConf`` from ``riko.ext`` (not
+  ``riko.modules`` or ``riko.types``), and ``async_url_open``, ``async_write``, and
+  ``async_get_temp_file`` from ``riko`` or ``riko.io`` (not ``riko.bado``).
 
-- Renamed ``get_async_temp_file`` to ``async_get_temp_file`` (import from ``riko`` now),
-  ``derive_category`` to ``get_module_category``, ``register`` to ``register_module``.
+- Renamed ``get_async_temp_file`` to ``async_get_temp_file``, ``derive_category`` to
+  ``get_module_category``, and ``riko.ext.register`` to ``riko.ext.register_module``.
   ``get_module_category`` no longer takes ``provider`` or ``override``.
 
 - Renamed ``riko.Targets`` to ``Formats`` (its members name serialization formats)
@@ -190,9 +188,6 @@ Changes
 - ``PipeTuples`` now represents either the synchronous or asynchronous form
   (``SyncPipeTuples`` or ``AsyncPipeTuples``).
 
-- ``DynamicConf`` is no longer exported from ``riko.types``. Extension authors should
-  import it from ``riko.ext``.
-
 - ``sort`` now places items lacking the sort field together. Previously a missing field
   sorted using the type's default (``0`` for ``int``, ``-inf`` for ``float`` and dates,
   ``""`` for ``text``). Use the ``default`` option to restore this behavior.
@@ -220,22 +215,16 @@ Removed
 
 - Removed unused ``Context.submodule`` and the ``submodule`` keyword argument.
 
-- Removed ``autorss``, ``cast``, ``collections``, ``compile``, ``context``, ``parsers``,
-  ``currencies``, ``dotdict``, ``exceptions``, ``locations``, ``pprint2``, ``topsort``,
-  ``paths``, ``dates``, ``bado.io``, ``ext.names``, and ``types.compile`` from ``riko``.
+- Removed ``autorss``, ``cast``, ``collections``, ``compile``, ``context``,
+  ``currencies``, ``dates``, ``dotdict``, ``exceptions``, ``locations``, ``parsers``,
+  ``paths``, ``pprint2``, ``topsort``, ``bado.io``, ``ext.names``, and ``types.compile``
+  from ``riko``. ``CastType`` is now on ``riko`` and ``normalize_module_name`` on
+  ``riko.ext``. Everything else they held is private, with no public replacement.
 
 - Removed the ``config``, ``decorators``, ``protocols``, and ``registry`` modules from
-  ``riko.ext``. ``riko.ext`` now exports what they held: ``processor``, ``operator``,
-  ``splitter``, the ``Sync*Wrapper``/``Async*Wrapper`` protocols, ``DynamicConf``,
-  ``ModuleRegistry``, ``ModuleWrapper``, ``ModuleDefinition``, ``register_module``, and
-  ``get_conf_type``; its ``reset_registry`` is now ``reset_module_registry``. ``Feed``,
-  ``Stream``, ``AsyncStream``, and ``AsyncItems`` are on ``riko.types``.
-
-- Import ``CastType``, ``Context``, ``ExecutionMode``, ``Executor``, ``get_temp_file``,
-  ``async_get_temp_file``, ``async_url_open``, ``async_write``, ``compile_workflow``,
-  ``get_path``, and the exception classes from ``riko``; ``get_module_category`` and
-  ``normalize_module_name`` from ``riko.ext``; and ``PipeDef``/``PipeDag`` from
-  ``riko.types``. The remaining are now private, with no public replacement.
+  ``riko.ext``. Every name they held is already on ``riko.ext`` (``reset_registry`` as
+  ``reset_module_registry``), except ``Feed``, ``Stream``, ``AsyncStream``, and
+  ``AsyncItems``, which are on ``riko.types``.
 
 Fixes
 ~~~~~

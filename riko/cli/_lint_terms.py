@@ -63,6 +63,8 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("item attribute", "item field"),
     BannedTerm("resolver façade", "dispatcher"),
     BannedTerm("entry-point plugin", "extension package"),
+    BannedTerm("provider package", "extension package"),
+    BannedTerm("provider command", "backend command"),
 )
 
 _EXCLUDED_NAMES = frozenset(

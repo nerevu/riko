@@ -66,7 +66,7 @@ class SupportsWrite(Target, Protocol):
 
 class SupportsActions(Target, Protocol):
     """
-    A target that runs provider commands that are not data writes.
+    A target that runs backend commands that are not data writes.
 
     The concrete command methods are defined when action targets gain a runtime.
     """
