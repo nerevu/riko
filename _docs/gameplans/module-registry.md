@@ -13,7 +13,7 @@
   `ModuleDefinition` + `register(defn, *, replace=False)` / `resolve(name, interface)` / `names()`.
   Populated from built-ins + entry points + runtime registrations. **Never loads JSON, never invokes
   the compiler.**
-- **`WorkflowResolver`** (`riko/runtime/_workflows.py`, private per `PRIVATE_RESOLUTION`) — resolves
+- **`WorkflowResolver`** (`riko/runtime/_workflow_resolver.py`, private per `PRIVATE_RESOLUTION`) — resolves
   **stored workflows** (`pipe_*` workflow modules or `WorkflowDocument`s) via an injected
   `ModuleStore(Protocol).load`, with `Directory`/`Package`/`Mapping`/`Composite` stores. Sources are
   registered through a `register(*, module_store, document_store, replace=False)` / `reset()`

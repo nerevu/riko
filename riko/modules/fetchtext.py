@@ -36,7 +36,7 @@ from riko.io._sync import Fetch, auto_close
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
-from ._prepare import require_conf_key
+from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

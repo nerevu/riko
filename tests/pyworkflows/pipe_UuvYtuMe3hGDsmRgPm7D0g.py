@@ -12,7 +12,7 @@ from riko.modules.input import pipe as _input
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
 from riko.modules.strconcat import pipe as strconcat
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
 from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     CsvRawConf,
@@ -30,6 +30,7 @@ INPUTS = [("", "name", "Name", "text", "Lancaster")]
 DEPENDENCIES = ["csv", "filter", "input", "loop", "rename"]
 
 
+@workflow(subtype="transformer")
 def pipe(item=None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_371 = _input(
@@ -194,9 +195,6 @@ def pipe(item=None, context: Context | None = None, **_):
         _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="transformer")
 
 
 if __name__ == "__main__":

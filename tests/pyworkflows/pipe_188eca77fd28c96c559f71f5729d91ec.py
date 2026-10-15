@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from riko.modules.fetchpage import pipe as fetchpage
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.truncate import pipe as truncate
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
 from riko.types._enums import ExecutionMode
 from riko.types.modules import FetchPageRawConf, ItemBuilderRawConf, TruncateRawConf
 
@@ -21,6 +21,7 @@ INPUTS = []
 DEPENDENCIES = ["fetchpage", "itembuilder", "truncate"]
 
 
+@workflow(subtype="source")
 def pipe(item=None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_163 = itembuilder(
@@ -70,9 +71,6 @@ def pipe(item=None, context: Context | None = None, **_):
         _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":

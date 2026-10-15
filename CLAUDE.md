@@ -42,6 +42,7 @@ Important concrete locations:
 - workflow loading/saving: `Workflow.parse`/`load`/`serialize` in `riko/definitions/_workflow.py`, over the data-returning `_normalize.py`/`_migrate.py`/`_serialize.py`; the CLI front door `riko/cli/_workflow.py` keeps only `read_document`/`require_workflow`
 - pub/sub: `riko/runtime/_pubsub/`
 - executions: `riko/execution/_execution.py` (base) + `_sync_execution.py`/`_async_execution.py`; the frozen `ExecutionPlan` and its `from_workflow` constructor are in `riko/execution/_prepared.py`; the pipeline runners are `riko/runtime/_run.py`
+- stored workflows: the `workflow` decorator and `build_workflow_pipes` in `riko/runtime/_workflow_pipes.py`, the stores in `_workflow_stores.py`, the `WorkflowResolver` in `_workflow_resolver.py`
 - pipelines: composition on `PipelineDefinition` in `riko/definitions/_composition.py`; the node/edge families in `riko/definitions/_nodes.py`; the runnable `Pipeline` subclass in `riko/runtime/_pipeline.py`
 - context/resource definitions: `riko/definitions/_context.py` + `_resource_definition.py`; their acquisition/teardown: `riko/execution/_resource_plan.py`
 - declarative write model: `riko/definitions/_write.py` + `_targets.py`
@@ -161,7 +162,7 @@ new permanent bullet here.
   specialized pattern explicitly requires it.
 - Runtime data conditions degrade only when the data contract survives
   (`logger.warning` + carry on). Missing required call arguments are programming
-  errors and raise; `require_arg` in `riko/modules/_prepare.py` owns that pattern.
+  errors and raise; `require_arg` in `riko/modules/_require.py` owns that pattern.
 - Docstrings follow `_docs/DOCUMENTATION_STANDARD.md`: annotations own types except
   the documented pipe conventions; summaries use third-person present. Public
   modules (including private files that define re-exported public APIs) keep a useful
@@ -179,6 +180,13 @@ new permanent bullet here.
   only a bare `Workflow` (`flow = pipeline.workflow`). Don't copy `flow = ...` from
   older text; rename it. Examples never rebind a name: each step gets its own. A
   `PipelineDefinition` is `definition` (or a step name), never `pipeline`.
+  The rule runs both ways: a `Workflow` value is `flow` — every parameter, local,
+  module-level, and doctest binding (`compile_workflow(flow, ...)`), never `workflow`,
+  which is the decorator that tags a hand-written workflow module's pipe
+  (`@workflow(subtype="source")`). So a workflow module binds its `Workflow` as `flow`
+  (generated modules included). Instance fields (`pipeline.workflow`,
+  `ExecutionPlan.workflow`), the `from_workflow` name, and the `workflow=` keywords
+  that set those fields (constructors, `evolve`) keep their names.
 - **Workflow forms go by their type names** — `Workflow`, `RawWorkflow`,
   `WorkflowDocument` ("workflow document" on first use), `PipeDef` ("pipe definition"
   on first use), `PipeDag`; old JSON is a "serialized `PipeDef`". Full rule and

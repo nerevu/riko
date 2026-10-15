@@ -32,8 +32,9 @@ Index (file, then the subjects it owns, in file order):
                               AsyncProcessorDualProtocol, ProcessorListKeepsTestFlag,
                               BareDecorator, Splitter, AsyncOperatorLaziness,
                               ReturnInference, ModuleMetadata, WrapperMeta,
-                              LoopCharacterization, ProcessorTopLevelCount,
-                              ImplicitLooping, SubpipeLoop, AsyncLoop, CustomEmbed,
+                              WorkflowDecorator, LoopCharacterization,
+                              ProcessorTopLevelCount, ImplicitLooping, SubpipeLoop,
+                              AsyncLoop, CustomEmbed,
                               ModuleRegistry, PublicRegister, ResolverDispatcher,
                               RequireInterface, EntryPointModules, WorkflowResolver,
                               Catalog, ResolvedDocuments, Modules, Prepare

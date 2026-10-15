@@ -36,7 +36,7 @@ from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close, seekable
 
 from ._decorators import processor
-from ._prepare import require_conf_key
+from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from logging import Logger

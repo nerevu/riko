@@ -40,7 +40,7 @@ from riko.bado.itertools import as_async
 from riko.runtime._pubsub import async_hub, sync_hub
 
 from ._decorators import operator
-from ._prepare import require_arg
+from ._require import require_arg
 
 if TYPE_CHECKING:
     from logging import Logger

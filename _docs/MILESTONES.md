@@ -125,7 +125,7 @@ These entries remain a map from phase names to implementation areas, not an alte
 | Area | P-track phase | Current interpretation |
 |---|---:|---|
 | `riko/runtime/_module_registry.py` (facade `riko/ext/registry.py`) | P8 | retained module implementation registry |
-| `riko/runtime/_workflows.py` | P8 | retained stored-workflow resolver |
+| `riko/runtime/_workflow_resolver.py` (stores in `_workflow_stores.py`) | P8 | retained stored-workflow resolver |
 | `riko/runtime/_resolver.py` | P8 | retained resolution facade |
 | generated module names/stubs | P9 | discovery layer over final Pipeline surface |
 | bounded async map/concurrency helpers | P10 | mechanics migrate/reuse under R4B private executions |

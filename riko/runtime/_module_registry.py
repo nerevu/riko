@@ -164,6 +164,11 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
         super().register(entry, replace=replace)
 
+    def _require_builtin_name(self, name: str) -> None:
+        if name not in BUILTIN_NAMES:
+            candidates = BUILTIN_NAMES.union(self.catalog_names())
+            raise UnsupportedModuleError(name, candidates=candidates)
+
     def _resolve_builtin(self, name: str, is_async: bool = False) -> ModuleWrapper:
         return require_interface(name, is_async=is_async)
 
@@ -209,6 +214,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
         """
         if (definition := self._registered(name)) is None:
+            self._require_builtin_name(name)
             pipe = self._resolve_builtin(name, is_async)
         elif (pipe := definition.get_pipe(is_async)) is None:
             interface = "async_pipe" if is_async else "pipe"
@@ -241,8 +247,13 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             ['pipe']
 
         """
-        definition = self._registered(name)
-        return load_interfaces(name) if definition is None else definition.interfaces
+        if (definition := self._registered(name)) is None:
+            self._require_builtin_name(name)
+            interfaces = load_interfaces(name)
+        else:
+            interfaces = definition.interfaces
+
+        return interfaces
 
     def load_definition(self, name: str) -> ModuleDefinition | None:
         """

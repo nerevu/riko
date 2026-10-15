@@ -90,13 +90,17 @@ phase cannot land without tripping it:
 
 ```python
 @pytest.mark.xfail(
-    strict=True, reason="owned by <phase>: <exact probed failure mode>"
+    strict=True, reason="<the pending capability, in plain English> is not yet implemented"
 )
 ```
 
 - Probe the *specific* wrong behavior observed (wrong value, wrong exception,
   wrong ordering) — not a vague "this area is broken".
-- Name the owning phase in the reason so a future session finds the contract.
+- Word the reason as "<the pending capability> is not yet implemented" (e.g.,
+  "lazy async fan-out is not yet implemented"); never a phase code like `R5C` or a
+  gameplan path, which are banned from shipped text (`manage lint --terms` flags
+  them). The phase code goes in the gameplan note, which names the tripwire's test
+  id so a future session finds the contract.
 - Place it in the existing test module for that area; follow the placements
   already used for tripwires in `tests/internal/`.
 - `strict=True` is the point: when the phase lands and behavior corrects, the

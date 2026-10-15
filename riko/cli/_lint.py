@@ -18,7 +18,7 @@ from riko.base._paths import PACKAGE_DIR, ROOT_DIR
 
 from ._build import _twine_check
 from ._docs import _lint_docs, _lint_rst
-from ._docstyle import format_issue, gen_summary_issues
+from ._docstyle import format_issue, gen_docstring_issues
 from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
 from ._lint_deps import (
     format_dependency_issue,
@@ -92,9 +92,9 @@ def _lint_python_strict(parallel: bool = False) -> int:
 
 
 def _lint_docstrings(where: str | None = "") -> int:
-    """Checks that no docstring summary leads with Returns or Yields."""
+    """Checks docstring summaries and the prose between doctest examples."""
     roots = [Path(p) for p in where.split(" ")] if where else [Path("riko")]
-    issues = list(gen_summary_issues(*roots))
+    issues = list(gen_docstring_issues(*roots))
 
     for issue in issues:
         print(format_issue(issue))
@@ -240,7 +240,12 @@ def _check_command() -> None:
 @click.option("--docs", help="Validate internal documentation policy", is_flag=True)
 @click.option("-a", "--actions", help="Validate GitHub Actions workflows", is_flag=True)
 @click.option("-y", "--yaml", help="Validate YAML files", is_flag=True)
-@click.option("-D", "--docstrings", help="Check docstring summary style", is_flag=True)
+@click.option(
+    "-D",
+    "--docstrings",
+    help="Check docstring summaries and example prose",
+    is_flag=True,
+)
 @click.option("--terms", help="Check shipped text for replaced terms", is_flag=True)
 @click.option(
     "--literals", help="Check shipped text for misquoted literals", is_flag=True

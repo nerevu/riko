@@ -14,7 +14,7 @@ from riko.ext import (
 {%- endfor %}
 )
 from riko.runtime._resolver import dispatcher
-from riko.runtime._workflows import build_workflow_pipes
+from riko.runtime._workflow_pipes import build_workflow_pipes
 {%- if raw_confs %}
 from riko.types.modules import (
 {%- for raw_conf in raw_confs %}
@@ -26,7 +26,7 @@ from riko.types.modules import (
 INPUTS: dict[str, object] = {{ inputs }}
 DEPENDENCIES: list[str] = {{ dependencies }}
 
-workflow = Workflow(
+flow = Workflow(
     nodes=[
 {%- for node in nodes %}
         {{ node }},
@@ -40,7 +40,7 @@ workflow = Workflow(
 {%- endif %}
 )
 
-args = (workflow, dispatcher)
+args = (flow, dispatcher)
 {{ "async_pipe" if is_async else "pipe" }} = build_workflow_pipes(
     *args, *DEPENDENCIES, inputs=INPUTS, subtype="{{ subtype }}"
 ).{{ "async_pipe" if is_async else "sync_pipe" }}

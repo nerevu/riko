@@ -21,7 +21,9 @@ import riko.modules
 import riko.modules._names
 import riko.runtime._codegen
 import riko.runtime._resolver
-import riko.runtime._workflows
+import riko.runtime._workflow_pipes
+import riko.runtime._workflow_resolver
+import riko.runtime._workflow_stores
 import riko.runtime.collections
 import riko.types
 from riko.bado._backend import create_task_group
@@ -38,8 +40,8 @@ from riko.base._api_surface import (
 )
 from riko.base.exceptions import ReceiverUnavailableError
 from riko.definitions._context import Context
-from riko.ext.codegen import list_modules
 from riko.modules import describe_module
+from riko.modules._metadata import list_modules
 from riko.modules.aggregate import pipe as aggregate_pipe
 from riko.modules.fetchdata import async_pipe as async_fetchdata_pipe
 from riko.modules.fetchdata import pipe as fetchdata_pipe
@@ -635,7 +637,12 @@ PUBLIC_EXTENSION_MODULES = (
     "riko.ext.protocols",
     "riko.ext.registry",
 )
-RESOLUTION_MODULES = (riko.runtime._resolver, riko.runtime._workflows)
+RESOLUTION_MODULES = (
+    riko.runtime._resolver,
+    riko.runtime._workflow_pipes,
+    riko.runtime._workflow_stores,
+    riko.runtime._workflow_resolver,
+)
 
 
 def id_func(val):

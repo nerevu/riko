@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from riko.modules.fetch import pipe as fetch
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
 from riko.types._enums import ExecutionMode
 from riko.types.modules import FetchRawConf
 
@@ -19,6 +19,7 @@ INPUTS = []
 DEPENDENCIES = ["fetch"]
 
 
+@workflow(subtype="source")
 def pipe(item=None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_478 = fetch(
@@ -42,9 +43,6 @@ def pipe(item=None, context: Context | None = None, **_):
         _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":

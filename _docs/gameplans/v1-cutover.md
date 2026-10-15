@@ -129,7 +129,7 @@ Blocks step 4.
   `build-workflow`) and drives the new generator `riko/runtime/_codegen.py`: `compile_pipe(workflow,
   name, *, is_async=False)` keeps its STABLE name but now takes a `Workflow` or a
   `RawWorkflow` and emits a module that rebuilds the graph from typed `<Name>RawConf` classes, runs it
-  through the canonical execution with the caller's `Context`, and is `mark_subpipe`-marked so it can
+  through the canonical execution with the caller's `Context`, and whose pipe is tagged by `build_workflow_pipes` (via the `workflow` decorator) so it can
   serve as a `pipe:` sub-pipeline (template `riko/runtime/templates/pyworkflow.txt`; the v1 compiler
   entry point is renamed `compile_pipe_def`). `run-pipe` gained document execution (`-p flow.json`, or
   an example id resolving to `examples/pipelines/{pipeid}.json`), sync or async, alongside its
@@ -254,6 +254,8 @@ commit; since `write` survives until `WriteNode` executes (R5C), `SINK_NAMES`
 
 The cutover session's only step-6 action is keeping this deferral recorded so the deletion table
 row is not executed early.
+Tripwire: `tests/internal/test_codegen.py::TestModuleCategory::test_no_module_is_a_sink` (strict
+xfail on `list_modules(category="sink") == []`) XPASSes when `write` leaves module space.
 
 ## Per-step gates
 

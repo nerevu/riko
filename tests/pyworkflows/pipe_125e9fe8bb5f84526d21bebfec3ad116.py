@@ -12,7 +12,7 @@ from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
 from riko.modules.urlbuilder import pipe as urlbuilder
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
 from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     FetchDataRawConf,
@@ -30,6 +30,7 @@ INPUTS = [("", "textinput1", "Enter Text", "text", "defunkt")]
 DEPENDENCIES = ["fetchdata", "input", "itembuilder", "loop", "rename"]
 
 
+@workflow(subtype="transformer")
 def pipe(item=None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_479 = _input(
@@ -117,9 +118,6 @@ def pipe(item=None, context: Context | None = None, **_):
         _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="transformer")
 
 
 if __name__ == "__main__":

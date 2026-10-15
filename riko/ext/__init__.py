@@ -22,9 +22,10 @@ from riko.definitions._workflow import migrate_v1_to_v2, normalize_workflow
 from riko.definitions._write import WriteCapabilities
 from riko.definitions.modules import ModuleDefinition, normalize_module_name
 from riko.modules._decorators import operator, processor, splitter
+from riko.modules._metadata import get_module_category
 from riko.runtime._module_registry import ModuleRegistry, register_module
 from riko.runtime._target_registry import TargetRegistry, register_target
-from riko.runtime._workflows import register_workflow_store
+from riko.runtime._workflow_resolver import register_workflow_store
 from riko.types._enums import ModuleName, ModuleNameLike
 from riko.types._targets import SupportsActions, SupportsRead, SupportsWrite, Target
 from riko.types._wrappers import (
@@ -38,7 +39,6 @@ from riko.types._wrappers import (
 )
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
-from ._names import get_module_category
 from .config import get_conf_type
 
 __all__ = [

@@ -1531,15 +1531,24 @@ Agent packages compose Pipeline + loop + Publisher/Subscription + StateStore rat
 `AgentGraph`/`AgentNetwork` runtime primitives.
 
 Naming (2026-10-10 naming triage): the "subpipe" family names the tag that lets `loop` run a stored
-workflow's pipe without conf — `SubPipe`/`SyncSubPipe`/`AsyncSubPipe`/`SubPipes`, `mark_subpipe`,
-`is_subpipe`, `_as_subpipe`, `SUBPIPE_TYPE`, plus `bind_subpipe` (`riko/modules/_assignment.py`, which
+workflow's pipe without conf — `SubPipe`/`SyncSubPipe`/`AsyncSubPipe`/`SubPipes`, `is_subpipe`,
+`SUBPIPE_TYPE`, plus `bind_subpipe` (`riko/modules/_assignment.py`, which
 builds an embedder, not a resource binding) and `loop_embed_sync`/`loop_embed_async` (no verb; they
 resolve the loop stream). "Subpipe" sits next to the banned "sub-pipeline". Settle the names when the
 embed shape is settled: keep the tag or delete it, then rename what survives (e.g. `build_embedder`,
-`resolve_loop_stream`) in one pass, including the `examples/pyworkflows` and `tests/pyworkflows`
-imports of `mark_subpipe`. If the tag survives, it and `build_workflow_pipes` need a supported
-surface: hand-written and generated workflow modules import both from private
-`riko.runtime._workflows` today (2026-10-10 terminology audit).
+`resolve_loop_stream`) in one pass. The tag is applied by the `workflow` decorator
+(`riko/runtime/_workflow_pipes.py`; `@workflow(subtype="source")` in the `examples/pyworkflows` and
+`tests/pyworkflows` modules), which returns a tagged copy rather than altering the pipe in place. If
+the tag survives, it, `build_workflow_pipes`, and the `dispatcher` instance need a supported surface,
+planned as `riko.ext.workflows`: hand-written workflow modules import the decorator, and generated ones
+`build_workflow_pipes` and `dispatcher`, from private `riko.runtime._workflow_pipes` and
+`riko.runtime._resolver` today (2026-10-10 terminology audit; tripwire
+`tests/internal/test_codegen.py::TestCompileWorkflow::test_generated_source_imports_no_private_module`).
+If the tag survives as its own marker (see the type tag below), name the marker and its guard after
+the decorator, but not a bare `.workflow` attribute: `pipeline.workflow` is a `Workflow`. A tagged pipe's `.name` is still the function's `__name__` (`pipe`/`async_pipe`), not the
+`pipe_<id>` the resolver knows, so the keep/delete decision should also say what `.name` a stored
+workflow's pipe carries. If `SubPipes` survives the rename, `build_workflow_pipes` (a free function that
+builds it) becomes its `from_workflow`-style classmethod in the same pass (tidy, 2026-10-15).
 
 Type tag (2026-10-11 "type" triage): the tag lives in the wrapper's `.type` (`SUBPIPE_TYPE == "pipe"`),
 but `ModuleWrapper.type` is annotated `ModuleType` (`operator`/`processor`/`splitter`), which

@@ -365,7 +365,8 @@ and a stale mechanism summary misleads faster than no summary at all.
 
 Internal planning vocabulary — phase codes (`R4B`, `R5C`, `P10`), gameplan
 section refs (`§E3.6`), `_docs/` paths, and internal ticket ids — must never
-appear in text a user or contributor reads outside the design docs. That covers
+appear in text a user or contributor reads outside the design docs (`manage lint
+--terms` flags phase codes). That covers
 **every shipped or user-facing surface**:
 
 - docstrings and doctests;
@@ -653,6 +654,17 @@ code block without interpreter prompts.
 
   Those two positions only — no other empty prompts for visual spacing. A true
   blank line still terminates the example, so it can never substitute for `>>>`.
+- Narrate a case inside the example as a `>>> #` comment, not as prose between
+  examples, and write names plainly (no RST markup) since the comment renders as
+  code:
+
+  ```
+  >>> # A falsy value passes unless strict is set
+  >>> require_arg([], "others", "send")
+  []
+  ```
+
+  A labelled block (`Basic usage::`) still introduces a separate example group.
 - Prefer double-quoted strings in example **input**; expected dict/`repr` output
   keeps whatever Python actually prints (usually single quotes).
 - Public examples exercise the public object — do not reach through the API into

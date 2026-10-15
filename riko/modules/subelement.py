@@ -40,7 +40,7 @@ import pygogo as gogo
 from riko.coercion._sequences import gen_items
 
 from ._decorators import processor
-from ._prepare import require_conf_key
+from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

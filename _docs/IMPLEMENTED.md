@@ -241,7 +241,7 @@ the Twisted `asyncioreactor` escape hatch for server roles) is roadmap, in ROADM
 ## 24. Module discovery (shipped)
 
 Module discovery is the derived catalog. `list_modules()` /
-`list_modules(show_metadata=True)` (defined in `riko/ext/codegen.py`, re-exported from the stable
+`list_modules(show_metadata=True)` (defined in `riko/modules/_metadata.py`, re-exported from the stable
 `riko` surface) discover built-in pipes via `pkgutil` and read `ModuleMetadata` off the
 decorator-set wrapper attributes (`type`, `subtype`, `subtypes`, `pollable`); subtype is derived
 (see `get_module_subtypes` in `riko/modules/_derive.py`). The catalog is derived, not declared. Since P8 it **overlays** registry
@@ -249,8 +249,7 @@ decorator-set wrapper attributes (`type`, `subtype`, `subtypes`, `pollable`); su
 discoverable too. Unqualified names are reserved for built-ins; dotted namespaces for extensions.
 
 **Typed discovery (P9A, shipped).** `list_modules(*, type, subtype, category)` and
-`describe_module(name) -> ModuleDefinition | None` (`riko/ext/codegen.py` and
-`riko/modules/_metadata.py` respectively, both on the stable `riko` surface) give filtered runtime truth. **The three filter axes are all lowercase
+`describe_module(name) -> ModuleDefinition | None` (both in `riko/modules/_metadata.py`, both on the stable `riko` surface) give filtered runtime truth. **The three filter axes are all lowercase
 `Literal` strings, not enums** — `ModuleType = Literal["operator","processor","splitter"]`,
 `ModuleSubtype`, and `ModuleCategory = Literal["source","transform","sink"]` (the `get_module_category`
 return value) — so `list_modules(category="sink")` → `["write"]`. These are a **separate axis** from
@@ -259,7 +258,7 @@ is the module id, for `Pipeline.from_module(...)`/`|` chaining): don't confuse t
 `category="Sinks"` (the bucket class name) returns `[]` — the value is `"sink"`, lowercase singular.
 (The codegen maps the three category strings to the plural bucket **class** names via `_CANONICAL`
 = `{"source": "Sources", "transform": "Transforms", "sink": "Sinks"}`.)
-`get_module_category` (`riko/ext/_names.py`) buckets each module by **data-flow capability only**.
+`get_module_category` (`riko/modules/_metadata.py`, on `riko.ext`) buckets each module by **data-flow capability only**.
 `SINK_NAMES` (`{"output","write"}`) is the *criterion*, not the
 membership: a module is a `Sink` iff its name is in that set. The one built-in match is `write`
 (`riko/modules/write.py`) — a pass-through operator that serializes the stream to `conf['dest']` via a
@@ -282,7 +281,7 @@ one overloaded `require(name, is_async)` contract (`riko/types/_wrappers.py::Res
 `ModuleRegistry` (`riko/runtime/_module_registry.py`, re-exported via `riko/ext/registry.py`; built-ins
 lazy per name, runtime `register_module`/`reset_module_registry`, entry
 points under `[project.entry-points."riko.modules"]`; precedence runtime → entry-point → built-in),
-`WorkflowResolver` + injectable workflow stores (`riko/runtime/_workflows.py`): every store is a
+`WorkflowResolver` (`riko/runtime/_workflow_resolver.py`) + injectable workflow stores (`riko/runtime/_workflow_stores.py`): every store is a
 `WorkflowStore[T]` protocol (`load(name) -> T | None`); `ModuleStore = WorkflowStore[ResolvedWorkflow]`
 (`PackageStore`, `MappingStore`, `CompositeStore`) and `DirectoryStore` is a `DocumentStore` (`WorkflowStore[Workflow]`) that
 parses each workflow document (`WorkflowDocument`) with `Workflow.parse(text, shape="v2")`, which `load_workflow` returns (a miss raises
@@ -853,7 +852,7 @@ run:
   versa, an external resource with a factory or that is not reusable); `Context` accepts only
   `ReusableResource` values in `_resources`; `_from_data` builds the subclass through the generated `__init__`.
 - One run loop: `run_pipeline`/`arun_pipeline` (`riko/runtime/_run.py`) back
-  `Pipeline` iteration, and `build_workflow_pipes` (`riko/runtime/_workflows.py`) builds on them
+  `Pipeline` iteration, and `build_workflow_pipes` (`riko/runtime/_workflow_pipes.py`) builds on them
   for both generated workflow modules and named `WorkflowDocument`s, which the resolver binds to
   the dispatcher that loaded them.
 - `ExecutionPlan.from_workflow(workflow, dispatcher)` (`riko/execution/_prepared.py`; the dispatcher is required — any `Dispatcher`, which runtime's `ResolverDispatcher` satisfies) resolves each node's synchronous and asynchronous callables once,
@@ -874,8 +873,9 @@ run:
   `TypeIs[AsyncModuleWrapper]` guard keyed on slot identity (`pipe is self.async_pipe`), so it narrows the
   callable with no cast and works for undecorated callables (documented `ModuleDefinition(sync_pipe=plain)`
   carries no `isasync`). `WorkflowResolver.require` tags a stored workflow's interface with the `isasync` of the
-  slot it loaded rather than guessing from the callable; `mark_subpipe` alone defaults it from
-  `is_async_callable`/`isasyncgenfunction`. A callable filling both slots is rejected at
+  slot it loaded rather than guessing from the callable; the `workflow` decorator
+  (`riko/runtime/_workflow_pipes.py`), which tags a copy of a hand-written workflow module's pipe and
+  leaves the original untouched, alone defaults it from `is_async_callable`/`isasyncgenfunction`. A callable filling both slots is rejected at
   construction, since slot identity could not tell its mode.
 - `SyncExecution.run(plan, output="default")` runs only the selected output's dependency subgraph in
   topological order and returns that output's stream, seeding source nodes at one normalization

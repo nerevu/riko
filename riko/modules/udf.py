@@ -31,7 +31,7 @@ import pygogo as gogo
 from riko.bado._util import maybe_async
 
 from ._decorators import processor
-from ._prepare import require_arg
+from ._require import require_arg
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

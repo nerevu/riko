@@ -10,7 +10,7 @@ from riko.modules.feedautodiscovery import pipe as feedautodiscovery
 from riko.modules.fetch import pipe as fetch
 from riko.modules.sort import pipe as sort
 from riko.modules.truncate import pipe as truncate
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
 from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     FeedAutoDiscoveryRawConf,
@@ -27,6 +27,7 @@ INPUTS = []
 DEPENDENCIES = ["feedautodiscovery", "fetch", "sort", "truncate"]
 
 
+@workflow(subtype="source")
 def pipe(item=None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_149 = feedautodiscovery(
@@ -73,9 +74,6 @@ def pipe(item=None, context: Context | None = None, **_):
         _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":

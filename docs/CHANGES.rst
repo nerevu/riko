@@ -125,7 +125,9 @@ Changes
 
 - Renamed ``riko.get_async_temp_file`` to ``riko.async_get_temp_file`` (no longer
   re-exported from ``riko.bado``), ``derive_category`` to ``get_module_category``, and
-  ``riko.ext.register`` to ``riko.ext.register_module``.
+  ``riko.ext.register`` to ``riko.ext.register_module``. ``get_module_category`` no
+  longer takes ``provider`` or ``override``: a module's category is always derived from
+  its metadata.
 
 - Renamed ``riko.Targets`` to ``Formats`` (its members name serialization formats)
   and ``riko.list_targets`` to ``riko.list_formats``. ``Formats`` drops the ``LIST`` and
@@ -169,6 +171,12 @@ Changes
 - An invalid ``Formats`` or ``ExecutionMode`` choice is rejected with an error that
   lists the accepted values, e.g., ``Invalid ExecutionMode: 'bogus'. Expected one of
   run, describe_inputs, describe_dependencies, describe``.
+
+- An unknown module name now raises ``UnsupportedModuleError`` with a did-you-mean hint
+  naming candidate modules. The error's ``matches`` attribute carries them.
+
+- ``run-pipe`` reports any riko error, such as an unknown module, as a one-line message
+  and exits with status 1 instead of printing a traceback.
 
 - Refined the supported ``riko.types`` stream aliases. ``Feed`` now represents either
   synchronous or asynchronous item input (``Items | AsyncItems``), and ``Item`` now

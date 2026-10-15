@@ -9,7 +9,7 @@ from riko.definitions._nodes import ModuleNode
 from riko.definitions._workflow import Workflow
 from riko.runtime._module_registry import ModuleRegistry
 from riko.runtime._resolver import ResolverDispatcher
-from riko.runtime._workflows import workflow_resolver
+from riko.runtime._workflow_resolver import workflow_resolver
 from riko.types._workflow import Endpoint
 
 if TYPE_CHECKING:

@@ -13,7 +13,7 @@ from riko.modules.rename import pipe as rename
 from riko.modules.sort import pipe as sort
 from riko.modules.union import pipe as union
 from riko.modules.uniq import pipe as uniq
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
 from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     FetchRawConf,
@@ -32,6 +32,7 @@ INPUTS = []
 DEPENDENCIES = ["fetch", "filter", "regex", "rename", "sort", "union", "uniq"]
 
 
+@workflow(subtype="source")
 def pipe(item=None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_233 = fetch(
@@ -152,9 +153,6 @@ def pipe(item=None, context: Context | None = None, **_):
         _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":

@@ -37,10 +37,10 @@ from typing import TYPE_CHECKING, Any
 import pygogo as gogo
 
 from riko.bado.itertools import coop_reduce
-from riko.base._strutils import reduce_find
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
+from ._textops import reduce_find
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

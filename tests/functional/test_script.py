@@ -48,6 +48,17 @@ DEMO_OPTS = [
     pytest.param([], id="sync"),
     pytest.param(["-a"], marks=skipif_issync, id="async"),
 ]
+RAISING_SCRIPT = (
+    "from riko import UnsupportedModuleError\n\n"
+    "def pipe(test=False):\n    raise UnsupportedModuleError('x')\n"
+)
+RAISED_MESSAGE = "Unsupported riko module: x\n"
+TYPO_DAG = json.dumps({"modules": [{"type": "trunkate"}]})
+TYPO_MESSAGE = "Unsupported riko module: trunkate (did you mean 'truncate'?)\n"
+RIKO_ERRORS = [
+    pytest.param("pipe.py", RAISING_SCRIPT, RAISED_MESSAGE, id="pipe-script"),
+    pytest.param("pipe.dag.json", TYPO_DAG, TYPO_MESSAGE, id="workflow-document"),
+]
 
 
 def run_command(script: str, argument: str, *opts: str) -> str:
@@ -175,6 +186,23 @@ class TestRunPipe:
         ran = run_module("runpipe", "pipe_missing", **options)
         assert ran.returncode == 1
         assert f"Example pipe_missing {message}" in ran.stderr
+
+    @pytest.mark.parametrize(("filename", "content", "message"), RIKO_ERRORS)
+    def test_run_pipe_reports_a_riko_error_without_a_traceback(
+        self, tmp_path, filename, content, message
+    ):
+        path = tmp_path / filename
+        path.write_text(content, encoding="utf-8")
+
+        if path.suffix == ".json":
+            target = tmp_path / "pipe.json"
+            run_module("build_workflow", str(path), "-o", str(target))
+        else:
+            target = path
+
+        ran = run_module("runpipe", "-p", str(target))
+        assert ran.returncode == 1
+        assert ran.stderr == message
 
     def test_run_pipe_missing_workflow_document(self, tmp_path):
         ran = run_module("runpipe", "-p", str(tmp_path / "missing.json"))

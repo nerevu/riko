@@ -300,24 +300,20 @@ def xpath(
         >>> xml = '<rss><channel><item>a</item><item>b</item></channel></rss>'
         >>> tree = fromstring(xml)
 
-        Absolute path from the rss root:
-
+        >>> # Absolute path from the rss root
         >>> [el.text for el in xpath(tree, '/rss/channel/item')]
         ['a', 'b']
 
-        Relative path when tree is the channel element:
-
+        >>> # Relative path when tree is the channel element
         >>> channel = tree.find('channel')
         >>> [el.text for el in xpath(channel, 'item')]
         ['a', 'b']
 
-        Relative path when tree IS the top-level tag in the path:
-
+        >>> # Relative path when tree is the top-level tag in the path
         >>> [el.text for el in xpath(tree, 'rss/channel/item')]
         ['a', 'b']
 
-        With a namespace:
-
+        >>> # With a namespace
         >>> NS = 'http://purl.org/rss/1.0/'
         >>> xml_ns = f'<rss xmlns="{NS}"><channel><item>x</item></channel></rss>'
         >>> tree_ns = fromstring(xml_ns)

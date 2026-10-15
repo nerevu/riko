@@ -34,13 +34,13 @@ from typing import TYPE_CHECKING, Any, cast
 import pygogo as gogo
 
 from riko.bado.itertools import async_reduce, coop_reduce
-from riko.base._strutils import multi_substitute, substitute
 from riko.coercion._dataclass import build_regex_rule
 from riko.parsing._dotdict import DotDict
 from riko.types._sentinels import MISSING
 
 from ._decorators import processor
 from ._iterutils import group_by
+from ._textops import multi_substitute, substitute
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

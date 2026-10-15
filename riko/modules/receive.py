@@ -39,7 +39,6 @@ from typing import TYPE_CHECKING, Any, cast
 import pygogo as gogo
 from meza.fntools import dfilter
 
-from riko.base._strutils import gen_name
 from riko.runtime._pubsub import async_hub, coroutine, sync_hub
 from riko.types._enums import BasicCastType
 from riko.types._guards import is_missing_type, is_stateful_item
@@ -47,6 +46,7 @@ from riko.types._sentinels import MISSING, StreamState
 from riko.types._streams import Item, StatefulItem, Stream
 
 from ._decorators import operator
+from ._textops import gen_name
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping

@@ -29,7 +29,7 @@ from riko.definitions._workflow import Workflow, migrate_v1_to_v2, normalize_wor
 from riko.definitions._write import WriteMode
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
-from riko.runtime._workflows import register_workflow_store
+from riko.runtime._workflow_resolver import register_workflow_store
 from riko.types._collections import FrozenDict
 from riko.types._compiler import Embed
 from riko.types._enums import Backends, DocumentShape, ExecutionMode, Formats

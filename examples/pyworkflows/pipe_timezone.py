@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from riko import ExecutionMode
 from riko.modules.dateformat import pipe as dateformat
 from riko.modules.itembuilder import pipe as itembuilder
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
 from riko.types.modules import DateFormatRawConf, ItemBuilderRawConf
 
 if TYPE_CHECKING:
@@ -24,6 +24,7 @@ INPUTS = []
 DEPENDENCIES = ["dateformat", "itembuilder"]
 
 
+@workflow(subtype="source")
 def pipe(item=None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_1 = itembuilder(
@@ -60,9 +61,6 @@ def pipe(item=None, context: Context | None = None, **_):
         _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":

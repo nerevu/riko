@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from riko.bado._backend import run as async_run
 from riko.base._paths import ROOT_DIR
-from riko.base.exceptions import InvalidPipelineError
+from riko.base.exceptions import RikoError
 from riko.definitions._context import Context
 from riko.runtime._pipeline import Pipeline
 
@@ -37,7 +37,7 @@ io_error = FileNotFoundError
 
 def emit_result(result: object) -> None:
     """
-    Print a pipe result, expanding iterables item by item.
+    Prints a pipe result item by item.
 
     >>> emit_result(["alpha", "beta"])
     alpha
@@ -51,8 +51,7 @@ def emit_result(result: object) -> None:
     elif isinstance(result, (Mapping, str)):
         print(result)
     elif isinstance(result, Iterable):
-        for item in result:
-            emit_result(item)
+        [emit_result(item) for item in result]
     else:
         print(result)
 
@@ -115,11 +114,8 @@ def run_document(path: PathLike, isasync: bool = False, test: bool = False) -> N
     if document is None:
         sys.exit(f"Workflow document {path} not found!")
 
-    try:
-        pipeline = Pipeline(require_workflow(document), context=Context(test=test))
-        async_run(aemit_result, pipeline) if isasync else emit_result(pipeline)
-    except InvalidPipelineError as e:
-        sys.exit(str(e))
+    pipeline = Pipeline(require_workflow(document), context=Context(test=test))
+    async_run(aemit_result, pipeline) if isasync else emit_result(pipeline)
 
 
 def get_example_dirs() -> list[Path]:
@@ -208,6 +204,35 @@ def resolve_target(
     return target
 
 
+def run_target(
+    target: Path | ModuleType | None, *, isasync: bool = False, test: bool = False
+) -> None:
+    """
+    Runs a resolved pipe script, ``WorkflowModule``, or ``WorkflowDocument``.
+
+    Args:
+
+        target: The loaded pipe script or ``WorkflowModule``, or path to a
+            ``WorkflowDocument``.
+
+        isasync: Whether to run the async pipe when the target has one.
+
+        test: Whether to use default input values instead of prompting.
+
+    """
+    if isinstance(target, Path):
+        run_document(target, isasync, test)
+    else:
+        printer = getattr(target, "print_results", emit_result)
+
+        if isasync and (async_pipe := getattr(target, "async_pipe", None)):
+            async_run(runner, async_pipe, test, printer)
+        elif main := getattr(target, "main", None):
+            main(test=test)
+        elif target is not None:
+            emit_result(target.pipe(test=test))
+
+
 def run() -> None:
     """CLI runner."""
     parser = ArgumentParser(
@@ -257,17 +282,10 @@ def run() -> None:
     args = parser.parse_args()
     target = resolve_target(args.path, args.pipeid)
 
-    if isinstance(target, Path):
-        run_document(target, args.isasync, args.test)
-    else:
-        printer = getattr(target, "print_results", emit_result)
-
-        if args.isasync and (async_pipe := getattr(target, "async_pipe", None)):
-            async_run(runner, async_pipe, args.test, printer)
-        elif main := getattr(target, "main", None):
-            main(test=args.test)
-        elif target:
-            emit_result(target.pipe(test=args.test))
+    try:
+        run_target(target, isasync=args.isasync, test=args.test)
+    except RikoError as e:
+        sys.exit(str(e))
 
 
 if __name__ == "__main__":

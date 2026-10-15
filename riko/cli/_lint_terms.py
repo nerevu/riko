@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Checks shipped text for phrases the reserved-terms rules replace."""
+"""Checks shipped text for phrases the reserved-terms rules replace and phase codes."""
 
 from __future__ import annotations
 
@@ -75,8 +75,11 @@ def _build_pattern(term: BannedTerm) -> re.Pattern[str]:
     return re.compile(rf"\b{re.escape(term.phrase)}s?\b", re.IGNORECASE)
 
 
-_PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = tuple(
-    (term, _build_pattern(term)) for term in BANNED_TERMS
+PHASE_CODE = BannedTerm("phase code", "a plain-English name for the pending work")
+
+_PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
+    *((term, _build_pattern(term)) for term in BANNED_TERMS),
+    (PHASE_CODE, re.compile(r"\b[RP](?:1[0-2]|[0-9])[A-E]?(?:\.\d+)?\b")),
 )
 
 
@@ -130,6 +133,7 @@ def format_term_issue(issue: TermIssue) -> str:
 
 __all__ = [
     "BANNED_TERMS",
+    "PHASE_CODE",
     "BannedTerm",
     "TermIssue",
     "format_term_issue",

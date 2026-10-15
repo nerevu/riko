@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Derives metadata for built-in and registered modules.
+Derives, categorizes, and lists metadata for built-in and registered modules.
 
 Examples:
     Basic usage::
@@ -15,11 +15,15 @@ Examples:
 
 from __future__ import annotations
 
+import builtins
+from functools import partial
 from importlib import import_module
 from pkgutil import iter_modules as iter_package_modules
 from typing import TYPE_CHECKING, Literal, cast, overload
 
+from riko.base._config import SINK_NAMES
 from riko.base._imports import import_or_else
+from riko.base._iterutils import broadcast
 from riko.definitions.modules import ModuleDefinition, normalize_module_name
 from riko.runtime._module_registry import module_registry
 from riko.types._wrappers import WRAPPER_META
@@ -30,6 +34,7 @@ if TYPE_CHECKING:
 
     from riko.types._enums import ModuleNameLike
     from riko.types._wrappers import ModuleWrapper
+    from riko.types.modules import ModuleCategory
 
 _PACKAGE = "riko.modules"
 
@@ -40,6 +45,43 @@ SUBTYPES: dict[ModuleSubtype, ModuleType] = {
     "composer": "operator",
     "aggregator": "operator",
 }
+
+
+def get_module_category(metadata: ModuleMetadata) -> ModuleCategory:
+    """
+    Derives the user-facing discovery category for a module.
+
+    Categories are based on data-flow role, not the runtime module type.
+
+    Args:
+
+        metadata: The module's metadata.
+
+    Returns:
+
+        ``"source"``, ``"sink"``, or ``"transform"``.
+
+    Examples:
+
+        >>> from riko import get_module_metadata
+        >>> from riko.ext import get_module_category
+        >>>
+        >>> get_module_category(get_module_metadata("fetch"))
+        'source'
+        >>> get_module_category(get_module_metadata("write"))
+        'sink'
+        >>> get_module_category(get_module_metadata("sort"))
+        'transform'
+
+    """
+    if metadata.name in SINK_NAMES:
+        result = "sink"
+    elif metadata.subtype == "source":
+        result = "source"
+    else:
+        result = "transform"
+
+    return result
 
 
 def _metadata_from_targets(
@@ -179,6 +221,105 @@ def gen_registry_catalog() -> Iterator[ModuleMetadata]:
 
         if metadata:
             yield metadata
+
+
+def _matches_subtype(
+    module: ModuleMetadata, subtype: ModuleSubtype | str | None, *, primary: bool
+) -> bool:
+    if subtype is None:
+        matched = True
+    elif primary:
+        matched = module.subtype == subtype
+    else:
+        matched = subtype in module.subtypes
+
+    return matched
+
+
+@overload
+def list_modules(  # noqa: E704
+    *,
+    type: ModuleType | str | None = ...,  # noqa: A002
+    subtype: ModuleSubtype | str | None = ...,
+    category: ModuleCategory | str | None = ...,
+    primary: bool = ...,
+    loopable: bool | None = ...,
+    show_metadata: Literal[False] = ...,
+) -> list[str]: ...
+@overload  # noqa: E302
+def list_modules(  # noqa: E704
+    *,
+    type: ModuleType | str | None = None,  # noqa: A002
+    subtype: ModuleSubtype | str | None = None,
+    category: ModuleCategory | str | None = ...,
+    primary: bool = ...,
+    loopable: bool | None = ...,
+    show_metadata: Literal[True],
+) -> list[ModuleMetadata]: ...
+def list_modules(  # noqa: E302
+    *,
+    type: ModuleType | str | None = None,  # noqa: A002
+    subtype: ModuleSubtype | str | None = None,
+    category: ModuleCategory | str | None = None,
+    primary: bool = False,
+    loopable: bool | None = None,
+    show_metadata: bool = False,
+) -> list[str] | list[ModuleMetadata]:
+    """
+    Lists the module names, or their metadata, that match the given filters.
+
+    Built-in modules are listed alongside registered and entry-point modules; a
+    registered module shadows a built-in of the same name.
+
+    Kwargs:
+
+        type: Only list modules of this module type (e.g., ``"operator"``).
+        subtype: Only list modules that support this subtype (e.g., ``"aggregator"``).
+        category: Only list modules in this discovery category (e.g., ``"source"``).
+        primary: Whether ``subtype`` must be marked as primary (default: False).
+        loopable: List modules with matching loopability (or all modules when ``None``).
+        show_metadata: Whether to list each module's metadata instead of its name.
+
+    Returns:
+
+        The matching module names, or their metadata when ``show_metadata`` is true,
+        sorted by name.
+
+    Raises:
+
+        ValueError: When ``type`` and ``subtype`` are both given, or ``primary`` is
+            true without a ``subtype``.
+
+    Examples:
+
+        >>> list_modules(subtype="aggregator", primary=True)
+        ['count', 'sum']
+        >>> list_modules(category="sink")
+        ['write']
+
+    """
+    if type and subtype:
+        raise ValueError("type and subtype cannot be combined")
+    elif primary and not subtype:
+        raise ValueError("primary=True requires subtype")
+
+    subtype_match = partial(_matches_subtype, subtype=subtype, primary=primary)
+    type_match = lambda module: type is None or module.type == type
+    loop_match = lambda module: loopable is None or module.loopable is loopable
+    user_match = lambda module: (
+        category is None or get_module_category(module) == category
+    )
+    matches = subtype_match, type_match, loop_match, user_match
+    match = lambda module: all(broadcast(module, *matches))
+
+    # built-ins first, then registry (runtime + entry-point) modules shadow them
+    catalog = {metadata.name: metadata for metadata in gen_module_catalog()}
+    catalog.update((metadata.name, metadata) for metadata in gen_registry_catalog())
+
+    # dynamic filter module import shadows the builtin filter
+    filtered = builtins.filter(match, catalog.values())
+    modules = sorted(filtered, key=lambda module: module.name)
+    return modules if show_metadata else [module.name for module in modules]
 
 
 def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:

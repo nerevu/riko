@@ -30,7 +30,7 @@ from riko.coercion.cast import SourceOpts
 from riko.rss.discovery import aload_rss_links, load_rss_links
 
 from ._decorators import processor
-from ._prepare import require_conf_key
+from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from logging import Logger

@@ -90,9 +90,10 @@ cutover step 5 (2026-10-03).
 - **Discovery enums are generated.** `riko/modules/_names.py` owns the flat
   `Modules` namespace and the `Sources`/`Transforms`/`Sinks` buckets. The stable
   `riko` facade re-exports them; do not hand-maintain parallel lists.
-- **Name normalization lives in `riko/ext/_names.py`.** Public name-accepting
-  discovery APIs normalize a string or discovery member to the canonical module id
-  before constructing metadata.
+- **Name normalization lives in `riko/definitions/modules.py`; discovery in
+  `riko/modules/_metadata.py`.** Public name-accepting discovery APIs
+  (`get_module_metadata`, `describe_module`) normalize a string or
+  discovery member to the canonical module id before constructing metadata.
 - **Formats are not sinks.** `Formats` is the serialization/export enum used by
   `riko/runtime/collections.py` and the write stack. `Sinks` is a generated bucket
   of pipe modules. These are separate axes even when a sink pipe ultimately writes

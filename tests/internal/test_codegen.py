@@ -21,7 +21,6 @@ from riko.definitions._nodes import ModuleNode, WriteNode
 from riko.definitions._workflow import Workflow, normalize_workflow
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
-from riko.ext._names import get_module_category
 from riko.ext.codegen import (
     NameEntry,
     enum_member_name,
@@ -29,11 +28,11 @@ from riko.ext.codegen import (
     generate_module_ids,
     generate_module_names,
 )
-from riko.modules._metadata import gen_module_catalog
+from riko.modules._metadata import gen_module_catalog, get_module_category, list_modules
 from riko.runtime._codegen import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
-from riko.runtime._workflows import _build_resolved_workflow
+from riko.runtime._workflow_resolver import _build_resolved_workflow
 from riko.types._enums import ExecutionMode
 from riko.types._workflow import Endpoint
 from riko.types.modules import (
@@ -295,7 +294,7 @@ class TestCompileWorkflow:
             {"nodes": [{"name": "itembuilder", "conf": conf}]}
         )
         module = _build(workflow, "pipe_verbatim", tmp_path)
-        assert module.workflow == workflow
+        assert module.flow == workflow
         assert list(module.pipe(context=Context(test=True))) == run_workflow(workflow)
 
     def test_generation_is_deterministic(self):
@@ -319,7 +318,7 @@ class TestCompileWorkflow:
         source = compile_workflow(workflow, "pipe_parsed")
         ast.parse(source)
         module = _load(source, "pipe_parsed", tmp_path)
-        assert module.workflow.outputs["default"] == Endpoint("rename-1", "out")
+        assert module.flow.outputs["default"] == Endpoint("rename-1", "out")
 
     def test_loop_embed_is_rendered_as_a_node_field(self):
         """A loop node's embedded module is rebuilt from the typed ``Embed``."""
@@ -334,6 +333,17 @@ class TestCompileWorkflow:
 
         with pytest.raises(InvalidPipelineError, match="write node code generation"):
             compile_workflow(workflow, "pipe_written")
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "a public import path for generated workflow modules is not yet implemented"
+        ),
+    )
+    def test_generated_source_imports_no_private_module(self):
+        """A generated workflow module imports only supported riko paths."""
+        flow = Pipeline.from_module("itembuilder").workflow
+        assert "from riko.runtime._" not in compile_workflow(flow, "pipe_public")
 
 
 class TestPythonise:
@@ -395,17 +405,18 @@ class TestModuleCategory:
         assert buckets["sink"] == _SINKS
         assert buckets["transform"] == set(categories) - _SOURCES - _SINKS
 
-    def test_provider_override_wins(self):
-        md = next(iter(gen_module_catalog()))
-        assert get_module_category(md, provider="microsoft") == "microsoft"
-        assert (
-            get_module_category(md, provider="microsoft", override="custom") == "custom"
-        )
-
     def test_sink_name_is_classified_as_sink(self):
         md = next(md for md in gen_module_catalog() if md.name == "fetch")
         renamed = dataclasses.replace(md, name="write")
         assert get_module_category(renamed) == "sink"
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="replacing the write module with write nodes is not yet implemented",
+    )
+    def test_no_module_is_a_sink(self):
+        """Writes run through targets, so no module is categorized as a sink."""
+        assert list_modules(category="sink") == []
 
 
 class TestEnumMemberName:
@@ -609,10 +620,8 @@ class TestWorkflowProbes:
     def test_probe_describes_the_inputs_its_document_declares(self):
         """A probe's describe-inputs output matches the pipe built from its document."""
         name = "pipe_975789b47f17690a21e89b10a702bcbd"
-        workflow = Workflow.parse(
-            (TESTS_DIR / "workflows" / f"{name}.json").read_text()
-        )
-        generated = _build_resolved_workflow(name, workflow, dispatcher)
+        flow = Workflow.parse((TESTS_DIR / "workflows" / f"{name}.json").read_text())
+        generated = _build_resolved_workflow(name, flow, dispatcher)
         probe = import_module(f"tests.pyworkflows.{name}")
         context = Context(mode=ExecutionMode.DESCRIBE_INPUTS)
         assert probe.pipe(context=context) == generated.pipe(context=context)

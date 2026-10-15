@@ -35,11 +35,11 @@ from urllib.parse import urlencode, urljoin
 
 import pygogo as gogo
 
-from riko.base._strutils import INVALID_FILECHAR_PATTERN
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
-from ._prepare import require_conf_key
+from ._require import require_conf_key
+from ._textops import INVALID_FILECHAR_PATTERN
 
 if TYPE_CHECKING:
     from logging import Logger

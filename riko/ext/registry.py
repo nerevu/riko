@@ -31,7 +31,10 @@ from riko.runtime._target_registry import (
     register_target,
     reset_target_registry,
 )
-from riko.runtime._workflows import register_workflow_store, reset_workflow_resolver
+from riko.runtime._workflow_resolver import (
+    register_workflow_store,
+    reset_workflow_resolver,
+)
 
 __all__ = [
     "ModuleDefinition",

@@ -26,13 +26,12 @@ from riko.definitions._context import Context
 from riko.definitions._workflow import Workflow
 from riko.definitions.modules import ModuleDefinition
 from riko.ext import register_module
-from riko.ext.codegen import list_modules
 from riko.ext.registry import reset_module_registry
 from riko.modules import regex as regex_module
 from riko.modules import tokenizer as tokenizer_module
 from riko.modules._decorators import operator, processor, splitter
 from riko.modules._inference import gen_operator_return_kinds, gen_return_inferences
-from riko.modules._metadata import get_module_metadata
+from riko.modules._metadata import get_module_metadata, list_modules
 from riko.modules._prepare import build_conf
 from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop
@@ -44,18 +43,19 @@ from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.modules.tokenizer import async_pipe as async_tok
 from riko.modules.tokenizer import pipe as tokenizer
 from riko.modules.truncate import async_pipe as async_truncate
+from riko.modules.truncate import pipe as truncate
 from riko.modules.union import async_pipe as async_union
 from riko.runtime._importutils import require_interface
 from riko.runtime._module_registry import module_registry
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
-from riko.runtime._workflows import (
+from riko.runtime._workflow_pipes import workflow
+from riko.runtime._workflow_resolver import WorkflowResolver
+from riko.runtime._workflow_stores import (
     CompositeStore,
     DirectoryStore,
     MappingStore,
     PackageStore,
-    WorkflowResolver,
-    mark_subpipe,
 )
 from riko.types._guards import is_mapping
 from riko.types._sentinels import MISSING
@@ -712,7 +712,7 @@ class TestWrapperMeta:
         )
         assert _carries_wrapper_meta(pipe)
 
-    def test_marked_subpipe_carries_wrapper_meta(self):
+    def test_workflow_decorator_carries_wrapper_meta(self):
         def pipe(item=None, **kwargs):
             return iter([])
 
@@ -722,14 +722,14 @@ class TestWrapperMeta:
         def other(item=None, **kwargs):
             return iter([])
 
-        sync_subpipe = mark_subpipe(pipe)
-        async_subpipe = mark_subpipe(async_pipe)
+        sync_subpipe = workflow()(pipe)
+        async_subpipe = workflow()(async_pipe)
 
         assert _carries_wrapper_meta(sync_subpipe)
         assert _carries_wrapper_meta(async_subpipe)
         assert not sync_subpipe.isasync
         assert async_subpipe.isasync
-        assert mark_subpipe(other, isasync=True).isasync
+        assert workflow(isasync=True)(other).isasync
 
     def test_decorated_wrappers_carry_wrapper_meta(self):
         def shout(item: Item, *args, **kwargs) -> str:
@@ -741,6 +741,21 @@ class TestWrapperMeta:
         assert _carries_wrapper_meta(processor()(shout))
         assert _carries_wrapper_meta(processor(isasync=True)(shout))
         assert _carries_wrapper_meta(operator()(total))
+
+
+class TestWorkflowDecorator:
+    def test_returns_a_tagged_copy(self):
+        tagged = workflow(subtype="transformer")(truncate)
+
+        assert tagged is not truncate
+        assert truncate.type == "operator"
+        assert truncate.name == "truncate"
+        assert tagged.type == "pipe"
+        assert get_module_metadata("truncate", strict=True).type == "operator"
+
+    def test_rejects_positional_arguments(self):
+        with pytest.raises(TypeError, match="Pipeline"):
+            workflow(object())  # pyright: ignore[reportCallIssue]
 
 
 LOOP_FOLD_CASES = [
@@ -844,8 +859,8 @@ def _sync_subpipe(item: Item, context: Context | None = None, **_) -> Stream:
     return iter([{"content": title.upper()}, {"content": title[::-1]}])
 
 
-_SYNC_SUBPIPE = mark_subpipe(_sync_subpipe)
-_ASYNC_SUBPIPE = mark_subpipe(_async_subpipe)
+_SYNC_SUBPIPE = workflow()(_sync_subpipe)
+_ASYNC_SUBPIPE = workflow()(_async_subpipe)
 
 
 class TestLoopCharacterization:
@@ -962,7 +977,7 @@ class TestSubpipeLoop:
             return child(str(item["title"]))
 
         parents = [{"title": "a"}, {"title": "b"}]
-        result = loop(iter(parents), embed=mark_subpipe(_sub), count="first", emit=True)
+        result = loop(iter(parents), embed=workflow()(_sub), count="first", emit=True)
 
         assert list(result) == [{"content": "a0"}, {"content": "b0"}]
         assert produced == [0, 0]
@@ -1034,7 +1049,7 @@ class TestAsyncSubpipeLoop:
 
         stream = async_loop(
             iter([{"title": "a"}, {"title": "b"}]),
-            embed=mark_subpipe(_sub),
+            embed=workflow()(_sub),
             count="first",
             emit=True,
         )
@@ -1071,15 +1086,30 @@ class TestModuleRegistry:
     def test_builtin_resolves_lazily(self, fixed_registry):
         assert fixed_registry.require("tokenizer").__name__ == "pipe"
 
-    def test_missing_module_raises_unsupported(self, fixed_registry):
-        with pytest.raises(UnsupportedModuleError):
+    @pytest.mark.parametrize("method", ["require", "require_interfaces"])
+    def test_missing_module_hints_at_close_matches(self, fixed_registry, method):
+        with pytest.raises(
+            UnsupportedModuleError, match=r"did you mean 'truncate'\?"
+        ) as e:
+            getattr(fixed_registry, method)("trunkate")
+
+        assert e.value.module_name == "trunkate"
+        assert e.value.matches == ("truncate",)
+
+    def test_missing_module_without_close_match_keeps_the_bare_message(
+        self, fixed_registry
+    ):
+        with pytest.raises(UnsupportedModuleError) as e:
             fixed_registry.require(_MISSING_NAME)
+
+        assert str(e.value) == f"Unsupported riko module: {_MISSING_NAME}"
 
     def test_missing_dotted_module_raises_unsupported(self, fixed_registry):
         """
-        Map missing parents in dotted names to ``UnsupportedModuleError``.
+        Rejects a dotted name as an unknown module.
 
-        The import fails at the missing parent rather than the full target.
+        A dotted name is not a built-in, so the registry refuses it before any
+        import is attempted.
         """
         with pytest.raises(UnsupportedModuleError):
             fixed_registry.require("acme.nope")
@@ -1221,6 +1251,12 @@ class TestResolverDispatcher:
 
 class TestRequireInterface:
     """A missing interface names the right kind of thing and keeps the bare name."""
+
+    def test_missing_builtin_module_is_a_module_error(self):
+        with pytest.raises(UnsupportedModuleError) as err:
+            require_interface("nope")
+
+        assert err.value.module_name == "nope"
 
     def test_builtin_module_without_interface_is_a_module_error(self):
         def loader(name):
@@ -1372,6 +1408,30 @@ class TestWorkflowResolver:
         setattr(module, "pipe", tokenizer_module.pipe)  # noqa: B010
         resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": module}))
         assert resolver.require_interfaces("pipe:demo") == {"pipe"}
+
+    def test_require_tags_a_copy_and_leaves_the_module_pipe_untouched(self):
+        def plain(item=None, **kwargs):
+            return iter([{"x": 1}])
+
+        module = ModuleType("pipe_demo")
+        setattr(module, "pipe", plain)  # noqa: B010
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": module}))
+        first = resolver.require("pipe_demo")
+        second = resolver.require("pipe_demo")
+
+        assert module.pipe is plain
+        assert not hasattr(plain, "type")
+        assert first is not plain
+        assert second is not plain
+        assert first.type == second.type == "pipe"
+
+    def test_require_returns_an_already_tagged_pipe_by_identity(self):
+        tagged = workflow(subtype="transformer")(lambda item=None, **_: iter([]))
+        module = ModuleType("pipe_demo")
+        setattr(module, "pipe", tagged)  # noqa: B010
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": module}))
+
+        assert resolver.require("pipe_demo") is tagged
 
     def test_async_interface_is_tagged_async_whatever_its_name(self):
         """An async interface not named ``async_pipe`` is still tagged async."""

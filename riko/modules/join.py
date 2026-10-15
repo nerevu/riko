@@ -41,7 +41,7 @@ from riko.types._options import DecorationOptions, Defaults
 from riko.types._sentinels import MISSING
 
 from ._decorators import operator
-from ._prepare import require_arg
+from ._require import require_arg
 
 if TYPE_CHECKING:
     from logging import Logger

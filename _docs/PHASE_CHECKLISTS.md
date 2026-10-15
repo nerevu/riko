@@ -176,7 +176,7 @@ now owned by `SyncExecution`/`AsyncExecution`, one per `Pipeline` iteration.
 **Delivered.** `Context.mode: ExecutionMode` (`RUN`/`DESCRIBE_INPUTS`/`DESCRIBE_DEPENDENCIES`/
 `DESCRIBE`), part of the stable surface. `describe_input`/`describe_dependencies` are read-only
 properties derived from `mode`; generated workflow modules dispatch on `mode` through
-`build_workflow_pipes` (`riko/runtime/_workflows.py`), where `DESCRIBE` returns
+`build_workflow_pipes` (`riko/runtime/_workflow_pipes.py`), where `DESCRIBE` returns
 `{"inputs", "dependencies"}`; `verbose`/`test`/`inputs` stay independent fields.
 
 **Decisions.**
@@ -260,7 +260,7 @@ equivalent to looping it:
   `tests/pyworkflows/*.py` tree was regenerated then; the v1 cutover later replaced it with
   `WorkflowDocument`s (workflow documents) plus hand-maintained probes). A loop embedding a `pipe:` sub-pipeline runs **per parent**
   through the same fold; sub-pipelines are detected by **declared** metadata (`SUBPIPE_TYPE` in `riko/base/_config.py`,
-  `mark_subpipe` in `riko/runtime/_workflows.py`, `is_subpipe` in `riko/types/_wrappers.py`) stamped at `resolve_module` + in the codegen templates.
+  the `workflow` decorator in `riko/runtime/_workflow_pipes.py`, `is_subpipe` in `riko/types/_wrappers.py`) stamped at `resolve_module` + in the codegen templates.
   `_resolve_leaf_modules` fail-fast-resolves every leaf (incl. graph-disconnected) so an unreached
   unsupported module raises at build. Per-parent fold contract:
 
@@ -307,7 +307,7 @@ equivalent to looping it:
   name lazily; precedence **runtime → entry-point → built-in**) + `ModuleDefinition`
   (`module=` by-convention *or* explicit `sync_pipe`/`async_pipe`; `name` optional, stamped from the
   entry-point key with a mismatch guard).
-- **`riko/runtime/_workflows.py`** — `WorkflowResolver` + an injectable `ModuleStore`
+- **`riko/runtime/_workflow_resolver.py` + `_workflow_stores.py`** — `WorkflowResolver` + an injectable `ModuleStore`
   (`Package`/`Mapping`/`Composite`) and `DirectoryStore` (now parsing `WorkflowDocument`s);
   core ships no locations (conftest injects the suite's `tests.pyworkflows` / `tests/workflows`, so
   no `tests.*` in `riko/`).
@@ -322,8 +322,8 @@ imports no compiler) and **DoD #1** (external module via entry point, no core ed
 always returns a callable; JSON compile → `load_definition`). Sub-pipelines are marked via a **fresh
 wrapper** (the generated module fn is never mutated). Codegen emits a **stable `pipe`/`async_pipe`
 entry**, so a sub-pipeline resolves exactly like a built-in — this removed the overloaded `pipe_name`
-argument (P8.6). `list_modules` overlays registry (runtime + entry-point) modules. `mark_subpipe`
-widened (it only stamps metadata). Speculative `ModuleDefinition` discovery fields
+argument (P8.6). `list_modules` overlays registry (runtime + entry-point) modules. The stored-workflow
+tagger (now the `workflow` decorator, which tags a copy) widened (it only stamps metadata). Speculative `ModuleDefinition` discovery fields
 (`provider`/`enum_name`/`category`/`docs_url`) dropped until P9A needs them. Entry-point group name:
 `riko.modules`.
 
@@ -344,7 +344,7 @@ overloads make `@operator()` on a coroutine statically async. Also on this branc
 **Landed on `features`; targeted for release v0.76.0.** A typed *discovery* layer over the canonical string ids — strings stay
 canonical everywhere (JSON, entry points, resolver); every enum member's `.value` **is** the id.
 
-- **Taxonomy (`get_module_category`, `riko/ext/_names.py`).** Pure/total `category` derivation from
+- **Taxonomy (`get_module_category`, `riko/modules/_metadata.py`).** Pure/total `category` derivation from
   **data-flow capability only** (never the runtime `type`/`subtype` axis) into
   `ModuleCategory = Literal["source", "transform", "sink"]` (lowercase singular — this is the
   `list_modules(category=…)` filter vocabulary): precedence `override → provider (non-`riko` →
@@ -359,12 +359,12 @@ canonical everywhere (JSON, entry points, resolver); every enum member's `.value
   both ids, never silently disambiguate. `generate_module_names` emits leaf `StrEnum`s grouped by
   `category` (+ a flat `Modules` wrapper so `Modules.FETCH is Sources.FETCH` — ids are globally unique,
   so the wrapper needs no category segment), sorted by id, fixed header, no timestamps →
-  byte-stable/VCS-checkable. `catalog_entries()` reads built-ins only.
+  byte-stable/VCS-checkable. `gen_catalog_entries()` reads built-ins only.
 - **Committed surface (`riko/modules/_names.py`).** `Modules`/`Sources`/`Transforms`/`Sinks`
   re-exported from the **stable `riko`** surface — *not* `riko.modules`, whose `Module`
   already names the decorator base (unflagged collision; see Guiding decisions). Canonical import is
   `riko.modules._names`. `ModuleName` base stays an `riko.ext` symbol.
-- **Introspection.** `list_modules(*, type, subtype, category)` (`riko/ext/codegen.py`; runtime
+- **Introspection.** `list_modules(*, type, subtype, category)` (`riko/modules/_metadata.py`; runtime
   truth from module metadata; the three axes are lowercase `Literal` strings —
   `ModuleType`/`ModuleSubtype`/`ModuleCategory`, e.g. `category="sink"` — **not** the discovery-tree
   identifier enums, which are a separate axis) + `describe_module` (`riko/modules/_metadata.py`;

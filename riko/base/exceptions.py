@@ -1,6 +1,19 @@
 # vim: sw=4:ts=4:expandtab
 """Provides riko specific exceptions."""
 
+from __future__ import annotations
+
+from difflib import get_close_matches
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+
+def _get_detail(*parts: str | None) -> str:
+    joined = "; ".join(filter(None, parts))
+    return f" ({joined})" if joined else ""
+
 
 class RikoError(Exception):
     """Base class for Riko-specific errors."""
@@ -11,11 +24,44 @@ class ModuleError(RikoError):
 
 
 class UnsupportedModuleError(ModuleError):
-    def __init__(self, module_name: str, reason: str | None = None):
-        detail = "" if reason is None else f" ({reason})"
+    """
+    Reports an unusable module name with hints for close matches.
+
+    Args:
+
+        module_name: The unresolved module name.
+        reason: Why the module is unusable (if it exists but lacks something).
+        candidates: Known module names to suggest from.
+
+    Attributes:
+
+        module_name: The unresolved module name.
+        reason: Why the module is unusable, or None.
+        matches: The candidates that closely match ``module_name``, closest first.
+
+    Examples:
+
+        >>> str(UnsupportedModuleError("trunkate", candidates=["truncate", "split"]))
+        "Unsupported riko module: trunkate (did you mean 'truncate'?)"
+
+    """
+
+    def __init__(
+        self,
+        module_name: str,
+        reason: str | None = None,
+        *,
+        candidates: Iterable[str] = (),
+    ):
+        matches = tuple(get_close_matches(module_name, tuple(candidates), n=3))
+        joined = ", ".join(map(repr, matches))
+        hint = f"did you mean {joined}?" if joined else None
+        detail = _get_detail(reason, hint)
+
         super().__init__(f"Unsupported riko module: {module_name}{detail}")
         self.module_name = module_name
         self.reason = reason
+        self.matches: tuple[str, ...] = matches
 
 
 class TargetError(RikoError):
@@ -34,7 +80,7 @@ class PipelineError(RikoError):
 
 class UnsupportedWorkflowError(PipelineError):
     def __init__(self, pipe_id: str, reason: str | None = None):
-        detail = "" if reason is None else f" ({reason})"
+        detail = _get_detail(reason)
         super().__init__(f"Unsupported riko stored workflow: {pipe_id}{detail}")
         self.pipe_id = pipe_id
         self.reason = reason

@@ -37,7 +37,7 @@ from riko.types._options import Defaults
 from riko.types._streams import Item, Items, Stream
 
 from ._decorators import operator
-from ._prepare import require_arg
+from ._require import require_arg
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

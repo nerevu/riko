@@ -7,13 +7,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from riko.modules.strconcat import pipe as strconcat
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
 from riko.types.modules import StrconcatRawConf
 
 if TYPE_CHECKING:
     from riko.definitions._context import Context
 
 
+@workflow(subtype="transformer")
 def pipe(item=None, context: Context | None = None, **_):
     sw_1 = strconcat(
         item,
@@ -30,9 +31,6 @@ def pipe(item=None, context: Context | None = None, **_):
     _OUTPUT = sw_1
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="transformer")
 
 
 if __name__ == "__main__":

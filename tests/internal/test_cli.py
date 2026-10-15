@@ -18,7 +18,7 @@ from riko.base._paths import ROOT_DIR
 from riko.base.exceptions import InvalidArchitectureError, InvalidPipelineError
 from riko.cli import _codegen, _import_commands, _lint, _test, _upgrade, _workflow
 from riko.cli._coverage import build_ceiling_text
-from riko.cli._docstyle import summary_leads_with_output
+from riko.cli._docstyle import gen_example_prose, summary_leads_with_output
 from riko.cli._lint_canonical_imports import _iter_issues as canonical_issues
 from riko.cli._lint_deps import (
     gen_dependency_issues,
@@ -447,8 +447,22 @@ class TestConsoleScripts:
         assert callable(getattr(import_module(module_name), attr)), script
 
 
+EXAMPLE_PROSE = [
+    pytest.param(">>> a\n1\n\nWith b:\n\n>>> b\n2", ["With b:"], id="narration"),
+    pytest.param(">>> a\n1\n\nWith b\nand c:\n\n>>> b", ["With b"], id="multi-line"),
+    pytest.param(">>> a\n1\n\n>>> # With b\n>>> b\n2", [], id="comment"),
+    pytest.param(">>> a\n1\n\nAsync usage::\n\n>>> b", [], id="labelled-group"),
+    pytest.param("Calls a.\n\n>>> a\n1", [], id="before-examples"),
+    pytest.param(">>> a\n1\n\nRaises:\n\n    TypeError: x.", [], id="section"),
+]
+
+
 class TestDocstyle:
-    """Docstring summary checks."""
+    """Docstring summary and example-prose checks."""
+
+    @pytest.mark.parametrize(("doc", "expected"), EXAMPLE_PROSE)
+    def test_example_prose_detection(self, doc: str, expected: list[str]) -> None:
+        assert list(gen_example_prose(doc)) == expected
 
     def test_docstring_summary_output_lead_detection(self) -> None:
         assert summary_leads_with_output("Returns the parsed response body.")
@@ -489,6 +503,16 @@ class TestTermLint:
             (2, "Execution Contexts"),
             (4, "other mode"),
         ]
+
+    def test_phase_codes_are_checked(self, tmp_path: Path) -> None:
+        source = tmp_path / "mod.py"
+        source.write_text(
+            'REASON = "owned by R5C: write is still a sink module"\n'
+            "# see R4B.2 and P10, not R2D2 or PR9\n",
+            encoding="utf-8",
+        )
+        found = [(issue.lineno, issue.found) for issue in gen_term_issues(source)]
+        assert found == [(1, "R5C"), (2, "R4B.2"), (2, "P10")]
 
     def test_prose_files_are_checked_except_the_changelog(self, tmp_path: Path) -> None:
         (tmp_path / "GUIDE.rst").write_text("Run a sub-pipeline.\n", encoding="utf-8")

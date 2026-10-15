@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Literal, overload
 from riko.base.exceptions import UnsupportedModuleError, UnsupportedWorkflowError
 
 from ._module_registry import module_registry
-from ._workflows import WorkflowResolver, workflow_resolver
+from ._workflow_resolver import WorkflowResolver, workflow_resolver
 
 if TYPE_CHECKING:
     from riko.types._wrappers import (

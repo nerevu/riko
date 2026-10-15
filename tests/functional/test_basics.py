@@ -28,7 +28,7 @@ from riko.execution._sync_execution import SyncExecution
 from riko.io import async_url_open
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
-from riko.runtime._workflows import workflow_resolver
+from riko.runtime._workflow_resolver import workflow_resolver
 from riko.types._guards import is_mapping
 from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput, is_subpipe

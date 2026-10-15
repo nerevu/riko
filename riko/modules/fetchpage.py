@@ -41,7 +41,7 @@ from riko.parsing.documents import get_text
 from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import processor
-from ._prepare import require_conf_key
+from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
