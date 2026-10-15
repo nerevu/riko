@@ -184,3 +184,14 @@ The same boundary applies to promoted source and protocol adapters:
 
 This requirement is especially important for JSON, CKAN, Prometheus, OpenAPI, and mail
 payloads, where arbitrary arrays are normal data.
+
+## Known instance: typed-value-shaped business data on module output
+
+Triaged 2026-10-14. Feed entries carry fields shaped like a typed value, e.g. feedparser's
+`summary_detail = {"type": "text/html", "value": "<b>hi</b>"}`. Today `DotDict` read paths
+(`[]`, `get`, `asdict`) treat that as configuration and collapse it to `"<b>hi</b>"`, so any
+processor run over the entry rewrites the field on output, whether or not it touches it. The
+"literal DotDict access" boundary above fixes this; until it lands, the strict-xfail tripwire
+`TestDotDict::test_typed_value_shaped_business_data_reads_literally` in
+`tests/internal/test_values.py` pins the collapse. (A nested `DotDict` write does not re-read
+sibling fields, so a write is not a second trigger.)

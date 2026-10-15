@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, MutableMapping
 from datetime import date
 from decimal import Decimal
 from functools import reduce
@@ -81,6 +81,30 @@ def raw_get[VT](data: Mapping[str, VT], key: str) -> VT:
         value = data[key]
 
     return value
+
+
+def raw_set[VT](data: MutableMapping[str, VT], key: str, value: VT) -> None:
+    if isinstance(data, CaseInsensitiveDict):
+        CaseInsensitiveDict.__setitem__(data, key, value)  # noqa: PLC2801
+    else:
+        data[key] = value
+
+
+def detach_nested[VT](data: MutableMapping[str, VT], key: str) -> VT | None:
+    """Replaces the mapping at ``key`` with a copy, so writes stay off the source."""
+    value = raw_get(data, key)
+
+    if isinstance(value, CaseInsensitiveDict):
+        copied = value.copy()
+    elif is_mapping(value):
+        copied = dict(value)
+    else:
+        copied = None
+
+    if copied is not None:
+        raw_set(data, key, cast("VT", copied))
+
+    return cast("VT | None", copied)
 
 
 @overload
@@ -494,18 +518,9 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         """
 
         def reducer(item: Self, key: str) -> Self:
-            if item and key in item:
-                existing = raw_get(item, key)
-
-                if existing is not None and not is_mapping(existing):
-                    del item[key]
-                    existing = None
-            else:
-                existing = None
-
-            if existing is None:
-                existing = item[key] = cast("VT", {})
-                # CaseInsensitiveDict.__setitem__(item, key, existing)
+            if (existing := detach_nested(item, key) if key in item else None) is None:
+                existing = cast("VT", {})
+                raw_set(item, key, existing)
 
             return cast("Self", existing)
 
@@ -514,11 +529,8 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         if len(keys) == 1:
             CaseInsensitiveDict.__setitem__(self, key, value)
         else:
-            item = self.copy()
             rest, last = keys[:-1], keys[-1]
-            reduced = reduce(reducer, rest, item)
-            reduced[last] = value
-            CaseInsensitiveDict.update(self, item)
+            raw_set(reduce(reducer, rest, self), last, value)
 
     @overload
     def __or__(self, other: SupportsKeysAndGetItem[str, VT]) -> Self: ...  # noqa: E704
@@ -646,11 +658,11 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
         def reducer(item: Self | None, key: str) -> Self | None:
             if item and key and (matched := match_key(item, key)):
-                value = raw_get(item, matched)
+                value = detach_nested(item, matched)
             else:
                 value = None
 
-            return cast("Self", value) if is_mapping(value) else None
+            return cast("Self | None", value)
 
         keys = parse_key(key)
         rest, last = keys[:-1], keys[-1]

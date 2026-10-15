@@ -221,6 +221,10 @@ Removed
 Fixes
 ~~~~~
 
+- Assignment to a dotted field (e.g., ``assign="author.uri"``) no longer changes nested
+  dicts of a module's input items, and each assignment now takes constant time no matter
+  the item's number of fields.
+
 - ``@operator`` now gives the reason it can't classify a parser's return type. E.g.,
   return annotation of ``Any`` is too broad.
 

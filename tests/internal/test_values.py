@@ -13,6 +13,7 @@ from decimal import Decimal, localcontext
 from enum import Enum, StrEnum
 from graphlib import CycleError
 from io import BytesIO
+from operator import methodcaller
 from pathlib import PurePosixPath, PureWindowsPath
 from time import struct_time
 from types import MappingProxyType
@@ -49,7 +50,7 @@ from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._workflow import Workflow
 from riko.io._sync import Fetch
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
-from riko.parsing._dotdict import DotDict
+from riko.parsing._dotdict import DotDict, raw_get
 from riko.parsing.config import get_skip
 from riko.parsing.documents import XML_PARSER, any2dict
 from riko.rss.entries import augment_entries, resolve_date
@@ -507,12 +508,39 @@ DOTDICT_DELETES = [
 ]
 
 
+NESTED_WRITES = [
+    pytest.param(methodcaller("__setitem__", "a.b.c", 2), id="set"),
+    pytest.param(methodcaller("update", {"a.b.d": 3}), id="update"),
+    pytest.param(methodcaller("delete", "A.B.C"), id="delete"),
+]
+
+
 class TestDotDict:
     @pytest.mark.parametrize(("source", "key", "expected"), DOTDICT_DELETES)
     def test_delete(self, source, key, expected):
         d = DotDict(source)
         d.delete(key)
         assert d.asdict() == expected
+
+    @pytest.mark.parametrize("nest", [dict, DotDict], ids=["dict", "dotdict"])
+    @pytest.mark.parametrize("write", NESTED_WRITES)
+    def test_nested_write_leaves_the_source_untouched(self, write, nest):
+        typed = {"type": "text", "value": "hi"}
+        source = {"a": nest({"b": {"c": 1}}), "v": typed}
+        d = DotDict(source)
+        write(d)
+        assert source == {"a": {"b": {"c": 1}}, "v": {"type": "text", "value": "hi"}}
+        assert raw_get(d, "v") is typed
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="business data shaped like a typed value is still read as one",
+    )
+    def test_typed_value_shaped_business_data_reads_literally(self):
+        detail = {"type": "text/html", "value": "<b>hi</b>"}
+        assert DotDict({"summary_detail": detail}).asdict() == {
+            "summary_detail": detail
+        }
 
 
 class TestParsers:

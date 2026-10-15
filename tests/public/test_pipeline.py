@@ -332,6 +332,14 @@ class TestPipelineIteration:
         assert list(Pipeline(source=[{"x": 1}, {"x": 2}])) == [{"x": 1}, {"x": 2}]
         assert list(Pipeline(source={"x": 1})) == [{"x": 1}]
 
+    def test_a_dotted_assignment_leaves_the_source_untouched(self):
+        source: Items = [{"a": {"b": "hi"}}]
+        options = CallOptions(field="a.b", assign="a.c")
+        conf = {"rule": {"transform": "upper"}}
+        pipeline = Pipeline(source=source).strtransform(conf=conf, options=options)
+        assert list(pipeline) == [{"a": {"b": "hi", "c": "HI"}}]
+        assert source == [{"a": {"b": "hi"}}]
+
     def test_a_source_seed_runs_through_a_registered_module(self) -> None:
         def double(source, **_):
             return ({"x": item["x"] * 2} for item in source)

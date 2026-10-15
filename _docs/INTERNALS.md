@@ -181,7 +181,13 @@ sync when source is moved between package groups.
   that context-local hub state between cases.
 - **`DotDict`.** The implementation lives in `riko/parsing/_dotdict.py`; fast paths
   for simple keys should remain simple rather than routing everything through
-  dotted-path parsing.
+  dotted-path parsing. A nested write (`d["a.b"] = v`, a dotted `update`, `delete`)
+  walks the item in place and copies only the mappings on the key's path
+  (`detach_nested`), so it never edits the caller's nested dicts or re-reads sibling
+  fields, and its cost grows with the sizes of the mappings on that path rather than
+  with the item's top-level keys. The single-key set and the plain-dict `update`
+  loop call `CaseInsensitiveDict.__setitem__` directly: routing them through
+  `raw_set` doubles their cost.
 - **`meza` is pinned to the project source declared in `pyproject.toml`.** Meza owns
   the lower-level conversion semantics referenced by the runtime contract.
 - **Changelog style.** `docs/CHANGES.rst` records user-observable behavior in the
