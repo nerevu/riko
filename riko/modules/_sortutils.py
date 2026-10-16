@@ -66,17 +66,15 @@ def _resolve_uncastable(
     """
     if isinstance(value, (str, int, struct_time)):
         msg += ". Returning value without casting."
-        logger.warning(msg)
         casted = value
     elif isinstance(value, NON_SORTABLE):
         msg += ". Returning default value."
-        logger.warning(msg)
         casted = default
     else:
         msg += ". Returning value without casting."
-        logger.warning(msg)
         casted = value
 
+    logger.warning(msg)
     return casted
 
 

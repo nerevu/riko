@@ -56,7 +56,6 @@ from ._execution import (
     _BaseExecution,
     _FailedAcquisition,
     _is_async_only_closeable,
-    _require_output,
     _require_source,
 )
 from ._resource_plan import (
@@ -641,7 +640,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         """Builds the async item stream for one of the plan's workflow outputs."""
         policy = self._policy
 
-        endpoint, required = _require_output(plan, output)
+        endpoint, required = plan.require_output(output)
         steps: AsyncExecSteps = {}
         self._reserve_node_threads(plan, required)
         seed = None if source is None else await self._abuild_source_stream(source)

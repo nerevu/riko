@@ -32,6 +32,7 @@ from riko.types._io import is_async_closeable, is_sync_closeable
 from riko.types._workflow import parse_port
 from riko.types._wrappers import ModuleWrapper
 
+from ._prepared import require_default_output_port
 from ._resource_view import ResourceView
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     from riko.definitions._context import Context
     from riko.definitions._resource_definition import Resource
     from riko.types._events import EventSink
-    from riko.types._workflow import Endpoint, GraphEdge
+    from riko.types._workflow import GraphEdge
 
     from ._prepared import ExecutionPlan
 
@@ -91,73 +92,6 @@ def _require_source[S](source: S | None, output: str) -> S:
         raise InvalidPipelineError(msg)
 
     return source
-
-
-def _require_seed_target(plan: ExecutionPlan, required: frozenset[str]) -> str:
-    """
-    Supplies the one node in ``required`` whose default input is open to a seed.
-
-    A node's default input is open when no incoming stream edge targets its bare
-    default input port. A seed needs exactly one such node.
-
-    Args:
-
-        plan: The prepared workflow being run.
-        required: The node ids that the selected workflow output's subgraph runs.
-
-    Returns:
-
-        The id of the single node whose default input a supplied seed feeds.
-
-    Raises:
-
-        InvalidPipelineError: If the required subgraph has no single open input.
-
-    """
-    roots = required.intersection(plan.index.order)
-    open_roots = [root for root in roots if plan.index.is_open(root)]
-
-    if (count := len(open_roots)) == 1:
-        target = open_roots[0]
-    else:
-        msg = f"a seed requires exactly one open input, found {count}"
-        raise InvalidPipelineError(msg)
-
-    return target
-
-
-def _require_default_output_port(port: str, ref: str) -> None:
-    """
-    Rejects a non-default output port until multi-output delivery is executable.
-
-    Only the bare ``out`` port is executable today. A positional ``out:N`` or
-    semantic ``out:<name>`` source or selected workflow output is refused rather than
-    silently read as the node's default ``out`` stream.
-
-    Args:
-
-        port: The source or selected workflow output's port string to check.
-        ref: A human-readable reference to the offending edge or workflow output.
-
-    Raises:
-
-        InvalidPipelineError: If ``port`` is not the default ``out`` port.
-
-    """
-    if not parse_port(port).is_default:
-        msg = f"{ref} uses the non-default output port {port!r}, which cannot run yet."
-        raise InvalidPipelineError(msg)
-
-
-def _require_output(
-    plan: ExecutionPlan, output: str
-) -> tuple[Endpoint, frozenset[str]]:
-    """Requires a default-port output the plan exposes, with the nodes it runs."""
-    if (endpoint := plan.index.outputs.get(output)) is None:
-        raise InvalidPipelineError(f"workflow has no workflow output {output!r}")
-
-    _require_default_output_port(endpoint.port, f"workflow output {output!r}")
-    return endpoint, plan.index.required[output]
 
 
 def _is_async_only_closeable(value: object) -> bool:
@@ -316,7 +250,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         extra: ExtraOutput = {}
 
         for edge in incoming:
-            _require_default_output_port(edge.source_port, f"edge from {edge.source!r}")
+            require_default_output_port(edge.source_port, f"edge from {edge.source!r}")
             port = parse_port(edge.target_port)
             upstream = steps[edge.source]
 
@@ -359,7 +293,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
                 single open input.
 
         """
-        seed_target = None if seed is None else _require_seed_target(plan, required)
+        seed_target = None if seed is None else plan.require_seed_target(required)
 
         for node_id in plan.index.order:
             if node_id in required:

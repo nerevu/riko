@@ -25,10 +25,10 @@ from riko.types._collections import (
     FrozenDict,
     FrozenJSON,
     freeze_json,
+    normalize_strs,
     require_from_attrs,
     require_from_typed_dict,
     require_str,
-    require_strlike,
     serialize_attrs,
 )
 from riko.types._guards import is_mapping, require_mapping, require_sequence
@@ -68,7 +68,7 @@ class WorkflowFields(TypedDict):
     edges: list[Edge]
     outputs: dict[str, Endpoint]
     inputs: dict[str, FrozenDict[str, FrozenJSON]]
-    resources: str | tuple[str, ...]
+    resources: tuple[str, ...]
     version: str
 
 
@@ -373,7 +373,7 @@ def build_workflow_fields(value: RawWorkflow | Mapping[str, object]) -> Workflow
         outputs=_normalize_outputs(raw.get("outputs"), *edges, **nodes),
         inputs=_normalize_inputs(raw.get("inputs")),
         edges=edges,
-        resources=() if _resources is None else require_strlike(_resources),
+        resources=normalize_strs(_resources, "Workflow 'resources'"),
         version=require_str(version, "workflow 'version'"),
     )
 

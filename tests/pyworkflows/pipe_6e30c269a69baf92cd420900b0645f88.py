@@ -26,6 +26,7 @@ from riko.types.modules import (
 
 if TYPE_CHECKING:
     from riko import Context
+    from riko.types import Item
 
 
 INPUTS = []
@@ -33,7 +34,7 @@ DEPENDENCIES = ["fetch", "filter", "regex", "rename", "sort", "union", "uniq"]
 
 
 @workflow(subtype="source")
-def pipe(item=None, context: Context | None = None, **_):
+def pipe(item: Item | None = None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_233 = fetch(
             item,

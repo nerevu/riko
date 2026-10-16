@@ -1431,7 +1431,7 @@ Deliver:
   `Workflow.validate()` accepts `splits=2` with an `out:2` edge);
 - port-keyed execution steps replace the R4B refusal of splitter nodes (`require_single_output` in
   `riko/types/_wrappers.py`, applied as a `ResolvedModule` pipe validator and inside
-  `require_stream`/`require_async_stream`) and the `_require_default_output_port` guard; the async splitter wrapper accepts an async input stream (tripwire
+  `require_stream`/`require_async_stream`) and the `require_default_output_port` guard (`riko/execution/_prepared.py`); the async splitter wrapper accepts an async input stream (tripwire
   `test_async_splitter_accepts_an_async_input_stream`), and the splitter wrapper resolves an
   execution `context` into its parser's `inputs`/`test`/`resources` as processors and operators do
   rather than forwarding the raw `Context` (tripwire
@@ -1449,7 +1449,7 @@ Deliver:
   (`riko/types/_streams.py`) is either that type or deleted (audit triage 2026-10-05);
 - branch/route port behavior from the R4A contract;
 - one input router: both executions already share `_BaseExecution._resolve_node_inputs`
-  (`riko/execution/_execution.py`, extracted 2026-10-13), which runs `_require_default_output_port`
+  (`riko/execution/_execution.py`, extracted 2026-10-13), which runs `require_default_output_port`
   per incoming edge, then sends `in` to the primary source, `in:N` to the ordered `others` list, and
   named ports into the call kwargs, differing per execution only in its `as_stream` adapter.
   Port-keyed dispatch rekeys that router on the source port instead of guarding it (its input changes

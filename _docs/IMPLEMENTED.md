@@ -523,8 +523,8 @@ default)` for a chain, `Workflow(nodes: 3, edges: 2; outputs: default)` otherwis
 
 The single authoring-sugar normalization boundary: `RawWorkflow` in, one `Workflow` out,
 so no other subsystem reinterprets shorthand. Lives in `riko/definitions/_normalize.py`
-(`build_workflow_fields`, which returns the field values; the clean-break placement note supersedes the
-original `riko/workflow/normalize.py` sketch); the `normalize_workflow` delegate in
+(`build_workflow_fields`, which returns the field values; the clean-break placement note
+superseded the original `riko/workflow/normalize.py` sketch); the `normalize_workflow` delegate in
 `riko/definitions/_workflow_definition.py` is exported EXTENSION as `riko.ext.normalize_workflow`.
 
 It is the **structural, contract-free** pass — no `ModuleRegistry`/`TargetRegistry` lookup. It
@@ -641,8 +641,8 @@ from the command line through `build-workflow`. The v1 `PipeDef`/`wires` compile
 
 A one-shot offline conversion of a `PipeDef` (`modules` plus `src`/`tgt`
 `wires`) into `Workflow`. Lives in `riko/definitions/_migrate.py`
-(`migrate_pipe_def`, which returns a `RawWorkflow`; the clean-break placement note supersedes the
-original `riko/workflow/migrate.py` sketch); the `migrate_v1_to_v2` delegate in
+(`migrate_pipe_def`, which returns a `RawWorkflow`; the clean-break placement note
+superseded the original `riko/workflow/migrate.py` sketch); the `migrate_v1_to_v2` delegate in
 `riko/definitions/_workflow_definition.py` is exported EXTENSION as `riko.ext.migrate_v1_to_v2`. It is **not** a live loader — v1 is not a
 maintained runtime ingress, so it `logger.warning`s that a `PipeDef` was migrated, then emits v2
 only.
@@ -1004,7 +1004,7 @@ run:
   `Pipeline(source=items)` bind an external iterable as `Pipeline.source` — definition-level but
   `Workflow`-external, so serializing a seeded pipeline never captures items — and `__iter__`/`__aiter__`
   pass it to `run(plan, source=…)`, which delivers it to the subgraph's single open default input
-  (`_require_seed_target`; two open roots raise `InvalidPipelineError`) while other roots keep the
+  (`ExecutionPlan.require_seed_target`; two open roots raise `InvalidPipelineError`) while other roots keep the
   `{"forever": True}` seed. The seed is a `SourceLike` (`Item | Feed | Awaitable[Item | Feed]`,
   `riko/types/_streams.py`) resolved once per run — `SyncExecution._build_source_stream` awaits an
   awaitable through the portal and drains an async stream through it, `AsyncExecution.

@@ -46,7 +46,8 @@ Index (file, then the subjects it owns, in file order):
                               WorkflowFixtures, WorkflowProbes
     test_cli.py               CodegenCommand, UpgradeCommand, ImportsCommand,
                               LintCommand, CoverageRatchet, ConsoleScripts, Docstyle,
-                              TermLint, LiteralLint, BindingLint, LayoutLint,
+                              CitationLint, TermLint, LiteralLint, BindingLint,
+                              LayoutLint,
                               BasenameLint, DependencyLint, HookPinLint,
                               CanonicalImportLint, RelativeImportLint,
                               ImportArchitectureLint, ValidateGraph, RequireWorkflow,

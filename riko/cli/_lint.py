@@ -17,8 +17,8 @@ import click
 
 from riko.base._paths import PACKAGE_DIR, ROOT_DIR
 
-from ._build import _twine_check
-from ._docs import _lint_docs, _lint_rst
+from ._build import twine_check
+from ._docs import lint_docs, lint_rst
 from ._docstyle import format_issue, gen_docstring_issues
 from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
 from ._lint_basenames import format_basename_issue, gen_basename_issues
@@ -331,10 +331,10 @@ def _lint_command(
             return_codes.append(_lint_python(_where, unsafe_fixes))
 
         if rst or all_:
-            return_codes.append(_lint_rst(_where))
+            return_codes.append(lint_rst(_where))
 
         if docs or all_:
-            return_codes.append(_lint_docs())
+            return_codes.append(lint_docs())
 
         if docstrings or all_:
             return_codes.append(_lint_docstrings(_where))
@@ -369,7 +369,7 @@ def _lint_command(
             return_codes.append(run_import_checks(PACKAGE_DIR, *_IMPORT_CHECKS))
 
         if dist:
-            return_codes.append(_twine_check())
+            return_codes.append(twine_check())
 
         if check_types:
             return_codes.append(_lint_types(_where))

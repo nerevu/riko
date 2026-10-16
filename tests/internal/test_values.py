@@ -339,6 +339,14 @@ SORT_KEY_WARNINGS = [
     pytest.param("bogus", 1, id="unknown"),
 ]
 
+INVALID_CAST_KEYS = [
+    pytest.param("abc", "abc", id="str"),
+    pytest.param(7, 7, id="int"),
+    pytest.param(time.gmtime(0), time.gmtime(0), id="struct_time"),
+    pytest.param({"a": 1}, "x", id="mapping"),
+    pytest.param([1], "x", id="sequence"),
+]
+
 
 class TestDefItemgetter:
     @pytest.mark.parametrize(("type_", "warnings"), SORT_KEY_WARNINGS)
@@ -349,6 +357,13 @@ class TestDefItemgetter:
 
         assert keys == [3, 1, 2]
         assert len(caplog.records) == warnings
+
+    @pytest.mark.parametrize(("value", "expected"), INVALID_CAST_KEYS)
+    def test_invalid_cast_type_keeps_scalars_and_defaults_containers(
+        self, value, expected
+    ):
+        keyfunc = def_itemgetter("n", default="x", type_="location")
+        assert keyfunc({"n": value}) == expected
 
 
 @pytest.fixture

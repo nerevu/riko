@@ -17,8 +17,17 @@ from click.testing import CliRunner
 
 from riko.base._paths import ROOT_DIR
 from riko.base.exceptions import InvalidArchitectureError, InvalidPipelineError
-from riko.cli import _codegen, _document, _import_commands, _lint, _test, _upgrade
+from riko.cli import (
+    _codegen,
+    _docs,
+    _document,
+    _import_commands,
+    _lint,
+    _test,
+    _upgrade,
+)
 from riko.cli._coverage import build_ceiling_text
+from riko.cli._docs import gen_stale_path_citations, gen_stale_test_citations
 from riko.cli._docstyle import (
     gen_docstring_issues,
     gen_example_prose,
@@ -54,7 +63,7 @@ from riko.definitions._workflow_definition import Workflow
 from tests._workflows import DAG, DAG_PATH, PIPE_DEF
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable, Iterator
 
 
 def write(root: Path, path: str, text: str) -> None:
@@ -256,8 +265,8 @@ def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
     monkeypatch.setattr(
         _lint, "_lint_python", lambda *_, **_kw: calls.append("ruff") or 0
     )
-    monkeypatch.setattr(_lint, "_lint_rst", lambda *_: calls.append("rst") or 0)
-    monkeypatch.setattr(_lint, "_lint_docs", lambda: calls.append("docs") or 0)
+    monkeypatch.setattr(_lint, "lint_rst", lambda *_: calls.append("rst") or 0)
+    monkeypatch.setattr(_lint, "lint_docs", lambda: calls.append("docs") or 0)
     monkeypatch.setattr(
         _lint, "_lint_docstrings", lambda *_: calls.append("docstrings") or 0
     )
@@ -279,7 +288,7 @@ def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
     monkeypatch.setattr(
         _lint, "_verify_types", lambda *_: calls.append("verify-types") or 0
     )
-    monkeypatch.setattr(_lint, "_twine_check", lambda: calls.append("dist") or 0)
+    monkeypatch.setattr(_lint, "twine_check", lambda: calls.append("dist") or 0)
     monkeypatch.setattr(
         _lint, "_lint_python_strict", lambda *_: calls.append("strict") or 0
     )
@@ -520,6 +529,42 @@ class TestDocstyle:
     def test_docstring_summary_output_lead_detection(self) -> None:
         assert summary_leads_with_output("Returns the parsed response body.")
         assert not summary_leads_with_output("Parses the response body.")
+
+
+CITATION_SCANS = [
+    pytest.param(
+        gen_stale_test_citations,
+        "public/test_{}.py",
+        "tests/public/test_kept.py",
+        id="tests",
+    ),
+    pytest.param(gen_stale_path_citations, "riko/{}.py", "riko/kept.py", id="paths"),
+]
+
+
+class TestCitationLint:
+    """The stale test-file and source-file citation checks."""
+
+    @pytest.mark.parametrize(("scan", "template", "kept"), CITATION_SCANS)
+    def test_every_document_is_checked_against_the_known_files(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        scan: Callable[[str, Iterable[str]], Iterator[tuple[int, str]]],
+        template: str,
+        kept: str,
+    ) -> None:
+        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
+        gone = template.format("gone")
+        paths = (tmp_path / "a.md", tmp_path / "b.md")
+
+        for path in paths:
+            text = f"See `{template.format('kept')}` and `{gone}`.\n"
+            path.write_text(text, encoding="utf-8")
+
+        known = (name for name in (kept,))
+        offenders = _docs._gen_citation_offenders(scan, known, *paths)
+        assert list(offenders) == [f"a.md:1: {gone}", f"b.md:1: {gone}"]
 
 
 STANDARD = ROOT_DIR / "_docs" / "DOCUMENTATION_STANDARD.md"

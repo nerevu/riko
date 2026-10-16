@@ -25,8 +25,7 @@ class SyncPubSubHub:
     """
     The registry of synchronous receivers and their pending items.
 
-    Instantiated once by ``riko.runtime._pubsub`` as ``sync_hub``, which is how callers
-    reach it.
+    Instantiated once as the package's ``sync_hub``, which is how callers reach it.
 
     A receiver is a primed generator: ``seed`` registers one under a name
     alongside a queue for its items and a token identifying that particular

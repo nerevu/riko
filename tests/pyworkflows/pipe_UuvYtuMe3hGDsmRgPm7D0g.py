@@ -24,6 +24,7 @@ from riko.types.modules import (
 
 if TYPE_CHECKING:
     from riko import Context
+    from riko.types import Item
 
 
 INPUTS = [("", "name", "Name", "text", "Lancaster")]
@@ -31,7 +32,7 @@ DEPENDENCIES = ["csv", "filter", "input", "loop", "rename"]
 
 
 @workflow(subtype="transformer")
-def pipe(item=None, context: Context | None = None, **_):
+def pipe(item: Item | None = None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_371 = _input(
             item,

@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from riko.definitions._nodes import ConfInput
-    from riko.types._workflow import GraphEdge, GraphIndex, NodeId
+    from riko.types._workflow import Endpoint, GraphEdge, GraphIndex, NodeId
     from riko.types._wrappers import (
         AnyModuleWrapper,
         AsyncModuleWrapper,
@@ -364,6 +364,29 @@ _require_workflow = narrow_from_require(
 )
 
 
+def require_default_output_port(port: str, ref: str) -> None:
+    """
+    Rejects a non-default output port until multi-output delivery is executable.
+
+    Only the bare ``out`` port is executable today. A positional ``out:N`` or
+    semantic ``out:<name>`` source or selected workflow output is refused rather than
+    silently read as the node's default ``out`` stream.
+
+    Args:
+
+        port: The source or selected workflow output's port string to check.
+        ref: A human-readable reference to the offending edge or workflow output.
+
+    Raises:
+
+        InvalidPipelineError: If ``port`` is not the default ``out`` port.
+
+    """
+    if not parse_port(port).is_default:
+        msg = f"{ref} uses the non-default output port {port!r}, which cannot run yet."
+        raise InvalidPipelineError(msg)
+
+
 @define(frozen=True, slots=True)
 class ExecutionPlan:
     """
@@ -478,6 +501,61 @@ class ExecutionPlan:
             for k, n in pairs
         }
         return FrozenDict.from_frozen(prepared)
+
+    def require_output(self, output: str) -> tuple[Endpoint, frozenset[str]]:
+        """
+        Requires a default-port workflow output, with the nodes it runs.
+
+        Args:
+
+            output: The name of the workflow output to run.
+
+        Returns:
+
+            The output's endpoint and the ids of the nodes its subgraph runs.
+
+        Raises:
+
+            InvalidPipelineError: If the plan exposes no such workflow output, or it
+                reads a non-default output port.
+
+        """
+        if (endpoint := self.index.outputs.get(output)) is None:
+            raise InvalidPipelineError(f"workflow has no workflow output {output!r}")
+
+        require_default_output_port(endpoint.port, f"workflow output {output!r}")
+        return endpoint, self.index.required[output]
+
+    def require_seed_target(self, required: frozenset[str]) -> str:
+        """
+        Requires the one node in ``required`` whose default input is open to a seed.
+
+        A node's default input is open when no incoming stream edge targets its bare
+        default input port. A seed needs exactly one such node.
+
+        Args:
+
+            required: The node ids that the selected workflow output's subgraph runs.
+
+        Returns:
+
+            The id of the single node whose default input a supplied seed feeds.
+
+        Raises:
+
+            InvalidPipelineError: If the required subgraph has no single open input.
+
+        """
+        roots = required.intersection(self.index.order)
+        open_roots = [root for root in roots if self.index.is_open(root)]
+
+        if (count := len(open_roots)) == 1:
+            target = open_roots[0]
+        else:
+            msg = f"a seed requires exactly one open input, found {count}"
+            raise InvalidPipelineError(msg)
+
+        return target
 
     def validate(self) -> None:
         """

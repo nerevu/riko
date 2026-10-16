@@ -25,6 +25,7 @@ from riko.types.modules import (
 
 if TYPE_CHECKING:
     from riko import Context
+    from riko.types import Item
 
 
 INPUTS = [("", "q", "Status update", "text", "Here's #: some #hashtags to play #with")]
@@ -32,7 +33,7 @@ DEPENDENCIES = ["filter", "input", "itembuilder", "regex", "rename", "tokenizer"
 
 
 @workflow(subtype="transformer")
-def pipe(item=None, context: Context | None = None, **_):
+def pipe(item: Item | None = None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_417 = _input(
             item,

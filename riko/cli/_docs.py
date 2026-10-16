@@ -9,13 +9,14 @@ import tomllib
 from collections import Counter
 from glob import glob
 from io import StringIO
+from itertools import chain
 from os.path import basename, dirname, exists, isdir, join
 from pathlib import Path
 from shutil import which
 from subprocess import run
 from typing import TYPE_CHECKING, Any
 
-from riko.base._paths import ROOT_DIR
+from riko.base._paths import PACKAGE_DIR, ROOT_DIR
 
 from ._gen_api_surface import _BLOCK, _DOC, generate_api_surface
 
@@ -28,7 +29,7 @@ except ImportError:
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterable, Iterator
 
 _TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
 _LINE_ANCHOR_RE = re.compile(r"^L\d")
@@ -87,6 +88,8 @@ _HISTORY_WORDS = re.compile(
     r"\b(?:deleted|retired|removed|dropped|merged|superseded)\b", re.IGNORECASE
 )
 _CITING_DOCS = (ROOT_DIR / "CONTRIBUTING.rst", ROOT_DIR / "CLAUDE.md")
+_PATH_CITATION = re.compile(r"`(riko/[A-Za-z0-9_./-]+\.py)`")
+_CURRENT_STATE_DOCS = (*_CITING_DOCS, ROOT_DIR / "README.rst")
 _TARGET = re.compile(
     r"\b(target|targeted|planned|plan|next|prerequisite|prereq|future)\b", re.IGNORECASE
 )
@@ -191,7 +194,7 @@ def _get_link_errors(path: str, text: str, cache: dict[str, set[str]]) -> list[s
     return errors
 
 
-def _lint_rst(where: str | None = None) -> int:
+def lint_rst(where: str | None = None) -> int:
     """Validates RST rendering and internal links."""
     if publish_doctree is None:
         raise RuntimeError("docutils not found")
@@ -238,21 +241,21 @@ def _gameplan_paths() -> list[Path]:
     return sorted(path for path in globbed if path in tracked)
 
 
+def _root_doc_paths() -> list[Path]:
+    """List root internal Markdown documents tracked by git in stable order."""
+    tracked = _tracked_docs()
+    return sorted(path for path in _INTERNAL_DOCS.glob("*.md") if path in tracked)
+
+
 def _root_markdown_offenders() -> list[str]:
     """Find tracked root Markdown documents outside the authority allowlist."""
-    tracked = _tracked_docs()
-    return sorted(
-        path.name
-        for path in _INTERNAL_DOCS.glob("*.md")
-        if path in tracked and path.name not in _ROOT_MARKDOWN
-    )
+    paths = _root_doc_paths()
+    return [path.name for path in paths if path.name not in _ROOT_MARKDOWN]
 
 
 def _version_tuple(text: str) -> tuple[int, int, int]:
     """Parse the first semantic version in text."""
-    match = _VERSION.search(text)
-
-    if match:
+    if match := _VERSION.search(text):
         major, minor, patch = match.groups()
         parsed = (int(major), int(minor), int(patch))
     else:
@@ -270,9 +273,8 @@ def _packaged_version() -> tuple[int, int, int]:
 
 def _status_banner_offenders() -> list[str]:
     """Find gameplans that claim phase status locally."""
-    return [
-        path.name for path in _gameplan_paths() if _STATUS_BANNER.search(_read(path))
-    ]
+    paths = _gameplan_paths()
+    return [path.name for path in paths if _STATUS_BANNER.search(_read(path))]
 
 
 def _authority_namespace_offenders() -> list[str]:
@@ -319,9 +321,11 @@ def _phase_closure_offenders() -> list[str]:
     return offenders
 
 
-def get_stale_test_citations(text: str, known: frozenset[str]) -> list[tuple[int, str]]:
+def gen_stale_test_citations(
+    text: str, known: Iterable[str]
+) -> Iterator[tuple[int, str]]:
     """
-    Gets the test-file citations in ``text`` that name no current test file.
+    Finds the test-file citations in ``text`` that name no current test file.
 
     A line that says the file was deleted, retired, removed, dropped, merged, or
     superseded records history, so its citations are not checked.
@@ -331,67 +335,127 @@ def get_stale_test_citations(text: str, known: frozenset[str]) -> list[tuple[int
         text: The document text.
         known: The current test files, as ``tests/<tier>/test_<name>.py`` paths.
 
-    Returns:
+    Yields:
+
+        Each stale citation's line number and the path as cited.
+
+    Examples:
+
+        >>> from riko.cli._docs import gen_stale_test_citations
+        >>>
+        >>> known = ("tests/public/test_pipeline.py",)
+        >>> text = "See `public/test_pipeline.py` and `public/test_gone.py`."
+        >>> list(gen_stale_test_citations(text, known))
+        [(1, 'public/test_gone.py')]
+        >>> text = "`public/test_gone.py` was deleted."
+        >>> list(gen_stale_test_citations(text, known))
+        []
+
+    """
+    _known = frozenset(known)
+
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if not _HISTORY_WORDS.search(line):
+            for cited in _TEST_CITATION.findall(line):
+                path = cited if cited.startswith("tests/") else f"tests/{cited}"
+
+                if path not in _known:
+                    yield (lineno, cited)
+
+
+def gen_stale_path_citations(
+    text: str, known: Iterable[str]
+) -> Iterator[tuple[int, str]]:
+    """
+    Finds backticked ``riko/*.py`` citations that name no current source file.
+
+    A line that says the file was deleted, retired, removed, dropped, merged, or
+    superseded records history, so its citations are not checked.
+
+    Args:
+
+        text: The document text.
+        known: The current source files, as ``riko/...py`` paths.
+
+    Yields:
 
         Each stale citation's line number and cited path.
 
     Examples:
 
-        >>> from riko.cli._docs import get_stale_test_citations
+        >>> from riko.cli._docs import gen_stale_path_citations
         >>>
-        >>> known = frozenset({"tests/public/test_pipeline.py"})
-        >>> text = "See `public/test_pipeline.py` and `public/test_gone.py`."
-        >>> get_stale_test_citations(text, known)
-        [(1, 'public/test_gone.py')]
-        >>> get_stale_test_citations("`public/test_gone.py` was deleted.", known)
+        >>> known = ("riko/runtime/_export.py",)
+        >>> text = "See `riko/runtime/_export.py` and `riko/runtime/collections.py`."
+        >>> list(gen_stale_path_citations(text, known))
+        [(1, 'riko/runtime/collections.py')]
+        >>> list(gen_stale_path_citations("`riko/old.py` was deleted.", known))
         []
 
     """
-    return [
-        (lineno, cited)
-        for lineno, line in enumerate(text.splitlines(), 1)
-        if not _HISTORY_WORDS.search(line)
-        for cited in _TEST_CITATION.findall(line)
-        if (cited if cited.startswith("tests/") else f"tests/{cited}") not in known
-    ]
+    _known = frozenset(known)
+
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if not _HISTORY_WORDS.search(line):
+            for cited in _PATH_CITATION.findall(line):
+                if cited not in _known:
+                    yield (lineno, cited)
 
 
-def _stale_test_citation_offenders() -> list[str]:
+def _gen_citation_offenders(
+    scan: Callable[[str, Iterable[str]], Iterator[tuple[int, str]]],
+    known: Iterable[str],
+    *paths: Path,
+) -> Iterator[str]:
+    """Format each document's stale citations as ``path:line: cited`` offenders."""
+    _known = frozenset(known)
+
+    for path in paths:
+        for lineno, cited in scan(_read(path), _known):
+            yield f"{path.relative_to(ROOT_DIR)}:{lineno}: {cited}"
+
+
+def _gen_stale_test_citation_offenders() -> Iterator[str]:
     """Find tracked docs citing test files that no longer exist."""
-    known = frozenset(
+    known = (
         path.relative_to(ROOT_DIR).as_posix() for path in _TESTS_DIR.glob("*/test_*.py")
     )
-    tracked = _tracked_docs()
-    internal = (path for path in _INTERNAL_DOCS.glob("*.md") if path in tracked)
-    docs = [
-        *internal,
-        *_gameplan_paths(),
-        *_CITING_DOCS,
-        *sorted(_DOCS_DIR.glob("*.rst")),
-    ]
-    return [
-        f"{path.relative_to(ROOT_DIR)}:{lineno}: {cited}"
-        for path in docs
-        for lineno, cited in get_stale_test_citations(_read(path), known)
-    ]
+    docs = chain(
+        _root_doc_paths(),
+        _gameplan_paths(),
+        _CITING_DOCS,
+        sorted(_DOCS_DIR.glob("*.rst")),
+    )
+    yield from _gen_citation_offenders(gen_stale_test_citations, known, *docs)
+
+
+def _gen_stale_path_citation_offenders() -> Iterator[str]:
+    """
+    Find current-state docs citing source files that no longer exist.
+
+    ``MILESTONES.md`` records history, so it is not scanned.
+    """
+    py_paths = PACKAGE_DIR.rglob("*.py")
+    known = (path.relative_to(ROOT_DIR).as_posix() for path in py_paths)
+    internal = (path for path in _root_doc_paths() if path.name != "MILESTONES.md")
+    docs = chain(internal, _CURRENT_STATE_DOCS)
+    yield from _gen_citation_offenders(gen_stale_path_citations, known, *docs)
 
 
 def _api_surface_offenders() -> list[str]:
     """Find API-surface blocks that drift from the contract declaration."""
-    text = _read(_DOC)
     offenders: list[str] = []
 
-    if not text:
-        offenders.append("document is missing")
-    else:
+    if text := _read(_DOC):
         present = {match["key"] for match in _BLOCK.finditer(text)}
-        missing = sorted(_API_SURFACE_GROUPS - present)
 
-        if missing:
+        if missing := sorted(_API_SURFACE_GROUPS - present):
             offenders.append(f"missing generated blocks: {missing}")
 
         if generate_api_surface(text) != text:
             offenders.append("generated blocks are stale; run `manage codegen --api`")
+    else:
+        offenders.append("document is missing")
 
     return offenders
 
@@ -409,7 +473,7 @@ def _version_claim_offenders(current: tuple[int, int, int]) -> list[str]:
     ]
 
 
-def _lint_docs() -> int:
+def lint_docs() -> int:
     """Validates static internal-document consistency and authority rules."""
     problems: list[str] = []
     roadmap = _read(_ROADMAP)
@@ -424,13 +488,11 @@ def _lint_docs() -> int:
 
     linked = set(_GAMEPLAN_LINK.findall(roadmap))
     gameplans = {path.name for path in _gameplan_paths()}
-    missing = sorted(gameplans - linked)
-    stale = sorted(linked - gameplans)
 
-    if missing:
+    if missing := sorted(gameplans - linked):
         problems.append(f"{_ROADMAP}: unindexed authoritative gameplans: {missing}")
 
-    if stale:
+    if stale := sorted(linked - gameplans):
         problems.append(f"{_ROADMAP}: links to missing gameplans: {stale}")
 
     if offenders := _root_markdown_offenders():
@@ -476,8 +538,11 @@ def _lint_docs() -> int:
     if offenders := _api_surface_offenders():
         problems.append(f"{_DOC}: {'; '.join(offenders)}")
 
-    if offenders := _stale_test_citation_offenders():
+    if offenders := list(_gen_stale_test_citation_offenders()):
         problems.append(f"cited test files no longer exist: {'; '.join(offenders)}")
+
+    if offenders := list(_gen_stale_path_citation_offenders()):
+        problems.append(f"cited source files no longer exist: {'; '.join(offenders)}")
 
     for problem in problems:
         print(problem)

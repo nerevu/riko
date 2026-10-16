@@ -12,10 +12,11 @@ from riko.types.modules import StrconcatRawConf
 
 if TYPE_CHECKING:
     from riko.definitions._context import Context
+    from riko.types._streams import Item
 
 
 @workflow(subtype="transformer")
-def pipe(item=None, context: Context | None = None, **_):
+def pipe(item: Item | None = None, context: Context | None = None, **_):
     sw_1 = strconcat(
         item,
         conf=StrconcatRawConf(

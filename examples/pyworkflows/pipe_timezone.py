@@ -18,6 +18,7 @@ from riko.types.modules import DateFormatRawConf, ItemBuilderRawConf
 
 if TYPE_CHECKING:
     from riko import Context
+    from riko.types import Item
 
 
 INPUTS = []
@@ -25,7 +26,7 @@ DEPENDENCIES = ["dateformat", "itembuilder"]
 
 
 @workflow(subtype="source")
-def pipe(item=None, context: Context | None = None, **_):
+def pipe(item: Item | None = None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_1 = itembuilder(
             item,

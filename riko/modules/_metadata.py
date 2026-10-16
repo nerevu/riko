@@ -19,20 +19,20 @@ import builtins
 from functools import partial
 from importlib import import_module
 from pkgutil import iter_modules as iter_package_modules
-from typing import TYPE_CHECKING, Literal, cast, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 from riko.base._config import SINK_NAMES
 from riko.base._imports import import_or_else
 from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.runtime._module_registry import module_registry
-from riko.types._wrappers import WRAPPER_META
+from riko.types._wrappers import WRAPPER_META, require_wrapper_meta
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from riko.types._enums import ModuleNameLike
-    from riko.types._wrappers import ModuleWrapper
+    from riko.types._wrappers import WrapperMeta
     from riko.types.modules import ModuleCategory
 
 _PACKAGE = "riko.modules"
@@ -84,7 +84,7 @@ def get_module_category(metadata: ModuleMetadata) -> ModuleCategory:
 
 
 def _metadata_from_targets(
-    name: str, targets: tuple[ModuleWrapper, ...], *, label: str, strict_naming: bool
+    name: str, targets: tuple[WrapperMeta, ...], *, label: str, strict_naming: bool
 ) -> ModuleMetadata | None:
     attrs = tuple(attr for attr in WRAPPER_META if attr != "isasync")
 
@@ -156,8 +156,8 @@ def get_module_metadata(  # noqa: E302
     Raises:
 
         ValueError: When ``strict`` is true and the name has no metadata.
-        TypeError: When the module's sync and async pipes disagree about their
-            metadata.
+        TypeError: When the module's pipe lacks module metadata, or its sync and
+            async pipes disagree about their metadata.
 
     Examples:
 
@@ -174,10 +174,10 @@ def get_module_metadata(  # noqa: E302
         metadata = None
     else:
         pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
-        targets = tuple(cast("ModuleWrapper", pipe) for pipe in pipes if callable(pipe))
-        metadata = _metadata_from_targets(
-            canonical, targets, label=module.__name__, strict_naming=True
-        )
+        label = module.__name__
+        require = partial(require_wrapper_meta, what=f"{label} pipe")
+        args = (canonical, tuple(require(pipe) for pipe in pipes if callable(pipe)))
+        metadata = _metadata_from_targets(*args, label=label, strict_naming=True)
 
     if strict and metadata is None:
         raise ValueError(f"Module {name!r} has no metadata")

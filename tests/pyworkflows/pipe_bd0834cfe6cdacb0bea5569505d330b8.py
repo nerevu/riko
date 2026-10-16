@@ -15,6 +15,7 @@ from riko.types.modules import FetchDataRawConf, InputRawConf, UrlBuilderRawConf
 
 if TYPE_CHECKING:
     from riko import Context
+    from riko.types import Item
 
 
 INPUTS = [("", "gid", "MP Guardian ID", "text", "1276")]
@@ -22,7 +23,7 @@ DEPENDENCIES = ["fetchdata", "input", "urlbuilder"]
 
 
 @workflow(subtype="transformer")
-def pipe(item=None, context: Context | None = None, **_):
+def pipe(item: Item | None = None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_606 = _input(
             item,

@@ -253,6 +253,10 @@ commit; since `write` survives until `WriteNode` executes (R5C), `SINK_NAMES`
 
 - remove `SINK_NAMES`; regenerate discovery (`manage codegen --names` →
   `riko/modules/_names.py`, `riko/types/_module_ids.py`);
+- drop the `metadata.name in SINK_NAMES` branch of `get_module_category`
+  (`riko/modules/_metadata.py`) and its `"write"` → `'sink'` doctest; the body becomes
+  `"source" if metadata.subtype == "source" else "transform"`. The branch matches unqualified
+  names only, so a provider's `example.write` is already a transform;
 - remove `Sinks` from `riko/__init__.py` + the `MODULES` set in `_api_surface.py`
   (`manage codegen --api`);
 - update `tests/internal/test_codegen.py`, `tests/public/test_modules.py`, README/docs

@@ -353,6 +353,42 @@ def is_wrapper_meta(value: object) -> TypeIs[WrapperMeta]:
     return callable(value) and all(hasattr(value, attr) for attr in WRAPPER_META)
 
 
+def require_wrapper_meta(value: object, what: str | None = "pipe", **_) -> WrapperMeta:
+    """
+    Requires ``value`` to be a callable carrying every ``WRAPPER_META`` attribute.
+
+    Args:
+
+        value: The object to check.
+        what: How to name ``value`` in the error.
+
+    Returns:
+
+        ``value``, narrowed to the wrapper metadata it carries.
+
+    Raises:
+
+        TypeError: If ``value`` lacks the wrapper metadata a module decorator stamps.
+
+    Examples:
+
+        >>> from riko.modules.hash import pipe
+        >>>
+        >>> require_wrapper_meta(pipe).name
+        'hash'
+        >>> require_wrapper_meta(len, "example.pipe")
+        Traceback (most recent call last):
+            ...
+        TypeError: example.pipe has no module metadata...
+
+    """
+    if not is_wrapper_meta(value):
+        msg = f"{what} has no module metadata; decorate it with a module decorator"
+        raise TypeError(msg)
+
+    return value
+
+
 def stamp_wrapper_meta(
     target: Callable[..., object],
     *,

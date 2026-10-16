@@ -129,6 +129,9 @@ Enforcement:
   `_docs/` root doc, a gameplan, `CONTRIBUTING.rst`, `CLAUDE.md`, or `docs/*.rst` that names no
   current file; a line saying the file was deleted, retired, removed, dropped, merged, or
   superseded records history and is exempt. Repoint a moved test's citations when moving it.
+- The same check fails on a backticked `riko/*.py` citation in a tracked `_docs/` root doc,
+  `CLAUDE.md`, `README.rst`, or `CONTRIBUTING.rst` that names no current source file; gameplans,
+  `MILESTONES.md`, and `docs/*.rst` keep historical paths and are exempt.
 - `manage test --ratchet` fails when the full suite leaves more statements uncovered than
   `[tool.riko.coverage] uncovered` in `pyproject.toml`, and lowers that ceiling on a gain. The
   ceiling counts uncovered lines rather than a percentage, so losing coverage of existing code and

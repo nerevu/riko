@@ -44,7 +44,6 @@ from ._execution import (
     _BaseExecution,
     _FailedAcquisition,
     _is_async_only_closeable,
-    _require_output,
     _require_source,
 )
 from ._pools import open_pool
@@ -401,7 +400,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         source: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None,
     ) -> Iterator[T]:
         """Builds the item stream for one of the plan's workflow outputs."""
-        endpoint, required = _require_output(plan, output)
+        endpoint, required = plan.require_output(output)
         steps: SyncExecSteps = {}
 
         if self._policy.executor is Executor.PROCESS:

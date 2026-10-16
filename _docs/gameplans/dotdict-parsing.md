@@ -84,6 +84,12 @@ Naming: the helpers that move here (`resolve_sentinel`, `is_sentinel`, the `Sent
 `SentinelValue` key) implement *terminal references*, not sentinels; name them `resolve_terminal`,
 `is_terminal_ref`, and `TerminalRef` when they move, leaving "sentinel" to true sentinels such as `MISSING`.
 
+Measured 2026-10-15 (no owner before this phase): `gen_dict` resolves a nested mapping through
+`resolve_sentinel(v, v)` (`riko/parsing/_dotdict.py`), which returns a plain `dict`, so every nesting level
+is re-wrapped in a fresh `DotDict` on the way back out: `asdict()` on a 20-key item builds 71 `DotDict`s
+(down from 110 before `DotDict.__contains__` answered from the store). Fold the wrap into one pass when
+`resolve_sentinel` moves here; a strict xfail cannot probe a construction count, so there is no tripwire.
+
 Conceptually:
 
 raw = DotDict(conf).get_raw("URL")

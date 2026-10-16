@@ -25,6 +25,7 @@ from riko.base.exceptions import (
 from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._workflow_definition import Workflow
+from riko.modules import _metadata
 from riko.modules import count as count_module
 from riko.modules import regex as regex_module
 from riko.modules import tokenizer as tokenizer_module
@@ -682,6 +683,16 @@ class TestModuleMetadata:
         # operators and splitters cannot be embedded in a loop
         assert not get_module_metadata("count", strict=True).loopable
         assert not get_module_metadata("split", strict=True).loopable
+
+    def test_undecorated_pipe_is_named_in_the_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        module = ModuleType("riko.modules.bare")
+        module.pipe = lambda *args, **kwargs: iter(())  # pyright: ignore[reportAttributeAccessIssue]
+        monkeypatch.setattr(_metadata, "import_or_else", lambda *_: module)
+
+        with pytest.raises(TypeError, match=r"riko\.modules\.bare pipe has no module"):
+            get_module_metadata("bare")
 
     def test_operator_metadata_is_derived(self):
         @operator()

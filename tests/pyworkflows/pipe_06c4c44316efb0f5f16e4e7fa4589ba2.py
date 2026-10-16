@@ -16,6 +16,7 @@ from riko.types.modules import FetchRawConf, InputRawConf, SortRawConf, TailRawC
 
 if TYPE_CHECKING:
     from riko import Context
+    from riko.types import Item
 
 
 INPUTS = [("", "numberinput1", "How many items do you want in the feed?", "int", "5")]
@@ -23,7 +24,7 @@ DEPENDENCIES = ["fetch", "input", "sort", "tail"]
 
 
 @workflow(subtype="transformer")
-def pipe(item=None, context: Context | None = None, **_):
+def pipe(item: Item | None = None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         sw_123 = fetch(
             item,

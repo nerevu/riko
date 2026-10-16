@@ -178,6 +178,12 @@ sync when source is moved between package groups.
   from `riko/base/_api_surface.py`: `STABLE` maps to `riko`, `EXTENSION` to `riko.ext`,
   `EXT_CODEGEN` to `riko.ext.codegen`, and `TYPES` to `riko.types`, first match winning
   (`resolve_public_path` in `riko/cli/_docstyle.py`).
+- **Stale citation lint.** `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py`
+  citation (in the tracked `_docs/` root docs, gameplans, `CONTRIBUTING.rst`, `CLAUDE.md`, or
+  `docs/*.rst`) or `riko/*.py` citation (in the tracked `_docs/` root docs, `CLAUDE.md`,
+  `README.rst`, or `CONTRIBUTING.rst`; gameplans, `MILESTONES.md`, and `docs/` keep history) that names no
+  current file. A line saying the file was deleted, retired, removed, dropped, merged, or
+  superseded is exempt (`gen_stale_test_citations`/`gen_stale_path_citations` in `riko/cli/_docs.py`).
 - **Coverage ratchet.** `manage test --ratchet` counts `missing_lines` from a JSON report
   written to a fresh temp folder. Coverage runs on the `sysmon` core (Python 3.12
   `sys.monitoring`; about the cost of a no-coverage run) and measures the console scripts
