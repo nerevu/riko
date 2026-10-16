@@ -48,6 +48,9 @@ single command batch:
 
 - `git status --short`, `git diff --stat` (staged and unstaged), and
   `git log --oneline -8`.
+- Pending fixups: `git log --format='%h %s' HEAD --not --remotes`. Each
+  `fixup! <subject>` line names its target by subject; the oldest target in
+  that range is the base for step 6's rebase line.
 - For each owner you expect to touch, the relevant section only: `grep -n` for
   the slice/phase/feature names in `_docs/IMPLEMENTED.md`,
   `_docs/PHASE_CHECKLISTS.md`, the owning gameplan, `docs/CHANGES.rst`
@@ -157,8 +160,22 @@ not history:
 - Dates absolute, never relative. If everything landed clean with no
   successor work, say exactly that — an empty frontier is also information.
 
+If step 1 found pending `fixup!` commits, issue in the same response one Bash
+call that puts the autosquash line on the clipboard with `pbcopy`:
+
+```bash
+git rebase -i --autosquash --autostash <oldest-target>~1
+```
+
+`--autostash` lets it run while wrapup's doc edits are still uncommitted. In
+the handoff, record the fixups as "pending autosquash" with that line, so a
+session that starts before the user runs it knows to.
+
 ## 6. Report
 
 End with a short manifest: tidy's fixes and open findings, each file updated
 and the one-line reason, anything deliberately not updated (and why), the
-number of turns used against the seven-turn budget, and confirmation the session is safe to clear.
+number of turns used against the seven-turn budget, and confirmation the session
+is safe to clear. When fixups are pending, the manifest's last line is the
+rebase step: the user runs the clipboard line (shown for reference) only now,
+after wrapup has finished. `/land` deliberately leaves this step to wrapup.

@@ -172,8 +172,10 @@ unpushed commits it amends, plus at most one new commit for the rest.
      git add -A -- . ':(exclude)_docs/<scratch>.md' && git commit -F <scratchpad>/commit-new.txt
      ```
 
-   - **Last,** `git rebase -i --autosquash <oldest-target>~1`, where the
-     oldest target counts any `fixup!` commits already pending on the branch.
+   - **No rebase.** Leave the `fixup!` commits pending: the autosquash
+     rebase is handed over by `/wrapup` as its very last step, after its doc
+     and memory edits, so it runs once over everything the session amends.
+     Say so in the report.
 
    Before each commit, say what `git status --short` should show. A commit
    subject is at most 50 characters, house tag included; the body is at most
@@ -196,5 +198,6 @@ End with:
   hunks it takes) with its commands, then any remaining hunks under one
   suggested commit message using the house tags seen in `git log` (`[NEW]`,
   `[DEV]`, `[DOCS]`, …), its subject at most 50 characters. Mention any hunks
-  dropped from a fixup because the rehearsal conflicted. These are commands for the user to run, never executed
-  on their branch.
+  dropped from a fixup because the rehearsal conflicted, and that the
+  autosquash waits for `/wrapup`. These are commands for the user to run, never
+  executed on their branch.
