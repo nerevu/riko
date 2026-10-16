@@ -25,6 +25,8 @@ from riko.base.exceptions import CyclicIdentityError, IdentityEncodingError
 from ._dates import resolve_aware_datetime, tt_to_datetime
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from _typeshed import DataclassInstance
     from attrs import AttrsInstance
 
@@ -150,20 +152,21 @@ def _canon_map(value: object, seen: set[int]) -> CanonicalValue:
     return ["map", [[k, v] for k, v in ordered]]
 
 
+def _canon_record(
+    value: object, names: Iterable[str], seen: set[int]
+) -> CanonicalValue:
+    inner = sorted((name, _canon(getattr(value, name), seen)) for name in names)
+    return ["record", _type_id(type(value)), [[name, canon] for name, canon in inner]]
+
+
 def _canon_dataclass(value: object, seen: set[int]) -> CanonicalValue:
     instance = cast("DataclassInstance", value)
-    _fields = fields(instance)
-    inner = sorted((f.name, _canon(getattr(instance, f.name), seen)) for f in _fields)
-    return ["record", _type_id(type(value)), [[name, value] for name, value in inner]]
+    return _canon_record(value, (f.name for f in fields(instance)), seen)
 
 
 def _canon_attrs(value: object, seen: set[int]) -> CanonicalValue:
     attributes = attrs.fields(cast("type[AttrsInstance]", type(value)))
-    inner = sorted(
-        (attribute.name, _canon(getattr(value, attribute.name), seen))
-        for attribute in attributes
-    )
-    return ["record", _type_id(type(value)), [[name, value] for name, value in inner]]
+    return _canon_record(value, (a.name for a in attributes), seen)
 
 
 def _guard(

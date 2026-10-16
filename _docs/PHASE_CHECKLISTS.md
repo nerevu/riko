@@ -177,7 +177,7 @@ now owned by `SyncExecution`/`AsyncExecution`, one per `Pipeline` iteration.
 `DESCRIBE`), part of the stable surface. `describe_input`/`describe_dependencies` are read-only
 properties derived from `mode`; generated workflow modules dispatch on `mode` through
 `build_workflow_pipes` (`riko/runtime/_workflow_pipes.py`), where `DESCRIBE` returns
-`{"inputs", "dependencies"}`; `verbose`/`test`/`inputs` stay independent fields.
+`{"inputs", "dependencies"}`; `test`/`inputs` stay independent fields; verbosity is process-level (`set_log_level`), not a `Context` field.
 
 **Decisions.**
 - The "both bools independently true/false" state is unrepresentable — `DESCRIBE` is the one combined

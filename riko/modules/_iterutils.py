@@ -6,8 +6,7 @@ Attributes:
 
     SORT_FILLER: Orderable stand-in (``-inf``) for a sort value that cannot be cast.
     DATELIKE_TYPES: Cast types reduced to epoch timestamps for sorting.
-    INVALID_DEF_TYPES: Cast types with no usable typed default.
-    INVALID_TYPES: Cast types that cannot be cast at all.
+    INVALID_TYPES: Cast types with no usable sort value or typed default.
     NON_SORTABLE: Types (mappings, sequences) that fall back to the default key.
 
 """
@@ -23,12 +22,11 @@ from math import isnan
 from time import struct_time
 from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
-from requests.structures import CaseInsensitiveDict
-
 from riko.base._logging import get_logger
 from riko.coercion._dates import date_to_datetime, resolve_aware_datetime
-from riko.coercion.cast import CAST_SWITCH, cast_value
+from riko.coercion.cast import CAST_SWITCH, cast_value, resolve_cast_type
 from riko.types._enums import CastType
+from riko.types._guards import is_mapping
 from riko.types._scalars import PrimitiveValue, SortableValue
 
 if TYPE_CHECKING:
@@ -38,8 +36,7 @@ logger: Logger = get_logger(__name__)
 
 SORT_FILLER = float("-inf")
 DATELIKE_TYPES = frozenset({CastType.DATE, CastType.DATETIME})
-INVALID_DEF_TYPES = frozenset({CastType.LOCATION, CastType.NONE})
-INVALID_TYPES = frozenset({CastType.LOCATION, CastType.PASS, CastType.NONE})
+INVALID_TYPES = frozenset({CastType.LOCATION, CastType.NONE})
 NON_SORTABLE = (Mapping, Sequence)
 
 B = TypeVar("B", Literal[True], Literal[False])
@@ -71,7 +68,7 @@ def _resolve_uncastable(
         msg += ". Returning value without casting."
         logger.warning(msg)
         casted = value
-    elif isinstance(value, (dict, CaseInsensitiveDict, list, tuple, Mapping, Sequence)):
+    elif isinstance(value, NON_SORTABLE):
         msg += ". Returning default value."
         logger.warning(msg)
         casted = default
@@ -90,21 +87,20 @@ def _warn_and_default(type_name: str, default: SortableValue) -> SortableValue:
 
 
 def _resolve_default(
-    type_: str | None, invalid_type: bool | None, default: PrimitiveValue | None
+    cast_type: CastType | None, default: PrimitiveValue | None
 ) -> SortableValue:
     """
     Resolves the sort-key default for a cast type, kept orderable.
 
-    A cast default marks "no value" and may be non-orderable (``NaN`` for
-    ``float``/``decimal``, ``None`` for dates). Those and all date-like types
-    collapse to ``SORT_FILLER`` (``-inf``), which compares against real keys. A
-    falsy-but-valid caller default (``0``/``False``) is preserved; only ``None``
-    and a mapping default fall back to the empty string.
+    A cast default marks "no value" and may be non-orderable (``NaN`` for ``float``/
+    ``decimal``, ``None`` for dates). Those and all date-like types collapse to
+    ``SORT_FILLER`` (``-inf``), which compares against real keys. A falsy-but-valid
+    caller default (``0``/``False``) is preserved. Only ``None`` and a mapping default
+    fall back to the empty string, as does a cast type with no usable typed default.
 
     Args:
 
-        type_: The cast type name, or ``None`` for no casting.
-        invalid_type: Whether ``type_`` has no usable typed default.
+        cast_type: The cast type, or ``None`` for no casting.
         default: The caller-supplied default, if any.
 
     Returns:
@@ -114,19 +110,18 @@ def _resolve_default(
     """
     resolved = ""
 
-    if invalid_type and default is None:
-        logger.warning(f"Invalid cast type={type_}. Setting default to empty string.")
-    elif type_ and default is None:
-        _default = CAST_SWITCH[type_].get("default")
-        unorderable = isinstance(_default, (float, Decimal)) and isnan(_default)
+    if default is None:
+        if cast_type is not None and cast_type not in INVALID_TYPES:
+            _default = CAST_SWITCH[cast_type].get("default")
+            unorderable = isinstance(_default, (float, Decimal)) and isnan(_default)
 
-        if unorderable or type_ in DATELIKE_TYPES:
-            resolved = SORT_FILLER
-        elif _default is not None:
-            resolved = cast("SortableValue", _default)
+            if unorderable or cast_type in DATELIKE_TYPES:
+                resolved = SORT_FILLER
+            elif _default is not None:
+                resolved = cast("SortableValue", _default)
     elif isinstance(default, Mapping):
         logger.warning(f"Invalid {default=}. Setting to empty string.")
-    elif default is not None:
+    else:
         resolved = default
 
     return resolved
@@ -166,34 +161,34 @@ def def_itemgetter(
         (-inf, -inf)
 
     """
-    not_switch = type_ and type_ not in CAST_SWITCH
-    invalid_def_type = bool((type_ in INVALID_DEF_TYPES) or not_switch)
-    default = _resolve_default(type_, invalid_def_type, default)
-    invalid_type = bool((type_ in INVALID_TYPES) or not_switch)
+    resolved = resolve_cast_type(type_)
+    cast_type = None if resolved is CastType.PASS else resolved
+    sort_default = _resolve_default(cast_type, default)
+    invalid_type = cast_type in INVALID_TYPES
 
     def keyfunc(item: Mapping | PrimitiveValue) -> SortableValue:
-        if isinstance(item, (dict, CaseInsensitiveDict, Mapping)):
+        if is_mapping(item):
             value = item.get(attr)
         else:
             value = item
 
-        msg = f"Invalid cast type={type_} for key '{attr}'."
+        msg = f"Invalid cast type={type_} for key '{attr}'"
 
         if invalid_type:
-            casted = _resolve_uncastable(value, msg, default)
-        elif type_:
-            _casted = cast_value(value, CastType(type_))
+            casted = _resolve_uncastable(value, msg, sort_default)
+        elif cast_type is not None:
+            _casted = cast_value(value, cast_type)
             casted = cast("PrimitiveValue", _casted)
         elif isinstance(value, (str, int, struct_time)):
             casted = value
         elif isinstance(value, NON_SORTABLE):
-            casted = _warn_and_default(type(value).__name__, default)
+            casted = _warn_and_default(type(value).__name__, sort_default)
         elif value is not None:
             casted = value
         else:
-            casted = default
+            casted = sort_default
 
-        if type_ in DATELIKE_TYPES and isinstance(casted, (date, dt)):
+        if cast_type in DATELIKE_TYPES and isinstance(casted, (date, dt)):
             if isinstance(casted, dt):
                 aware = resolve_aware_datetime(casted, fallback_tzinfo=fallback_tzinfo)
             else:
@@ -202,7 +197,7 @@ def def_itemgetter(
             casted = aware.timestamp()
 
         if casted is None or (isinstance(casted, (float, Decimal)) and isnan(casted)):
-            casted = default
+            casted = sort_default
 
         return casted
 

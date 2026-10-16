@@ -3,6 +3,7 @@
 
 BADO = frozenset(
     {
+        "alist",
         "as_async",
         "async_chain",
         "async_map",

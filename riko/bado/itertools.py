@@ -127,6 +127,32 @@ def as_async[T](source: AnyIterable[T], cooperative: bool = False) -> AsyncItera
     return result
 
 
+async def alist[T](source: AnyIterable[T]) -> list[T]:
+    """
+    Collects a sync or async iterable into a list.
+
+    Args:
+
+        source: A sync or async iterable.
+
+    Returns:
+
+        The items of *source* in order.
+
+    Examples:
+
+        >>> from riko import as_async, run
+        >>>
+        >>> async def main():
+        ...     print(await alist(as_async([1, 2])))
+        >>>
+        >>> run(main)
+        [1, 2]
+
+    """
+    return [item async for item in as_async(source)]
+
+
 async def async_iter[T](
     elements: Iterable[T], cooperative: bool = False
 ) -> AsyncGenerator[T, None]:

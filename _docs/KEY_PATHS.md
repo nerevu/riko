@@ -34,7 +34,7 @@ internals stay in `_docs/INTERNALS.md`.
 | Path | Role |
 |---|---|
 | `riko/base/_api_surface.py` | **private** declaration of `STABLE`, `EXTENSION`, `TYPES`, and private surface name sets; source for generated blocks in `_docs/API_SURFACE.md` |
-| `riko/base/exceptions.py` | exception hierarchy rooted at `RikoError`; stable root exceptions are re-exported from `riko` |
+| `riko/base/exceptions.py` | exception hierarchy rooted at `RikoError` and the warnings rooted at `RikoWarning`; stable root exceptions are re-exported from `riko` |
 | `riko/base/_config.py` | static project policy (layer DAG, port/output tokens, `SINK_NAMES`, `SUBPIPE_TYPE`), and the frozen `Settings` with `RIKO_*` overrides |
 | `riko/base/_paths.py` | package/repository path constants and filesystem helpers used by runtime and CLI code |
 | `riko/base/_dateutils.py` | low-level date/time conversion helpers kept below coercion/runtime code |
@@ -43,18 +43,19 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/base/_source_format.py` | shared source-formatting helper used by generators |
 | `riko/base/_typing.py` | runtime type-hint helpers: `resolve_type_hints` (PEP 563 annotations with supplementary namespaces), `resolve_alias` (follows a `type` alias chain), and `gen_union_members` (flattens aliases, unions, and `Annotated` into arms), shared by return-kind inference and `require_from_form` |
 | `riko/base/{_constants,_imports,_locations,_logging,_strutils}.py` | small base utilities; keep them free of upward package dependencies; `_logging` holds the one pygogo configuration (`get_logger`/`set_log_level`) |
-| `riko/base/{currencies,locations,warnings}.py` | shared domain/reference helpers that sit at the bottom of the import graph |
+| `riko/base/{currencies,locations}.py` | shared domain/reference helpers that sit at the bottom of the import graph |
 
 ## Types and coercion
 
 | Path | Role |
 |---|---|
-| `riko/types/modules.py` | hand-maintained module configuration contracts; source input for config code generation; `ModuleMetadata` and its derived `provider` (`get_module_provider`: first dotted segment, `BUILTIN_PROVIDER` when unqualified); also the call options: the frozen `CallOptions` record `ModuleNode.options` stores (`from_raw`, `kwargs`), its keyword form `RawCallOptions` (emit/assign/field/count), and the `ContextOverrides` `TypedDict` (mode/inputs/verbose/test, mirroring `Context.replace`); plus the conf guards `require_module_conf`/`require_conf`, kept out of `__all__` |
+| `riko/types/modules.py` | hand-maintained module configuration contracts; source input for config code generation; `ModuleMetadata` and its derived `provider` (`get_module_provider`: first dotted segment, `BUILTIN_PROVIDER` when unqualified); also the call options: the frozen `CallOptions` record `ModuleNode.options` stores (`from_raw`, `kwargs`), its keyword form `RawCallOptions` (emit/assign/field/count), and the `ContextOverrides` `TypedDict` (mode/inputs/test, mirroring `Context.replace`); plus the conf guards `require_module_conf`/`require_conf`, kept out of `__all__` |
 | `riko/types/_module_ids.py` | **generated** `ModuleId`/`LoopableModuleId` literals; regenerate with `gen-names` or `manage codegen --names` |
 | `riko/types/_streams.py` | core `Item`/`Items`/stream aliases and async stream contracts |
 | `riko/types/_workflow.py` | Workflow v2 structural contracts (endpoints, port grammar, node/edge discriminants) plus `GraphEdge` and `GraphIndex`, the one topology interpretation `Workflow.index` builds and `Workflow.validate()`/execution planning both read. `GraphIndex` takes only node ids, edges, and outputs (`Endpoint`s); every other attribute is lazily derived from them using `riko/base/_graph.py` helpers, so a hand-built index is consistent and frozen |
 | `riko/types/_compiler.py` | the `PipeDef`/`PipeDefLike`/`Wire` shapes (the pipe definition `migrate_v1_to_v2` reads), the `is_pipe_id` stored-workflow name guard, `PipeDag`/`DagModule` for `Workflow.parse`, and the loop `CountValues`/`EmbedKwargs` contracts; `PipeDag`/`PipeDef`/`PipeDefLike` are re-exported on `riko.types` (TYPES tier); `riko/types/_pipeline.py` was deleted with the v1 compiler at cutover step 5 (2026-10-03) |
 | `riko/types/_collections.py` | immutability (`FrozenDict`, `freeze`/`freeze_json`/`thaw`), the `require_*`/`narrow_*`/`def_from_*` narrowing family (`require_from_form` for any type form, `require_from_keys` as the key check behind the TypedDict and attrs guards) and the attrs converters built on it, and `require_binding`, which checks node resource bindings |
+| `riko/types/_values.py` | the item/value type aliases pipe modules accept and return (`BasicArg`/`BasicReturn`, `RikoDict`/`RikoList`/`RikoValue`, the `Stringy*` family, `Inputs`) |
 | `riko/types/_resource.py` | resource factory/kind type contracts used by definitions and execution, plus factory classification (`FactoryKind`, `VALUE_FACTORY_KINDS`, `get_factory_kind`) and the lifecycle/context-manager guards |
 | `riko/types/_guards.py` | guards over generic shapes only (mappings, sequences, callables, protocol structural checks via `isinstance_strict`, sentinels, conf shapes); a guard narrowing a specific contract lives in that contract's module |
 | `riko/types/_enums.py` | shared enums and enum-like aliases, including serialization format typing and the `DocumentShape` (`dag`/`v1`/`v2`) a workflow input is read as |
@@ -94,8 +95,7 @@ iterator is consumed.
 | `riko/parsing/config.py` | parse-time module configuration normalization and casting |
 | `riko/parsing/documents.py` | XML/HTML/document parsing (`xml2etree`, `LinkParser`, etc.) |
 | `riko/rss/discovery.py` | feed discovery helpers |
-| `riko/rss/parsing.py` | RSS/Atom parser coordination |
-| `riko/rss/entries.py` | feed-entry normalization |
+| `riko/rss/feeds.py` | RSS/Atom feed parsing (`parse_rss`) and feed-entry normalization (`augment_entries`, `resolve_date`) |
 
 ## Definitions and execution resources
 

@@ -41,9 +41,9 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import RssItemBuilderObjconf
-    from riko.types._collections import RikoValue
     from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item
+    from riko.types._values import RikoValue
 
 OPTS: DecorationOptions = {"ftype": BasicCastType.NONE}
 DEFAULTS: Defaults = {}

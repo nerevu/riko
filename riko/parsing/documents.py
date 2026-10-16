@@ -32,8 +32,8 @@ if TYPE_CHECKING:
     from types import ModuleType
 
     from riko.io._filelike import FileLike
-    from riko.types._collections import RikoDict, Stringy, StringyDict
     from riko.types._streams import Item, Stream
+    from riko.types._values import RikoDict, Stringy, StringyDict
 
 try:
     from lxml import etree, html

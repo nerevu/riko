@@ -8,7 +8,8 @@ from time import struct_time
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 from meza.fntools import Objectify as _Objectify
-from requests.structures import CaseInsensitiveDict
+
+from riko.types._guards import is_mapping
 
 _VT = TypeVar("_VT")
 
@@ -119,7 +120,7 @@ def objectify[T](  # noqa: E302
         for any other value, or ``data`` unchanged when no ``func`` is given.
 
     """
-    if isinstance(data, (dict, CaseInsensitiveDict, Mapping)):
+    if is_mapping(data):
         objectified = Objectify(data, func=func, **defaults)
     elif func:
         if isinstance(data, (str, struct_time)):

@@ -18,9 +18,9 @@ from riko.base._locations import AnyLocation
 if TYPE_CHECKING:
     from riko.parsing._dotdict import DotDict
 
-    from ._collections import RikoDict, RikoValue, StringyDict
     from ._rss import RSSEntry
     from ._sentinels import StreamState
+    from ._values import RikoDict, RikoValue, StringyDict
 
 
 # Item/value

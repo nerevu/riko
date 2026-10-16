@@ -29,8 +29,11 @@ from riko.bado._backend import (
     fail_after,
 )
 from riko.base._config import settings as config
-from riko.base.exceptions import InvalidPipelineError, PipelineStateError
-from riko.base.warnings import ResourceInterpretationWarning
+from riko.base.exceptions import (
+    InvalidPipelineError,
+    PipelineStateError,
+    ResourceInterpretationWarning,
+)
 from riko.definitions._context import Context
 from riko.definitions._execution import ExecutionSettings
 from riko.definitions._nodes import ModuleNode, StreamEdge
@@ -1318,13 +1321,13 @@ class TestValues:
 
 class TestResourceEcosystem:
     def test_context_with_resource_is_immutable_copy(self):
-        base = Context(verbose=True)
+        base = Context(test=True)
         resource = Resource.from_factory(sync_gen_factory)
         derived = base.with_resource("resource", resource)
 
         assert "resource" not in base.resources
         assert derived.resources["resource"] is resource
-        assert derived.verbose
+        assert derived.test
         assert derived is not base
 
     def test_classify_rejects_non_resource(self):

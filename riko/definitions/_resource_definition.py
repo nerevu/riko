@@ -17,7 +17,7 @@ from warnings import warn
 
 from attrs import define, field
 
-from riko.base.warnings import ResourceInterpretationWarning
+from riko.base.exceptions import ResourceInterpretationWarning
 from riko.types._collections import FrozenDict, freeze
 from riko.types._io import is_closeable
 from riko.types._resource import (

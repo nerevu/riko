@@ -8,7 +8,7 @@ Application code imports from this namespace; extension authors use ``riko.ext``
 
 from riko.bado._backend import async_chain, async_sleep, backend, isasync, issync, run
 from riko.bado._util import async_read, async_return
-from riko.bado.itertools import as_async, async_map, async_map_stream
+from riko.bado.itertools import alist, as_async, async_map, async_map_stream
 from riko.base._paths import get_path, get_temp_file
 from riko.base.exceptions import (
     EmptyPipelineError,
@@ -78,6 +78,7 @@ __all__ = [
     "WorkflowDocument",
     "WorkflowLike",
     "WorkflowModule",
+    "alist",
     "as_async",
     "async_chain",
     "async_get_temp_file",

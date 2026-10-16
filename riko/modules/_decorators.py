@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterable, AsyncIterator, Iterator
 from functools import partial, wraps
-from inspect import iscoroutinefunction
 from itertools import chain
 from typing import (
     TYPE_CHECKING,
@@ -39,6 +38,7 @@ from attrs import define
 
 from riko.bado._util import as_awaitable
 from riko.bado.itertools import (
+    alist,
     as_async,
     async_iter,
     async_map,
@@ -51,7 +51,13 @@ from riko.parsing.config import get_field, get_skip
 from riko.types._collections import require_from_typed_dict, typed_dict_keys
 from riko.types._compiler import CountValues, EmbedKwargs
 from riko.types._enums import BasicCastType
-from riko.types._guards import is_listlike, is_mapping, is_streamlike
+from riko.types._guards import (
+    is_async_callable,
+    is_known_sequence,
+    is_listlike,
+    is_mapping,
+    is_streamlike,
+)
 from riko.types._options import (
     Casted,
     DecorationOptions,
@@ -88,7 +94,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.types._collections import RikoValue
+    from riko.types._values import RikoValue
     from riko.types._wrappers import (
         AsyncOperatorParser,
         AsyncOperatorWrapper,
@@ -299,7 +305,7 @@ class Module[B: (Literal[True], Literal[False])]:
             TypeError: When a parser named ``pipe`` is async or ``isasync=True``.
 
         """
-        awaitable = iscoroutinefunction(pipe)
+        awaitable = is_async_callable(pipe)
         name = getattr(pipe, "__name__", "")
         isasync = self.isasync or awaitable or name == "async_pipe"
 
@@ -558,8 +564,8 @@ async def _materialize_terminal[T](value: object) -> object:  # noqa: E302
     materialized: Iterator[T] | list[T] | T
 
     if isinstance(value, AsyncIterable):
-        materialized = iter([item async for item in value])
-    elif isinstance(value, (list, tuple)):
+        materialized = iter(await alist(value))
+    elif is_known_sequence(value):
         materialized = [await _materialize_terminal(item) for item in value]
     else:
         materialized = cast("T", value)
@@ -869,7 +875,7 @@ class _PreparedOperator(_PreparedCall["operator[Any]"]):
         extra: dict[str, object],
     ) -> AsyncOperatorWrapperInternalOutput:
         parser = self.parser
-        async_native = iscoroutinefunction(parser)
+        async_native = is_async_callable(parser)
 
         if isinstance(items, AsyncIterable):
             # Async-native composers (async def async_pipe, e.g. timeout/send)
@@ -879,7 +885,7 @@ class _PreparedOperator(_PreparedCall["operator[Any]"]):
             if async_native:
                 input_ = self.module.anormalize_input(items)
             else:
-                _items = [item async for item in self.module.anormalize_input(items)]
+                _items = await alist(self.module.anormalize_input(items))
                 input_ = iter(_items)
         else:
             input_ = self.module.normalize_input(items)
@@ -969,6 +975,12 @@ class _PreparedSplitter(_PreparedCall["splitter[Any]"]):
             self._parse(items, kwargs),
         )
         return await as_awaitable(parsed)
+
+
+def _wrap_item(item: ItemOrValue) -> DotDict[RikoValue]:
+    """Wraps a mapping as a ``DotDict`` and any other value under ``"content"``."""
+    _item = item if is_mapping(item) else {"content": item}
+    return DotDict(_item)
 
 
 class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
@@ -1101,10 +1113,8 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         """
         if item is None:
             parsed: DotDict[RikoValue] = DotDict()
-        elif is_mapping(item):
-            parsed = DotDict(item)
         else:
-            parsed = DotDict({"content": item})
+            parsed = _wrap_item(item)
 
         return parsed
 
@@ -1423,10 +1433,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         """
         for item in items or []:
-            if is_mapping(item):
-                yield DotDict(item)
-            else:
-                yield DotDict({"content": item})
+            yield _wrap_item(item)
 
     async def anormalize_input(self, items: AsyncItemsOrValues) -> AsyncStream:
         """
@@ -1445,10 +1452,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         """
         async for item in items:
-            if is_mapping(item):
-                yield DotDict(item)
-            else:
-                yield DotDict({"content": item})
+            yield _wrap_item(item)
 
     @overload
     def setup[T, E](  # noqa: E704

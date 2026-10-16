@@ -183,6 +183,13 @@ policy.
 Cache keys use the common canonical freezing/fingerprint system from `execution-semantics.md`. Do not
 invent cache-only serializers/hashes.
 
+Encoder cost note (measured 2026-10-16): `canonical_bytes` dumps each child once per enclosing
+sorted container plus once for the whole tree (a three-rule module conf: 18 JSON dumps, 1.6 KB
+dumped for a 621-byte result, 68 µs per call). After prepare-once that is one call per node per
+plan build, so the simpler encoder was kept. If this gameplan fingerprints per item, rewrite the
+encoder bytes-first (child bytes serve as both the sort key and the output; `canonicalize` becomes
+`json.loads` of those bytes) and keep the golden-byte tests as the identity guard.
+
 Automatic semantic fingerprints are appropriate for process-local default caching. Where a shared or
 persistent cache must remain correct across deploy/dependency changes, explicit node/resource
 `version=` follows the same durability guidance as other identity-sensitive boundaries.

@@ -46,9 +46,9 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import SubelementObjconf
-    from riko.types._collections import RikoValue
     from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item, Stream
+    from riko.types._values import RikoValue
 
 OPTS: DecorationOptions = {"emit": True}
 DEFAULTS: Defaults = {"token_key": "content"}

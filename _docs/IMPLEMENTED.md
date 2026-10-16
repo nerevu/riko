@@ -113,6 +113,18 @@ wrappers remain `Stream` / `AsyncStream` at the public boundary; splitters are t
 exception and return cascades. Broader `StreamOrValueStream`-style types remain internal
 implementation scaffolding rather than public pipe output contracts.
 
+**Shared value helpers (2026-10-15).** `resolve_cast_type` (`riko/coercion/cast.py`) is the one
+owner of the unknown-cast-type fallback: `None`/`""` resolve to `CastType.PASS` silently, an unknown
+name logs one warning and resolves to `PASS`; `cast_value`, the decorator caster builder, the sort
+key builder (`def_itemgetter`, which treats `PASS` as no casting so a sort rule never warns per
+item), and typed-value sentinels all call it. `DotDict.__contains__` answers a plain key from the
+case-insensitive store without constructing nested `DotDict`s, and a dotted `item["a.b.c"]` wraps
+each nested plain mapping so it walks any depth case-insensitively, matching `get`; `match_key`
+returns the stored spelling for every mapping kind. `alist` (`riko/bado/itertools.py`, on the stable
+surface) collects any iterable through `as_async`. The item/value aliases live in
+`riko/types/_values.py`; `Context` has no `verbose` field (verbosity is the `riko` logger's
+level); `truncate_content` (`riko/coercion/_sequences.py`) shortens `bytes` like `str`.
+
 ## 3. Pipe behavior (shipped)
 
 > **Partial.** Remaining lazy-Feed-chaining gaps → [execution-semantics.md](gameplans/execution-semantics.md).
@@ -224,7 +236,7 @@ missing field before casting and counts as present, so the item sorts among the 
 keeps the raw string. `def_itemgetter` keeps its scalar contract because `group_by`
 (`count`/`sum`/`regex`) stringifies its result.
 
-Feed entries resolve dates through `resolve_date` (`riko/rss/entries.py`): the first
+Feed entries resolve dates through `resolve_date` (`riko/rss/feeds.py`): the first
 usable value among the parser's `*_parsed` key and the raw string, parsed by
 `resolve_aware_datetime` when it is a string. A key is read only when the entry carries it
 (so `feedparser`'s deprecated `updated`→`published` fallback is never triggered), a
@@ -1028,7 +1040,7 @@ extras, defaults; all but the name default) whose `assign`/`emit` (read from the
 detection sees the node's extras, which `PreparedNode.extras` derives from its incoming edges
 (named ports, `others`, `resources`, `embed`). Call
 options are typed: `RawCallOptions` (emit/assign/field/count, the `**options` keyword form) and
-`ContextOverrides` (mode/inputs/verbose/test, mirroring `Context.replace`; `_resolve_context` is
+`ContextOverrides` (mode/inputs/test, mirroring `Context.replace`; `_resolve_context` is
 `base.replace(**overrides)`) live in `riko/types/modules.py`, and the decorators derive their
 option-name sets from them with `typed_dict_keys`. `ModuleNode.options` stores the frozen attrs
 `CallOptions` record (each field `| None`, `None` = unset, type-checked per field at construction;

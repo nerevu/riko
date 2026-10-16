@@ -47,16 +47,18 @@ from riko.coercion._dates import (
     resolve_aware_datetime,
     tt_to_datedict,
 )
-from riko.coercion.cast import cast_datetime
+from riko.coercion.cast import cast_datetime, resolve_cast_type
 from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._workflow import Workflow
 from riko.io._sync import Fetch
+from riko.modules._iterutils import def_itemgetter
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
-from riko.parsing._dotdict import DotDict, raw_get
+from riko.parsing._dotdict import DotDict, match_key, raw_get
 from riko.parsing.config import get_skip
 from riko.parsing.documents import XML_PARSER, any2dict
-from riko.rss.entries import augment_entries, resolve_date
+from riko.rss.feeds import augment_entries, resolve_date
 from riko.types import _workflow as workflow_types
+from riko.types._enums import CastType
 from riko.types._rss import FeedParserRSSEntry
 from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
 from riko.types.modules import XpathFetchPageConf
@@ -322,6 +324,33 @@ class TestCastDatetime:
         assert int(result.timestamp()) == 1181230100
 
 
+class TestResolveCastType:
+    def test_unknown_name_warns_once_and_passes(self, caplog):
+        with caplog.at_level(WARNING, logger="riko"):
+            resolved = resolve_cast_type("unknown")
+
+        assert resolved == CastType.PASS
+        assert [r.levelno for r in caplog.records] == [WARNING]
+
+
+SORT_KEY_WARNINGS = [
+    pytest.param("pass", 0, id="pass"),
+    pytest.param("", 0, id="empty"),
+    pytest.param("bogus", 1, id="unknown"),
+]
+
+
+class TestDefItemgetter:
+    @pytest.mark.parametrize(("type_", "warnings"), SORT_KEY_WARNINGS)
+    def test_uncast_types_warn_at_most_once(self, type_, warnings, caplog):
+        with caplog.at_level(WARNING, logger="riko"):
+            keyfunc = def_itemgetter("n", type_=type_)
+            keys = [keyfunc({"n": n}) for n in (3, 1, 2)]
+
+        assert keys == [3, 1, 2]
+        assert len(caplog.records) == warnings
+
+
 @pytest.fixture
 def tokyo(monkeypatch):
     if not hasattr(time, "tzset"):
@@ -510,6 +539,26 @@ DOTDICT_DELETES = [
 ]
 
 
+DOTDICT_CONTAINS = [
+    pytest.param("title", True, id="plain"),
+    pytest.param("TITLE", True, id="case-insensitive"),
+    pytest.param("author.name", True, id="dotted-present"),
+    pytest.param("author.url", False, id="dotted-absent"),
+    pytest.param("missing", False, id="missing"),
+    pytest.param({"subkey": "title"}, True, id="subkey-mapping"),
+    pytest.param("AUTHOR.NAME", True, id="dotted-case-insensitive"),
+]
+
+MATCH_KEYS = [
+    pytest.param(dict, "TITLE", "Title", id="plain-dict"),
+    pytest.param(DotDict, "TITLE", "Title", id="dotdict"),
+    pytest.param(dict, "Title", "Title", id="exact"),
+    pytest.param(dict, "author", None, id="missing"),
+]
+
+DOTTED_PATHS = ["a.b", "a.b.c", "author.name", "AUTHOR.NAME"]
+
+
 NESTED_WRITES = [
     pytest.param(methodcaller("__setitem__", "a.b.c", 2), id="set"),
     pytest.param(methodcaller("update", {"a.b.d": 3}), id="update"),
@@ -518,6 +567,20 @@ NESTED_WRITES = [
 
 
 class TestDotDict:
+    @pytest.mark.parametrize(("key", "expected"), DOTDICT_CONTAINS)
+    def test_contains(self, key, expected):
+        d = DotDict({"Title": "foo", "author": {"name": "bar"}})
+        assert (key in d) is expected
+
+    @pytest.mark.parametrize(("make", "key", "expected"), MATCH_KEYS)
+    def test_match_key_returns_the_stored_spelling(self, make, key, expected):
+        assert match_key(make({"Title": 1}), key) == expected
+
+    @pytest.mark.parametrize("key", DOTTED_PATHS)
+    def test_dotted_getitem_matches_get(self, key):
+        d = DotDict({"a": {"b": {"c": 1}}, "Author": {"Name": "x"}})
+        assert d[key] == d.get(key)
+
     @pytest.mark.parametrize(("source", "key", "expected"), DOTDICT_DELETES)
     def test_delete(self, source, key, expected):
         d = DotDict(source)
@@ -623,7 +686,7 @@ AUGMENT_FALLBACKS = [
 class TestRSSUtils:
     @pytest.mark.parametrize(("entry", "expected"), AUGMENT_FALLBACKS)
     def test_augment_entries_fallbacks(self, entry, expected):
-        """Feed-entry augmentation fallbacks from ``riko.rss.entries``."""
+        """Feed-entry augmentation fallbacks from ``riko.rss.feeds``."""
         item = next(augment_entries([FeedParserRSSEntry(entry)]))
         assert item.get("summary") == expected
         assert item.get("description") == expected

@@ -21,8 +21,9 @@ Index (file, then the subjects it owns, in file order):
                               ConverterPath, Csv, Jsonl, Framed, SessionLifecycle,
                               WriteExecution, Sink
     test_values.py            CanonicalBytes, Digest, ReprCache, CastDatetime,
-                              Fromdict, TryLocalTz, Dates, DotDict, Parsers, RSSUtils,
-                              Graph, GraphIndex, Logging
+                              ResolveCastType, DefItemgetter, Fromdict, TryLocalTz,
+                              Dates, DotDict, Parsers, RSSUtils, Graph, GraphIndex,
+                              Logging
     test_io.py                Fetch, LoopbackServer, AsyncUrlOpen,
                               ExtensionlessAsyncUrlOpen, Reencode, ConversionFuncs,
                               AsyncMapStream, AsyncMap, AsyncMerge, GatherResults,

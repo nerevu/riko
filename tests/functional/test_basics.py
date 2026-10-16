@@ -15,9 +15,8 @@ from urllib.request import urlopen
 import pytest
 
 from riko.base._dateutils import get_tzname
-from riko.base._strutils import truncate_content
 from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
-from riko.coercion._sequences import listize
+from riko.coercion._sequences import listize, truncate_content
 from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode
 from riko.definitions._resource_definition import Resource

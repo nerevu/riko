@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides riko specific exceptions."""
+"""Provides riko specific exceptions and warnings."""
 
 from __future__ import annotations
 
@@ -151,6 +151,14 @@ class ImportAnalysisError(ImportLintError): ...  # noqa: E701
 class InvalidArchitectureError(ImportLintError): ...  # noqa: E701
 
 
+class RikoWarning(UserWarning):
+    """Base class for Riko-specific warnings."""
+
+
+class ResourceInterpretationWarning(RikoWarning):
+    """Warns that a resource definition may be interpreted unexpectedly."""
+
+
 __all__ = [
     "CyclicIdentityError",
     "DuplicateReceiverError",
@@ -166,7 +174,9 @@ __all__ = [
     "PipelineStateError",
     "PubSubError",
     "ReceiverUnavailableError",
+    "ResourceInterpretationWarning",
     "RikoError",
+    "RikoWarning",
     "TargetError",
     "UnsupportedModuleError",
     "UnsupportedTargetError",

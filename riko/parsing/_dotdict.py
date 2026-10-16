@@ -14,7 +14,7 @@ from requests.structures import CaseInsensitiveDict
 from riko.base._logging import get_logger
 from riko.base._strutils import replacer
 from riko.coercion._objectify import Objectify
-from riko.coercion.cast import CAST_SWITCH, cast_value
+from riko.coercion.cast import cast_value, resolve_cast_type
 from riko.types._enums import CastType
 from riko.types._guards import (
     is_known_sequence,
@@ -31,9 +31,9 @@ if TYPE_CHECKING:
 
     from _typeshed import SupportsKeysAndGetItem
 
-    from riko.types._collections import Key, RikoList
     from riko.types._scalars import BasicValue, PrimitiveValue
     from riko.types._streams import Item, ItemOrValue, StatefulItem, Stream
+    from riko.types._values import RikoList
     from riko.types.modules import ConfArg
 
 logger: Logger = get_logger(__name__)
@@ -44,6 +44,8 @@ D = TypeVar("D")
 
 type Data[VT] = Iterable[tuple[str, VT]]
 type DotDictInput[VT] = Data[VT] | Item
+type SubkeyRef = Mapping[str, str]
+type Key = str | SubkeyRef
 
 
 def parse_key(key: Key | None = None) -> list[str]:
@@ -61,7 +63,28 @@ def parse_key(key: Key | None = None) -> list[str]:
 
 
 def match_key(data: object, key: str) -> str | None:
-    if is_mapping(data):
+    """
+    Case insensitively finds the ``data`` key named by ``key``.
+
+    Args:
+
+        data: The mapping to look in (non-mappings will match nothing).
+        key: The key to look up.
+
+    Returns:
+
+        The key as ``data`` stores it, or ``None`` when no key matches.
+
+    Examples:
+
+        >>> match_key({"Title": 1}, "TITLE")
+        'Title'
+
+    """
+    if isinstance(data, CaseInsensitiveDict):
+        stored = data._store.get(key.lower())
+        matched = None if stored is None else stored[0]
+    elif is_mapping(data):
         if key in data:
             matched = key
         else:
@@ -143,10 +166,8 @@ def resolve_sentinel[D, VT](  # noqa: E302
             pass
         elif type_ == CastType.LOCATION:
             logger.warning(f"Location type not supported! Not casting {parsed=}.")
-        elif type_ in CAST_SWITCH:
-            parsed = cast_value(parsed, type_=CastType(type_))
         elif type_ != "module":
-            logger.warning(f"Invalid cast type={type_}! Not casting {parsed=}.")
+            parsed = cast_value(parsed, resolve_cast_type(type_))
     else:
         _parsed = {}
 
@@ -161,8 +182,10 @@ def resolve_sentinel[D, VT](  # noqa: E302
 def gen_map_items[VT](
     *keys: str, data: Mapping[str, VT], **kwargs: VT
 ) -> Iterator[tuple[str, VT | None]]:
+    dd = data if DotDict.is_self(data) else DotDict(data)
+
     for key in keys:
-        value = DotDict(data).get(key, **kwargs)
+        value = dd.get(key, **kwargs)
         v = next(gen_dict(value, default_key=None))
         yield (key.lower(), v)
 
@@ -483,7 +506,8 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             msg = f"Ignoring unsupported key {key} to access non-mapping value {value}."
 
             if is_mapping(value):
-                value = cast("VT", value[key])
+                nested = value if self.is_self(value) else DotDict(value)
+                value = cast("VT", nested[key])
             else:
                 logger.warning(msg)
 
@@ -494,6 +518,33 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             result = cast("VT", self.dictize(parsed))
 
         return result
+
+    def __contains__(self, key: object) -> bool:
+        """
+        Checks whether a key, dotted path, or subkey mapping resolves to a value.
+
+        Examples:
+
+            >>> r = DotDict({'A': {'content': 'value'}})
+            >>> 'a' in r
+            True
+            >>> 'a.content' in r
+            True
+            >>> 'b' in r
+            False
+
+        """
+        if isinstance(key, str) and "." not in key:
+            contained = key.lower() in self._store
+        else:
+            try:
+                self[cast("Key", key)]
+            except KeyError:
+                contained = False
+            else:
+                contained = True
+
+        return contained
 
     def __setitem__(self, key: str, value: VT) -> None:
         """

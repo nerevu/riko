@@ -36,10 +36,10 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import InputObjconf
-    from riko.types._collections import Inputs
     from riko.types._options import DecorationOptions, Defaults
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import Item
+    from riko.types._values import Inputs
 
 OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = {

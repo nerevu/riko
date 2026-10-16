@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING, cast, overload
 from attrs import Factory, define, field
 
 from riko.base._iterutils import broadcast, dispatch
-from riko.base._logging import get_logger
 from riko.coercion._objectify import objectify
 from riko.coercion._sequences import listize
-from riko.coercion.cast import CAST_SWITCH, cast_none, cast_pass, cast_value
+from riko.coercion.cast import cast_none, cast_pass, cast_value, resolve_cast_type
+from riko.parsing._dotdict import match_key
 from riko.parsing.config import conf_is_dynamic, get_field, resolve_conf
 from riko.types._collections import narrow_from_require, require_from_form
 from riko.types._enums import BasicCastType, CastType
@@ -37,17 +37,14 @@ from riko.types.modules import AnyModuleConf, Conf, require_module_conf
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from logging import Logger
 
     from riko.base._locations import AnyLocation
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.parsing._dotdict import DotDict
-    from riko.types._collections import BasicReturn, RikoDict, RikoList, RikoValue
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import Item, ItemOrValue
+    from riko.types._values import BasicReturn, RikoDict, RikoList, RikoValue
     from riko.types._wrappers import ExtraNames
-
-logger: Logger = get_logger(__name__)
 
 
 def build_conf(
@@ -86,13 +83,13 @@ def build_conf(
         merged_conf = require_module_conf(defaults)
 
     if extract := opts.get("extract"):
-        try:
-            pieces = next(v for k, v in merged_conf.items() if k.lower() == extract)
-        except StopIteration:
+        matched = match_key(merged_conf, extract)
+
+        if matched is None:
             label = f"the {module!r} module" if module else "this module"
-            raise TypeError(f"{label} requires the {extract!r} conf key") from None
-        else:
-            pieces = cast("BasicReturn", pieces)
+            raise TypeError(f"{label} requires the {extract!r} conf key")
+
+        pieces = cast("BasicReturn", merged_conf[matched])
 
         pieces_or_conf = listize(pieces) if opts.get("listize") else pieces
     else:
@@ -111,7 +108,7 @@ def _build_caster[T](  # noqa: E302
     type_: BasicCastType | CastType | None,
 ) -> ArgCaster[T | PrimitiveValue | ItemOrValue]:
     """
-    Builds a caster for a cast type, degrading on an unknown one.
+    Builds a caster for a known cast type and degrades on an unknown one.
 
     An unrecognized ``type_`` logs a warning and falls back to ``cast_pass``
     (pass-through) rather than raising.
@@ -125,16 +122,12 @@ def _build_caster[T](  # noqa: E302
         A caster callable taking content and optional kwargs.
 
     """
-    if type_ in CAST_SWITCH:
-        cast_type = CastType(type_)
+    if (cast_type := resolve_cast_type(type_)) == CastType.PASS:
+        caster = cast_pass
+    else:
 
         def caster(content: T, **kwargs: object) -> T | PrimitiveValue | AnyLocation:
             return cast_value(content, cast_type, **kwargs)
-    else:
-        if type_:
-            logger.warning(f"Invalid cast {type_=}. Ignoring.")
-
-        caster = cast_pass
 
     return caster
 

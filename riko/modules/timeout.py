@@ -35,7 +35,7 @@ from datetime import timedelta
 from time import monotonic_ns
 from typing import TYPE_CHECKING, Any, Self, cast
 
-from riko.bado.itertools import as_async
+from riko.bado.itertools import alist, as_async
 from riko.base._logging import get_logger
 from riko.types._enums import BasicCastType
 
@@ -67,7 +67,7 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
         self.deadline: int | None = None
 
     async def _collect(self) -> Iterator[T]:
-        return iter([item async for item in self])
+        return iter(await alist(self))
 
     def _raise_if_expired(self) -> None:
         if self.timeout_ns:

@@ -42,8 +42,8 @@ from ._resource_definition import Resource, ReusableResource
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from riko.types._collections import Inputs
     from riko.types._resource import LifecycleFactory
+    from riko.types._values import Inputs
 
     from ._resource_definition import ResourceDefinition, ReusableResources
 
@@ -80,8 +80,6 @@ class Context:
             default, or ``None`` when none were given (an ``input`` module then
             prompts unless ``test``).
 
-        verbose: Whether to print debug output.
-
         test: Whether to use defaults instead of prompting.
 
         resources: Read-only, keyed by name, and populated only via ``with_resource``.
@@ -90,7 +88,6 @@ class Context:
 
     mode: ExecutionMode = field(default=ExecutionMode.RUN, converter=_normalize_mode)
     inputs: Inputs | None = field(default=None, converter=_input_converter)
-    verbose: bool = field(default=False, converter=bool)
     test: bool = field(default=False, converter=bool)
     resources: ReusableResources = field(
         default=EMPTY_RESOURCES,
@@ -100,7 +97,7 @@ class Context:
     )
 
     def __repr__(self) -> str:
-        content = f"mode={self.mode}, verbose={self.verbose}, test={self.test}, "
+        content = f"mode={self.mode}, test={self.test}, "
         inputs = None if self.inputs is None else dict(self.inputs)
         content += f"inputs={inputs}"
         return f"Context({content})"
@@ -138,7 +135,6 @@ class Context:
         *,
         mode: ExecutionMode | None = None,
         inputs: Inputs | None = None,
-        verbose: bool | None = None,
         test: bool | None = None,
     ) -> Self:
         """
@@ -152,7 +148,6 @@ class Context:
 
             mode: Replacement execution mode, or ``None`` to keep the current one.
             inputs: Replacement input overrides, or ``None`` to keep the current ones.
-            verbose: Replacement verbose flag, or ``None`` to keep the current one.
             test: Replacement test flag, or ``None`` to keep the current one.
 
         Returns:
@@ -164,7 +159,6 @@ class Context:
             self,
             mode=self.mode if mode is None else mode,
             inputs=self.inputs if inputs is None else inputs,
-            verbose=self.verbose if verbose is None else verbose,
             test=self.test if test is None else test,
         )
 

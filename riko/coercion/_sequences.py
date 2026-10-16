@@ -4,22 +4,23 @@ from __future__ import annotations
 
 import builtins
 import itertools
+from collections.abc import Sequence
 from functools import partial
 from inspect import signature
 from itertools import repeat
 from time import struct_time
 from typing import TYPE_CHECKING, Any, Self, cast, overload
 
-from requests.structures import CaseInsensitiveDict
-
-from riko.base._iterutils import multi_try
-from riko.types._guards import is_listlike
+from riko.base._iterutils import map_values, multi_try
+from riko.types._guards import is_known_sequence, is_listlike, is_mapping
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Mapping
 
-    from riko.types._collections import BasicDict, RikoValue, StringyDict
+    from requests.structures import CaseInsensitiveDict
+
     from riko.types._streams import Item, Stream, StreamOrValueStream, ValueStream
+    from riko.types._values import BasicDict, RikoValue, StringyDict
 
 
 @overload
@@ -130,13 +131,51 @@ def gen_items(  # noqa: E302
         [None]
 
     """
-    if isinstance(content, (struct_time, dict, CaseInsensitiveDict)):
+    if isinstance(content, struct_time) or is_mapping(content):
         yield {key: content} if key else content
-    elif isinstance(content, (list, tuple)):
+    elif is_known_sequence(content):
         for value in content:
             yield from gen_items(value, key)
     elif content is not None or yield_if_none:
         yield {key: content} if key else content
+
+
+def truncate_content[T](content: T | object, length: int = 20) -> T:
+    """
+    Shortens every string or bytes value for a log message, recursing into containers.
+
+    Args:
+
+        content: A string, bytes, a mapping or sequence of values, or any other value.
+        length: The longest a string or bytes value stays before it is cut and marked
+            with "…".
+
+    Returns:
+
+        The shortened value; a value with nothing to shorten is returned as is.
+
+    Examples:
+
+        >>> truncate_content({"a": "x" * 30, "n": 5}, length=4)
+        {'a': 'xxxx…', 'n': 5}
+        >>> truncate_content(b"x" * 30, length=4)
+        b'xxxx\xe2\x80\xa6'
+
+    """
+    if isinstance(content, str):
+        truncated = content[:length] + "…" if len(content) > length else content
+    elif isinstance(content, bytes):
+        truncated = (
+            content[:length] + "…".encode() if len(content) > length else content
+        )
+    elif is_mapping(content):
+        truncated = map_values(partial(truncate_content, length=length), content)
+    elif isinstance(content, Sequence):
+        truncated = [truncate_content(v, length) for v in content]
+    else:
+        truncated = content
+
+    return cast("T", truncated)
 
 
 class Chainable:

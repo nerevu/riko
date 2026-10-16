@@ -46,9 +46,9 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import RegexObjconf
-    from riko.types._collections import RikoValue
     from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item
+    from riko.types._values import RikoValue
     from riko.types.modules import RegexConfRule, RegexRule
 
 OPTS: DecorationOptions = {"listize": True, "extract": "rule", "emit": True}

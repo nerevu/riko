@@ -1,11 +1,10 @@
-"""Collection, mapping, and nested value typing aliases."""
+"""Immutable mappings and the narrowing helpers that validate typed records."""
 
 from __future__ import annotations
 
 import ast
-from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from dataclasses import Field, asdict, fields, is_dataclass
-from decimal import Decimal
 from functools import partial
 from math import isinf, isnan
 from typing import (
@@ -31,15 +30,18 @@ from riko.base._iterutils import map_values, sort_stably
 from riko.base._typing import gen_union_members
 from riko.base.exceptions import InvalidPipelineError
 
-from ._guards import is_attrs_inst, is_conf_rule, is_mapping, require_mapping
+from ._guards import (
+    is_attrs_inst,
+    is_conf_rule,
+    is_known_sequence,
+    is_mapping,
+    require_mapping,
+)
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
-    from riko.parsing._dotdict import DotDict
-
     from ._enums import StrLike
-    from ._scalars import BasicValue, PrimitiveValue
     from ._workflow import GraphEdge
 
 type FrozenJSON = (
@@ -57,9 +59,6 @@ type FrozenParams = FrozenDict[str, FrozenJSON]
 type FrozenPolicy = FrozenDict[str, FrozenJSON]
 type FrozenTupleMapping = FrozenDict[str, tuple[GraphEdge, ...]]
 type FrozenSetMapping = FrozenDict[str, frozenset[str]]
-type Inputs = Mapping[str, str | int | bool]
-type SubkeyRef = Mapping[str, str]
-type Key = str | SubkeyRef
 type AttrsValidator[T] = Callable[[AttrsInstance, Attribute[Any], T], None]
 
 type Freezer[FV] = Callable[[Mapping[str, object]], FrozenDict[str, FV]]
@@ -73,36 +72,7 @@ type DefFunc[T, R] = Callable[[T | None], R]
 
 _KEY_QUALIFIERS = frozenset({"Required", "NotRequired"})
 
-# Args
-type BasicMapping = Mapping[str, BasicValue]
-type BasicArg = BasicValue | BasicMapping | Sequence[BasicValue]
 type DataclassLike = DataclassInstance | type[DataclassInstance]
-
-# Returns
-type BasicDict = (
-    dict[str, str]
-    | dict[str, bool]
-    | dict[str, int]
-    | dict[str, Decimal]
-    | dict[str, float]
-)
-type BasicList = list[str] | list[bool] | list[int] | list[Decimal] | list[float]
-type BasicReturn = BasicValue | BasicDict | BasicList | tuple[BasicValue, ...]
-
-type Stringy = str | StringyList | StringyDict
-type StringyDict = dict[str, Stringy]
-type StringyList = list[Stringy]
-
-type RikoDict = (
-    BasicDict
-    | StringyDict
-    | dict[str, PrimitiveValue]
-    | dict[str, BasicDict]
-    | dict[str, BasicList]
-    | "DotDict[PrimitiveValue]"
-)
-type RikoList = BasicList | list[BasicDict] | StringyList
-type RikoValue = PrimitiveValue | RikoList
 
 
 # Other
@@ -181,7 +151,7 @@ def _freeze_value(value: object, json_native: bool = False) -> object:  # noqa: 
         result = FrozenDict.from_frozen(_freeze_items(value, json_native))
     elif is_named_tuple and not json_native:
         result = value
-    elif isinstance(value, (list, tuple)):
+    elif is_known_sequence(value):
         result = tuple(_freeze_value(item, json_native) for item in value)
     elif json_native and is_conf_rule(value):
         result = FrozenDict.from_frozen(_freeze_items(asdict(value), json_native))

@@ -26,10 +26,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from re import Pattern, RegexFlag
 
-    from ._collections import Inputs, TypeRequire
+    from ._collections import TypeRequire
     from ._enums import CastType, ExecutionMode, FmtLike, LocationType, SortableCastType
     from ._io import PathLike
     from ._scalars import BasicValue
+    from ._values import Inputs
 
 
 # Shared
@@ -1050,7 +1051,6 @@ class ContextOverrides(TypedDict, total=False):
 
     mode: ExecutionMode
     inputs: Inputs
-    verbose: bool
     test: bool
 
 

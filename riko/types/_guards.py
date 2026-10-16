@@ -28,10 +28,10 @@ from ._sentinels import MISSING, SentinelValue, StreamState
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
-    from ._collections import BasicList
     from ._scalars import BasicValue
     from ._sentinels import MissingType, Sentinel
     from ._streams import AnyIterable, Item, StatefulItem
+    from ._values import BasicList
     from .modules import AnyConfRule, Conf, ConfArg
 
 

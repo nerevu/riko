@@ -38,7 +38,7 @@ from jinja2 import Environment, PackageLoader
 from riko.base._source_format import ruff_format
 from riko.base._strutils import pythonise
 from riko.definitions._workflow import normalize_workflow
-from riko.types._guards import is_mapping
+from riko.types._guards import is_known_sequence, is_mapping
 from riko.types._workflow import WorkflowModule
 
 if TYPE_CHECKING:
@@ -103,7 +103,7 @@ def render_value(value: object) -> str:
     if is_mapping(value):
         pairs = (f"{key!r}: {render_value(item)}" for key, item in value.items())
         result = "{" + ", ".join(pairs) + "}"
-    elif isinstance(value, (list, tuple)):
+    elif is_known_sequence(value):
         result = "[" + ", ".join(render_value(item) for item in value) + "]"
     else:
         result = repr(value)

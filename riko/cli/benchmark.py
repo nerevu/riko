@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from riko.bado._backend import async_sleep, isasync
 from riko.bado._backend import run as async_run
-from riko.bado.itertools import async_map
+from riko.bado.itertools import alist, async_map
 from riko.base._paths import get_path
 from riko.definitions._workflow import normalize_workflow
 from riko.execution._pools import get_worker_cnt
@@ -164,13 +164,13 @@ async def async_pipeline() -> Items:
 
     for conf in confs:
         pipeline = Pipeline.from_module("fetch", conf=conf)
-        results.extend([item async for item in pipeline])
+        results.extend(await alist(pipeline))
 
     return results
 
 
 async def async_workflow() -> Items:
-    return [item async for item in Pipeline(fanin)]
+    return await alist(Pipeline(fanin))
 
 
 def summarize_results(results: Sequence[float]) -> tuple[float, str]:

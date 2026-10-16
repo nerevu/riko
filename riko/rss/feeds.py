@@ -1,15 +1,34 @@
 # vim: sw=4:ts=4:expandtab
-"""RSS/feed entry helpers for text extraction, enrichment, and content truncation."""
+"""
+RSS and Atom feed parsing and entry normalization.
+
+Examples:
+
+    >>> from riko.rss.feeds import parse_rss
+    >>>
+    >>> content = (
+    ...     "<rss version='2.0'><channel><title>Example</title>"
+    ...     "<item><title>First</title></item></channel></rss>"
+    ... )
+    >>> parse_rss(content=content)[0]["title"]
+    'First'
+
+"""
 
 from __future__ import annotations
 
 from datetime import date
 from datetime import datetime as dt
 from time import struct_time
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast, overload
+from urllib.error import URLError
+from xml.sax import SAXParseException  # noqa: S406
 
 from riko.base._logging import get_logger
 from riko.coercion._dates import date_to_tt, resolve_aware_datetime
+from riko.coercion._sequences import truncate_content
+from riko.io._sync import Fetch
+from riko.parsing.documents import IS_FASTFEEDPARSER, rss_parser
 from riko.types._guards import is_mapping
 
 if TYPE_CHECKING:
@@ -22,8 +41,95 @@ if TYPE_CHECKING:
         RSSEntry,
         YahooRSSEntry,
     )
+    from riko.types._scalars import AnyStr
+    from riko.types._values import BasicArg
 
 logger: Logger = get_logger(__name__)
+
+
+# The overloads are so I can call parse_rss(**kwargs) without Pyright complaining.
+# https://stackoverflow.com/q/79673094
+@overload
+def parse_rss(  # noqa: E704
+    url: str, *, content: None = ..., **kwargs: BasicArg
+) -> list[ParserRSSEntry]: ...
+@overload  # noqa: E302
+def parse_rss(  # noqa: E704
+    *, content: AnyStr, **kwargs: BasicArg
+) -> list[ParserRSSEntry]: ...
+@overload
+def parse_rss(**kwargs: Any) -> list[ParserRSSEntry]: ...  # noqa: E704
+def parse_rss(  # noqa: E302
+    url: BasicArg = "", *, content: AnyStr | None = None, **kwargs: BasicArg
+) -> list[ParserRSSEntry]:
+    """
+    Fetches or reads an RSS/Atom feed and returns its parsed entries.
+
+    Args:
+
+        url: URL, path, or source string used when ``content`` is not supplied.
+        content: Feed content to parse directly instead of fetching ``url``.
+        **kwargs: Additional options forwarded to ``Fetch`` when reading ``url``.
+
+    Returns:
+
+        Parsed RSS/Atom entries in source order.
+
+    Examples:
+
+        >>> content = (
+        ...     "<rss version='2.0'><channel><title>Example</title>"
+        ...     "<item><title>First</title></item></channel></rss>"
+        ... )
+        >>> entries = parse_rss(content=content)
+        >>> len(entries), entries[0]["title"]
+        (1, 'First')
+
+    """
+    f = None
+
+    if content is None:
+        source_name = str(url)
+
+        try:
+            f = Fetch(source_name, binary=True, **kwargs)
+        except URLError:
+            source, source_name = source_name, "content"
+        else:
+            if f.file and IS_FASTFEEDPARSER:
+                # fastfeedparser.parse takes str/bytes only (no file-like input)
+                source = f.read()
+            elif f.file:
+                source = f.file  # feedparser reads the file object directly
+            else:
+                source = b""
+    else:
+        source, source_name = content, "content"
+
+    try:
+        parsed = rss_parser.parse(source)
+    finally:
+        if f:
+            f.close()
+
+    bozo = parsed.get("bozo")
+    entry_count = len(parsed.entries)
+
+    if bozo is False and not entry_count:
+        logger.warning(f"Parsed {source_name} successfully but no entries were found.")
+    elif (bozo is False) or (entry_count > 3):
+        pass
+    elif bozo_exception := parsed.get("bozo_exception"):
+        if isinstance(bozo_exception, SAXParseException):
+            msg = bozo_exception.getMessage()
+            logger.warning(f"Error parsing {source_name}: {msg}")
+        else:
+            msg = str(bozo_exception)
+            logger.error(f"Error parsing {source_name}: {msg}")
+
+        logger.warning(f"Content: {truncate_content(source)}")
+
+    return cast("list[ParserRSSEntry]", parsed.entries)
 
 
 def _get_entry_text(entry: ParserRSSEntry) -> str:

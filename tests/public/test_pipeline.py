@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, ClassVar, cast, get_args, get_origin
 import pytest
 
 from riko.bado._backend import async_sleep, checkpoint, fail_after
-from riko.bado.itertools import async_iter
+from riko.bado.itertools import alist, async_iter
 from riko.base._paths import ROOT_DIR, get_path
 from riko.base.exceptions import (
     EmptyPipelineError,
@@ -728,6 +728,12 @@ class TestAsyncSourceAdapter:
             _ = [item async for item in pipeline]
 
 
+class TestAlist:
+    @async_test
+    async def test_collects_a_sync_source(self):
+        assert await alist([1, 2]) == [1, 2]
+
+
 class TestFanIn:
     @pytest.mark.smoke
     def test_fan_in_merges_every_source(self):
@@ -1108,9 +1114,8 @@ class TestContextMode:
         assert context.describe_dependencies is wants_deps
 
     def test_orthogonal_flags_preserved(self):
-        context = Context(mode=ExecutionMode.DESCRIBE, test=True, verbose=True)
+        context = Context(mode=ExecutionMode.DESCRIBE, test=True)
         assert context.test is True
-        assert context.verbose is True
         assert context.mode is ExecutionMode.DESCRIBE
 
     def test_describe_properties_are_read_only(self):
@@ -1150,9 +1155,6 @@ class TestContextImmutability:
         with pytest.raises(AttributeError):
             context.mode = ExecutionMode.DESCRIBE  # pyright: ignore[reportAttributeAccessIssue]
 
-        with pytest.raises(AttributeError):
-            context.verbose = True  # pyright: ignore[reportAttributeAccessIssue]
-
     def test_rejects_the_removed_submodule_flag(self):
         with pytest.raises(TypeError):
             Context(submodule=True)  # pyright: ignore[reportCallIssue]
@@ -1171,12 +1173,12 @@ class TestContextImmutability:
             context.resources["db"] = object()  # pyright: ignore[reportIndexIssue]
 
     def test_augment_returns_independent_snapshot(self):
-        base = Context(inputs={"count": 2}, verbose=False)
-        derived = base.replace(verbose=True, inputs={"limit": 5})
+        base = Context(inputs={"count": 2}, test=False)
+        derived = base.replace(test=True, inputs={"limit": 5})
 
         assert derived is not base
-        assert base.verbose is False
-        assert derived.verbose is True
+        assert base.test is False
+        assert derived.test is True
         assert base.inputs == {"count": 2}
         assert derived.inputs == {"limit": 5}
 

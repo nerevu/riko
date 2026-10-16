@@ -33,7 +33,7 @@ from riko._package import __version__
 from riko.base._constants import ENCODING, STREAMING_THRESHOLD
 from riko.base._logging import get_logger
 from riko.base._paths import normalize_url
-from riko.base._strutils import truncate_content
+from riko.coercion._sequences import truncate_content
 
 from ._reencode import reencode
 
@@ -44,8 +44,8 @@ if TYPE_CHECKING:
     from logging import Logger
     from urllib.response import addinfourl
 
-    from riko.types._collections import BasicArg
     from riko.types._scalars import AnyStr
+    from riko.types._values import BasicArg
 
     from ._filelike import BinaryFileLike, FileLike, Opener, StringFileLike
 

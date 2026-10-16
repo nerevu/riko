@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from riko.bado._backend import run as async_run
+from riko.bado.itertools import alist
 from riko.base._paths import ROOT_DIR
 from riko.base.exceptions import RikoError
 from riko.definitions._context import Context
@@ -82,7 +83,7 @@ async def runner(
     async_pipe: AsyncModuleWrapper, test: bool = False, cb: Callable | None = None
 ) -> None:
     stream = async_pipe(test=test)
-    result = [item async for item in stream]
+    result = await alist(stream)
     cb(result) if callable(cb) else None
 
 
@@ -95,7 +96,7 @@ async def aemit_result(pipeline: Pipeline) -> None:
         pipeline: The pipeline to iterate with ``async for``.
 
     """
-    emit_result([item async for item in pipeline])
+    emit_result(await alist(pipeline))
 
 
 def run_document(path: PathLike, isasync: bool = False, test: bool = False) -> None:

@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.definitions._context import Context
-    from riko.types._collections import RikoValue
     from riko.types._compiler import CountValues, EmbedKwargs
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import (
@@ -25,6 +24,7 @@ if TYPE_CHECKING:
         StreamOrValueStream,
         ValueStream,
     )
+    from riko.types._values import RikoValue
     from riko.types._wrappers import (
         AsyncProcessorWrapper,
         AsyncSubPipe,

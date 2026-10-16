@@ -1,15 +1,13 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides string sanitization, docstring-summary, and truncation helpers."""
+"""Provides string sanitization and docstring-summary helpers."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
 from functools import reduce
-from typing import cast
+from typing import TYPE_CHECKING
 
-from requests.structures import CaseInsensitiveDict
-
-from ._iterutils import map_values
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def replacer(content: str, old: str, new: str = "_") -> str:
@@ -87,16 +85,3 @@ def get_doc_summary(obj: object) -> str | None:
     """
     lines = (getattr(obj, "__doc__", None) or "").strip().splitlines()
     return lines[0].strip() if lines else None
-
-
-def truncate_content[T](content: T | object, length: int = 20) -> T:
-    if isinstance(content, str):
-        truncated = content[:length] + "…" if len(content) > length else content
-    elif isinstance(content, (dict, CaseInsensitiveDict, Mapping)):
-        truncated = map_values(truncate_content, content)
-    elif isinstance(content, (list, tuple, Sequence)):
-        truncated = [truncate_content(v) for v in content]
-    else:
-        truncated = content
-
-    return cast("T", truncated)

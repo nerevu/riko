@@ -55,9 +55,9 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.base._locations import AnyLocation, IPAddress, Location
-    from riko.types._collections import BasicArg
     from riko.types._options import DecorationOptions
     from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
+    from riko.types._values import BasicArg
     from riko.types._wrappers import PreCaster
 
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
@@ -480,6 +480,43 @@ CAST_SWITCH: dict[str, PreCaster[PrimitiveValue | AnyLocation]] = {
 }
 
 
+def resolve_cast_type(type_: str | CastType | None) -> CastType:
+    """
+    Resolves a cast type name to its ``CastType`` member.
+
+    A missing or empty name resolves to ``CastType.PASS``. An unknown name logs a
+    warning and also resolves to ``CastType.PASS``.
+
+    Args:
+
+        type_: The cast type name or member.
+
+    Returns:
+
+        The matching member, or ``CastType.PASS`` when there is none.
+
+    Examples:
+
+        >>> resolve_cast_type("int")
+        <CastType.INT: 'int'>
+        >>> resolve_cast_type(None)
+        <CastType.PASS: 'pass'>
+        >>> resolve_cast_type("unknown")
+        <CastType.PASS: 'pass'>
+
+    """
+    if type_ is None or type_ == "":
+        cast_type = CastType.PASS
+    elif type_ in CAST_SWITCH:
+        cast_type = CastType(type_)
+    else:
+        msg = f"Invalid cast type {type_!r}. Passing the value through unchanged."
+        logger.warning(msg)
+        cast_type = CastType.PASS
+
+    return cast_type
+
+
 @overload
 def cast_value(content: object) -> str: ...  # noqa: E704
 @overload  # noqa: E302
@@ -574,24 +611,18 @@ def cast_value[T](  # noqa: E302
         ''
 
     """
-    if type_ and type_ in CAST_SWITCH:
-        precaster = CAST_SWITCH[type_]
-    else:
-        if type_:
-            logger.warning(f"Invalid cast {type_=}. Returning content as is.")
-
-        precaster = CAST_SWITCH[CastType.PASS]
-
+    cast_type = resolve_cast_type(type_)
+    precaster = CAST_SWITCH[cast_type]
     caster = precaster["func"]
     default = precaster["default"]
 
-    if content is None and type_ != CastType.NONE:
+    if content is None and cast_type != CastType.NONE:
         value = default
-    elif content is None or type_ == CastType.NONE:
+    elif content is None or cast_type == CastType.NONE:
         value = None
-    elif type_ == CastType.PASS:
+    elif cast_type == CastType.PASS:
         value = content
-    elif type_ in KWARG_TYPES:
+    elif cast_type in KWARG_TYPES:
         try:
             value = caster(content, **kwargs)  # pyright: ignore[reportArgumentType]
         except (TypeError, InvalidOperation, ValueError):

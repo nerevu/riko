@@ -41,8 +41,8 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import ItemBuilderObjconf
-    from riko.types._collections import RikoDict
     from riko.types._options import DecorationOptions, Defaults
+    from riko.types._values import RikoDict
     from riko.types.modules import ParsedParam
 
 OPTS: DecorationOptions = {

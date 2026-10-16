@@ -18,7 +18,7 @@ from riko.types.modules import RegexConfRule, RegexRule
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
-    from riko.types._collections import RikoDict, RikoValue
+    from riko.types._values import RikoDict, RikoValue
 
     from ._dynamic_conf import DynamicConf
 

@@ -28,7 +28,12 @@ from riko.bado._backend import (
     run_from_thread,
 )
 from riko.bado._util import as_awaitable
-from riko.bado.itertools import as_async, async_map_ordered_stream, async_map_stream
+from riko.bado.itertools import (
+    alist,
+    as_async,
+    async_map_ordered_stream,
+    async_map_stream,
+)
 from riko.base.exceptions import InvalidPipelineError
 from riko.types._guards import is_async_callable
 
@@ -486,7 +491,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
                 if isinstance(value, AsyncIterable):
                     stream = cast("AsyncIterable[T]", value)
-                    results: Iterable[T] = [x async for x in stream]
+                    results: Iterable[T] = await alist(stream)
                 else:
                     results = cast("Iterator[T]", value)
 

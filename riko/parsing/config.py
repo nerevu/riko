@@ -26,8 +26,8 @@ from typing import TYPE_CHECKING, cast
 from riko.base._iterutils import map_values
 from riko.coercion._canonical import repr_cache
 from riko.coercion._sequences import listize
-from riko.types._collections import RikoValue
 from riko.types._guards import is_dataclass_inst, is_mapping, is_sentinel, is_type_value
+from riko.types._values import RikoValue
 
 from ._dotdict import DotDict
 

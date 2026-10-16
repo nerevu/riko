@@ -27,8 +27,7 @@ from riko.base._logging import get_logger
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_read
 from riko.rss.discovery import aload_rss_links, load_rss_links
-from riko.rss.entries import augment_entries
-from riko.rss.parsing import parse_rss
+from riko.rss.feeds import augment_entries, parse_rss
 
 from ._decorators import processor
 from ._require import require_conf_key

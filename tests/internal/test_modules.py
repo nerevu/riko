@@ -1689,6 +1689,11 @@ class TestPrepare:
         pieces, _ = build_conf(conf, {}, {"extract": "n", "listize": True})
         assert pieces == expected
 
+    def test_extract_matches_the_conf_key_case_insensitively(self):
+        conf = cast("Conf", {"n": 1})
+        pieces, _ = build_conf(conf, {}, {"extract": "N"})
+        assert pieces == 1
+
     def test_prepared_module_is_frozen(self):
         conf = cast("Conf", {"x": {"subkey": "y"}})
         prepared = processor(ftype="text").prepare("m", conf=conf)
@@ -1730,3 +1735,10 @@ class TestPrepare:
         assert prepared.is_dynamic is is_dynamic
         assert prepared.extras == extras
         assert (prepared.static_casted is None) is is_dynamic
+
+    def test_processor_normalizes_a_none_input_to_an_empty_item(self):
+        assert processor().normalize_input(None) == {}
+
+    def test_operator_wraps_a_none_item_as_content(self):
+        items = cast("Any", [None])
+        assert next(operator().normalize_input(items)) == {"content": None}

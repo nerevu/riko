@@ -71,8 +71,9 @@ New
 
 - Added ``AsyncItems``, ``SyncPipeTuples``, and ``AsyncPipeTuples`` to ``riko.types``.
 
-- Added ``riko.async_chain`` to chain async iterables, and a ``cooperative`` option to
-  ``riko.as_async`` to yield control before each item of a sync source.
+- Added ``riko.async_chain`` to chain async iterables, ``riko.alist`` to collect a sync
+  or async iterable into a list, and a ``cooperative`` option to ``riko.as_async`` to
+  yield control before each item of a sync source.
 
 - A ``sort`` rule accepts a ``default``: the value an item lacking the sort field sorts
   by, cast like any other value (``{"field": "n", "type": "int", "default": 0}``).
@@ -149,12 +150,10 @@ Changes
 - Renamed ``convert-dag`` to ``build-workflow``, which now emits a ``WorkflowDocument``
   instead of a serialized ``PipeDef``. It reads a path to a ``WorkflowDocument``, or a
   serialized ``PipeDag`` or ``PipeDef`` with auto detection. Use ``--format
-  {dag,v1,v2}`` to pin a format, and ``--compact`` to write a single-line minified
-  output. Unreadable or invalid input is reported on stderr with a non-zero exit.
+  {dag,v1,v2}`` to pin a format, and ``--compact`` to write a minified output.
 
-- Renamed ``compile-pipe`` to ``compile-workflow`` (which now takes a
-  ``WorkflowDocument`` instead of a serialized ``PipeDef``) and ``riko.compile_pipe`` to
-  ``compile_workflow``.
+- Renamed ``compile-pipe`` to ``compile-workflow`` (it now takes a ``WorkflowDocument``,
+  not a serialized ``PipeDef``) and ``riko.compile_pipe`` to ``compile_workflow``.
 
 - Convert a serialized ``PipeDef`` with ``build-workflow`` (or a ``PipeDef`` with
   ``migrate_v1_to_v2``) before handing it to ``compile-workflow``, ``run-pipe``, or a
@@ -215,7 +214,8 @@ Removed
 - Removed ``convert_dag``. ``Workflow.parse`` reads the same ``PipeDag`` into a
   ``Workflow`` rather than a ``PipeDef``.
 
-- Removed unused ``Context.submodule`` and the ``submodule`` keyword argument.
+- Removed the ``submodule`` and ``verbose`` attributes and keyword arguments from
+  ``Context``. Use ``logging.getLogger("riko").setLevel(logging.DEBUG)`` instead.
 
 - Removed ``autorss``, ``cast``, ``collections``, ``compile``, ``context``,
   ``currencies``, ``dates``, ``dotdict``, ``exceptions``, ``locations``, ``parsers``,
@@ -247,6 +247,14 @@ Fixes
   longer fails type checking.
 
 - ``key in conf`` on a parsed module configuration now reports False for missing keys.
+
+- A dotted ``item["a.b.c"]`` on a ``DotDict`` now walks nested mappings
+  case-insensitively and fully resolves, like ``item.get("a.b.c")`` already does.
+
+- A decorator's ``extract`` option now finds its conf key case-insensitively.
+
+- A conf ``type`` or decorator ``ftype``/``ptype`` that is not a ``CastType`` now logs
+  one warning and passes the value through unchanged, wherever it appears.
 
 - An unsupported object nested inside a container argument no longer collides in the
   conf memoization cache. Distinct instances stay distinct.

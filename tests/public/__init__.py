@@ -5,11 +5,11 @@ Index (file, then the subjects it owns, in file order):
 
     test_pipeline.py    PipelineConstruction, PipelineChaining, ModuleNameEnum,
                         PipelineIteration, OutputParity, Reiteration, Close, Failure,
-                        AsyncSourceAdapter, FanIn, WithExecution, ExecutionSettings,
-                        AsyncBoundedParallel, AsyncFanInParallel, ContextMode,
-                        ContextImmutability, EnvironmentBinding, WritePassthrough,
-                        WriteParity, WriteNestedItems, WriteSetValues, WriteSkips,
-                        WriteTargetFromExtension, PipelineWriteDefinition,
+                        AsyncSourceAdapter, Alist, FanIn, WithExecution,
+                        ExecutionSettings, AsyncBoundedParallel, AsyncFanInParallel,
+                        ContextMode, ContextImmutability, EnvironmentBinding,
+                        WritePassthrough, WriteParity, WriteNestedItems, WriteSetValues,
+                        WriteSkips, WriteTargetFromExtension, PipelineWriteDefinition,
                         PipelineWrite, ExportFormats, ExportPipeline, ExportFinance,
                         Subscriptions, Split, CallableNodes, ConditionalNodes,
                         UnseededPipeline
