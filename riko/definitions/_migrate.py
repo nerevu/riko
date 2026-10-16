@@ -25,8 +25,8 @@ from riko.types._collections import (
     require_str,
     typed_dict_keys,
 )
-from riko.types._compiler import DagModule, Embed, EmbedRef, PipeModule
 from riko.types._guards import is_mapping, require_mapping, require_sequence
+from riko.types._pipedef import DagModule, Embed, EmbedRef, PipeModule
 from riko.types._workflow import (
     WORKFLOW_VERSION,
     RawEdge,
@@ -43,7 +43,7 @@ from ._write import WriteMode
 if TYPE_CHECKING:
     from logging import Logger
 
-    from riko.types._compiler import PipeDag, PipeDefLike
+    from riko.types._pipedef import PipeDag, PipeDefLike
 
 _OPTIONS = frozenset(chain.from_iterable(typed_dict_keys(RawCallOptions)))
 _WRITE = "write"

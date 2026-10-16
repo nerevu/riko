@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, cast
 from riko.base.exceptions import UnsupportedTargetError
 from riko.definitions._targets import FileTarget
 from riko.types._enums import BackendLike, Backends
-from riko.types._targets import Target
+from riko.types._target_protocols import Target
 
 from ._registry import Registry
 
@@ -93,8 +93,8 @@ class TargetRegistry(Registry[type[Target]]):
 
         Examples:
 
-            >>> from riko.definitions._targets import FileTarget
-            >>> from riko.types._enums import Backends
+            >>> from riko import Backends
+            >>> from riko.ext import FileTarget
             >>>
             >>> TargetRegistry().resolve(Backends.FILE) is FileTarget
             True

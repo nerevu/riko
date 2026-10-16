@@ -28,7 +28,7 @@ from riko.base._logging import get_logger
 from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import operator
-from ._iterutils import group_by
+from ._sortutils import group_by
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

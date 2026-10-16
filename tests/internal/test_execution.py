@@ -35,18 +35,18 @@ from riko.base.exceptions import (
     ResourceInterpretationWarning,
 )
 from riko.definitions._context import Context
-from riko.definitions._execution import ExecutionSettings
+from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._resource_definition import (
     OneShotResource,
     Resource,
     ReusableResource,
 )
-from riko.definitions._workflow import Workflow
-from riko.definitions.modules import ModuleDefinition
+from riko.definitions._settings import ExecutionSettings
+from riko.definitions._workflow_definition import Workflow
 from riko.execution import _sync_execution
 from riko.execution._async_execution import AsyncExecution
-from riko.execution._mapping import (
+from riko.execution._concurrency import (
     AsyncPolicy,
     SyncPolicy,
     is_mappable,

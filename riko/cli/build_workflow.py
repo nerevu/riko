@@ -37,11 +37,11 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from pathlib import Path
 
 from riko.base.exceptions import InvalidPipelineError
-from riko.definitions._workflow import Workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.types._enums import DocumentShape
 from riko.types._guards import require_mapping
 
-from ._workflow import read_document
+from ._document import read_document
 
 
 def run() -> None:

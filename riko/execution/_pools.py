@@ -63,8 +63,8 @@ class PoolHandle:
 
         Basic usage::
 
+            >>> from riko import Executor
             >>> from riko.execution._pools import open_pool
-            >>> from riko.types._enums import Executor
             >>>
             >>> handle = open_pool(Executor.THREAD, 2)
             >>> handle.require_pool().map(str, [1, 2])
@@ -136,8 +136,8 @@ def open_pool(executor: Executor, workers: int) -> PoolHandle:
 
         Basic usage::
 
+            >>> from riko import Executor
             >>> from riko.execution._pools import open_pool
-            >>> from riko.types._enums import Executor
             >>>
             >>> handle = open_pool(Executor.THREAD, 2)
             >>> handle.pool

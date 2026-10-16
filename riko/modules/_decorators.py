@@ -49,7 +49,6 @@ from riko.definitions._context import Context
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
 from riko.types._collections import require_from_typed_dict, typed_dict_keys
-from riko.types._compiler import CountValues, EmbedKwargs
 from riko.types._enums import BasicCastType
 from riko.types._guards import (
     is_async_callable,
@@ -66,6 +65,7 @@ from riko.types._options import (
     ProcessorDecorationOptions,
     SharedDecorationOptions,
 )
+from riko.types._pipedef import CountValues, EmbedKwargs
 from riko.types._streams import (
     AnyIterable,
     AsyncItemsOrValues,

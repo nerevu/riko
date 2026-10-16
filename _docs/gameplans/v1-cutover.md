@@ -9,6 +9,12 @@
 > **Status vocabulary.** Everything below is planned deletion/migration work. Nothing here is
 > shipped until the owning step lands; each step is a separate commit gated by the full lint/test
 > suite.
+>
+> **File names.** Steps cite the paths in force when they landed. The file-rename pass of
+> 2026-10-15 moved them: `riko/runtime/collections.py` is `riko/runtime/_export.py` (its
+> API-surface set `COLLECTIONS` is `EXPORT`), the v2 generator `riko/runtime/_codegen.py` is
+> `riko/runtime/_compile.py` (reusing the name of the v1 compiler step 5 deleted), and
+> `riko/types/_compiler.py` is `riko/types/_pipedef.py`.
 
 ## Mission
 

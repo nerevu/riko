@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 
 from riko.base._config import SINK_NAMES
 from riko.base._imports import import_or_else
-from riko.definitions.modules import ModuleDefinition, normalize_module_name
+from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.runtime._module_registry import module_registry
 from riko.types._wrappers import WRAPPER_META
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType

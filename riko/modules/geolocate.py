@@ -36,8 +36,8 @@ from ._decorators import processor
 if TYPE_CHECKING:
     from logging import Logger
 
-    from riko.base._locations import AnyLocation
     from riko.coercion._configs import GeolocateObjconf
+    from riko.types._geo import AnyLocation
     from riko.types._options import DecorationOptions, Defaults
 
 OPTS: DecorationOptions = {"ftype": BasicCastType.TEXT, "field": "content"}

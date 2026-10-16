@@ -38,9 +38,9 @@ from riko.types.modules import AnyModuleConf, Conf, require_module_conf
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from riko.base._locations import AnyLocation
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.parsing._dotdict import DotDict
+    from riko.types._geo import AnyLocation
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import Item, ItemOrValue
     from riko.types._values import BasicReturn, RikoDict, RikoList, RikoValue

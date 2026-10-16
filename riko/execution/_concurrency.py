@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from riko.definitions._context import Context
-    from riko.definitions._execution import ExecutionSettings
+    from riko.definitions._settings import ExecutionSettings
 
     from ._pools import AnyPool, PoolHandle
     from ._prepared import ExecutionPlan, PreparedNode
@@ -99,8 +99,8 @@ def resolve_sync_policy(settings: ExecutionSettings) -> SyncPolicy:
 
     Examples:
 
-        >>> from riko.definitions._execution import ExecutionSettings
-        >>> from riko.execution._mapping import resolve_sync_policy
+        >>> from riko.definitions._settings import ExecutionSettings
+        >>> from riko.execution._concurrency import resolve_sync_policy
         >>>
         >>> resolve_sync_policy(ExecutionSettings())
         SyncPolicy(executor=<Executor.INLINE: 'inline'>, workers=None)
@@ -156,8 +156,8 @@ def resolve_async_policy(settings: ExecutionSettings) -> AsyncPolicy:
 
     Examples:
 
-        >>> from riko.definitions._execution import ExecutionSettings
-        >>> from riko.execution._mapping import resolve_async_policy
+        >>> from riko.definitions._settings import ExecutionSettings
+        >>> from riko.execution._concurrency import resolve_async_policy
         >>>
         >>> resolve_async_policy(ExecutionSettings(concurrency=4))
         AsyncPolicy(limit=4, inline=False)
@@ -203,7 +203,7 @@ def run_item[T](call: Callable[[T], Iterable[T]], item: T) -> list[T]:
 
     Examples:
 
-        >>> from riko.execution._mapping import run_item
+        >>> from riko.execution._concurrency import run_item
         >>>
         >>> run_item(lambda item: [item, item], {"x": 1})
         [{'x': 1}, {'x': 1}]
@@ -231,12 +231,11 @@ def is_mappable(node: PreparedNode, extra: Mapping[str, object]) -> bool:
 
     Examples:
 
-        >>> from riko.definitions._nodes import ModuleNode
-        >>> from riko.definitions._workflow import Workflow
-        >>> from riko.execution._mapping import is_mappable
+        >>> from riko import Endpoint, Workflow
+        >>> from riko.execution._concurrency import is_mappable
         >>> from riko.execution._prepared import ExecutionPlan
+        >>> from riko.ext import ModuleNode
         >>> from riko.runtime._resolver import dispatcher
-        >>> from riko.types._workflow import Endpoint
         >>>
         >>> flow = Workflow(
         ...     nodes=[ModuleNode(id="h", name="hash")],
@@ -300,12 +299,11 @@ def require_process_safe(
 
     Examples:
 
-        >>> from riko.definitions._nodes import ModuleNode
-        >>> from riko.definitions._workflow import Workflow
-        >>> from riko.execution._mapping import require_process_safe
+        >>> from riko import Endpoint, Workflow
+        >>> from riko.execution._concurrency import require_process_safe
         >>> from riko.execution._prepared import ExecutionPlan
+        >>> from riko.ext import ModuleNode
         >>> from riko.runtime._resolver import dispatcher
-        >>> from riko.types._workflow import Endpoint
         >>>
         >>> flow = Workflow(
         ...     nodes=[ModuleNode(id="h", name="hash")],

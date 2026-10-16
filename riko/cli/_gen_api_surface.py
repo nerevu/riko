@@ -31,7 +31,7 @@ def _sorted_repr(names: Iterable[str]) -> str:
 
 def _render_block(key: str) -> str:
     if key == "stable-union":
-        expr = "BADO | IO_ | COLLECTIONS | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS"
+        expr = "BADO | IO_ | EXPORT | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS"
         lines = [f">>> STABLE == {expr}", "True"]
     elif key == "extension-union":
         lines = [">>> EXTENSION == EXT_MODULES | EXT_TARGETS | EXT_WORKFLOWS", "True"]

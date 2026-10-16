@@ -81,7 +81,7 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 
 from riko.base._strutils import pythonise
 from riko.base.exceptions import UnsupportedWorkflowError
-from riko.types._compiler import is_pipe_id
+from riko.types._pipedef import is_pipe_id
 from riko.types._workflow import ResolvedWorkflow
 from riko.types._wrappers import is_subpipe
 
@@ -92,7 +92,7 @@ from ._workflow_stores import DirectoryStore, PackageStore
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from riko.definitions._workflow import Workflow
+    from riko.definitions._workflow_definition import Workflow
     from riko.types._wrappers import (
         AsyncModuleWrapper,
         Dispatcher,

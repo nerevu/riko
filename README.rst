@@ -692,7 +692,7 @@ Project Structure
     │   ├── parsing/          (config, XML/HTML, and document parsing)
     │   ├── rss/              (feed discovery and parsing)
     │   ├── execution/        (sync/async executions, resource acquisition and teardown)
-    │   ├── runtime/          (collections, compiler, registries, pipelines, pub/sub)
+    │   ├── runtime/          (export, compiler, registries, pipelines, pub/sub)
     │   ├── modules/          (the built-in modules)
     │   ├── ext/              (extension API: decorators, protocols)
     │   ├── cli/              (manage, run-pipe, benchmark, compile-workflow, build-workflow)

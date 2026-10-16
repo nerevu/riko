@@ -23,7 +23,7 @@ from riko.definitions._nodes import (
     conf_converter,
     require_module_node,
 )
-from riko.definitions._workflow import Workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.types._collections import (
     FrozenConf,
     FrozenDict,

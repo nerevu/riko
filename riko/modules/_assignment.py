@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.definitions._context import Context
-    from riko.types._compiler import CountValues, EmbedKwargs
+    from riko.types._pipedef import CountValues, EmbedKwargs
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import (
         Item,

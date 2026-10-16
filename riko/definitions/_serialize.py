@@ -31,9 +31,9 @@ from ._normalize import WorkflowFields, build_workflow_fields
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from riko.types._compiler import PipeDag, PipeDefLike
+    from riko.types._pipedef import PipeDag, PipeDefLike
 
-    from ._workflow import Workflow
+    from ._workflow_definition import Workflow
 
 _SHAPE_ERROR = "the input needs 'nodes' or 'modules'"
 _WIRE_KEYS = frozenset({"src", "tgt"})

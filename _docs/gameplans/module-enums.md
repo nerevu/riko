@@ -65,7 +65,7 @@ the `C6` "weaker duplicate" shape).
   formatting (`ruff_format`) — handling non-alphanumerics, leading digits, **`keyword.iskeyword`**,
   and collisions (suffix, deterministically); `enum_member_name` becomes the upper-case
   caller, `pythonise` the identifier caller.
-- `compile_workflow` (`riko/runtime/_codegen.py`) emits the sanitized id as the variable while the
+- `compile_workflow` (`riko/runtime/_compile.py`) emits the sanitized id as the variable while the
   workflow document (`WorkflowDocument`) keeps the original string — ids stay canonical (§ Scope), exactly as enum `.value` does.
 - Round-trip test over the pathological ids above, plus the existing
   `test_codegen_matches_expected_file` byte guard to prove no `tests/pyworkflows/*.py`

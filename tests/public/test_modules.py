@@ -15,7 +15,7 @@ import pytest
 import riko
 import riko.bado
 import riko.base.exceptions
-import riko.definitions._workflow
+import riko.definitions._workflow_definition
 import riko.ext
 import riko.ext.codegen
 import riko.ext.modules
@@ -23,18 +23,18 @@ import riko.ext.targets
 import riko.ext.workflows
 import riko.modules
 import riko.modules._names
-import riko.runtime._codegen
+import riko.runtime._compile
+import riko.runtime._export
 import riko.runtime._resolver
 import riko.runtime._workflow_pipes
 import riko.runtime._workflow_resolver
 import riko.runtime._workflow_stores
-import riko.runtime.collections
 import riko.types
 from riko.bado._backend import create_task_group
 from riko.base._api_surface import (
     BADO,
-    COLLECTIONS,
     COMPILE,
+    EXPORT,
     EXT_CODEGEN,
     EXT_MODULES,
     EXT_TARGETS,
@@ -608,9 +608,9 @@ class TestDescribeModule:
 
 SURFACE_MODULES = (
     riko.bado,
-    riko.runtime.collections,
-    riko.runtime._codegen,
-    riko.definitions._workflow,
+    riko.runtime._export,
+    riko.runtime._compile,
+    riko.definitions._workflow_definition,
     riko.ext,
     riko.modules,
     riko.base.exceptions,
@@ -628,10 +628,10 @@ CODEGEN = (COMPILE & {"compile_workflow"}) | {"RAW_CONFS", "render_value"}
 
 EQUAL_SURFACES = (
     (riko.bado, BADO),
-    (riko.runtime.collections, COLLECTIONS),
-    (riko.runtime._codegen, CODEGEN),
+    (riko.runtime._export, EXPORT),
+    (riko.runtime._compile, CODEGEN),
     (
-        riko.definitions._workflow,
+        riko.definitions._workflow_definition,
         {"Workflow", "migrate_v1_to_v2", "normalize_workflow"},
     ),
     (riko.ext, EXTENSION),

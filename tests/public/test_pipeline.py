@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, ClassVar, cast, get_args, get_origin
 
 import pytest
 
+from riko import export
 from riko.bado._backend import async_sleep, checkpoint, fail_after
 from riko.bado.itertools import alist, async_iter
 from riko.base._paths import ROOT_DIR, get_path
@@ -25,17 +26,16 @@ from riko.base.exceptions import (
     UnsupportedTargetError,
 )
 from riko.definitions._context import Context, ExecutionMode
-from riko.definitions._execution import DEF_EXECUTION_SETTINGS
 from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode
-from riko.definitions._workflow import Workflow
+from riko.definitions._settings import DEF_EXECUTION_SETTINGS
+from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteCapabilities, WriteMode
-from riko.definitions.modules import ModuleDefinition, normalize_module_name
+from riko.ext import ModuleDefinition, normalize_module_name
 from riko.modules._names import Transforms
 from riko.modules.write import async_pipe, pipe
 from riko.parsing._dotdict import DotDict
 from riko.runtime._module_registry import register_module, reset_module_registry
 from riko.runtime._pipeline import Pipeline
-from riko.runtime.collections import export
 from riko.types._enums import Backends, Executor, Formats, ModuleName
 from riko.types._guards import is_mapping, is_stateful_item
 from riko.types._workflow import Endpoint

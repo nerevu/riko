@@ -488,14 +488,14 @@ in the generator. Never patch only the generated file.
 
 An underscore-prefixed module gets a module-level example **only when it has a
 public API** — a name it defines that is re-exported from `riko`, `riko.bado`,
-`riko.ext`, or `riko.modules`. When it does, the example imports through that
-public path, never the private one:
+`riko.ext` (including `riko.ext.codegen`), `riko.modules`, or `riko.types`. When it
+does, the example imports through that public path, never the private one:
 
 | Module | Public surface | Module example |
 |---|---|---|
 | `riko/modules/_decorators.py` | `processor`, `operator`, `splitter` | yes — `from riko.ext import processor` |
 | `riko/modules/_inference.py` | none | no |
-| `riko/_io.py` | none | no |
+| `riko/cli/_coverage.py` | none | no |
 
 Otherwise the module keeps its description (and `Attributes:` for module-level
 constants) and stops there. A module-level example is the reader's entry point
@@ -503,7 +503,8 @@ into a supported surface; a private module with no public surface has no entry
 point to advertise, and demonstrating one would contradict the "public examples
 exercise the public object" rule under Doctest rules. This bounds only the
 *module* docstring — a private function may still carry a local doctest where a
-compact executable example clarifies non-obvious behavior.
+compact executable example clarifies non-obvious behavior. `manage lint --docstrings`
+enforces both this rule and the public-path rule for example imports.
 
 ## General docstring rules
 
@@ -537,7 +538,7 @@ compact executable example clarifies non-obvious behavior.
   under `Args:`.
 - Give every non-underscore function the sections its signature implies: `Args:`
   for its parameters, `Returns:`/`Yields:` for its output. Model it on the file's
-  *fullest* docstring, not its thinnest — in `riko/_io.py` that is
+  *fullest* docstring, not its thinnest — in `riko/io/_sync.py` that is
   `ext_from_content_type`/`seekable`, not a bare summary. This holds across all
   tiers: a private module's public-named function is documented as completely as a
   STABLE one. An underscore-prefixed helper may still stay bare when obvious (see

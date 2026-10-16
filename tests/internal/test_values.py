@@ -49,9 +49,9 @@ from riko.coercion._dates import (
 )
 from riko.coercion.cast import cast_datetime, resolve_cast_type
 from riko.definitions._nodes import ModuleNode, StreamEdge
-from riko.definitions._workflow import Workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.io._sync import Fetch
-from riko.modules._iterutils import def_itemgetter
+from riko.modules._sortutils import def_itemgetter
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.parsing._dotdict import DotDict, match_key, raw_get
 from riko.parsing.config import get_skip

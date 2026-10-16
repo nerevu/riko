@@ -25,7 +25,7 @@ from riko.base.exceptions import RikoError
 from riko.definitions._context import Context
 from riko.runtime._pipeline import Pipeline
 
-from ._workflow import read_document, require_workflow
+from ._document import read_document, require_workflow
 
 if TYPE_CHECKING:
     from types import ModuleType

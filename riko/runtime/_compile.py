@@ -15,8 +15,7 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.runtime._pipeline import Pipeline
-        >>> from riko.runtime._codegen import compile_workflow
+        >>> from riko import Pipeline, compile_workflow
         >>>
         >>> attrs = {"key": "title", "value": "riko"}
         >>> itembuilder = Pipeline.from_module("itembuilder", conf={"attrs": attrs})
@@ -37,7 +36,7 @@ from jinja2 import Environment, PackageLoader
 
 from riko.base._source_format import ruff_format
 from riko.base._strutils import pythonise
-from riko.definitions._workflow import normalize_workflow
+from riko.definitions._workflow_definition import normalize_workflow
 from riko.types._guards import is_known_sequence, is_mapping
 from riko.types._workflow import WorkflowModule
 
@@ -45,9 +44,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from riko.definitions._nodes import ModuleNode
-    from riko.definitions._workflow import WorkflowLike
+    from riko.definitions._workflow_definition import WorkflowLike
     from riko.types._collections import FrozenConf
-    from riko.types._compiler import Embed
+    from riko.types._pipedef import Embed
     from riko.types._workflow import Edge, Endpoint
     from riko.types.modules import Conf
 

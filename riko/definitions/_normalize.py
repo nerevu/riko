@@ -58,7 +58,7 @@ from ._nodes import (
 )
 
 if TYPE_CHECKING:
-    from ._workflow import Workflow
+    from ._workflow_definition import Workflow
 
 
 class WorkflowFields(TypedDict):

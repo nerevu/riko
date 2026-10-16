@@ -44,7 +44,7 @@ Two consumers anchor the behavior to lock:
 
 ## 3. Types are load-bearing and stay as-is
 
-`riko/base/_locations.py` (moving to `riko/types/_geo.py` in the file-rename pass) defines
+`riko/types/_geo.py` defines
 both as `TypedDict(total=False)`:
 
 - `Region` — `Required[code_2]`, `Required[continent]`, optional `code_3`/`country`/`num`.
@@ -157,4 +157,4 @@ Commit: `[CLEANUP] Remove duplicate currency and country data files`.
 `reference-data.md` owns the currency/location reference tables and their facades.
 [enrichment-modules.md § 6b](enrichment-modules.md) keeps geolocate's `currency` lookup
 (the only real `type`), which *consumes* `CURRENCY_CODES` but does not own it. Types stay
-owned by `riko/base/_locations.py` (moving to `riko/types/_geo.py`). See [ownership.md](ownership.md).
+owned by `riko/types/_geo.py`. See [ownership.md](ownership.md).

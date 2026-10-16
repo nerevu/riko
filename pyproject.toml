@@ -268,7 +268,7 @@ core = "sysmon"
 # Console scripts run as subprocesses in the functional tests; measure them there.
 patch = ["subprocess"]
 # Dev-only `manage` tooling is not shipped behavior, so it does not count toward the
-# uncovered-line ceiling. The console scripts and their `_workflow` front door do.
+# uncovered-line ceiling. The console scripts and their `_document` front door do.
 omit = [
     "*/riko/cli/manage.py",
     "*/riko/cli/_build.py",

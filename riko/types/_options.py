@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, TypedDict
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
 
-    from ._compiler import CountValues
     from ._enums import BasicCastType, FmtLike
+    from ._pipedef import CountValues
     from ._scalars import PrimitiveValue
     from ._streams import Item
     from ._values import BasicArg, RikoList

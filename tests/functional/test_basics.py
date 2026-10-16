@@ -20,7 +20,7 @@ from riko.coercion._sequences import listize, truncate_content
 from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode
 from riko.definitions._resource_definition import Resource
-from riko.definitions._workflow import Workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._sync_execution import SyncExecution

@@ -38,7 +38,7 @@ from riko.parsing._dotdict import DotDict
 from riko.types._sentinels import MISSING
 
 from ._decorators import processor
-from ._iterutils import group_by
+from ._sortutils import group_by
 from ._textops import multi_substitute, substitute
 
 if TYPE_CHECKING:

@@ -328,8 +328,8 @@ Dev
 ~~~
 
 - Added ``--docstrings``, ``--docs``, ``--terms``, ``--deps``, ``--literals``,
-  ``--bindings``, ``--tests``, and ``--all`` to ``manage lint``. ``manage lint`` no
-  longer takes paths to check.
+  ``--bindings``, ``--tests``, ``--basenames``, and ``--all`` to ``manage lint``.
+  ``manage lint`` no longer takes paths to check.
 
 - Added ``manage lint imports`` to check the internal import contracts.
 

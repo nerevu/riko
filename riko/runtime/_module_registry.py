@@ -33,9 +33,9 @@ from typing import TYPE_CHECKING, Literal, get_args, overload
 from attrs import evolve
 
 from riko.base.exceptions import UnsupportedModuleError
-from riko.definitions.modules import ModuleDefinition
-from riko.types._compiler import is_pipe_id
+from riko.definitions._module_definition import ModuleDefinition
 from riko.types._module_ids import ModuleId
+from riko.types._pipedef import is_pipe_id
 
 from ._importutils import load_interfaces, require_interface
 from ._registry import Registry

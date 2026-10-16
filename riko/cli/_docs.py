@@ -56,15 +56,7 @@ _ROOT_MARKDOWN = frozenset(
 )
 _LEGACY_INSPIRATION = _INTERNAL_DOCS / "inspiration"
 _API_SURFACE_GROUPS = frozenset(
-    {
-        "collections",
-        "compile",
-        "bado",
-        "modules",
-        "root-exceptions",
-        "other",
-        "extension",
-    }
+    {"export", "compile", "bado", "modules", "root-exceptions", "other", "extension"}
 )
 _GIT: str | None = which("git")
 
@@ -100,8 +92,8 @@ _TARGET = re.compile(
 )
 
 
-def _slugify(text: str) -> str:
-    """Convert a heading to its GitHub anchor slug."""
+def get_anchor(text: str) -> str:
+    """Computes the GitHub anchor for a heading."""
     lowered = text.strip().lower()
     kept = "".join(c for c in lowered if c.isalnum() or c in {" ", "-", "_"})
     return kept.replace(" ", "-")
@@ -143,7 +135,7 @@ def _get_doc_anchors(doctree: Any) -> set[str]:
     else:
         for node in doctree.findall(nodes.title):
             if isinstance(node.parent, (nodes.section, nodes.document)):
-                base = _slugify(node.astext())
+                base = get_anchor(node.astext())
                 count = seen.get(base, 0)
                 anchors.add(base if count == 0 else f"{base}-{count}")
                 seen[base] = count + 1

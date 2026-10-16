@@ -275,9 +275,7 @@ Upstream candidates currently implemented in Riko (each removes the Riko copy on
 
 - `listize` (`riko/coercion/_sequences.py`) — move back to meza;
 - `cast_datetime` (`riko/coercion/cast.py`) — inherit from meza's date casting;
-- `group_by` (`riko/modules/_iterutils.py`) — move to `meza.process.group`;
-- `_slugify` (`riko/cli/_docs.py`) — replace with meza's
-  `slugify(text, allow_unicode=True, regex_pattern=r"[^\w-]+")` once meza is updated.
+- `group_by` (`riko/modules/_sortutils.py`) — move to `meza.process.group`.
 
 The batch/dataframe path avoids pandas as a mandatory intermediary. Arrow, Narwhals, Polars, pandas,
 SQL-native values, or Python objects are execution representations selected by capability/conversion

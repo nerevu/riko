@@ -25,14 +25,18 @@ from riko.definitions._nodes import (
     SubscribeNode,
     WriteNode,
 )
-from riko.definitions._workflow import Workflow, migrate_v1_to_v2, normalize_workflow
+from riko.definitions._workflow_definition import (
+    Workflow,
+    migrate_v1_to_v2,
+    normalize_workflow,
+)
 from riko.definitions._write import WriteMode
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_resolver import register_workflow_store
 from riko.types._collections import FrozenDict
-from riko.types._compiler import Embed
 from riko.types._enums import Backends, DocumentShape, ExecutionMode, Formats
+from riko.types._pipedef import Embed
 from riko.types._workflow import Endpoint, ParsedPort, parse_port
 from riko.types.modules import ItemBuilderConf, StrconcatRawConf, TruncateRawConf
 from tests import TESTS_DIR, async_test
@@ -42,7 +46,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from riko.types._compiler import DagModule, PipeDag
+    from riko.types._pipedef import DagModule, PipeDag
 
 DAG_DIR = TESTS_DIR / "dags"
 RAW_WORKFLOW = {"nodes": [{"name": "forever"}]}

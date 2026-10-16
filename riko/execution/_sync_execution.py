@@ -28,6 +28,14 @@ from ._adapt import (
     require_stream,
     select_embed,
 )
+from ._concurrency import (
+    SyncPolicy,
+    _PoolLifetime,
+    is_mappable,
+    require_process_safe,
+    resolve_sync_policy,
+    run_item,
+)
 from ._execution import (
     Acquisition,
     SyncExecSteps,
@@ -38,14 +46,6 @@ from ._execution import (
     _is_async_only_closeable,
     _require_output,
     _require_source,
-)
-from ._mapping import (
-    SyncPolicy,
-    _PoolLifetime,
-    is_mappable,
-    require_process_safe,
-    resolve_sync_policy,
-    run_item,
 )
 from ._pools import open_pool
 from ._resource_plan import (

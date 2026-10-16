@@ -67,9 +67,9 @@ from ._serialize import parse_graph, serialize_graph
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from riko.types._compiler import Embed, PipeDag, PipeDefLike
     from riko.types._enums import DocumentShapeLike
     from riko.types._io import PathLike
+    from riko.types._pipedef import Embed, PipeDag, PipeDefLike
     from riko.types._workflow import EdgeFamily, WorkflowDocument
 
 

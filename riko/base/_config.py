@@ -56,6 +56,9 @@ SUBPIPE_TYPE = "pipe"
 BUILTIN_PROVIDER = "riko"
 SINK_NAMES: frozenset[str] = frozenset({OUTPUT_MODULE, "write"})
 PIPE_ID_PREFIXES: tuple[str, ...] = ("pipe_", "pipe:")
+DUPLICATE_BASENAMES: frozenset[str] = frozenset(
+    {"_async.py", "_sync.py", "_logging.py", "modules.py"}
+)
 
 
 @dataclass(frozen=True, slots=True)

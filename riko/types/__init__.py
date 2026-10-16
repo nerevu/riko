@@ -6,8 +6,8 @@ Implementation typing machinery lives in underscore-prefixed modules and is
 not part of the SemVer-guaranteed API.
 """
 
-from ._compiler import PipeDag, PipeDef, PipeDefLike
 from ._events import EventSink
+from ._pipedef import PipeDag, PipeDef, PipeDefLike
 from ._streams import AsyncItems, AsyncStream, Feed, Item, Items, Stream
 from ._workflow import RawEdge, RawEndpoint, RawNode, RawWorkflow
 from ._wrappers import AsyncPipeTuples, PipeTuples, SyncPipeTuples

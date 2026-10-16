@@ -11,7 +11,8 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.types._workflow import Endpoint, parse_port
+        >>> from riko import Endpoint
+        >>> from riko.types._workflow import parse_port
         >>>
         >>> Endpoint("normalize-1", "out")
         Endpoint(node='normalize-1', port='out')
@@ -54,9 +55,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
     from ._collections import FrozenSetMapping, FrozenTupleMapping
-    from ._compiler import Embed
     from ._enums import BackendLike, FmtLike, StrLike
     from ._io import PathLike
+    from ._pipedef import Embed
     from .modules import Conf, RawCallOptions
 
 type NodeId = str

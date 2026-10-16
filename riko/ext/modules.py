@@ -29,7 +29,7 @@ from types import SimpleNamespace
 from riko.base._typing import resolve_type_hints
 from riko.coercion import _configs
 from riko.coercion._dynamic_conf import DynamicConf
-from riko.definitions.modules import ModuleDefinition, normalize_module_name
+from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.modules._decorators import operator, processor, splitter
 from riko.modules._metadata import get_module_category
 from riko.runtime._module_registry import (

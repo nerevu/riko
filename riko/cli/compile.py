@@ -35,9 +35,9 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from pathlib import Path
 
 from riko.base.exceptions import InvalidPipelineError
-from riko.runtime._codegen import compile_workflow
+from riko.runtime._compile import compile_workflow
 
-from ._workflow import read_document, require_workflow
+from ._document import read_document, require_workflow
 
 
 def run() -> None:

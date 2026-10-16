@@ -60,8 +60,9 @@ encode removed `SyncPipe`/`AsyncPipe`, `write`, `output`, or `Sinks` APIs.
 - worker pools/executors;
 - shared concurrency-budget primitives.
 
-Their current home in `collections.py` is temporary. Move reusable mechanics into private execution
-modules rather than preserving `collections.py` as architecture.
+They live in the private execution modules `riko/execution/_pools.py` and
+`riko/execution/_concurrency.py`; what was `collections.py` survives only as
+`riko/runtime/_export.py` (`Formats`, `export`, `list_formats`).
 
 **Workflow graph index** is a retained foundation. `Workflow.index` (`GraphIndex` in `riko/types/_workflow.py`;
 formerly the v1 `parse_pipe_def`, deleted at cutover step 5) builds one immutable
@@ -633,7 +634,7 @@ R4A.5  deterministic serialization + acceptance
   (undeclared ports, fan-in arity, registered conf/params/target-config validation) are **deferred**:
   `ModuleDefinition`/target contracts declare no ports or conf schemas yet, so they land with that
   metadata. Registered module-conf validation is scheduled as **R4E** (after M1, before M2). Structural validity is not runtime capability. Home: validation is a method on the model
-  — `Workflow.validate()` / `isvalid` in `riko/definitions/_workflow.py` — after the refactor that
+  — `Workflow.validate()` / `isvalid` in `riko/definitions/_workflow_definition.py` — after the refactor that
   folded the standalone `riko/runtime/_validate.py` / `riko.ext.validate_workflow` into the spec.
 - **R4A.4 — `migrate_v1_to_v2()`. Landed** (see `IMPLEMENTED.md`). Pure v1→v2 (E3.1/E3.11):
   `_INPUT`/`_OUTPUT`/`_OTHERn`→canonical ports, v1 `write` module→`WriteNode` (`backend=file`, `fmt`
@@ -645,7 +646,7 @@ R4A.5  deterministic serialization + acceptance
   original `riko/workflow/migrate.py` sketch).
 - **R4A.5 — deterministic serialization + acceptance. Landed** (see `IMPLEMENTED.md` § Workflow v2
   serialization). Byte-stable `Workflow.serialize`/`Workflow.parse` in
-  `riko/definitions/_workflow.py` over `_serialize.py`, full round-trip of every supported topology, golden fixtures, and `serialize ∘ migrate`
+  `riko/definitions/_workflow_definition.py` over `_serialize.py`, full round-trip of every supported topology, golden fixtures, and `serialize ∘ migrate`
   never emitting v1-only structure. The **CLI v2-emission** bullet (`compile-pipe`/`build-workflow`) and
   the v1 compiler/fixture deletions are **deferred to R4B**: the E3.10 CLI-emission acceptance is
   superseded by the clean-break policy, which completes the v1→v2 CLI/compiler cutover at R4B (the
@@ -653,7 +654,7 @@ R4A.5  deterministic serialization + acceptance
   **The deferred CLI v2-emission has since landed** at cutover step 3 ([v1-cutover.md § Step
   3](v1-cutover.md#step-3--retire-remaining-v1-cli-consumers)): `build-workflow` emits a `WorkflowDocument` from
   any supported form, `compile-pipe` generates from a `WorkflowDocument` through the new
-  `riko/runtime/_codegen.py`, `run-pipe` executes `WorkflowDocument`s, and `build_pipe_def` gave way
+  `riko/runtime/_compile.py`, `run-pipe` executes `WorkflowDocument`s, and `build_pipe_def` gave way
   to `parse_dag` (since folded into `Workflow.parse`). The `SyncPipe`/`AsyncPipe`/Collection class deletion (step 4) landed on
   2026-10-02 (`54b53c29`), and the v1 compiler deletion (step 5) on 2026-10-03 (`59a51274`)
   completed the CLI/compiler cutover.
@@ -684,7 +685,7 @@ counterpart to delete yet. Paired deletions begin once a consumer can flip:
 |---|---|
 | (nothing — pure foundation) | R4A.1 |
 | verbatim `_INPUT`/`_OTHER`/`_OUTPUT` ports, `_OUTPUT`-as-node | R4A.2/.4 (normalize/migrate resolve the `GraphIndex` legacy artifacts) |
-| v1 `PipeDef`/`wires` compiler consumption (`_index_pipe_def` and its inlined `GraphIndex` assembly, `parse_pipe_def`, `_gen_steps`/`build_pipeline`); the generated `tests/pypipelines` tree and the v1 form of the `tests/pipelines` fixtures | R4B — by the end of the phase (see the incremental-landing paragraph above; v2 may execute through `Pipeline` while the v1 compiler still exists mid-phase, but neither survives past R4B). Cutover step 2 (`b4850983`) already flipped the fixtures: the JSON is now `WorkflowDocument`s and stays, the generator is gone, and a covering set of hand-maintained probes remains; probes built on `SyncPipe`/`SyncCollection` go with the classes at step 4. Cutover step 3 then removed the CLI's dependence on the v1 compiler — `build-workflow`/`compile-pipe`/`run-pipe`/`benchmark` are v2-native and code generation moved to `riko/runtime/_codegen.py` — so the v1 compiler had no consumer left; step 5 deleted it on 2026-10-03 |
+| v1 `PipeDef`/`wires` compiler consumption (`_index_pipe_def` and its inlined `GraphIndex` assembly, `parse_pipe_def`, `_gen_steps`/`build_pipeline`); the generated `tests/pypipelines` tree and the v1 form of the `tests/pipelines` fixtures | R4B — by the end of the phase (see the incremental-landing paragraph above; v2 may execute through `Pipeline` while the v1 compiler still exists mid-phase, but neither survives past R4B). Cutover step 2 (`b4850983`) already flipped the fixtures: the JSON is now `WorkflowDocument`s and stays, the generator is gone, and a covering set of hand-maintained probes remains; probes built on `SyncPipe`/`SyncCollection` go with the classes at step 4. Cutover step 3 then removed the CLI's dependence on the v1 compiler — `build-workflow`/`compile-pipe`/`run-pipe`/`benchmark` are v2-native and code generation moved to `riko/runtime/_compile.py` — so the v1 compiler had no consumer left; step 5 deleted it on 2026-10-03 |
 | the shipped `riko.modules.write` Python module + its discovery entry; **`SINK_NAMES` + the `Sinks` discovery bucket** | R5C — the write module survives until `WriteNode` executes, and is retired in that same commit (see the R5C section and `v1-cutover.md`) |
 
 `SINK_NAMES` (`riko/base/_config.py`, `{"output","write"}` → the P9A `sink` category) has no v2 role —
@@ -699,7 +700,7 @@ per-step drift guards, and the recorded keep-`migrate_v1_to_v2` divergence) is
 **Placement (supersedes the R4A.1 `riko/workflow/` package note).** The canonical model is not a new
 top-level package/layer; it lives in the existing declarative-contract layer. Pure contracts live in
 `riko/types/_workflow.py`; the node/edge model in `riko/definitions/_nodes.py`; the `Workflow` model,
-with `Workflow.parse`/`load`/`serialize`, in `riko/definitions/_workflow.py`, over the data-returning
+with `Workflow.parse`/`load`/`serialize`, in `riko/definitions/_workflow_definition.py`, over the data-returning
 `_normalize.py`/`_migrate.py`/`_serialize.py` beside it (amended 2026-10-12, superseding the
 2026-10-05 amendment that put `normalize`/`migrate` in `riko/runtime/`); `PipelineDefinition` in
 `riko/definitions/_composition.py`; and the runnable `Pipeline` subclass that adds iteration in
@@ -909,9 +910,9 @@ Regressions: `test_build_plan_rejects_splitter_node_before_any_node_runs`,
 to read an async input stream is R7's (tripwire `test_async_splitter_accepts_an_async_input_stream`).
 
 As-built close (2026-10-03): `Pipeline.with_execution(executor=, concurrency=, ordered=, event_sink=,
-shutdown_timeout=)` stores a frozen `ExecutionSettings` (`riko/definitions/_execution.py`; omitted
+shutdown_timeout=)` stores a frozen `ExecutionSettings` (`riko/definitions/_settings.py`; omitted
 arguments are `MISSING`, explicit `None` restores the default), `with_context`/`with_resource` bind the
-run's `Context`, and `riko/execution/_mapping.py` resolves the settings into the per-run mapping policy
+run's `Context`, and `riko/execution/_concurrency.py` resolves the settings into the per-run mapping policy
 both executions honor (details in [IMPLEMENTED § Private execution runtime](../IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)).
 Concurrent pulling of fan-in branches is R7's (its deliverable list names it).
 

@@ -38,9 +38,9 @@ from riko.types._collections import (
     require_str,
     validator_from_require,
 )
-from riko.types._compiler import Embed
 from riko.types._enums import Backends, Formats, resolve_enum
 from riko.types._guards import require_mapping
+from riko.types._pipedef import Embed
 from riko.types._workflow import Edge, NodeId
 from riko.types.modules import CallOptions, ConfValues, MaybeFrozenConf
 

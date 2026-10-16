@@ -45,6 +45,7 @@ from ._adapt import (
     require_stream,
     select_embed,
 )
+from ._concurrency import AsyncPolicy, is_mappable, resolve_async_policy, run_item
 from ._execution import (
     Acquisition,
     AsyncExecSteps,
@@ -58,7 +59,6 @@ from ._execution import (
     _require_output,
     _require_source,
 )
-from ._mapping import AsyncPolicy, is_mappable, resolve_async_policy, run_item
 from ._resource_plan import (
     _ResourcePlan,
     _ResourceStrategy,

@@ -17,9 +17,19 @@ from click.testing import CliRunner
 
 from riko.base._paths import ROOT_DIR
 from riko.base.exceptions import InvalidArchitectureError, InvalidPipelineError
-from riko.cli import _codegen, _import_commands, _lint, _test, _upgrade, _workflow
+from riko.cli import _codegen, _document, _import_commands, _lint, _test, _upgrade
 from riko.cli._coverage import build_ceiling_text
-from riko.cli._docstyle import gen_example_prose, summary_leads_with_output
+from riko.cli._docstyle import (
+    gen_docstring_issues,
+    gen_example_prose,
+    summary_leads_with_output,
+)
+from riko.cli._document import read_document, require_workflow
+from riko.cli._lint_basenames import (
+    BasenameIssue,
+    format_basename_issue,
+    gen_basename_issues,
+)
 from riko.cli._lint_bindings import gen_binding_issues, gen_binding_lines
 from riko.cli._lint_canonical_imports import _iter_issues as canonical_issues
 from riko.cli._lint_deps import (
@@ -39,9 +49,8 @@ from riko.cli._lint_terms import BANNED_TERMS, BannedTerm, gen_term_issues
 from riko.cli._lint_tests import LayoutIssue, format_layout_issue, gen_layout_issues
 from riko.cli._logging import exception_hook, resolve_log_level
 from riko.cli._upgrade import _pin_hooks
-from riko.cli._workflow import read_document, require_workflow
 from riko.cli.manage import manager
-from riko.definitions._workflow import Workflow
+from riko.definitions._workflow_definition import Workflow
 from tests._workflows import DAG, DAG_PATH, PIPE_DEF
 
 if TYPE_CHECKING:
@@ -464,12 +473,49 @@ EXAMPLE_PROSE = [
 ]
 
 
+def _doctest(source: str) -> str:
+    return f'def f():\n    """\n    Runs.\n\n    >>> {source}\n    """\n'
+
+
+_MODULE_EXAMPLE = '"""\nDoes.\n\n>>> 1\n1\n"""\n'
+_PRIVATE_MODULE = ["private module without a public API carries a module example"]
+EXAMPLE_RULES = [
+    pytest.param(
+        "mod.py",
+        _doctest("from riko.runtime._pipeline import Pipeline"),
+        ['imports Pipeline privately (use "from riko import Pipeline")'],
+        id="stable-name",
+    ),
+    pytest.param(
+        "mod.py",
+        _doctest("from riko.modules._decorators import processor"),
+        ['imports processor privately (use "from riko.ext import processor")'],
+        id="extension-name",
+    ),
+    pytest.param(
+        "mod.py", _doctest("from riko.cli._docstyle import f"), [], id="nopub"
+    ),
+    pytest.param("mod.py", _doctest("from riko import Pipeline"), [], id="public"),
+    pytest.param("_mod.py", _MODULE_EXAMPLE, _PRIVATE_MODULE, id="private-module"),
+    pytest.param("_mod.py", f"{_MODULE_EXAMPLE}class Pipeline: ...\n", [], id="api"),
+    pytest.param("mod.py", _MODULE_EXAMPLE, [], id="public-module"),
+]
+
+
 class TestDocstyle:
     """Docstring summary and example-prose checks."""
 
     @pytest.mark.parametrize(("doc", "expected"), EXAMPLE_PROSE)
     def test_example_prose_detection(self, doc: str, expected: list[str]) -> None:
         assert list(gen_example_prose(doc)) == expected
+
+    @pytest.mark.parametrize(("name", "source", "expected"), EXAMPLE_RULES)
+    def test_example_import_and_module_example_rules(
+        self, tmp_path: Path, name: str, source: str, expected: list[str]
+    ) -> None:
+        path = tmp_path / name
+        path.write_text(source, encoding="utf-8")
+        assert [issue.problem for issue in gen_docstring_issues(path)] == expected
 
     def test_docstring_summary_output_lead_detection(self) -> None:
         assert summary_leads_with_output("Returns the parsed response body.")
@@ -858,6 +904,60 @@ class TestLayoutLint:
         assert "consider merging" in messages[0][0]
 
 
+_SHARED = "basename is shared; rename one or allowlist the pair"
+_STALE = "allowlisted basename is no longer duplicated; remove it"
+BASENAME_CASES = [
+    pytest.param(("a/x.py", "b/y.py"), frozenset(), [], id="clean"),
+    pytest.param(
+        ("a/x.py", "b/x.py"),
+        frozenset(),
+        [("x.py", ("pkg/a/x.py", "pkg/b/x.py"), _SHARED)],
+        id="duplicate",
+    ),
+    pytest.param(("a/x.py", "b/x.py"), frozenset({"x.py"}), [], id="allowlisted"),
+    pytest.param(
+        ("a/x.py",),
+        frozenset({"x.py"}),
+        [("x.py", ("pkg/a/x.py",), _STALE)],
+        id="stale",
+    ),
+    pytest.param(("a/__init__.py", "b/__init__.py"), frozenset(), [], id="init"),
+]
+
+
+class TestBasenameLint:
+    """The duplicate module-basename lint check."""
+
+    @pytest.mark.parametrize(("names", "allowed", "expected"), BASENAME_CASES)
+    def test_shared_basenames_and_stale_allowlist_entries_are_flagged(
+        self,
+        tmp_path: Path,
+        names: tuple[str, ...],
+        allowed: frozenset[str],
+        expected: list[tuple[str, tuple[str, ...], str]],
+    ) -> None:
+        package = tmp_path / "pkg"
+
+        for name in names:
+            (package / name).parent.mkdir(parents=True, exist_ok=True)
+            (package / name).write_text("", encoding="utf-8")
+
+        issues = gen_basename_issues(package, allowed)
+        found = [(i.basename, tuple(map(str, i.paths)), i.message) for i in issues]
+        assert found == expected
+
+    def test_findings_print_and_fail_the_check(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        issue = BasenameIssue("x.py", (Path("a/x.py"), Path("b/x.py")), "bad")
+        monkeypatch.setattr(_lint, "gen_basename_issues", lambda _: [issue])
+        line = "x.py: bad (a/x.py, b/x.py)"
+
+        assert format_basename_issue(issue) == line
+        assert _lint._lint_basenames() == 1
+        assert line in capsys.readouterr().out
+
+
 def _unguarded(name: str) -> str:
     return f"'{name}' is imported unguarded but is not a [project] dependency"
 
@@ -1119,7 +1219,7 @@ class TestRequireWorkflow:
 def _record_warnings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     warnings: list[str] = []
     warning = lambda msg, *args: warnings.append(msg % args)
-    monkeypatch.setattr(_workflow.logger, "warning", warning)
+    monkeypatch.setattr(_document.logger, "warning", warning)
     return warnings
 
 

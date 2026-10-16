@@ -33,7 +33,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ._locations import CurrencyCode
+    from riko.types._geo import CurrencyCode
 
 CURRENCY_SYMBOLS = {"$": "USD", "£": "GBP", "€": "EUR", "₹": "INR"}
 

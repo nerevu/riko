@@ -21,6 +21,7 @@ from ._build import _twine_check
 from ._docs import _lint_docs, _lint_rst
 from ._docstyle import format_issue, gen_docstring_issues
 from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
+from ._lint_basenames import format_basename_issue, gen_basename_issues
 from ._lint_bindings import format_binding_issue, gen_binding_issues
 from ._lint_deps import (
     format_dependency_issue,
@@ -94,7 +95,7 @@ def _lint_python_strict(parallel: bool = False) -> int:
 
 
 def _lint_docstrings(where: str | None = "") -> int:
-    """Checks docstring summaries and the prose between doctest examples."""
+    """Checks docstring summaries and doctest examples against the docs standard."""
     roots = [Path(p) for p in where.split(" ")] if where else [Path("riko")]
     issues = list(gen_docstring_issues(*roots))
 
@@ -136,6 +137,16 @@ def _lint_tests() -> int:
         print(format_layout_issue(issue))
 
     return 1 if any(issue.fatal for issue in issues) else 0
+
+
+def _lint_basenames() -> int:
+    """Checks that no two package modules share a file name."""
+    issues = list(gen_basename_issues(PACKAGE_DIR))
+
+    for issue in issues:
+        print(format_basename_issue(issue))
+
+    return 1 if issues else 0
 
 
 def _lint_deps() -> int:
@@ -245,10 +256,7 @@ def _check_command() -> None:
 @click.option("-a", "--actions", help="Validate GitHub Actions workflows", is_flag=True)
 @click.option("-y", "--yaml", help="Validate YAML files", is_flag=True)
 @click.option(
-    "-D",
-    "--docstrings",
-    help="Check docstring summaries and example prose",
-    is_flag=True,
+    "-D", "--docstrings", help="Check docstring summaries and examples", is_flag=True
 )
 @click.option("--terms", help="Check shipped text for replaced terms", is_flag=True)
 @click.option(
@@ -261,6 +269,9 @@ def _check_command() -> None:
     "--bindings", help="Check Workflow values are bound as flow", is_flag=True
 )
 @click.option("--tests", help="Check the test suite's indexed layout", is_flag=True)
+@click.option(
+    "--basenames", help="Check package modules for shared file names", is_flag=True
+)
 @click.option("--all", "all_", help="Run every standard lint check", is_flag=True)
 @click.option(
     "-p",
@@ -287,6 +298,7 @@ def _lint_command(
     deps: bool = False,
     bindings: bool = False,
     tests: bool = False,
+    basenames: bool = False,
     all_: bool = False,
     parallel: bool = False,
 ) -> None:
@@ -309,6 +321,7 @@ def _lint_command(
                 deps,
                 bindings,
                 tests,
+                basenames,
                 all_,
             )
         )
@@ -340,6 +353,9 @@ def _lint_command(
 
         if tests or all_:
             return_codes.append(_lint_tests())
+
+        if basenames or all_:
+            return_codes.append(_lint_basenames())
 
         if actions or all_:
             exts = ["yml", "yaml"]

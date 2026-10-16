@@ -168,7 +168,7 @@ item, materialize the entire source, or permit unbounded result buffering. Order
 streaming ships through `async_map_stream` / `async_map_ordered_stream`
 (`riko/bado/itertools.py`). Async ordering currently uses batched windows rather than a true
 indexed reorder buffer; the sync pool keeps order with a sliding `apply_async` look-ahead
-window (`riko/execution/_mapping.py`).
+window (`riko/execution/_concurrency.py`).
 
 `limit=0` means unlimited; `async_map` preserves legitimate `None` results through a
 `_missing` sentinel; eager materialization is by design, with the streaming variants above
@@ -226,7 +226,7 @@ comparison is skipped. Drop-policy and disposition semantics are absent.
 
 ## 14. Sort keys and feed dates (shipped)
 
-`sort` builds its key with `build_sort_key` (`riko/modules/_iterutils.py`): a
+`sort` builds its key with `build_sort_key` (`riko/modules/_sortutils.py`): a
 `(present, value)` pair whose `value` comes from `def_itemgetter`. An item lacking the
 field is `present=False`, so it is never compared with real values and groups first
 ascending / last descending for every rule `type`. A rule `default` substitutes for the
@@ -318,7 +318,7 @@ parses each workflow document (`WorkflowDocument`) with `Workflow.parse(text, sh
 `UnsupportedWorkflowError` naming the reason; `DirectoryStore.load` treats only `FileNotFoundError` as a miss).
 Stores take only `pipe_<id>` names: every resolver entry point (`load`, `load_workflow`, `require`,
 `require_interfaces`) translates the `pipe:<id>` alias with `pythonise`, and both `is_compatible` checks use
-`is_pipe_id` (`riko/types/_compiler.py`, prefixes `PIPE_ID_PREFIXES` in `riko/base/_config.py`). A stored-workflow
+`is_pipe_id` (`riko/types/_pipedef.py`, prefixes `PIPE_ID_PREFIXES` in `riko/base/_config.py`). A stored-workflow
 miss raises `UnsupportedWorkflowError`, a built-in miss `UnsupportedModuleError`; both carry `reason`.
 `ResolvedWorkflow` and `WorkflowModule` (`riko/types/_workflow.py`) are `NewType`s so type checkers show
 their names. `WorkflowModule` is defined by shape (source defining `pipe`/`async_pipe` over an item, a
@@ -341,7 +341,7 @@ like a built-in. External packages add modules with **no core edit** (`examples/
 The module registry and a private target registry (`riko/runtime/_target_registry.py`, built-in
 `FileTarget`, entry points under `riko.targets`) share a generic `Registry[T]` base
 (`riko/runtime/_registry.py`) — one three-tier runtime → entry-point → built-in lifetime, each keyed by a
-per-domain `_key` hook (module `name`, target `backend`). `ModuleDefinition` (`riko/definitions/modules.py`) is a frozen attrs
+per-domain `_key` hook (module `name`, target `backend`). `ModuleDefinition` (`riko/definitions/_module_definition.py`) is a frozen attrs
 class: `declared_name` holds the name as given (constructor keyword `name=`), `name` is the derived
 registry key (declared name, else `module.__name__`'s last part, else a non-generic pipe `__name__`), and
 `description` defaults to the module docstring summary. An entry-point definition with no declared name
@@ -378,7 +378,7 @@ it lands, at which point the guard branch becomes the bare-wrap branch.
 
 **Fluent surface (P9, partial — shipped):** value-taking chaining — `pipeline | "name"`,
 `pipeline | ("name", conf)`, `pipeline | Pipeline.from_module(...)`, `items | Pipeline(...)`, and
-`.pipe()` — plus the `ModuleName` `StrEnum` base (`riko/types/_enums.py`) and `normalize_module_name` (`riko/definitions/modules.py`); a name may
+`.pipe()` — plus the `ModuleName` `StrEnum` base (`riko/types/_enums.py`) and `normalize_module_name` (`riko/definitions/_module_definition.py`); a name may
 be a `str` or `ModuleName` member anywhere, normalized to its canonical string at the boundary. The
 generated `Modules` tree (P9A) shipped — `pipeline | Transforms.FILTER` resolves identically to
 `pipeline.filter()`; see §24.
@@ -453,7 +453,7 @@ property, the `NodeFamily`/`EdgeFamily`/`PortDirection` discriminant literals, `
 `parse_port` grammar helper, and the `Raw*` TypedDicts); the immutable model lives in
 `riko/definitions/` — the closed node union
 `ModuleNode`/`ReadNode`/`WriteNode`/`CacheNode`/`ActionNode`/`SubscribeNode` and the edge families
-`StreamEdge`/`PublishEdge` in `_nodes.py`, the `Workflow` envelope in `_workflow.py`, and the generic
+`StreamEdge`/`PublishEdge` in `_nodes.py`, the `Workflow` envelope in `_workflow_definition.py`, and the generic
 `PipelineDefinition[T]` in `_composition.py`, which owns every pipeline field and composition method
 (each returns `Self`). The runnable STABLE `Pipeline` is its
 subclass in `riko/runtime/_pipeline.py`, adding only `__iter__`/`__aiter__`/`first`/`afirst`, so no
@@ -525,7 +525,7 @@ The single authoring-sugar normalization boundary: `RawWorkflow` in, one `Workfl
 so no other subsystem reinterprets shorthand. Lives in `riko/definitions/_normalize.py`
 (`build_workflow_fields`, which returns the field values; the clean-break placement note supersedes the
 original `riko/workflow/normalize.py` sketch); the `normalize_workflow` delegate in
-`riko/definitions/_workflow.py` is exported EXTENSION as `riko.ext.normalize_workflow`.
+`riko/definitions/_workflow_definition.py` is exported EXTENSION as `riko.ext.normalize_workflow`.
 
 It is the **structural, contract-free** pass — no `ModuleRegistry`/`TargetRegistry` lookup. It
 assigns node ids, dispatches each `RawNode` to its node family, maps legacy ports to the
@@ -582,7 +582,7 @@ metadata. Tests: `tests/public/test_workflow.py` (builds `Workflow` graphs direc
 Deterministic byte-stable canonical serialization of a `Workflow` and its
 round-tripping parser. Lives in `riko/definitions/_serialize.py` (`serialize_graph`/`parse_graph`);
 the STABLE entry points are the `Workflow.serialize`/`Workflow.parse` methods in
-`riko/definitions/_workflow.py` (no separate `riko.ext` function forms).
+`riko/definitions/_workflow_definition.py` (no separate `riko.ext` function forms).
 
 `flow.serialize(*, indent=4)` is a thin `json.dumps(workflow, cls=WorkflowEncoder,
 sort_keys=True, indent=indent, ensure_ascii=False)` (plus a trailing newline; `indent=None` gives the
@@ -620,14 +620,14 @@ non-JSON-native value rejection, migrate-emits-no-v1) plus module doctests.
 
 The **CLI v1→v2 cutover** was deferred out of this slice to R4B and has since shipped there
 (cutover step 3; see [v1-cutover.md](gameplans/v1-cutover.md)). Every console script was kept
-and re-pointed at canonical v2 rather than deleted. `riko/cli/_workflow.py` is the shared
+and re-pointed at canonical v2 rather than deleted. `riko/cli/_document.py` is the shared
 document front door (`read_document`, `require_workflow`); `build-workflow` is the one lenient reader
 (through `Workflow.parse`), taking a serialized `PipeDag`, a
 serialized `PipeDef`, or a `WorkflowDocument` and always emitting a validated `WorkflowDocument`
 (detection picks the reader; a `--format` pin is read as given, never re-detected, and a non-list
 `wires`/`modules` falls through to the `PipeDag` reader's `InvalidPipelineError`);
 `compile-workflow` and `run-pipe` go through `require_workflow` and refuse anything older. `run-pipe <id>` searches `./examples` and then the checkout's `ROOT_DIR / "examples"` (`get_example_dirs` in `riko/cli/runpipe.py`; listed once when they are the same directory), trying `<id>.py` then `workflows/<id>.json` in each, so example ids resolve from any directory in a checkout or editable install (the wheel ships no `examples`).
-`riko/runtime/_codegen.py` is the v2 generator behind STABLE `compile_workflow`, and
+`riko/runtime/_compile.py` is the v2 generator behind STABLE `compile_workflow`, and
 `Workflow.parse` replaces `build_pipe_def` as the bare-bones DAG entry point (its interim
 STABLE alias `parse_dag` was removed 2026-10-12 as a clean break). A `PipeDag` module names its module in `name` or the older `type`
 (`_require_dag_name` in `riko/definitions/_migrate.py` rejects a missing or disagreeing pair). `migrate_v1_to_v2` remains the one-shot offline conversion path, now reachable
@@ -643,7 +643,7 @@ A one-shot offline conversion of a `PipeDef` (`modules` plus `src`/`tgt`
 `wires`) into `Workflow`. Lives in `riko/definitions/_migrate.py`
 (`migrate_pipe_def`, which returns a `RawWorkflow`; the clean-break placement note supersedes the
 original `riko/workflow/migrate.py` sketch); the `migrate_v1_to_v2` delegate in
-`riko/definitions/_workflow.py` is exported EXTENSION as `riko.ext.migrate_v1_to_v2`. It is **not** a live loader — v1 is not a
+`riko/definitions/_workflow_definition.py` is exported EXTENSION as `riko.ext.migrate_v1_to_v2`. It is **not** a live loader — v1 is not a
 maintained runtime ingress, so it `logger.warning`s that a `PipeDef` was migrated, then emits v2
 only.
 
@@ -767,14 +767,14 @@ serializes the same `Formats` at a destination. Meza owns conversion work. The B
 > The fluent authoring surface (`Pipeline.from_module(name, conf=…)`, `.pipe()`, attribute chaining,
 > `|`, and `items | Pipeline(…)` source seeding) ships now too.
 > `Pipeline.with_execution(...)` stores a frozen `ExecutionSettings`
-> (`riko/definitions/_execution.py`; field checks are `require_*` guards attached with
+> (`riko/definitions/_settings.py`; field checks are `require_*` guards attached with
 > `validator_from_require` — `ordered` is `validator_from_require(require_instance, bool,
 > error=TypeError)`, `concurrency` a `def_from_require` converter that also accepts
 > `"auto"` — raising `TypeError`/`ValueError` because the values come from Python call
 > sites, and a NaN `shutdown_timeout` is rejected); `with_context`/`with_resource` bind the run's
 > `Context`. `concurrency=None` is sequential even beside an explicit `thread`/`process` executor (a
 > one-worker pool, async limit 1); `concurrency="auto"` sizes the sync pool with `get_worker_cnt`
-> (cores ×2 for threads) and the async limit from `concurrency_limit`. `riko/execution/_mapping.py`
+> (cores ×2 for threads) and the async limit from `concurrency_limit`. `riko/execution/_concurrency.py`
 > resolves the settings into a `SyncPolicy`/`AsyncPolicy`:
 > sync maps loopable nodes over one shared pool (`open_pool` from `riko/execution/_pools.py`) with
 > `apply_async` windows that pull the source no further ahead than the pool width (`Pool.imap`
@@ -784,8 +784,8 @@ serializes the same `Formats` at a destination. Meza owns conversion work. The B
 > Cutover steps 2–5 are done (ordered checklist: [v1-cutover.md](gameplans/v1-cutover.md); step 5
 > deleted the v1 compiler on 2026-10-03): the fixture trees hold `WorkflowDocument`s,
 > the console scripts run, convert, and generate from canonical v2 through
-> `Workflow.parse`, `riko/cli/_workflow.py`, and `riko/runtime/_codegen.py`, and the v1 pipe/collection classes were
-> deleted on 2026-10-02 (`54b53c29`), leaving `riko/runtime/collections.py` with `Formats`, `export`, and
+> `Workflow.parse`, `riko/cli/_document.py`, and `riko/runtime/_compile.py`, and the v1 pipe/collection classes were
+> deleted on 2026-10-02 (`54b53c29`), leaving `riko/runtime/_export.py` with `Formats`, `export`, and
 > `list_formats`.
 
 `riko/execution/` (the `execution` layer) hosts the one-shot executions a pipeline run
@@ -929,7 +929,7 @@ run:
   error raises at the pull that hits it after every earlier item has been yielded, and abandoning or
   closing the async stream closes the sync pipe's generator off-loop through the unguarded `_asyncify_call`
   seam (which still works while the execution is shutting down). Async source/inputs are typed
-  `AsyncItems` (`AsyncIterable[Item]`) and outputs `AsyncStream`, matching `runtime/collections.py`.
+  `AsyncItems` (`AsyncIterable[Item]`) and outputs `AsyncStream`.
   *Design note:* the earlier plan's "bounded channel" was replaced by this demand-driven pull because
   asyncer offers no iterator bridge and the pull shape needs no task-lifetime management; what it gives
   up — thread affinity across yields, and one item of producer/consumer overlap — was never promised by
@@ -1072,7 +1072,7 @@ v1-cutover step 4 (2026-10-02). What remains is four durable layers:
 
 - **declarative** — `WriteOperation` (frozen `mode` + unified `keys`), `SupportsWrite` (a destination
   that *reports write capabilities*, it does not itself deliver records; the protocol lives in
-  `riko/types/_targets.py`), and `Formats` (`riko/definitions/_write.py`).
+  `riko/types/_target_protocols.py`), and `Formats` (`riko/definitions/_write.py`).
 - **prepared** — `PreparedWrite` (target + normalized operation + resolved `WriteCapabilities`) is the
   validated object; `WriteOperation` on its own is unvalidated intent. `WriteCapabilities` stores only
   independent facts (`modes`, `fmt`, `incremental`, `match_keyed_modes`, `idempotent_modes`);

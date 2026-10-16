@@ -12,6 +12,7 @@ discovery names for an extension package.
 """
 
 from riko.coercion._dynamic_conf import DynamicConf
+from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.definitions._nodes import (
     ActionNode,
     CacheNode,
@@ -23,9 +24,8 @@ from riko.definitions._nodes import (
     WriteNode,
 )
 from riko.definitions._targets import FileTarget
-from riko.definitions._workflow import migrate_v1_to_v2, normalize_workflow
+from riko.definitions._workflow_definition import migrate_v1_to_v2, normalize_workflow
 from riko.definitions._write import WriteCapabilities
-from riko.definitions.modules import ModuleDefinition, normalize_module_name
 from riko.modules._decorators import operator, processor, splitter
 from riko.modules._metadata import get_module_category
 from riko.runtime._module_registry import (
@@ -43,7 +43,12 @@ from riko.runtime._workflow_resolver import (
     reset_workflow_resolver,
 )
 from riko.types._enums import ModuleName, ModuleNameLike
-from riko.types._targets import SupportsActions, SupportsRead, SupportsWrite, Target
+from riko.types._target_protocols import (
+    SupportsActions,
+    SupportsRead,
+    SupportsWrite,
+    Target,
+)
 from riko.types._wrappers import (
     AsyncOperatorWrapper,
     AsyncProcessorWrapper,

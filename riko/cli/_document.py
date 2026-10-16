@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from riko.base._logging import get_logger
 from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._serialize import get_document_shape
-from riko.definitions._workflow import Workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.types._enums import DocumentShape
 from riko.types._guards import require_mapping
 
@@ -95,7 +95,7 @@ def require_workflow(document: object) -> Workflow:
 
     Returns:
 
-        The validated :class:`~riko.definitions._workflow.Workflow`.
+        The validated :class:`~riko.definitions._workflow_definition.Workflow`.
 
     Raises:
 

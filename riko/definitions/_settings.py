@@ -1,27 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Immutable execution settings a pipeline runs with.
-
-Examples:
-
-    Basic usage::
-
-        >>> from attrs import evolve
-        >>> from riko import Executor
-        >>> from riko.definitions._execution import ExecutionSettings
-        >>>
-        >>> settings = ExecutionSettings(executor="thread")
-        >>> settings.executor is Executor.THREAD, settings.concurrency
-        (True, None)
-        >>> evolve(settings, concurrency=4).concurrency
-        4
-        >>> evolve(settings, concurrency="auto").concurrency
-        'auto'
-        >>> ExecutionSettings(concurrency=0)
-        Traceback (most recent call last):
-        ValueError: ExecutionSettings 'concurrency' must be at least 1, got 0
-
-"""
+"""Immutable execution settings a pipeline runs with."""
 
 from __future__ import annotations
 
@@ -112,11 +90,21 @@ class ExecutionSettings:
 
         Basic usage::
 
-            >>> from riko.definitions._execution import ExecutionSettings
+            >>> from attrs import evolve
+            >>> from riko import Executor
+            >>> from riko.definitions._settings import ExecutionSettings
             >>>
             >>> settings = ExecutionSettings(concurrency=4, ordered=True)
             >>> settings.executor.value, settings.concurrency, settings.ordered
             ('auto', 4, True)
+            >>> threaded = ExecutionSettings(executor="thread")
+            >>> threaded.executor is Executor.THREAD, threaded.concurrency
+            (True, None)
+            >>> evolve(threaded, concurrency="auto").concurrency
+            'auto'
+            >>> ExecutionSettings(concurrency=0)
+            Traceback (most recent call last):
+            ValueError: ExecutionSettings 'concurrency' must be at least 1, got 0
 
     """
 

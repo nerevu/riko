@@ -41,7 +41,7 @@ from riko.definitions._nodes import (
     SubscribeNode,
     WriteNode,
 )
-from riko.definitions._workflow import migrate_v1_to_v2, normalize_workflow
+from riko.definitions._workflow_definition import migrate_v1_to_v2, normalize_workflow
 from riko.runtime._workflow_resolver import (
     register_workflow_store,
     reset_workflow_resolver,

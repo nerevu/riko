@@ -29,17 +29,17 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 | `riko/parsing/` | config parsing, `DotDict`, XML/HTML/document parsing |
 | `riko/rss/` | feed discovery, parsing, entry normalization |
 | `riko/execution/` | explicit execution layer: execution planning, one-shot sync/async executions, lifetime primitives, execution-local resource acquisition and owned-resource teardown, event sink |
-| `riko/runtime/` | executable orchestration: collections, resolver/registry, pipelines, pub/sub, write sessions, codegen |
+| `riko/runtime/` | executable orchestration: export, resolver/registry, pipelines, pub/sub, write sessions, codegen |
 | `riko/modules/` | built-in pipe implementations; private decorator/preparation/metadata/looping internals; generated discovery names |
 | `riko/ext/` | supported extension-author facade + extension codegen/name helpers; shares the `modules` architecture layer |
 | `riko/cli/` | CLI commands, private generators, docs checks, and import-contract linters; `manage.py` stays a thin composer |
 
 Important concrete locations:
 
-- `export`/`Formats`/`list_formats`: `riko/runtime/collections.py`
+- `export`/`Formats`/`list_formats`: `riko/runtime/_export.py`
 - graph index for validation and execution planning: `GraphIndex` in `riko/types/_workflow.py`, built by `Workflow.index`
-- v2 code generator behind `compile_workflow`/`compile-workflow`: `riko/runtime/_codegen.py`
-- workflow loading/saving: `Workflow.parse`/`load`/`serialize` in `riko/definitions/_workflow.py`, over the data-returning `_normalize.py`/`_migrate.py`/`_serialize.py`; the CLI front door `riko/cli/_workflow.py` keeps only `read_document`/`require_workflow`
+- v2 code generator behind `compile_workflow`/`compile-workflow`: `riko/runtime/_compile.py`
+- workflow loading/saving: `Workflow.parse`/`load`/`serialize` in `riko/definitions/_workflow_definition.py`, over the data-returning `_normalize.py`/`_migrate.py`/`_serialize.py`; the CLI front door `riko/cli/_document.py` keeps only `read_document`/`require_workflow`
 - pub/sub: `riko/runtime/_pubsub/`
 - executions: `riko/execution/_execution.py` (base) + `_sync_execution.py`/`_async_execution.py`; the frozen `ExecutionPlan` and its `from_workflow` constructor are in `riko/execution/_prepared.py`; the pipeline runners are `riko/runtime/_run.py`
 - stored workflows: the `workflow` decorator and `build_workflow_pipes` in `riko/runtime/_workflow_pipes.py`, the stores in `_workflow_stores.py`, the `WorkflowResolver` in `_workflow_resolver.py`
@@ -285,7 +285,7 @@ is a fallback, so it is a `resolve`.
   `WorkflowDocument`s plus hand-maintained typed probes. Details: `_docs/INTERNALS.md`.
 - **Lint selectors are additive** — bare `manage lint` is Ruff; `manage lint --all`
   runs the whole standard suite (Ruff, RST, `--docs`, `--docstrings`, `--terms`, `--literals`,
-  `--deps`, `--bindings`, `--tests`, actionlint, YAML, and all import contracts), so none of those need a separate run. Type
+  `--deps`, `--bindings`, `--tests`, `--basenames`, actionlint, YAML, and all import contracts), so none of those need a separate run. Type
   verification (`--check-types`/`--verify-types`), pylint strict mode, and
   distribution checks remain explicit heavyweight checks.
 - **Docs stay consistent by lint** — `manage lint --docs` guards the authoritative

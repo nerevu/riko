@@ -20,7 +20,7 @@ BADO = frozenset(
 
 IO_ = frozenset({"async_url_open", "async_write", "async_get_temp_file"})
 
-COLLECTIONS = frozenset({"Formats", "export", "list_formats"})
+EXPORT = frozenset({"Formats", "export", "list_formats"})
 
 COMPILE = frozenset({"compile_workflow"})
 
@@ -69,7 +69,7 @@ ROOT_EXCEPTIONS = frozenset(
     }
 )
 
-STABLE = BADO | IO_ | COLLECTIONS | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS
+STABLE = BADO | IO_ | EXPORT | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS
 
 PRIVATE_RESOLUTION = frozenset(
     {

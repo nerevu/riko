@@ -16,12 +16,12 @@ import pytest
 
 from riko.base._paths import ROOT_DIR
 from riko.definitions._context import Context
-from riko.definitions._workflow import Workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._sync_execution import SyncExecution
 from riko.parsing.documents import IJSON_IS_NATIVE, IS_FASTFEEDPARSER, IS_LXML
+from riko.runtime._export import list_formats
 from riko.runtime._resolver import dispatcher
-from riko.runtime.collections import list_formats
 from tests import TESTS_DIR, async_test, skipif_issync
 
 _BASEDIR = TESTS_DIR.parent

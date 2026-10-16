@@ -55,7 +55,7 @@ from riko.definitions._targets import (
     resolve_format,
     validate_target_mode,
 )
-from riko.definitions._workflow import Workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import (
     WriteCapabilities,
     WriteMode,
@@ -90,9 +90,9 @@ from riko.types._collections import (
     require_strlike,
     typed_dict_keys,
 )
-from riko.types._compiler import Embed, PipeModule
 from riko.types._enums import Backends, Executor, Formats, resolve_enum
 from riko.types._guards import require_mapping, require_sequence
+from riko.types._pipedef import Embed, PipeModule
 from riko.types._resource import FactoryKind
 from riko.types._workflow import Edge as EdgeBase
 from riko.types._workflow import Endpoint, NodeFamily, RawEdge, RawEndpoint, RawNode

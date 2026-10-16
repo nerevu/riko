@@ -37,7 +37,7 @@ from riko.types._enums import SortableCastType
 from riko.types.modules import SortConfRule
 
 from ._decorators import operator
-from ._iterutils import build_sort_key
+from ._sortutils import build_sort_key
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

@@ -30,16 +30,15 @@ from riko.types._streams import Item
 from riko.types._workflow import Endpoint, NodeId
 
 from ._context import Context
-from ._execution import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from ._nodes import ModuleNode, Node, StreamEdge, WriteNode
+from ._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from ._targets import build_write
-from ._workflow import Workflow
+from ._workflow_definition import Workflow
 from ._write import WriteMode
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from riko.types._compiler import Embed
     from riko.types._enums import (
         ConcurrencyLike,
         ExecutorLike,
@@ -48,6 +47,7 @@ if TYPE_CHECKING:
         StrLike,
     )
     from riko.types._events import EventSink
+    from riko.types._pipedef import Embed
     from riko.types._resource import LifecycleFactory
     from riko.types._streams import SourceLike
     from riko.types.modules import AnyModuleConf, CallOptionsLike, Conf

@@ -29,18 +29,18 @@ Application code should import stable APIs from `riko`.
 
 Breaking changes to this surface follow riko's normal SemVer policy.
 
-**Collections** — pipe/collection runtime and export helpers
-(`riko.runtime.collections`):
+**Export** — serialization formats and export helpers
+(`riko.runtime._export`):
 
-<!-- api-surface:collections -->
+<!-- api-surface:export -->
 ```python
->>> sorted(COLLECTIONS)
+>>> sorted(EXPORT)
 ['Formats', 'export', 'list_formats']
 ```
-<!-- /api-surface:collections -->
+<!-- /api-surface:export -->
 
 **Compilation** — `PipeDag`/`Workflow` compilation entry points implemented in
-`riko.runtime._codegen` (`compile_workflow`):
+`riko.runtime._compile` (`compile_workflow`):
 
 <!-- api-surface:compile -->
 ```python
@@ -95,7 +95,7 @@ The complete stable surface is the union of these groups:
 
 <!-- api-surface:stable-union -->
 ```python
->>> STABLE == BADO | IO_ | COLLECTIONS | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS
+>>> STABLE == BADO | IO_ | EXPORT | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS
 True
 ```
 <!-- /api-surface:stable-union -->
@@ -220,7 +220,7 @@ re-exported through one of the supported namespaces above.
 
 Private implementation paths carry no independent compatibility guarantee. For
 example, compiler/resolution implementations live under private paths such as
-`riko.runtime._codegen` and `riko.runtime._resolver`; callers should use the stable
+`riko.runtime._compile` and `riko.runtime._resolver`; callers should use the stable
 or extension facade appropriate to the operation rather than treating those paths
 as new APIs.
 

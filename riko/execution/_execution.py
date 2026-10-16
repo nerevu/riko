@@ -26,7 +26,7 @@ from attrs import Factory, define, field
 from riko.bado._backend import asyncify
 from riko.base._constants import FOREVER_ITEM
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
-from riko.definitions._execution import DEF_EXECUTION_SETTINGS, ExecutionSettings
+from riko.definitions._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from riko.types._collections import FrozenDict
 from riko.types._io import is_async_closeable, is_sync_closeable
 from riko.types._workflow import parse_port

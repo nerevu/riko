@@ -66,14 +66,14 @@ one only for a config shape the surviving probes do not already reach.
 The compiler implementation lives under `riko/runtime/`; workflow loading lives under
 `riko/definitions/`:
 
-- `riko/runtime/_codegen.py` — the Workflow v2 generator behind `compile_workflow`.
-- `riko/definitions/_workflow.py` — `Workflow.parse`/`load`/`serialize`, plus `migrate_v1_to_v2` (`PipeDef`, a pipe definition), over the data-returning `_normalize.py`/`_migrate.py`/`_serialize.py`.
+- `riko/runtime/_compile.py` — the Workflow v2 generator behind `compile_workflow`.
+- `riko/definitions/_workflow_definition.py` — `Workflow.parse`/`load`/`serialize`, plus `migrate_v1_to_v2` (`PipeDef`, a pipe definition), over the data-returning `_normalize.py`/`_migrate.py`/`_serialize.py`.
 - `GraphIndex` (`riko/types/_workflow.py`) — derives the topology from node ids, edges, and outputs; `Workflow.index` builds it, and validation and execution planning both read it.
 - `riko/runtime/templates/` — `pyworkflow.txt`, the v2 generator template.
-- `riko/types/_compiler.py` — `PipeDef`/`PipeDefLike` and `PipeDag` type contracts;
+- `riko/types/_pipedef.py` — `PipeDef`/`PipeDefLike` and `PipeDag` type contracts;
   all three are exported on `riko.types`.
 
-The console scripts are v2-native. `riko/cli/_workflow.py` is their one document front
+The console scripts are v2-native. `riko/cli/_document.py` is their one document front
 door (`read_document`, `require_workflow`). `build-workflow` reads through `Workflow.parse`,
 which detects whether a document is a serialized `PipeDag`, a serialized `PipeDef`, or a
 `WorkflowDocument` (`get_document_shape`) unless `--format` pins the `DocumentShape`.
@@ -90,19 +90,19 @@ cutover step 5 (2026-10-03).
 - **Discovery enums are generated.** `riko/modules/_names.py` owns the flat
   `Modules` namespace and the `Sources`/`Transforms`/`Sinks` buckets. The stable
   `riko` facade re-exports them; do not hand-maintain parallel lists.
-- **Name normalization lives in `riko/definitions/modules.py`; discovery in
+- **Name normalization lives in `riko/definitions/_module_definition.py`; discovery in
   `riko/modules/_metadata.py`.** Public name-accepting discovery APIs
   (`get_module_metadata`, `describe_module`) normalize a string or
   discovery member to the canonical module id before constructing metadata.
 - **Formats are not sinks.** `Formats` is the serialization/export enum used by
-  `riko/runtime/collections.py` and the write stack. `Sinks` is a generated bucket
+  `riko/runtime/_export.py` and the write stack. `Sinks` is a generated bucket
   of pipe modules. These are separate axes even when a sink pipe ultimately writes
   a serialized format.
 - **Write contracts live below execution.** Declarative write intent and protocols
   are in `riko/definitions/_write.py`; target validation is in
   `riko/definitions/_targets.py`; live session state is in
-  `riko/runtime/_write_session.py`; collection verbs are in
-  `riko/runtime/collections.py`.
+  `riko/runtime/_write_session.py`; export helpers are in
+  `riko/runtime/_export.py`.
 - **Async I/O moved out of Bado.** Backend/iterator helpers remain under
   `riko/bado/`, while `async_url_open`, `async_write`, and async temp-file support
   live under `riko/io/` and are promoted through the stable `riko` surface.
@@ -168,6 +168,16 @@ sync when source is moved between package groups.
   parses). An `Async<Subject>` class matches its `<Subject>` or `Sync<Subject>` row, so a
   twin pair takes one index entry. A bare section keyword (`Examples`, `Returns`) on its
   own index line reads as a docstring section to pydocstyle, so name such subjects longer.
+- **Basename lint.** `manage lint --basenames` fails when two modules under `riko/`
+  (`__init__.py` aside) share a file name. Deliberate pairs are allowlisted in
+  `DUPLICATE_BASENAMES` in `riko/base/_config.py`; an allowlisted name that is no longer
+  shared also fails, so the allowlist is pruned when a pair is renamed away.
+- **Docstring example lint.** `manage lint --docstrings` also flags a doctest that
+  imports a public name through a private `riko` module path, and a module example in an
+  underscore-prefixed module that defines no public name. Both read the public names
+  from `riko/base/_api_surface.py`: `STABLE` maps to `riko`, `EXTENSION` to `riko.ext`,
+  `EXT_CODEGEN` to `riko.ext.codegen`, and `TYPES` to `riko.types`, first match winning
+  (`resolve_public_path` in `riko/cli/_docstyle.py`).
 - **Coverage ratchet.** `manage test --ratchet` counts `missing_lines` from a JSON report
   written to a fresh temp folder. Coverage runs on the `sysmon` core (Python 3.12
   `sys.monitoring`; about the cost of a no-coverage run) and measures the console scripts

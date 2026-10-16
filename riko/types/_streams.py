@@ -13,7 +13,7 @@ from collections.abc import (
 )
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from riko.base._locations import AnyLocation
+from ._geo import AnyLocation
 
 if TYPE_CHECKING:
     from riko.parsing._dotdict import DotDict

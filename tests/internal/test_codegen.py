@@ -18,7 +18,7 @@ from riko.base.exceptions import InvalidPipelineError
 from riko.cli._gen_config import objconf_structure, render
 from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode, WriteNode
-from riko.definitions._workflow import Workflow, normalize_workflow
+from riko.definitions._workflow_definition import Workflow, normalize_workflow
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.ext.codegen import (
@@ -29,7 +29,7 @@ from riko.ext.codegen import (
     generate_module_names,
 )
 from riko.modules._metadata import gen_module_catalog, get_module_category, list_modules
-from riko.runtime._codegen import compile_workflow
+from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_resolver import _build_resolved_workflow

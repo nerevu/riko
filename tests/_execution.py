@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from riko.definitions._nodes import ModuleNode
-from riko.definitions._workflow import Workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.runtime._module_registry import ModuleRegistry
 from riko.runtime._resolver import ResolverDispatcher
 from riko.runtime._workflow_resolver import workflow_resolver
@@ -15,7 +15,7 @@ from riko.types._workflow import Endpoint
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from riko.definitions.modules import ModuleDefinition
+    from riko.definitions._module_definition import ModuleDefinition
 
 
 def build_dispatcher(*definitions: ModuleDefinition) -> ResolverDispatcher:

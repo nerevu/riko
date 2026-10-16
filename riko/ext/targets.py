@@ -32,7 +32,12 @@ from riko.runtime._target_registry import (
     register_target,
     reset_target_registry,
 )
-from riko.types._targets import SupportsActions, SupportsRead, SupportsWrite, Target
+from riko.types._target_protocols import (
+    SupportsActions,
+    SupportsRead,
+    SupportsWrite,
+    Target,
+)
 
 __all__ = [
     "FileTarget",

@@ -13,12 +13,12 @@ from riko.bado._backend import fail_after
 from riko.bado._util import maybe_async
 from riko.bado.itertools import as_async
 from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
-from riko.definitions import _workflow as workflow_definitions
+from riko.definitions import _workflow_definition as workflow_definitions
 from riko.definitions._context import Context
+from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
-from riko.definitions._workflow import Workflow
-from riko.definitions.modules import ModuleDefinition
+from riko.definitions._workflow_definition import Workflow
 from riko.execution._adapt import (
     adapt_embed,
     async_adapt_embed,

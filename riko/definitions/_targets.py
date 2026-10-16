@@ -20,7 +20,7 @@ from typing import ClassVar
 from riko.types._collections import normalize_strs
 from riko.types._enums import Backends, FmtLike, Formats, StrLike, resolve_enum
 from riko.types._io import PathLike, PathLikeType
-from riko.types._targets import SupportsWrite
+from riko.types._target_protocols import SupportsWrite
 
 from ._write import (
     Destination,
@@ -134,7 +134,7 @@ class FileTarget:
 
     Examples:
 
-        >>> from riko.definitions._targets import FileTarget
+        >>> from riko.ext import FileTarget
         >>>
         >>> FileTarget("out.jsonl").capabilities().incremental
         True
@@ -164,7 +164,7 @@ class FileTarget:
 
         Examples:
 
-            >>> from riko.definitions._targets import FileTarget
+            >>> from riko.ext import FileTarget
             >>> from riko.definitions._write import WriteMode
             >>>
             >>> capabilities = FileTarget("out.jsonl").capabilities()
@@ -258,7 +258,8 @@ def build_write(
 
     Examples:
 
-        >>> from riko.definitions._targets import FileTarget, build_write
+        >>> from riko.definitions._targets import build_write
+        >>> from riko.ext import FileTarget
         >>>
         >>> prepared = build_write(FileTarget("out.csv"), "append")
         >>> prepared.operation.mode

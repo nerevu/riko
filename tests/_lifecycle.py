@@ -3,9 +3,9 @@
 
 from __future__ import annotations
 
-from riko.definitions._workflow import Workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.runtime._pipeline import Pipeline
-from riko.types._compiler import DagModule, PipeDag
+from riko.types._pipedef import DagModule, PipeDag
 from riko.types.modules import ConfArg, FetchRawConf, ItemBuilderConf
 
 _BUILDER_CONF = ItemBuilderConf({"attrs": [{"key": "content", "value": "a,b,c"}]})

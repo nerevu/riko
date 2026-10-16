@@ -21,13 +21,13 @@ from riko.base.exceptions import (
 )
 from riko.definitions._context import Context
 from riko.definitions._nodes import Node
-from riko.definitions._workflow import Workflow, WorkflowLike
+from riko.definitions._workflow_definition import Workflow, WorkflowLike
 from riko.io._async import async_get_temp_file, async_url_open, async_write
 from riko.modules._metadata import describe_module, get_module_metadata, list_modules
 from riko.modules._names import Modules, Sinks, Sources, Transforms
-from riko.runtime._codegen import compile_workflow
+from riko.runtime._compile import compile_workflow
+from riko.runtime._export import export, list_formats
 from riko.runtime._pipeline import Pipeline
-from riko.runtime.collections import export, list_formats
 from riko.types._enums import (
     Backends,
     CastType,

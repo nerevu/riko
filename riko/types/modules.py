@@ -20,7 +20,7 @@ from ._collections import (
     serialize_attrs,
     validator_from_require,
 )
-from ._compiler import CountValues, Embed
+from ._pipedef import CountValues, Embed
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Iterator, Mapping
 
     from riko.definitions._context import Context
-    from riko.definitions._workflow import Workflow
+    from riko.definitions._workflow_definition import Workflow
     from riko.types._streams import SourceLike
     from riko.types._wrappers import (
         AsyncFunc,

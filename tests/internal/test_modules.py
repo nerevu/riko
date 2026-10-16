@@ -23,8 +23,8 @@ from riko.base.exceptions import (
     UnsupportedWorkflowError,
 )
 from riko.definitions._context import Context
-from riko.definitions._workflow import Workflow
-from riko.definitions.modules import ModuleDefinition
+from riko.definitions._module_definition import ModuleDefinition
+from riko.definitions._workflow_definition import Workflow
 from riko.modules import count as count_module
 from riko.modules import regex as regex_module
 from riko.modules import tokenizer as tokenizer_module

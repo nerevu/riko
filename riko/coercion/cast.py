@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from logging import Logger
 
-    from riko.base._locations import AnyLocation, IPAddress, Location
+    from riko.types._geo import AnyLocation, IPAddress, Location
     from riko.types._options import DecorationOptions
     from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
     from riko.types._values import BasicArg
