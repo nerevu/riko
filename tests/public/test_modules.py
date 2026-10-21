@@ -61,6 +61,7 @@ from riko.modules.join import pipe as join_pipe
 from riko.modules.receive import pipe as receive_pipe
 from riko.modules.send import async_pipe as async_send
 from riko.modules.send import pipe as send_pipe
+from riko.modules.slugify import pipe as slugify_pipe
 from riko.modules.sort import pipe as sort_pipe
 from riko.modules.udf import pipe as udf_pipe
 from riko.runtime._pubsub import async_hub
@@ -263,6 +264,18 @@ def _counting_source(consumed: list[int]) -> Any:
     for i in count():
         consumed.append(i)
         yield {"x": "foo", "i": i}
+
+
+SLUGIFY_CASES = [
+    pytest.param("北京 市", "bei-jing-shi", id="han-transliteration"),
+    pytest.param("ß straße", "ss-strasse", id="eszett-expansion"),
+]
+
+
+class TestSlugify:
+    @pytest.mark.parametrize(("content", "slug"), SLUGIFY_CASES)
+    def test_non_ascii_content_transliterates(self, content, slug):
+        assert _values(slugify_pipe({"content": content}), "slugify") == [slug]
 
 
 class TestJoin:
