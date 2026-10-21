@@ -12,6 +12,7 @@ from decimal import Context, Decimal, localcontext
 from enum import Enum, StrEnum
 from functools import partial, wraps
 from hashlib import blake2b
+from itertools import chain
 from math import isinf, isnan
 from pathlib import PurePath, PureWindowsPath
 from time import struct_time
@@ -25,7 +26,7 @@ from riko.base.exceptions import CyclicIdentityError, IdentityEncodingError
 from ._dates import resolve_aware_datetime, tt_to_datetime
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Hashable, Iterable
 
     from _typeshed import DataclassInstance
     from attrs import AttrsInstance
@@ -295,11 +296,37 @@ def digest(value: object, domain: IdentityDomain) -> str:
     return blake2b(header + b"\x00" + _bytes, digest_size=16).hexdigest()
 
 
-def _cache_key(args: tuple[object, ...], kwargs: Mapping[str, object]) -> bytes | None:
-    try:
-        key = canonical_bytes((args, tuple(sorted(kwargs.items()))))
-    except (IdentityEncodingError, CyclicIdentityError):
+_NATIVE_KEY_TYPES: frozenset[type] = frozenset(
+    {str, bytes, int, float, bool, type(None)}
+)
+
+
+def _is_native_val(value: object) -> bool:
+    """Reports whether a value's own hash and equality match its canonical identity."""
+    is_native = type(value) in _NATIVE_KEY_TYPES
+
+    if is_native and isinstance(value, float):
+        is_native = not isnan(value)
+
+    return is_native
+
+
+def _native_key(*args: object, **kwargs: object) -> tuple[object, ...] | None:
+    if all(map(_is_native_val, chain(args, kwargs.values()))):
+        tagged = tuple((type(a), a) for a in args)
+        key = (tagged, tuple(sorted((k, type(v), v) for k, v in kwargs.items())))
+    else:
         key = None
+
+    return key
+
+
+def _cache_key(*args: object, **kwargs: object) -> Hashable | None:
+    if (key := _native_key(*args, **kwargs)) is None:
+        try:
+            key = canonical_bytes((args, tuple(sorted(kwargs.items()))))
+        except (IdentityEncodingError, CyclicIdentityError):
+            key = None
 
     return key
 
@@ -308,8 +335,9 @@ def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
     """
     Memoize a callable by the canonical encoding of its arguments.
 
-    Arguments that cannot be canonically encoded bypass the cache so distinct
-    instances never collide on a shared key.
+    A call whose arguments are all plain scalars is keyed without the encoding step, so
+    hits on such calls stay cheap. Arguments that cannot be canonically encoded bypass
+    the cache so distinct instances never collide on a shared key.
 
     Returns:
 
@@ -330,12 +358,12 @@ def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
         3
 
     """
-    store: dict[bytes, R] = {}
+    store: dict[Hashable, R] = {}
     stats = {"hits": 0, "misses": 0}
 
     @wraps(fn)
     def wrapper(*args: VT, **kwargs: VT) -> R:
-        key = _cache_key(args, kwargs)
+        key = _cache_key(*args, **kwargs)
 
         if key is None:
             stats["misses"] += 1

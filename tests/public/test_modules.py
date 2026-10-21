@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from importlib import import_module
 from importlib.resources import files
 from itertools import count
@@ -47,6 +48,7 @@ from riko.base._api_surface import (
     TYPES,
 )
 from riko.base.exceptions import ReceiverUnavailableError
+from riko.coercion import cast as cast_module
 from riko.definitions._context import Context
 from riko.modules import describe_module
 from riko.modules._metadata import list_modules
@@ -226,6 +228,19 @@ class TestFilter:
         nonfinite = [{"x": "nan"}, {"x": "5"}]
         conf = FilterConf({"rule": FilterConfRule(field="x", op="greater", value="9")})
         assert _values(filter_pipe(nonfinite, conf=conf), "x") == ["nan"]
+
+    def test_filter_relative_date_value_resolves_per_evaluation(self, monkeypatch):
+        """A ``"today"`` rule value follows the clock, not its first evaluation."""
+        ahead, behind = timezone(timedelta(hours=14)), timezone(timedelta(hours=-12))
+        items = [{"x": datetime.now(behind).date().isoformat()}]
+        rule = FilterConfRule(field="x", op="before", value="today")
+        conf = FilterConf({"rule": rule})
+
+        monkeypatch.setattr(cast_module, "load_local_tz", lambda **_: ahead)
+        assert _values(filter_pipe(items, conf=conf), "x") == [items[0]["x"]]
+
+        monkeypatch.setattr(cast_module, "load_local_tz", lambda **_: behind)
+        assert _values(filter_pipe(items, conf=conf), "x") == []
 
     def test_filter_allow_inf_flag(self, monkeypatch):
         """Compare infinities numerically when ``ALLOW_INF`` is enabled."""

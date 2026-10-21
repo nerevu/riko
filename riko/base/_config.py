@@ -57,7 +57,6 @@ SUBPIPE_TYPE = "pipe"
 BUILTIN_PROVIDER = "riko"
 SINK_NAMES: frozenset[str] = frozenset({OUTPUT_MODULE, "write"})
 PIPE_ID_PREFIXES: tuple[str, ...] = ("pipe_", "pipe:")
-SHIPPED_CALL_CACHE_SIZE = 32
 DUPLICATE_BASENAMES: frozenset[str] = frozenset(
     {"_async.py", "_sync.py", "_logging.py", "modules.py"}
 )
@@ -103,6 +102,8 @@ class Settings:
     encoding: str = "utf-8"
     discovery_timeout: int = 10
     exchange_api: str = "https://openexchangerates.org/api/latest.json"
+    shipped_call_cache_size: int = 32
+    parsed_date_cache_size: int = 1024
 
 
 def _env_int(
@@ -156,6 +157,8 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         40
         >>> load_settings({"RIKO_NODE_THREADS": "-1"}).node_threads
         40
+        >>> load_settings({"RIKO_PARSED_DATE_CACHE_SIZE": "0"}).parsed_date_cache_size
+        0
 
     """
     source = environ if env is None else env
@@ -175,6 +178,18 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             source, "RIKO_DISCOVERY_TIMEOUT", defaults.discovery_timeout
         ),
         exchange_api=_env_str(source, "RIKO_EXCHANGE_API", defaults.exchange_api),
+        shipped_call_cache_size=_env_int(
+            source,
+            "RIKO_SHIPPED_CALL_CACHE_SIZE",
+            defaults.shipped_call_cache_size,
+            minimum=0,
+        ),
+        parsed_date_cache_size=_env_int(
+            source,
+            "RIKO_PARSED_DATE_CACHE_SIZE",
+            defaults.parsed_date_cache_size,
+            minimum=0,
+        ),
     )
 
 

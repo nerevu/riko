@@ -46,8 +46,8 @@ Index (file, then the subjects it owns, in file order):
                               ResolverDispatcher, RequireInterface, EntryPointModules,
                               WorkflowResolver, Catalog, ResolvedDocuments, Modules,
                               Prepare
-    test_values.py            CanonicalBytes, Digest, ReprCache, CastDatetime,
-                              ResolveCastType, DefItemgetter, Fromdict, TryLocalTz,
-                              Dates, DotDict, Parsers, RSSUtils, Graph, GraphIndex,
-                              Logging
+    test_values.py            CanonicalBytes, Digest, ReprCache, ResolveConf,
+                              CastDatetime, ResolveCastType, DefItemgetter, Fromdict,
+                              TryLocalTz, Dates, DotDict, Parsers, RSSUtils, Graph,
+                              GraphIndex, Logging
 """

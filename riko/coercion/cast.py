@@ -63,6 +63,7 @@ if TYPE_CHECKING:
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 MATH_WORDS = {"seconds", "minutes", "hours", "days", "weeks", "months", "years"}
 TEXT_WORDS = {"last", "next", "week", "month", "year"}
+NAMED_DAYS = frozenset({"today", "now", "tomorrow", "yesterday"})
 KWARG_TYPES = {CastType.DATE, CastType.DATETIME, CastType.LOCATION}
 
 logger: Logger = get_logger(__name__)
@@ -401,14 +402,6 @@ def cast_datetime(  # noqa: E302
         count = words[0].lstrip("+-")
         unit = f"{words[-1].rstrip('s')}s" if len(words) == 2 else ""
         textish = set(words).intersection(TEXT_WORDS)
-        now = dt.now(load_local_tz(try_local_tz=try_local_tz))
-        today = now.date()
-        named = {
-            "today": today,
-            "now": now,
-            "tomorrow": today + timedelta(days=1),
-            "yesterday": today - timedelta(days=1),
-        }
 
         if unit in MATH_WORDS and count.isdigit():
             op = sub if value.startswith("-") else add
@@ -416,8 +409,20 @@ def cast_datetime(  # noqa: E302
         elif len(textish) == 2:
             op = sub if words[0] == "last" else add
             _date = get_relative_date(f"{words[1]}s", 1, op, dt.now(UTC))
-        elif value in named:
-            _date = named[value]
+        elif value in NAMED_DAYS:
+            now = dt.now(load_local_tz(try_local_tz=try_local_tz))
+            today = now.date()
+            _date = None
+
+            match value:
+                case "today":
+                    _date = today
+                case "now":
+                    _date = now
+                case "tomorrow":
+                    _date = today + timedelta(days=1)
+                case "yesterday":
+                    _date = today - timedelta(days=1)
         else:
             _date = parse_date_string(value)
 

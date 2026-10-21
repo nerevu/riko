@@ -252,7 +252,7 @@ class PreparedModule[T, E]:
         """Whether the configuration varies per item."""
         if self.is_conf_parsed:
             sentinels = dict.fromkeys(self.extras)
-            is_dynamic = conf_is_dynamic(self.conf, memoize=False, **sentinels)
+            is_dynamic = conf_is_dynamic(self.conf, **sentinels)
         else:
             is_dynamic = False
 
@@ -264,7 +264,7 @@ class PreparedModule[T, E]:
         if self.is_dynamic or not self.is_conf_parsed:
             static_conf = None
         else:
-            static_conf = resolve_conf(None, conf=self.conf, memoize=True)
+            static_conf = resolve_conf(None, conf=self.conf)
 
         return static_conf
 
@@ -284,7 +284,7 @@ class PreparedModule[T, E]:
         if not self.is_conf_parsed:
             conf_parser = cast_none
         elif self.is_dynamic:
-            conf_parser = partial(resolve_conf, conf=self.conf, memoize=False)
+            conf_parser = partial(resolve_conf, conf=self.conf)
         else:
             static = self.static_conf
             conf_parser = lambda _, **__: static

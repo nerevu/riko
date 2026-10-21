@@ -993,6 +993,20 @@ class TestLoopCharacterization:
 
         assert list(result) == [{"title": "a_b"}, {"title": "c_d"}]
 
+    def test_loop_prepares_embed_once_per_stream(self, monkeypatch):
+        prepares: list[object] = []
+        prepare = tokenizer.prepare
+        spy = lambda *a, **k: prepares.append(k) or prepare(*a, **k)  # noqa: E731
+        monkeypatch.setattr(tokenizer, "prepare", spy)
+        result = _tokenizer_loop(iter(PARENTS), emit=True)
+        assert list(result) == [
+            {"content": "a"},
+            {"content": "b"},
+            {"content": "c"},
+            {"content": "d"},
+        ]
+        assert len(prepares) == 1
+
     @pytest.mark.parametrize(("kwargs", "expected"), LOOP_FOLD_CASES)
     def test_loop_fold(self, kwargs, expected):
         result = _tokenizer_loop(iter(PARENTS), **kwargs)
@@ -1098,6 +1112,23 @@ class TestAsyncLoop:
         )
         result = [item async for item in stream]
         assert result == expected
+
+    @pytest.mark.anyio
+    async def test_prepares_embed_once_per_stream(self, monkeypatch):
+        prepares: list[object] = []
+        prepare = async_tok.prepare
+        spy = lambda *a, **k: prepares.append(k) or prepare(*a, **k)  # noqa: E731
+        monkeypatch.setattr(async_tok, "prepare", spy)
+        stream = async_loop(
+            iter(PARENTS),
+            embed=async_tok,
+            conf=TOKENIZER_CONF,
+            field="title",
+            emit=True,
+        )
+        result = [item async for item in stream]
+        assert len(result) == 4
+        assert len(prepares) == 1
 
     @pytest.mark.anyio
     async def test_async_loop_is_lazy_and_ordered(self):

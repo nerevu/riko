@@ -90,6 +90,12 @@ is re-wrapped in a fresh `DotDict` on the way back out: `asdict()` on a 20-key i
 (down from 110 before `DotDict.__contains__` answered from the store). Fold the wrap into one pass when
 `resolve_sentinel` moves here; a strict xfail cannot probe a construction count, so there is no tripwire.
 
+Measured 2026-10-20 (triage of the conf-parse memoization removal): the same churn makes `resolve_conf`
+(`riko/parsing/config.py`) cost 72 µs for a three-field typed rule conf, with 164 `is_mapping` checks per
+parse (`dictize` → `asdict` → `gen_dict` at every level). A dynamic conf pays it per item (198 µs per item
+through `regex`), and it is the larger share of a per-call direct `pipe()` (R4E note in
+implementation-sequence). Folding the wrap into one pass is the lever for every path at once.
+
 Conceptually:
 
 raw = DotDict(conf).get_raw("URL")

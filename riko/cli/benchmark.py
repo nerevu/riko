@@ -9,7 +9,7 @@ from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 from time import sleep, time
 from timeit import repeat
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from riko.bado._backend import async_sleep, isasync
 from riko.bado._backend import run as async_run
@@ -19,9 +19,10 @@ from riko.base._paths import get_path
 from riko.definitions._workflow_definition import normalize_workflow
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
+from riko.modules.regex import pipe as regex
 from riko.runtime._pipeline import Pipeline
 from riko.types._rss import RSSEntry
-from riko.types.modules import FetchConf
+from riko.types.modules import FetchConf, RegexRawConf, RegexRawRule
 
 if TYPE_CHECKING:
     from riko.definitions._workflow_definition import Workflow
@@ -59,6 +60,15 @@ confs: list[FetchConf] = [FetchConf({"url": url}) for url in urls]
 length: int = len(files)
 iterable: list[float] = [DELAY for _ in files]
 
+REGEX_RULE = RegexRawRule(
+    {
+        "field": {"type": "text", "value": "title"},
+        "match": {"type": "text", "value": "a"},
+        "replace": {"type": "text", "value": "b"},
+    }
+)
+REGEX_CONF = RegexRawConf({"rule": [REGEX_RULE]})
+items: list[Item] = [{"title": f"a{i}"} for i in range(200)]
 type AsyncFunc = Callable[..., Awaitable[Iterator[RSSEntry]]]
 type AsyncTest = Callable[[], Awaitable[object]]
 
@@ -131,6 +141,19 @@ def baseline_procs() -> list[None]:
 def sync_module() -> ParserMaterializedOutput:
     pipes = (fetch(conf=conf) for conf in confs)
     return list(chain.from_iterable(pipes))
+
+
+def sync_module_per_item() -> Items:
+    """Calls a cheap module once per item, so every call prepares afresh."""
+    pipes = (regex([item], conf=REGEX_CONF) for item in items)
+    return list(chain.from_iterable(pipes))
+
+
+def sync_prepared_per_item() -> Items:
+    """Prepares the same module once, then calls the bound result once per item."""
+    call = regex.prepare(conf=REGEX_CONF)
+    outputs = (cast("SyncProcessorWrapperOutput", call([item])) for item in items)
+    return list(chain.from_iterable(outputs))
 
 
 def sync_pipeline() -> Items:
@@ -216,6 +239,8 @@ def main() -> None:
         "baseline_threads",
         "baseline_procs",
         "sync_module",
+        "sync_module_per_item",
+        "sync_prepared_per_item",
         "sync_pipeline",
         "sync_workflow",
     ]

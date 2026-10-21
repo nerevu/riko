@@ -27,11 +27,14 @@ from attrs import define
 from dateutil.relativedelta import relativedelta
 from feedparser import FeedParserDict
 
+from riko.base._config import settings as config
 from riko.base._dateutils import TZINFOS
 from riko.base._graph import cyclic_nodes, descendants, freeze_graph, topological_sort
 from riko.base._logging import get_logger, set_log_level
 from riko.base._paths import ROOT_DIR, get_path
 from riko.base.exceptions import CyclicIdentityError, IdentityEncodingError
+from riko.coercion import _canonical
+from riko.coercion import cast as cast_module
 from riko.coercion._canonical import (
     IdentityDomain,
     ReprCacheWrapper,
@@ -42,6 +45,7 @@ from riko.coercion._canonical import (
 )
 from riko.coercion._dataclass import fromdict
 from riko.coercion._dates import (
+    _parse_date_cached,
     date_to_tt,
     parse_date_string,
     resolve_aware_datetime,
@@ -54,7 +58,7 @@ from riko.io._sync import Fetch
 from riko.modules._sortutils import def_itemgetter
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.parsing._dotdict import DotDict, match_key, raw_get
-from riko.parsing.config import get_skip
+from riko.parsing.config import get_skip, resolve_conf
 from riko.parsing.documents import XML_PARSER, any2dict
 from riko.rss.feeds import augment_entries, resolve_date
 from riko.types import _workflow as workflow_types
@@ -271,15 +275,46 @@ def _counting_cache() -> tuple[list[object], ReprCacheWrapper[int]]:
     return calls, tally
 
 
+NATIVE_KEY_PAIRS = [
+    pytest.param(1, True, id="int-bool"),
+    pytest.param(1, 1.0, id="int-float"),
+    pytest.param("x", b"x", id="str-bytes"),
+    pytest.param(Flavor.SWEET, "sweet", id="strenum-str"),
+    pytest.param(0, None, id="int-none"),
+]
+
+
 class TestReprCache:
     def test_repr_cache_memoizes_supported_arguments(self):
         calls, tally = _counting_cache()
         assert (tally({"a": 1}), tally({"a": 1})) == (1, 1)
         assert len(calls) == 1
 
-    def test_repr_cache_bypasses_lone_surrogate_strings(self):
+    def test_scalar_arguments_skip_canonical_encoding(self, monkeypatch):
+        encoded: list[object] = []
+        spy = lambda value: encoded.append(value) or canonical_bytes(value)  # noqa: E731
+        monkeypatch.setattr(_canonical, "canonical_bytes", spy)
+        calls, tally = _counting_cache()
+        assert (tally(42), tally(42), tally("42")) == (1, 1, 2)
+        assert encoded == []
+        assert (tally({"a": 1}), tally({"a": 1})) == (3, 3)
+        assert len(encoded) == 2
+        assert len(calls) == 3
+
+    def test_fresh_nans_share_one_entry(self):
         _, tally = _counting_cache()
-        assert (tally("\ud800"), tally("\ud800")) == (1, 2)
+        assert (tally(float("nan")), tally(float("nan"))) == (1, 1)
+        assert tally.cache_info().currsize == 1
+
+    @pytest.mark.parametrize(("left", "right"), NATIVE_KEY_PAIRS)
+    def test_native_keys_keep_distinct_types_apart(self, left, right):
+        _, tally = _counting_cache()
+        assert (tally(left), tally(right)) == (1, 2)
+        assert (tally(left), tally(right)) == (1, 2)
+
+    def test_repr_cache_memoizes_lone_surrogate_strings(self):
+        _, tally = _counting_cache()
+        assert (tally("\ud800"), tally("\ud800")) == (1, 1)
 
     def test_nested_unsupported_bypasses_cache_and_reaches_fn(self):
         """
@@ -297,6 +332,14 @@ class TestReprCache:
         assert cast("dict", calls[1])["x"] is second
 
 
+class TestResolveConf:
+    def test_each_call_parses_afresh(self):
+        conf = {"field": {"type": "text", "value": "x"}}
+        first, second = resolve_conf(None, conf=conf), resolve_conf(None, conf=conf)
+        assert first == second
+        assert first is not second
+
+
 class TestCastDatetime:
     @pytest.mark.parametrize(
         ("value", "expected"),
@@ -310,6 +353,16 @@ class TestCastDatetime:
         result = cast_datetime(value)
         assert result is not None
         assert (result.year, result.month, result.day) == expected
+
+    def test_plain_date_string_never_consults_the_clock(self, monkeypatch):
+        zones: list[bool] = []
+        load_local_tz = cast_module.load_local_tz
+        spy = lambda **kwargs: zones.append(True) or load_local_tz(**kwargs)  # noqa: E731
+        monkeypatch.setattr(cast_module, "load_local_tz", spy)
+        assert cast_datetime("Jan. 12, 2001") is not None
+        assert zones == []
+        assert cast_datetime("today") is not None
+        assert zones == [True]
 
     def test_relative_date_strings_offset_from_today(self):
         today = cast_datetime("today")
@@ -455,6 +508,14 @@ class NamelessZone(tzinfo):
 
 
 class TestDates:
+    def test_parsed_date_cache_is_bounded(self):
+        _parse_date_cached.cache_clear()
+
+        for second in range(config.parsed_date_cache_size + 1):
+            parse_date_string(f"2015-02-01T00:00:00.{second:06d}+00:00")
+
+        assert _parse_date_cached.cache_info().currsize == config.parsed_date_cache_size
+
     def test_resolve_aware_datetime_keeps_a_nameless_zone(self):
         zone = NamelessZone()
         result = resolve_aware_datetime(

@@ -438,14 +438,17 @@ insignificant whitespace, and `digest(obj, domain)` returns a 32-character lower
 BLAKE2b-128 hex string, domain/version-separated by the fixed `IdentityDomain`
 (`fingerprint`/`generation`/`idempotency`/`state-key`) and `IDENTITY_FORMAT_VERSION` folded
 into the hashed bytes but not the returned text. `repr_cache` now keys process-local
-memoization on `canonical_bytes`, bypassing values that cannot be encoded, so the reversible
-`_from_hashable` reconstruction machinery is gone. `NonNullHashable`/`Hashable`
+memoization on `canonical_bytes` (an all-scalar call keys on a type-tagged native tuple instead,
+since a canonical key costs ~6 µs to build, more than the work most cached calls do), bypassing
+values that cannot be encoded, so the reversible `_from_hashable` reconstruction machinery is gone.
+`_parse_date_cached` (`riko/coercion/_dates.py`) is bounded by `settings.parsed_date_cache_size` (`RIKO_PARSED_DATE_CACHE_SIZE`): it is fed one
+entry per distinct item date, so an unbounded cache grew with the stream. `NonNullHashable`/`Hashable`
 (`riko/types/_scalars.py`) are the aligned static contracts. `Context(identity_encoder=...)`
 backend selection is deferred (R3-adjacent); the stdlib encoder is the reference. Tests:
 `tests/internal/test_values.py` (golden canonical bytes + golden digests + rule matrix) plus
 module doctests.
 
-## Canonical Workflow v2 model (R4A.1, shipped)
+## `Workflow` v2 model (R4A.1, shipped)
 
 The structural v2 vocabulary (no execution runtime yet — R4B executes it). Pure contracts live in
 `riko/types/_workflow.py` (`Endpoint`, the frozen `Edge` base with its `(node, port)` `port`
@@ -1032,15 +1035,34 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   when they land. Tests: `tests/public/test_pipeline.py` plus seeded-run and end-to-end
   coverage in `tests/internal/test_execution_plan.py`.
 
+**Node-thread budget** (2026-10-16). Under `AsyncExecution` a node without an async implementation
+holds a worker thread while it pulls its upstream, so a sync-only chain needs threads at once. All
+async executions on one event loop share one budget (`RIKO_NODE_THREADS`, default 40; an AnyIO
+`RunVar` in `riko/execution/_async_execution.py`). Each run reserves its whole demand
+(`ExecutionPlan.get_thread_demand(output, mapped=)`: a thread holder scores one plus the most any one
+input holds; a node whose module reads its inputs one at a time (`sequential_inputs`, derived for
+`union`/`join` by `has_sequential_inputs` in `riko/modules/_derive.py` and stamped on the wrapper) the
+most any one input holds; other nodes the sum of their inputs) before reading anything, so runs never hold part of
+a chain while waiting for the rest. A run needing more than the budget, or more than this execution's
+own open output streams leave free, raises `InvalidPipelineError`; other executions' runs wait.
+`_ReleasingStream` returns the threads when the output stream ends, fails, or is closed (even before its
+first item), and the execution's exit stack returns any it still holds.
+
+**Process executor ships each call once** (2026-10-16). `build_item_call`
+(`riko/execution/_concurrency.py`) pickles a mapped node's bound call once on first pull; each task
+carries those bytes and `run_shipped_item` unpickles them through a per-worker `lru_cache`
+(`settings.shipped_call_cache_size`, `RIKO_SHIPPED_CALL_CACHE_SIZE`), so a call is rebuilt once per worker rather than once per item (measured
+~22–30% faster per item on a four-worker pool). The thread executor maps the call directly.
+
 **Prepare once per plan** (2026-10-13). A node's module is prepared once per execution plan, not
-once per item: `PreparedNode.sync_call`/`async_call` (cached) call
+once per item: `PreparedNode.sync_interface`/`async_interface` (cached `PreparedInterface`s) call
 `ModuleWrapper.prepare(*extras, conf=, **options)` — implemented for every wrapper kind — and the
-executions call `node.select_call(pipe)(item, context=..., **extra)`, supplying only the per-item
+executions call `interface.call(item, context=..., **extra)`, supplying only the per-item
 context and the secondary input streams, `resources`, or `embed`. The decorators' call records
 `_PreparedProcessor`/`_PreparedOperator`/`_PreparedSplitter` share the generic attrs base
 `_PreparedCall[M]` (the decorator, wrapper, prepared module, and bound options, plus derived
 `field`/`count`/`parser`), which subclasses the `PreparedCall` protocol; a
-plain wrapper (a stored-workflow pipe, a cross-mode adapter) is bound by `bind_call`/`build_call`
+plain wrapper (a stored-workflow pipe, a sync/async adapter) is bound by `bind_call`/`build_call`
 (`riko/types/_wrappers.py`), and `stamp_wrapper_meta` attaches a default `prepare`. `PreparedModule`
 (`riko/modules/_prepare.py`) is a frozen attrs record of plain values (name, merged conf, options,
 extras, defaults; all but the name default) whose `assign`/`emit` (read from the options), `is_conf_parsed`/`is_dynamic`/`static_conf`/`parsers`/`casters`/

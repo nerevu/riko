@@ -34,7 +34,6 @@ from typing import TYPE_CHECKING, Any
 from dateutil.parser import ParserError
 
 from riko.base._logging import get_logger
-from riko.coercion._canonical import repr_cache
 from riko.coercion._objectify import Objectify
 from riko.coercion.cast import cast_date, cast_decimal
 from riko.parsing._dotdict import DotDict
@@ -115,7 +114,7 @@ TRUTHINESS_OPS = {"truthy", "falsy"}
 logger: Logger = get_logger(__name__)
 
 
-def _cast_arg_uncached[VT](arg: VT, op: str) -> str | date | VT | None:
+def cast_arg[VT](arg: VT, op: str) -> str | date | VT | None:
     if op in STRING_OPS:
         value = str(arg)
     elif op in DATE_OPS:
@@ -127,16 +126,6 @@ def _cast_arg_uncached[VT](arg: VT, op: str) -> str | date | VT | None:
         value = arg
 
     return value
-
-
-@repr_cache
-def _cast_arg_cached[VT](arg: VT, op: str) -> str | date | VT | None:
-    return _cast_arg_uncached(arg, op)
-
-
-def cast_arg[VT](arg: VT, op: str, memoize: bool = False) -> str | date | VT | None:
-    func = _cast_arg_cached if memoize else _cast_arg_uncached
-    return func(arg, op)
 
 
 def evaluate_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
@@ -173,7 +162,7 @@ def evaluate_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
     if has_value and not truthiness:
         try:
             x = cast_arg(_x, rule.op)
-            y = cast_arg(_y, rule.op, memoize=True)
+            y = cast_arg(_y, rule.op)
         except (AttributeError, TypeError, ValueError, InvalidOperation, ParserError):
             x = y = None
     else:
@@ -252,12 +241,6 @@ def parser(
     for rule in extract:
         if rule.op not in SWITCH:
             raise ValueError(f"Unsupported filter operation: {rule.op!r}.")
-
-        truthiness = rule.op in TRUTHINESS_OPS
-        has_value = rule.value is not None
-
-        if has_value and not truthiness:
-            cast_arg(rule.value, rule.op, memoize=True)
 
     for item, objconf in tuples:
         try:

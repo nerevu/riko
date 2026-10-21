@@ -82,14 +82,18 @@ New
   ``riko.Formats`` member is.
 
 - Added environment variables to override runtime defaults: ``RIKO_CONCURRENCY_LIMIT``,
-  ``RIKO_STREAMING_THRESHOLD``, ``RIKO_ENCODING``, ``RIKO_DISCOVERY_TIMEOUT``, and
-  ``RIKO_EXCHANGE_API``. A malformed value logs a warning and keeps the default.
+  ``RIKO_STREAMING_THRESHOLD``, ``RIKO_ENCODING``, ``RIKO_DISCOVERY_TIMEOUT``,
+  ``RIKO_EXCHANGE_API``, ``RIKO_NODE_THREADS``, ``RIKO_PARSED_DATE_CACHE_SIZE``, and
+  ``RIKO_SHIPPED_CALL_CACHE_SIZE``.
 
 Changes
 ~~~~~~~
 
 - ``Context`` is now a fully immutable snapshot, including nested ``inputs`` values.
   Derive a changed context with ``replace`` instead of direct assignment.
+
+- A module's ``pipe()`` now parses ``conf`` on every call. To parse ``conf`` just once,
+  bind the configuration with ``pipe.prepare(conf=...)`` and call that result per item.
 
 - ``Context().inputs`` is now ``None`` when no inputs are given, rather than an empty
   mapping. An ``input`` module still prompts when no inputs are given, but an explicit
@@ -331,6 +335,13 @@ Fixes
 
 - ``compile-workflow --help`` and its usage errors now show the command's installed name
   instead of ``compile``.
+
+- Parsing a stream containing date strings now caches only the most recent 1024 strings.
+
+- ``loop`` now prepares its embedded module once per stream instead of per parent item.
+
+- A ``filter`` rule with a relative date (e.g., ``"today"`` or ``"now"``) now resolves
+  the date on every evaluation instead of reusing the value from its first evaluation.
 
 Dev
 ~~~

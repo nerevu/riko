@@ -24,7 +24,6 @@ from time import struct_time
 from typing import TYPE_CHECKING, cast
 
 from riko.base._iterutils import map_values
-from riko.coercion._canonical import repr_cache
 from riko.coercion._sequences import listize
 from riko.types._guards import is_dataclass_inst, is_mapping, is_sentinel, is_type_value
 from riko.types._values import RikoValue
@@ -43,34 +42,13 @@ SKIP_SWITCH: dict[str, Callable[[str, str], bool]] = {
 }
 
 
-def _conf_is_dynamic_uncached(conf: object, **kwargs: object) -> bool:
-    is_dynamic = False
-
-    if isinstance(conf, Mapping):
-        if "subkey" in conf or is_sentinel(conf, **kwargs):
-            is_dynamic = True
-        else:
-            values = conf.values()
-            is_dynamic = any(_conf_is_dynamic_uncached(v, **kwargs) for v in values)
-    elif isinstance(conf, Sequence) and not isinstance(conf, str):
-        is_dynamic = any(_conf_is_dynamic_uncached(c, **kwargs) for c in conf)
-
-    return is_dynamic
-
-
-@repr_cache
-def _conf_is_dynamic_cached(conf: object, **kwargs: object) -> bool:
-    return _conf_is_dynamic_uncached(conf, **kwargs)
-
-
-def conf_is_dynamic(conf: object, memoize: bool = False, **kwargs: object) -> bool:
+def conf_is_dynamic(conf: object, **kwargs: object) -> bool:
     """
     Reports whether configuration requires per-item parsing.
 
     Args:
 
         conf: Configuration value to inspect recursively.
-        memoize: Whether to use the representation-based cache.
         **kwargs: Sentinel values used when identifying dynamic configuration.
 
     Returns:
@@ -80,86 +58,40 @@ def conf_is_dynamic(conf: object, memoize: bool = False, **kwargs: object) -> bo
 
     Examples:
 
-        >>> _conf_is_dynamic_cached.cache_clear()
-        >>> conf_is_dynamic({'type': 'text', 'value': 'hello'}, True)
+        >>> conf_is_dynamic({'type': 'text', 'value': 'hello'})
         False
-        >>> conf_is_dynamic({'type': 'text', 'subkey': 'title'}, True)
+        >>> conf_is_dynamic({'type': 'text', 'subkey': 'title'})
         True
-        >>> _ = conf_is_dynamic({'type': 'text', 'value': 'hello'}, True)
-        >>> _conf_is_dynamic_cached.cache_info().hits
-        1
 
     """
-    func = _conf_is_dynamic_cached if memoize else _conf_is_dynamic_uncached
-    return func(conf, **kwargs)
+    is_dynamic = False
 
-
-def _parse_conf_uncached[T](
-    item: Item | None = None,
-    conf: T | None = None,
-    default: T | None = None,
-    **kwargs: T,
-) -> T | None:
-    parsed = default
-    dd_conf = DotDict.dictize([])
-
-    if is_dataclass_inst(conf):
-        d_conf: dict[str, T] | T | None = asdict(conf)
-    else:
-        d_conf = conf
-
-    dd_conf = DotDict.dictize(d_conf)
-
-    if isinstance(dd_conf, DotDict):
-        if subkey := dd_conf.get("subkey"):
-            dd_item = DotDict.dictize(item) if item else DotDict[RikoValue]()
-            parsed = dd_item.get(cast("str", subkey), **kwargs)
-        elif is_sentinel(dd_conf, **kwargs) or is_type_value(dd_conf):
-            parsed = cast("DotDict[T]", dd_conf).get()
+    if isinstance(conf, Mapping):
+        if "subkey" in conf or is_sentinel(conf, **kwargs):
+            is_dynamic = True
         else:
-            parse = partial(_parse_conf_uncached, item, **kwargs)
-            _parsed = map_values(parse, dd_conf.asdict(key=None, **kwargs))
-            parsed = cast("T", _parsed)
-    elif isinstance(dd_conf, (str, struct_time)):
-        parsed = dd_conf
-    elif isinstance(dd_conf, (list, tuple, Sequence)):
-        _parsed = [_parse_conf_uncached(item, c, **kwargs) for c in dd_conf]
-        parsed = cast("T", _parsed)
-    elif dd_conf is not None:
-        parsed = cast("T", dd_conf)
+            values = conf.values()
+            is_dynamic = any(conf_is_dynamic(v, **kwargs) for v in values)
+    elif isinstance(conf, Sequence) and not isinstance(conf, str):
+        is_dynamic = any(conf_is_dynamic(c, **kwargs) for c in conf)
 
-    return parsed
-
-
-@repr_cache
-def _parse_conf_cached[T](
-    item: Item | None = None,
-    conf: T | None = None,
-    default: T | None = None,
-    **kwargs: T,
-) -> T | None:
-    return _parse_conf_uncached(item, conf, default=default, **kwargs)
+    return is_dynamic
 
 
 def resolve_conf[VT](
     item: Item | None = None,
     conf: VT | None = None,
     default: VT | None = None,
-    memoize: bool | None = None,
     **kwargs: VT,
 ) -> VT | None:
     """
     Resolves configuration against an item by expanding subkeys and sentinels.
-
-    Static configurations are memoized by default; ``memoize`` can force or disable
-    caching for a specific call.
 
     Args:
 
         item: Input item used to resolve subkey references.
         conf: Configuration value to parse recursively.
         default: Value returned when ``conf`` does not produce another value.
-        memoize: Explicit cache choice, or ``None`` to cache only static config.
         **kwargs: Sentinel values and options forwarded while resolving config.
 
     Returns:
@@ -194,28 +126,39 @@ def resolve_conf[VT](
         >>> conf = DotDict({"terminal": "attrs_1", "type": "text"})
         >>> conf.get(attrs_1=iter([{'content': 'baz'}]))
         {'content': 'baz'}
-        >>> _parse_conf_cached.cache_clear()
         >>> resolve_conf(conf={'type': 'text', 'value': 'hello'})
         'hello'
-        >>> _parse_conf_cached.cache_info().hits
-        0
-        >>> _ = resolve_conf(conf={'type': 'text', 'value': 'hello'})
-        >>> _parse_conf_cached.cache_info().hits
-        1
-        >>> resolve_conf(conf={'type': 'text', 'value': 'hello'}, memoize=False)
-        'hello'
-        >>> _parse_conf_cached.cache_info().hits
-        1
-        >>> _ = resolve_conf(conf={'type': 'text', 'value': 'hello'}, memoize=True)
-        >>> _parse_conf_cached.cache_info().hits
-        2
 
     """
-    if memoize is None:
-        memoize = not conf_is_dynamic(conf, memoize=False, **kwargs)
+    parsed = default
+    dd_conf = DotDict.dictize([])
 
-    func = _parse_conf_cached if memoize else _parse_conf_uncached
-    return func(item, conf, default=default, **kwargs)
+    if is_dataclass_inst(conf):
+        d_conf: dict[str, VT] | VT | None = asdict(conf)
+    else:
+        d_conf = conf
+
+    dd_conf = DotDict.dictize(d_conf)
+
+    if isinstance(dd_conf, DotDict):
+        if subkey := dd_conf.get("subkey"):
+            dd_item = DotDict.dictize(item) if item else DotDict[RikoValue]()
+            parsed = dd_item.get(cast("str", subkey), **kwargs)
+        elif is_sentinel(dd_conf, **kwargs) or is_type_value(dd_conf):
+            parsed = cast("DotDict[VT]", dd_conf).get()
+        else:
+            parse = partial(resolve_conf, item, **kwargs)
+            _parsed = map_values(parse, dd_conf.asdict(key=None, **kwargs))
+            parsed = cast("VT", _parsed)
+    elif isinstance(dd_conf, (str, struct_time)):
+        parsed = dd_conf
+    elif isinstance(dd_conf, (list, tuple, Sequence)):
+        _parsed = [resolve_conf(item, c, **kwargs) for c in dd_conf]
+        parsed = cast("VT", _parsed)
+    elif dd_conf is not None:
+        parsed = cast("VT", dd_conf)
+
+    return parsed
 
 
 def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> bool:

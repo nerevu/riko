@@ -390,6 +390,14 @@ explicit version when they must survive software/dependency changes.
 - **DELETE:** none; R2B removes no runtime surface, but no durable contract may depend on automatic
   callable introspection being complete.
 
+Note (2026-10-20, triage of the dict-key slowdown): the reference encoder is the cost floor for
+any mapping-keyed process-local cache. A `repr_cache` hit on a dict argument builds one JSON sort
+key per mapping pair per level and costs more than re-parsing the conf it would save (29/116/439 µs
+against 26/83/298 µs at 2/10/40 keys), about 7x the v0.77.3 native-hash key. A byte-identical
+key-only sort in `_canon_map` gains 13% and was rejected as not worth touching the durable format.
+The conf-parse memoization in `riko/parsing/config.py` was removed instead; memoizing mapping-keyed
+parses is worth revisiting only once the accelerated `perf`-extra backend owned here lands.
+
 ### R3 — Immutable Context and Resource definitions
 
 **Goal:** establish the public environment/resource-definition model before Pipeline definitions bind
@@ -1100,6 +1108,15 @@ and `ModuleNode.conf` upstream is already frozen JSON, so this is a latent hazar
   the process executor ships `PreparedModule`); defensive copies at each hand-off (convention only).
 
 Do not freeze `PreparedModule.conf` or flip the conf keys to `ReadOnly` ahead of this decision.
+
+Measured 2026-10-20 (triage of the conf-parse memoization removal): a direct `pipe()` call once per
+item costs 198 µs against 116 µs on v0.77.3, because every call prepares afresh: 44 µs is the
+static-conf parse the release served from a native-hash cache, and 35 µs is the prepare machinery
+(`PreparedModule` record plus the `static_casted` derivation) that predates the removal. Streams,
+plans, and loops prepare once and run about 4x faster than the release, so the once-parsed typed
+config object targeted here is the fix; an interim per-call cache was rejected (no cheap key until the
+accelerated encoder lands, and a conf-identity key goes stale under mutation). `pipe.prepare()` is the
+supported way to amortize repeated calls meanwhile. No tripwire: only a timing test could probe it.
 
 Caster typing (triaged 2026-10-15): the conf-casting types this redesign replaces do not describe
 their callables. `_build_casters` (`riko/modules/_prepare.py`) hides behind

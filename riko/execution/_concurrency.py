@@ -11,7 +11,7 @@ import pickle  # noqa: S403
 from functools import lru_cache, partial
 from typing import TYPE_CHECKING, cast
 
-from riko.base._config import SHIPPED_CALL_CACHE_SIZE
+from riko.base._config import settings as config
 from riko.base.exceptions import InvalidPipelineError
 from riko.types._enums import Executor
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 __all__ = ["build_item_call", "require_process_safe", "run_item", "run_shipped_item"]
 
 
-@lru_cache(maxsize=SHIPPED_CALL_CACHE_SIZE)
+@lru_cache(maxsize=config.shipped_call_cache_size)
 def _load_call(payload: bytes) -> Callable[[object], Iterable[object]]:
     return pickle.loads(payload)  # noqa: S301
 
