@@ -38,6 +38,7 @@ from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
 from riko.modules.split import async_pipe as async_split
+from riko.modules.split import pipe as split
 from riko.modules.strconcat import pipe as strconcat
 from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.modules.tokenizer import async_pipe as async_tok
@@ -394,6 +395,63 @@ class TestBareDecorator:
         pipe = processor(shout)  # pyright: ignore[reportArgumentType]
         stream = pipe({"content": "hi"}, assign="content")  # pyright: ignore[reportCallIssue]
         assert next(stream) == {"content": "HI"}
+
+
+def _fixed_processor(item: Item, extraction: object, objconf: object) -> str:
+    return str(item.get("content", "")).upper()
+
+
+def _fixed_operator(stream: Stream, extraction: object, tuples: object) -> int:
+    return sum(1 for _ in stream)
+
+
+def _fixed_splitter(stream: Stream, extraction: object, tuples: object) -> Cascade:
+    return iter([stream])
+
+
+FIXED_ROWS = [{"x": 1}]
+FIXED_SPLITTER = splitter(objectify=False)
+FIXED_CONTEXT = {"context": Context()}
+FIXED_ARITY = [
+    pytest.param(processor(), _fixed_processor, {"content": "hi"}, {}, id="processor"),
+    pytest.param(operator(), _fixed_operator, FIXED_ROWS, {}, id="operator"),
+    pytest.param(
+        FIXED_SPLITTER, _fixed_splitter, FIXED_ROWS, FIXED_CONTEXT, id="splitter"
+    ),
+]
+
+
+class TestParserSignature:
+    """
+    The ``**kwargs`` a parser needs for the keyword arguments its decorator passes.
+
+    A parser without ``**kwargs`` is rejected by the type checker at decoration,
+    since the call would otherwise fail with ``TypeError`` on the first item.
+    """
+
+    def test_processor_parser_with_kwargs_is_accepted(self) -> None:
+        def parser(item: Item, extraction: object, objconf: object, **_: object) -> str:
+            return str(item.get("content", "")).upper()
+
+        pipe = processor()(parser)
+        assert next(pipe({"content": "hi"}, assign="content")) == {"content": "HI"}
+
+    def test_fixed_arity_parser_is_a_type_error(self) -> None:
+        pipes = [
+            processor()(_fixed_processor),  # pyright: ignore[reportArgumentType, reportCallIssue]
+            operator()(_fixed_operator),  # pyright: ignore[reportArgumentType, reportCallIssue]
+            FIXED_SPLITTER(_fixed_splitter),  # pyright: ignore[reportArgumentType, reportCallIssue]
+        ]
+        assert all(map(callable, pipes))
+
+    @pytest.mark.parametrize(("decorate", "parser", "source", "kwargs"), FIXED_ARITY)
+    def test_fixed_arity_parser_fails_at_first_call(
+        self, decorate, parser, source, kwargs
+    ) -> None:
+        pipe = decorate(parser)
+
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            next(pipe(source, **kwargs))
 
 
 class TestSplitter:
@@ -1681,6 +1739,13 @@ class TestModules:
         assert next(regex({"title": "hi"}, conf=conf)) == {"title": "hi"}
 
 
+DECORATION_OPTION_CALLS = [
+    pytest.param(strconcat, "ftype", id="processor+ftype"),
+    pytest.param(count_module.pipe, "ptype", id="operator+ptype"),
+    pytest.param(split, "extract", id="splitter+extract"),
+]
+
+
 class TestPrepare:
     @pytest.mark.parametrize(
         ("item", "kind"), [({"content": "a"}, ItemDispatch), ("a", ValueDispatch)]
@@ -1728,6 +1793,20 @@ class TestPrepare:
         assert restored.parsers.conf_parser(item) == prepared.parsers.conf_parser(item)
         assert restored.casters.field_caster(4) == prepared.casters.field_caster(4)
         assert restored.static_conf == prepared.static_conf
+
+    @pytest.mark.parametrize(("pipe", "option"), DECORATION_OPTION_CALLS)
+    def test_prepare_rejects_a_decoration_option(self, pipe, option):
+        kwargs: dict[str, Any] = {option: True}
+
+        with pytest.raises(TypeError, match=f"module fixes '{option}' when it is"):
+            pipe.prepare(conf={}, **kwargs)
+
+    @pytest.mark.parametrize(("pipe", "option"), DECORATION_OPTION_CALLS)
+    def test_a_direct_call_rejects_a_decoration_option(self, pipe, option):
+        kwargs: dict[str, Any] = {option: True}
+
+        with pytest.raises(TypeError, match=f"module fixes '{option}' when it is"):
+            list(pipe([{"x": 1}], conf={}, **kwargs))
 
     @pytest.mark.parametrize("extra", ["resources", "embed", "others", "label"])
     def test_prepare_rejects_a_per_item_argument(self, extra):

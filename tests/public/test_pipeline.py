@@ -627,16 +627,21 @@ class TestAsyncClose:
     @async_test
     async def test_early_close_stops_a_partially_consumed_run(self):
         consumed: list[int] = []
+        closed: list[bool] = []
 
         async def source():
-            for index in range(20):
-                consumed.append(index)
-                yield {"content": str(index)}
+            try:
+                for index in range(20):
+                    consumed.append(index)
+                    yield {"content": str(index)}
+            finally:
+                closed.append(True)
 
         stream = aiter(source() | Pipeline.from_module("hash"))
         assert await anext(stream)
         await stream.aclose()
         assert len(consumed) < 20
+        assert closed == [True]
 
     @async_test
     async def test_afirst_closes_its_run_before_returning(self):

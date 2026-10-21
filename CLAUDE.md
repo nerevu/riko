@@ -135,7 +135,7 @@ new permanent bullet here.
 - **Immutable prepare** — `Module.prepare()` returns a frozen `PreparedModule` with
   no mutable call cache; call-site options cannot leak across items/concurrent
   invocations. A node is prepared once per execution plan
-  (`PreparedNode.sync_call`/`async_call`), and the prepared state is plain data so
+  (`PreparedNode.sync_interface`/`async_interface`), and the prepared state is plain data so
   the process executor can ship it.
 - **Immutable definitions, mutable execution** — `Context`, resource definitions,
   module definitions, and write intent are structural snapshots. Derive changed
@@ -240,9 +240,10 @@ new permanent bullet here.
   it, which is why the `require_str`/`require_mapping`/`require_options` guard family
   carries it. `build` absorbs the old `prepare`/`convert`/`make`. Specialized verbs are
   not alternatives to weigh: `cast` (coercion), `compile` (compiler), `generate`
-  (codegen: returns generated source), `gen_` (generator functions only: they yield),
+  (codegen: returns generated source), `gen_` (generators: a generator function must use it, a method that yields may),
   `migrate` (version migration), `serialize`, `register`, `read`/`write`/`open`/`close`,
-  and `is`/`has` for predicates.
+  and `is`/`has` for predicates (an attrs `validator=` callable keeps the predicate
+  name it checks, `_is_single`/`_has_pipe`: attrs owns the raise).
 
 | Verb | Meaning | Raising | Idempotency | Context / lookup | Hard rule |
 |---|---|---|---|---|---|

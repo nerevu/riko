@@ -21,6 +21,7 @@ Examples:
 from __future__ import annotations
 
 from collections.abc import AsyncIterable, AsyncIterator, Iterator
+from contextlib import aclosing
 from functools import partial, wraps
 from itertools import chain
 from typing import (
@@ -57,6 +58,7 @@ from riko.types._guards import (
     is_mapping,
     is_streamlike,
 )
+from riko.types._io import is_async_closeable
 from riko.types._options import (
     Casted,
     DecorationOptions,
@@ -85,7 +87,7 @@ from riko.types.modules import (
 )
 
 from ._assignment import build_assignment, gen_assignments
-from ._derive import get_module_subtypes, is_loopable
+from ._derive import get_module_subtypes, has_sequential_inputs, is_loopable
 from ._loop import loop_embed_async, loop_embed_sync
 from ._prepare import PreparedModule, resolve_and_cast
 
@@ -219,6 +221,11 @@ class _AsyncWrapperStream[T]:
 
         return await self._agen.__anext__()
 
+    async def aclose(self) -> None:
+        """Closes the parser's stream if consumption has started."""
+        if is_async_closeable(self._agen):
+            await self._agen.aclose()
+
 
 class Module[B: (Literal[True], Literal[False])]:
     """
@@ -233,6 +240,7 @@ class Module[B: (Literal[True], Literal[False])]:
 
     isasync: B
     module_type: ClassVar[ModuleType]
+    decoration_options: ClassVar[frozenset[str]]
     call_options: ClassVar[frozenset[str]] = _CALL_OPTS
     context_options: ClassVar[frozenset[str]] = _CONTEXT_OPTS
     call_record: ClassVar[type[_PreparedCall[Any]]]
@@ -349,8 +357,37 @@ class Module[B: (Literal[True], Literal[False])]:
             pollable=self.pollable,
             loopable=loopable,
             isasync=isasync,
+            sequential_inputs=has_sequential_inputs(name),
             prepare=partial(self.prepare_call, wrapper),
         )
+
+    def _validate_call_keywords(
+        self, wrapper: ModuleWrapper, names: Iterable[str]
+    ) -> None:
+        """
+        Rejects decoration options handed to a module call.
+
+        A decoration option (``skip_if``, ``ftype``, ``extract``, …) is fixed when the
+        module is decorated. Passing one to a call or to ``prepare`` would otherwise be
+        silently ignored, so it raises instead.
+
+        Args:
+
+            wrapper: The module wrapper being called.
+            names: The keyword argument names the call supplied.
+
+        Raises:
+
+            TypeError: When any name is a decoration option this decorator reads.
+
+        """
+        fixed = self.decoration_options - self.call_options - self.context_options
+
+        if invalid := sorted(fixed.intersection(names)):
+            named = ", ".join(repr(key) for key in invalid)
+            msg = f"the {wrapper.name!r} module fixes {named} when it is decorated, "
+            msg += "not with each call"
+            raise TypeError(msg)
 
     def prepare(
         self,
@@ -480,7 +517,9 @@ class Module[B: (Literal[True], Literal[False])]:
         Raises:
 
             TypeError: If ``options`` holds a keyword argument that is not a call
-                option, such as ``resources``, ``embed``, or a secondary input stream.
+                option: a decoration option such as ``skip_if`` or ``ftype``, which is
+                fixed when the module is decorated, or a per-item argument such as
+                ``resources``, ``embed``, or a secondary input stream.
 
         Examples:
 
@@ -494,8 +533,14 @@ class Module[B: (Literal[True], Literal[False])]:
             Traceback (most recent call last):
                 ...
             TypeError: the 'strtransform' module takes 'resources' with each item...
+            >>> pipe.prepare(conf=conf, skip_if=lambda item: True)
+            Traceback (most recent call last):
+                ...
+            TypeError: the 'strtransform' module fixes 'skip_if' when it is decorated...
 
         """
+        self._validate_call_keywords(wrapper, options)
+
         if invalid := sorted(set(options).difference(self.call_options)):
             named = ", ".join(repr(key) for key in invalid)
             msg = f"the {wrapper.name!r} module takes {named} with each item call, "
@@ -521,6 +566,7 @@ class Module[B: (Literal[True], Literal[False])]:
         call cannot differentiate an input port named like a call option (e.g., ``tail``
         uses ``count`` as an input stream).
         """
+        self._validate_call_keywords(wrapper, kwargs)
         named = self.call_options | self.context_options
         call_options = {k: kwargs[k] for k in self.call_options.intersection(kwargs)}
         _overrides = {k: kwargs[k] for k in self.context_options.intersection(kwargs)}
@@ -589,9 +635,10 @@ async def _aprocess_stream[T](
         Each result of every item, in stream order.
 
     """
-    async for processed in async_map_ordered_stream(wrapper, stream):
-        for value in processed:
-            yield value
+    async with aclosing(async_map_ordered_stream(wrapper, stream)) as mapped:
+        async for processed in mapped:
+            for value in processed:
+                yield value
 
 
 async def _materialize_terminals(**kwargs: object) -> dict[str, object]:
@@ -988,6 +1035,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
     isasync: B
     module_type: ClassVar[ModuleType] = "processor"
+    decoration_options: ClassVar[frozenset[str]] = _PROCESSOR_OPTS
     call_record: ClassVar[type[_PreparedCall[Any]]] = _PreparedProcessor
 
     @overload
@@ -1092,7 +1140,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             {'content': 'say "hello world" three times!'}
 
         """
-        _validate_opts("processor", _PROCESSOR_OPTS, kwargs)
+        _validate_opts(self.module_type, self.decoration_options, kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
     def normalize_input(self, item: ItemOrValue) -> DotDict[RikoValue]:
@@ -1298,6 +1346,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
     isasync: B
     module_type: ClassVar[ModuleType] = "operator"
+    decoration_options: ClassVar[frozenset[str]] = _OPERATOR_OPTS
     call_record: ClassVar[type[_PreparedCall[Any]]] = _PreparedOperator
 
     @overload
@@ -1413,7 +1462,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             {'content': 4}
 
         """
-        _validate_opts("operator", _OPERATOR_OPTS, kwargs)
+        _validate_opts(self.module_type, self.decoration_options, kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
     def normalize_input(self, items: SyncOperatorWrapperInput | None = None) -> Stream:
@@ -1693,6 +1742,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
     isasync: B
     module_type: ClassVar[ModuleType] = "splitter"
+    decoration_options: ClassVar[frozenset[str]] = _SPLITTER_OPTS
     call_options: ClassVar[frozenset[str]] = _SPLITTER_CALL_OPTS
     context_options: ClassVar[frozenset[str]] = frozenset()
     call_record: ClassVar[type[_PreparedCall[Any]]] = _PreparedSplitter
@@ -1767,7 +1817,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             {'x': 1}
 
         """
-        _validate_opts("splitter", _SPLITTER_OPTS, kwargs)
+        _validate_opts(self.module_type, self.decoration_options, kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
     def normalize_input(self, items: SplitterWrapperInput | None = None) -> Stream:

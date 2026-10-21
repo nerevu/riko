@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from multiprocessing import cpu_count
 from os import environ
 from typing import TYPE_CHECKING
 
@@ -56,9 +57,40 @@ SUBPIPE_TYPE = "pipe"
 BUILTIN_PROVIDER = "riko"
 SINK_NAMES: frozenset[str] = frozenset({OUTPUT_MODULE, "write"})
 PIPE_ID_PREFIXES: tuple[str, ...] = ("pipe_", "pipe:")
+SHIPPED_CALL_CACHE_SIZE = 32
 DUPLICATE_BASENAMES: frozenset[str] = frozenset(
     {"_async.py", "_sync.py", "_logging.py", "modules.py"}
 )
+
+
+def get_worker_cnt(length: int = 0, *, threads: bool = True) -> int:
+    """
+    Computes a worker pool size, capped at the core count (doubled for threads).
+
+    Args:
+
+        length: The number of items to spread across the pool, or zero when unknown.
+        threads: Whether the pool uses threads rather than processes.
+
+    Returns:
+
+        The worker count.
+
+    Examples:
+
+        >>> from multiprocessing import cpu_count
+        >>>
+        >>> get_worker_cnt(1), get_worker_cnt() == 2 * get_worker_cnt(threads=False)
+        (1, True)
+        >>> get_worker_cnt(10_000) == get_worker_cnt(0) == 2 * cpu_count()
+        True
+        >>> get_worker_cnt(10_000, threads=False) == cpu_count()
+        True
+
+    """
+    multiplier = 2 if threads else 1
+    maximum = cpu_count() * multiplier
+    return min(length, maximum) if length else maximum
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,14 +98,21 @@ class Settings:
     """Operator-tunable runtime defaults, overridable via ``RIKO_*`` env vars."""
 
     concurrency_limit: int = 16
+    node_threads: int = 40
     streaming_threshold: int = 1 * 1024 * 1024
     encoding: str = "utf-8"
     discovery_timeout: int = 10
     exchange_api: str = "https://openexchangerates.org/api/latest.json"
 
 
-def _env_int(env: Mapping[str, str], key: str, default: int) -> int:
-    """Reads an integer ``RIKO_*`` override, warning and falling back when malformed."""
+def _env_int(
+    env: Mapping[str, str], key: str, default: int, *, minimum: int | None = None
+) -> int:
+    """
+    Reads an integer ``RIKO_*`` override.
+
+    A malformed value, or one below ``minimum``, logs a warning and keeps ``default``.
+    """
     raw = env.get(key)
 
     if raw is None:
@@ -85,6 +124,10 @@ def _env_int(env: Mapping[str, str], key: str, default: int) -> int:
             logger.warning("ignoring %s=%r: expected an integer", key, raw)
             value = default
 
+        if minimum is not None and value < minimum:
+            logger.warning("ignoring %s=%r: expected at least %d", key, raw, minimum)
+            value = default
+
     return value
 
 
@@ -94,12 +137,35 @@ def _env_str(env: Mapping[str, str], key: str, default: str) -> str:
 
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
-    """Builds ``Settings`` from defaults overlaid with ``RIKO_*`` env vars."""
+    """
+    Builds ``Settings`` from defaults overlaid with ``RIKO_*`` env vars.
+
+    Args:
+
+        env: The variables to read (default: the process environment).
+
+    Returns:
+
+        The settings, keeping the default for each malformed or out-of-range value.
+
+    Examples:
+
+        >>> load_settings({"RIKO_NODE_THREADS": "8"}).node_threads
+        8
+        >>> load_settings({"RIKO_NODE_THREADS": "many"}).node_threads
+        40
+        >>> load_settings({"RIKO_NODE_THREADS": "-1"}).node_threads
+        40
+
+    """
     source = environ if env is None else env
     defaults = Settings()
     return Settings(
         concurrency_limit=_env_int(
             source, "RIKO_CONCURRENCY_LIMIT", defaults.concurrency_limit
+        ),
+        node_threads=_env_int(
+            source, "RIKO_NODE_THREADS", defaults.node_threads, minimum=0
         ),
         streaming_threshold=_env_int(
             source, "RIKO_STREAMING_THRESHOLD", defaults.streaming_threshold

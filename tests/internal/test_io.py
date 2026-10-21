@@ -477,6 +477,27 @@ class TestAsyncMapStream:
         result = aresolve(async_map_ordered_stream(slow_first, range(6), limit=3))
         assert result == list(range(6))
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="sliding-window async ordered mapping is not yet implemented",
+    )
+    @async_test
+    async def test_ordered_yields_ready_results_while_a_later_item_runs(self):
+        """A slow second item never holds back the first result or the third start."""
+        log: list[str] = []
+
+        async def slow_second(i: int) -> int:
+            log.append(f"start {i}")
+            await async_sleep(0.05 if i == 1 else 0)
+            log.append(f"done {i}")
+            return i
+
+        async for i in async_map_ordered_stream(slow_second, range(4), limit=2):
+            log.append(f"yield {i}")
+
+        assert log.index("yield 0") < log.index("done 1")
+        assert log.index("start 2") < log.index("done 1")
+
     @async_test
     async def test_shared_budget_caps_nested_fanout(self):
         """

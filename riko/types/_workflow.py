@@ -272,7 +272,8 @@ class GraphIndex:
         cyclic: Node ids that lie on a cycle, sorted.
         roots: Node ids with no upstream nodes, in ``order``.
         leaves: Node ids with no downstream nodes, in declaration order.
-        required: Node ids each workflow output subgraph runs: current & upstream nodes.
+        required: Node ids each workflow output subgraph runs (the output's node and
+            every node upstream of it), in ``order``.
 
     Examples:
 
@@ -280,8 +281,8 @@ class GraphIndex:
         >>> index = GraphIndex(["a", "b"], [edge], {"default": Endpoint("b", "out")})
         >>> index.order, index.roots, index.leaves
         (('a', 'b'), ('a',), ('b',))
-        >>> sorted(index.required["default"])
-        ['a', 'b']
+        >>> index.required["default"]
+        ('a', 'b')
 
     """
 
@@ -335,10 +336,15 @@ class GraphIndex:
         return tuple(leaves(self.downstream))
 
     @cached_property
-    def required(self) -> FrozenSetMapping:
+    def required(self) -> FrozenDict[str, tuple[str, ...]]:
         reach = partial(descendants, graph=self.upstream)
         items = self.outputs.items()
-        return FrozenDict({name: reach(ref.node) | {ref.node} for name, ref in items})
+        members = {name: reach(ref.node) | {ref.node} for name, ref in items}
+        ordered = {
+            name: tuple(node for node in self.order if node in subgraph)
+            for name, subgraph in members.items()
+        }
+        return FrozenDict(ordered)
 
     def is_open(self, node: str) -> bool:
         """Reports whether ``node``'s default input port is free for a seed to feed."""

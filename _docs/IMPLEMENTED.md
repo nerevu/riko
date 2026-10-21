@@ -168,7 +168,7 @@ item, materialize the entire source, or permit unbounded result buffering. Order
 streaming ships through `async_map_stream` / `async_map_ordered_stream`
 (`riko/bado/itertools.py`). Async ordering currently uses batched windows rather than a true
 indexed reorder buffer; the sync pool keeps order with a sliding `apply_async` look-ahead
-window (`riko/execution/_concurrency.py`).
+window (`riko/execution/_pools.py`).
 
 `limit=0` means unlimited; `async_map` preserves legitimate `None` results through a
 `_missing` sentinel; eager materialization is by design, with the streaming variants above
@@ -390,7 +390,7 @@ generated `Modules` tree (P9A) shipped — `pipeline | Transforms.FILTER` resolv
 keep full port identity in the v2 grammar (`out`; `in`/`in:N`/named value ports); node-level
 `order`/`upstream`/`downstream`/`roots`/`leaves`/`outputs`/`required` carry scheduling facts (`leaves` is
 derived from `downstream`; `outputs` are the workflow's named outputs; `required` maps each output to
-its node plus everything upstream; `cyclic` names the nodes a
+its node plus everything upstream, in `order`; `cyclic` names the nodes a
 cycle passes through). The index derives and freezes itself: `GraphIndex` takes only node ids, `GraphEdge`s
 (`Workflow.graph_edges`), and the named-output `Endpoint`s (converted with `tuple`/`FrozenDict`, the
 `Workflow` converter pattern); every other attribute is a `functools.cached_property`
@@ -478,7 +478,10 @@ statically: `narrow_from_require`/`narrow_def_from_require` take a keyword-only 
 and a bound class (`InstanceRequire[T, R]`, `cls: type[R]`) infers the result for `require_instance`;
 `def_from_require`'s overloads carry the `TypeRequire`/`InstanceRequire` narrowing while its body
 calls `require(*args, value, ...)` (protocols that differ only in `__call__` cannot be told apart at
-runtime). `isinstance_strict` returns `TypeIs[P]`.
+runtime). `isinstance_strict` returns `TypeIs[P]`; a callable method whose signature `inspect`
+cannot read (a generator's built-in `close`/`aclose`) counts as compatible, so the closeable guards
+in `riko/types/_io.py` accept generators. An owned `Resource` still refuses a generator object given
+without `cleanup`, with an error pointing to `Resource.from_lifecycle`.
 `require_from_form(form)` builds a guard for any type form: it flattens aliases, unions, and
 `Annotated` with `gen_union_members` (`riko/base/_typing.py`, shared with return-kind inference),
 sends a lone class to `require_instance` and a lone TypedDict to `require_from_typed_dict`, accepts a
@@ -757,10 +760,10 @@ serializes the same `Formats` at a destination. Meza owns conversion work. The B
 > `aiter(pipeline)` runners — with multi-input port wiring, execution-owned resource injection, and
 > node-level sync/async adaptation (async-only under sync via the portal, sync-only under async on a
 > worker) — ship now. The plan is a resolution snapshot: it carries no dispatcher and each execution picks
-> native-vs-adapter from the pre-resolved callables (`ResolvedModule.select_sync()`/`select_async()`) without re-inspecting the
+> native-vs-adapter from the pre-resolved callables (`PreparedNode.sync_interface`/`async_interface`, each a `PreparedInterface` whose `native` flag says whether an adapter is needed) without re-inspecting the
 > registry. Non-default output ports fail closed (a reachable non-`out` source port or a selected
 > non-`out` output raises), and a multi-output splitter node is refused when the plan is built, by
-> its declared module type, before any node runs. Cross-mode work is lazy in both directions: a sync-only node under async
+> its declared module type, before any node runs. Sync-under-async and async-under-sync work are both lazy: a sync-only node under async
 > execution runs on a worker thread, reads its async inputs from there, and hands back one item per
 > `__anext__`; and a loop `embed` that exists only as sync or only as async is adapted at execution time into a
 > metadata-preserving wrapper matching the host.
@@ -774,12 +777,13 @@ serializes the same `Formats` at a destination. Meza owns conversion work. The B
 > sites, and a NaN `shutdown_timeout` is rejected); `with_context`/`with_resource` bind the run's
 > `Context`. `concurrency=None` is sequential even beside an explicit `thread`/`process` executor (a
 > one-worker pool, async limit 1); `concurrency="auto"` sizes the sync pool with `get_worker_cnt`
-> (cores ×2 for threads) and the async limit from `concurrency_limit`. `riko/execution/_concurrency.py`
-> resolves the settings into a `SyncPolicy`/`AsyncPolicy`:
-> sync maps loopable nodes over one shared pool (`open_pool` from `riko/execution/_pools.py`) with
-> `apply_async` windows that pull the source no further ahead than the pool width (`Pool.imap`
+> (cores ×2 for threads) and the async limit from `concurrency_limit`. `ExecutionSettings`
+> derives a `SyncPolicy`/`AsyncPolicy` (`sync_policy`/`async_policy`):
+> sync maps loopable nodes over one shared pool (`_PoolLifetime.flat_map` in `riko/execution/_pools.py`) with
+> sliding `apply_async` windows that pull the source no further ahead than the pool width (`Pool.imap`
 > deadlocks when chained on the pool's single task-handler thread); async maps through
-> `async_map_stream`/`async_map_ordered_stream` under one shared `Semaphore` budget, and the process
+> `async_map_stream`/`async_map_ordered_stream` (fixed ordered batches; the sliding window waits on
+> R7's dedicated-task hosting) under one shared `Semaphore` budget, and the process
 > executor is refused under async. Concurrent pulling of fan-in branches is deferred to R7.
 > Cutover steps 2–5 are done (ordered checklist: [v1-cutover.md](gameplans/v1-cutover.md); step 5
 > deleted the v1 compiler on 2026-10-03): the fixture trees hold `WorkflowDocument`s,
@@ -807,7 +811,7 @@ portal drain and the worker-side upstream reader are the same function with a di
   This is sound because sync execution rejects async-native teardown, so no owned cleanup ever needs
   the portal alive.
 - **`AsyncExecution`** runs behind an `AsyncExitStack`; blocking sync components run on a worker
-  thread. Shutdown unwinds the stack behind a cancellation shield within an optional teardown budget,
+  thread. Shutdown unwinds the stack behind a cancellation shield within the optional shutdown timeout,
   so ambient cancellation of the shutdown task can never skip teardown.
 - Shutdown order is explicit (stop accepting work → shielded unwind), not generic exit-stack
   LIFO. The primary execution error is threaded into the exit stack's `__exit__` / `__aexit__`, so a
@@ -815,7 +819,7 @@ portal drain and the worker-side upstream reader are the same function with a di
   execution surfaces the returned suppression. Plain cleanup callbacks (`callback`,
   `push_async_callback`, and every Riko-registered teardown built on them) are wrapped so a failure
   is recorded rather than raised, which is what keeps a callback from replacing the primary error;
-  an exhausted shutdown budget (`TimeoutError`) is recorded the same way. `_report_shutdown` then raises: a lone cleanup failure with no primary error bare; several
+  an exhausted shutdown timeout (`TimeoutError`) is recorded the same way. `_report_shutdown` then raises: a lone cleanup failure with no primary error bare; several
   with no primary as an `ExceptionGroup`; and any cleanup failures beside an unsuppressed primary
   (or beside the exception a native context manager replaced it with) as a `BaseExceptionGroup`
   led by that primary. A native replacement with no cleanup failures propagates bare.
@@ -824,13 +828,14 @@ portal drain and the worker-side upstream reader are the same function with a di
 keyed by resource identity); a repeat returns the first value or replays the first failure.
 Concurrent first-use of one lazy resource under `aacquire` is single-flight too — a per-resource
 in-flight gate makes waiters await and replay the leader's outcome rather than resolving twice.
-`build_resource_plan(resource)` (in `riko/execution/_resource_plan.py`) is the one boundary that turns a
-declaration into a `_ResourcePlan` carrying a `_ResourceStrategy` (`EXTERNAL` / `OWNED` /
-`VALUE_FACTORY` / `LIFECYCLE`); the runtime consumes the plan and never re-inspects the original
-generator/context-manager/instance shape. Teardown rides the exit stack: owned → `close`/`aclose`,
+A `Resource` classifies itself: its cached `strategy` (`ResourceStrategy`: `EXTERNAL` / `OWNED` /
+`VALUE_FACTORY` / `LIFECYCLE`) and `async_native` derive from `external` and its `FactoryKind`
+(`is_async`/`is_cm_factory`). The execution builds `_ResourcePlan(resource)`
+(`riko/execution/_resource_plan.py`) inside the recorded acquisition, so a failing factory is
+replayed like any other outcome, and never re-inspects the generator/context-manager/instance shape. Teardown rides the exit stack: owned → `close`/`aclose`,
 value-factory → cleanup callback, lifecycle → context-manager entry. Explicit `cleanup` is
 authoritative. The two executions adapt work across sync/async as mirror images, classifying async-vs-sync
-with the same predicates (`is_async_callable`/`is_async_closeable`/`is_sync_closeable`/`native_async`).
+with the same predicates (`is_async_callable`/`is_async_closeable`/`is_sync_closeable`/`async_native`).
 Under `SyncExecution`, async value *production* bridges through the portal, but async-native
 *teardown* — an async cleanup callable, an async-native lifecycle, or an `aclose()`-only owned value —
 is a permanent boundary: it raises `InvalidPipelineError` before the resource is acquired, so no value
@@ -845,9 +850,9 @@ exception info preserved.
 the `external` flag plus `factory`/`kind`/`cleanup`/`args`/`kwargs` — not a private subclass
 hierarchy. `OneShotResource` / `ReusableResource` remain as user-facing marker types (`reusable` is
 `isinstance`, `external` is a field); construction routes through a private builder, and `Resource`
-itself has no open/close behavior: `build_resource_plan` turns the data into a `_ResourcePlan` that
-the execution's `acquire`/`aacquire` enter and tear down. `FactoryKind` stays input classification only,
-never a runtime ontology.
+itself has no open/close behavior: the execution's `acquire`/`aacquire` enter its `_ResourcePlan` and
+tear it down. `FactoryKind` classifies input (plus the `is_async`/`is_cm_factory` facts the strategy
+reads), never a runtime ontology.
 
 **External-resource proof.** `tests/internal/test_execution.py` proves the lifetime holds a
 genuinely external resource — a real HTTP client against the loopback server
@@ -900,7 +905,9 @@ run:
   available `pipe` / `async_pipe` interfaces (`ModuleDefinition.interfaces` for registered modules,
   `load_interfaces` for built-ins), and the chosen callables come from `resolve`. At run time
   `ResolvedModule.select_sync()`/`select_async()` return the native callable when present, else the
-  sync or async counterpart's callable (`AnyModuleWrapper`), touching no registry. `ResolvedModule.is_async_pipe(pipe)` is a
+  sync or async counterpart's callable (`AnyModuleWrapper`), touching no registry. A `ResolvedModule` whose two callables disagree on `loopable` or
+`sequential_inputs` raises `InvalidPipelineError` (`_is_consistent`), so either slot answers for the
+module. `ResolvedModule.is_async_pipe(pipe)` is a
   `TypeIs[AsyncModuleWrapper]` guard keyed on slot identity (`pipe is self.async_pipe`), so it narrows the
   callable with no cast and works for undecorated callables (documented `ModuleDefinition(sync_pipe=plain)`
   carries no `isasync`). `WorkflowResolver.require` tags a stored workflow's interface with the `isasync` of the
@@ -963,7 +970,7 @@ run:
   become the ordered `others=[...]` list, and `in:<name>` ports pass as the named stream kwarg.
 - A node's declared `{slot: name}` resource binding is injected as a `resources` view whose values come
   from execution-owned `acquire`/`aacquire` (single-flight + exit-stack teardown), resolved against the
-  execution Context; a name absent from the Context raises before any sibling is acquired. Providing
+  execution's `Context`; a name absent from the Context raises before any sibling is acquired. Providing
   resources into the `Pipeline` surface itself is deferred.
 - `iter(pipeline)` (`Pipeline.__iter__`, returning a `Generator`) and `aiter(pipeline)`
   (`Pipeline.__aiter__`, returning an `AsyncGenerator`) own the execution lifetime
@@ -1014,7 +1021,8 @@ run:
   the raw value through and the helpers below `run` keep their wide `Items`/`Feed` parameters. An
   async `processor` node fed an async stream maps it lazily and in order (`_aprocess_stream` in
   `riko/modules/_decorators.py`, a bounded ordered window) instead of treating the stream object as
-  one item. `ExecutionPlan.from_workflow` also refuses, before any node runs, a source port feeding more
+  one item. Closing the node's stream (`_AsyncWrapperStream.aclose`) closes that window and its
+  source at once, not at garbage collection. `ExecutionPlan.from_workflow` also refuses, before any node runs, a source port feeding more
   than one stream edge (`Workflow.require_executable()`), the fail-closed companion of the non-`out` port guard
   until R7's port-keyed delivery; the shape stays valid canonical structure under `validate()`.
   Sparse positional inputs (`in` + `in:2`, legacy `_OTHER2`) execute as an ordered `others` list,
@@ -1050,11 +1058,16 @@ nested record with no set fields, so an option-less node stays byte-stable. A dr
 `TestRawWorkflowFields` keeps the record's fields and types equal to `RawCallOptions` (`| None`).
 Direct wrapper calls share `Module._call_direct`, which still prepares with every keyword name as a
 per-item input: a direct call cannot tell an input port named like a call option (`tail`'s `count`)
-from the option. One precedence nuance: when a node both binds a call option and receives a
+from the option. A decoration option (`skip_if`, `ftype`, …) handed to a direct call or to
+`prepare` raises `TypeError` (`Module._validate_call_keywords`) instead of being dropped. One
+precedence nuance: when a node both binds a call option and receives a
 secondary input stream under the same name (e.g. `count`), the stream wins, as it already did on a
 direct call. Measured: `Module.prepare` ran 50 times for 50 items before and once per plan after; a
 2,000-item inline `strtransform` run takes ~46 ms. Regressions:
-`tests/internal/test_execution_plan.py::TestPreparedCall` and `tests/internal/test_modules.py::TestPrepare`.
+`tests/internal/test_execution_plan.py::TestPreparedCall` and `tests/internal/test_modules.py::TestPrepare`. A loop's embed is bound the same way once per stream: `bind_subpipe`
+(`riko/modules/_assignment.py`) runs the embed's conf and call options through `build_call` and
+calls the prepared call per parent item, so the embed is no longer re-prepared per parent
+(2026-10-20; conf-parse memoization in `riko/parsing/config.py` went with it).
 
 ## Write sessions — private seam awaiting `WriteNode`
 

@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides functions for deriving module subtypes and loop behavior."""
+"""Derives module subtypes, loop behavior, and sequential input-stream reading."""
 
 from __future__ import annotations
 
@@ -44,7 +44,8 @@ def _get_operator_subtypes(pipe: ModuleParser) -> tuple[ModuleSubtype, ModuleSub
             break
 
     if subtype is None:
-        qualified_name = f"{pipe.__module__}.{pipe.__name__}"
+        name = getattr(pipe, "__name__", type(pipe).__name__)
+        qualified_name = f"{pipe.__module__}.{name}"
         msg = f"{qualified_name} no supported subtypes found"
 
         if reasons:
@@ -55,8 +56,15 @@ def _get_operator_subtypes(pipe: ModuleParser) -> tuple[ModuleSubtype, ModuleSub
     return subtype, subtypes
 
 
+SEQUENTIAL_READERS = frozenset({"join", "union"})
+
+
 def is_loopable(name: str, module_type: ModuleType | str) -> bool:
     return module_type == "processor" and name != "input"
+
+
+def has_sequential_inputs(name: str) -> bool:
+    return name in SEQUENTIAL_READERS
 
 
 def get_module_subtypes(

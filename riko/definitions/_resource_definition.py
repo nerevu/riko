@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from functools import cached_property
+from inspect import isasyncgen, isgenerator
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -27,6 +29,7 @@ from riko.types._resource import (
     FactoryKind,
     LifecycleFactory,
     ResourceFactory,
+    ResourceStrategy,
     ValueFactory,
     get_factory_kind,
     is_async_context_manager,
@@ -181,8 +184,14 @@ class Resource[T]:
 
         if self.factory is None and not self.external:
             self._validate_value(self.value)
+            started = isgenerator(self.value) or isasyncgen(self.value)
 
-            if self.cleanup is None and not is_closeable(self.value):
+            if self.cleanup is None and started:
+                msg = "A generator object is not a resolved resource value. To run "
+                msg += "a generator as setup and teardown, pass the generator "
+                msg += "function to Resource.from_lifecycle(...) instead."
+                raise TypeError(msg)
+            elif self.cleanup is None and not is_closeable(self.value):
                 msg = "Must provide a Closeable value or cleanup function for riko "
                 msg += f"owned resources. Not a {type(self.value).__name__}. If this "
                 msg += "value's lifecycle is externally managed, use "
@@ -200,6 +209,27 @@ class Resource[T]:
     @property
     def reusable(self) -> bool:
         return isinstance(self, ReusableResource)
+
+    @cached_property
+    def strategy(self) -> ResourceStrategy:
+        """How an execution acquires and tears down this resource."""
+        kind = self.kind
+
+        if self.external:
+            strategy = ResourceStrategy.EXTERNAL
+        elif kind is None:
+            strategy = ResourceStrategy.OWNED
+        elif kind in VALUE_FACTORY_KINDS:
+            strategy = ResourceStrategy.VALUE_FACTORY
+        else:
+            strategy = ResourceStrategy.LIFECYCLE
+
+        return strategy
+
+    @cached_property
+    def async_native(self) -> bool:
+        """Whether an execution produces or enters this resource natively async."""
+        return self.kind is not None and self.kind.is_async
 
     @overload
     @classmethod

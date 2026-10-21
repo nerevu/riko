@@ -114,16 +114,6 @@ Readers cope with `getattr` defaults, and `gen_registry_catalog` skips such defi
 boundary (stamping declared metadata), reject them, or type the slots honestly. Do not stamp
 metadata or widen the slot types ahead of that decision.
 
-Open defect (triaged 2026-10-15): the parser types that the `processor`/`operator`/`splitter`
-decorators accept (`SyncProcessorParser`, `AsyncProcessorParser`, and the operator and splitter
-pairs in `riko/types/_wrappers.py`) are fixed-arity `Callable[[...], ...]`, but the wrappers always
-call the parser with keyword arguments as well (`inputs=`, any call extras). A parser such as
-`def parser(item, extract, objconf)` type-checks against `@processor()` and then fails on its first
-call with `TypeError: ... unexpected keyword argument 'inputs'`. The module contract fixes the parser
-signature: callback protocols that require `**kwargs` (a static check) and/or a decoration-time
-signature check (a runtime one). That retypes the `riko.ext` decorators, so it carries a
-`CHANGES.rst` line.
-
 ## E2. Plugin ecosystem v1
 
 Use Python package metadata entry points:

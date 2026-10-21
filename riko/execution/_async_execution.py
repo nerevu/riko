@@ -12,8 +12,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterable, Mapping
 from contextlib import AsyncExitStack, aclosing, nullcontext
 from functools import cached_property, partial
-from itertools import chain
-from typing import TYPE_CHECKING, Any, Literal, Self, cast, overload
+from typing import TYPE_CHECKING, Any, Self, cast
 
 from attrs import Factory, define, field
 
@@ -23,19 +22,20 @@ from riko.bado._backend import (
     Event,
     Semaphore,
     asyncify,
-    current_default_thread_limiter,
     fail_after,
+    lowlevel,
     run_from_thread,
 )
-from riko.bado._util import as_awaitable
+from riko.bado._util import as_awaitable, maybe_aclosing
 from riko.bado.itertools import (
     alist,
     as_async,
     async_map_ordered_stream,
     async_map_stream,
 )
+from riko.base._config import settings as config
 from riko.base.exceptions import InvalidPipelineError
-from riko.types._guards import is_async_callable
+from riko.types._resource import ResourceStrategy
 
 from ._adapt import (
     async_drain,
@@ -45,26 +45,19 @@ from ._adapt import (
     require_stream,
     select_embed,
 )
-from ._concurrency import AsyncPolicy, is_mappable, resolve_async_policy, run_item
+from ._concurrency import run_item
 from ._execution import (
     Acquisition,
     AsyncExecSteps,
     ExtraInput,
-    ExtraObjects,
+    ExtraOutput,
     _Acquired,
     _asyncify_call,
     _BaseExecution,
     _FailedAcquisition,
-    _is_async_only_closeable,
     _require_source,
 )
-from ._resource_plan import (
-    _ResourcePlan,
-    _ResourceStrategy,
-    aclose_resource,
-    build_resource_plan,
-    close_resource,
-)
+from ._resource_plan import _ResourcePlan, aclose_resource, close_resource
 from ._resource_view import ResourceView
 
 if TYPE_CHECKING:
@@ -73,40 +66,21 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from anyio import CapacityLimiter as Limiter
+    from anyio.lowlevel import RunVar
 
-    from riko.definitions._resource_definition import Resource
-    from riko.types._resource import Cleanup
-    from riko.types._sentinels import MissingType
+    from riko.definitions._resource_definition import ResolvedValue, Resource
     from riko.types._streams import AnyIterable
-    from riko.types._wrappers import (
-        AnyModuleWrapper,
-        AsyncFunc,
-        AsyncModuleWrapperOutput,
-        SyncModuleWrapper,
-    )
+    from riko.types._wrappers import AsyncFunc, AsyncModuleWrapperOutput
 
-    from ._prepared import ExecutionPlan, PreparedNode
+    from ._prepared import ExecutionPlan, PreparedInterface
 
 
-@overload
-def _bridge_inputs[T](  # noqa: E704
-    extra: Mapping[str, AsyncIterable[T] | Iterator[T]],
-) -> Mapping[str, Iterator[T]]: ...
-@overload  # noqa: E302
-def _bridge_inputs[T](  # noqa: E704
-    extra: Mapping[str, ExtraObjects[T]],
-) -> Mapping[str, ExtraObjects[T]]: ...
-@overload  # noqa: E302
-def _bridge_inputs[T](  # noqa: E704
-    extra: Mapping[str, list[AsyncIterable[T]] | Iterable[Iterator[T]]],
-) -> Mapping[str, Iterable[Iterator[T]]]: ...
-@overload  # noqa: E302
-def _bridge_inputs[T](  # noqa: E704
-    extra: ExtraInput[T],
-) -> Mapping[str, ExtraObjects[T] | Iterator[T] | Iterable[Iterator[T]]]: ...
-def _bridge_inputs[T](  # noqa: E302
-    extra: ExtraInput[T],
-) -> Mapping[str, ExtraObjects[T] | Iterator[T] | Iterable[Iterator[T]]]:
+_worker_drain = partial(async_drain, call=run_from_thread)
+
+
+def _bridge_inputs[T](
+    extra: ExtraInput[T], drain: Callable[[AsyncIterable[T]], Iterator[T]]
+) -> ExtraOutput[T]:
     """
     Re-exposes a worker-run node's async input streams as lazy synchronous ones.
 
@@ -115,47 +89,37 @@ def _bridge_inputs[T](  # noqa: E302
         extra: The secondary input streams wired for the node, mixed with the non-stream
             values a node may also receive.
 
+        drain: Re-exposes one async stream as a lazy synchronous one.
+
     Returns:
 
         The same mapping with every async stream replaced by a lazy synchronous
         stream over it, and every other value left as it is.
 
     """
-    bridged: dict[str, ExtraObjects | Iterator[T] | Iterable[Iterator[T]]] = {}
+    bridged: ExtraOutput[T] = {}
 
     for key, value in extra.items():
         if isinstance(value, AsyncIterable):
-            bridged[key] = async_drain(value, run_from_thread)
+            bridged[key] = drain(value)
         elif isinstance(value, list):
-            _bridged = (_bridge_inputs({key: v}).values() for v in value)
-            bridged[key] = list(chain.from_iterable(_bridged))
+            bridged[key] = [
+                drain(v) if isinstance(v, AsyncIterable) else v for v in value
+            ]
         else:
             bridged[key] = value
 
     return bridged
 
 
-def _is_owned_teardown_async[T](
-    cleanup: Cleanup[T] | Literal[False] | None, value: object
-) -> bool:
-    """An owned value tears down asynchronously via an async cleanup or ``aclose``."""
-    if cleanup is None:
-        native_async = _is_async_only_closeable(value)
-    else:
-        native_async = is_async_callable(cleanup)
-
-    return native_async
-
-
 @define(eq=False)
 class _WorkerContext[T]:
     """Runs a blocking sync context manager's entry and exit on a worker thread."""
 
-    _run: AsyncFunc[T]
     _cm: AbstractContextManager[T]
 
     async def __aenter__(self) -> T:
-        return await self._run(self._cm.__enter__)
+        return await _asyncify_call(self._cm.__enter__)
 
     async def __aexit__(
         self,
@@ -163,7 +127,111 @@ class _WorkerContext[T]:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> bool:
-        return bool(await self._run(self._cm.__exit__, exc_type, exc, traceback))
+        return bool(await _asyncify_call(self._cm.__exit__, exc_type, exc, traceback))
+
+
+@define(eq=False)
+class _Reservation:
+    """The node threads one run holds until its output stream closes."""
+
+    budget: _ThreadBudget
+    count: int
+    held: bool = field(default=True, init=False)
+
+    @cached_property
+    def limiter(self) -> Limiter:
+        """Caps the run's node threads at the number it reserved."""
+        return CapacityLimiter(max(self.count, 1))
+
+    def release(self) -> None:
+        """Gives the threads back to the budget. A repeated call does nothing."""
+        if self.held:
+            self.held = False
+            self.budget.restore(self.count)
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.release()
+
+
+@define(eq=False)
+class _ThreadBudget:
+    """
+    Shares one event loop's node threads among the async executions running on it.
+
+    A run takes every thread it may hold at once before it reads anything. No run waits
+    for a thread while holding threads another run is waiting for.
+    """
+
+    total: int
+    available: int = field(
+        default=Factory(lambda self: self.total, takes_self=True), init=False
+    )
+    _restored: Event = field(factory=Event, init=False)
+
+    async def reserve(self, count: int) -> _Reservation:
+        """Waits until ``count`` node threads are free, then takes them all at once."""
+        while count and self.available < count:
+            await self._restored.wait()
+
+        self.available -= count
+        return _Reservation(self, count)
+
+    def restore(self, count: int) -> None:
+        """Gives back ``count`` node threads and wakes the runs waiting for them."""
+        self.available += count
+        restored, self._restored = self._restored, Event()
+        restored.set()
+
+
+_budgets: RunVar[_ThreadBudget] | None = (
+    None if lowlevel is None else lowlevel.RunVar("node_threads")
+)
+
+
+def _resolve_thread_budget() -> _ThreadBudget:
+    """Finds the running event loop's node-thread budget and starts it on first use."""
+    if _budgets is None:
+        msg = "anyio is required to run async executions"
+        raise RuntimeError(msg)
+    elif (budget := _budgets.get(None)) is None:
+        budget = _ThreadBudget(config.node_threads)
+        _budgets.set(budget)
+
+    return budget
+
+
+@define(eq=False)
+class _ReleasingStream[T]:
+    """Wraps an output stream so its node threads return when it ends or closes."""
+
+    _stream: AsyncIterator[T]
+    _reservation: _Reservation
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> T:
+        try:
+            item = await anext(self._stream)
+        except BaseException:
+            self._reservation.release()
+            raise
+
+        return item
+
+    async def aclose(self) -> None:
+        """Closes the output stream and returns the run's node threads."""
+        with self._reservation:
+            async with maybe_aclosing(self._stream):
+                pass
 
 
 _timeout = Factory(lambda self: self.settings.shutdown_timeout, takes_self=True)
@@ -182,12 +250,16 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
     shutdown_timeout: float | None = field(default=_timeout, kw_only=True)
     _stack: AsyncExitStack = field(factory=AsyncExitStack, init=False)
     _inflight: dict[Resource[Any], Event] = field(factory=dict, init=False)
-    _budget: Semaphore | None = field(default=None, init=False)
-    _node_limiter: Limiter | None = field(default=None, init=False)
+    _reservations: list[_Reservation] = field(factory=list, init=False)
 
     @cached_property
-    def _policy(self) -> AsyncPolicy:
-        return resolve_async_policy(self.settings)
+    def _concurrency_budget(self) -> Semaphore:
+        """Caps the items in flight across every mapped node of the execution."""
+        if (limit := self.settings.async_policy.limit) is None:
+            msg = "only a concurrent execution maps items under a shared ceiling"
+            raise InvalidPipelineError(msg)
+
+        return Semaphore(limit)
 
     async def __aenter__(self) -> Self:
         return self
@@ -199,11 +271,11 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         traceback: TracebackType | None,
     ) -> tuple[BaseException | None, bool]:
         """
-        Unwinds the exit stack behind a cancellation shield within the budget.
+        Unwinds the exit stack under a cancellation shield within the shutdown timeout.
 
         Returns the exception a native context manager replaced the primary error
         with, if any, and whether the primary error was suppressed. Exhausting the
-        shutdown budget is recorded as a cleanup failure rather than replacing the
+        shutdown timeout is recorded as a cleanup failure rather than replacing the
         primary outcome.
         """
         raised: BaseException | None = None
@@ -262,19 +334,6 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         self._require_open("add an async resource to")
         return await self._stack.enter_async_context(cm)
 
-    def callback(self, func: Callable, *args: object) -> None:
-        """
-        Registers a synchronous ``func`` to run during exit-stack unwind.
-
-        Args:
-
-            func: A cleanup callable invoked with ``args`` on shutdown.
-            args: Positional arguments forwarded to ``func``.
-
-        """
-        self._require_open("add a callback to")
-        self._stack.callback(self._record_cleanup_error, func, *args)
-
     async def _arecord_cleanup_error(
         self, func: AsyncFunc[object], *args: object
     ) -> None:
@@ -314,37 +373,67 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         self._require_open("run work in")
         return await _asyncify_call(func, *args)
 
-    def _reserve_node_threads(
-        self, plan: ExecutionPlan, required: Iterable[str]
-    ) -> None:
+    async def _reserve_threads(self, demand: int, output: str) -> _Reservation:
         """
-        Sizes the node-thread limiter so every sync-only node can hold a thread.
-
-        A sync-only node holds one thread while pulling upstream. A chain of nodes
-        needs their threads up front. Since the limiter never shrinks, allocate one
-        extra thread per node on the plan.
+        Reserves every node thread a run may hold at once before it reads anything.
 
         Args:
 
-            plan: The prepared workflow about to run.
-            required: The node ids the selected workflow output runs.
+            demand: The max number of node threads the run may hold at once.
+            output: The name of the workflow output being run.
+
+        Returns:
+
+            The run's reservation. It is released when its output stream closes or the
+            execution shuts down.
+
+        Raises:
+
+            InvalidPipelineError: If ``demand`` exceeds the event loop's node-thread
+                budget, or what this execution's open output streams leave of it, so
+                the run could never get all its threads.
 
         """
-        modules = (plan.nodes[node_id].module for node_id in required)
-        sync_nodes = sum(
-            not module.is_async_pipe(module.select_async()) for module in modules
-        )
-        tokens = current_default_thread_limiter().total_tokens + sync_nodes
+        budget = _resolve_thread_budget()
+        self._reservations[:] = [r for r in self._reservations if r.held]
+        held = sum(r.count for r in self._reservations)
 
-        if (limiter := self._node_limiter) is None:
-            self._node_limiter = CapacityLimiter(tokens)
-        else:
-            limiter.total_tokens = max(limiter.total_tokens, tokens)
+        if demand > budget.total:
+            msg = (
+                f"workflow output {output!r} may hold {demand} threads at once for "
+                "modules without an async implementation, more than the node-thread "
+                f"budget of {budget.total}; raise RIKO_NODE_THREADS or shorten the "
+                "chain of such modules"
+            )
+            raise InvalidPipelineError(msg)
+        elif held + demand > budget.total:
+            msg = (
+                f"workflow output {output!r} may hold {demand} threads at once for "
+                f"modules without an async implementation, but this execution's open "
+                f"output streams hold {held} of the node-thread budget of "
+                f"{budget.total}; close them first or raise RIKO_NODE_THREADS"
+            )
+            raise InvalidPipelineError(msg)
 
-    async def _run_node_call[R](self, func: Callable[..., R], *args: object) -> R:
-        """Runs a sync-only node's blocking step on a node thread."""
+        reservation = await budget.reserve(demand)
+
+        if demand:
+            try:
+                self.enter_context(reservation)
+            except BaseException:
+                reservation.release()
+                raise
+
+            self._reservations.append(reservation)
+
+        return reservation
+
+    async def _run_node_call[R](
+        self, limiter: Limiter, func: Callable[..., R], *args: object
+    ) -> R:
+        """Runs a sync-only node's blocking step on one of the run's node threads."""
         self._require_open("run work in")
-        return await asyncify(func, limiter=self._node_limiter)(*args)
+        return await asyncify(func, limiter=limiter)(*args)
 
     def _register_teardown(
         self, teardown: Callable, value: object, *, is_async: bool
@@ -355,58 +444,58 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         else:
             self.push_async_callback(_asyncify_call, teardown, value)
 
-    async def _acall_factory[R](self, plan: _ResourcePlan[R]) -> R | Awaitable[R]:
-        if (factory := plan.factory) is None:
-            raise InvalidPipelineError("resource factory is required")
-
-        if is_async_callable(factory):
-            value = await factory(*plan.args, **plan.kwargs)
+    async def _acall_factory[R](self, plan: _ResourcePlan[R]) -> R:
+        if plan.async_native:
+            raw = plan.call_factory()
         else:
-            value = await _asyncify_call(partial(factory, *plan.args, **plan.kwargs))
+            raw = await _asyncify_call(plan.call_factory)
+
+        value = await as_awaitable(raw)
 
         if (cleanup := plan.cleanup) not in (None, False):
-            self._register_teardown(cleanup, value, is_async=is_async_callable(cleanup))
+            self._register_teardown(cleanup, value, is_async=plan.is_teardown_async)
 
         return value
 
     async def _aenter_lifecycle[R](self, plan: _ResourcePlan[R]) -> R:
-        if plan.native_async:
-            cm = cast("AbstractAsyncContextManager[R]", plan.context_manager)
+        built = plan.build_context_manager()
+
+        if plan.async_native:
+            cm = cast("AbstractAsyncContextManager[R]", built)
         else:
-            _cm = cast("AbstractContextManager[R]", plan.context_manager)
-            cm = _WorkerContext(_asyncify_call, _cm)
+            cm = _WorkerContext(cast("AbstractContextManager[R]", built))
 
         return await self.enter_async_context(cm)
 
-    async def _aopen[R](self, plan: _ResourcePlan[R]) -> R | MissingType | Awaitable[R]:
-        if plan.strategy is _ResourceStrategy.EXTERNAL:
+    async def _aopen[R](self, plan: _ResourcePlan[R]) -> ResolvedValue[R]:
+        if plan.strategy is ResourceStrategy.EXTERNAL:
             value = plan.value
-        elif plan.strategy is _ResourceStrategy.OWNED:
+        elif plan.strategy is ResourceStrategy.OWNED:
             value = plan.value
-            is_async = _is_owned_teardown_async(plan.cleanup, value)
+            is_async = plan.is_teardown_async
             close = aclose_resource if is_async else close_resource
             teardown = partial(close, plan.cleanup)
             self._register_teardown(teardown, value, is_async=is_async)
-        elif plan.strategy is _ResourceStrategy.VALUE_FACTORY:
+        elif plan.strategy is ResourceStrategy.VALUE_FACTORY:
             value = await self._acall_factory(plan)
         else:
             value = await self._aenter_lifecycle(plan)
 
         return value
 
-    async def _aacquire_entry[R](self, resource: Resource[R]) -> Acquisition:
-        plan = build_resource_plan(resource)
-
+    async def _aacquire_entry[R](
+        self, resource: Resource[R]
+    ) -> Acquisition[ResolvedValue[R]]:
         try:
-            value = await self._aopen(plan)
+            value = await self._aopen(_ResourcePlan(resource))
         except Exception as error:  # noqa: BLE001
-            entry: Acquisition = _FailedAcquisition(error)
+            entry: Acquisition[ResolvedValue[R]] = _FailedAcquisition(error)
         else:
             entry = _Acquired(value)
 
         return entry
 
-    async def _acquire_entry_once[R](self, resource: Resource[R]) -> Acquisition:
+    async def _acquire_entry_once(self, resource: Resource[Any]) -> Acquisition[Any]:
         if resource in self._acquired:
             entry = self._acquired[resource]
         elif (event := self._inflight.get(resource)) is not None:
@@ -443,11 +532,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         """
         self._require_open("acquire a resource in")
         entry = await self._acquire_entry_once(resource)
-
-        if isinstance(entry, _FailedAcquisition):
-            raise entry.error
-
-        return cast("R", entry.value)
+        return entry.unwrap()
 
     async def _abuild_source_stream(
         self, value: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]]
@@ -468,11 +553,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         return ResourceView(values)
 
     def _build_item_call(
-        self,
-        pipe: AnyModuleWrapper,
-        node: PreparedNode,
-        extra: ExtraInput,
-        policy: AsyncPolicy,
+        self, interface: PreparedInterface, extra: ExtraInput
     ) -> Callable[[T], Awaitable[Iterable[T]]]:
         """
         Binds a mapped node's pipe into a call that collects one item's results.
@@ -480,9 +561,9 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         A synchronous pipe runs on a worker thread, or on the event-loop thread
         when the settings choose the inline executor.
         """
-        prepared = node.select_call(pipe)
+        prepared = interface.call
 
-        if node.module.is_async_pipe(pipe):
+        if interface.native:
 
             async def call_native(item: T) -> Iterable[T]:
                 raw = prepared(item, context=self.context, **extra)
@@ -498,19 +579,17 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
             call = call_native
         else:
-            kwargs = _bridge_inputs(extra)
-            bound = partial(prepared, context=self.context, **kwargs)
+            bound = partial(prepared, context=self.context, **extra)
             sync_call = cast("Callable[[T], Iterable[T]]", bound)
 
-            async def call_adapted(item: T) -> Iterable[T]:
-                if policy.inline:
-                    results = run_item(sync_call, item)
-                else:
-                    results = await self.run_sync(run_item, sync_call, item)
+            if self.settings.async_policy.inline:
 
-                return results
+                async def call_inline(item: T) -> Iterable[T]:
+                    return run_item(sync_call, item)
 
-            call = call_adapted
+                call = call_inline
+            else:
+                call = partial(self.run_sync, run_item, sync_call)
 
         return call
 
@@ -525,11 +604,9 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
         Closing the stream early stops its in-flight calls in the consuming task.
         """
-        if self._budget is None:
-            self._budget = Semaphore(limit)
-
         mapper = async_map_ordered_stream if self.settings.ordered else async_map_stream
-        mapped = mapper(call, source, limit=limit, buffer=0, budget=self._budget)
+        args = (call, source)
+        mapped = mapper(*args, limit=limit, buffer=0, budget=self._concurrency_budget)
 
         async with aclosing(mapped) as results:
             async for result in results:
@@ -538,41 +615,48 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
     async def _run_sync_node(
         self,
-        pipe: SyncModuleWrapper,
-        node: PreparedNode,
+        interface: PreparedInterface,
         source: AsyncIterable[T],
         extra: ExtraInput,
+        limiter: Limiter,
     ) -> AsyncIterator[T]:
         """
         Streams a sync-only node's output stream without materializing it.
 
         The pipe runs on a worker thread, reads its async input streams lazily from
         there, and that stream is pulled one item at a time as the consumer asks
-        for it.
+        for it. Closing the stream closes the pipe, then its async input streams.
 
         Args:
 
-            pipe: The node's synchronous pipe.
-            node: The prepared node being run.
+            interface: The node's synchronous pipe and its prepared call.
             source: The node's primary async input stream.
             extra: The node's secondary input streams and non-stream arguments.
+            limiter: Caps the run's node threads.
 
         Returns:
 
             The async item stream produced by the node.
 
         """
-        bridged = _bridge_inputs(extra)
-        worker_source = async_drain(source, run_from_thread)
-        call = node.select_call(pipe)
+        upstreams: list[AsyncIterator[T]] = []
+
+        def drain(stream: AsyncIterable[T]) -> Iterator[T]:
+            upstream = aiter(stream)
+            upstreams.append(upstream)
+            return _worker_drain(upstream)
+
+        bridged = _bridge_inputs(extra, drain)
+        worker_source = drain(source)
 
         def start() -> tuple[object, Iterator[T]]:
-            raw = call(worker_source, context=self.context, **bridged)
+            raw = interface.call(worker_source, context=self.context, **bridged)
             value = cast("Iterator[T] | Iterator[Iterator[T]]", raw)
-            return raw, require_stream(value, pipe)
+            return raw, require_stream(value, interface.pipe)
 
-        raw, iterator = await self._run_node_call(start)
-        return pull_stream(iterator, raw, self._run_node_call, _asyncify_call)
+        run = partial(self._run_node_call, limiter)
+        raw, iterator = await run(start)
+        return pull_stream(raw, iterator, *upstreams, pull=run, close=_asyncify_call)
 
     async def _abuild_stream(
         self,
@@ -580,7 +664,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         node_id: str,
         steps: AsyncExecSteps,
         seed: AnyIterable[T] | None,
-        policy: AsyncPolicy,
+        limiter: Limiter,
     ) -> AsyncIterator[T]:
         """
         Builds one node's lazy async output stream from its already-built input streams.
@@ -594,7 +678,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             node_id: The node to build.
             steps: The streams already built for upstream nodes.
             seed: The items fed to the node's open input, if any.
-            policy: The run's resolved concurrency policy.
+            limiter: Caps the run's node threads.
 
         Returns:
 
@@ -602,8 +686,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
         """
         node = plan.nodes[node_id]
-        pipe = node.module.select_async()
-        host_isasync = node.module.is_async_pipe(pipe)
+        interface = node.async_interface
         args = (node.incoming, steps, seed)
         source, extra = self._resolve_node_inputs(*args, as_stream=as_async)
 
@@ -611,23 +694,22 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             extra["resources"] = await self._abind_resources(node.resources)
 
         if (embed := node.embed) is not None:
-            drain = partial(async_drain, call=run_from_thread)
             extra["embed"] = select_embed(
-                embed, host_isasync=host_isasync, run_sync=self.run_sync, drain=drain
+                embed,
+                host_isasync=interface.native,
+                run_sync=self.run_sync,
+                drain=_worker_drain,
             )
 
-        limit = policy.limit
-
-        if limit is not None and is_mappable(node, extra):
-            call = self._build_item_call(pipe, node, extra, policy)
+        if (limit := self.settings.async_policy.limit) is not None and node.is_mappable:
+            call = self._build_item_call(interface, extra)
             stream = self._amap_stream(call, source, limit)
-        elif not node.module.is_async_pipe(pipe):
-            stream = await self._run_sync_node(pipe, node, source, extra)
+        elif not interface.native:
+            stream = await self._run_sync_node(interface, source, extra, limiter)
         else:
-            call = node.select_call(pipe)
-            _stream = call(source, context=self.context, **extra)
+            _stream = interface.call(source, context=self.context, **extra)
             value = cast("AsyncModuleWrapperOutput[T]", _stream)
-            stream = require_async_stream(value, pipe)
+            stream = require_async_stream(value, interface.pipe)
 
         return stream
 
@@ -638,18 +720,25 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         source: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None,
     ) -> AsyncIterator[T]:
         """Builds the async item stream for one of the plan's workflow outputs."""
-        policy = self._policy
+        policy = self.settings.async_policy
 
-        endpoint, required = plan.require_output(output)
+        endpoint = plan.require_output(output)
         steps: AsyncExecSteps = {}
-        self._reserve_node_threads(plan, required)
-        seed = None if source is None else await self._abuild_source_stream(source)
+        demand = plan.get_thread_demand(output, mapped=policy.limit is not None)
+        reservation = await self._reserve_threads(demand, output)
 
-        for node_id, node_seed in self._gen_build_order(plan, required, seed):
-            args = (plan, node_id, steps, node_seed, policy)
-            steps[node_id] = await self._abuild_stream(*args)
+        try:
+            seed = None if source is None else await self._abuild_source_stream(source)
 
-        return steps[endpoint.node]
+            for node_id, node_seed in plan.gen_build_order(output, seed=seed):
+                args = (plan, node_id, steps, node_seed, reservation.limiter)
+                steps[node_id] = await self._abuild_stream(*args)
+        except BaseException:
+            reservation.release()
+            raise
+
+        stream = steps[endpoint.node]
+        return stream if demand == 0 else _ReleasingStream(stream, reservation)
 
     async def arun(
         self,
@@ -664,6 +753,12 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         Only the selected workflow output's upstream subgraph runs. The returned stream
         is lazy. Consume it inside this execution's ``async with`` block so its teardown
         stays owned.
+
+        A module without an async implementation runs on a thread it holds while it
+        reads its upstream stream. Every run on one event loop draws those threads from
+        one shared budget (``RIKO_NODE_THREADS``), and a run takes all the threads it
+        may need before reading anything. It waits while other executions hold them,
+        and raises when this execution's own open output streams leave too few.
 
         Args:
 
@@ -685,8 +780,10 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
             InvalidPipelineError: If the plan exposes no such workflow output, if it
                 has no nodes and no ``source`` is given, if ``source`` is supplied but
-                the workflow output has no single open input, or if the settings name
-                the process executor.
+                the workflow output has no single open input, if the settings name
+                the process executor, or if the workflow output may hold more node
+                threads at once than the node-thread budget or what this execution's
+                open output streams leave free.
 
         """
         self._require_open("run")

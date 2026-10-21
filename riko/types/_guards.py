@@ -71,7 +71,12 @@ def _signature_compatible(expected: Signature, actual: Signature) -> bool:
 
 
 def isinstance_strict[P](obj: object, protocol: type[P], *methods: str) -> TypeIs[P]:
-    """Check runtime protocol membership and method call compatibility."""
+    """
+    Checks runtime protocol membership and method call compatibility.
+
+    A callable built-in method whose signature cannot be inspected (e.g., a
+    generator's ``close``) counts as compatible.
+    """
     match = False
 
     if isinstance(obj, protocol):
@@ -104,7 +109,7 @@ def isinstance_strict[P](obj: object, protocol: type[P], *methods: str) -> TypeI
             try:
                 actual = signature(obj_method)
             except (TypeError, ValueError):
-                break
+                continue
 
             if not _signature_compatible(expected, actual):
                 break

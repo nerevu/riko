@@ -828,7 +828,7 @@ class TestGraphIndex:
         assert index.edges == (edge,)
         assert index.incoming["b"] == (edge,)
         assert index.upstream["b"] == frozenset({"a"})
-        assert index.required["default"] == frozenset({"a", "b"})
+        assert index.required["default"] == ("a", "b")
         assert index.roots == ("a", "c")
 
         with pytest.raises(TypeError):
@@ -849,7 +849,7 @@ class TestGraphIndex:
         assert index.cyclic == ()
         assert index.order == ("a", "b")
         assert calls == []
-        assert index.required["default"] == frozenset({"a", "b"})
+        assert index.required["default"] == ("a", "b")
         assert len(calls) == 1
         assert index == GraphIndex(["a", "b"], [edge], outputs)
 
@@ -873,7 +873,7 @@ class TestGraphIndex:
         assert index.incoming["b"][0].source == "a"
         assert index.outgoing["a"][0].target == "b"
         assert set(index.outputs) == {"default", "extra"}
-        assert index.required == {"default": {"a", "b"}, "extra": {"c"}}
+        assert index.required == {"default": ("a", "b"), "extra": ("c",)}
 
     def test_cycle_names_only_the_nodes_on_the_cycle(self):
         src = ModuleNode(id="src", name="fetch")

@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING
 from riko.bado._backend import async_sleep, isasync
 from riko.bado._backend import run as async_run
 from riko.bado.itertools import alist, async_map
+from riko.base._config import get_worker_cnt
 from riko.base._paths import get_path
 from riko.definitions._workflow_definition import normalize_workflow
-from riko.execution._pools import get_worker_cnt
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
 from riko.runtime._pipeline import Pipeline
@@ -122,7 +122,7 @@ def baseline_threads() -> list[None]:
 
 
 def baseline_procs() -> list[None]:
-    workers = get_worker_cnt(length, False)
+    workers = get_worker_cnt(length, threads=False)
     chunksize = get_chunksize(length, workers)
     pool = Pool(workers)
     return list(pool.imap_unordered(sleep, iterable, chunksize=chunksize))

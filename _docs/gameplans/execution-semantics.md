@@ -884,6 +884,8 @@ Bound concurrency rather than spawning work proportional to source size. Backpre
 
 `with_execution(concurrency=N)` is a per-execution ceiling, not a per-node allowance: the eligible nodes of one execution share at most `N` concurrent workers, so total parallelism never scales with graph size. A permit is held only while a callable runs and is released before any channel send or reorder-buffer wait, so a blocked producer can never starve the consumer that would unblock it. How the ceiling is apportioned across stages is a planner decision that defaults to one shared pool; per-stage allocation may arrive with the planner but never as a node-level concurrency knob. The per-call budget in the current async primitives is an implementation detail the execution layer wraps, not the contract.
 
+Open decision (triaged 2026-10-16): plan reuse across runs. `riko/runtime/_run.py` builds a fresh `ExecutionPlan` (`from_workflow`) on every `iter`/`aiter`, so module resolution and each node's prepared call are redone per run; on a two-module pipeline that is about 98% of a small run's fixed cost. Caching the plan per `Pipeline` removes it, but a registry `register`/`reset` must then invalidate the cached plan (a generation counter on the dispatcher is the likely shape). Decide alongside the per-run seed and `Pipeline.open()` work, which reshapes the same entry points.
+
 ### 6.2 Ordering
 
 ```python
@@ -903,6 +905,8 @@ The current `async_map()` documentation/implementation discrepancy must be corre
 ### 6.3 Reorder buffer
 
 Ordered concurrent execution uses a bounded reorder buffer. When the buffer fills, producers/workers pause until missing earlier positions permit progress. Ordering is never silently relaxed.
+
+**Open gap (R7, 2026-10-20).** The sync pool (`_map_ordered` in `riko/execution/_pools.py`) already slides its window, but async `async_map_ordered_stream` still maps fixed `limit + buffer` batches: one slow item holds back every result in its batch and stops new work from starting. A sliding window needs worker tasks alive across a `yield`. On the default async processor path (`_aprocess_stream`) those tasks would sit in the consumer's task, which the abandoned-iteration constraint in §6.5 forbids. An attempt over `_pool_stream` broke a bare `break`, `afirst`, and plain-exception propagation. So the port waits for R7's dedicated-task hosting. Tripwire: `tests/internal/test_io.py::TestAsyncMapStream::test_ordered_yields_ready_results_while_a_later_item_runs`.
 
 ### 6.4 Cancellation
 

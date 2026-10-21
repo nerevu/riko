@@ -1,151 +1,167 @@
 # vim: sw=4:ts=4:expandtab
 """
-Worker pools for per-item work in synchronous executions.
+Worker pool lifetime for per-item work in synchronous executions.
 
-An execution opens a thread or process pool to map items across workers and sized
-from the source length. Each pool is held by a handle that releases it once.
+An execution maps a loopable node's items across one shared thread or process pool. It
+pulls its source no further ahead than the pool can take.
 """
 
 from __future__ import annotations
 
-from multiprocessing import Pool as CPUPool
-from multiprocessing import cpu_count
-from multiprocessing.dummy import Pool as ThreadPool
+from collections import deque
 from multiprocessing.pool import Pool as CPUPoolType
 from multiprocessing.pool import ThreadPool as ThreadPoolType
-from typing import TYPE_CHECKING
+from queue import SimpleQueue
+from typing import TYPE_CHECKING, Self
 
-from riko.base.exceptions import PipelineStateError
-from riko.types._enums import Executor
+from attrs import define, field
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable, Iterator
+    from multiprocessing.pool import ApplyResult
+    from types import TracebackType
 
 type AnyPool = ThreadPoolType | CPUPoolType
-type PoolFactory = Callable[..., AnyPool]
 
-__all__ = ["AnyPool", "PoolFactory", "PoolHandle", "get_worker_cnt", "open_pool"]
-
-
-_POOLS: dict[Executor, PoolFactory] = {
-    Executor.THREAD: ThreadPool,
-    Executor.PROCESS: CPUPool,
-}
+__all__ = ["AnyPool"]
 
 
-def get_worker_cnt(length: int, threads: bool | None = True) -> int:
+@define(frozen=True, slots=True)
+class _Failure:
+    """Carries a worker's error back to the consuming thread."""
+
+    error: BaseException
+
+
+def _map_ordered[T, R](
+    pool: AnyPool, func: Callable[[T], R], source: Iterable[T], window: int
+) -> Iterator[R]:
+    """Unlike ``Pool.imap``, maps in source order and pulls at most ``window`` ahead."""
+    pending: deque[ApplyResult[R]] = deque()
+
+    for item in source:
+        pending.append(pool.apply_async(func, (item,)))
+
+        if len(pending) >= window:
+            yield pending.popleft().get()
+
+    while pending:
+        yield pending.popleft().get()
+
+
+def _map_unordered[T, R](
+    pool: AnyPool, func: Callable[[T], R], source: Iterable[T], window: int
+) -> Iterator[R]:
+    """Unlike ``imap``, maps in completion order and pulls at most ``window`` ahead."""
+    done: SimpleQueue[R | _Failure] = SimpleQueue()
+    pending = 0
+
+    def take() -> R:
+        if isinstance(value := done.get(), _Failure):
+            raise value.error
+
+        return value
+
+    def submit(item: T) -> None:
+        pool.apply_async(
+            func,
+            (item,),
+            callback=done.put,
+            error_callback=lambda error: done.put(_Failure(error)),
+        )
+
+    for item in source:
+        submit(item)
+        pending += 1
+
+        if pending >= window:
+            pending -= 1
+            yield take()
+
+    for _ in range(pending):
+        yield take()
+
+
+@define(eq=False)
+class _PoolLifetime:
     """
-    Computes a pool size, capped at the core count (doubled for threads).
+    Owns an execution's shared worker pool and decides how it is released.
 
-    Args:
-
-        length: The number of items to spread across the pool, or zero when
-            unknown.
-        threads: Whether the pool uses threads rather than processes.
-
-    Returns:
-
-        The worker count.
-
-    """
-    multiplier = 2 if threads else 1
-    maximum = cpu_count() * multiplier
-    return min(length, maximum) if length else maximum
-
-
-class PoolHandle:
-    """
-    Holds a worker pool until its first ``close``/``terminate`` releases it.
-
-    A released handle goes falsy, and a repeated release does nothing.
+    The pool waits out its pending work only when every mapped stream ran to exhaustion
+    and no error is propagating. Otherwise in-flight and read-ahead work is immediately
+    stopped, so an early-closed or failed run never waits on it.
 
     Examples:
 
         Basic usage::
 
-            >>> from riko import Executor
-            >>> from riko.execution._pools import open_pool
+            >>> from multiprocessing.pool import ThreadPool
+            >>> from riko.execution._pools import _PoolLifetime
             >>>
-            >>> handle = open_pool(Executor.THREAD, 2)
-            >>> handle.require_pool().map(str, [1, 2])
-            ['1', '2']
-            >>> handle.close()
-            >>> bool(handle)
-            False
+            >>> with _PoolLifetime(ThreadPool(2), 2) as lifetime:
+            ...     list(lifetime.flat_map(lambda x: [x, x], [1, 2], ordered=True))
+            [1, 1, 2, 2]
 
     """
 
-    def __init__(self, pool: AnyPool) -> None:
-        self.pool: AnyPool | None = pool
+    pool: AnyPool
+    window: int
+    abandoned: bool = field(default=False, init=False)
+    _active: int = field(default=0, init=False)
 
-    def __bool__(self) -> bool:
-        return self.pool is not None
+    def __enter__(self) -> Self:
+        return self
 
-    def _release(self, stop: Callable[[AnyPool], None]) -> None:
-        if pool := self.pool:
-            stop(pool)
-            pool.join()
-            self.pool = None
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        if exc_type is None and not self.abandoned and not self._active:
+            self.close()
+        else:
+            self.terminate()
 
     def close(self) -> None:
         """Waits out the pending work, then releases the pool."""
-        self._release(CPUPoolType.close)
+        self.pool.close()
+        self.pool.join()
 
     def terminate(self) -> None:
         """Stops the pending work at once, then releases the pool."""
-        self._release(CPUPoolType.terminate)
+        self.pool.terminate()
+        self.pool.join()
 
-    def require_pool(self) -> AnyPool:
+    def flat_map[T](
+        self, func: Callable[[T], list[T]], source: Iterable[T], *, ordered: bool
+    ) -> Iterator[T]:
         """
-        Requires the pool the handle still holds.
+        Maps ``func`` over ``source`` on the pool and flattens each item's results.
 
-        Returns:
+        The source is pulled by the consumer, never ahead of it by more than the pool's
+        width. Mapped nodes can share one pool and chain freely.
 
-            The live pool.
+        Args:
 
-        Raises:
+            func: Collects one item's results.
+            source: The items to map.
+            ordered: Whether results keep source order.
 
-            PipelineStateError: If the pool was already released.
+        Yields:
+
+            Each result item, in source order when ``ordered`` and in
+            completion order otherwise.
 
         """
-        if (pool := self.pool) is None:
-            raise PipelineStateError("closed", "reuse", subject="worker pool")
+        mapper = _map_ordered if ordered else _map_unordered
+        self._active += 1
 
-        return pool
-
-
-def open_pool(executor: Executor, workers: int) -> PoolHandle:
-    """
-    Builds a worker pool behind a handle that releases it.
-
-    Args:
-
-        executor: The thread or process executor to open a pool for.
-        workers: The pool size.
-
-    Returns:
-
-        A handle over the new pool.
-
-    Raises:
-
-        ValueError: If ``executor`` is ``INLINE`` or ``AUTO``, which have no worker
-            pool.
-
-    Examples:
-
-        Basic usage::
-
-            >>> from riko import Executor
-            >>> from riko.execution._pools import open_pool
-            >>>
-            >>> handle = open_pool(Executor.THREAD, 2)
-            >>> handle.pool
-            <multiprocessing.pool.ThreadPool state=RUN pool_size=2>
-            >>> handle.close()
-
-    """
-    if not (factory := _POOLS.get(executor)):
-        raise ValueError(f"The {executor.value} executor has no worker pool")
-
-    return PoolHandle(factory(workers))
+        try:
+            for results in mapper(self.pool, func, source, self.window):
+                yield from results
+        except GeneratorExit:
+            self.abandoned = True
+            raise
+        else:
+            self._active -= 1

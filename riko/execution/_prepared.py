@@ -11,12 +11,12 @@ dispatcher, or registry.
 from __future__ import annotations
 
 from functools import cached_property, partial
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, NamedTuple, Self
 
 from attrs import define, field
 from typing_extensions import TypeIs
 
-from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
+from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._nodes import (
     FROZEN_CONF,
     ModuleNode,
@@ -39,10 +39,10 @@ from riko.types._workflow import parse_port
 from riko.types._wrappers import build_call, require_single_output
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterator, Mapping
 
     from riko.definitions._nodes import ConfInput
-    from riko.types._workflow import Endpoint, GraphEdge, GraphIndex, NodeId
+    from riko.types._workflow import Endpoint, GraphEdge, GraphIndex, NodeId, ParsedPort
     from riko.types._wrappers import (
         AnyModuleWrapper,
         AsyncModuleWrapper,
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
         PreparedCall,
         SyncModuleWrapper,
     )
-    from riko.types.modules import CallOptions, ModuleType
+    from riko.types.modules import CallOptions
 
 type PreparedNodes = FrozenDict[NodeId, PreparedNode]
 type ResolvedModules = FrozenDict[NodeId, ResolvedModule]
@@ -62,12 +62,45 @@ _is_single = validator_from_require(require_single_output, optional=True)
 _rmodule_conf_converter = conf_converter(what="ModuleNode 'conf'")
 
 
-def _validate_distinct_pipes(
+def _is_distinct(
     instance: ResolvedModule, _: object, value: AsyncModuleWrapper | None
 ) -> None:
     if value is not None and value is instance.sync_pipe:
         msg = f"{instance.name!r} uses one callable for both sync and async"
         raise InvalidPipelineError(msg)
+
+
+def _has_pipe(
+    instance: ResolvedModule, _: object, value: AsyncModuleWrapper | None
+) -> None:
+    if value is None and instance.sync_pipe is None:
+        msg = f"{instance.name!r} has neither a sync nor an async callable"
+        raise InvalidPipelineError(msg)
+
+
+_MODULE_FLAGS = ("loopable", "sequential_inputs")
+
+
+def _has_flag(pipe: AnyModuleWrapper, flag: str) -> bool:
+    return getattr(pipe, flag, False) is True
+
+
+def _has_flag_mismatch(
+    flag: str, sync_pipe: SyncModuleWrapper, async_pipe: AsyncModuleWrapper
+) -> bool:
+    return _has_flag(sync_pipe, flag) != _has_flag(async_pipe, flag)
+
+
+def _is_consistent(
+    instance: ResolvedModule, _: object, value: AsyncModuleWrapper | None
+) -> None:
+    if (sync_pipe := instance.sync_pipe) is not None and value is not None:
+        _diff = partial(_has_flag_mismatch, sync_pipe=sync_pipe, async_pipe=value)
+
+        if differing := tuple(filter(_diff, _MODULE_FLAGS)):
+            msg = f"{instance.name!r} has sync and async callables that disagree on "
+            msg += ", ".join(repr(flag) for flag in differing)
+            raise InvalidPipelineError(msg)
 
 
 @define(frozen=True, slots=True)
@@ -84,9 +117,9 @@ class ResolvedModule:
 
     Raises:
 
-        InvalidPipelineError: If either resolved callable is a multi-output
-            splitter, which no execution can run yet, or one callable fills
-            both slots.
+        InvalidPipelineError: If neither callable is given, either resolved callable is
+            a splitter, one callable fills both slots, or the two callables disagree on
+            whether the module is loopable or reads its input streams one at a time.
 
     Examples:
 
@@ -104,7 +137,7 @@ class ResolvedModule:
     conf: FrozenConf = field(default=FROZEN_CONF, converter=_rmodule_conf_converter)
     sync_pipe: SyncModuleWrapper | None = field(default=None, validator=_is_single)
     async_pipe: AsyncModuleWrapper | None = field(
-        default=None, validator=[_is_single, _validate_distinct_pipes]
+        default=None, validator=[_is_single, _is_distinct, _has_pipe, _is_consistent]
     )
 
     @classmethod
@@ -149,47 +182,25 @@ class ResolvedModule:
 
     def select_sync(self) -> AnyModuleWrapper:
         """
-        Chooses the callable a synchronous execution runs, preferring the native one.
+        Chooses the callable a synchronous execution runs.
 
         Returns:
 
-            The synchronous pipe, or else the asynchronous pipe to adapt.
-
-        Raises:
-
-            UnsupportedModuleError: If neither callable was resolved.
+            The synchronous pipe, or the asynchronous pipe to adapt.
 
         """
-        if self.sync_pipe is not None:
-            result: AnyModuleWrapper = self.sync_pipe
-        elif self.async_pipe is not None:
-            result = self.async_pipe
-        else:
-            raise UnsupportedModuleError(self.name, "it has no interfaces")
-
-        return result
+        return self.select_async() if self.sync_pipe is None else self.sync_pipe
 
     def select_async(self) -> AnyModuleWrapper:
         """
-        Chooses the callable an asynchronous execution runs, preferring the native one.
+        Chooses the callable an asynchronous execution runs.
 
         Returns:
 
-            The asynchronous pipe, or else the synchronous pipe to adapt.
-
-        Raises:
-
-            UnsupportedModuleError: If neither callable was resolved.
+            The asynchronous pipe, or the synchronous pipe to adapt.
 
         """
-        if self.async_pipe is not None:
-            result: AnyModuleWrapper = self.async_pipe
-        elif self.sync_pipe is not None:
-            result = self.sync_pipe
-        else:
-            raise UnsupportedModuleError(self.name, "it has no interfaces")
-
-        return result
+        return self.select_sync() if self.async_pipe is None else self.async_pipe
 
     def is_async_pipe(self, pipe: ModuleWrapper | None) -> TypeIs[AsyncModuleWrapper]:
         """
@@ -207,32 +218,40 @@ class ResolvedModule:
         return self.async_pipe is not None and pipe is self.async_pipe
 
     @property
-    def pipe(self) -> AnyModuleWrapper | None:
-        return self.sync_pipe if self.async_pipe is None else self.async_pipe
-
-    @property
-    def module_type(self) -> ModuleType | None:
-        """
-        Reports the declared module type of the resolved implementation.
-
-        Returns:
-
-            The ``processor``/``operator``/``splitter`` type its pipe was decorated
-            with, or ``None`` when no resolved pipe carries one.
-
-        """
-        return None if self.pipe is None else getattr(self.pipe, "type", None)
-
-    @property
     def loopable(self) -> bool:
         """
-        Whether the implementation runs one item at a time.
+        Whether the module runs one item at a time.
 
-        A loopable module gives the same results whether it is called once with
-        the whole stream or once per item, so its items may be spread across
-        workers.
+        A loopable module gives the same results whether it is called once with the
+        whole stream or once per item. Its items may be spread across workers.
         """
-        return self.pipe is not None and getattr(self.pipe, "loopable", False) is True
+        return _has_flag(self.select_async(), "loopable")
+
+    @property
+    def sequential_inputs(self) -> bool:
+        """
+        Whether the module reads its input streams one at a time.
+
+        Its input streams never hold their node threads at the same time.
+        """
+        return _has_flag(self.select_async(), "sequential_inputs")
+
+
+class PreparedInterface(NamedTuple):
+    """
+    The pipe a sync or async execution runs for a node, with its call prepared once.
+
+    Attributes:
+
+        pipe: The callable that execution runs.
+        call: The pipe with the node's configuration, options, and extras bound.
+        native: Whether ``pipe`` runs natively for the execution, without an adapter.
+
+    """
+
+    pipe: AnyModuleWrapper
+    call: PreparedCall
+    native: bool
 
 
 _build_is_module = partial(validator_from_require, require_instance, ResolvedModule)
@@ -247,12 +266,22 @@ class PreparedNode:
     Attributes:
 
         node: The ``Workflow`` module node this was resolved from.
+
         module: The node's resolved implementation.
+
         embed: The resolved module a loop node runs per item, else ``None``.
+
         incoming: The stream edges that target the node.
+
+        input_ports: The parsed target port of each incoming stream edge.
+
         extras: The names of the extra inputs delivered with each item: a named
             input stream under its port name, positional streams as ``others``, bound
             resources as ``resources``, and a loop's embed as ``embed``, in that order.
+
+        sync_interface: The pipe a synchronous execution runs, with its call.
+
+        async_interface: The pipe an asynchronous execution runs, with its call.
 
     Examples:
 
@@ -295,60 +324,104 @@ class PreparedNode:
     def loopable(self) -> bool:
         return self.module.loopable
 
+    @property
+    def sequential_inputs(self) -> bool:
+        return self.module.sequential_inputs
+
+    @cached_property
+    def input_ports(self) -> tuple[ParsedPort, ...]:
+        """The parsed target port of each incoming stream edge, in edge order."""
+        return tuple(parse_port(edge.target_port) for edge in self.incoming)
+
     @cached_property
     def extras(self) -> ExtraNames:
         """The names of the extra inputs delivered with each item, in call order."""
-        node = self.node
-        ports = [parse_port(edge.target_port) for edge in self.incoming]
-        named = [port.name for port in ports if port.name is not None]
-        has_others = any(port.is_positional for port in ports)
+        named = [port.name for port in self.input_ports if port.name is not None]
+        has_others = any(port.is_positional for port in self.input_ports)
         others = ["others"] if has_others else []
-        resources = ["resources"] if node.resources else []
-        embed = [] if node.embed is None else ["embed"]
+        resources = ["resources"] if self.node.resources else []
+        embed = [] if self.node.embed is None else ["embed"]
         return (*named, *others, *resources, *embed)
 
-    def _build_call(self, pipe: ModuleWrapper | None) -> PreparedCall | None:
-        if pipe is None:
-            call = None
-        else:
-            conf, options = self.embed_or_self_conf, self.options.kwargs
-            call = build_call(pipe, *self.extras, conf=conf, **options)
-
-        return call
+    @cached_property
+    def has_secondary_input_streams(self) -> bool:
+        """Whether a stream reaches the node on a port other than its default one."""
+        return any(not port.is_default for port in self.input_ports)
 
     @cached_property
-    def sync_call(self) -> PreparedCall | None:
-        """The synchronous pipe's call, prepared once, or ``None`` without one."""
-        return self._build_call(self.module.sync_pipe)
-
-    @cached_property
-    def async_call(self) -> PreparedCall | None:
-        """The asynchronous pipe's call, prepared once, or ``None`` without one."""
-        return self._build_call(self.module.async_pipe)
-
-    def select_call(self, pipe: ModuleWrapper) -> PreparedCall:
+    def is_mappable(self) -> bool:
         """
-        Chooses the prepared call matching ``pipe``, the sync or async one selected.
+        Whether the node's items may run one at a time across workers.
+
+        Only a loopable node qualifies, and only when no secondary input stream
+        reaches it: such a stream is shared by the whole call and cannot be split
+        per item.
+        """
+        return self.loopable and not self.has_secondary_input_streams
+
+    def is_thread_holder(self, *, mapped: bool) -> bool:
+        """
+        Reports whether an async run holds a thread while the node reads upstream.
+
+        Only a node without an async implementation does. When items are mapped across
+        workers, a loopable node with no secondary input stream instead runs each item
+        after it has been read.
 
         Args:
 
-            pipe: The pipe ``select_sync`` or ``select_async`` chose.
+            mapped: Whether the execution maps loopable nodes' items across workers.
 
         Returns:
 
-            The asynchronous pipe's call when ``pipe`` is it, else the synchronous one.
-
-        Raises:
-
-            UnsupportedModuleError: If the module has no pipe matching ``pipe``.
+            ``True`` when the node holds a thread while it reads upstream.
 
         """
-        is_async = self.module.is_async_pipe(pipe)
+        return self.module.async_pipe is None and not (mapped and self.is_mappable)
 
-        if (call := self.async_call if is_async else self.sync_call) is None:
-            raise UnsupportedModuleError(self.module.name, "it has no such interface")
+    def _build_native(self, pipe: AnyModuleWrapper) -> PreparedInterface:
+        conf, options = self.embed_or_self_conf, self.options.kwargs
+        call = build_call(pipe, *self.extras, conf=conf, **options)
+        return PreparedInterface(pipe, call, native=True)
 
-        return call
+    @cached_property
+    def sync_interface(self) -> PreparedInterface:
+        """
+        The pipe a synchronous execution runs, with its call prepared once.
+
+        It is the synchronous pipe when the module has one, else the asynchronous
+        pipe for the execution to adapt.
+        """
+        if (pipe := self.module.sync_pipe) is None:
+            interface = self.async_interface._replace(native=False)
+        else:
+            interface = self._build_native(pipe)
+
+        return interface
+
+    @cached_property
+    def async_interface(self) -> PreparedInterface:
+        """
+        The pipe an asynchronous execution runs, with its call prepared once.
+
+        It is the asynchronous pipe when the module has one, else the synchronous
+        pipe for the execution to adapt.
+        """
+        if (pipe := self.module.async_pipe) is None:
+            interface = self.sync_interface._replace(native=False)
+        else:
+            interface = self._build_native(pipe)
+
+        return interface
+
+    @cached_property
+    def is_sync_mappable(self) -> bool:
+        """
+        Whether a synchronous run may map the node's items across workers.
+
+        Only a mappable node with a native synchronous pipe qualifies. An adapted
+        asynchronous pipe streams its whole input in one call.
+        """
+        return self.is_mappable and self.sync_interface.native
 
 
 _rmodule_freezer = instances_freezer(ResolvedModule, "ExecutionPlan module")
@@ -502,9 +575,9 @@ class ExecutionPlan:
         }
         return FrozenDict.from_frozen(prepared)
 
-    def require_output(self, output: str) -> tuple[Endpoint, frozenset[str]]:
+    def require_output(self, output: str) -> Endpoint:
         """
-        Requires a default-port workflow output, with the nodes it runs.
+        Requires a default-port workflow output.
 
         Args:
 
@@ -512,7 +585,7 @@ class ExecutionPlan:
 
         Returns:
 
-            The output's endpoint and the ids of the nodes its subgraph runs.
+            The output's endpoint.
 
         Raises:
 
@@ -524,18 +597,77 @@ class ExecutionPlan:
             raise InvalidPipelineError(f"workflow has no workflow output {output!r}")
 
         require_default_output_port(endpoint.port, f"workflow output {output!r}")
-        return endpoint, self.index.required[output]
+        return endpoint
 
-    def require_seed_target(self, required: frozenset[str]) -> str:
+    def get_thread_demand(self, output: str, *, mapped: bool) -> int:
         """
-        Requires the one node in ``required`` whose default input is open to a seed.
+        Computes how many node threads an async run of ``output`` may hold at once.
 
-        A node's default input is open when no incoming stream edge targets its bare
-        default input port. A seed needs exactly one such node.
+        A node without an async implementation holds a thread while it reads its input
+        streams. Unless its items are mapped, it reads them one at a time and needs one
+        thread more than the max number of threads any one of its input streams holds.
+
+        Nodes with a module that reads its input streams one at a time, such as
+        ``union`` or ``join``, need only the max any one input stream holds.
+        Otherwise a node may read its input streams together, so it needs as many
+        threads as the sum of its input streams.
 
         Args:
 
-            required: The node ids that the selected workflow output's subgraph runs.
+            output: The name of the workflow output being run.
+            mapped: Whether the execution maps loopable nodes' items across workers.
+
+        Returns:
+
+            The most node threads held at once while the workflow output is read.
+
+        Examples:
+
+            >>> from riko import Endpoint, Workflow
+            >>> from riko.ext import ModuleNode, StreamEdge
+            >>> from riko.modules.hash import pipe
+            >>>
+            >>> a, b = ModuleNode(id="a", name="hash"), ModuleNode(id="b", name="hash")
+            >>> flow = Workflow(
+            ...     nodes=[a, b],
+            ...     edges=[StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))],
+            ...     outputs={"default": Endpoint("b", "out")},
+            ... )
+            >>> module = ResolvedModule("hash", sync_pipe=pipe)
+            >>> plan = ExecutionPlan(workflow=flow, modules={"a": module, "b": module})
+            >>> plan.get_thread_demand("default", mapped=False)
+            2
+            >>> plan.get_thread_demand("default", mapped=True)
+            0
+
+        """
+        demand: dict[str, int] = {}
+
+        for node_id in self.index.required[output]:
+            upstream = [demand[source] for source in self.index.upstream[node_id]]
+            node = self.nodes[node_id]
+            max_count = max(upstream, default=0)
+
+            if node.is_thread_holder(mapped=mapped):
+                demand[node_id] = max_count + 1
+            elif node.sequential_inputs:
+                demand[node_id] = max_count
+            else:
+                demand[node_id] = sum(upstream)
+
+        return max(demand.values(), default=0)
+
+    def require_seed_target(self, output: str) -> str:
+        """
+        Requires the one node ``output`` runs whose default input is open to a seed.
+
+        A node's default input is open when every stream edge reaching it, if any,
+        targets a positional ``in:<n>`` port. An edge into its default port or a named
+        ``in:<name>`` port closes it. A seed needs exactly one open node.
+
+        Args:
+
+            output: The name of the workflow output being run.
 
         Returns:
 
@@ -543,11 +675,10 @@ class ExecutionPlan:
 
         Raises:
 
-            InvalidPipelineError: If the required subgraph has no single open input.
+            InvalidPipelineError: If the output's subgraph has no single open input.
 
         """
-        roots = required.intersection(self.index.order)
-        open_roots = [root for root in roots if self.index.is_open(root)]
+        open_roots = list(filter(self.index.is_open, self.index.required[output]))
 
         if (count := len(open_roots)) == 1:
             target = open_roots[0]
@@ -556,6 +687,32 @@ class ExecutionPlan:
             raise InvalidPipelineError(msg)
 
         return target
+
+    def gen_build_order[V](
+        self, output: str, *, seed: V | None = None
+    ) -> Iterator[tuple[str, V | None]]:
+        """
+        Pairs each node ``output`` runs, in build order, with the seed it takes.
+
+        Args:
+
+            output: The name of the workflow output being run.
+            seed: The seed stream for the workflow output's open input, if any.
+
+        Yields:
+
+            Each node id the output runs paired with the seed it takes, or ``None``.
+
+        Raises:
+
+            InvalidPipelineError: If a seed is given and the output's subgraph has no
+                single open input.
+
+        """
+        seed_target = None if seed is None else self.require_seed_target(output)
+
+        for node_id in self.index.required[output]:
+            yield node_id, seed if node_id == seed_target else None
 
     def validate(self) -> None:
         """
@@ -585,4 +742,4 @@ class ExecutionPlan:
             raise InvalidPipelineError(msg)
 
 
-__all__ = ["ExecutionPlan", "PreparedNode", "ResolvedModule"]
+__all__ = ["ExecutionPlan", "PreparedInterface", "PreparedNode", "ResolvedModule"]

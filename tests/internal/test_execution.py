@@ -1,9 +1,8 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides internal tests for executions, resources, pools, and mapping policy."""
+"""Provides internal tests for executions and their resources."""
 
 from __future__ import annotations
 
-from collections import Counter
 from contextlib import (
     AbstractAsyncContextManager,
     AbstractContextManager,
@@ -13,10 +12,8 @@ from contextlib import (
 )
 from dataclasses import dataclass
 from functools import partial
-from itertools import pairwise
-from multiprocessing import cpu_count
 from threading import Event as ThreadEvent
-from threading import Thread, get_ident
+from threading import get_ident
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import pytest
@@ -28,51 +25,31 @@ from riko.bado._backend import (
     create_task_group,
     fail_after,
 )
-from riko.base._config import settings as config
 from riko.base.exceptions import (
     InvalidPipelineError,
     PipelineStateError,
     ResourceInterpretationWarning,
 )
 from riko.definitions._context import Context
-from riko.definitions._module_definition import ModuleDefinition
-from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._resource_definition import (
     OneShotResource,
     Resource,
     ReusableResource,
 )
-from riko.definitions._settings import ExecutionSettings
-from riko.definitions._workflow_definition import Workflow
-from riko.execution import _sync_execution
 from riko.execution._async_execution import AsyncExecution
-from riko.execution._concurrency import (
-    AsyncPolicy,
-    SyncPolicy,
-    is_mappable,
-    resolve_async_policy,
-    resolve_sync_policy,
-)
-from riko.execution._pools import PoolHandle, get_worker_cnt, open_pool
-from riko.execution._prepared import ExecutionPlan
 from riko.execution._resource_plan import aclose_resource
 from riko.execution._resource_view import ResourceView
 from riko.execution._sync_execution import SyncExecution
 from riko.modules._decorators import operator
-from riko.runtime._resolver import dispatcher
-from riko.types._enums import Executor
+from riko.types._io import is_closeable
 from riko.types._resource import FactoryKind, get_factory_kind
-from riko.types._workflow import Endpoint
-from tests import async_test
-from tests._execution import build_dispatcher
+from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import Awaitable, Generator
 
-    from riko.types._events import EventSink
     from riko.types._resource import LifecycleFactory, ValueFactory
     from riko.types._streams import Stream
-    from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 
 class _SyncClient:
@@ -238,36 +215,6 @@ def _test_metadata(
 
     if classification is not None:
         assert resource.kind is classification
-
-
-ITEMS = [{"x": x} for x in range(20)]
-
-
-def _workflow(nodes, edges=(), resources=()) -> Workflow:
-    last = nodes[-1].id
-    outputs = {"default": Endpoint(last, "out")}
-    return Workflow(nodes=nodes, outputs=outputs, edges=edges, resources=resources)
-
-
-def _chain(*nodes):
-    pairs = pairwise(nodes)
-    edges = [StreamEdge(Endpoint(a.id, "out"), Endpoint(b.id, "in")) for a, b in pairs]
-    return _workflow(list(nodes), edges=tuple(edges))
-
-
-def _loopable(func) -> Any:
-    func.loopable = True
-    func.type = "processor"
-    return func
-
-
-def _hash_plan(*names):
-    nodes = [ModuleNode(id=f"n{i}", name=name) for i, name in enumerate(names)]
-    return ExecutionPlan.from_workflow(_chain(*nodes), dispatcher)
-
-
-def _key(item):
-    return tuple(sorted(item.items()))
 
 
 class TestSyncExecution:
@@ -538,10 +485,10 @@ class TestAsyncExecution:
         assert isinstance(info.value.__cause__, ValueError)
 
     @async_test
-    async def test_async_shutdown_budget_expiry_is_grouped_with_primary_error(
+    async def test_async_shutdown_timeout_expiry_is_grouped_with_primary_error(
         self,
     ) -> None:
-        # Exhausting the shutdown budget during teardown is a cleanup failure
+        # Exhausting the shutdown timeout during teardown is a cleanup failure
         # reported beside the execution's own error, not a replacement for it.
         async def slow() -> None:
             await async_sleep(3600)
@@ -588,7 +535,58 @@ class _BadClient:
         raise RuntimeError("cleanup failed")
 
 
+def _acquire_twice(resource: Resource[Any]) -> list[object]:
+    """Acquires ``resource`` twice in one execution, keeping each value or error."""
+    outcomes: list[object] = []
+
+    with SyncExecution() as execution:
+        for _ in range(2):
+            try:
+                outcomes.append(execution.acquire(resource))
+            except TypeError as error:
+                outcomes.append(error)
+
+    return outcomes
+
+
+async def _aacquire_twice(resource: Resource[Any]) -> list[object]:
+    """Acquires ``resource`` twice in an async execution, keeping each outcome."""
+    outcomes: list[object] = []
+
+    async with AsyncExecution() as execution:
+        for _ in range(2):
+            try:
+                outcomes.append(await execution.aacquire(resource))
+            except TypeError as error:
+                outcomes.append(error)
+
+    return outcomes
+
+
+async def _value() -> str:
+    return "value"
+
+
+def _build_awaitable() -> Awaitable[str]:
+    return _value()
+
+
+@contextmanager
+def _needs_arg(ctx: object) -> Generator[object]:
+    yield ctx
+
+
 class TestResourceAcquisition:
+    @skipif_issync
+    def test_awaitable_from_sync_factory_is_awaited(self) -> None:
+        resource = Resource.from_factory(_build_awaitable, cleanup=False)
+        assert _acquire_twice(resource) == ["value", "value"]
+
+    def test_failed_lifecycle_factory_replays_its_error(self) -> None:
+        first, second = _acquire_twice(Resource.from_lifecycle(_needs_arg))
+        assert isinstance(first, TypeError)
+        assert second is first
+
     @pytest.mark.parametrize("client_class", CLIENT_CLASSES)
     def test_sync_acquire_external_resource_is_borrowed(
         self, client_class: type[_SyncClient | _AsyncClient]
@@ -776,6 +774,17 @@ ACLOSE_CASES = [
 
 
 class TestAsyncResourceAcquisition:
+    @async_test
+    async def test_async_awaitable_from_sync_factory_is_awaited(self) -> None:
+        resource = Resource.from_factory(_build_awaitable, cleanup=False)
+        assert await _aacquire_twice(resource) == ["value", "value"]
+
+    @async_test
+    async def test_async_failed_lifecycle_factory_replays_its_error(self) -> None:
+        first, second = await _aacquire_twice(Resource.from_lifecycle(_needs_arg))
+        assert isinstance(first, TypeError)
+        assert second is first
+
     @pytest.mark.parametrize("client_class", CLIENT_CLASSES)
     @async_test
     async def test_async_acquire_external_resource_is_borrowed(
@@ -1211,6 +1220,20 @@ VALUE_CASES = [
 ]
 
 
+def _sync_generator():
+    yield _SCALAR
+
+
+async def _async_generator():
+    yield _SCALAR
+
+
+GENERATOR_FUNCS = [
+    pytest.param(_sync_generator, id="sync"),
+    pytest.param(_async_generator, id="async"),
+]
+
+
 class TestValues:
     @pytest.mark.parametrize("case", VALUE_CASES)
     def test_constructor_contract(self, case: ValueCase, request):
@@ -1318,6 +1341,14 @@ class TestValues:
                 async_contextmanager  # pyright: ignore[reportArgumentType]
             )
 
+    @pytest.mark.parametrize("func", GENERATOR_FUNCS)
+    def test_generator_object_points_to_from_lifecycle(self, func):
+        started = func()
+        assert is_closeable(started)
+
+        with pytest.raises(TypeError, match=r"generator object.*from_lifecycle"):
+            Resource(started)
+
 
 class TestResourceEcosystem:
     def test_context_with_resource_is_immutable_copy(self):
@@ -1384,548 +1415,3 @@ class TestResourceImmutability:
 
         with pytest.raises(AttributeError):
             resource.kind = FactoryKind.SYNC_GEN_FACTORY  # pyright: ignore[reportAttributeAccessIssue]
-
-
-class TestWorkerCnt:
-    def test_zero_length_uses_the_maximum(self) -> None:
-        assert get_worker_cnt(0) == cpu_count() * 2
-        assert get_worker_cnt(0, False) == cpu_count()
-
-    def test_small_length_caps_at_the_length(self) -> None:
-        assert get_worker_cnt(1) == 1
-        assert get_worker_cnt(1, False) == 1
-
-    def test_huge_length_caps_at_the_maximum(self) -> None:
-        assert get_worker_cnt(10_000) == cpu_count() * 2
-        assert get_worker_cnt(10_000, False) == cpu_count()
-
-
-@pytest.mark.slow
-class TestPoolHandle:
-    @pytest.mark.parametrize("release", ["close", "terminate"])
-    def test_release_frees_the_pool_once(self, release: str) -> None:
-        handle = open_pool(Executor.THREAD, 2)
-        assert handle
-
-        getattr(handle, release)()
-        assert handle.pool is None
-        assert not handle
-
-        getattr(handle, release)()
-        assert handle.pool is None
-
-    def test_require_pool_after_release_raises(self) -> None:
-        handle = open_pool(Executor.THREAD, 2)
-        handle.close()
-
-        match = "cannot reuse the worker pool in state 'closed'"
-        with pytest.raises(PipelineStateError, match=match):
-            handle.require_pool()
-
-
-class TestOpenPool:
-    @pytest.mark.slow
-    @pytest.mark.parametrize("executor", [Executor.THREAD, Executor.PROCESS])
-    def test_builds_a_pool(self, executor: Executor) -> None:
-        handle = open_pool(executor, 2)
-
-        try:
-            assert handle
-            assert getattr(handle.pool, "_processes") == 2  # noqa: B009
-        finally:
-            handle.close()
-
-    @pytest.mark.parametrize("executor", [Executor.INLINE, Executor.AUTO])
-    def test_poolless_executors_have_no_pool(self, executor: Executor) -> None:
-        with pytest.raises(ValueError, match=executor.value):
-            open_pool(executor, 2)
-
-
-class _Sink:
-    def emit(self, event: object) -> None:
-        pass
-
-
-class TestExecutionSettings:
-    def test_unknown_executor_lists_the_known_executors(self) -> None:
-        message = "ExecutionSettings 'executor': 'bogus'. Expected one of auto, inline"
-
-        with pytest.raises(ValueError, match=message):
-            ExecutionSettings(executor="bogus")
-
-    def test_settings_supply_the_event_sink_and_shutdown_budget(self) -> None:
-        sink, explicit = cast("EventSink", _Sink()), cast("EventSink", _Sink())
-        settings = ExecutionSettings(event_sink=sink, shutdown_timeout=1.5)
-        assert SyncExecution(settings=settings).events is sink
-        assert SyncExecution(events=explicit, settings=settings).events is explicit
-        assert AsyncExecution(settings=settings).shutdown_timeout == pytest.approx(1.5)
-
-
-SYNC_POLICIES = [
-    ({}, SyncPolicy(Executor.INLINE, None)),
-    ({"concurrency": 4}, SyncPolicy(Executor.THREAD, 4)),
-    ({"concurrency": 1}, SyncPolicy(Executor.INLINE, None)),
-    ({"executor": "inline"}, SyncPolicy(Executor.INLINE, None)),
-    ({"executor": "inline", "concurrency": 4}, SyncPolicy(Executor.INLINE, None)),
-    ({"executor": "thread", "concurrency": 3}, SyncPolicy(Executor.THREAD, 3)),
-    ({"executor": "process", "concurrency": 2}, SyncPolicy(Executor.PROCESS, 2)),
-    ({"executor": "thread"}, SyncPolicy(Executor.THREAD, 1)),
-    ({"executor": "process"}, SyncPolicy(Executor.PROCESS, 1)),
-    ({"concurrency": "auto"}, SyncPolicy(Executor.THREAD, get_worker_cnt(0))),
-    (
-        {"executor": "thread", "concurrency": "auto"},
-        SyncPolicy(Executor.THREAD, get_worker_cnt(0, threads=True)),
-    ),
-    (
-        {"executor": "process", "concurrency": "auto"},
-        SyncPolicy(Executor.PROCESS, get_worker_cnt(0, threads=False)),
-    ),
-    ({"executor": "inline", "concurrency": "auto"}, SyncPolicy(Executor.INLINE, None)),
-]
-
-
-ASYNC_POLICIES = [
-    ({}, AsyncPolicy(None, False)),
-    ({"concurrency": 4}, AsyncPolicy(4, False)),
-    ({"executor": "inline"}, AsyncPolicy(1, True)),
-    ({"executor": "inline", "concurrency": 3}, AsyncPolicy(3, True)),
-    ({"executor": "thread"}, AsyncPolicy(1, False)),
-    ({"concurrency": "auto"}, AsyncPolicy(config.concurrency_limit, False)),
-    (
-        {"executor": "inline", "concurrency": "auto"},
-        AsyncPolicy(config.concurrency_limit, True),
-    ),
-    ({"executor": "thread", "concurrency": 3}, AsyncPolicy(3, False)),
-]
-
-
-class TestMappingPolicy:
-    @pytest.mark.parametrize(("kwargs", "expected"), SYNC_POLICIES)
-    def test_sync_policy_table(self, kwargs, expected) -> None:
-        assert resolve_sync_policy(ExecutionSettings(**kwargs)) == expected
-
-    @pytest.mark.parametrize(("kwargs", "expected"), ASYNC_POLICIES)
-    def test_async_policy_table(self, kwargs, expected) -> None:
-        assert resolve_async_policy(ExecutionSettings(**kwargs)) == expected
-
-    def test_prepared_node_reports_loopable(self) -> None:
-        plan = _hash_plan("hash", "count")
-        assert plan.nodes["n0"].loopable is True
-        assert plan.nodes["n1"].loopable is False
-
-    def test_can_map_refuses_stream_valued_inputs(self) -> None:
-        node = _hash_plan("hash").nodes["n0"]
-        assert is_mappable(node, {"emit": True, "embed": len})
-        assert not is_mappable(node, {"side": iter(())})
-        assert not is_mappable(node, {"others": [iter(())]})
-
-    def test_async_policy_refuses_the_process_executor(self) -> None:
-        settings = ExecutionSettings(executor="process", concurrency=2)
-
-        with pytest.raises(
-            InvalidPipelineError, match="requires synchronous execution"
-        ):
-            resolve_async_policy(settings)
-
-
-def _run_sync(plan, settings=None, source=ITEMS):
-    kwargs = {} if settings is None else {"settings": settings}
-    execution = SyncExecution(**kwargs)
-    result: list = []
-
-    with execution:
-        result = list(execution.run(plan, source=source))
-
-    return result
-
-
-@pytest.fixture
-def opened(monkeypatch):
-    calls: list[tuple[Executor, int]] = []
-    original = _sync_execution.open_pool
-
-    def record(executor, workers):
-        calls.append((executor, workers))
-        return original(executor, workers)
-
-    monkeypatch.setattr(_sync_execution, "open_pool", record)
-    return calls
-
-
-@pytest.fixture
-def released(monkeypatch):
-    calls: list[str] = []
-    close, terminate = PoolHandle.close, PoolHandle.terminate
-
-    def record_close(self):
-        calls.append("close")
-        close(self)
-
-    def record_terminate(self):
-        calls.append("terminate")
-        terminate(self)
-
-    monkeypatch.setattr(PoolHandle, "close", record_close)
-    monkeypatch.setattr(PoolHandle, "terminate", record_terminate)
-    return calls
-
-
-def _loop_dispatcher():
-    def fakeloop(item, **_):
-        return iter([item])
-
-    up = cast("AsyncModuleWrapper", lambda item, **_: item)
-    return build_dispatcher(
-        ModuleDefinition(name="fakeloop", sync_pipe=_loopable(fakeloop)),
-        ModuleDefinition(name="up", async_pipe=up),
-    )
-
-
-class TestSyncConcurrency:
-    def test_sync_run_without_settings_opens_no_pool(self, opened) -> None:
-        plan = _hash_plan("hash")
-        assert len(_run_sync(plan)) == len(ITEMS)
-        assert opened == []
-
-    def test_sync_sequential_run_has_no_worker_pool(self) -> None:
-        with SyncExecution() as execution, pytest.raises(PipelineStateError):
-            _ = execution._pool
-
-    @pytest.mark.slow
-    def test_sync_concurrency_maps_on_a_thread_pool(self, opened, released) -> None:
-        plan = _hash_plan("hash", "hash")
-        expected = _run_sync(plan)
-        result = _run_sync(plan, ExecutionSettings(concurrency=4))
-
-        assert Counter(map(_key, result)) == Counter(map(_key, expected))
-        assert opened == [(Executor.THREAD, 4)]
-        assert released == ["close"]
-
-    def test_sync_inline_executor_never_opens_a_pool(self, opened) -> None:
-        plan = _hash_plan("hash")
-        settings = ExecutionSettings(executor="inline", concurrency=4)
-        assert _run_sync(plan, settings) == _run_sync(plan)
-        assert opened == []
-
-    @pytest.mark.slow
-    def test_sync_process_executor_maps_items(self, opened) -> None:
-        plan = _hash_plan("hash")
-        settings = ExecutionSettings(executor="process", concurrency=2)
-        result = _run_sync(plan, settings)
-
-        assert Counter(map(_key, result)) == Counter(map(_key, _run_sync(plan)))
-        assert opened == [(Executor.PROCESS, 2)]
-
-    def test_sync_non_loopable_node_is_never_mapped(self, opened) -> None:
-        plan = _hash_plan("count")
-        assert _run_sync(plan, ExecutionSettings(concurrency=4)) == [{"count": 20}]
-        assert opened == []
-
-    def test_sync_node_with_stream_input_is_never_mapped(self, opened) -> None:
-        def joiner(items, side=None, **_):
-            yield from items
-
-            if side is not None:
-                yield from side
-
-        def source(_items=None, **_):
-            yield {"t": "side"}
-
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="side", sync_pipe=cast("SyncModuleWrapper", source)),
-            ModuleDefinition(name="joiner", sync_pipe=_loopable(joiner)),
-        )
-        side = ModuleNode(id="s", name="side")
-        joined = ModuleNode(id="j", name="joiner")
-        edge = StreamEdge(Endpoint("s", "out"), Endpoint("j", "in:side"))
-        flow = _workflow([side, joined], edges=(edge,))
-        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
-        settings = ExecutionSettings(concurrency=4)
-
-        expected = [{"forever": True}, {"t": "side"}]
-        assert _run_sync(plan, settings, None) == expected
-        assert opened == []
-
-    @pytest.mark.slow
-    def test_sync_pool_terminates_when_a_mapped_item_fails(self, released) -> None:
-        def explode(item, **_):
-            if item["x"] == 3:
-                raise ValueError("boom")
-
-            return iter([item])
-
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="explode", sync_pipe=_loopable(explode))
-        )
-        flow = _workflow([ModuleNode(id="n", name="explode")])
-        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
-
-        with pytest.raises(ValueError, match="boom"):
-            _run_sync(plan, ExecutionSettings(concurrency=2))
-
-        assert released == ["terminate"]
-
-    @pytest.mark.slow
-    def test_sync_pool_terminates_when_the_stream_is_closed_early(
-        self, released
-    ) -> None:
-        plan = _hash_plan("hash")
-
-        with SyncExecution(settings=ExecutionSettings(concurrency=2)) as execution:
-            stream = cast("Generator", execution.run(plan, source=ITEMS))
-            next(stream)
-            stream.close()
-
-        assert released == ["terminate"]
-
-    @pytest.mark.slow
-    @pytest.mark.parametrize("ordered", [False, True])
-    def test_sync_chained_mapping_reads_the_source_on_demand(self, ordered) -> None:
-        pulled: list[int] = []
-        concurrency = 2
-
-        def tracked():
-            for x in range(10_000):
-                pulled.append(x)
-                yield {"x": x}
-
-        plan = _hash_plan("hash", "hash")
-        settings = ExecutionSettings(concurrency=concurrency, ordered=ordered)
-
-        def consume() -> None:
-            with SyncExecution(settings=settings) as execution:
-                stream = cast("Generator", execution.run(plan, source=tracked()))
-                next(stream)
-                stream.close()
-
-        worker = Thread(target=consume, daemon=True)
-        worker.start()
-        worker.join(timeout=10)
-
-        assert not worker.is_alive(), (
-            "chained mapped nodes deadlocked on the shared pool"
-        )
-        assert len(pulled) <= 2 * concurrency + 1
-
-    def test_sync_mapping_waits_for_the_first_pull(self, opened) -> None:
-        plan = _hash_plan("hash")
-
-        with SyncExecution(settings=ExecutionSettings(concurrency=2)) as execution:
-            execution.run(plan, source=ITEMS)
-
-        assert opened == []
-
-    def test_process_executor_refuses_a_resource_node(self, opened) -> None:
-        node = ModuleNode(id="h", name="hash", resources={"slot": "primary"})
-        flow = _workflow([node], resources=("primary",))
-        plan = ExecutionPlan.from_workflow(flow, dispatcher)
-        context = Context().with_resource("primary", Resource.from_external(object()))
-        settings = ExecutionSettings(executor="process", concurrency=2)
-        execution = SyncExecution(context, settings=settings)
-
-        with (
-            execution,
-            pytest.raises(InvalidPipelineError, match="node 'h' cannot run"),
-        ):
-            execution.run(plan, source=ITEMS)
-
-        assert opened == []
-
-    def test_process_executor_refuses_a_cross_mode_embed(self, opened) -> None:
-        node = ModuleNode(id="loop", name="fakeloop", embed={"name": "up", "conf": {}})
-        plan = ExecutionPlan.from_workflow(
-            _workflow([node]), dispatcher=_loop_dispatcher()
-        )
-        settings = ExecutionSettings(executor="process", concurrency=2)
-        execution = SyncExecution(settings=settings)
-
-        with (
-            execution,
-            pytest.raises(InvalidPipelineError, match="node 'loop' cannot run"),
-        ):
-            execution.run(plan, source=ITEMS)
-
-        assert opened == []
-
-    def test_process_executor_refuses_an_unpicklable_pipe(self, opened) -> None:
-        def local(item, **_):
-            return iter([item])
-
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="local", sync_pipe=_loopable(local))
-        )
-        flow = _workflow([ModuleNode(id="n", name="local")])
-        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
-        settings = ExecutionSettings(executor="process", concurrency=2)
-        execution = SyncExecution(settings=settings)
-
-        with (
-            execution,
-            pytest.raises(InvalidPipelineError, match="node 'n' cannot run") as info,
-        ):
-            execution.run(plan, source=ITEMS)
-
-        assert info.value.__cause__ is not None
-        assert opened == []
-
-
-def _passthru(stream, **_):
-    yield from stream
-
-
-_passthru.type = "operator"  # pyright: ignore[reportFunctionMemberAccess]
-
-
-async def _arun(plan, settings, source=ITEMS):
-    execution = AsyncExecution(settings=settings)
-    result: list = []
-
-    async with execution:
-        stream = await execution.arun(plan, source=source)
-        result = [item async for item in stream]
-
-    return result
-
-
-def _thread_probe():
-    threads: list[int] = []
-
-    def probe(item, **_):
-        threads.append(get_ident())
-        return iter([item])
-
-    definition = ModuleDefinition(name="probe", sync_pipe=_loopable(probe))
-    flow = _workflow([ModuleNode(id="n", name="probe")])
-    return threads, ExecutionPlan.from_workflow(
-        flow, dispatcher=build_dispatcher(definition)
-    )
-
-
-class TestAsyncConcurrency:
-    @async_test
-    async def test_async_long_sync_only_chain_completes(self) -> None:
-        # Each sync-only node holds a worker thread while it pulls its upstream, so
-        # a chain longer than the default thread limit must still get a thread each.
-        pipe = cast("SyncModuleWrapper", _passthru)
-        definition = ModuleDefinition(name="passthru", sync_pipe=pipe)
-        nodes = [ModuleNode(id=f"n{i}", name="passthru") for i in range(45)]
-        plan = ExecutionPlan.from_workflow(
-            _chain(*nodes), dispatcher=build_dispatcher(definition)
-        )
-        result: list = []
-
-        with fail_after(20):
-            async with AsyncExecution() as execution:
-                stream = await execution.arun(plan, source=ITEMS[:2])
-                result = [item async for item in stream]
-
-        assert result == ITEMS[:2]
-
-    @async_test
-    async def test_async_later_run_grows_the_thread_reservation(self) -> None:
-        pipe = cast("SyncModuleWrapper", _passthru)
-        dispatcher = build_dispatcher(ModuleDefinition(name="passthru", sync_pipe=pipe))
-        nodes = [ModuleNode(id=f"n{i}", name="passthru") for i in range(45)]
-        short = ExecutionPlan.from_workflow(_chain(*nodes[:1]), dispatcher=dispatcher)
-        long = ExecutionPlan.from_workflow(_chain(*nodes), dispatcher=dispatcher)
-        result: list = []
-
-        with fail_after(20):
-            async with AsyncExecution() as execution:
-                await execution.arun(short, source=ITEMS[:2])
-                stream = await execution.arun(long, source=ITEMS[:2])
-                result = [item async for item in stream]
-
-        assert result == ITEMS[:2]
-
-    @async_test
-    async def test_async_concurrency_collects_async_iterable_results(self) -> None:
-        async def twice(item, **_):
-            yield item
-            yield item
-
-        definition = ModuleDefinition(name="twice", async_pipe=_loopable(twice))
-        flow = _workflow([ModuleNode(id="n", name="twice")])
-        plan = ExecutionPlan.from_workflow(
-            flow, dispatcher=build_dispatcher(definition)
-        )
-        result = await _arun(plan, ExecutionSettings(concurrency=2))
-
-        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS * 2))
-
-    @async_test
-    async def test_async_concurrency_is_one_ceiling_across_nodes(self) -> None:
-        active = peak = 0
-
-        async def slow(item, **_):
-            nonlocal active, peak
-            active += 1
-            peak = max(peak, active)
-            await async_sleep(0.01)
-            active -= 1
-            return [item]
-
-        definition = ModuleDefinition(name="slow", async_pipe=_loopable(slow))
-        nodes = [ModuleNode(id="a", name="slow"), ModuleNode(id="b", name="slow")]
-        plan = ExecutionPlan.from_workflow(
-            _chain(*nodes), dispatcher=build_dispatcher(definition)
-        )
-        result = await _arun(plan, ExecutionSettings(concurrency=3))
-
-        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS))
-        assert 1 < peak <= 3
-
-    @async_test
-    async def test_async_concurrency_runs_sync_pipes_on_worker_threads(self) -> None:
-        threads, plan = _thread_probe()
-        result = await _arun(plan, ExecutionSettings(concurrency=2))
-
-        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS))
-        assert len(threads) == len(ITEMS)
-        assert get_ident() not in threads
-
-    @async_test
-    async def test_async_inline_executor_runs_sync_pipes_on_the_loop_thread(
-        self,
-    ) -> None:
-        threads, plan = _thread_probe()
-        settings = ExecutionSettings(executor="inline", concurrency=2)
-        result = await _arun(plan, settings)
-
-        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS))
-        assert set(threads) == {get_ident()}
-
-    @async_test
-    async def test_async_run_refuses_the_process_executor(self) -> None:
-        threads, plan = _thread_probe()
-        settings = ExecutionSettings(executor="process", concurrency=2)
-
-        async with AsyncExecution(settings=settings) as execution:
-            with pytest.raises(InvalidPipelineError, match="synchronous execution"):
-                await execution.arun(plan, source=ITEMS)
-
-        assert threads == []
-
-    @pytest.mark.parametrize("ordered", [False, True])
-    @async_test
-    async def test_async_early_close_stops_pulling_the_source(self, ordered) -> None:
-        pulled: list[int] = []
-
-        async def tracked():
-            for item in ITEMS:
-                pulled.append(item["x"])
-                yield item
-
-        plan = _hash_plan("hash", "hash")
-        settings = ExecutionSettings(concurrency=2, ordered=ordered)
-        first: dict = {}
-
-        async with AsyncExecution(settings=settings) as execution:
-            stream = cast(
-                "AsyncGenerator", await execution.arun(plan, source=tracked())
-            )
-            first = await anext(stream)
-            await stream.aclose()
-
-        assert first["x"] in pulled
-        assert len(pulled) < len(ITEMS)

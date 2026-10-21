@@ -105,14 +105,44 @@ type SyncSplitterWrapperInput = SyncProcessorWrapperOutput | SyncOperatorWrapper
 
 type SyncWrapperOutput = SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
 type SyncConfCastFunc = Callable[..., DynamicConf]
-type SyncProcessorParser[I, E, O: ItemOrValue] = Callable[
-    [I, E, DynamicConf], ProcessorParserOutput[O]
-]
-type SyncOperatorParser[T: ItemOrValue, E] = Callable[
-    [Stream, E, SyncPipeTuples], OperatorParserOutput[T]
-]
-type SyncSplitterParser[E] = Callable[[Stream, E, SyncPipeTuples], SplitterParserOutput]
-type SyncPipeParser[T: ItemOrValue] = Callable[..., ParserOutput[T]]
+
+
+class SyncProcessorParser[I, E, O: ItemOrValue](Protocol):
+    """
+    Parses one item's field, extraction, and configuration.
+
+    Its ``**kwargs`` receives the remaining keyword arguments (``inputs``, ``count``,
+    ``test``).
+    """
+
+    def __call__(  # noqa: E704
+        self, item: I, extraction: E, objconf: DynamicConf, /, **kwargs: Any
+    ) -> ProcessorParserOutput[O]: ...
+
+
+class SyncOperatorParser[T: ItemOrValue, E](Protocol):
+    """
+    Parses a whole stream with its extraction and per-item tuples.
+
+    Its ``**kwargs`` receives the remaining keyword arguments (``inputs``, ``count``).
+    """
+
+    def __call__(  # noqa: E704
+        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: Any
+    ) -> OperatorParserOutput[T]: ...
+
+
+class SyncSplitterParser[E](Protocol):
+    """
+    Splits a whole stream into branches.
+
+    Its ``**kwargs`` receives the remaining keyword arguments.
+    """
+
+    def __call__(  # noqa: E704
+        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: Any
+    ) -> SplitterParserOutput: ...
+
 
 type SyncWrapperInput = (
     SyncProcessorWrapperInput | SyncOperatorWrapperInput | SyncSplitterWrapperInput
@@ -199,6 +229,7 @@ class WrapperMeta(Protocol):
     pollable: bool
     loopable: bool
     isasync: bool
+    sequential_inputs: bool
 
 
 class ModuleWrapper(WrapperMeta, Protocol):
@@ -399,6 +430,7 @@ def stamp_wrapper_meta(
     pollable: bool,
     loopable: bool,
     isasync: bool,
+    sequential_inputs: bool = False,
     prepare: Preparer | None = None,
 ) -> None:
     """
@@ -418,8 +450,11 @@ def stamp_wrapper_meta(
         loopable: Whether ``loop`` can embed the module.
         isasync: Whether ``target`` is the async interface.
 
+        sequential_inputs: Whether the module reads its input streams one at a time
+            (default: False).
+
         prepare: Binds a call for reuse over many items. Defaults to binding ``target``
-            with its configuration and call options.
+            with its configuration and call options (default: None).
 
     Examples:
 
@@ -449,6 +484,7 @@ def stamp_wrapper_meta(
     setattr(target, "pollable", pollable)  # noqa: B010
     setattr(target, "loopable", loopable)  # noqa: B010
     setattr(target, "isasync", isasync)  # noqa: B010
+    setattr(target, "sequential_inputs", sequential_inputs)  # noqa: B010
     bound = prepare
 
     if bound is None and is_wrapper_meta(target):
@@ -550,15 +586,44 @@ type AsyncModuleWrapperOutput[T] = (
     | AsyncWrapperStream[Iterator[T], Iterator[Iterator[T]]]
 )
 
-type AwaitableProcessorParser[I, E, O: ItemOrValue] = Callable[
-    [I, E, DynamicConf], Awaitable[ProcessorParserOutput[O]]
-]
-type AwaitableOperatorParser[T: ItemOrValue, E] = Callable[
-    [Feed, E, PipeTuples], Awaitable[OperatorParserOutput[T]]
-]
-type AwaitableSplitterParser[E] = Callable[
-    [Stream, E, SyncPipeTuples], Awaitable[SplitterParserOutput]
-]
+
+class AwaitableProcessorParser[I, E, O: ItemOrValue](Protocol):
+    """
+    Parses one item's field, extraction, and configuration asynchronously.
+
+    Its ``**kwargs`` receives the remaining keyword arguments (``inputs``, ``count``,
+    ``test``).
+    """
+
+    def __call__(  # noqa: E704
+        self, item: I, extraction: E, objconf: DynamicConf, /, **kwargs: Any
+    ) -> Awaitable[ProcessorParserOutput[O]]: ...
+
+
+class AwaitableOperatorParser[T: ItemOrValue, E](Protocol):
+    """
+    Parses a whole sync or async stream asynchronously.
+
+    Its ``**kwargs`` receives the remaining keyword arguments (``inputs``, ``count``).
+    """
+
+    def __call__(  # noqa: E704
+        self, stream: Feed, extraction: E, tuples: PipeTuples, /, **kwargs: Any
+    ) -> Awaitable[OperatorParserOutput[T]]: ...
+
+
+class AwaitableSplitterParser[E](Protocol):
+    """
+    Splits a whole stream into branches asynchronously.
+
+    Its ``**kwargs`` receives the remaining keyword arguments.
+    """
+
+    def __call__(  # noqa: E704
+        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: Any
+    ) -> Awaitable[SplitterParserOutput]: ...
+
+
 type AsyncProcessorParser[I, E, O: ItemOrValue] = (
     SyncProcessorParser[I, E, O] | AwaitableProcessorParser[I, E, O]
 )
@@ -566,8 +631,6 @@ type AsyncOperatorParser[T: ItemOrValue, E] = (
     SyncOperatorParser[T, E] | AwaitableOperatorParser[T, E]
 )
 type AsyncSplitterParser[E] = SyncSplitterParser[E] | AwaitableSplitterParser[E]
-type AwaitableParserOutput[T: ItemOrValue] = Awaitable[ParserOutput[T]]
-type AsyncPipeParser[T: ItemOrValue] = Callable[..., AwaitableParserOutput[T]]
 
 
 class AsyncModuleWrapper(ModuleWrapper, Protocol):

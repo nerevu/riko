@@ -19,7 +19,7 @@ from collections.abc import (
     Mapping,
 )
 from contextlib import AsyncExitStack, ExitStack
-from typing import TYPE_CHECKING, Any, cast, overload
+from typing import TYPE_CHECKING, Any, Never, cast, overload
 
 from attrs import Factory, define, field
 
@@ -28,7 +28,6 @@ from riko.base._constants import FOREVER_ITEM
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from riko.types._collections import FrozenDict
-from riko.types._io import is_async_closeable, is_sync_closeable
 from riko.types._workflow import parse_port
 from riko.types._wrappers import ModuleWrapper
 
@@ -45,8 +44,6 @@ if TYPE_CHECKING:
     from riko.types._events import EventSink
     from riko.types._workflow import GraphEdge
 
-    from ._prepared import ExecutionPlan
-
 
 type SyncExecSteps[T] = dict[str, Iterator[T]]
 type AsyncExecSteps[T] = dict[str, AsyncIterator[T]]
@@ -57,8 +54,8 @@ type ExtraStreams[T] = (
 type ExtraValues[T] = ExtraObjects[T] | ExtraStreams[T]
 type ExtraInput[T] = Mapping[str, ExtraValues[T]]
 type ExtraOutput[T] = dict[str, ExtraValues[T]]
-type Acquisition = _Acquired | _FailedAcquisition
-type Acquisitions = dict[Resource[Any], Acquisition]
+type Acquisition[T] = _Acquired[T] | _FailedAcquisition
+type Acquisitions = dict[Resource[Any], Acquisition[Any]]
 
 DEFAULT_SEED: tuple[FrozenDict[str, bool], ...] = (FrozenDict(FOREVER_ITEM),)
 
@@ -94,16 +91,15 @@ def _require_source[S](source: S | None, output: str) -> S:
     return source
 
 
-def _is_async_only_closeable(value: object) -> bool:
-    """Tells whether ``value`` closes only through an async ``aclose``."""
-    return is_async_closeable(value) and not is_sync_closeable(value)
-
-
 @define(frozen=True, slots=True)
-class _Acquired:
+class _Acquired[T]:
     """Holds a successfully acquired resource value for single-flight replay."""
 
-    value: object
+    value: T
+
+    def unwrap(self) -> T:
+        """Replays the acquired value."""
+        return self.value
 
 
 @define(frozen=True, slots=True)
@@ -111,6 +107,10 @@ class _FailedAcquisition:
     """Holds a failed acquisition so repeated use replays the same error."""
 
     error: BaseException
+
+    def unwrap(self) -> Never:
+        """Replays the acquisition's original error."""
+        raise self.error
 
 
 class _NullEventSink:
@@ -147,7 +147,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
 
     That covers the context and settings, the closed-state guard, synchronous
     exit-stack entry, cleanup-error reporting, the resolved-resource cache,
-    resource-binding checks, input wiring, and the node build order.
+    resource-binding checks, and input wiring.
     """
 
     context: Context | None = None
@@ -179,6 +179,19 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
             func(*args)
         except Exception as error:  # noqa: BLE001
             self._cleanup_errors.append(error)
+
+    def callback(self, func: Callable, *args: object) -> None:
+        """
+        Registers a synchronous ``func`` to run during exit-stack unwind.
+
+        Args:
+
+            func: A cleanup callable invoked with ``args`` on shutdown.
+            args: Positional arguments forwarded to ``func``.
+
+        """
+        self._require_open("add a callback to")
+        self._stack.callback(self._record_cleanup_error, func, *args)
 
     @overload
     def enter_context(  # noqa: E704
@@ -270,34 +283,6 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
             source = as_stream(seed_items)
 
         return source, extra
-
-    def _gen_build_order[V](
-        self, plan: ExecutionPlan, required: frozenset[str], seed: V | None
-    ) -> Iterator[tuple[str, V | None]]:
-        """
-        Pairs each node a workflow output runs, in build order, with the seed it takes.
-
-        Args:
-
-            plan: The prepared workflow being run.
-            required: The node ids that the selected workflow output's subgraph runs.
-            seed: The seed stream for the workflow output's open input, if any.
-
-        Yields:
-
-            Each required node id paired with the seed it takes, or ``None``.
-
-        Raises:
-
-            InvalidPipelineError: If a seed is given and the required subgraph has no
-                single open input.
-
-        """
-        seed_target = None if seed is None else plan.require_seed_target(required)
-
-        for node_id in plan.index.order:
-            if node_id in required:
-                yield node_id, seed if node_id == seed_target else None
 
     def _report_shutdown(
         self, exc: BaseException | None, raised: BaseException | None, suppressed: bool

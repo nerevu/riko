@@ -72,11 +72,11 @@ Prerequisites that must be true before any deletion commit:
 - Port the pool-ownership/lifecycle characterization tests alongside the code.
 - Guards: the import-contract half of `manage lint --all` (the new module classifies into the
   `execution` layer), full test gate.
-- As-built: `riko/execution/_pools.py` (`Executor`, `resolve_executor`, `get_worker_cnt`/
-  `get_chunksize`, `PoolHandle` with `open_pool`/`borrow_pool`/`map(ordered)`); `SyncPipe`/
-  `SyncCollection` consume it, `PoolScope` chain sharing stays with them and goes at step 4, and
+- As-built: `riko/execution/_pools.py` (`PoolHandle`/`open_pool` and the bounded windows, since
+  replaced by `_PoolLifetime`; `get_worker_cnt` moved to `riko/base/_config.py` and `Executor` to
+  `riko/types/_enums.py`); `SyncPipe`/`SyncCollection` consume it, `PoolScope` chain sharing stays with them and goes at step 4, and
   `listpipe` stays because it depends on `riko.coercion`, which the `execution` layer cannot import.
-  Handle-level tests: `tests/internal/test_execution.py`; the pipe-level `TestPoolLifecycle` in
+  Pool tests: `tests/internal/test_concurrency.py`; the pipe-level `TestPoolLifecycle` in
   `tests/public/test_collections.py` goes with the classes at step 4 (since removed).
 
 ## Step 2 — Flip the generated-pipeline mechanism off v1
@@ -178,7 +178,7 @@ Depends on steps 1–3. Deletes `SyncPipe`, `AsyncPipe`, `PyPipe`, `PyCollection
   arguments), and `write(dest, mode=, fmt=, keys=)` appends a `build_write`-validated
   `WriteNode` that plan build still refuses. The retired v1 behaviors live on as strict xfails
   written against those forms — `tests/public/test_pipeline.py` (subscriptions,
-  split, callable nodes, per-item gating), the fan-in branch-pulling cases in `test_parallel.py`
+  split, callable nodes, per-item gating), the fan-in branch-pulling cases in `tests/public/test_pipeline.py`
   (R7), and `TestPipelineWrite` in
   `tests/internal/test_definitions.py` — so each flips to a pass when its owner lands. User docs keep the
   same sections as `Pending.` code blocks. The one capability with no designed successor is the

@@ -55,7 +55,6 @@ except ImportError:
     backend: AsyncBackend = "empty"
     create_memory_object_stream: Callable[..., Any] | None = None
     create_task_group: Callable[..., Any] | None = None
-    current_default_thread_limiter: Callable[..., Any] | None = None
     fail_after: Callable[..., Any] | None = None
     gather_results: Callable[..., Any] = lambda *_, **_kw: None
     lowlevel: Any = None
@@ -91,7 +90,6 @@ else:
     from anyio.itertools import chain as async_chain
     from anyio.lowlevel import checkpoint
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
-    from anyio.to_thread import current_default_thread_limiter
     from asyncer import asyncify
     from httpx import AsyncClient
 
@@ -121,7 +119,6 @@ __all__ = [
     "checkpoint",
     "create_memory_object_stream",
     "create_task_group",
-    "current_default_thread_limiter",
     "fail_after",
     "gather_results",
     "isasync",

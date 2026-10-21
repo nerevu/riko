@@ -816,7 +816,7 @@ manager-vs-instance syntax.
 
 Preparation is now a resolution snapshot: `ExecutionPlan.from_workflow` (`riko/execution/_prepared.py`)
 resolves each node's sync/async callables once into a `PreparedNode` and the returned `ExecutionPlan`
-holds no dispatcher, so `ResolvedModule.select_sync()`/`select_async()` (and `PreparedNode.select_call`) pick native-vs-adapter at run time without
+holds no dispatcher, so `ResolvedModule.select_sync()`/`select_async()` (and `PreparedNode.sync_interface`/`async_interface`) pick native-vs-adapter at run time without
 re-inspecting the registry (regression: `test_execution_plan_snapshots_resolution`). The two cross-mode
 defects this section tracked behind strict-xfail tripwires are now closed; the shared adaptation
 helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_execution_plan.py`).
@@ -836,11 +836,12 @@ helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_
    pull that hits it after every earlier item has been yielded, and abandoning or closing the async
    stream closes the sync pipe's generator off-loop. The MIGRATE item ("P10 bounded/executor mechanics")
    therefore no longer owes a bounded channel at this boundary. Its `collections.py` half is done:
-   the sync executor/pool mechanics live in `riko/execution/_pools.py` (`Executor`,
-   `resolve_executor`, `get_worker_cnt`/`get_chunksize`, `PoolHandle` via `open_pool`/`borrow_pool`
-   with `map(ordered)`), consumed by the surviving `SyncPipe`/`SyncCollection` until their deletion
-   and by `with_execution(...)` after; the async bounded mapping already lived in
-   `riko/bado/itertools.py`. Handle-level characterization tests are `tests/internal/test_execution.py`.
+   the sync executor/pool mechanics live in `riko/execution/_pools.py` (`PoolHandle`/`open_pool`
+   with the bounded ordered/unordered windows, since replaced by `_PoolLifetime`; `get_worker_cnt`
+   is in `riko/base/_config.py`), consumed
+   by the surviving `SyncPipe`/`SyncCollection` until their deletion and by `with_execution(...)`
+   after; the async bounded mapping already lived in
+   `riko/bado/itertools.py`. Pool characterization tests are `tests/internal/test_concurrency.py`.
    Cutover step 2 followed (`b4850983`): the pipeline fixtures are `WorkflowDocument`s run by the
    v2 execution, `ModuleNode.options` carries per-node call options for every module node, and the
    positional-input seed rule and `migrate_v1_to_v2` were corrected so the fixtures convert
@@ -912,7 +913,7 @@ to read an async input stream is R7's (tripwire `test_async_splitter_accepts_an_
 As-built close (2026-10-03): `Pipeline.with_execution(executor=, concurrency=, ordered=, event_sink=,
 shutdown_timeout=)` stores a frozen `ExecutionSettings` (`riko/definitions/_settings.py`; omitted
 arguments are `MISSING`, explicit `None` restores the default), `with_context`/`with_resource` bind the
-run's `Context`, and `riko/execution/_concurrency.py` resolves the settings into the per-run mapping policy
+run's `Context`, and `ExecutionSettings.sync_policy`/`async_policy` derive the per-run mapping policy
 both executions honor (details in [IMPLEMENTED § Private execution runtime](../IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)).
 Concurrent pulling of fan-in branches is R7's (its deliverable list names it).
 
@@ -958,6 +959,14 @@ Deliver:
   `PipelineDefinition.source` goes along with the `Pipeline(source=…)` parameter, and an unseeded
   open pipeline raises; `pipeline(items)` returns a plain stream and `open(items)` the only
   `PipelineRun` context manager, with no `first`/`afirst` on either (all decided there 2026-10-10).
+
+Open decision (triaged 2026-10-16): which node a seed targets. `GraphIndex.is_open` treats a node
+wired only through a named `in:<name>` port as not open (it tests `edge.is_positional`), yet
+`_resolve_node_inputs` still feeds that node's default input the default seed (pinned by
+`test_run_still_seeds_a_node_wired_only_through_a_named_value_port`). Making `is_open` test the
+bare default port instead would give that test's workflow two open inputs, so a seed would raise.
+The per-run seed work decides which definition is right; no tripwire until it does, since the target
+behavior is not yet chosen.
 
 Out of scope here: `flat_map`/strict flat-map (needs R5A's derive/combine envelope), side effects and
 idempotency (R6), state/checkpoints (R6), and per-item gating (`skip_if`, callable-pipes § Per-item
@@ -1031,7 +1040,7 @@ close R4B  →  R4C  →  R4D  →  R5A  →  R7  →  merge next → features
 ```
 
 R5B, R5C, R6, and everything after follow the merge. Parity means every strict-xfail tripwire written
-for a retired v1 behavior — execution settings (`test_parallel.py`, `TestExecutionSettings`), local
+for a retired v1 behavior — execution settings (`tests/public/test_pipeline.py`, `TestExecutionSettings`), local
 pub/sub and split (`TestSubscriptions`, `TestSplit`, the `split` rows in `test_script.py`), and
 callable nodes (`TestCallableNodes`) — has flipped, with the sole documented exception of per-item
 gating (`skip_if`), whose successor is still undecided. Write execution (`TestPipelineWrite`) is R5C
@@ -1057,7 +1066,7 @@ Deliver:
   wrong types, invalid enum/operator values, and missing required keys raise `InvalidPipelineError`
   naming the node and key, before resources open or the source is read; a node whose module declares
   no contract is not rejected. The check lands inside `ModuleWrapper.prepare`, which the plan already
-  calls once per node (`PreparedNode.sync_call`/`async_call`), so no second preparation path is needed;
+  calls once per node (`PreparedNode.sync_interface`/`async_interface`), so no second preparation path is needed;
 - the same check for built-in and entry-point modules.
 
 Open decision (triaged 2026-10-05): the released `riko.ext.get_conf_type` reads a parser's `objconf`
@@ -1415,7 +1424,13 @@ Deliver:
 - concurrent pulling of fan-in branches under the `with_execution(concurrency=)` ceiling, with
   bounded per-source buffers (execution-semantics § 8.2), restoring what `SyncCollection(parallel=True)`
   did for multi-source fetching; until then a fan-in pulls its branches one at a time while per-item
-  work inside each branch is concurrent (tripwires: `TestAsyncFanInParallel` in `test_parallel.py`);
+  work inside each branch is concurrent (tripwires: `TestAsyncFanInParallel` in `tests/public/test_pipeline.py`);
+  concurrent pulling also changes the async node-thread budget: `ExecutionPlan.get_thread_demand`
+  scores a sync-only node as one plus the **max** of its inputs because it reads them one at a time
+  (pinned by `test_async_interleaved_fan_in_fits_its_thread_budget`), so pulling branches together
+  makes that a **sum**, and that test changes with it; `union`/`join` (`sequential_inputs`) likewise
+  score the max of their inputs (pinned by `test_async_sequential_fan_in_needs_only_its_deepest_input`),
+  which holds only while they keep reading their inputs in turn;
 - multiple same-name local subscriptions distinguished by object identity;
 - multiple publishers complete a subscription only after all attached publishers finish, derived
   structurally from incoming `PublishEdge`s and owned sender endpoints;
@@ -1602,8 +1617,7 @@ builds it) becomes its `from_workflow`-style classmethod in the same pass (tidy,
 Type tag (2026-10-11 "type" triage): the tag lives in the wrapper's `.type` (`SUBPIPE_TYPE == "pipe"`),
 but `ModuleWrapper.type` is annotated `ModuleType` (`operator`/`processor`/`splitter`), which
 `SyncSubPipe`/`AsyncSubPipe` inherit, so the annotation excludes the value every
-`build_workflow_pipes` pipe carries; `is_subpipe` and `PreparedNode.module_type` only work through
-`getattr`. Target: `.type` keeps the real module type (a stored workflow's pipe is a processor) and
+`build_workflow_pipes` pipe carries; `is_subpipe` only works through `getattr`. Target: `.type` keeps the real module type (a stored workflow's pipe is a processor) and
 the tag moves to its own marker read by its own guard, rather than a fourth `.type` value
 (`"workflow"` would repeat the problem). Decide it with the tag's keep/delete decision above.
 

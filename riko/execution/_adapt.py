@@ -11,8 +11,10 @@ private to the runtime and belong to no supported surface.
 from __future__ import annotations
 
 from collections.abc import AsyncIterable, AsyncIterator, Generator, Iterable, Iterator
+from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any, cast
 
+from riko.bado._util import maybe_aclosing
 from riko.types._guards import is_listlike
 from riko.types._sentinels import MISSING
 from riko.types._wrappers import require_single_output, stamp_wrapper_meta
@@ -153,29 +155,43 @@ def async_drain[T](source: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
 
 
 async def pull_stream[T](
-    iterator: Iterator[T], closeable: object, pull: WorkerCall, close: WorkerCall
+    closeable: object,
+    iterator: Iterator[T],
+    *upstreams: AsyncIterator[Any],
+    pull: WorkerCall,
+    close: WorkerCall,
 ) -> AsyncIterator[T]:
     """
     Re-exposes a blocking item stream as a lazy async item stream.
 
     Args:
 
-        iterator: The synchronous item stream to read.
         closeable: The pipe's return value whose closure releases what the stream holds.
+
+        iterator: The synchronous item stream to read.
+
+        upstreams: The async streams ``iterator`` reads. Closed once ``closeable`` is
+            closed (even when closing it fails).
+
         pull: Runs a blocking callable off the event loop.
-        close: Runs the final closure off the event loop, including while the
-            execution is shutting down.
+
+        close: Runs the final closure off the event loop (even while the execution is
+            shutting down).
 
     Yields:
 
         Each item ``iterator`` produces, in order.
 
     """
-    try:
-        while (item := await pull(next, iterator, MISSING)) is not MISSING:
-            yield item
-    finally:
-        await close(_close_generator, closeable)
+    async with AsyncExitStack() as stack:
+        for upstream in upstreams:
+            await stack.enter_async_context(maybe_aclosing(upstream))
+
+        try:
+            while (item := await pull(next, iterator, MISSING)) is not MISSING:
+                yield item
+        finally:
+            await close(_close_generator, closeable)
 
 
 def _copy_wrapper_meta(
@@ -204,6 +220,7 @@ def _copy_wrapper_meta(
         pollable=source.pollable,
         loopable=source.loopable,
         isasync=isasync,
+        sequential_inputs=source.sequential_inputs,
     )
 
     for attr in _FUNC_META:

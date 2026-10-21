@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
-from enum import StrEnum
+from enum import Enum, StrEnum, auto
 from inspect import isasyncgenfunction, isgeneratorfunction, unwrap
 from typing import TypeGuard
 
@@ -32,16 +32,22 @@ class FactoryKind(StrEnum):
 
     Attributes:
 
-        SYNC_GEN_FACTORY: A sync generator function (setup, ``yield`` value,
-            teardown).
+        SYNC_GEN_FACTORY: A sync generator function (setup, ``yield`` value, teardown).
+
         ASYNC_GEN_FACTORY: An async generator function.
-        SYNC_CM_FACTORY: A callable returning a sync context manager, such as a
-            ``@contextmanager`` function.
-        ASYNC_CM_FACTORY: A callable returning an async context manager, such as an
-            ``@asynccontextmanager`` function.
+
+        SYNC_CM_FACTORY: A callable returning a sync context manager (e.g.,
+            ``@contextmanager``).
+
+        ASYNC_CM_FACTORY: A callable returning an async context manager (e.g.,
+            ``@asynccontextmanager``).
+
         SYNC_CALLABLE_FACTORY: A plain sync callable that returns the value.
+
         ASYNC_CALLABLE_FACTORY: A plain async function that returns the value.
+
         SYNC_CONTEXTMANAGER: A sync context-manager instance, entered as is.
+
         ASYNC_CONTEXTMANAGER: An async context-manager instance, entered as is.
 
     """
@@ -54,6 +60,25 @@ class FactoryKind(StrEnum):
     ASYNC_CALLABLE_FACTORY = "async_callable_factory"
     SYNC_CONTEXTMANAGER = "sync_contextmanager"
     ASYNC_CONTEXTMANAGER = "async_contextmanager"
+
+    @property
+    def is_async(self) -> bool:
+        """Whether this kind produces or enters its value natively async."""
+        return self.value.startswith("async_")
+
+    @property
+    def is_cm_factory(self) -> bool:
+        """Whether this kind is a callable that returns a context manager."""
+        return self.value.endswith("_cm_factory")
+
+
+class ResourceStrategy(Enum):
+    """The acquisition shape an execution drives for a resource."""
+
+    EXTERNAL = auto()
+    OWNED = auto()
+    VALUE_FACTORY = auto()
+    LIFECYCLE = auto()
 
 
 VALUE_FACTORY_KINDS = {

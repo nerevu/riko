@@ -119,6 +119,10 @@ Changes
 - ``@processor``, ``@operator``, and ``@splitter`` raise ``TypeError`` at decoration
   time for an invalid option, e.g., a typo or a call option like ``count``.
 
+- A parser passed to ``@processor``, ``@operator``, or ``@splitter`` must accept
+  ``**kwargs``. The decorators always pass keyword arguments such as ``inputs`` and
+  ``count``, so a parser without ``**kwargs`` would raise ``TypeError`` when called.
+
 - The decorators' ``parse`` method (and ``@operator``'s ``aparse``) is now
   ``normalize_input`` (and ``anormalize_input``).
 
@@ -201,6 +205,10 @@ Removed
   ``export(pipeline, …)`` replaces ``.export()``, and multi-source fetching is a
   ``union`` fan-in in a ``Workflow``. ``subscribe``/``publish``, ``split``, and
   ``udf(func=…)`` through a pipeline have no replacement.
+
+- Removed call-time decoration options. Passing ``skip_if``, ``ftype``, ``ptype``,
+  ``extract``, ``listize``, ``objectify``, ``parse``, or ``pollable`` to a module call
+  now raises ``TypeError``. Set them in the decorator, e.g., ``@processor(skip_if=…)``.
 
 - Removed ``parallel``/``workers``/``threads``/``pool`` arguments. To run items in
   parallel use ``pipeline.with_execution`` with ``concurrency`` set to either

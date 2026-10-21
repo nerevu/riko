@@ -12,6 +12,8 @@ from collections.abc import AsyncIterable, Callable, Iterable, Iterator, Mapping
 from contextlib import ExitStack
 from functools import cached_property, partial
 from inspect import isawaitable
+from multiprocessing import Pool as CPUPool
+from multiprocessing.dummy import Pool as ThreadPool
 from typing import TYPE_CHECKING, Self, cast, overload
 
 from attrs import define, field
@@ -19,7 +21,7 @@ from attrs import define, field
 from riko.bado._backend import start_blocking_portal
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
 from riko.types._enums import Executor
-from riko.types._guards import is_async_callable
+from riko.types._resource import ResourceStrategy
 
 from ._adapt import (
     async_drain,
@@ -28,14 +30,7 @@ from ._adapt import (
     require_stream,
     select_embed,
 )
-from ._concurrency import (
-    SyncPolicy,
-    _PoolLifetime,
-    is_mappable,
-    require_process_safe,
-    resolve_sync_policy,
-    run_item,
-)
+from ._concurrency import build_item_call, require_process_safe
 from ._execution import (
     Acquisition,
     SyncExecSteps,
@@ -43,16 +38,10 @@ from ._execution import (
     _asyncify_call,
     _BaseExecution,
     _FailedAcquisition,
-    _is_async_only_closeable,
     _require_source,
 )
-from ._pools import open_pool
-from ._resource_plan import (
-    _ResourcePlan,
-    _ResourceStrategy,
-    build_resource_plan,
-    close_resource,
-)
+from ._pools import _PoolLifetime
+from ._resource_plan import _ResourcePlan, close_resource
 from ._resource_view import ResourceView
 
 if TYPE_CHECKING:
@@ -62,8 +51,7 @@ if TYPE_CHECKING:
 
     from anyio.from_thread import BlockingPortal
 
-    from riko.definitions._resource_definition import Resource
-    from riko.types._sentinels import MissingType
+    from riko.definitions._resource_definition import ResolvedValue, Resource
     from riko.types._streams import AnyIterable
     from riko.types._wrappers import AsyncModuleWrapperOutput
 
@@ -107,20 +95,16 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         return self
 
     @cached_property
-    def _policy(self) -> SyncPolicy:
-        return resolve_sync_policy(self.settings)
-
-    @cached_property
     def _pool(self) -> _PoolLifetime:
         """The run's one worker pool, shared by every mapped node."""
-        action = "open a worker pool in"
+        executor, workers = self.settings.sync_policy
 
-        if (workers := self._policy.workers) is None:
+        if workers is None:
+            action = "open a worker pool in"
             raise PipelineStateError("sequential", action, subject="execution")
 
-        self._require_open(action)
-        handle = open_pool(self._policy.executor, workers)
-        return self._stack.enter_context(_PoolLifetime(handle, workers))
+        pool = ThreadPool(workers) if executor is Executor.THREAD else CPUPool(workers)
+        return self._stack.enter_context(_PoolLifetime(pool, workers))
 
     def close(
         self,
@@ -164,19 +148,6 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         return self.enter_context(portal_cm)
 
-    def callback(self, func: Callable, *args: object) -> None:
-        """
-        Registers ``func`` to run during exit-stack unwind.
-
-        Args:
-
-            func: A cleanup callable invoked with ``args`` on shutdown.
-            args: Positional arguments forwarded to ``func``.
-
-        """
-        self._require_open("add a callback to")
-        self._stack.callback(self._record_cleanup_error, func, *args)
-
     @overload
     def run_async[R](self, func: Awaitable[R], /) -> R: ...  # noqa: E704
     @overload  # noqa: E301
@@ -214,64 +185,49 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         return result
 
     def _validate_sync_teardown[R](self, plan: _ResourcePlan[R]) -> None:
-        is_lifecycle = plan.strategy is _ResourceStrategy.LIFECYCLE
-        native_lifecycle = is_lifecycle and plan.native_async
-        cleanup = plan.cleanup
+        if plan.is_teardown_async:
+            if plan.strategy is ResourceStrategy.LIFECYCLE:
+                msg = "async-native resource lifecycle requires async execution"
+            elif plan.cleanup is None:
+                msg = "async-native resource teardown requires async execution"
+            else:
+                msg = "async resource cleanup requires async execution"
 
-        async_owned_value = (
-            plan.strategy is _ResourceStrategy.OWNED
-            and cleanup is None
-            and _is_async_only_closeable(plan.value)
-        )
-
-        if native_lifecycle:
-            msg = "async-native resource lifecycle requires async execution"
-            raise InvalidPipelineError(msg)
-        elif is_async_callable(cleanup):
-            msg = "async resource cleanup requires async execution"
-            raise InvalidPipelineError(msg)
-        elif async_owned_value:
-            msg = "async-native resource teardown requires async execution"
             raise InvalidPipelineError(msg)
 
     def _call_factory[R](self, plan: _ResourcePlan[R]) -> R:
-        if (factory := plan.factory) is None:
-            raise InvalidPipelineError("resource factory is required")
-        else:
-            raw = factory(*plan.args, **plan.kwargs)
-            value = self.run_async(raw) if isawaitable(raw) else cast("R", raw)
+        raw = plan.call_factory()
+        value = self.run_async(raw) if isawaitable(raw) else cast("R", raw)
 
-            if cleanup := plan.cleanup:
-                self.callback(cleanup, value)
+        if cleanup := plan.cleanup:
+            self.callback(cleanup, value)
 
         return value
 
     def _enter_lifecycle[R](self, plan: _ResourcePlan[R]) -> R:
-        cm = cast("AbstractContextManager[R]", plan.context_manager)
+        cm = cast("AbstractContextManager[R]", plan.build_context_manager())
         return self.enter_context(cm)
 
-    def _open[R](self, plan: _ResourcePlan[R]) -> R | MissingType:
+    def _open[R](self, plan: _ResourcePlan[R]) -> ResolvedValue[R]:
         self._validate_sync_teardown(plan)
 
-        if plan.strategy is _ResourceStrategy.EXTERNAL:
+        if plan.strategy is ResourceStrategy.EXTERNAL:
             value = plan.value
-        elif plan.strategy is _ResourceStrategy.OWNED:
+        elif plan.strategy is ResourceStrategy.OWNED:
             value = plan.value
             self.callback(close_resource, plan.cleanup, value)
-        elif plan.strategy is _ResourceStrategy.VALUE_FACTORY:
+        elif plan.strategy is ResourceStrategy.VALUE_FACTORY:
             value = self._call_factory(plan)
         else:
             value = self._enter_lifecycle(plan)
 
         return value
 
-    def _acquire_entry[R](self, resource: Resource[R]) -> Acquisition:
-        plan = build_resource_plan(resource)
-
+    def _acquire_entry[R](self, resource: Resource[R]) -> Acquisition[ResolvedValue[R]]:
         try:
-            value = self._open(plan)
+            value = self._open(_ResourcePlan(resource))
         except Exception as error:  # noqa: BLE001
-            entry: Acquisition = _FailedAcquisition(error)
+            entry: Acquisition[ResolvedValue[R]] = _FailedAcquisition(error)
         else:
             entry = _Acquired(value)
 
@@ -295,16 +251,10 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         """
         self._require_open("acquire a resource in")
 
-        if resource in self._acquired:
-            entry = self._acquired[resource]
-        else:
-            entry = self._acquire_entry(resource)
-            self._acquired[resource] = entry
+        if resource not in self._acquired:
+            self._acquired[resource] = self._acquire_entry(resource)
 
-        if isinstance(entry, _FailedAcquisition):
-            raise entry.error
-
-        return cast("R", entry.value)
+        return self._acquired[resource].unwrap()
 
     def _async_drain(self, source: AsyncIterable[T]) -> Iterator[T]:
         """Pulls an async stream item by item through the execution portal."""
@@ -318,8 +268,9 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         self, call: Callable[[T], Iterable[T]], source: Iterator[T]
     ) -> Iterator[T]:
         """Maps a bound pipe over its items once the consumer first pulls."""
-        func = partial(run_item, call)
-        yield from self._pool.map_items(func, source, ordered=self.settings.ordered)
+        self._require_open("map items in")
+        func = build_item_call(call, self.settings.sync_policy.executor)
+        yield from self._pool.flat_map(func, source, ordered=self.settings.ordered)
 
     def _build_stream(
         self,
@@ -332,9 +283,9 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         Builds one node's lazy output stream from its already-built input streams.
 
         When the settings allow concurrency, a loopable node with a synchronous
-        implementation runs its items across the run's worker pool. Concurrency
-        applies to synchronous pipes here; iterate asynchronously for concurrent
-        async work.
+        implementation and no secondary input stream runs its items across the run's
+        worker pool. Concurrency applies to synchronous pipes here. Iterate
+        asynchronously for concurrent async work.
 
         Args:
 
@@ -349,8 +300,8 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         """
         node = plan.nodes[node_id]
-        pipe = node.module.select_sync()
-        host_isasync = node.module.is_async_pipe(pipe)
+        sync_native = node.sync_interface.native
+        call, pipe = node.sync_interface.call, node.sync_interface.pipe
         args = (node.incoming, steps, seed)
         source, extra = self._resolve_node_inputs(*args, as_stream=iter)
 
@@ -358,25 +309,22 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             extra["resources"] = self._bind_resources(node.resources)
 
         if (embed := node.embed) is not None:
-            drain = self._async_drain
+            host_isasync, drain = not sync_native, self._async_drain
             extra["embed"] = select_embed(
                 embed, host_isasync=host_isasync, run_sync=_asyncify_call, drain=drain
             )
 
-        call = node.select_call(pipe)
-        mapped = self._policy.workers is not None and is_mappable(node, extra)
-
-        if host_isasync:
-            _stream = call(source, context=self.context, **extra)
-            value = cast("AsyncModuleWrapperOutput[T]", _stream)
-            stream = self._async_drain(require_async_stream(value, pipe))
-        elif mapped:
+        if self.settings.sync_policy.workers is not None and node.is_sync_mappable:
             bound = partial(call, context=self.context, **extra)
             stream = self._map_stream(cast("Callable[[T], Iterable[T]]", bound), source)
-        else:
+        elif sync_native:
             _stream = call(source, context=self.context, **extra)
             value = cast("Iterator[T] | Iterator[Iterator[T]]", _stream)
             stream = require_stream(value, pipe)
+        else:
+            _stream = call(source, context=self.context, **extra)
+            avalue = cast("AsyncModuleWrapperOutput[T]", _stream)
+            stream = self._async_drain(require_async_stream(avalue, pipe))
 
         return stream
 
@@ -400,15 +348,15 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         source: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None,
     ) -> Iterator[T]:
         """Builds the item stream for one of the plan's workflow outputs."""
-        endpoint, required = plan.require_output(output)
+        endpoint = plan.require_output(output)
         steps: SyncExecSteps = {}
 
-        if self._policy.executor is Executor.PROCESS:
-            require_process_safe(plan, required, self.context)
+        if self.settings.sync_policy.executor is Executor.PROCESS:
+            require_process_safe(plan, output, self.context)
 
         seed = None if source is None else self._build_source_stream(source)
 
-        for node_id, node_seed in self._gen_build_order(plan, required, seed):
+        for node_id, node_seed in plan.gen_build_order(output, seed=seed):
             steps[node_id] = self._build_stream(plan, node_id, steps, node_seed)
 
         return steps[endpoint.node]

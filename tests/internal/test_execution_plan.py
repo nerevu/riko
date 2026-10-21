@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pickle  # noqa: S403
 from threading import get_ident
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
@@ -48,6 +48,7 @@ from tests._execution import (
     agen_source,
     awaitable_source,
     build_dispatcher,
+    build_workflow,
     module_workflow,
 )
 
@@ -63,12 +64,6 @@ _sync_pipe = cast("SyncModuleWrapper", lambda source, **_: iter(source or {}))
 
 
 _async_pipe = cast("AsyncModuleWrapper", lambda source, **_: as_async(source or {}))
-
-
-def _build_flow(nodes, outputs, edges=(), resources=()):
-    return Workflow(
-        nodes=nodes, outputs=outputs, inputs={}, edges=edges, resources=resources
-    )
 
 
 def _tagged_source(tag):
@@ -119,7 +114,9 @@ def _resource_reader_plan(reader=_decorated_reader):
     sync_pipe = cast("SyncModuleWrapper", reader)
     dispatcher = build_dispatcher(ModuleDefinition(name="reader", sync_pipe=sync_pipe))
     nodes = [ModuleNode(id="n", name="reader", resources={"slot": "primary"})]
-    flow = _build_flow(nodes, {"default": Endpoint("n", "out")}, resources=("primary",))
+    flow = build_workflow(
+        nodes, resources=("primary",), outputs={"default": Endpoint("n", "out")}
+    )
     return ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
 
@@ -173,7 +170,7 @@ def _loop(loop_name="fakeloop", embed_name="up"):
         options={"emit": True, "count": "first"},
     )
     edge = StreamEdge(Endpoint("s", "out"), Endpoint("loop", "in"))
-    return _build_flow([src, loop], {"default": Endpoint("loop", "out")}, edges=(edge,))
+    return build_workflow([src, loop], edges=(edge,))
 
 
 def _titled_source(_items=None, **_):
@@ -185,19 +182,10 @@ def _real_loop_workflow(embed_name="child"):
     return _loop(loop_name="loop", embed_name=embed_name)
 
 
+_BOTH = {"sync_pipe": _sync_pipe, "async_pipe": _async_pipe}
 SELECTIONS = [
-    pytest.param(
-        {"sync_pipe": _sync_pipe, "async_pipe": _async_pipe},
-        "sync",
-        _sync_pipe,
-        id="native-sync",
-    ),
-    pytest.param(
-        {"sync_pipe": _sync_pipe, "async_pipe": _async_pipe},
-        "async",
-        _async_pipe,
-        id="native-async",
-    ),
+    pytest.param(_BOTH, "sync", _sync_pipe, id="native-sync"),
+    pytest.param(_BOTH, "async", _async_pipe, id="native-async"),
     pytest.param({"sync_pipe": _sync_pipe}, "async", _sync_pipe, id="sync-only"),
     pytest.param({"async_pipe": _async_pipe}, "sync", _async_pipe, id="async-only"),
 ]
@@ -210,9 +198,13 @@ class TestExecutionPlan:
         plan = ExecutionPlan.from_workflow(
             module_workflow(), dispatcher=build_dispatcher(definition)
         )
-        module = plan.nodes["n"].module
+        node = plan.nodes["n"]
+        interface = node.sync_interface if mode == "sync" else node.async_interface
+        module = node.module
         selected = module.select_sync() if mode == "sync" else module.select_async()
-        assert selected is expected
+
+        assert selected is interface.pipe is expected
+        assert interface.native is (f"{mode}_pipe" in pipes)
 
     def test_build_does_not_invoke_the_pipe(self) -> None:
         calls: list[int] = []
@@ -261,7 +253,7 @@ class TestExecutionPlan:
     def test_build_carries_conf_index_and_resources(self) -> None:
         definition = ModuleDefinition(name="m", sync_pipe=_sync_pipe)
         node = ModuleNode(id="n", name="m", conf={"url": "x"}, resources={"db": "db"})
-        flow = _build_flow([node], {"default": Endpoint("n", "out")}, resources=("db",))
+        flow = build_workflow([node], resources=("db",))
         dispatcher = build_dispatcher(definition)
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
         prepared = plan.nodes["n"]
@@ -277,7 +269,7 @@ class TestExecutionPlan:
             ExecutionPlan.from_workflow(flow, dispatcher=build_dispatcher())
 
     def test_build_validates_the_graph(self) -> None:
-        flow = _build_flow([ModuleNode(id="n", name="count")], {})
+        flow = build_workflow([ModuleNode(id="n", name="count")], outputs={})
 
         with pytest.raises(InvalidPipelineError, match="output"):
             ExecutionPlan.from_workflow(flow, dispatcher)
@@ -304,7 +296,9 @@ class TestExecutionPlan:
             StreamEdge(Endpoint("a", "out"), Endpoint("b", "in")),
             StreamEdge(Endpoint("a", "out"), Endpoint("c", "in")),
         )
-        flow = _build_flow([a, b, c], {"default": Endpoint("b", "out")}, edges=edges)
+        flow = build_workflow(
+            [a, b, c], edges=edges, outputs={"default": Endpoint("b", "out")}
+        )
 
         with pytest.raises(InvalidPipelineError, match=r"fan-out.*\('a', 'out'\)"):
             ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
@@ -328,7 +322,7 @@ class TestExecutionPlan:
         a = ModuleNode(id="a", name="src")
         s = ModuleNode(id="s", name="split")
         edge = StreamEdge(Endpoint("a", "out"), Endpoint("s", "in"))
-        flow = _build_flow([a, s], {"default": Endpoint("s", "out")}, edges=(edge,))
+        flow = build_workflow([a, s], edges=(edge,))
 
         with pytest.raises(InvalidPipelineError, match="splitter"):
             ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
@@ -368,21 +362,54 @@ class TestExecutionPlan:
             StreamEdge(Endpoint("a", "out"), Endpoint("s", "in")),
             StreamEdge(Endpoint("b", "out"), Endpoint("s", "in:1")),
         )
-        flow = _build_flow([a, b, s], {"default": Endpoint("s", "out")}, edges=edges)
+        flow = build_workflow([a, b, s], edges=edges)
 
         with pytest.raises(InvalidPipelineError, match="positional"):
             ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
 
-class TestResolvedModule:
-    def test_resolved_module_refuses_a_splitter_pipe_on_construction(self) -> None:
-        # The invariant lives on the resolved module itself, so every construction
-        # path (plan build, embeds, direct construction) is covered.
-        with pytest.raises(InvalidPipelineError, match=r"'sync_pipe'.*splitter"):
-            ResolvedModule("split", {}, sync_pipe=split_pipe)
+def _flagged(func, flag: str) -> Any:
+    setattr(func, flag, True)
+    return func
 
-        with pytest.raises(InvalidPipelineError, match=r"'async_pipe'.*splitter"):
-            ResolvedModule("split", {}, async_pipe=async_split)
+
+_LOOPABLE_SYNC = _flagged(lambda source, **_: iter(source or {}), "loopable")
+_SEQUENTIAL_ASYNC = _flagged(
+    lambda source, **_: as_async(source or {}), "sequential_inputs"
+)
+
+
+# The invariants live on the resolved module itself, so every construction path
+# (plan build, embeds, direct construction) is covered.
+INVALID_MODULES = [
+    pytest.param({"sync_pipe": split_pipe}, r"'sync_pipe'.*splitter", id="sync-split"),
+    pytest.param(
+        {"async_pipe": async_split}, r"'async_pipe'.*splitter", id="async-split"
+    ),
+    pytest.param(
+        {"sync_pipe": _sync_pipe, "async_pipe": cast("AsyncModuleWrapper", _sync_pipe)},
+        "both sync and async",
+        id="one-callable",
+    ),
+    pytest.param({}, "neither a sync nor an async", id="no-callable"),
+    pytest.param(
+        {"sync_pipe": _LOOPABLE_SYNC, "async_pipe": _async_pipe},
+        "disagree on 'loopable'",
+        id="mismatched-loopable",
+    ),
+    pytest.param(
+        {"sync_pipe": _sync_pipe, "async_pipe": _SEQUENTIAL_ASYNC},
+        "disagree on 'sequential_inputs'",
+        id="mismatched-sequential-inputs",
+    ),
+]
+
+
+class TestResolvedModule:
+    @pytest.mark.parametrize(("pipes", "match"), INVALID_MODULES)
+    def test_resolved_module_refuses_invalid_pipes(self, pipes, match) -> None:
+        with pytest.raises(InvalidPipelineError, match=match):
+            ResolvedModule("m", {}, **pipes)
 
     def test_resolved_module_reads_mode_from_the_slot(self) -> None:
         # Plain undecorated callables carry no mode marker, so the slot decides.
@@ -395,12 +422,6 @@ class TestResolvedModule:
         assert not sync_only.is_async_pipe(sync_only.select_async())
         assert async_only.is_async_pipe(async_only.select_sync())
 
-    def test_resolved_module_rejects_one_callable_in_both_slots(self) -> None:
-        shared = cast("AsyncModuleWrapper", _sync_pipe)
-
-        with pytest.raises(InvalidPipelineError, match="both sync and async"):
-            ResolvedModule("m", {}, sync_pipe=_sync_pipe, async_pipe=shared)
-
 
 class _EmbedStub:
     """Carries the discovery metadata an adapter must copy onto its wrapper."""
@@ -412,6 +433,7 @@ class _EmbedStub:
     pollable = False
     loopable = True
     isasync = True
+    sequential_inputs = False
 
     def __call__(self, item=None, **kwargs):
         return iter(())
@@ -531,7 +553,7 @@ class TestPlanRun:
         a = ModuleNode(id="a", name="src")
         b = ModuleNode(id="b", name="double")
         edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))
-        flow = _build_flow([a, b], {"default": Endpoint("b", "out")}, edges=(edge,))
+        flow = build_workflow([a, b], edges=(edge,))
 
         assert _run(flow, dispatcher) == [{"x": 2}, {"x": 4}]
 
@@ -548,7 +570,7 @@ class TestPlanRun:
             ModuleDefinition(name="probe", sync_pipe=sync_pipe)
         )
         node = ModuleNode(id="n", name="probe", options={"emit": True})
-        flow = _build_flow([node], {"default": Endpoint("n", "out")})
+        flow = build_workflow([node])
 
         assert _run(flow, dispatcher) == []
         assert seen["emit"] is True
@@ -576,7 +598,7 @@ class TestPlanRun:
             StreamEdge(Endpoint("c", "out"), Endpoint("m", "in:2")),
             StreamEdge(Endpoint("b", "out"), Endpoint("m", "in:1")),
         )
-        flow = _build_flow([a, b, c, m], {"default": Endpoint("m", "out")}, edges=edges)
+        flow = build_workflow([a, b, c, m], edges=edges)
 
         assert _run(flow, dispatcher) == [{"t": "a"}, {"t": "b"}, {"t": "c"}]
 
@@ -599,7 +621,7 @@ class TestPlanRun:
             StreamEdge(Endpoint("a", "out"), Endpoint("j", "in")),
             StreamEdge(Endpoint("s", "out"), Endpoint("j", "in:side")),
         )
-        flow = _build_flow([a, s, j], {"default": Endpoint("j", "out")}, edges=edges)
+        flow = build_workflow([a, s, j], edges=edges)
 
         assert _run(flow, dispatcher) == [{"t": "a"}, {"t": "side"}]
 
@@ -623,7 +645,7 @@ class TestPlanRun:
         a = ModuleNode(id="a", name="src")
         m = ModuleNode(id="m", name="merge")
         edge = StreamEdge(Endpoint("a", "out"), Endpoint("m", "in:1"))
-        flow = _build_flow([a, m], {"default": Endpoint("m", "out")}, edges=(edge,))
+        flow = build_workflow([a, m], edges=(edge,))
 
         assert _run(flow, dispatcher) == [{"t": "a"}]
         assert seen["source"] == []
@@ -643,7 +665,7 @@ class TestPlanRun:
         a = ModuleNode(id="a", name="src")
         b = ModuleNode(id="b", name="probe")
         edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in:count"))
-        flow = _build_flow([a, b], {"default": Endpoint("b", "out")}, edges=(edge,))
+        flow = build_workflow([a, b], edges=(edge,))
 
         assert _run(flow, dispatcher) == []
         assert seen["source"] == [{"forever": True}]
@@ -662,7 +684,7 @@ class TestPlanRun:
         a = ModuleNode(id="a", name="src")
         b = ModuleNode(id="b", name="sink")
         edge = StreamEdge(Endpoint("a", "out:1"), Endpoint("b", "in"))
-        flow = _build_flow([a, b], {"default": Endpoint("b", "out")}, edges=(edge,))
+        flow = build_workflow([a, b], edges=(edge,))
 
         with pytest.raises(InvalidPipelineError, match="non-default output port"):
             _run(flow, dispatcher)
@@ -675,7 +697,7 @@ class TestPlanRun:
             ModuleDefinition(name="src", sync_pipe=_tagged_source("a"))
         )
         node = ModuleNode(id="n", name="src")
-        flow = _build_flow([node], {"default": Endpoint("n", "out:1")})
+        flow = build_workflow([node], outputs={"default": Endpoint("n", "out:1")})
 
         with pytest.raises(InvalidPipelineError, match="non-default output port"):
             _run(flow, dispatcher)
@@ -701,7 +723,7 @@ class TestPlanRun:
             StreamEdge(Endpoint("c", "out"), Endpoint("u", "in:3")),
             StreamEdge(Endpoint("b", "out"), Endpoint("u", "in:1")),
         )
-        flow = _build_flow([a, b, c, u], {"default": Endpoint("u", "out")}, edges=edges)
+        flow = build_workflow([a, b, c, u], edges=edges)
 
         assert _run(flow, dispatcher) == [{"t": "a"}, {"t": "b"}, {"t": "c"}]
 
@@ -731,7 +753,9 @@ class TestPlanRun:
         dispatcher = build_dispatcher(definition)
         nodes = [ModuleNode(id="n", name="reader", resources={"slot": "primary"})]
         endpoint = Endpoint("n", "out")
-        flow = _build_flow(nodes, {"default": endpoint}, resources=("primary",))
+        flow = build_workflow(
+            nodes, resources=("primary",), outputs={"default": endpoint}
+        )
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
         with (
@@ -759,7 +783,7 @@ class TestPlanRun:
         b = ModuleNode(id="b", name="b_src")
         outputs = {"default": Endpoint("a", "out"), "other": Endpoint("b", "out")}
 
-        assert _run(_build_flow([a, b], outputs), dispatcher) == [{"x": 1}]
+        assert _run(build_workflow([a, b], outputs=outputs), dispatcher) == [{"x": 1}]
         assert ran == ["a"]
 
     def test_run_rejects_missing_output(self) -> None:
@@ -804,7 +828,7 @@ class TestPlanRun:
         a = ModuleNode(id="a", name="src")
         b = ModuleNode(id="b", name="atag")
         edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))
-        flow = _build_flow([a, b], {"default": Endpoint("b", "out")}, edges=(edge,))
+        flow = build_workflow([a, b], edges=(edge,))
 
         assert _run(flow, dispatcher) == [{"x": 1, "seen": True}]
 
@@ -850,7 +874,7 @@ class TestPlanRun:
             StreamEdge(Endpoint("a", "out"), Endpoint("m", "in:1")),
             StreamEdge(Endpoint("b", "out"), Endpoint("m", "in:2")),
         )
-        flow = _build_flow([a, b, m], {"default": Endpoint("m", "out")}, edges=edges)
+        flow = build_workflow([a, b, m], edges=edges)
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
         with (
@@ -875,8 +899,8 @@ class TestPlanRun:
             ModuleDefinition(name="ignore", sync_pipe=sync_pipe)
         )
         nodes = [ModuleNode(id="n", name="ignore", resources={"slot": "primary"})]
-        flow = _build_flow(
-            nodes, {"default": Endpoint("n", "out")}, resources=("primary",)
+        flow = build_workflow(
+            nodes, resources=("primary",), outputs={"default": Endpoint("n", "out")}
         )
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
         events: list[str] = []
@@ -903,7 +927,7 @@ class TestAsyncPlanRun:
             assert [item async for item in stream] == [{"x": 1}]
 
     @async_test
-    async def test_arun_executes_native_async_source(self) -> None:
+    async def test_arun_executes_async_native_source(self) -> None:
         async def src(_items=None, **_):
             yield {"x": 1}
             yield {"x": 2}
@@ -950,7 +974,7 @@ class TestAsyncPlanRun:
             StreamEdge(Endpoint("a", "out"), Endpoint("b", "in")),
             StreamEdge(Endpoint("b", "out"), Endpoint("c", "in")),
         )
-        flow = _build_flow([a, b, c], {"default": Endpoint("c", "out")}, edges=edges)
+        flow = build_workflow([a, b, c], edges=edges)
 
         assert await _arun(flow, dispatcher) == [{"n": 2, "seen": True}]
 
@@ -970,7 +994,7 @@ class TestAsyncPlanRun:
             ModuleDefinition(name="aprobe", async_pipe=async_pipe)
         )
         node = ModuleNode(id="n", name="aprobe", options={"emit": True})
-        flow = _build_flow([node], {"default": Endpoint("n", "out")})
+        flow = build_workflow([node])
 
         assert await _arun(flow, dispatcher) == []
         assert seen["emit"] is True
@@ -999,7 +1023,7 @@ class TestAsyncPlanRun:
         a = ModuleNode(id="a", name="asrc")
         m = ModuleNode(id="m", name="amerge")
         edge = StreamEdge(Endpoint("a", "out"), Endpoint("m", "in:1"))
-        flow = _build_flow([a, m], {"default": Endpoint("m", "out")}, edges=(edge,))
+        flow = build_workflow([a, m], edges=(edge,))
 
         assert await _arun(flow, dispatcher) == [{"t": "a"}]
         assert seen["source"] == []
@@ -1039,7 +1063,7 @@ class TestAsyncPlanRun:
             StreamEdge(Endpoint("b", "out"), Endpoint("m", "in:1")),
             StreamEdge(Endpoint("c", "out"), Endpoint("m", "in:label")),
         )
-        flow = _build_flow([a, b, c, m], {"default": Endpoint("m", "out")}, edges=edges)
+        flow = build_workflow([a, b, c, m], edges=edges)
 
         assert await _arun(flow, dispatcher) == [
             {"t": "a"},
@@ -1176,6 +1200,62 @@ class TestAsyncPlanRun:
         assert closed == [True]
 
     @async_test
+    async def test_arun_sync_worker_node_closes_its_async_inputs_on_early_exit(
+        self,
+    ) -> None:
+        # The sources stay referenced, so only the stream's own close can end them.
+        closed, sources = [], []
+
+        def tagged(tag):
+            async def gen():
+                try:
+                    while True:
+                        yield {"t": tag}
+                finally:
+                    closed.append(tag)
+
+            def src(_items=None, **_):
+                sources.append(gen())
+                return sources[-1]
+
+            return cast("AsyncModuleWrapper", src)
+
+        def interleave(items, others=None, **_):
+            for row in zip(items, *(others or ()), strict=False):
+                yield from row
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="asrc", async_pipe=tagged("a")),
+            ModuleDefinition(name="bsrc", async_pipe=tagged("b")),
+            ModuleDefinition(
+                name="interleave", sync_pipe=cast("SyncModuleWrapper", interleave)
+            ),
+        )
+        nodes = [
+            ModuleNode(id="a", name="asrc"),
+            ModuleNode(id="b", name="bsrc"),
+            ModuleNode(id="m", name="interleave"),
+        ]
+        edges = (
+            StreamEdge(Endpoint("a", "out"), Endpoint("m", "in")),
+            StreamEdge(Endpoint("b", "out"), Endpoint("m", "in:1")),
+        )
+        flow = build_workflow(
+            nodes, edges=edges, outputs={"default": Endpoint("m", "out")}
+        )
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+        upstream_closed = []
+
+        with fail_after(5):
+            async with AsyncExecution() as execution:
+                stream = cast("AsyncItemGenerator", await execution.arun(plan))
+                await anext(stream)
+                await stream.aclose()
+                upstream_closed = sorted(closed)
+
+        assert upstream_closed == ["a", "b"]
+
+    @async_test
     async def test_arun_unconsumed_sync_only_source_does_not_block_exit(self) -> None:
         def src(_items=None, **_):
             index = 0
@@ -1222,7 +1302,7 @@ class TestAsyncPlanRun:
             StreamEdge(Endpoint("a", "out"), Endpoint("m", "in")),
             StreamEdge(Endpoint("b", "out"), Endpoint("m", "in:1")),
         )
-        flow = _build_flow([a, b, m], {"default": Endpoint("m", "out")}, edges=edges)
+        flow = build_workflow([a, b, m], edges=edges)
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
         seen = []
 
@@ -1259,7 +1339,7 @@ def _lone_loop(embed_conf=None):
         embed={"name": "up", "conf": embed_conf or {}},
         options={"emit": True, "count": "first"},
     )
-    return _build_flow([loop], {"default": Endpoint("loop", "out")})
+    return build_workflow([loop])
 
 
 def _build_async_embed():
@@ -1518,7 +1598,14 @@ def _replace_workflow(conf, *edges, extra_nodes=()):
         id="r", name="strreplace", conf=conf, options={"field": "content"}
     )
     nodes = [*extra_nodes, node]
-    return _build_flow(nodes, {"default": Endpoint("r", "out")}, edges=edges)
+    return build_workflow(nodes, edges=edges, outputs={"default": Endpoint("r", "out")})
+
+
+_SYNC, _ASYNC = "sync_interface", "async_interface"
+FALLBACKS = [
+    pytest.param({"sync_pipe": _sync_pipe}, _ASYNC, _SYNC, id="sync-only"),
+    pytest.param({"async_pipe": _async_pipe}, _SYNC, _ASYNC, id="async-only"),
+]
 
 
 class TestPreparedCall:
@@ -1532,7 +1619,7 @@ class TestPreparedCall:
 
         monkeypatch.setattr(Module, "prepare", counting)
         node = ModuleNode(id="n", name="strtransform", conf=_UPPER)
-        flow = _build_flow([node], {"default": Endpoint("n", "out")})
+        flow = build_workflow([node])
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
         items = [{"content": f"item {i}"} for i in range(50)]
 
@@ -1586,8 +1673,7 @@ class TestPreparedCall:
         plan = ExecutionPlan.from_workflow(
             _replace_workflow(_STATIC_REPLACE), dispatcher
         )
-        call = plan.nodes["r"].sync_call
-        assert call is not None
+        call = plan.nodes["r"].sync_interface.call
         restored = pickle.loads(pickle.dumps(call))  # noqa: S301
 
         restored_items = cast("Iterator[Item]", restored(_REPLACE_ITEMS))
@@ -1614,23 +1700,20 @@ class TestPreparedCall:
             StreamEdge(Endpoint("c", "out"), Endpoint("n", "in:1")),
         )
         outputs = {"default": Endpoint("n", "out")}
-        flow = _build_flow([*sources, host], outputs, edges=edges, resources=("db",))
+        flow = build_workflow(
+            [*sources, host], edges=edges, resources=("db",), outputs=outputs
+        )
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
 
         assert plan.nodes["n"].extras == ("label", "others", "resources", "embed")
         assert plan.nodes["a"].extras == ()
 
-    def test_select_call_requires_a_matching_pipe(self) -> None:
-        node = PreparedNode(
-            ModuleNode(id="n", name="m"), ResolvedModule("m", async_pipe=_async_pipe)
-        )
+    @pytest.mark.parametrize(("pipes", "missing", "present"), FALLBACKS)
+    def test_a_missing_pipe_reuses_the_other_prepared_call(
+        self, pipes, missing, present
+    ) -> None:
+        node = PreparedNode(ModuleNode(id="n", name="m"), ResolvedModule("m", **pipes))
+        fallback, native = getattr(node, missing), getattr(node, present)
 
-        with pytest.raises(UnsupportedModuleError, match="no such interface"):
-            node.select_call(_sync_pipe)
-
-    def test_a_missing_pipe_has_no_prepared_call(self) -> None:
-        module = ResolvedModule("m", sync_pipe=_sync_pipe)
-        node = PreparedNode(ModuleNode(id="n", name="m"), module)
-
-        assert node.async_call is None
-        assert node.select_call(_sync_pipe) is node.sync_call
+        assert native.native is True
+        assert fallback == native._replace(native=False)

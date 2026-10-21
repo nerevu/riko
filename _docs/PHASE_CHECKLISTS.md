@@ -388,7 +388,7 @@ separate `test_fluent_discovery.py` was dropped as redundant — its coverage li
 **Delivered (P10.1–P10.5).** Bounded parallel mapping with bounded in-flight memory: unordered
 `async_map_stream` + ordered `async_map_ordered_stream` (`riko/bado/itertools.py`, in-flight memory
 within `limit + buffer`); a sync executor abstraction (now `riko/execution/_pools.py`:
-`open_pool`/`PoolHandle`, `get_worker_cnt`; the `Executor` enum is in
+`_PoolLifetime`, with `get_worker_cnt` in `riko/base/_config.py`; the `Executor` enum is in
 `riko/types/_enums.py`); and a shared-budget foundation (anyio `Semaphore` threaded through
 `async_map*` as opt-in `budget=`, wrapping **leaf** I/O to cap combined concurrency without
 multiplication or hold-and-wait deadlock). P10 originally hung these on the v1 pipe/collection
@@ -399,7 +399,7 @@ step 4, and `Pipeline.with_execution(executor=, concurrency=, ordered=)` is the 
 - **Shared-budget execution wiring** — `AsyncExecution` shares one `Semaphore` budget across every
   node of a run; `Context` stays an immutable environment/resource definition.
 - **Sync bounded window** — the sync pool maps through `apply_async` within a bounded look-ahead
-  window and honors `ordered` (`riko/execution/_concurrency.py`).
+  window and honors `ordered` (`riko/execution/_pools.py`).
 
 (The earlier "child `count="first"` aclose" and the `async_map_stream` early-close wart both **landed**
 under P7.5 — see P7 above.)

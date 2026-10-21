@@ -318,7 +318,11 @@ strict xfail because the ungated budget math yields `NaN`). The strict-xfail tri
 `tests/public/test_pipeline.py::TestConditionalNodes`, written against
 `.strconcat(..., skip_if=…)`. This phase decides the successor: a predicate argument on the callable
 node, or conditional routing from the fan-out plan; either way the tripwire is rewritten to the
-chosen form and un-xfailed here.
+chosen form and un-xfailed here. Call-time `skip_if` on a direct module call (honored by the
+released `prepare`, which folded call kwargs into the options) was retired on 2026-10-16 rather than
+restored ahead of that decision: `skip_if` and the other decoration options are fixed at decoration,
+and a direct call or `prepare` passing one raises `TypeError` (`Module._validate_call_keywords`,
+rows `DECORATION_OPTION_CALLS` in `tests/internal/test_modules.py`).
 
 ### Definition of done
 
