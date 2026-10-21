@@ -15,8 +15,8 @@ Index (file, then the subjects it owns, in file order):
                               GenerateModuleNames, GenerateModuleIds, ConfigCodegen,
                               WorkflowFixtures, WorkflowProbes
     test_concurrency.py       ExecutionSettings, MappingPolicy, SyncConcurrency
-    test_definitions.py       FrozenDict, Context, ResourceFreezing, ResourceView,
-                              ResourceBinding, Nodes, WorkflowFields,
+    test_definitions.py       FrozenDict, Context, Resource, ResourceFreezing,
+                              ResourceView, ResourceBinding, Nodes, WorkflowFields,
                               NormalizeInternals, RawWorkflowFields,
                               ExecutionPlanFields, PipelineDefinitionFields,
                               RequireHelpers, RequireFromForm, ResolveEnum,

@@ -47,7 +47,7 @@ Examples:
         'fetch'
 
 """'''
-_IDS_DOC = '''"""Generated built-in module-id typing aliases."""'''
+_IDS_DOC = '''"""Generated built-in module-id typing aliases and name set."""'''
 _IMPORT = "from riko.types._enums import ModuleName"
 _IMPORT += '\n\n__all__ = ["Modules", "Sinks", "Sources", "Transforms"]'
 
@@ -208,7 +208,7 @@ def _literal_alias(name: str, *ids: str) -> str:
 
 
 def generate_module_ids() -> str:
-    """Generate the module id ``Literal`` aliases."""
+    """Generate the module id ``Literal`` aliases and the built-in module-id set."""
     all_ids, loopable_ids = _catalog_ids()
     aliases = "\n\n".join(
         [
@@ -216,7 +216,9 @@ def generate_module_ids() -> str:
             _literal_alias("LoopableModuleId", *loopable_ids),
         ]
     )
-    src = f"{_HEADER}\n\n{_IDS_DOC}\n\nfrom typing import Literal\n\n{aliases}\n"
+    names = "BUILTIN_MODULE_IDS: frozenset[str] = frozenset(get_args(ModuleId))"
+    imports = "from typing import Literal, get_args"
+    src = f"{_HEADER}\n\n{_IDS_DOC}\n\n{imports}\n\n{aliases}\n\n{names}\n"
     return ruff_format(src)
 
 

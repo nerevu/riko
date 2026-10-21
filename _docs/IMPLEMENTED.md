@@ -831,14 +831,16 @@ portal drain and the worker-side upstream reader are the same function with a di
 keyed by resource identity); a repeat returns the first value or replays the first failure.
 Concurrent first-use of one lazy resource under `aacquire` is single-flight too — a per-resource
 in-flight gate makes waiters await and replay the leader's outcome rather than resolving twice.
-A `Resource` classifies itself: its cached `strategy` (`ResourceStrategy`: `EXTERNAL` / `OWNED` /
-`VALUE_FACTORY` / `LIFECYCLE`) and `async_native` derive from `external` and its `FactoryKind`
-(`is_async`/`is_cm_factory`). The execution builds `_ResourcePlan(resource)`
-(`riko/execution/_resource_plan.py`) inside the recorded acquisition, so a failing factory is
-replayed like any other outcome, and never re-inspects the generator/context-manager/instance shape. Teardown rides the exit stack: owned → `close`/`aclose`,
+A `Resource` stores the plan its constructor classified: `ExternalPlan` / `OwnedPlan` /
+`ValueFactoryPlan` / `SyncLifecyclePlan` / `AsyncLifecyclePlan` (`riko/types/_resource.py`, exported
+from `riko.types`), built by `build_factory_plan`/`build_lifecycle_plan`. `strategy`
+(`ResourceStrategy`), `async_native`, `external`, and `value` derive from it. The executions `match`
+on `resource.plan` inside the recorded acquisition (so a failing factory is replayed like any other
+outcome); the records are passive data, and `call_factory`/`build_context_manager`
+(`riko/execution/_resource_acquisition.py`) thaw fresh argument copies each time. A generator function's `enter` is a module-level partial, so the plan pickles. Teardown rides the exit stack: owned → `close`/`aclose`,
 value-factory → cleanup callback, lifecycle → context-manager entry. Explicit `cleanup` is
 authoritative. The two executions adapt work across sync/async as mirror images, classifying async-vs-sync
-with the same predicates (`is_async_callable`/`is_async_closeable`/`is_sync_closeable`/`async_native`).
+with the same predicates (`is_async_callable`/`is_async_closeable`/`is_sync_closeable`, read through the plan records' `is_async`/`is_teardown_async`).
 Under `SyncExecution`, async value *production* bridges through the portal, but async-native
 *teardown* — an async cleanup callable, an async-native lifecycle, or an `aclose()`-only owned value —
 is a permanent boundary: it raises `InvalidPipelineError` before the resource is acquired, so no value
@@ -849,13 +851,16 @@ execution is closing, when the guarded `run_sync` would refuse), and a sync cont
 is entered through a `_WorkerContext` async wrapper so both `__enter__` and `__exit__` run off-loop with
 exception info preserved.
 
-**Resource-model shape.** The owned/external/lifecycle/factory distinction is data on `Resource` —
-the `external` flag plus `factory`/`kind`/`cleanup`/`args`/`kwargs` — not a private subclass
-hierarchy. `OneShotResource` / `ReusableResource` remain as user-facing marker types (`reusable` is
-`isinstance`, `external` is a field); construction routes through a private builder, and `Resource`
-itself has no open/close behavior: the execution's `acquire`/`aacquire` enter its `_ResourcePlan` and
-tear it down. `FactoryKind` classifies input (plus the `is_async`/`is_cm_factory` facts the strategy
-reads), never a runtime ontology.
+**Resource-model shape.** `Resource` stores `plan`, `credential`, and `lazy` — no private subclass
+hierarchy and no field-pair invariants. `OneShotResource` / `ReusableResource` remain as user-facing
+marker types (`reusable` is `isinstance`); `Resource(value, cleanup=)` builds an `OwnedPlan` in its own
+`__init__` and the alternate constructors set fields through a private builder. `Resource` itself has
+no open/close behavior: the execution's `acquire`/`aacquire` drive its `plan` and tear it down (owned
+values through `close_resource`/`aclose_resource` in `riko/execution/_resource_teardown.py`).
+`Resource`, `ReusableResource`, and `OneShotResource` are on the stable `riko` surface; the plan
+records and `ResourceStrategy` are on `riko.types`. A `contextmanager`/`asynccontextmanager` factory is
+recognized by the decorator's shared helper code anywhere in its `__wrapped__` chain, so another
+`functools.wraps` decorator around a generator function leaves it a generator lifecycle.
 
 **External-resource proof.** `tests/internal/test_execution.py` proves the lifetime holds a
 genuinely external resource — a real HTTP client against the loopback server
@@ -880,16 +885,15 @@ run:
   and `Workflow.validate()`'s separate cycle walk folded into it (2026-10-05). Every declared node is
   kept (disconnected nodes retained) and all named outputs preserved.
 - `Context` and `Resource` are frozen, slotted attrs classes with `eq=False` (identity equality: the
-  execution caches key on `Resource` identity). Field converters freeze `inputs`, factory `args`, and
+  execution caches key on `Resource` identity). Field converters freeze `inputs` and the plan records' `args` and
   `kwargs` into `FrozenDict`/tuples (a non-mapping `Context` `inputs` raises `TypeError`); the
   resource plan `thaw`s factory arguments into fresh dicts/lists/sets for each call, so a factory
   sees plain mutable values; a `FrozenDict` passes through unchanged, so `attrs.evolve` in
   `Context.replace`/`with_resource` re-freezes nothing. Set-only-internally fields use private init
-  aliases (`Context(_resources=...)`, `Resource(..., _factory=, _kind=, _args=, _kwargs=, _external=)`)
-  while staying public attributes. `Resource` validates the plain-value path in
-  `__attrs_post_init__` and rejects inconsistent private fields (a factory without its kind or vice
-  versa, an external resource with a factory or that is not reusable); `Context` accepts only
-  `ReusableResource` values in `_resources`; `_from_data` builds the subclass through the generated `__init__`.
+  aliases (`Context(_resources=...)`) while staying public attributes. `Resource` has a hand-written
+  `__init__` that validates the owned-value path and stores an `OwnedPlan`; the alternate
+  constructors set `plan`/`credential`/`lazy` through `_from_plan`; `Context` accepts only
+  `ReusableResource` values in `_resources`.
 - One run loop: `run_pipeline`/`arun_pipeline` (`riko/runtime/_run.py`) back
   `Pipeline` iteration, and `build_workflow_pipes` (`riko/runtime/_workflow_pipes.py`) builds on them
   for both generated workflow modules and named `WorkflowDocument`s, which the resolver binds to

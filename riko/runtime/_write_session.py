@@ -698,7 +698,7 @@ def build_write_resource(
 
     Examples:
 
-        >>> from riko.definitions._resource_definition import OneShotResource
+        >>> from riko import OneShotResource
         >>>
         >>> resource = build_write_resource("report.csv")
         >>> isinstance(resource, OneShotResource)
@@ -707,8 +707,8 @@ def build_write_resource(
         False
         >>> resource.external
         False
-        >>> resource.kind.value
-        'sync_contextmanager'
+        >>> type(resource.plan).__name__
+        'SyncLifecyclePlan'
 
     """
     prepared = build_write(dest, mode, fmt=fmt, keys=keys)

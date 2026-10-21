@@ -11,7 +11,7 @@ from contextlib import (
     nullcontext,
 )
 from dataclasses import dataclass
-from functools import partial
+from functools import partial, wraps
 from threading import Event as ThreadEvent
 from threading import get_ident
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -37,16 +37,23 @@ from riko.definitions._resource_definition import (
     ReusableResource,
 )
 from riko.execution._async_execution import AsyncExecution
-from riko.execution._resource_plan import aclose_resource
+from riko.execution._resource_teardown import aclose_resource
 from riko.execution._resource_view import ResourceView
 from riko.execution._sync_execution import SyncExecution
 from riko.modules._decorators import operator
 from riko.types._io import is_closeable
-from riko.types._resource import FactoryKind, get_factory_kind
+from riko.types._resource import (
+    AsyncLifecyclePlan,
+    ResourceStrategy,
+    SyncLifecyclePlan,
+    ValueFactoryPlan,
+    build_factory_plan,
+    build_lifecycle_plan,
+)
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Generator
+    from collections.abc import Awaitable, Callable, Generator
 
     from riko.types._resource import LifecycleFactory, ValueFactory
     from riko.types._streams import Stream
@@ -157,6 +164,18 @@ async def async_cm_factory(credential: str | None = None):
         print("Cleaning async db...")
 
 
+def _passthrough[**P, R](func: Callable[P, R]) -> Callable[P, R]:
+    @wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+wrapped_sync_gen_factory = _passthrough(sync_gen_factory)
+wrapped_async_gen_factory = _passthrough(async_gen_factory)
+wrapped_sync_cm_factory = _passthrough(sync_cm_factory)
+wrapped_async_cm_factory = _passthrough(async_cm_factory)
 connection = pytest.fixture(sync_callable_factory)
 
 
@@ -207,14 +226,14 @@ def _test_metadata(
     *,
     external: bool,
     reusable: bool,
-    classification: FactoryKind | None = None,
+    classification: type | None = None,
 ):
     assert isinstance(resource, typ)
     assert resource.external == external
     assert resource.reusable == reusable
 
     if classification is not None:
-        assert resource.kind is classification
+        assert isinstance(resource.plan, classification)
 
 
 class TestSyncExecution:
@@ -1046,6 +1065,9 @@ class TestLifecycleFactory:
         with pytest.raises(TypeError, match="Expected a resolved resource"):
             Resource.from_external(factory)
 
+        with pytest.raises(TypeError, match="Cleanup is not allowed"):
+            Resource.from_factory(factory, cleanup=False)
+
     @pytest.mark.parametrize(
         "factory",
         [sync_gen_factory, async_gen_factory, sync_cm_factory, async_cm_factory],
@@ -1066,16 +1088,28 @@ class TestLifecycleFactory:
     @pytest.mark.parametrize(
         ("factory", "classification"),
         [
-            (sync_gen_factory, FactoryKind.SYNC_GEN_FACTORY),
-            (async_gen_factory, FactoryKind.ASYNC_GEN_FACTORY),
-            (sync_cm_factory, FactoryKind.SYNC_CM_FACTORY),
-            (async_cm_factory, FactoryKind.ASYNC_CM_FACTORY),
+            pytest.param(sync_gen_factory, SyncLifecyclePlan, id="sync-gen"),
+            pytest.param(async_gen_factory, AsyncLifecyclePlan, id="async-gen"),
+            pytest.param(sync_cm_factory, SyncLifecyclePlan, id="sync-cm"),
+            pytest.param(async_cm_factory, AsyncLifecyclePlan, id="async-cm"),
+            pytest.param(
+                wrapped_sync_gen_factory, SyncLifecyclePlan, id="wraps-sync-gen"
+            ),
+            pytest.param(
+                wrapped_async_gen_factory, AsyncLifecyclePlan, id="wraps-async-gen"
+            ),
+            pytest.param(
+                wrapped_sync_cm_factory, SyncLifecyclePlan, id="wraps-sync-cm"
+            ),
+            pytest.param(
+                wrapped_async_cm_factory, AsyncLifecyclePlan, id="wraps-async-cm"
+            ),
         ],
     )
     def test_resource_metadata[T](
-        self, factory: LifecycleFactory[T], classification: FactoryKind
+        self, factory: LifecycleFactory[T], classification: type
     ):
-        assert get_factory_kind(factory) is classification
+        assert isinstance(build_lifecycle_plan(factory), classification)
         test_metadata = partial(_test_metadata, classification=classification)
 
         context = Context().with_resource("factory", factory)
@@ -1090,7 +1124,16 @@ class TestLifecycleFactory:
 
     @pytest.mark.parametrize(
         "factory",
-        [sync_gen_factory, async_gen_factory, sync_cm_factory, async_cm_factory],
+        [
+            sync_gen_factory,
+            async_gen_factory,
+            sync_cm_factory,
+            async_cm_factory,
+            wrapped_sync_gen_factory,
+            wrapped_async_gen_factory,
+            wrapped_sync_cm_factory,
+            wrapped_async_cm_factory,
+        ],
     )
     @async_test
     async def test_resource_opens_and_closes[T](self, factory: LifecycleFactory[T]):
@@ -1132,31 +1175,25 @@ class TestValueFactory:
         _test_credential_and_lazy(resource)
 
     @pytest.mark.parametrize(
-        ("factory", "cleanup", "classification"),
+        ("factory", "cleanup", "is_async"),
         [
-            (
-                sync_callable_factory,
-                close_connection,
-                FactoryKind.SYNC_CALLABLE_FACTORY,
-            ),
-            (
-                async_callable_factory,
-                close_async_connection,
-                FactoryKind.ASYNC_CALLABLE_FACTORY,
-            ),
+            (sync_callable_factory, close_connection, False),
+            (async_callable_factory, close_async_connection, True),
         ],
     )
     def test_resource_metadata[T](
-        self, factory: ValueFactory[T], cleanup, classification: FactoryKind
+        self, factory: ValueFactory[T], cleanup, is_async: bool
     ):
-        assert get_factory_kind(factory, lifecycle=False) is classification
+        plan = build_factory_plan(factory, cleanup=cleanup)
+        assert isinstance(plan, ValueFactoryPlan)
+        assert plan.is_async is is_async
         test_metadata = partial(_test_metadata, typ=ReusableResource, reusable=True)
 
         resource = Resource.from_external(factory)
         test_metadata(resource, external=True)
 
         resource = Resource.from_factory(factory, cleanup=cleanup)
-        test_metadata(resource, external=False, classification=classification)
+        test_metadata(resource, external=False, classification=ValueFactoryPlan)
 
     @pytest.mark.parametrize(
         ("factory", "cleanup"),
@@ -1350,7 +1387,71 @@ class TestValues:
             Resource(started)
 
 
+RESOURCE_SHAPES = [
+    pytest.param(
+        lambda: Resource.from_external(_Connection()),
+        ResourceStrategy.EXTERNAL,
+        False,
+        True,
+        id="external",
+    ),
+    pytest.param(
+        lambda: Resource(_Connection()), ResourceStrategy.OWNED, False, True, id="owned"
+    ),
+    pytest.param(
+        lambda: Resource.from_factory(sync_callable_factory, cleanup=close_connection),
+        ResourceStrategy.VALUE_FACTORY,
+        False,
+        False,
+        id="sync-value-factory",
+    ),
+    pytest.param(
+        lambda: Resource.from_factory(
+            async_callable_factory, cleanup=close_async_connection
+        ),
+        ResourceStrategy.VALUE_FACTORY,
+        True,
+        False,
+        id="async-value-factory",
+    ),
+    pytest.param(
+        lambda: Resource.from_lifecycle(sync_gen_factory),
+        ResourceStrategy.LIFECYCLE,
+        False,
+        False,
+        id="sync-lifecycle",
+    ),
+    pytest.param(
+        lambda: Resource.from_lifecycle(async_gen_factory),
+        ResourceStrategy.LIFECYCLE,
+        True,
+        False,
+        id="async-lifecycle",
+    ),
+]
+
+
 class TestResourceEcosystem:
+    @pytest.mark.parametrize(
+        ("build", "strategy", "async_native", "has_value"), RESOURCE_SHAPES
+    )
+    def test_plan_derived_properties(
+        self,
+        build: Callable[[], Resource[Any]],
+        strategy: ResourceStrategy,
+        async_native: bool,
+        has_value: bool,
+    ):
+        resource = build()
+        assert resource.strategy is strategy
+        assert resource.async_native is async_native
+
+        if has_value:
+            assert isinstance(resource.value, _Connection)
+        else:
+            with pytest.raises(AttributeError, match="no value until acquired"):
+                _ = resource.value
+
     def test_context_with_resource_is_immutable_copy(self):
         base = Context(test=True)
         resource = Resource.from_factory(sync_gen_factory)
@@ -1363,7 +1464,10 @@ class TestResourceEcosystem:
 
     def test_classify_rejects_non_resource(self):
         with pytest.raises(TypeError, match="Invalid lifecycle factory"):
-            get_factory_kind(_SCALAR)  # pyright: ignore[reportArgumentType]
+            build_lifecycle_plan(_SCALAR)  # pyright: ignore[reportArgumentType]
+
+        with pytest.raises(TypeError, match="Invalid resource factory"):
+            Resource.from_factory(_SCALAR)  # pyright: ignore[reportArgumentType]
 
     def test_operator_passes_the_supplied_view_through(self, connection: _Connection):
         captured = {}
@@ -1411,7 +1515,7 @@ class TestResourceImmutability:
         resource = Resource.from_factory(sync_gen_factory)
 
         with pytest.raises(AttributeError):
-            resource.factory = sync_gen_factory  # pyright: ignore[reportAttributeAccessIssue]
+            resource.plan = resource.plan  # pyright: ignore[reportAttributeAccessIssue]
 
         with pytest.raises(AttributeError):
-            resource.kind = FactoryKind.SYNC_GEN_FACTORY  # pyright: ignore[reportAttributeAccessIssue]
+            resource.plan.enter = sync_gen_factory  # pyright: ignore[reportAttributeAccessIssue]

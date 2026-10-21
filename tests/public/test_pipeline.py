@@ -285,8 +285,10 @@ class TestPipelineChaining:
         pipeline = Pipeline.from_module("sort").pipe("sort")
         assert sorted(pipeline.workflow.nodes) == ["sort-1", "sort-2"]
 
-    @pytest.mark.parametrize("name", ["_hidden", "keys", "values", "items", "get"])
-    def test_getattr_rejects_reserved_names(self, name):
+    @pytest.mark.parametrize(
+        "name", ["_hidden", "keys", "values", "items", "get", "close", "sortt"]
+    )
+    def test_getattr_rejects_non_builtin_names(self, name):
         with pytest.raises(AttributeError):
             getattr(Pipeline.from_module("fetch"), name)
 

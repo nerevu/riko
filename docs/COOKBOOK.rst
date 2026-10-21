@@ -795,6 +795,22 @@ with resources (from a ``context.with_resource``), pass it to the ``Pipeline`` w
     >>> pipeline.context is context
     True
 
+A generator function like ``open_db`` is a lifecycle that riko enters before the run and
+closes after it. To share a client you already manage, wrap it with
+``Resource.from_external``. Modules receive it, and riko never closes it. A plain
+callable that returns the value should use ``Resource.from_factory`` with an explicit
+``cleanup``.
+
+.. code-block:: python
+
+    >>> from riko import Pipeline, Resource
+    >>>
+    >>> client = {'session': 'open'}
+    >>> shared = Resource.from_external(client)
+    >>> pipeline = Pipeline.from_module('fetch').with_resource('client', shared)
+    >>> pipeline.context.resources['client'].value is client
+    True
+
 Fanning out a stream
 ^^^^^^^^^^^^^^^^^^^^
 

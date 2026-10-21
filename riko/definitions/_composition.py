@@ -25,6 +25,7 @@ from riko.types._collections import (
     validator_from_require,
 )
 from riko.types._guards import is_mapping, is_streamlike
+from riko.types._module_ids import BUILTIN_MODULE_IDS
 from riko.types._sentinels import MISSING, MissingType
 from riko.types._streams import Item
 from riko.types._workflow import Endpoint, NodeId
@@ -622,13 +623,12 @@ class PipelineDefinition(Generic[T]):
         """
         Chains a module by attribute. E.g., ``.sort()`` appends the sort module.
 
-        A module named like an existing ``Pipeline`` method (e.g., ``split``) needs to
-        use ``.pipe(name)``, since the method wins. Any other non-underscore attribute
-        is treated as a module name. This means a typo surfaces as a module-resolution
-        failure rather than ``AttributeError``. Mapping names are excluded to keep a
-        pipeline from looking dict-like to duck-typed callers.
+        Only built-in modules chain by attribute. Any other name raises
+        ``AttributeError``. A registered, stored, or Context-defined module chains with
+        ``.pipe(name)``, as does a built-in module named like a ``Pipeline`` method
+        (e.g., ``split``).
         """
-        if name.startswith("_") or name in {"keys", "values", "items", "get"}:
+        if name not in BUILTIN_MODULE_IDS:
             raise AttributeError(name)
 
         return partial(self.pipe, name)

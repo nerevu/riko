@@ -21,6 +21,11 @@ from riko.base.exceptions import (
 )
 from riko.definitions._context import Context
 from riko.definitions._nodes import Node
+from riko.definitions._resource_definition import (
+    OneShotResource,
+    Resource,
+    ReusableResource,
+)
 from riko.definitions._workflow_definition import Workflow, WorkflowLike
 from riko.io._async import async_get_temp_file, async_url_open, async_write
 from riko.modules._metadata import describe_module, get_module_metadata, list_modules
@@ -65,9 +70,12 @@ __all__ = [
     "InvalidPipelineError",
     "Modules",
     "Node",
+    "OneShotResource",
     "Pipeline",
     "PipelineError",
     "PipelineStateError",
+    "Resource",
+    "ReusableResource",
     "RikoError",
     "Sinks",
     "Sources",

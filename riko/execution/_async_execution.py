@@ -35,7 +35,13 @@ from riko.bado.itertools import (
 )
 from riko.base._config import settings as config
 from riko.base.exceptions import InvalidPipelineError
-from riko.types._resource import ResourceStrategy
+from riko.types._resource import (
+    AsyncLifecyclePlan,
+    ExternalPlan,
+    OwnedPlan,
+    SyncLifecyclePlan,
+    ValueFactoryPlan,
+)
 
 from ._adapt import (
     async_drain,
@@ -57,7 +63,8 @@ from ._execution import (
     _FailedAcquisition,
     _require_source,
 )
-from ._resource_plan import _ResourcePlan, aclose_resource, close_resource
+from ._resource_acquisition import build_context_manager, call_factory
+from ._resource_teardown import aclose_resource, close_resource
 from ._resource_view import ResourceView
 
 if TYPE_CHECKING:
@@ -68,7 +75,8 @@ if TYPE_CHECKING:
     from anyio import CapacityLimiter as Limiter
     from anyio.lowlevel import RunVar
 
-    from riko.definitions._resource_definition import ResolvedValue, Resource
+    from riko.definitions._resource_definition import Resource
+    from riko.types._resource import ResolvedValue, ResourcePlan
     from riko.types._streams import AnyIterable
     from riko.types._wrappers import AsyncFunc, AsyncModuleWrapperOutput
 
@@ -444,11 +452,11 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         else:
             self.push_async_callback(_asyncify_call, teardown, value)
 
-    async def _acall_factory[R](self, plan: _ResourcePlan[R]) -> R:
-        if plan.async_native:
-            raw = plan.call_factory()
+    async def _acall_factory[R](self, plan: ValueFactoryPlan[R]) -> R:
+        if plan.is_async:
+            raw = call_factory(plan)
         else:
-            raw = await _asyncify_call(plan.call_factory)
+            raw = await _asyncify_call(partial(call_factory, plan))
 
         value = await as_awaitable(raw)
 
@@ -457,29 +465,31 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
         return value
 
-    async def _aenter_lifecycle[R](self, plan: _ResourcePlan[R]) -> R:
-        built = plan.build_context_manager()
-
-        if plan.async_native:
-            cm = cast("AbstractAsyncContextManager[R]", built)
-        else:
-            cm = _WorkerContext(cast("AbstractContextManager[R]", built))
+    async def _aenter_lifecycle[R](
+        self, plan: SyncLifecyclePlan[R] | AsyncLifecyclePlan[R]
+    ) -> R:
+        match plan:
+            case AsyncLifecyclePlan():
+                cm: AbstractAsyncContextManager[R] = build_context_manager(plan)
+            case SyncLifecyclePlan():
+                cm = _WorkerContext(build_context_manager(plan))
 
         return await self.enter_async_context(cm)
 
-    async def _aopen[R](self, plan: _ResourcePlan[R]) -> ResolvedValue[R]:
-        if plan.strategy is ResourceStrategy.EXTERNAL:
-            value = plan.value
-        elif plan.strategy is ResourceStrategy.OWNED:
-            value = plan.value
-            is_async = plan.is_teardown_async
-            close = aclose_resource if is_async else close_resource
-            teardown = partial(close, plan.cleanup)
-            self._register_teardown(teardown, value, is_async=is_async)
-        elif plan.strategy is ResourceStrategy.VALUE_FACTORY:
-            value = await self._acall_factory(plan)
-        else:
-            value = await self._aenter_lifecycle(plan)
+    async def _aopen[R](self, plan: ResourcePlan[R]) -> ResolvedValue[R]:
+        match plan:
+            case ExternalPlan():
+                value = plan.value
+            case OwnedPlan():
+                value = plan.value
+                is_async = plan.is_teardown_async
+                close = aclose_resource if is_async else close_resource
+                teardown = partial(close, plan.cleanup)
+                self._register_teardown(teardown, value, is_async=is_async)
+            case ValueFactoryPlan():
+                value = await self._acall_factory(plan)
+            case SyncLifecyclePlan() | AsyncLifecyclePlan():
+                value = await self._aenter_lifecycle(plan)
 
         return value
 
@@ -487,7 +497,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         self, resource: Resource[R]
     ) -> Acquisition[ResolvedValue[R]]:
         try:
-            value = await self._aopen(_ResourcePlan(resource))
+            value = await self._aopen(resource.plan)
         except Exception as error:  # noqa: BLE001
             entry: Acquisition[ResolvedValue[R]] = _FailedAcquisition(error)
         else:

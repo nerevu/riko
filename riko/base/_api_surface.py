@@ -46,7 +46,10 @@ OTHER = frozenset(
         "ExecutionMode",
         "Executor",
         "Node",
+        "OneShotResource",
         "Pipeline",
+        "Resource",
+        "ReusableResource",
         "Workflow",
         "WorkflowLike",
         "WorkflowDocument",
@@ -162,6 +165,14 @@ EXTENSION = EXT_MODULES | EXT_TARGETS | EXT_WORKFLOWS
 
 TYPES = frozenset(
     {
+        "AsyncLifecyclePlan",
+        "ExternalPlan",
+        "LifecyclePlan",
+        "OwnedPlan",
+        "ResourcePlan",
+        "ResourceStrategy",
+        "SyncLifecyclePlan",
+        "ValueFactoryPlan",
         "AsyncStream",
         "AsyncItems",
         "AsyncPipeTuples",

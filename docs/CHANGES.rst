@@ -8,18 +8,25 @@ New
 ~~~
 
 - Added ``riko.Pipeline``, an immutable, runnable workflow. Start one with
-  ``Pipeline.from_module`` or ``Pipeline``, or seed one with ``items | pipeline``.
-  Run it with ``list(pipeline)``, ``async for``, or ``.first()``/``.afirst()``.
-  ``.with_context`` sets the run ``Context`` and ``.with_resource`` provides a resource.
-  ``.with_execution(...)`` configures concurrency. Each chained module takes
-  ``options=`` call options that are stored as a ``CallOptions`` record.
+  ``Pipeline.from_module`` or ``Pipeline``, or seed one with ``items | pipeline``. Run
+  it with ``list(pipeline)``, ``async for``, or ``.first()``/``.afirst()``. Chain it by
+  attribute (``.sort()``) or with ``.pipe(name)``. Chained modules take ``options=``
+  (stored as a ``CallOptions``). ``.with_context`` sets the run ``Context`` and
+  ``.with_resource`` provides a resource. ``.with_execution`` configures concurrency.
 
-- Added the ``Workflow`` graph (``Node``, ``Edge``, and ``Endpoint``) that a
-  ``Pipeline`` runs. ``Workflow.parse`` reads a workflow document
-  (``WorkflowDocument``), a bare-bones DAG (``PipeDag``), or a pipe definition
-  (``PipeDef``), and ``riko.DocumentShape`` pins a specific shape. ``Workflow.load``
-  reads any of those shapes from a file, and ``flow.serialize()`` writes a
-  ``WorkflowDocument``.
+- Added ``riko.Resource`` for use with ``.with_resource``. ``Resource.from_external``
+  shares a value you manage, ``Resource.from_factory`` calls a factory with an explicit
+  ``cleanup`` (or a generator/context-manager factory without one), and
+  ``Resource.from_lifecycle`` enters a generator or context manager. ``from_external``
+  and ``from_factory`` return a ``ReusableResource``, which a ``Context`` can hold.
+  ``Resource(value)`` and ``from_lifecycle`` return a ``OneShotResource``, which it
+  rejects. ``resource.plan`` describes how riko acquires a resource.
+
+- Added the ``Workflow`` graph (``Node``, ``Edge``, ``Endpoint``) that a ``Pipeline``
+  runs. ``Workflow.parse`` reads a workflow document (``WorkflowDocument``), a
+  bare-bones DAG (``PipeDag``), or a pipe definition (``PipeDef``), and
+  ``riko.DocumentShape`` pins a specific shape. ``Workflow.load`` reads any of those
+  shapes from a file, and ``flow.serialize()`` writes a ``WorkflowDocument``.
 
 - Added ``riko.WorkflowLike`` to annotate anything accepted where a ``Workflow`` is
   expected, ``riko.WorkflowDocument`` to annotate a workflow document (its ``bytes``

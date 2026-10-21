@@ -28,13 +28,13 @@ Attributes:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, get_args, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 from attrs import evolve
 
 from riko.base.exceptions import UnsupportedModuleError
 from riko.definitions._module_definition import ModuleDefinition
-from riko.types._module_ids import ModuleId
+from riko.types._module_ids import BUILTIN_MODULE_IDS
 from riko.types._pipedef import is_pipe_id
 
 from ._importutils import load_interfaces, require_interface
@@ -49,8 +49,6 @@ if TYPE_CHECKING:
         ModuleWrapper,
         SyncModuleWrapper,
     )
-
-BUILTIN_NAMES: frozenset[str] = frozenset(get_args(ModuleId))
 
 
 def _resolve_definition(obj: object) -> ModuleDefinition | None:
@@ -152,7 +150,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
         if name and not replace:
             if name in self._discover_entry_points():
                 tier = "an entry-point"
-            elif name in BUILTIN_NAMES:
+            elif name in BUILTIN_MODULE_IDS:
                 tier = "a built-in"
             else:
                 tier = None
@@ -165,8 +163,8 @@ class ModuleRegistry(Registry[ModuleDefinition]):
         super().register(entry, replace=replace)
 
     def _require_builtin_name(self, name: str) -> None:
-        if name not in BUILTIN_NAMES:
-            candidates = BUILTIN_NAMES.union(self.catalog_names())
+        if name not in BUILTIN_MODULE_IDS:
+            candidates = BUILTIN_MODULE_IDS.union(self.catalog_names())
             raise UnsupportedModuleError(name, candidates=candidates)
 
     def _resolve_builtin(self, name: str, is_async: bool = False) -> ModuleWrapper:

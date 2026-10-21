@@ -2,40 +2,33 @@
 
 from __future__ import annotations
 
-from functools import cached_property
 from inspect import isasyncgen, isgenerator
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Literal,
-    Never,
-    Self,
-    TypedDict,
-    Unpack,
-    cast,
-    overload,
-)
+from typing import TYPE_CHECKING, Any, Literal, Never, Self, cast, overload
 from warnings import warn
 
 from attrs import define, field
 
 from riko.base.exceptions import ResourceInterpretationWarning
-from riko.types._collections import FrozenDict, freeze
+from riko.types._collections import FrozenDict
 from riko.types._io import is_closeable
 from riko.types._resource import (
-    VALUE_FACTORY_KINDS,
     AnyContextManager,
+    AsyncLifecyclePlan,
     Cleanup,
-    FactoryKind,
+    ExternalPlan,
     LifecycleFactory,
+    OwnedPlan,
+    ResolvedValue,
     ResourceFactory,
+    ResourcePlan,
     ResourceStrategy,
+    SyncLifecyclePlan,
     ValueFactory,
-    get_factory_kind,
-    is_async_context_manager,
+    ValueFactoryPlan,
+    build_factory_plan,
+    build_lifecycle_plan,
     is_context_manager,
     is_lifecycle_factory,
-    is_sync_context_manager,
 )
 
 if TYPE_CHECKING:
@@ -44,51 +37,30 @@ if TYPE_CHECKING:
     from riko.types._io import Closeable
 
 
-type AnyFactory[T] = ResourceFactory[T] | AnyContextManager[T]
 type ResourcesLike = str | Iterable[str] | Mapping[str, str]
 type Values = Mapping[str, Any | Closeable]
-type ResolvedValue[T] = T | Closeable
 
 
-class _ResourceFields(TypedDict, total=False):
-    """The optional fields an alternate constructor passes to the generated init."""
-
-    credential: str | None
-    lazy: bool
-    cleanup: Cleanup[Any] | Literal[False] | None
-    _kind: FactoryKind | None
-    _factory: AnyFactory[Any] | None
-    _args: tuple[object, ...]
-    _kwargs: Mapping[str, object]
-    _external: bool
-
-
-@define(frozen=True, slots=True, eq=False, repr=False)
+@define(frozen=True, slots=True, eq=False, repr=False, init=False)
 class Resource[T]:
     """
     An immutable execution-resource definition.
 
-    A resource is a resolved value, a caller-owned value, a value-producing
-    factory, or a generator/context-manager lifecycle. The variant is carried as
-    data rather than a subclass: ``external`` marks caller-owned lifecycles and
-    ``factory``/``kind`` mark declarations the execution layer enters.
+    A resource is a resolved value, a caller-owned value, a value-producing factory, or
+    a generator/context-manager lifecycle. Each constructor classifies its declaration
+    once into ``plan``. ``Resource(value, cleanup=...)`` owns ``value`` and closes it
+    after the run: with ``cleanup`` when given, never when ``cleanup`` is ``False``,
+    and otherwise with the value's own ``aclose``/``close``.
 
     Attributes:
 
-        value: The resolved value this resource hands to parsers.
-        external: Whether the caller owns the lifecycle (Riko never closes it).
+        plan: How an execution acquires and tears down the resource.
         credential: A credential reference resolved by the connector layer.
-        cleanup: Overrides the value's ``aclose``/``close`` to close an owned handle.
-        lazy: Whether entry should defer until first use. Not yet honored: a run
-            acquires every resource its nodes bind, whether or not it is used.
-        kind: How a factory produces its value, or ``None`` for a resolved value.
-        factory: The factory or lifecycle the execution layer enters, if any.
-        args: Frozen positional arguments for ``factory``.
-        kwargs: Frozen keyword arguments for ``factory``.
+        lazy: Whether entry should defer until first use (not yet implemented).
 
     Examples:
 
-        >>> from riko.definitions._resource_definition import Resource
+        >>> from riko import Resource
         >>>
         >>> class _Connection:
         ...    def __init__(self):
@@ -111,19 +83,17 @@ class Resource[T]:
 
     """
 
-    value: ResolvedValue[T]
+    plan: ResourcePlan[T]
     credential: str | None = field(default=None, kw_only=True)
     lazy: bool = field(default=False, kw_only=True)
-    cleanup: Cleanup[T] | Literal[False] | None = field(default=None, kw_only=True)
-    kind: FactoryKind | None = field(default=None, kw_only=True, alias="_kind")
-    factory: AnyFactory[T] | None = field(default=None, kw_only=True, alias="_factory")
-    args: tuple[object, ...] = field(
-        factory=tuple, converter=freeze, kw_only=True, alias="_args"
-    )
-    kwargs: FrozenDict[str, object] = field(
-        factory=FrozenDict, converter=FrozenDict, kw_only=True, alias="_kwargs"
-    )
-    external: bool = field(default=False, kw_only=True, alias="_external")
+
+    @classmethod
+    def _validate_constructor(cls) -> None:
+        if cls is not Resource:
+            msg = f"{cls.__name__} is a declaration type. Construct it through "
+            msg += "Resource(...), Resource.from_external(...), "
+            msg += "Resource.from_factory(...), or Resource.from_lifecycle(...)."
+            raise TypeError(msg)
 
     @overload
     def __new__(  # noqa: E704
@@ -152,8 +122,12 @@ class Resource[T]:
     @overload  # noqa: E301
     def __new__(cls, value: T) -> Never: ...  # noqa: E704
     def __new__(  # noqa: E301
-        cls, *_: object, **_kw: object
+        cls, *args: object, **kwargs: object
     ) -> OneShotResource[T] | ReusableResource[T]:
+        # pickle and copy rebuild an instance by calling __new__ with no arguments
+        if args or kwargs:
+            cls._validate_constructor()
+
         target = OneShotResource if cls is Resource else cls
         return cast("OneShotResource[T] | ReusableResource[T]", object.__new__(target))
 
@@ -165,71 +139,107 @@ class Resource[T]:
             msg = f"Expected a resolved resource value but got a: {type(value)}."
             raise TypeError(msg)
 
-    def _validate_fields(self) -> None:
-        if (self.factory is None) != (self.kind is None):
-            msg = "A resource factory and its kind must be given together. "
-            msg += "Use Resource.from_factory(...) or Resource.from_lifecycle(...)."
+    def _set_fields(
+        self, plan: ResourcePlan[T], credential: str | None, lazy: bool
+    ) -> None:
+        object.__setattr__(self, "plan", plan)  # noqa: PLC2801
+        object.__setattr__(self, "credential", credential)  # noqa: PLC2801
+        object.__setattr__(self, "lazy", lazy)  # noqa: PLC2801
+
+    def __init__(
+        self,
+        value: ResolvedValue[T],
+        *,
+        cleanup: Cleanup[T] | Literal[False] | None = None,
+        credential: str | None = None,
+        lazy: bool = False,
+    ) -> None:
+        self._validate_value(value)
+        started = isgenerator(value) or isasyncgen(value)
+
+        if cleanup is None and started:
+            msg = "A generator object is not a resolved resource value. To run "
+            msg += "a generator as setup and teardown, pass the generator "
+            msg += "function to Resource.from_lifecycle(...) instead."
             raise TypeError(msg)
-        elif self.external and self.factory is not None:
-            msg = "An external resource cannot carry a factory. "
-            msg += "Use Resource.from_external(value)."
-            raise TypeError(msg)
-        elif self.external and not isinstance(self, ReusableResource):
-            msg = "An external resource must be reusable. "
-            msg += "Use Resource.from_external(value)."
+        elif cleanup is None and not is_closeable(value):
+            msg = "Must provide a Closeable value or cleanup function for riko "
+            msg += f"owned resources. Not a {type(value).__name__}. If this "
+            msg += "value's lifecycle is externally managed, use "
+            msg += "Resource.from_external(...) instead."
             raise TypeError(msg)
 
-    def __attrs_post_init__(self) -> None:
-        self._validate_fields()
-
-        if self.factory is None and not self.external:
-            self._validate_value(self.value)
-            started = isgenerator(self.value) or isasyncgen(self.value)
-
-            if self.cleanup is None and started:
-                msg = "A generator object is not a resolved resource value. To run "
-                msg += "a generator as setup and teardown, pass the generator "
-                msg += "function to Resource.from_lifecycle(...) instead."
-                raise TypeError(msg)
-            elif self.cleanup is None and not is_closeable(self.value):
-                msg = "Must provide a Closeable value or cleanup function for riko "
-                msg += f"owned resources. Not a {type(self.value).__name__}. If this "
-                msg += "value's lifecycle is externally managed, use "
-                msg += "Resource.from_external(...) instead."
-                raise TypeError(msg)
+        self._set_fields(OwnedPlan(value, cleanup), credential, lazy)
 
     @classmethod
-    def _from_data[R: Resource[Any]](
-        cls, target: type[R], value: object, **fields: Unpack[_ResourceFields]
+    def _from_plan[R: Resource[Any]](
+        cls,
+        target: type[R],
+        plan: ResourcePlan[Any],
+        credential: str | None = None,
+        lazy: bool = False,
     ) -> R:
         resource = object.__new__(target)
-        target.__init__(resource, value, **fields)
+        resource._set_fields(plan, credential, lazy)
         return resource
 
     @property
     def reusable(self) -> bool:
+        """Whether a reusable Context may hold this resource."""
         return isinstance(self, ReusableResource)
 
-    @cached_property
+    @property
+    def external(self) -> bool:
+        """Whether the caller owns the lifecycle (Riko never closes it)."""
+        return isinstance(self.plan, ExternalPlan)
+
+    @property
+    def value(self) -> ResolvedValue[T]:
+        """
+        The resolved value an external or owned resource carries.
+
+        Raises:
+
+            AttributeError: When a factory or lifecycle produces the value at
+                acquisition instead.
+
+        """
+        match self.plan:
+            case ExternalPlan(value=value) | OwnedPlan(value=value):
+                pass
+            case _:
+                msg = "A factory or lifecycle resource has no value until acquired."
+                raise AttributeError(msg)
+
+        return value
+
+    @property
     def strategy(self) -> ResourceStrategy:
         """How an execution acquires and tears down this resource."""
-        kind = self.kind
-
-        if self.external:
-            strategy = ResourceStrategy.EXTERNAL
-        elif kind is None:
-            strategy = ResourceStrategy.OWNED
-        elif kind in VALUE_FACTORY_KINDS:
-            strategy = ResourceStrategy.VALUE_FACTORY
-        else:
-            strategy = ResourceStrategy.LIFECYCLE
+        match self.plan:
+            case ExternalPlan():
+                strategy = ResourceStrategy.EXTERNAL
+            case OwnedPlan():
+                strategy = ResourceStrategy.OWNED
+            case ValueFactoryPlan():
+                strategy = ResourceStrategy.VALUE_FACTORY
+            case SyncLifecyclePlan() | AsyncLifecyclePlan():
+                strategy = ResourceStrategy.LIFECYCLE
 
         return strategy
 
-    @cached_property
+    @property
     def async_native(self) -> bool:
         """Whether an execution produces or enters this resource natively async."""
-        return self.kind is not None and self.kind.is_async
+        match self.plan:
+            case AsyncLifecyclePlan():
+                is_async = True
+            case ValueFactoryPlan():
+                is_async = self.plan.is_async
+            case _:
+                is_async = False
+
+        return is_async
 
     @overload
     @classmethod
@@ -264,16 +274,8 @@ class Resource[T]:
         **kwargs: object,
     ) -> ReusableResource[T]:
         """The alternate form of ``Context.with_resource(name, factory)``."""
-        kind = get_factory_kind(factory, lifecycle=False)
-
-        if kind in VALUE_FACTORY_KINDS:
-            if cleanup is None:
-                raise TypeError("ValueFactory requires an explicit cleanup function")
-        elif cleanup is not None:
-            msg = "Cleanup is not allowed for generator/context-manager factories. "
-            msg += "Use Resource.from_lifecycle(...) instead if you want riko to "
-            msg += "manage the lifecycle."
-            raise TypeError(msg)
+        cls._validate_constructor()
+        plan = build_factory_plan(factory, *args, cleanup=cleanup, **kwargs)
 
         if is_context_manager(factory):
             warn(
@@ -285,17 +287,7 @@ class Resource[T]:
                 stacklevel=2,
             )
 
-        return cls._from_data(
-            ReusableResource,
-            factory,
-            _factory=factory,
-            _kind=kind,
-            _args=args,
-            _kwargs=kwargs,
-            cleanup=cleanup,
-            credential=credential,
-            lazy=lazy,
-        )
+        return cls._from_plan(ReusableResource, plan, credential, lazy)
 
     @overload
     @classmethod
@@ -334,7 +326,7 @@ class Resource[T]:
 
         Examples:
 
-            >>> from riko.definitions._resource_definition import Resource
+            >>> from riko import Resource
             >>>
             >>> class Client:
             ...     closed = False
@@ -349,8 +341,9 @@ class Resource[T]:
             True
 
         """
+        cls._validate_constructor()
         cls._validate_value(value)
-        return cls._from_data(ReusableResource, value, _external=True)
+        return cls._from_plan(ReusableResource, ExternalPlan(value))
 
     @classmethod
     def from_lifecycle[T](  # pyright: ignore[reportGeneralTypeIssues]
@@ -383,11 +376,7 @@ class Resource[T]:
 
         Examples:
 
-            >>> from riko.definitions._resource_definition import (
-            ...     OneShotResource,
-            ...     Resource,
-            ... )
-            >>> from riko.types._resource import FactoryKind
+            >>> from riko import OneShotResource, Resource
             >>>
             >>> def db():
             ...     yield object()
@@ -395,41 +384,47 @@ class Resource[T]:
             >>> resource = Resource.from_lifecycle(db, credential="microsoft/cif")
             >>> isinstance(resource, OneShotResource)
             True
-            >>> resource.kind
-            <FactoryKind.SYNC_GEN_FACTORY: 'sync_gen_factory'>
+            >>> type(resource.plan).__name__
+            'SyncLifecyclePlan'
             >>> resource.external
             False
             >>> resource.reusable
             False
 
         """
-        if is_sync_context_manager(factory):
-            kind = FactoryKind.SYNC_CONTEXTMANAGER
-        elif is_async_context_manager(factory):
-            kind = FactoryKind.ASYNC_CONTEXTMANAGER
-        else:
-            kind = get_factory_kind(factory)
-
-        return cls._from_data(
-            OneShotResource,
-            factory,
-            _factory=factory,
-            _kind=kind,
-            credential=credential,
-            lazy=lazy,
-        )
+        cls._validate_constructor()
+        plan = build_lifecycle_plan(factory)
+        return cls._from_plan(OneShotResource, plan, credential, lazy)
 
 
 class OneShotResource[T](Resource[T]):
-    """A Resource that may only be used once."""
+    """
+    A Resource that may only be used once.
+
+    It is a declaration type: ``Resource(value)`` and ``Resource.from_lifecycle``
+    construct it, and calling it or its constructors directly raises ``TypeError``.
+    """
 
     __slots__ = ()
+
+    if TYPE_CHECKING:
+
+        def __new__(cls, *args: object, **kwargs: object) -> Never: ...  # noqa: E704
 
 
 class ReusableResource[T](Resource[T]):
-    """A Resource that may be stored in a reusable Context."""
+    """
+    A Resource that may be stored in a reusable Context.
+
+    It is a declaration type: ``Resource.from_external`` and ``Resource.from_factory``
+    construct it, and calling it or its constructors directly raises ``TypeError``.
+    """
 
     __slots__ = ()
+
+    if TYPE_CHECKING:
+
+        def __new__(cls, *args: object, **kwargs: object) -> Never: ...  # noqa: E704
 
 
 type ReusableResources = FrozenDict[str, ReusableResource[Any]]

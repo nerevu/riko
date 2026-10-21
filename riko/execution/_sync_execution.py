@@ -21,7 +21,13 @@ from attrs import define, field
 from riko.bado._backend import start_blocking_portal
 from riko.base.exceptions import InvalidPipelineError, PipelineStateError
 from riko.types._enums import Executor
-from riko.types._resource import ResourceStrategy
+from riko.types._resource import (
+    AsyncLifecyclePlan,
+    ExternalPlan,
+    OwnedPlan,
+    SyncLifecyclePlan,
+    ValueFactoryPlan,
+)
 
 from ._adapt import (
     async_drain,
@@ -41,17 +47,18 @@ from ._execution import (
     _require_source,
 )
 from ._pools import _PoolLifetime
-from ._resource_plan import _ResourcePlan, close_resource
+from ._resource_acquisition import build_context_manager, call_factory
+from ._resource_teardown import close_resource
 from ._resource_view import ResourceView
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
-    from contextlib import AbstractContextManager
     from types import TracebackType
 
     from anyio.from_thread import BlockingPortal
 
-    from riko.definitions._resource_definition import ResolvedValue, Resource
+    from riko.definitions._resource_definition import Resource
+    from riko.types._resource import ResolvedValue, ResourcePlan
     from riko.types._streams import AnyIterable
     from riko.types._wrappers import AsyncModuleWrapperOutput
 
@@ -184,19 +191,20 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         return result
 
-    def _validate_sync_teardown[R](self, plan: _ResourcePlan[R]) -> None:
+    def _validate_sync_teardown[R](
+        self, plan: OwnedPlan[R] | ValueFactoryPlan[R]
+    ) -> None:
         if plan.is_teardown_async:
-            if plan.strategy is ResourceStrategy.LIFECYCLE:
-                msg = "async-native resource lifecycle requires async execution"
-            elif plan.cleanup is None:
-                msg = "async-native resource teardown requires async execution"
-            else:
-                msg = "async resource cleanup requires async execution"
+            match plan:
+                case OwnedPlan(cleanup=None):
+                    msg = "async-native resource teardown requires async execution"
+                case _:
+                    msg = "async resource cleanup requires async execution"
 
             raise InvalidPipelineError(msg)
 
-    def _call_factory[R](self, plan: _ResourcePlan[R]) -> R:
-        raw = plan.call_factory()
+    def _call_factory[R](self, plan: ValueFactoryPlan[R]) -> R:
+        raw = call_factory(plan)
         value = self.run_async(raw) if isawaitable(raw) else cast("R", raw)
 
         if cleanup := plan.cleanup:
@@ -204,28 +212,31 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         return value
 
-    def _enter_lifecycle[R](self, plan: _ResourcePlan[R]) -> R:
-        cm = cast("AbstractContextManager[R]", plan.build_context_manager())
-        return self.enter_context(cm)
+    def _enter_lifecycle[R](self, plan: SyncLifecyclePlan[R]) -> R:
+        return self.enter_context(build_context_manager(plan))
 
-    def _open[R](self, plan: _ResourcePlan[R]) -> ResolvedValue[R]:
-        self._validate_sync_teardown(plan)
-
-        if plan.strategy is ResourceStrategy.EXTERNAL:
-            value = plan.value
-        elif plan.strategy is ResourceStrategy.OWNED:
-            value = plan.value
-            self.callback(close_resource, plan.cleanup, value)
-        elif plan.strategy is ResourceStrategy.VALUE_FACTORY:
-            value = self._call_factory(plan)
-        else:
-            value = self._enter_lifecycle(plan)
+    def _open[R](self, plan: ResourcePlan[R]) -> ResolvedValue[R]:
+        match plan:
+            case ExternalPlan():
+                value = plan.value
+            case OwnedPlan():
+                self._validate_sync_teardown(plan)
+                value = plan.value
+                self.callback(close_resource, plan.cleanup, value)
+            case ValueFactoryPlan():
+                self._validate_sync_teardown(plan)
+                value = self._call_factory(plan)
+            case SyncLifecyclePlan():
+                value = self._enter_lifecycle(plan)
+            case AsyncLifecyclePlan():
+                msg = "async-native resource lifecycle requires async execution"
+                raise InvalidPipelineError(msg)
 
         return value
 
     def _acquire_entry[R](self, resource: Resource[R]) -> Acquisition[ResolvedValue[R]]:
         try:
-            value = self._open(_ResourcePlan(resource))
+            value = self._open(resource.plan)
         except Exception as error:  # noqa: BLE001
             entry: Acquisition[ResolvedValue[R]] = _FailedAcquisition(error)
         else:

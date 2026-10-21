@@ -173,11 +173,11 @@ Conceptually:
 
 ```text
 Resource[T]                   # variant carried as data, not a subclass:
-├── OneShotResource[T]        #   external (bool) / factory + kind mark the variant
+├── OneShotResource[T]        #   the `plan` record marks the variant
 └── ReusableResource[T]       # Context-storable definition
 ```
 
-`Resource`, `OneShotResource`, and `ReusableResource` are the only classes. The owned/external/lifecycle/factory distinction is data on `Resource` — the `external` flag plus the `factory`/`kind`/`cleanup` fields — not a private subclass hierarchy. `reusable` follows the `OneShotResource` vs `ReusableResource` type; `external` is a field. The execution layer classifies these fields once into an executable lifecycle plan (strategy `EXTERNAL`/`OWNED`/`VALUE_FACTORY`/`LIFECYCLE`) and consumes the plan, never re-inspecting the original generator/context-manager/instance shape. `Resource` is the public facade, with one constructor per intent:
+`Resource`, `OneShotResource`, and `ReusableResource` are the only classes. The owned/external/lifecycle/factory distinction is the record `Resource.plan` holds — `ExternalPlan`/`OwnedPlan`/`ValueFactoryPlan`/`SyncLifecyclePlan`/`AsyncLifecyclePlan`, classified once by the constructor — not a private subclass hierarchy. `reusable` follows the `OneShotResource` vs `ReusableResource` type, and the markers are declaration types only: calling one, or a `from_*` constructor through one, raises `TypeError`, so only `Resource`'s constructors choose reusability (2026-10-21 review); `external`, `strategy`, and `async_native` derive from the plan. The execution layer consumes the plan and never re-inspects the original generator/context-manager/instance shape. `Resource` is the public facade, with one constructor per intent:
 
 | API | Accepted input | Interpretation | Parser receives | Lifecycle / cleanup | Resource type | Reusable? |
 |---|---|---|---|---|---|---|

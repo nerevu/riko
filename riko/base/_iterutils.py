@@ -10,17 +10,17 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
 
-def noop[T](item: T) -> T:
+def noop[T](value: T) -> T:
     """
-    Passes an item through unchanged.
+    Passes a value through unchanged.
 
     Args:
 
-        item: Value to pass through.
+        value: Value to pass through.
 
     Returns:
 
-        The original ``item``.
+        The original ``value``.
 
     Examples:
 
@@ -28,7 +28,7 @@ def noop[T](item: T) -> T:
         {'value': 1}
 
     """
-    return item
+    return value
 
 
 def multi_try[T, S](

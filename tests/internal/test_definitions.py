@@ -46,7 +46,11 @@ from riko.definitions._nodes import (
     require_module_node,
 )
 from riko.definitions._normalize import _NODE_BUILDERS, _normalize_port
-from riko.definitions._resource_definition import Resource, ReusableResource
+from riko.definitions._resource_definition import (
+    OneShotResource,
+    Resource,
+    ReusableResource,
+)
 from riko.definitions._serialize import WorkflowEncoder
 from riko.definitions._targets import (
     FileTarget,
@@ -93,7 +97,7 @@ from riko.types._collections import (
 from riko.types._enums import Backends, Executor, Formats, resolve_enum
 from riko.types._guards import require_mapping, require_sequence
 from riko.types._pipedef import Embed, PipeModule
-from riko.types._resource import FactoryKind
+from riko.types._resource import SyncLifecyclePlan
 from riko.types._workflow import Edge as EdgeBase
 from riko.types._workflow import Endpoint, NodeFamily, RawEdge, RawEndpoint, RawNode
 from riko.types.modules import CallOptions, RawCallOptions
@@ -185,6 +189,17 @@ class _RecordStore:
         )
 
 
+MARKER_CONSTRUCTION_CASES = [
+    pytest.param(lambda: ReusableResource(_Client()), id="reusable-direct"),
+    pytest.param(lambda: OneShotResource(_Client()), id="one-shot-direct"),
+    pytest.param(lambda: ReusableResource.from_external(_Client()), id="external"),
+    pytest.param(
+        lambda: OneShotResource.from_factory(dict, cleanup=False), id="factory"
+    ),
+    pytest.param(lambda: ReusableResource.from_lifecycle(gen_client), id="lifecycle"),
+]
+
+
 class TestFrozenDict:
     @pytest.mark.parametrize(
         "source", [[("ids", [1])], ChainMap({"ids": [1]})], ids=["pairs", "chain-map"]
@@ -263,7 +278,23 @@ class TestContext:
         assert restored.inputs["tags"] == ("a",)
 
 
-_SYNC_FACTORY = FactoryKind.SYNC_CALLABLE_FACTORY
+class TestResource:
+    @pytest.mark.parametrize("construct", MARKER_CONSTRUCTION_CASES)
+    def test_marker_types_cannot_be_constructed(self, construct: Callable[[], object]):
+        with pytest.raises(TypeError, match="is a declaration type"):
+            construct()
+
+    def test_pickle_and_copy_round_trip(self):
+        resource = Resource.from_factory(gen_client, retries=[1, 2], lazy=True)
+
+        pickled = loads(dumps(resource))  # noqa: S301
+
+        for restored in (pickled, deepcopy(resource)):
+            assert isinstance(restored, ReusableResource)
+            assert isinstance(restored.plan, SyncLifecyclePlan)
+            assert restored.plan.source is gen_client
+            assert restored.lazy
+            assert restored.plan.kwargs["retries"] == (1, 2)
 
 
 class TestResourceFreezing:
@@ -271,9 +302,10 @@ class TestResourceFreezing:
         resource = Resource.from_factory(
             gen_client, ["arg"], headers={"accept": ["json"]}
         )
-        headers = resource.kwargs["headers"]
+        assert isinstance(resource.plan, SyncLifecyclePlan)
+        headers = resource.plan.kwargs["headers"]
 
-        assert resource.args == (("arg",),)
+        assert resource.plan.args == (("arg",),)
         assert isinstance(headers, FrozenDict)
         assert headers["accept"] == ("json",)
 
@@ -299,38 +331,16 @@ class TestResourceFreezing:
         assert isinstance(headers, dict)
         assert headers["accept"] == ["json"]
 
-    @pytest.mark.parametrize(
-        ("fields", "match"),
-        [
-            pytest.param(
-                {"_external": True}, "must be reusable", id="external-one-shot"
-            ),
-            pytest.param({"_factory": len}, "factory and its kind", id="factory-only"),
-            pytest.param(
-                {"_kind": _SYNC_FACTORY}, "factory and its kind", id="kind-only"
-            ),
-            pytest.param(
-                {"_external": True, "_factory": len, "_kind": _SYNC_FACTORY},
-                "cannot carry a factory",
-                id="external-factory",
-            ),
-        ],
-    )
-    def test_inconsistent_private_fields_are_rejected(
-        self, fields: dict[str, Any], match: str
-    ):
-        with pytest.raises(TypeError, match=match):
-            Resource(_Client(), cleanup=False, **fields)
-
     def test_opaque_argument_values_are_untouched(self):
         client = _Client()
         resource = Resource.from_factory(gen_client, client, session=client)
 
-        assert resource.args[0] is client
-        assert resource.kwargs["session"] is client
+        assert isinstance(resource.plan, SyncLifecyclePlan)
+        assert resource.plan.args[0] is client
+        assert resource.plan.kwargs["session"] is client
 
-    @pytest.mark.parametrize("name", ["_value", "_kwargs", "_lazy", "extra"])
-    def test_private_fields_cannot_be_set(self, name: str):
+    @pytest.mark.parametrize("name", ["plan", "credential", "lazy", "extra"])
+    def test_fields_cannot_be_set(self, name: str):
         resource = Resource.from_factory(gen_client)
 
         with pytest.raises(AttributeError):
@@ -338,18 +348,6 @@ class TestResourceFreezing:
 
         with pytest.raises(AttributeError):
             delattr(resource, name)
-
-    def test_pickle_and_copy_round_trip(self):
-        resource = Resource.from_factory(gen_client, retries=[1, 2], lazy=True)
-
-        pickled = loads(dumps(resource))  # noqa: S301
-
-        for restored in (pickled, deepcopy(resource)):
-            assert isinstance(restored, ReusableResource)
-            assert restored.factory is gen_client
-            assert restored.kind is resource.kind
-            assert restored.lazy
-            assert restored.kwargs["retries"] == (1, 2)
 
 
 class TestResourceView:

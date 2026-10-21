@@ -808,17 +808,31 @@ carrying `acquire`, native mode, `enter`, `teardown`, ownership, and cleanup pol
 boundary the runtime consumes the plan; it does not re-inspect the original generator-vs-context-
 manager-vs-instance syntax.
 
-1. `FactoryKind` stays input-classification machinery and does not become the runtime ontology. The
-   normalization boundary preserves the distinctions required to acquire and adapt a resource —
-   value factory vs lifecycle factory, explicit cleanup vs intrinsic teardown, native sync vs async
-   capability — and drops the ones that only described the user's original syntax.
-2. Public/static `OneShotResource` vs `ReusableResource` remain user-facing declaration types, but a
-   type whose entire body sets an internal flag is not the mechanism that carries that fact into
-   execution. Reuse, ownership, and no-op-vs-real teardown become explicit fields on the lifecycle
-   plan — the `_reusable`/`_external` flags and the `_ExternalResource` no-op teardown override stop
-   existing as subclass bodies. The private variants (`_OwnedResource`, `_LifecycleResource`,
-   `_ExternalResource`, `_FactoryResource`) collapse into that plan data plus a lifecycle strategy
-   rather than a subclass hierarchy: internal execution choices are data, not types.
+As built (user ruling 2026-10-16, reshaped twice on 2026-10-21): the plan is the definition's stored
+data, not a separate prepared object. `Resource` stores `plan`, `credential`, and `lazy`; `plan` is a
+tagged union defined in `riko/types/_resource.py` and exported from `riko.types` — `ExternalPlan` /
+`OwnedPlan` / `ValueFactoryPlan` / `SyncLifecyclePlan` / `AsyncLifecyclePlan`. Each constructor
+classifies its declaration once (`build_factory_plan` / `build_lifecycle_plan`, where the generic
+factory guards narrow), so no field-pair validator or cast exists. Lifecycle records split on
+sync-vs-async, the axis execution dispatches on; each carries the declared `source` (identity) and a
+picklable `enter` (a generator function is wrapped through a module-level partial; a
+`contextmanager`/`asynccontextmanager` factory is `enter` itself; a context manager is returned as
+given). `strategy`, `async_native`, `external`, and `value` are derived properties. Both executions
+`match` on the plan; `FactoryKind` no longer exists. The records are passive: calling a value factory
+and building a lifecycle's context manager live in `riko/execution/_resource_acquisition.py` (where
+the `(ctx, resources)` invocation extends them), and owned-value teardown stays in
+`riko/execution/_resource_teardown.py`.
+
+1. Classification is input machinery and not the runtime ontology. The normalization boundary
+   preserves the distinctions required to acquire and adapt a resource — value factory vs
+   lifecycle, explicit cleanup vs intrinsic teardown, native sync vs async — and drops the ones that
+   only described the user's original syntax (generator function vs context-manager factory vs
+   instance survives only as the `source` a lifecycle record keeps for identity).
+2. Public/static `OneShotResource` vs `ReusableResource` remain user-facing declaration types (on
+   the stable `riko` surface with `Resource`); `Context` admission is their only `isinstance` reader.
+   Reuse, ownership, and no-op-vs-real teardown are carried into execution by the plan variant, not
+   by subclass bodies; the private variants (`_OwnedResource`, `_LifecycleResource`,
+   `_ExternalResource`, `_FactoryResource`) are absent.
 
 #### R4B cross-mode adaptation — resolved audit tripwires
 
@@ -876,8 +890,8 @@ helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_
    off the event loop and returns its results as a list, which the per-parent result count keeps
    bounded. Accepted limitation: the loop's `count="first"` early-close is not applied to a sync-only
    embed under an async host (the child runs to completion on the worker); tripwire
-   `test_arun_count_first_stays_lazy_for_a_sync_only_embed` (strict xfail) marks it for whichever
-   phase makes that direction lazy. The other direction is already lazy and closes the child promptly
+   `test_arun_count_first_stays_lazy_for_a_sync_only_embed` (strict xfail) is owned by R10's
+   sync/async laziness parity work (it also needs the async embed wrapper shape R10 retires). The other direction is already lazy and closes the child promptly
    (regression `test_run_count_first_stays_lazy_for_an_async_only_embed`). This was R4B native-wins,
    not R9 (which owns iterative/resumable loop semantics only). Regressions:
    `test_run_adapts_async_only_embed_under_sync` (xfail removed) plus the
@@ -930,12 +944,13 @@ Concurrent pulling of fan-in branches is R7's (its deliverable list names it).
 - **ADD:** private sync/async executions own exit stacks, adaptation, resources, events, and
   shutdown (the async task group arrives with R7's spawned tasks).
 - **MIGRATE:** P10 bounded/executor mechanics and R3 resource acquisition run under the common
-  execution lifetime; resource declarations normalize once into the executable lifecycle plan. The
+  execution lifetime; resource declarations normalize once into the executable lifecycle plan
+  (`Resource.plan`). The
   write-session lifecycle part of this bullet is **carried to R5C**: no node drives a write session
   until `WriteNode` executes (tripwire `TestPipelineWrite` in `tests/internal/test_definitions.py`).
 - **DELETE:** `SyncPipe`/`AsyncPipe`/Collection runtime classes and superseded one-shot pipe lifecycle
   hosts are absent rather than wrapped; no parallel task-group/exit-stack/portal runtime remains; the
-  private resource-variant subclass hierarchy is absent, replaced by lifecycle-plan data.
+  private resource-variant subclass hierarchy is absent, replaced by the `Resource.plan` tagged union.
 
 ### R4C — Callable nodes (pure one-to-one `map`)
 
@@ -1143,7 +1158,10 @@ the dict literals the docs show for modules whose rule types are dataclasses (`S
 `StrReplaceConfRule` in `riko/types/modules.py`): pyright reports `dict[str, dict[str, str]]` as not
 assignable to `Conf`, and users only dodge it because `__getattr__` chaining is typed `Pipeline[Any]`.
 Pyright-only, no runtime tripwire; the conf-contract decision here settles which literal shapes the
-STABLE signature accepts. (2) The generated `*RawConf` types are asserted private
+STABLE signature accepts. Attribute chaining now accepts only built-in module ids
+(`BUILTIN_MODULE_IDS` in the generated `riko/types/_module_ids.py`; other names raise
+`AttributeError`, 2026-10-21 triage), so R4E can type it with generated per-module signatures under
+`TYPE_CHECKING` rather than `Pipeline[Any]`. (2) The generated `*RawConf` types are asserted private
 (`tests/public/test_modules.py::test_raw_module_confs_are_private`) while generated workflow modules
 import them from `riko.types.modules`; the contract decision here must give generated code a supported
 conf type (shared with the R9 note on generated-module imports). (3) There is no public route from a
@@ -1677,6 +1695,10 @@ R10 therefore owns:
   aliases (async **operators** already return an `AsyncIterator` directly);
 - proof that genuinely eager operators (`sort`, `reverse`, etc.) are the only intentional
   materialization points.
+- a sync-only loop embed under an async host honors `count="first"` lazily instead of running the
+  child to completion on its worker (strict-xfail tripwire
+  `tests/internal/test_execution_plan.py::TestAsyncEmbed::test_arun_count_first_stays_lazy_for_a_sync_only_embed`;
+  the worker-held stream must also enter the node-thread demand).
 
 Naming (2026-10-10 naming triage): `_materialize_terminal`/`_materialize_terminals`
 (`riko/modules/_decorators.py`) drain async terminal sub-sources for the sync conf parser; they are

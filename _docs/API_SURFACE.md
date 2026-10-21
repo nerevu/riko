@@ -87,7 +87,7 @@ the `IO_` contract group.
 <!-- api-surface:other -->
 ```python
 >>> sorted(OTHER)
-['Backends', 'CastType', 'Context', 'DocumentShape', 'Edge', 'Endpoint', 'ExecutionMode', 'Executor', 'Node', 'Pipeline', 'Workflow', 'WorkflowDocument', 'WorkflowLike', 'WorkflowModule', 'get_path', 'get_temp_file', 'list_modules']
+['Backends', 'CastType', 'Context', 'DocumentShape', 'Edge', 'Endpoint', 'ExecutionMode', 'Executor', 'Node', 'OneShotResource', 'Pipeline', 'Resource', 'ReusableResource', 'Workflow', 'WorkflowDocument', 'WorkflowLike', 'WorkflowModule', 'get_path', 'get_temp_file', 'list_modules']
 ```
 <!-- /api-surface:other -->
 
@@ -135,7 +135,7 @@ and extension authors.
 <!-- api-surface:types -->
 ```python
 >>> sorted(TYPES)
-['AsyncItems', 'AsyncPipeTuples', 'AsyncStream', 'Conf', 'EventSink', 'Feed', 'Item', 'Items', 'PipeDag', 'PipeDef', 'PipeDefLike', 'PipeTuples', 'RawEdge', 'RawEndpoint', 'RawNode', 'RawWorkflow', 'Stream', 'SyncPipeTuples']
+['AsyncItems', 'AsyncLifecyclePlan', 'AsyncPipeTuples', 'AsyncStream', 'Conf', 'EventSink', 'ExternalPlan', 'Feed', 'Item', 'Items', 'LifecyclePlan', 'OwnedPlan', 'PipeDag', 'PipeDef', 'PipeDefLike', 'PipeTuples', 'RawEdge', 'RawEndpoint', 'RawNode', 'RawWorkflow', 'ResourcePlan', 'ResourceStrategy', 'Stream', 'SyncLifecyclePlan', 'SyncPipeTuples', 'ValueFactoryPlan']
 ```
 <!-- /api-surface:types -->
 

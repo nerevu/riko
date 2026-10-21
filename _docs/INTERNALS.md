@@ -38,7 +38,7 @@ at call sites.
   the generated objconf file.
 - **Names** — `riko/cli/_gen_names.py` derives both
   `riko/modules/_names.py` (`Modules`/`Sources`/`Transforms`/`Sinks`) and
-  `riko/types/_module_ids.py` (`ModuleId`/`LoopableModuleId`) from the runtime
+  `riko/types/_module_ids.py` (`ModuleId`/`LoopableModuleId`/`BUILTIN_MODULE_IDS`) from the runtime
   module catalog. Both artifacts are deterministic and generated; never hand-edit
   them.
 - **API surface** — `riko/cli/_gen_api_surface.py` rewrites only the marked name
