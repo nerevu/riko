@@ -114,7 +114,8 @@ still be one-shot; a second iteration of the same pipeline does not recreate the
 Async mapping uses **bounded worker concurrency**: never one task per input item, never
 whole-source materialization, never unbounded result buffering. Order-preserving streaming
 ships via `async_map_stream` / `async_map_ordered_stream` (`riko/bado/itertools.py`).
-`limit=0` means unlimited; legitimate `None` results are preserved.
+Their `limit` is a fixed worker count and must be at least 1; only the eager `async_map` reads
+`limit=0` as unlimited. Legitimate `None` results are preserved.
 
 ## 7. Timeout
 
