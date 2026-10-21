@@ -162,7 +162,10 @@ sync when source is moved between package groups.
   `.venv`). That pin is the one copy of a locked version outside `uv.lock`:
   `manage upgrade` rewrites it and `manage lint --deps` fails when it drifts. Upgrades
   happen locally: `manage upgrade` runs `uv lock --upgrade` (or `--upgrade-package`
-  per `--package`) and syncs the active environment with every group and extra. `--daily` skips when
+  per `--package`) and syncs the active environment with every group and extra. Both hold
+  to `[tool.uv] exclude-newer = "1 week"`: no release younger than a week resolves, a
+  security fix included, so an urgent one needs uv's `exclude-newer-package` override
+  for that package. `--daily` skips when
   `.cache/last-upgrade` holds today's date, which only a successful full upgrade and
   sync writes. `PYRIGHT_PYTHON_FORCE_VERSION` never reaches tox (not in `pass_env`)
   and must not be added; `[tool.pyright] pythonPlatform = "Linux"` keeps local type

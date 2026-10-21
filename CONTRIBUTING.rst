@@ -157,12 +157,12 @@ The common development commands are:
     or ``--all`` for all three.
 
 ``manage upgrade``
-    Upgrade every locked dependency to the newest version ``pyproject.toml``
-    allows, then sync the active environment to the new lock. Use repeatable
-    ``--package`` to upgrade only named packages, ``--no-sync`` to update
-    ``uv.lock`` alone, and ``--daily`` to skip when a full upgrade already
-    succeeded today. CI installs exactly what ``uv.lock`` pins and never
-    upgrades, so commit the updated lock with the change it was tested against.
+    Upgrade every locked dependency to the newest version ``pyproject.toml`` allows
+    (is at least a week old) then sync the active environment to the new lock. Use
+    repeatable ``--package`` to upgrade only named packages, ``--no-sync`` to update
+    ``uv.lock`` alone, and ``--daily`` to skip when a full upgrade already succeeded
+    today. CI installs exactly what ``uv.lock`` pins and never upgrades, so commit the
+    updated lock with the change it was tested against.
 
 ``manage codegen``
     Regenerate derived repository artifacts. With no selector it regenerates

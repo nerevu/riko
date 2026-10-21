@@ -102,6 +102,10 @@ gen-names = "riko.cli._gen_names:main"
 gen-api-surface = "riko.cli._gen_api_surface:main"
 
 [tool.uv]
+# Resolve only releases at least a week old, so a broken or hijacked release never
+# reaches the lock. `exclude-newer-package` admits an urgent one early.
+exclude-newer = "1 week"
+
 # Rebuild the local `riko` install when any source file changes, not just when
 # pyproject.toml/setup.py change (uv's default). Without this, edits under
 # `riko/` (e.g. new CLI options) don't invalidate the cached build, so
