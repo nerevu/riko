@@ -183,8 +183,10 @@ class Workflow:
 
         A workflow document, a serialized pipe definition (``PipeDef``), and a
         serialized ``PipeDag`` are each recognized from their structure, as text,
-        bytes, or an already parsed mapping. A ``Workflow`` is re-normalized, so
-        parsing a result again returns an equal ``Workflow``.
+        bytes, or an already parsed mapping. A mapping listing ``modules`` with neither
+        ``src``/``tgt`` wires nor an ``output`` node reads as a ``PipeDag``. A
+        ``Workflow`` is re-normalized, so parsing a result again returns an equal
+        ``Workflow``.
 
         Args:
 

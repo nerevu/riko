@@ -480,9 +480,11 @@ Folded in from the retired `REFINEMENT_PLAN.md`. Cross-phase decisions that surv
     through), and execution-owned cleanup. Do not
     extend compatibility DONE/id machinery or partially backport F5 semantics.
 
-**Backward-compatibility contract (evergreen).** Every phase ships compat shims (moved-name
-re-exports, `describe_*` properties, re-homed exceptions keep old bases); a serialized `PipeDef`
-(pipe definition) worked unchanged through the v1 compiler (since deleted) until the scope exception below.
+**Backward-compatibility contract (pre-1.0).** Before 1.0, a phase may rename or remove a released
+public name without a compat shim; each such change gets a `docs/CHANGES.rst` line, measured against
+the last release tag (names added and removed between releases need neither). Re-homed exceptions
+keep their old bases. A serialized `PipeDef` (pipe definition) worked unchanged through the v1
+compiler (since deleted) until the scope exception below.
 **Scope exception — Workflow v1→v2 (R4A/R4B).** The canonical-format transition followed a per-commit
 clean break, not a maintained dual loader: serialized `PipeDef`s kept working until the R4B cutover,
 then became migrate-only (no long-lived v1 runtime ingress). Authoritative owner: `gameplans/implementation-sequence.md` R4A

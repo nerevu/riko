@@ -130,7 +130,8 @@ def get_document_shape(document: Mapping[str, object]) -> DocumentShape:
 
     A mapping listing ``nodes`` or declaring the workflow format version it targets
     is a workflow document. One listing ``modules`` is either a ``PipeDef``,
-    recognised by its wire mappings and its ``output`` node, or a ``PipeDag``.
+    recognized by its ``src``/``tgt`` wire mappings or its ``output`` node, or a
+    ``PipeDag``.
 
     Args:
 
