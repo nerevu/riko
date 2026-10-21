@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from importlib import import_module
 from logging import DEBUG, ERROR, INFO, WARNING, getLogger
 from pathlib import Path
+from textwrap import indent
 from typing import TYPE_CHECKING
 
 import pytest
@@ -34,17 +35,14 @@ from riko.cli._docstyle import (
     summary_leads_with_output,
 )
 from riko.cli._document import read_document, require_workflow
-from riko.cli._lint_basenames import (
-    BasenameIssue,
-    format_basename_issue,
-    gen_basename_issues,
-)
+from riko.cli._gen_tier_index import INDEX_HEADER, generate_tier_index
+from riko.cli._lint_basenames import BasenameIssue, gen_basename_issues
 from riko.cli._lint_bindings import gen_binding_issues, gen_binding_lines
 from riko.cli._lint_canonical_imports import _iter_issues as canonical_issues
 from riko.cli._lint_deps import (
-    gen_dependency_issues,
     gen_hook_pin_issues,
-    gen_import_sites,
+    gen_import_issues,
+    gen_runtime_imports,
     get_locked_version,
 )
 from riko.cli._lint_import_architecture import (
@@ -55,7 +53,12 @@ from riko.cli._lint_import_architecture import (
 from riko.cli._lint_literals import gen_literal_issues
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
 from riko.cli._lint_terms import BANNED_TERMS, BannedTerm, gen_term_issues
-from riko.cli._lint_tests import LayoutIssue, format_layout_issue, gen_layout_issues
+from riko.cli._lint_tests import (
+    MERGE_LINES,
+    SPLIT_LINES,
+    LayoutIssue,
+    gen_layout_issues,
+)
 from riko.cli._logging import exception_hook, resolve_log_level
 from riko.cli._upgrade import _pin_hooks
 from riko.cli.manage import manager
@@ -88,7 +91,8 @@ class TestCodegenCommand:
         [
             ([], ["config"]),
             (["--names", "--api"], ["names", "api"]),
-            (["--all"], ["config", "names", "api"]),
+            (["--tests"], ["tests"]),
+            (["--all"], ["config", "names", "api", "tests"]),
         ],
     )
     def test_codegen_selectors(
@@ -320,11 +324,17 @@ class TestLintCommand:
     def test_dependency_check_exits_by_whether_issues_were_found(
         self, monkeypatch: pytest.MonkeyPatch, capsys
     ) -> None:
-        monkeypatch.setattr(_lint, "gen_dependency_issues", lambda *_: [])
+        codes = {"deptry": 0}
+        monkeypatch.setattr(_lint, "_deptry", "deptry")
+        monkeypatch.setattr(_lint, "call", lambda args, **_: codes[args[0]])
+        monkeypatch.setattr(_lint, "gen_import_issues", lambda *_: [])
         monkeypatch.setattr(_lint, "gen_hook_pin_issues", lambda *_: [])
-        monkeypatch.setattr(_lint, "format_dependency_issue", str)
         assert _lint._lint_deps() == 0
 
+        codes["deptry"] = 1
+        assert _lint._lint_deps() == 1
+
+        codes["deptry"] = 0
         monkeypatch.setattr(_lint, "gen_hook_pin_issues", lambda *_: ["stale pin"])
         assert _lint._lint_deps() == 1
         assert "stale pin" in capsys.readouterr().out
@@ -432,16 +442,23 @@ class TestCoverageRatchet:
         present: str,
         absent: str,
     ) -> None:
-        calls: list[list[str]] = []
+        calls: list[tuple[list[str], dict[str, str] | None]] = []
         monkeypatch.setattr(_test, "_pytest", "pytest")
-        monkeypatch.setattr(_test, "check_call", calls.append)
+        monkeypatch.setattr(
+            _test, "check_call", lambda cmd, env=None: calls.append((cmd, env))
+        )
         monkeypatch.setattr(_test, "_ratchet_coverage", lambda _: 0)
 
         result = CliRunner().invoke(_test.TEST_COMMAND, args)
-        command = " ".join(calls[0])
+        cmd, env = calls[0]
+        command = " ".join(cmd)
+        report = command.partition("--cov-report=json:")[2].partition(" ")[0]
+        data_file = None if env is None else env["COVERAGE_FILE"]
+        expected = str(Path(report).with_name(".coverage")) if report else None
         assert result.exit_code == 0
         assert present in command
         assert not absent or absent not in command
+        assert data_file == expected
 
     def test_ratchet_refuses_a_partial_run(
         self, monkeypatch: pytest.MonkeyPatch
@@ -751,9 +768,8 @@ class TestBindingLint:
 
 DISTRIBUTIONS = {
     "dateutil": ["python-dateutil"],
-    "lxml": ["lxml"],
     "requests": ["requests"],
-    "typing_extensions": ["typing_extensions"],
+    "lxml": ["lxml"],
 }
 
 
@@ -762,28 +778,27 @@ PYPROJECT_TOML = """
 dependencies = ["python-dateutil>=2", "requests"]
 
 [project.optional-dependencies]
-perf = ["lxml"]
+xml = ["lxml>=5", "requests"]
 
 [dependency-groups]
-lint = ["types-requests", {include-group = "test"}]
+lint = ["types-requests"]
 """
 
 
-def _issues(tmp_path: Path, source: str, pyproject: str = PYPROJECT_TOML) -> list[str]:
+def _issues(tmp_path: Path, source: str) -> tuple[list[str], list[int]]:
     package = tmp_path / "pkg"
     package.mkdir(exist_ok=True)
     (package / "mod.py").write_text(source, encoding="utf-8")
     config = tmp_path / "pyproject.toml"
-    config.write_text(pyproject, encoding="utf-8")
-    issues = gen_dependency_issues(package, config, DISTRIBUTIONS)
-    return [issue.message for issue in issues]
+    config.write_text(PYPROJECT_TOML, encoding="utf-8")
+    issues = list(gen_import_issues(package, config, DISTRIBUTIONS))
+    required = [issue.message for issue in issues if issue.where == str(config)]
+    lines = [int(i.where.rsplit(":", 1)[1]) for i in issues if i.where != str(config)]
+    return required, lines
 
 
-_INDEX = """
-Index (file, then the subjects it owns, in file order):
-
-    test_alpha.py    Alpha, Beta
-"""
+_INIT = f'"""\nProvides tests.\n\n{INDEX_HEADER}\n\n"""\n'
+NO_INDEX = f"the docstring has no {INDEX_HEADER!r} block"
 
 _ALPHA = """
 class TestAlpha:
@@ -803,8 +818,10 @@ def _write_suite(root: Path, **files: str) -> Path:
     tests_dir = root / "tests"
     tier = tests_dir / "public"
     tier.mkdir(parents=True)
-    (tier / "__init__.py").write_text(f'"""{_INDEX}"""\n', encoding="utf-8")
-    (tier / "test_alpha.py").write_text(_ALPHA * 40, encoding="utf-8")
+    init = tier / "__init__.py"
+    init.write_text(_INIT, encoding="utf-8")
+    (tier / "test_alpha.py").write_text(_ALPHA + "\n" * MERGE_LINES, encoding="utf-8")
+    init.write_text(generate_tier_index(tier), encoding="utf-8")
 
     for name, text in files.items():
         path = tests_dir / name.replace("__", "/")
@@ -818,8 +835,66 @@ def _messages(tests_dir: Path) -> list[tuple[str, bool]]:
     return [(issue.message, issue.fatal) for issue in gen_layout_issues(tests_dir)]
 
 
+STALE = "the index is stale; run `manage codegen --tests`"
+ALPHA_ROW = "    test_alpha.py    Alpha, Beta\n"
+LONG = "".join(f"class TestSubject{n:02}: ...\n" for n in range(12))
+SUBJECTS = [
+    ", ".join(f"Subject{n:02}" for n in range(start, start + 6)) for start in (0, 6)
+]
+LONG_ROWS = f"{ALPHA_ROW}    test_long.py     {SUBJECTS[0]},\n{' ' * 21}{SUBJECTS[1]}\n"
+TIER_INDEX_CASES = [
+    pytest.param(None, ALPHA_ROW, id="twin-collapses"),
+    pytest.param(LONG, LONG_ROWS, id="wraps-under-column"),
+    pytest.param(
+        "class TestAsyncGamma: ...\n",
+        f"{ALPHA_ROW}    test_long.py     AsyncGamma\n",
+        id="lone-async-kept",
+    ),
+    pytest.param(
+        "def helper(): ...\n", f"{ALPHA_ROW}    test_long.py\n", id="no-subjects"
+    ),
+]
+
+
+class TestTierIndexCodegen:
+    """The generated test tier index."""
+
+    @pytest.mark.parametrize(("source", "rows"), TIER_INDEX_CASES)
+    def test_index_rows_come_from_subject_classes(
+        self, tmp_path: Path, source: str | None, rows: str
+    ) -> None:
+        tier = _write_suite(tmp_path) / "public"
+
+        if source is not None:
+            (tier / "test_long.py").write_text(source, encoding="utf-8")
+
+        generated = generate_tier_index(tier)
+        assert generated.split("order):\n\n")[1] == f'{rows}"""\n'
+
+    def test_regenerating_a_current_index_changes_nothing(self, tmp_path: Path) -> None:
+        tier = _write_suite(tmp_path) / "public"
+        text = (tier / "__init__.py").read_text(encoding="utf-8")
+        assert generate_tier_index(tier) == text
+
+    def test_a_docstring_without_an_index_header_is_refused(
+        self, tmp_path: Path
+    ) -> None:
+        tier = _write_suite(tmp_path) / "public"
+        (tier / "__init__.py").write_text('"""Provides tests."""\n')
+
+        with pytest.raises(ValueError, match="has no 'Index"):
+            generate_tier_index(tier)
+
+
+INDEX_FORMS = [
+    pytest.param(None, [NO_INDEX], id="no-index"),
+    pytest.param("    test_alpha.py    Alpha\n", [STALE], id="hand-edited"),
+    pytest.param("    test_alpha.py    Alpha, Beta\n", [], id="current"),
+]
+
+
 class TestLayoutLint:
-    """The indexed test-layout lint check."""
+    """The tier test-layout lint check."""
 
     def test_an_indexed_suite_passes(self, tmp_path: Path) -> None:
         assert _messages(_write_suite(tmp_path)) == []
@@ -828,9 +903,14 @@ class TestLayoutLint:
         ("files", "message"),
         [
             pytest.param(
-                {"public__test_gamma.py": _ALPHA},
-                "test_gamma.py has no row in __init__.py",
+                {"public__test_gamma.py": "class TestGamma: ...\n"},
+                STALE,
                 id="unindexed-file",
+            ),
+            pytest.param(
+                {"public__test_gamma.py": "class TestBeta: ...\n"},
+                "Beta is owned by both test_alpha.py and test_gamma.py",
+                id="duplicate-subject",
             ),
             pytest.param(
                 {"public__test_regressions.py": ""},
@@ -867,11 +947,7 @@ class TestLayoutLint:
                 "test_loose must live in a Test<Subject> class",
                 id="top-level-test",
             ),
-            pytest.param(
-                "\nclass TestGamma: ...\n",
-                "TestGamma names no subject in the index row",
-                id="unlisted-class",
-            ),
+            pytest.param("\nclass TestGamma: ...\n", STALE, id="unindexed-class"),
             pytest.param(
                 "\nfrom riko.x import _hidden\n",
                 "public tests import supported names: _hidden",
@@ -887,37 +963,21 @@ class TestLayoutLint:
         path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
         assert (message, True) in _messages(tests_dir)
 
-    @pytest.mark.parametrize(
-        ("rows", "message"),
-        [
-            pytest.param(None, "the docstring has no test index", id="no-index"),
-            pytest.param(
-                "    test_alpha.py    Alpha, Beta, Alpha\n",
-                "Alpha is indexed under both test_alpha.py and test_alpha.py",
-                id="duplicate-subject",
-            ),
-            pytest.param(
-                "    test_alpha.py    Alpha, Beta\n    test_ghost.py    Ghost\n",
-                "test_ghost.py is indexed but does not exist",
-                id="missing-file",
-            ),
-        ],
-    )
-    def test_index_departures_fail(
-        self, tmp_path: Path, rows: str | None, message: str
+    @pytest.mark.parametrize(("rows", "expected"), INDEX_FORMS)
+    def test_the_index_must_match_its_generated_form(
+        self, tmp_path: Path, rows: str | None, expected: list[str]
     ) -> None:
         tests_dir = _write_suite(tmp_path)
-        header = "Index (file, then the subjects it owns, in file order):\n\n"
-        index = "Provides tests." if rows is None else f"{header}{rows}"
-        (tests_dir / "public" / "__init__.py").write_text(f'"""{index}"""\n')
-        assert (message, True) in _messages(tests_dir)
+        index = "Provides tests.\n" if rows is None else f"{INDEX_HEADER}\n\n{rows}"
+        (tests_dir / "public" / "__init__.py").write_text(f'"""\n{index}"""\n')
+        assert [message for message, _ in _messages(tests_dir)] == expected
 
     def test_long_files_get_advice_to_split(self, tmp_path: Path) -> None:
         tests_dir = _write_suite(tmp_path)
-        (tests_dir / "public" / "test_alpha.py").write_text(_ALPHA * 400)
+        (tests_dir / "public" / "test_alpha.py").write_text(_ALPHA + "\n" * SPLIT_LINES)
         messages = _messages(tests_dir)
         assert [fatal for _, fatal in messages] == [False]
-        assert "split its largest index row" in messages[0][0]
+        assert "move its largest Test<Subject> class" in messages[0][0]
 
     @pytest.mark.parametrize(
         ("fatal", "line", "code"),
@@ -937,7 +997,7 @@ class TestLayoutLint:
         issue = LayoutIssue(Path("a.py"), 3, "bad", fatal=fatal)
         monkeypatch.setattr(_lint, "gen_layout_issues", lambda _: [issue])
 
-        assert format_layout_issue(issue) == line
+        assert str(issue) == line
         assert _lint._lint_tests() == code
         assert line in capsys.readouterr().out
 
@@ -987,7 +1047,7 @@ class TestBasenameLint:
             (package / name).parent.mkdir(parents=True, exist_ok=True)
             (package / name).write_text("", encoding="utf-8")
 
-        issues = gen_basename_issues(package, allowed)
+        issues = gen_basename_issues(package, allowed=allowed)
         found = [(i.basename, tuple(map(str, i.paths)), i.message) for i in issues]
         assert found == expected
 
@@ -998,81 +1058,85 @@ class TestBasenameLint:
         monkeypatch.setattr(_lint, "gen_basename_issues", lambda _: [issue])
         line = "x.py: bad (a/x.py, b/x.py)"
 
-        assert format_basename_issue(issue) == line
+        assert str(issue) == line
         assert _lint._lint_basenames() == 1
         assert line in capsys.readouterr().out
 
 
-def _unguarded(name: str) -> str:
-    return f"'{name}' is imported unguarded but is not a [project] dependency"
+def _if(test: str, body: str = "import a", orelse: str = "") -> str:
+    tail = f"else:\n    {orelse}\n" if orelse else ""
+    return f"if {test}:\n    {body}\n{tail}"
 
 
-def _try_import(*names: str) -> str:
-    imports = "".join(f"    import {name}\n" for name in names)
-    return f"try:\n{imports}except ImportError:\n    pass\n"
+TC, NOT_TC = "TYPE_CHECKING", "not TYPE_CHECKING"
+ABSOLUTE = "import a.b\nfrom c import d\nfrom . import e\n"
+LOCAL = "def f():\n" + indent(_if(TC) + "import b\n", "    ")
+ELIF = _if(TC, "pass") + "elif flag:\n    import a\n"
+TRY = "try:\n    import a\nexcept ImportError:\n    pass\n"
+REQUESTS = "import requests\n"
+RUNTIME_NAME_CASES = [
+    pytest.param(ABSOLUTE, ["a", "c"], id="absolute-only"),
+    pytest.param(_if(TC) + "import b\n", ["b"], id="type-checking-body"),
+    pytest.param(_if("typing.TYPE_CHECKING"), [], id="typing-attribute"),
+    pytest.param(_if(TC, "pass", "import a"), ["a"], id="type-checking-else"),
+    pytest.param(_if(NOT_TC), ["a"], id="not-type-checking-body"),
+    pytest.param(_if(NOT_TC, "pass", "import a"), [], id="not-type-checking-else"),
+    pytest.param(_if(f"{TC} and flag"), ["a"], id="compound-test"),
+    pytest.param(ELIF, ["a"], id="elif-branch"),
+    pytest.param(LOCAL, ["b"], id="function-local"),
+    pytest.param(TRY, ["a"], id="try-block"),
+]
+ONLY = (
+    "'python-dateutil' is a [project] dependency that nothing imports at run time; "
+    "import it outside TYPE_CHECKING or move it to a dependency group"
+)
+REQUIREMENT_CASES = [
+    pytest.param(f"{REQUESTS}import dateutil\n", [], id="both-used"),
+    pytest.param(REQUESTS + _if(TC, "import dateutil"), [ONLY], id="typing-only"),
+    pytest.param(REQUESTS + _if(NOT_TC, "import dateutil"), [], id="not-type-checking"),
+]
+
+LXML = "import lxml\n"
 
 
-IMPORTS = "import requests\nimport dateutil\n"
-TYPING = "import typing_extensions\n"
-FROM_DATEUTIL = f"import requests\nfrom dateutil import parser\n{TYPING}"
-LOCAL_TYPING = f"{IMPORTS}def f():\n    {TYPING}"
-TRY_UJSON = IMPORTS + _try_import("lxml", "ujson")
-TRY_HTTPX = IMPORTS + _try_import("httpx")
-TYPE_ONLY = f"import requests\nif TYPE_CHECKING:\n    import dateutil\n    {TYPING}"
-UNGUARDED = [_unguarded("typing_extensions")]
-UNDECLARED = ["'ujson' is imported in a try block but declared nowhere"]
-UNUSED = ["'python-dateutil' is a [project] dependency that nothing imports"]
-STUB = ["'types-lxml' is a typing stub; declare it in a dependency group"]
-PERF = 'perf = ["lxml"]'
-STUB_TOML = PYPROJECT_TOML.replace(PERF, 'perf = ["lxml", "types-lxml"]')
-HTTPX_TOML = PYPROJECT_TOML.replace(PERF, 'perf = ["httpx"]')
-DEPENDENCY_ISSUES = [
-    pytest.param(FROM_DATEUTIL, PYPROJECT_TOML, UNGUARDED, id="unguarded-transitive"),
-    pytest.param(LOCAL_TYPING, PYPROJECT_TOML, UNGUARDED, id="function-local"),
-    pytest.param(TRY_UJSON, PYPROJECT_TOML, UNDECLARED, id="try-undeclared"),
-    pytest.param(TYPE_ONLY, PYPROJECT_TOML, UNUSED, id="type-checking-only"),
-    pytest.param(IMPORTS, PYPROJECT_TOML, [], id="stub-in-group-ok"),
-    pytest.param(IMPORTS, STUB_TOML, STUB, id="stub-in-extra"),
-    pytest.param(TRY_HTTPX, HTTPX_TOML, [], id="uninstalled-extra-name"),
+def _try(body: str, caught: str = "ImportError", handler: str = "pass") -> str:
+    return f"try:\n    {body}\nexcept {caught}:\n    {handler}\n"
+
+
+OPTIONAL_CASES = [
+    pytest.param(LXML, [1], id="unguarded"),
+    pytest.param(_try("import lxml"), [], id="import-error"),
+    pytest.param(_try("import lxml", "ModuleNotFoundError"), [], id="not-found"),
+    pytest.param(_try("import lxml", "(ValueError, ImportError)"), [], id="tuple"),
+    pytest.param(_try("import lxml", "ValueError"), [2], id="wrong-handler"),
+    pytest.param(_try("pass", handler="import lxml"), [4], id="in-handler"),
+    pytest.param(_try("import a") + "else:\n    import lxml\n", [], id="try-else"),
+    pytest.param(_if(TC, "import lxml"), [], id="typing-only"),
+    pytest.param("def f():\n    import lxml\n", [2], id="function-local"),
+    pytest.param(REQUESTS, [], id="also-required"),
 ]
 
 
 class TestDependencyLint:
-    """The declared-dependencies lint check."""
+    """The run-time requirement lint check."""
 
-    def test_import_sites_record_their_guard(self, tmp_path: Path) -> None:
-        """Each third-party import is tagged by the strongest statement guarding it."""
-        package = tmp_path / "pkg"
-        package.mkdir()
-        (package / "mod.py").write_text(
-            "import os\n"
-            "import requests\n"
-            "from . import sibling\n"
-            "try:\n"
-            "    import lxml\n"
-            "except ImportError:\n"
-            "    pass\n"
-            "if TYPE_CHECKING:\n"
-            "    try:\n"
-            "        import dateutil\n"
-            "    except ImportError:\n"
-            "        pass\n",
-            encoding="utf-8",
-        )
-        sites = [(site.name, site.guard) for site in gen_import_sites(package)]
-        expected = [
-            ("requests", "none"),
-            ("lxml", "try"),
-            ("dateutil", "type_checking"),
-        ]
-        assert sites == expected
-
-    @pytest.mark.parametrize(("source", "pyproject", "expected"), DEPENDENCY_ISSUES)
-    def test_dependency_issues(
-        self, tmp_path: Path, source: str, pyproject: str, expected: list[str]
+    @pytest.mark.parametrize(("source", "expected"), RUNTIME_NAME_CASES)
+    def test_runtime_names_skip_only_typing_only_branches(
+        self, source: str, expected: list[str]
     ) -> None:
-        """Each import is checked against the declaration its guard requires."""
-        assert _issues(tmp_path, source, pyproject) == expected
+        assert [runtime.name for runtime in gen_runtime_imports(source)] == expected
+
+    @pytest.mark.parametrize(("source", "expected"), REQUIREMENT_CASES)
+    def test_required_dependencies_must_be_imported_at_run_time(
+        self, tmp_path: Path, source: str, expected: list[str]
+    ) -> None:
+        assert _issues(tmp_path, source)[0] == expected
+
+    @pytest.mark.parametrize(("source", "expected"), OPTIONAL_CASES)
+    def test_optional_extras_must_be_imported_under_a_guard(
+        self, tmp_path: Path, source: str, expected: list[int]
+    ) -> None:
+        assert _issues(tmp_path, source)[1] == expected
 
 
 LOCK = """

@@ -80,8 +80,17 @@ def _resolve_from_module(current: ModuleInfo, module: str | None, level: int) ->
     return resolved
 
 
-def _is_type_checking(test: ast.expr) -> bool:
-    return isinstance(test, ast.Name) and test.id == "TYPE_CHECKING"
+def is_type_checking(test: ast.expr) -> bool:
+    """Tells whether a test is exactly ``TYPE_CHECKING`` or ``typing.TYPE_CHECKING``."""
+    match test:
+        case ast.Name(id="TYPE_CHECKING"):
+            is_flag = True
+        case ast.Attribute(value=ast.Name(id="typing"), attr="TYPE_CHECKING"):
+            is_flag = True
+        case _:
+            is_flag = False
+
+    return is_flag
 
 
 class _ImportVisitor(ast.NodeVisitor):
@@ -103,7 +112,7 @@ class _ImportVisitor(ast.NodeVisitor):
         return kind
 
     def visit_If(self, node: ast.If) -> None:
-        if _is_type_checking(node.test):
+        if is_type_checking(node.test):
             self.visit(node.test)
             self._type_depth += 1
 

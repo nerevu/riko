@@ -3,6 +3,7 @@
 """Test runner helpers for the manage CLI."""
 
 import shutil
+from os import environ
 from pathlib import Path
 from subprocess import CalledProcessError, check_call
 from sys import exit
@@ -127,7 +128,12 @@ def _test_command(
             if kwargs.get("parallel"):
                 cmd += " -n auto"
 
-            check_call([_pytest] + cmd.split(" "))
+            if report is None:
+                env = None
+            else:
+                env = {**environ, "COVERAGE_FILE": str(report.with_name(".coverage"))}
+
+            check_call([_pytest] + cmd.split(" "), env=env)
 
             if report is not None:
                 exit(_ratchet_coverage(report))

@@ -15,25 +15,21 @@ from typing import TYPE_CHECKING, Protocol
 
 import click
 
-from riko.base._paths import PACKAGE_DIR, ROOT_DIR
+from riko.base._paths import PACKAGE_DIR, ROOT_DIR, TESTS_DIR
 
 from ._build import twine_check
-from ._docs import lint_docs, lint_rst
-from ._docstyle import format_issue, gen_docstring_issues
+from ._docs import AS_BUILT_DOCS, lint_docs, lint_rst
+from ._docstyle import gen_docstring_issues
 from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
-from ._lint_basenames import format_basename_issue, gen_basename_issues
-from ._lint_bindings import format_binding_issue, gen_binding_issues
-from ._lint_deps import (
-    format_dependency_issue,
-    gen_dependency_issues,
-    gen_hook_pin_issues,
-)
-from ._lint_literals import format_literal_issue, gen_literal_issues
-from ._lint_terms import format_term_issue, gen_term_issues
-from ._lint_tests import format_layout_issue, gen_layout_issues
+from ._lint_basenames import gen_basename_issues
+from ._lint_bindings import gen_binding_issues
+from ._lint_deps import gen_hook_pin_issues, gen_import_issues
+from ._lint_literals import gen_literal_issues
+from ._lint_terms import gen_phrase_issues, gen_term_issues
+from ._lint_tests import gen_layout_issues
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Iterable
 
 _WORKFLOW_DIR = ROOT_DIR / ".github" / "workflows"
 _TEXT_ROOTS: tuple[str, ...] = (
@@ -49,6 +45,7 @@ _ruff: str | None = shutil.which("ruff")
 _pylint: str | None = shutil.which("pylint")
 _pyright: str | None = shutil.which("pyright")
 _actionlint: str | None = shutil.which("actionlint")
+_deptry: str | None = shutil.which("deptry")
 _shellcheck: str | None = shutil.which("shellcheck")
 _yamlfmt: str | None = shutil.which("yamlfmt")
 
@@ -94,74 +91,92 @@ def _lint_python_strict(parallel: bool = False) -> int:
     return call(args)
 
 
-def _lint_docstrings(where: str | None = "") -> int:
-    """Checks docstring summaries and doctest examples against the docs standard."""
-    roots = [Path(p) for p in where.split(" ")] if where else [Path("riko")]
-    issues = list(gen_docstring_issues(*roots))
-
-    for issue in issues:
-        print(format_issue(issue))
-
-    return 1 if issues else 0
-
-
 class _IssueWalker[I](Protocol):
     """Walks shipped-text roots for one lint's issues."""
 
     def __call__(self, *roots: Path) -> Iterable[I]: ...
 
 
-def _run_text_lint[I](
-    gen: _IssueWalker[I], fmt: Callable[[I], str], where: str | None = ""
-) -> int:
-    """Runs one shipped-text lint over ``where`` (or the text roots) and reports it."""
-    names = where.split(" ") if where else _TEXT_ROOTS
-    issues = list(gen(*(ROOT_DIR / name for name in names)))
+def _report_text_lint[I](gen: _IssueWalker[I], *roots: Path) -> int:
+    """Runs one text lint over ``roots`` and prints each issue it finds."""
+    issues = list(gen(*roots))
 
     for issue in issues:
-        print(fmt(issue))
+        print(issue)
 
     return 1 if issues else 0
 
 
-_lint_terms = partial(_run_text_lint, gen_term_issues, format_term_issue)
-_lint_literals = partial(_run_text_lint, gen_literal_issues, format_literal_issue)
-_lint_bindings = partial(_run_text_lint, gen_binding_issues, format_binding_issue)
+def _run_text_lint[I](gen: _IssueWalker[I], where: str | None = "") -> int:
+    """Runs one shipped-text lint over ``where`` (or the text roots) and reports it."""
+    names = where.split(" ") if where else _TEXT_ROOTS
+    return _report_text_lint(gen, *(ROOT_DIR / name for name in names))
+
+
+def _lint_docstrings(where: str | None = "") -> int:
+    """Checks docstring summaries and doctest examples against the docs standard."""
+    roots = [Path(p) for p in where.split(" ")] if where else [Path("riko")]
+    return _report_text_lint(gen_docstring_issues, *roots)
+
+
+def _lint_terms(where: str | None = "") -> int:
+    """
+    Checks shipped text and the as-built docs for banned wording.
+
+    Shipped text is held to the banned phrases, phase codes, and removed paths; the
+    as-built docs only to the banned phrases, since they cite phases by design.
+
+    Args:
+
+        where: Space-separated files or directories to check instead of the
+            shipped-text roots; the as-built docs are then left out.
+
+    Returns:
+
+        ``1`` when any issue was found, else ``0``.
+
+    """
+    shipped = _run_text_lint(gen_term_issues, where)
+    internal = 0 if where else _report_text_lint(gen_phrase_issues, *AS_BUILT_DOCS)
+    return max(shipped, internal)
+
+
+_lint_literals = partial(_run_text_lint, gen_literal_issues)
+_lint_bindings = partial(_run_text_lint, gen_binding_issues)
 
 
 def _lint_tests() -> int:
-    """Checks the test suite against its indexed layout."""
-    issues = list(gen_layout_issues(ROOT_DIR / "tests"))
+    """Checks the test suite against its tier layout and generated indexes."""
+    issues = list(gen_layout_issues(TESTS_DIR))
 
     for issue in issues:
-        print(format_layout_issue(issue))
+        print(issue)
 
     return 1 if any(issue.fatal for issue in issues) else 0
 
 
 def _lint_basenames() -> int:
     """Checks that no two package modules share a file name."""
-    issues = list(gen_basename_issues(PACKAGE_DIR))
-
-    for issue in issues:
-        print(format_basename_issue(issue))
-
-    return 1 if issues else 0
+    return _report_text_lint(gen_basename_issues, PACKAGE_DIR)
 
 
 def _lint_deps() -> int:
-    """Checks riko's imports and hook pins against its declared and locked deps."""
+    """Checks imports with deptry, then the run-time, guard, and pin rules it leaves."""
+    if not _deptry:
+        raise RuntimeError("deptry not found")
+
     pyproject = ROOT_DIR / "pyproject.toml"
     hooks = ROOT_DIR / ".pre-commit-config.yaml"
+    deptry_code = call([_deptry, "."], cwd=ROOT_DIR)
     issues = [
-        *gen_dependency_issues(PACKAGE_DIR, pyproject),
+        *gen_import_issues(PACKAGE_DIR, pyproject),
         *gen_hook_pin_issues(hooks, ROOT_DIR / "uv.lock"),
     ]
 
     for issue in issues:
-        print(format_dependency_issue(issue))
+        print(issue)
 
-    return 1 if issues else 0
+    return max(deptry_code, 1 if issues else 0)
 
 
 def _lint_python(where: str | None = "", unsafe_fixes: bool = False) -> int:
@@ -263,12 +278,14 @@ def _check_command() -> None:
     "--literals", help="Check shipped text for misquoted literals", is_flag=True
 )
 @click.option(
-    "--deps", help="Check imports against declared dependencies", is_flag=True
+    "--deps",
+    help="Check imports and hook pins against package dependencies",
+    is_flag=True,
 )
 @click.option(
     "--bindings", help="Check Workflow values are bound as flow", is_flag=True
 )
-@click.option("--tests", help="Check the test suite's indexed layout", is_flag=True)
+@click.option("--tests", help="Check the test suite's tier layout", is_flag=True)
 @click.option(
     "--basenames", help="Check package modules for shared file names", is_flag=True
 )

@@ -187,7 +187,7 @@ The exact file split may evolve, but responsibilities must stay separated:
 | File/area | Purpose |
 |---|---|
 | `riko/pipeline.py` NEW | public immutable `Pipeline[T]` definition/DAG; iteration creates private execution |
-| workflow-definition/private schema modules NEW | canonical Workflow v2 node/edge/port/input/Target/Format types + normalization/migration/validation |
+| workflow-definition/private schema modules NEW | `Workflow` v2 node/edge/port/input/Target/Format types + normalization/migration/validation |
 | `riko/_execution/__init__.py` NEW | private execution package |
 | `riko/_execution/base.py` NEW | shared execution scaffolding/options/preparation state |
 | `riko/_execution/lifetime.py` NEW | task group, exit stack, portal/worker bridge |
@@ -262,6 +262,6 @@ Do not copy owner-level contract tests here.
 
 M2 is complete when retained P8/P9/P10 foundations and the reconciled R0–R12 implementation sequence
 satisfy their owner-level exit criteria, the M1 suite remains unregressed, Pyright is clean on the
-public surface, canonical Workflow v2/private execution are established, and at least one external
-extension proves registration + resources + cross-mode adaptation + pub/sub or StateStore integration
+public surface, `Workflow` v2/private execution are established, and at least one external
+extension proves registration + resources + sync/async adaptation + pub/sub or StateStore integration
 with **no Core edit**.

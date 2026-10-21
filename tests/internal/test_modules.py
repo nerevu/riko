@@ -16,7 +16,7 @@ import attrs
 import pytest
 
 from riko.bado.itertools import as_async
-from riko.base._paths import ROOT_DIR
+from riko.base._paths import TESTS_DIR
 from riko.base.exceptions import (
     InvalidPipelineError,
     UnsupportedModuleError,
@@ -1564,7 +1564,7 @@ class TestWorkflowResolver:
             resolver.register(document_store=DirectoryStore(tmp_path))
 
     def test_load_workflow_accepts_the_colon_alias(self):
-        directory = ROOT_DIR / "tests" / "workflows"
+        directory = TESTS_DIR / "workflows"
         resolver = WorkflowResolver(document_store=DirectoryStore(directory))
         assert resolver.load_workflow("pipe:gigs") == resolver.load_workflow(
             "pipe_gigs"
@@ -1579,7 +1579,7 @@ class TestWorkflowResolver:
             PackageStore(tokenizer_module)
 
     def test_directory_store_parses_workflow(self):
-        directory = ROOT_DIR / "tests" / "workflows"
+        directory = TESTS_DIR / "workflows"
         resolver = WorkflowResolver(document_store=DirectoryStore(directory))
         assert isinstance(resolver.load_workflow("pipe_gigs"), Workflow)
 
@@ -1660,7 +1660,7 @@ def _document_resolver(directory, **kwargs) -> WorkflowResolver:
 
 
 class TestResolvedDocuments:
-    workflows = ROOT_DIR / "tests" / "workflows"
+    workflows = TESTS_DIR / "workflows"
 
     def test_document_loads_once_with_both_interfaces(self):
         resolver = _document_resolver(self.workflows)

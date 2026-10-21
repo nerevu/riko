@@ -3,6 +3,8 @@ Provides public API tests: tests that use only supported names.
 
 Index (file, then the subjects it owns, in file order):
 
+    test_modules.py     Input, Fetchdata, Filter, Join, Sort, Send, AsyncReceive,
+                        RequiredOperands, ListModules, DescribeModule, ImportSurface
     test_pipeline.py    PipelineConstruction, PipelineChaining, ModuleNameEnum,
                         PipelineIteration, OutputParity, Reiteration, Close, Failure,
                         AsyncSourceAdapter, Alist, FanIn, WithExecution,
@@ -16,6 +18,4 @@ Index (file, then the subjects it owns, in file order):
     test_workflow.py    Workflow, NodeFamily, ParsePort, WorkflowParse, PipeDag,
                         NormalizeWorkflow, RequireModuleOnly, Validate, Migrate,
                         Serialize, WorkflowDocumentResolution
-    test_modules.py     Input, Fetchdata, Filter, Join, Sort, Send, AsyncReceive,
-                        RequiredOperands, ListModules, DescribeModule, ImportSurface
 """

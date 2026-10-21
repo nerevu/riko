@@ -16,7 +16,7 @@ from shutil import which
 from subprocess import run
 from typing import TYPE_CHECKING, Any
 
-from riko.base._paths import PACKAGE_DIR, ROOT_DIR
+from riko.base._paths import PACKAGE_DIR, ROOT_DIR, TESTS_DIR
 
 from ._gen_api_surface import _BLOCK, _DOC, generate_api_surface
 
@@ -55,6 +55,17 @@ _ROOT_MARKDOWN = frozenset(
         "RUNTIME_CONTRACT.md",
     }
 )
+AS_BUILT_DOCS: tuple[Path, ...] = tuple(
+    _INTERNAL_DOCS / name
+    for name in (
+        "IMPLEMENTED.md",
+        "INTERNALS.md",
+        "KEY_PATHS.md",
+        "MILESTONES.md",
+        "PHASE_CHECKLISTS.md",
+        "ROADMAP.md",
+    )
+)
 _LEGACY_INSPIRATION = _INTERNAL_DOCS / "inspiration"
 _API_SURFACE_GROUPS = frozenset(
     {"export", "compile", "bado", "modules", "root-exceptions", "other", "extension"}
@@ -80,7 +91,6 @@ _VERSION = re.compile(r"v?(\d+)\.(\d+)\.(\d+)")
 _COMPLETION = re.compile(
     r"\b(complete|completed|delivered|shipped|landed|done)\b", re.IGNORECASE
 )
-_TESTS_DIR = ROOT_DIR / "tests"
 _TEST_CITATION = re.compile(
     r"`((?:tests/)?(?:public|internal|functional)/test_\w+\.py)"
 )
@@ -418,7 +428,7 @@ def _gen_citation_offenders(
 def _gen_stale_test_citation_offenders() -> Iterator[str]:
     """Find tracked docs citing test files that no longer exist."""
     known = (
-        path.relative_to(ROOT_DIR).as_posix() for path in _TESTS_DIR.glob("*/test_*.py")
+        path.relative_to(ROOT_DIR).as_posix() for path in TESTS_DIR.glob("*/test_*.py")
     )
     docs = chain(
         _root_doc_paths(),

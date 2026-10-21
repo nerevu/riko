@@ -54,6 +54,15 @@ class BindingIssue(NamedTuple):
     path: Path
     lineno: int
 
+    def __str__(self) -> str:
+        """Renders the issue as a ``path:line`` line naming the preferred binding."""
+        where, found, instead = (
+            f"{self.path}:{self.lineno}",
+            RESERVED_NAME,
+            PREFERRED_NAME,
+        )
+        return f"{where} {found!r} binds a Workflow -> use {instead!r}"
+
 
 def _names_workflow(annotation: ast.expr | None) -> bool:
     """Detects an annotation that names ``Workflow`` or ``WorkflowLike``."""
@@ -227,17 +236,10 @@ def gen_binding_issues(*roots: Path) -> Iterator[BindingIssue]:
                 yield BindingIssue(path, lineno)
 
 
-def format_binding_issue(issue: BindingIssue) -> str:
-    """Renders one issue as a ``path:line`` line naming the preferred binding."""
-    found, instead = RESERVED_NAME, PREFERRED_NAME
-    return f"{issue.path}:{issue.lineno} {found!r} binds a Workflow -> use {instead!r}"
-
-
 __all__ = [
     "PREFERRED_NAME",
     "RESERVED_NAME",
     "BindingIssue",
-    "format_binding_issue",
     "gen_binding_issues",
     "gen_binding_lines",
 ]

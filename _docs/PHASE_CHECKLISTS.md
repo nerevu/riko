@@ -93,8 +93,8 @@ ADD/MIGRATE/DELETE exit (§ 3 closure rule); "open" names what is still owed.
 | **R2A** canonical value encoding | ✅ done | `84b1e363` (2026-09-22); [IMPLEMENTED § Canonical value encoder](IMPLEMENTED.md#canonical-value-encoder-r2a-shipped) |
 | **R2B** semantic identity + `version=` | ⏳ pending | no node/resource `version=` plumbing yet; owner `gameplans/execution-semantics.md` |
 | **R3** immutable Context/Resource (+ write-session seam) | ✅ done | `1c72a7a5` (2026-09-24); [IMPLEMENTED § Write sessions](IMPLEMENTED.md#write-sessions--private-seam-awaiting-writenode). Not built and re-homed (implementation-sequence R3): factory-signature and eager resource-graph validation → R11; `state_store` → R6; identity-encoder selection and resource identity metadata → R2B; Context-local module definitions/`with_module()` unscheduled |
-| **R4A** `Pipeline` + canonical Workflow v2 IR | ✅ done | `19eea428`→`f54f1183` (2026-09-18→23), fluent chaining `2838e7aa`, clean-break cutover steps 2–5 (`1d021824`, `ccb2575e`, `54b53c29`, `59a51274`); only the `SINK_NAMES`/`Sinks` deletion rides R5C by design; checkpoint and loop `until`/`max_iterations` structural fields land with their runtimes (R6, R9) |
-| **R4B** private `SyncExecution`/`AsyncExecution` | ✅ done | scaffold, lifetime primitives, resource lifecycle, cross-mode adaptation, the pipe/collection deletion, `Pipeline.with_execution(...)` (executor/concurrency/order, event sink, shutdown budget), and `with_context`/`with_resource` ([IMPLEMENTED § Private execution runtime](IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)); concurrent fan-in branch pulling and the async task group are deferred to R7, lazy acquire-on-first-use and resource dependency ordering to R11; the write-session MIGRATE bullet carries to R5C (`WriteNode` execution, tripwired by `TestPipelineWrite` in `tests/internal/test_definitions.py`) |
+| **R4A** `Pipeline` + `Workflow` v2 IR | ✅ done | `19eea428`→`f54f1183` (2026-09-18→23), fluent chaining `2838e7aa`, clean-break cutover steps 2–5 (`1d021824`, `ccb2575e`, `54b53c29`, `59a51274`); only the `SINK_NAMES`/`Sinks` deletion rides R5C by design; checkpoint and loop `until`/`max_iterations` structural fields land with their runtimes (R6, R9) |
+| **R4B** private `SyncExecution`/`AsyncExecution` | ✅ done | scaffold, lifetime primitives, resource lifecycle, sync/async adaptation, the pipe/collection deletion, `Pipeline.with_execution(...)` (executor/concurrency/order, event sink, shutdown timeout), and `with_context`/`with_resource` ([IMPLEMENTED § Private execution runtime](IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)); concurrent fan-in branch pulling and the async task group are deferred to R7, lazy acquire-on-first-use and resource dependency ordering to R11; the write-session MIGRATE bullet carries to R5C (`WriteNode` execution, tripwired by `TestPipelineWrite` in `tests/internal/test_definitions.py`) |
 | **R4C** callable nodes (pure 1→1 `map`) + bare decorator form + `Pipeline.open()` | ⏳ pending | slot added 2026-10-03, extended 2026-10-04 to cover bare `@processor`/`@operator`/`@splitter` and `Pipeline.open()` (none built yet); owner `gameplans/callable-pipes.md`; flips `TestCallableNodes` and replaces `test_bare_decorator_raises_at_decoration` |
 | **R4D** workflow input declarations | ⏳ pending | slot added 2026-10-03; owner `gameplans/extensibility.md` § E3.6 |
 | **M1** v1-parity merge (`next` → `features`) | 🎯 milestone | order: close R4B → R4C → R4D → R5A → R7 → merge; R5B/R5C/R6+ follow (implementation-sequence § 4 "M1") |
@@ -258,8 +258,8 @@ equivalent to looping it:
   **compact form is canonical**: `normalize_raw_module` lifts legacy → compact (processor-loop → direct
   node; `pipe:<id>` loop → compact loop), the compiler/runtime consume compact (the generated
   `tests/pyworkflows/*.py` tree was regenerated then; the v1 cutover later replaced it with
-  `WorkflowDocument`s (workflow documents) plus hand-maintained probes). A loop embedding a `pipe:` sub-pipeline runs **per parent**
-  through the same fold; sub-pipelines are detected by **declared** metadata (`SUBPIPE_TYPE` in `riko/base/_config.py`,
+  `WorkflowDocument`s (workflow documents) plus hand-maintained probes). A loop embedding a `pipe:` stored workflow runs **per parent**
+  through the same fold; stored workflows are detected by **declared** metadata (`SUBPIPE_TYPE` in `riko/base/_config.py`,
   the `workflow` decorator in `riko/runtime/_workflow_pipes.py`, `is_subpipe` in `riko/types/_wrappers.py`) stamped at `resolve_module` + in the codegen templates.
   `_resolve_leaf_modules` fail-fast-resolves every leaf (incl. graph-disconnected) so an unreached
   unsupported module raises at build. Per-parent fold contract:
@@ -319,9 +319,9 @@ equivalent to looping it:
 runtime `register` global-with-`reset()`, Context-scopable later). **DoD #2** (runtime resolution
 imports no compiler) and **DoD #1** (external module via entry point, no core edit —
 `examples/riko-example-ext/`) both met. `compile_missing` polymorphism **dropped** (`resolve_module`
-always returns a callable; JSON compile → `load_definition`). Sub-pipelines are marked via a **fresh
+always returns a callable; JSON compile → `load_definition`). Stored workflows are marked via a **fresh
 wrapper** (the generated module fn is never mutated). Codegen emits a **stable `pipe`/`async_pipe`
-entry**, so a sub-pipeline resolves exactly like a built-in — this removed the overloaded `pipe_name`
+entry**, so a stored workflow resolves exactly like a built-in — this removed the overloaded `pipe_name`
 argument (P8.6). `list_modules` overlays registry (runtime + entry-point) modules. The stored-workflow
 tagger (now the `workflow` decorator, which tags a copy) widened (it only stamps metadata). Speculative `ModuleDefinition` discovery fields
 (`provider`/`enum_name`/`category`/`docs_url`) dropped until P9A needs them. Entry-point group name:

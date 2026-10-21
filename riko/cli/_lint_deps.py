@@ -1,60 +1,52 @@
 # vim: sw=4:ts=4:expandtab
-"""Checks riko's imports and hook pins against its declared and locked dependencies."""
+"""
+Checks the dependency rules deptry leaves open: run-time use, guards, and hook pins.
+
+deptry reports missing, unused, and misplaced dependencies (a ``types-*`` stub package
+declared in ``[project]`` or an extra is unused, since nothing imports it). But it
+counts an import under ``TYPE_CHECKING`` as a use, counts an optional extra as declared
+wherever it is imported, and never reads hook configuration.
+
+This module holds every required dependency to an import that runs, every import of an
+optional extra to a ``try`` that catches its ``ImportError``, and every pre-commit tool
+pin to the version ``uv.lock`` resolves.
+"""
 
 from __future__ import annotations
 
 import ast
 import re
-import sys
 import tomllib
 from importlib.metadata import packages_distributions
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
+
+from ._import_graph import is_type_checking
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
     from pathlib import Path
 
-type ImportGuard = Literal["none", "try", "type_checking"]
-
-_LOCAL_NAMES = frozenset({"riko", "__future__"})
 _REQUIREMENT_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
-_STUB_PREFIX = "types-"
 HOOK_PINNED: tuple[str, ...] = ("ruff",)
-
-
-class ImportSite(NamedTuple):
-    """
-    One import of a top-level name outside the standard library and riko.
-
-    Attributes:
-
-        path: The file holding the import.
-        lineno: The import's line number.
-        name: The imported top-level module name, such as ``dateutil``.
-        guard: ``"none"`` when the import runs whenever its code runs, ``"try"``
-            inside a ``try`` block, or ``"type_checking"`` under ``TYPE_CHECKING``.
-
-    """
-
-    path: Path
-    lineno: int
-    name: str
-    guard: ImportGuard
 
 
 class DependencyIssue(NamedTuple):
     """
-    A mismatch between riko's imports and its declared dependencies.
+    A mismatch between riko's imports or hook pins and its declared dependencies.
 
     Attributes:
 
-        where: The ``path:line`` of the offending import, or ``pyproject.toml``.
-        message: What is wrong and what to declare or remove.
+        where: The ``path:line`` of the offending import or pin, or the offending file.
+        message: What is wrong and what to declare, import, or pin.
 
     """
 
     where: str
     message: str
+
+    def __str__(self) -> str:
+        """Renders the issue as a ``where message`` line."""
+        return f"{self.where} {self.message}"
 
 
 def normalize_distribution(name: str) -> str:
@@ -88,158 +80,186 @@ def _get_requirement_name(requirement: str) -> str:
     return normalize_distribution(match.group(1))
 
 
-def _get_guard(node: ast.AST, parents: Mapping[ast.AST, ast.AST]) -> ImportGuard:
-    """Finds the strongest guard among an import's enclosing statements."""
-    guards: set[ImportGuard] = set()
-    parent = parents.get(node)
+def _is_not_type_checking(test: ast.expr) -> bool:
+    """Tells whether a test is exactly ``not TYPE_CHECKING``."""
+    match test:
+        case ast.UnaryOp(op=ast.Not(), operand=operand):
+            is_negated = is_type_checking(operand)
+        case _:
+            is_negated = False
 
-    while parent is not None:
-        if isinstance(parent, ast.If) and "TYPE_CHECKING" in ast.unparse(parent.test):
-            guards.add("type_checking")
-        elif isinstance(parent, ast.Try):
-            guards.add("try")
-
-        parent = parents.get(parent)
-
-    if "type_checking" in guards:
-        guard: ImportGuard = "type_checking"
-    elif "try" in guards:
-        guard = "try"
-    else:
-        guard = "none"
-
-    return guard
+    return is_negated
 
 
-def _gen_imported_names(node: ast.AST) -> Iterator[str]:
-    """Extracts the top-level module names from an absolute import statement."""
-    if isinstance(node, ast.Import):
-        for alias in node.names:
-            yield alias.name.split(".")[0]
-    elif isinstance(node, ast.ImportFrom) and not node.level and node.module:
-        yield node.module.split(".")[0]
+_IMPORT_ERRORS = frozenset(
+    {"ImportError", "ModuleNotFoundError", "Exception", "BaseException"}
+)
 
 
-def gen_import_sites(package_dir: Path) -> Iterator[ImportSite]:
+def _catches_import_error(handler: ast.ExceptHandler) -> bool:
+    """Tells whether an ``except`` clause catches a failed import."""
+    match handler.type:
+        case None:
+            catches = True
+        case ast.Name(id=name):
+            catches = name in _IMPORT_ERRORS
+        case ast.Tuple(elts=elts):
+            names = (isinstance(e, ast.Name) and e.id in _IMPORT_ERRORS for e in elts)
+            catches = any(names)
+        case _:
+            catches = False
+
+    return catches
+
+
+class RuntimeImport(NamedTuple):
     """
-    Walks a package for imports of names outside the standard library and riko.
+    A top-level module imported at run time.
+
+    Attributes:
+
+        name: The imported top-level module name.
+        lineno: The import statement's line number.
+        guarded: Whether a ``try`` around it catches a failed import.
+
+    """
+
+    name: str
+    lineno: int
+    guarded: bool
+
+
+type _ImportNode = ast.Import | ast.ImportFrom
+
+
+def _gen_import_nodes(
+    node: ast.AST, typing_only: bool = False, guarded: bool = False
+) -> Iterator[tuple[_ImportNode, bool]]:
+    """Walks a tree for the import statements outside typing-only branches."""
+    if isinstance(node, ast.Import | ast.ImportFrom):
+        if not typing_only:
+            yield node, guarded
+    elif isinstance(node, ast.If):
+        body_only = typing_only or is_type_checking(node.test)
+        orelse_only = typing_only or _is_not_type_checking(node.test)
+
+        for child in node.body:
+            yield from _gen_import_nodes(child, body_only, guarded)
+
+        for child in node.orelse:
+            yield from _gen_import_nodes(child, orelse_only, guarded)
+    elif isinstance(node, ast.Try | ast.TryStar):
+        body_guarded = guarded or any(map(_catches_import_error, node.handlers))
+
+        for child in [*node.body, *node.orelse]:
+            yield from _gen_import_nodes(child, typing_only, body_guarded)
+
+        for child in [*node.handlers, *node.finalbody]:
+            yield from _gen_import_nodes(child, typing_only, guarded)
+    else:
+        for child in ast.iter_child_nodes(node):
+            yield from _gen_import_nodes(child, typing_only, guarded)
+
+
+def gen_runtime_imports(source: str) -> Iterator[RuntimeImport]:
+    """
+    Walks Python source for the top-level modules it imports at run time.
+
+    An import is typing-only when it sits in the body of an ``if`` whose test is
+    exactly ``TYPE_CHECKING`` or ``typing.TYPE_CHECKING``, or in the ``else`` of
+    ``if not TYPE_CHECKING``; every other absolute import runs. It is guarded when it
+    sits in the body or ``else`` of a ``try`` whose ``except`` catches ``ImportError``.
 
     Args:
 
-        package_dir: The package directory to scan.
+        source: The Python source text.
 
     Yields:
 
-        One :class:`ImportSite` per third-party name per import statement, in path
-        then line order.
+        Each absolute import's top-level module, in source order.
+
+    Examples:
+
+        >>> source = '''
+        ... import a.b
+        ... if TYPE_CHECKING:
+        ...     import c
+        ... try:
+        ...     from d import e
+        ... except ImportError:
+        ...     pass
+        ... '''
+        >>> [(i.name, i.guarded) for i in gen_runtime_imports(source)]
+        [('a', False), ('d', True)]
 
     """
-    excluded = _LOCAL_NAMES | sys.stdlib_module_names
+    for node, guarded in _gen_import_nodes(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        else:
+            names = [] if node.level or not node.module else [node.module]
 
-    for path in sorted(package_dir.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        parents = {
-            child: node
-            for node in ast.walk(tree)
-            for child in ast.iter_child_nodes(node)
-        }
-        imports = (
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Import | ast.ImportFrom)
-        )
-
-        for node in sorted(imports, key=lambda node: node.lineno):
-            for name in _gen_imported_names(node):
-                if name not in excluded:
-                    yield ImportSite(path, node.lineno, name, _get_guard(node, parents))
+        for name in names:
+            yield RuntimeImport(name.split(".")[0], node.lineno, guarded)
 
 
-def _get_declared(data: Mapping[str, Any]) -> tuple[frozenset[str], frozenset[str]]:
-    """Collects the required dependencies and every optional or group requirement."""
-    project = data.get("project", {})
-    required = frozenset(map(_get_requirement_name, project.get("dependencies", [])))
-    groups = [
-        *project.get("optional-dependencies", {}).values(),
-        *data.get("dependency-groups", {}).values(),
-    ]
-    optional = frozenset(
-        _get_requirement_name(entry)
-        for group in groups
-        for entry in group
-        if isinstance(entry, str)
-    )
-    return required, optional
-
-
-def _get_runtime_stubs(data: Mapping[str, Any]) -> list[str]:
-    """Lists ``types-*`` stub packages declared as run-time requirements."""
-    project = data.get("project", {})
-    extras = project.get("optional-dependencies", {}).values()
-    entries = [
-        *project.get("dependencies", []),
-        *(e for extra in extras for e in extra),
-    ]
-    names = map(_get_requirement_name, entries)
-    return sorted({name for name in names if name.startswith(_STUB_PREFIX)})
-
-
-def gen_dependency_issues(
+def gen_import_issues(
     package_dir: Path,
     pyproject: Path,
     distributions: Mapping[str, Sequence[str]] | None = None,
 ) -> Iterator[DependencyIssue]:
     """
-    Compares a package's imports against the dependencies its project declares.
+    Finds run-time imports that break the declared dependencies.
 
-    An unguarded import must come from a required dependency, an import in a ``try``
-    block from any declared requirement (a dependency, an extra, or a dependency
-    group), and every required dependency must be imported outside ``TYPE_CHECKING``.
-    A ``types-*`` stub package must never be a required dependency or an extra. A
-    module no installed distribution provides is assumed to share its
-    distribution's name, so an uninstalled extra still matches its declaration.
+    An import of a distribution that only ``[project.optional-dependencies]``
+    declares must be guarded, so riko still imports without the extra; and every
+    ``[project]`` dependency must be imported somewhere outside ``TYPE_CHECKING``.
+    A module no installed distribution provides is assumed to share its
+    distribution's name.
 
     Args:
 
         package_dir: The package directory whose imports are checked.
+
         pyproject: The ``pyproject.toml`` declaring the dependencies.
-        distributions: Maps each top-level module name to the distributions that
-            provide it. Defaults to the installed environment's mapping.
+
+        distributions: Maps each top-level module name to the providing distributions
+            (default: the installed environment's mapping).
 
     Yields:
 
-        One :class:`DependencyIssue` per mismatch: imports in path then line order,
-        then unused dependencies, then stub packages.
+        One :class:`DependencyIssue` per unguarded optional import, in path then
+        line order, then one per required dependency nothing imports, in name order.
 
     """
     provided = packages_distributions() if distributions is None else distributions
-    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-    required, optional = _get_declared(data)
+    project = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("project", {})
+    required = set(map(_get_requirement_name, project.get("dependencies", [])))
+    extras = {
+        _get_requirement_name(entry)
+        for group in project.get("optional-dependencies", {}).values()
+        for entry in group
+    }
     used: set[str] = set()
 
-    for site in gen_import_sites(package_dir):
-        names = provided.get(site.name) or (site.name,)
-        dists = {normalize_distribution(name) for name in names}
-        where = f"{site.path}:{site.lineno}"
-
-        if site.guard != "type_checking":
+    for path in sorted(package_dir.rglob("*.py")):
+        for runtime in gen_runtime_imports(path.read_text(encoding="utf-8")):
+            names = provided.get(runtime.name) or (runtime.name,)
+            dists = set(map(normalize_distribution, names))
             used |= dists
 
-        if site.guard == "none" and not dists & required:
-            msg = (
-                f"{site.name!r} is imported unguarded but is not a [project] dependency"
-            )
-            yield DependencyIssue(where, msg)
-        elif site.guard == "try" and not dists & (required | optional):
-            msg = f"{site.name!r} is imported in a try block but declared nowhere"
-            yield DependencyIssue(where, msg)
+            if dists <= extras - required and not runtime.guarded:
+                msg = (
+                    f"{runtime.name!r} comes from an optional extra; import it in a "
+                    "try block that catches ImportError"
+                )
+                yield DependencyIssue(f"{path}:{runtime.lineno}", msg)
 
     for name in sorted(required - used):
-        msg = f"{name!r} is a [project] dependency that nothing imports"
-        yield DependencyIssue(str(pyproject), msg)
-
-    for name in _get_runtime_stubs(data):
-        msg = f"{name!r} is a typing stub; declare it in a dependency group"
+        msg = (
+            f"{name!r} is a [project] dependency that nothing imports at run time; "
+            "import it outside TYPE_CHECKING or move it to a dependency group"
+        )
         yield DependencyIssue(str(pyproject), msg)
 
 
@@ -341,20 +361,14 @@ def gen_hook_pin_issues(config: Path, lockfile: Path) -> Iterator[DependencyIssu
                 yield DependencyIssue(f"{config}:{lineno}", msg)
 
 
-def format_dependency_issue(issue: DependencyIssue) -> str:
-    """Renders one issue as a ``where message`` line."""
-    return f"{issue.where} {issue.message}"
-
-
 __all__ = [
     "HOOK_PINNED",
     "DependencyIssue",
-    "ImportSite",
+    "RuntimeImport",
     "build_pinned_config",
-    "format_dependency_issue",
-    "gen_dependency_issues",
     "gen_hook_pin_issues",
-    "gen_import_sites",
+    "gen_import_issues",
+    "gen_runtime_imports",
     "get_locked_version",
     "normalize_distribution",
 ]

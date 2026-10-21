@@ -136,15 +136,17 @@ The common development commands are:
 ``manage lint``
     Run Ruff lint plus ``ruff format --check`` by default. Standard checks may be
     selected additively with ``--rst``, ``--docs``, ``--actions``, ``--yaml``,
-    ``--docstrings``, ``--terms`` (phrases the reserved-terms rules replace, and
-    internal phase codes),
+    ``--docstrings``, ``--terms`` (phrases the reserved-terms rules replace, internal
+    phase codes, and the same phrases in the internal design notes),
     ``--literals`` (single-quoted values, and backticked or unquoted string defaults),
-    ``--deps`` (imports that ``pyproject.toml`` does not declare, declared
-    dependencies nothing imports, and typing stubs shipped as runtime requirements),
+    ``--deps`` (deptry's missing, unused, and misplaced dependency checks, required
+    dependencies imported only under ``TYPE_CHECKING``, optional extras imported outside
+    a ``try`` that catches ``ImportError``, and pre-commit pins that differ from
+    ``uv.lock``),
     ``--bindings`` (a ``Workflow`` bound to ``workflow`` rather than ``flow`` in code
-    or doctests), ``--tests`` (test files and classes that depart from the tier indexes in
-    each ``tests/<tier>/__init__.py``), and ``--basenames`` (two package modules sharing a
-    file name).
+    or doctests), ``--tests`` (stale generated tier indexes, tests outside a
+    ``Test<Subject>`` class, a subject owned by two files, and misplaced files), and
+    ``--basenames`` (two package modules sharing a file name).
     ``manage lint --all`` runs all standard checks, including all import-contract ones.
     Type completeness, strict pylint, and distribution checks remain explicit via
     ``--check-types``, ``--verify-types``, ``--strict``, and ``--dist``.
@@ -164,7 +166,7 @@ The common development commands are:
 
 ``manage codegen``
     Regenerate derived repository artifacts. With no selector it regenerates
-    configuration types. Use ``--config``, ``--names``, and ``--api``
+    configuration types. Use ``--config``, ``--names``, ``--api``, and ``--tests``
     additively, or ``--all`` for every generator.
 
 Daily development workflow

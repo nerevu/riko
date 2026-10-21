@@ -73,6 +73,7 @@ test = [
 ]
 
 lint = [
+    "deptry>=0.25.1",
     "docutils>=0.21",
     "pygments>=2.20.0",
     "pylint>=4.0.5,<5.0.0",
@@ -216,6 +217,23 @@ split-on-trailing-comma = false
     "N806",  # Variable in function should be lowercase (generated _OUTPUT)
     "UP009",  # UTF-8 encoding declaration (generated header)
 ]
+
+[tool.deptry]
+# `manage lint --deps` runs deptry from the repository root. The root conftest.py
+# is pytest configuration (like the default-excluded tests/), and .claude/ holds
+# agent tooling rather than project code.
+extend_exclude = ["conftest\\.py", "\\.claude"]
+
+[tool.deptry.package_module_name_map]
+# The tox lint env installs only the lint group, so deptry can't read these
+# distributions' import names from installed metadata.
+python-dateutil = "dateutil"
+python-slugify = "slugify"
+
+[tool.deptry.per_rule_ignores]
+# `manage lint --rst` imports docutils in a try/except ImportError block; it is
+# declared in the lint group because only the lint tooling needs it.
+DEP004 = ["docutils"]
 
 [tool.pyright]
 venv = "riko"

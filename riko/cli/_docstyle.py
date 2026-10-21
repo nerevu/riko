@@ -56,6 +56,10 @@ class DocstringIssue(NamedTuple):
     problem: str
     text: str
 
+    def __str__(self) -> str:
+        """Renders the issue as a ``path:line name() problem: 'text'`` line."""
+        return f"{self.path}:{self.lineno} {self.name}() {self.problem}: {self.text!r}"
+
 
 def summary_leads_with_output(summary: str) -> bool:
     """
@@ -274,15 +278,9 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
             yield from _gen_module_example_issues(path, tree)
 
 
-def format_issue(issue: DocstringIssue) -> str:
-    """Renders one issue as a ``path:line name() problem: 'text'`` line."""
-    return f"{issue.path}:{issue.lineno} {issue.name}() {issue.problem}: {issue.text!r}"
-
-
 __all__ = [
     "BANNED_LEADS",
     "DocstringIssue",
-    "format_issue",
     "gen_docstring_issues",
     "gen_example_prose",
     "gen_private_imports",

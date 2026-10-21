@@ -9,7 +9,9 @@ Placing a test takes two lookups.
    it uses only supported names; ``internal`` otherwise.
 2. File: find the subject (the riko name whose behavior the test asserts) in that
    tier's index, the ``__init__.py`` docstring of its folder. Each subject has
-   exactly one file. When the subject is missing, add it to the closest row.
+   exactly one file. When the subject is missing, add its ``Test<Subject>`` class
+   to the closest file. The index is generated from those classes, so run
+   ``manage codegen --tests`` rather than editing it.
 
 Inside a file, every test belongs to a ``Test<Subject>`` class (its async twin,
 ``TestAsync<Subject>``, follows it). Helpers sit directly above the one class that
@@ -36,17 +38,15 @@ neighbor.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
 from riko.bado._backend import issync, run
+from riko.base._paths import TESTS_DIR as TESTS_DIR
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable
-
-TESTS_DIR = Path(__file__).parent.absolute()
 
 skipif_issync = pytest.mark.skipif(issync, reason="async support not available")
 

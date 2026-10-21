@@ -278,12 +278,13 @@ is a fallback, so it is a `resolve`.
   `mezmorize`'s console script in some install orders; use
   `python -m riko.cli.manage` if the wrong executable wins.
 - **Codegen selectors** — `manage codegen` defaults to config; `--config`,
-  `--names`, `--api` are additive; `--all` runs all generators.
+  `--names`, `--api`, `--tests` are additive; `--all` runs all generators.
 - **Generated files are never hand-edited** — `riko/coercion/_configs.py`,
-  `riko/modules/_names.py`, `riko/types/_module_ids.py`, and the marked name blocks
-  in `_docs/API_SURFACE.md` all have canonical sources and drift guards. The
-  `workflows`/`pyworkflows` fixture trees are not generated; they are
-  `WorkflowDocument`s plus hand-maintained typed probes. Details: `_docs/INTERNALS.md`.
+  `riko/modules/_names.py`, `riko/types/_module_ids.py`, the marked name blocks in
+  `_docs/API_SURFACE.md`, and the tier indexes in `tests/<tier>/__init__.py` all have
+  canonical sources and drift guards. The `workflows`/`pyworkflows` fixture trees are
+  not generated; they are `WorkflowDocument`s plus hand-maintained typed probes.
+  Details: `_docs/INTERNALS.md`.
 - **Lint selectors are additive** — bare `manage lint` is Ruff; `manage lint --all`
   runs the whole standard suite (Ruff, RST, `--docs`, `--docstrings`, `--terms`, `--literals`,
   `--deps`, `--bindings`, `--tests`, `--basenames`, actionlint, YAML, and all import contracts), so none of those need a separate run. Type

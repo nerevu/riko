@@ -63,7 +63,10 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's).
    terms/literals/deps/bindings/tests/basenames checks, actionlint, YAML, and every import contract, so do not rerun
    `--docs`, `--docstrings`, `--terms`, `--literals`, `--deps`, `--bindings`, `--tests`, or `--basenames` separately. It does **not** run the type gate.
 5. **Tests**: targeted tests for the touched area first while iterating, then
-   the full suite `manage test --ratchet --quiet` before declaring ready.
+   the full suite `manage test --ratchet --quiet` before declaring ready —
+   in the foreground and alone: no other pytest or `manage` gate may run
+   beside it: its thread/pool timing tests and the ~70s run degrade under CPU
+   contention, and its own data folder isolates only the coverage file.
    Doctests are tests here — doc examples run under pytest. `--ratchet` fails
    when the run leaves more statements uncovered than the ceiling in
    `pyproject.toml` (`[tool.riko.coverage] uncovered`): cover the new or

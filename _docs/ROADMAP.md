@@ -56,7 +56,7 @@ The core target is deliberately split by responsibility:
 
 - [execution-semantics.md](gameplans/execution-semantics.md) — Pipeline execution, resources,
   identity/provenance/state/batching/retry;
-- [extensibility.md](gameplans/extensibility.md) — canonical Workflow v2 graph/serialization contract;
+- [extensibility.md](gameplans/extensibility.md) — `Workflow` v2 graph/serialization contract;
 - [events.md](gameplans/events.md) — one execution-owned EventSink transport;
 - [cache.md](gameplans/cache.md) — explicit Pipeline cache/replay semantics;
 - [effects.md](gameplans/effects.md) — provider-neutral write/action side effects;
@@ -167,7 +167,7 @@ The complete `§0–27` routing map:
 |---|---|
 | [execution-semantics.md](gameplans/execution-semantics.md) | Immutable `Pipeline[T]` execution semantics; private sync/async executions and lifetime primitives; immutable Context/resources; FeedResult/provenance; identity/idempotency; StateStore/checkpoint/CAS; loop runtime; batch/retry/backpressure/timeout/merge/memory semantics. |
 | [dependency-layers.md](gameplans/dependency-layers.md) | Current package-layer DAG and import-contract boundaries; execution behavior remains owned by `execution-semantics.md`. |
-| [extensibility.md](gameplans/extensibility.md) | Canonical Workflow v2 normalization/serialization, node/edge/port grammar, Inputs/Targets/Formats structure, module/plugin contracts, ecosystem observability/adapters/drivers/GUI contracts. |
+| [extensibility.md](gameplans/extensibility.md) | `Workflow` v2 normalization/serialization, node/edge/port grammar, Inputs/Targets/Formats structure, module/plugin contracts, ecosystem observability/adapters/drivers/GUI contracts. |
 | [events.md](gameplans/events.md) | Minimal execution-owned `Event`/`EventSink` transport and optional-consumer boundary. |
 | [cache.md](gameplans/cache.md) | `Pipeline.cache()` / `CacheNode` explicit replay semantics, Mezmoize integration, fill/manifest/invalidation/backend-failure behavior. |
 | [effects.md](gameplans/effects.md) | Provider-neutral `write` / `ActionNode` semantics, Target/Format/Resource separation, pass-through behavior, WriteResult/ActionResult, idempotency participation. |

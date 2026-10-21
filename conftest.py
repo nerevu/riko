@@ -9,7 +9,7 @@ import pytest
 
 from riko.bado._backend import issync
 from riko.base._logging import LOGGER_NAME
-from riko.base._paths import ROOT_DIR
+from riko.base._paths import TESTS_DIR
 from riko.parsing.documents import IS_LXML
 from riko.runtime._pubsub import reset_pubsub
 from riko.runtime._workflow_resolver import (
@@ -19,8 +19,8 @@ from riko.runtime._workflow_resolver import (
 
 pytest_plugins = ["pytester", "tests._timeouts"]
 
-WORKFLOW_DIR = ROOT_DIR / "tests" / "workflows"
-RUN_CALL = re.compile(r"(?<![\w.])run\(")
+WORKFLOW_DIR = TESTS_DIR / "workflows"
+RUN_CALL = re.compile(r"^\s*run\(", re.MULTILINE)
 
 
 @pytest.fixture(autouse=True)

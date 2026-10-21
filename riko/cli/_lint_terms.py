@@ -30,6 +30,7 @@ class BannedTerm(NamedTuple):
 
 BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("execution context", "run environment (a `Context`)"),
+    BannedTerm("shutdown budget", "shutdown timeout"),
     BannedTerm("coroutine function", "async function"),
     BannedTerm("sink pipe", "write module, or 'consumes the stream'"),
     BannedTerm("output module", "the `PipeDef` `output` node"),
@@ -43,6 +44,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("missing side", "the missing sync or async interface"),
     BannedTerm("terminal sub-source", "secondary input stream"),
     BannedTerm("input requirements", "input declarations"),
+    BannedTerm("keyword sink", "`**kwargs` or keyword arguments"),
     BannedTerm("named workflow", "stored workflow"),
     BannedTerm("registered workflow", "stored workflow"),
     BannedTerm("imported workflow", "resolved workflow"),
@@ -82,8 +84,11 @@ REMOVED_EXT_PATH = BannedTerm(
     "removed riko.ext submodule path", "`riko.ext` or one of its submodules"
 )
 
+_PHRASE_PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = tuple(
+    (term, _build_pattern(term)) for term in BANNED_TERMS
+)
 _PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
-    *((term, _build_pattern(term)) for term in BANNED_TERMS),
+    *_PHRASE_PATTERNS,
     (PHASE_CODE, re.compile(r"\b[RP](?:1[0-2]|[0-9])[A-E]?(?:\.\d+)?\b")),
     (
         REMOVED_EXT_PATH,
@@ -110,6 +115,23 @@ class TermIssue(NamedTuple):
     found: str
     term: BannedTerm
 
+    def __str__(self) -> str:
+        """Renders the issue as a ``path:line 'found' -> say 'instead'`` line."""
+        found, instead = self.found, self.term.instead
+        return f"{self.path}:{self.lineno} {found!r} -> say {instead!r}"
+
+
+def _gen_issues(
+    patterns: tuple[tuple[BannedTerm, re.Pattern[str]], ...], *roots: Path
+) -> Iterator[TermIssue]:
+    """Walks ``roots`` for every ``patterns`` match in their scannable files."""
+    for root in roots:
+        for path in gen_files(root, _EXCLUDED_NAMES):
+            for lineno, line in gen_text(path):
+                for term, pattern in patterns:
+                    for match in pattern.finditer(line):
+                        yield TermIssue(path, lineno, match.group(0), term)
+
 
 def gen_term_issues(*roots: Path) -> Iterator[TermIssue]:
     """
@@ -126,18 +148,26 @@ def gen_term_issues(*roots: Path) -> Iterator[TermIssue]:
         One :class:`TermIssue` per match, in path then line order.
 
     """
-    for root in roots:
-        for path in gen_files(root, _EXCLUDED_NAMES):
-            for lineno, line in gen_text(path):
-                for term, pattern in _PATTERNS:
-                    for match in pattern.finditer(line):
-                        yield TermIssue(path, lineno, match.group(0), term)
+    yield from _gen_issues(_PATTERNS, *roots)
 
 
-def format_term_issue(issue: TermIssue) -> str:
-    """Renders one issue as a ``path:line 'found' -> say 'instead'`` line."""
-    found, instead = issue.found, issue.term.instead
-    return f"{issue.path}:{issue.lineno} {found!r} -> say {instead!r}"
+def gen_phrase_issues(*roots: Path) -> Iterator[TermIssue]:
+    """
+    Walks ``roots`` for banned phrases only, leaving phase codes and old paths alone.
+
+    The internal docs cite phases and retired paths by design, so they are held to the
+    reserved terms but not to the rules for shipped text.
+
+    Args:
+
+        roots: Files or directories to scan.
+
+    Yields:
+
+        One :class:`TermIssue` per match, in path then line order.
+
+    """
+    yield from _gen_issues(_PHRASE_PATTERNS, *roots)
 
 
 __all__ = [
@@ -146,6 +176,6 @@ __all__ = [
     "REMOVED_EXT_PATH",
     "BannedTerm",
     "TermIssue",
-    "format_term_issue",
+    "gen_phrase_issues",
     "gen_term_issues",
 ]

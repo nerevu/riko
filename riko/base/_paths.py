@@ -20,6 +20,7 @@ from typing import IO, Literal, overload
 
 PACKAGE_DIR = Path(__file__).parent.parent.absolute()
 ROOT_DIR = PACKAGE_DIR.parent
+TESTS_DIR = ROOT_DIR / "tests"
 
 
 def normalize_url(url: str, absolute: bool = True, offline: bool = False) -> str:

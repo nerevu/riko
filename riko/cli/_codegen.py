@@ -15,6 +15,8 @@ from ._gen_config import main as gen_config_main
 from ._gen_names import _MODULE_IDS as MODULE_IDS_PATH
 from ._gen_names import _NAMES as NAMES_PATH
 from ._gen_names import main as gen_names_main
+from ._gen_tier_index import TIERS
+from ._gen_tier_index import main as gen_tier_index_main
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -35,6 +37,11 @@ _CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
         lambda: f"regenerated the API-surface document at {API_SURFACE_PATH}",
         "Error regenerating the API-surface document!",
     ),
+    "tests": (
+        gen_tier_index_main,
+        lambda: f"regenerated the {', '.join(TIERS)} test indexes",
+        "Error regenerating the test indexes!",
+    ),
 }
 
 
@@ -42,9 +49,14 @@ _CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
 @click.option("--config", help="Regenerate configuration types", is_flag=True)
 @click.option("--names", help="Regenerate module-name catalogs", is_flag=True)
 @click.option("--api", help="Regenerate the API-surface document", is_flag=True)
+@click.option("--tests", help="Regenerate the test tier indexes", is_flag=True)
 @click.option("--all", "all_", help="Run every generator", is_flag=True)
 def _codegen_command(
-    config: bool = False, names: bool = False, api: bool = False, all_: bool = False
+    config: bool = False,
+    names: bool = False,
+    api: bool = False,
+    tests: bool = False,
+    all_: bool = False,
 ) -> None:
     """Regenerate generated project artifacts."""
     selected = (
@@ -52,7 +64,12 @@ def _codegen_command(
         if all_
         else tuple(
             name
-            for name, enabled in (("config", config), ("names", names), ("api", api))
+            for name, enabled in (
+                ("config", config),
+                ("names", names),
+                ("api", api),
+                ("tests", tests),
+            )
             if enabled
         )
     )

@@ -64,6 +64,11 @@ class LiteralIssue(NamedTuple):
     found: str
     rule: LiteralRule
 
+    def __str__(self) -> str:
+        """Renders the issue as a ``path:line 'found' -> use instead`` line."""
+        found, instead = self.found, self.rule.instead
+        return f"{self.path}:{self.lineno} {found!r} -> use {instead}"
+
 
 def _get_string_defaults(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
@@ -141,16 +146,4 @@ def gen_literal_issues(*roots: Path) -> Iterator[LiteralIssue]:
             yield from sorted(issues, key=attrgetter("lineno"))
 
 
-def format_literal_issue(issue: LiteralIssue) -> str:
-    """Renders one issue as a ``path:line 'found' -> use instead`` line."""
-    found, instead = issue.found, issue.rule.instead
-    return f"{issue.path}:{issue.lineno} {found!r} -> use {instead}"
-
-
-__all__ = [
-    "LITERAL_RULES",
-    "LiteralIssue",
-    "LiteralRule",
-    "format_literal_issue",
-    "gen_literal_issues",
-]
+__all__ = ["LITERAL_RULES", "LiteralIssue", "LiteralRule", "gen_literal_issues"]

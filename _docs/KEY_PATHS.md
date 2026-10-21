@@ -145,7 +145,7 @@ reusable; mutable open/close/session state belongs to execution-owned objects.
 | `riko/runtime/_importutils.py` | dynamic import helpers; string-constructed imports are intentionally invisible to the static AST dependency graph |
 | `riko/runtime/_write_session.py` | concrete sync/async write-session acquisition, incremental/framed delivery, finalize/abort/teardown semantics; no runtime importer today (tests only) — the write/action effect phase decides whether the `WriteNode` path reuses or replaces it |
 | `riko/runtime/_pubsub/` | sync/async pub/sub hubs and message types; mutable hub state is isolated via `contextvars` |
-| `riko/runtime/templates/` | source templates for workflow modules: `pyworkflow.txt`, the canonical Workflow v2 generator template behind `_compile.py` |
+| `riko/runtime/templates/` | source templates for workflow modules: `pyworkflow.txt`, the `Workflow` v2 generator template behind `_compile.py` |
 
 Executions are one-shot. Each execution owns and closes the one worker pool it
 opens. Every write uses the same prepared
@@ -175,20 +175,21 @@ write/session contracts.
 | Path | Role |
 |---|---|
 | `riko/cli/manage.py` | thin Click command composer only |
-| `riko/cli/_lint.py` | `manage lint`, additive selectors, `--all`, and nested `lint imports` registration |
+| `riko/cli/_lint.py` | `manage lint`, additive selectors, `--all`, and nested `lint imports` registration; `--terms` scans the shipped-text roots in full and the as-built `_docs` files (`AS_BUILT_DOCS`) for banned phrases only |
 | `riko/cli/_import_graph.py` | pure-AST import scanner; classifies module/local/type-only imports without importing riko |
 | `riko/cli/_lint_import_architecture.py` | package-layer DAG, module-to-layer mapping, architecture report/validation |
 | `riko/cli/_lint_canonical_imports.py` | canonical-definition import contract |
 | `riko/cli/_lint_relative_imports.py` | sibling-relative import contract |
 | `riko/cli/_import_commands.py` | selector-based `manage lint imports` command and shared import-check runner |
-| `riko/cli/_codegen.py` | selector-based `manage codegen`; defaults to config and supports additive `--config`/`--names`/`--api` plus `--all` |
+| `riko/cli/_codegen.py` | selector-based `manage codegen`; defaults to config and supports additive `--config`/`--names`/`--api`/`--tests` plus `--all` |
 | `riko/cli/_gen_config.py` | generates `riko/coercion/_configs.py` from `riko/types/modules.py` |
 | `riko/cli/_gen_names.py` | generates `riko/modules/_names.py` and `riko/types/_module_ids.py` |
 | `riko/cli/_gen_api_surface.py` | regenerates marked name blocks in `_docs/API_SURFACE.md` from `riko/base/_api_surface.py` |
+| `riko/cli/_gen_tier_index.py` | `manage codegen --tests`: generates each `tests/<tier>/__init__.py` index from its files' `Test<Subject>` classes |
 | `riko/cli/_document.py` | shared JSON document front door for the console scripts: `read_document` and the `WorkflowDocument`-only `require_workflow` (the run-it-through-`build-workflow`-first guard for `run-pipe`/`compile-workflow`); `build-workflow` reads any shape through `Workflow.parse` |
-| `riko/cli/{compile,build_workflow,runpipe,benchmark}.py` | standalone console-script implementations, all on canonical Workflow v2: `build-workflow` is the one lenient converter, `compile-workflow` generates from `WorkflowDocument`s only, `run-pipe` runs a script or a `WorkflowDocument`, `benchmark` times `Pipeline` and workflow execution |
+| `riko/cli/{compile,build_workflow,runpipe,benchmark}.py` | standalone console-script implementations, all on `Workflow` v2: `build-workflow` is the one lenient converter, `compile-workflow` generates from `WorkflowDocument`s only, `run-pipe` runs a script or a `WorkflowDocument`, `benchmark` times `Pipeline` and workflow execution |
 | `riko/cli/{_build,_docs,_docstyle,_lint_basenames,_lint_bindings,_lint_deps,_lint_literals,_lint_terms,_logging,_release,_shipped_text,_test,_upgrade}.py` | private `manage` command helpers grouped by reason to change |
-| `riko/cli/_lint_tests.py` | `manage lint --tests`: holds `tests/` to the tier indexes in each `tests/<tier>/__init__.py` (every file indexed, every test in a listed `Test<Subject>` class, no private imports in `public/`, size advice) |
+| `riko/cli/_lint_tests.py` | `manage lint --tests`: holds `tests/` to its layout (generated tier indexes current, every test in a `Test<Subject>` class, one owning file per subject, no private imports in `public/`, size advice) |
 | `riko/cli/_coverage.py` | `manage test --ratchet`'s uncovered-line ceiling (`[tool.riko.coverage] uncovered` in `pyproject.toml`): fail above it, lower it on a gain; dev-only `manage` modules are in `[tool.coverage.run] omit`, console scripts are measured through subprocesses |
 
 Use `_docs/gameplans/dependency-layers.md` when deciding **which package** should own

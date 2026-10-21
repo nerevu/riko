@@ -120,9 +120,9 @@ test folders themselves — this gameplan does not restate them:
 
 Enforcement:
 
-- `manage lint --tests` (in `--all`, `riko/cli/_lint_tests.py`) fails on an unindexed or missing
-  file, a subject on two rows, a top-level `test_*` function, a `Test*` class whose subject is not on
-  its row, a private name imported in `public/`, a history-named file (`test_regressions`), a helper
+- `manage lint --tests` (in `--all`, `riko/cli/_lint_tests.py`) fails on a stale generated tier
+  index (`manage codegen --tests` regenerates it), a subject owned by two files, a top-level `test_*`
+  function, a private name imported in `public/`, a history-named file (`test_regressions`), a helper
   module inside a tier, or a stray folder; it prints size advice without failing.
 - Ruff `ERA` (commented-out code) is enforced for `tests/` (generated `pyworkflows` excepted).
 - `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py` citation in a tracked

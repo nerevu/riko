@@ -27,16 +27,21 @@ class BasenameIssue(NamedTuple):
     paths: tuple[Path, ...]
     message: str
 
+    def __str__(self) -> str:
+        """Renders the issue as a ``basename: message (paths)`` line."""
+        paths = ", ".join(str(path) for path in self.paths)
+        return f"{self.basename}: {self.message} ({paths})"
+
 
 def gen_basename_issues(
-    root: Path, allowed: frozenset[str] = DUPLICATE_BASENAMES
+    *roots: Path, allowed: frozenset[str] = DUPLICATE_BASENAMES
 ) -> Iterator[BasenameIssue]:
     """
-    Finds module basenames shared by more than one file under ``root``.
+    Finds module basenames shared by more than one file under ``roots``.
 
     Args:
 
-        root: The package folder to scan.
+        roots: The package folders to scan.
         allowed: Basenames that may be shared.
 
     Yields:
@@ -47,9 +52,10 @@ def gen_basename_issues(
     """
     groups: defaultdict[str, list[Path]] = defaultdict(list)
 
-    for path in sorted(root.rglob("*.py")):
-        if path.name != "__init__.py":
-            groups[path.name].append(path.relative_to(root.parent))
+    for root in roots:
+        for path in sorted(root.rglob("*.py")):
+            if path.name != "__init__.py":
+                groups[path.name].append(path.relative_to(root.parent))
 
     duplicated = {name: paths for name, paths in groups.items() if len(paths) > 1}
 
@@ -61,20 +67,3 @@ def gen_basename_issues(
     for name in sorted(allowed - duplicated.keys()):
         message = "allowlisted basename is no longer duplicated; remove it"
         yield BasenameIssue(name, tuple(sorted(groups.get(name, []))), message)
-
-
-def format_basename_issue(issue: BasenameIssue) -> str:
-    """
-    Formats a basename finding as a ``basename: message (paths)`` diagnostic.
-
-    Args:
-
-        issue: The finding to format.
-
-    Returns:
-
-        The diagnostic line.
-
-    """
-    paths = ", ".join(str(path) for path in issue.paths)
-    return f"{issue.basename}: {issue.message} ({paths})"
