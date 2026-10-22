@@ -1469,6 +1469,18 @@ class TestMigrate:
         with pytest.raises(InvalidPipelineError, match="pipe definition"):
             migrate_v1_to_v2(["not", "a", "mapping"])  # pyright: ignore[reportArgumentType]
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="migrating a pipe definition's input modules into the workflow's "
+        "input declarations is not yet implemented",
+    )
+    def test_input_module_becomes_a_declared_input(self):
+        conf = {"name": "fmt", "prompt": "enter", "default": "%Y"}
+        flow = migrate_v1_to_v2(
+            {"modules": [{"id": "i", "type": "input", "conf": conf}]}
+        )
+        assert "fmt" in flow.inputs
+
 
 RICH_RAW = {
     "version": "2",

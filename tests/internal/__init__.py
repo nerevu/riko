@@ -9,7 +9,8 @@ Index (file, then the subjects it owns, in file order):
                               TierIndexCodegen, LayoutLint, BasenameLint,
                               DependencyLint, HookPinLint, CanonicalImportLint,
                               RelativeImportLint, ImportArchitectureLint, ValidateGraph,
-                              RequireWorkflow, ReadDocument, Timeouts, LogLevel
+                              RequireWorkflow, RunTarget, ReadDocument, Timeouts,
+                              LogLevel
     test_codegen.py           WorkflowModule, WorkflowModuleDescribe, CompileWorkflow,
                               Pythonise, ModuleCategory, EnumMemberName,
                               GenerateModuleNames, GenerateModuleIds, ConfigCodegen,

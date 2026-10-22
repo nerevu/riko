@@ -24,6 +24,7 @@ from riko.base._paths import ROOT_DIR
 from riko.base.exceptions import RikoError
 from riko.definitions._context import Context
 from riko.runtime._pipeline import Pipeline
+from riko.types._wrappers import is_subpipe
 
 from ._document import read_document, require_workflow
 
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
     from riko.types._io import PathLike
-    from riko.types._wrappers import AsyncModuleWrapper
+    from riko.types._wrappers import AsyncModuleWrapper, ModuleWrapper
 
 io_error = FileNotFoundError
 
@@ -79,10 +80,38 @@ def file2name(_path: str) -> str:
     return splitext(basename(_path))[0]
 
 
+def build_pipe_kwargs(pipe: ModuleWrapper, test: bool) -> dict[str, object]:
+    """
+    Builds the keyword arguments that pass ``test`` to a run target's pipe.
+
+    The ``workflow``-decorated pipe of a ``WorkflowModule`` (Python source defining
+    ``pipe``/``async_pipe`` over an item, a stream, or nothing, plus a ``context``)
+    reads ``test`` from its ``Context``, while a pipe script (a Python file defining
+    ``pipe(test=False)``) or an undecorated pipe takes it directly.
+
+    Args:
+
+        pipe: The target's ``pipe`` or ``async_pipe``.
+        test: Whether to use default input values instead of prompting.
+
+    Returns:
+
+        The keyword arguments to call ``pipe`` with.
+
+    Examples:
+
+        >>> def pipe(test=False): ...
+        >>> build_pipe_kwargs(pipe, True)
+        {'test': True}
+
+    """
+    return {"context": Context(test=test)} if is_subpipe(pipe) else {"test": test}
+
+
 async def runner(
     async_pipe: AsyncModuleWrapper, test: bool = False, cb: Callable | None = None
 ) -> None:
-    stream = async_pipe(test=test)
+    stream = async_pipe(**build_pipe_kwargs(async_pipe, test))
     result = await alist(stream)
     cb(result) if callable(cb) else None
 
@@ -231,7 +260,7 @@ def run_target(
         elif main := getattr(target, "main", None):
             main(test=test)
         elif target is not None:
-            emit_result(target.pipe(test=test))
+            emit_result(target.pipe(**build_pipe_kwargs(target.pipe, test)))
 
 
 def run() -> None:

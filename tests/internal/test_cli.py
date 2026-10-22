@@ -11,6 +11,7 @@ from importlib import import_module
 from logging import DEBUG, ERROR, INFO, WARNING, getLogger
 from pathlib import Path
 from textwrap import indent
+from types import ModuleType
 from typing import TYPE_CHECKING
 
 import pytest
@@ -62,7 +63,9 @@ from riko.cli._lint_tests import (
 from riko.cli._logging import exception_hook, resolve_log_level
 from riko.cli._upgrade import _pin_hooks
 from riko.cli.manage import manager
+from riko.cli.runpipe import run_target
 from riko.definitions._workflow_definition import Workflow
+from riko.runtime._compile import compile_workflow
 from tests._workflows import DAG, DAG_PATH, PIPE_DEF
 
 if TYPE_CHECKING:
@@ -1323,6 +1326,22 @@ class TestRequireWorkflow:
     def test_require_workflow_rejects_a_non_mapping(self):
         with pytest.raises(InvalidPipelineError, match="must be a mapping"):
             require_workflow([])
+
+
+class TestRunTarget:
+    """Running the targets run-pipe resolves."""
+
+    def test_workflow_module_honors_test(self, capsys, monkeypatch):
+        """A workflow module's input node uses its default under test, not a prompt."""
+        conf = {"name": "fmt", "prompt": "enter", "default": "%Y"}
+        flow = Workflow.parse({"modules": [{"name": "input", "conf": conf}]})
+        module = ModuleType("generated")
+        exec(compile_workflow(flow), module.__dict__)
+        monkeypatch.setattr("sys.stdin", io.StringIO(""))
+
+        run_target(module, test=True)
+
+        assert capsys.readouterr().out == "%Y\n"
 
 
 def _record_warnings(monkeypatch: pytest.MonkeyPatch) -> list[str]:

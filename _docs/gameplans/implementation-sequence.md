@@ -1049,7 +1049,9 @@ Deliver:
   hand-maintained probes in `tests/pyworkflows`/`examples/pyworkflows` migrate with it: their
   describe-inputs branches still return `[]` or the scanned `input`-node tuples while the generated
   pipe returns the declared `Workflow.inputs` mapping (strict xfail
-  `tests/internal/test_codegen.py::TestWorkflowProbes::test_probe_describes_the_inputs_its_document_declares`).
+  `tests/internal/test_codegen.py::TestWorkflowProbes::test_probe_describes_the_inputs_its_document_declares`),
+  and `migrate_v1_to_v2` declares nothing from a `PipeDef`'s `input` modules (strict xfail
+  `tests/public/test_workflow.py::TestMigrate::test_input_module_becomes_a_declared_input`).
 - **DELETE:** none at the public surface; no second input-declaration carrier exists beside the IR.
 
 ### M1 — v1-parity merge (`next` → `features`)
